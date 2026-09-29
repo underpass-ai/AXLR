@@ -68,6 +68,28 @@ func TestSessionStoreRoundTripListPermissionsAndNoAPIKey(t *testing.T) {
 		t.Fatal("credential persisted")
 	}
 }
+
+func TestSessionStoreRestoresChangedModelFromVersionOneSnapshot(t *testing.T) {
+	store, dir := openStore(t)
+	s := fixture(t)
+	must(t, s.BeginTurn("before", nil))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "answer"}}))
+	before := s.Messages()
+	must(t, s.ChangeModel("next/model"))
+	must(t, store.Save(context.Background(), s))
+	raw, err := os.ReadFile(filepath.Join(dir, string(s.Export().ID)+".json"))
+	must(t, err)
+	var record map[string]any
+	must(t, json.Unmarshal(raw, &record))
+	if record["version"] != float64(1) {
+		t.Fatalf("snapshot version changed: %v", record["version"])
+	}
+	got, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	if got.Export().Model != "next/model" || !reflect.DeepEqual(got.Messages(), before) {
+		t.Fatalf("restored model or transcript changed: %+v", got.Export())
+	}
+}
 func TestSessionStorePendingAndUncertainRecovery(t *testing.T) {
 	store, _ := openStore(t)
 	s := fixture(t)

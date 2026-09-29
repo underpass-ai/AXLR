@@ -37,6 +37,19 @@ func (s Session) Pending() []PendingTool {
 	}
 	return pending
 }
+func (s *Session) ChangeModel(model axlr.ModelID) error {
+	if _, err := axlr.NewModelID(string(model)); err != nil {
+		return err
+	}
+	if s.Status() != StatusIdle && s.Status() != StatusComplete && s.Status() != StatusInterrupted {
+		return errors.New("cannot change model while turn is active")
+	}
+	if len(s.Pending()) != 0 {
+		return errors.New("pending calls must be resolved before changing model")
+	}
+	s.state.Model = model
+	return nil
+}
 func (s *Session) BeginTurn(prompt axlr.Text, tools []AvailableTool) error {
 	if s.Status() != StatusIdle && s.Status() != StatusComplete && s.Status() != StatusInterrupted {
 		return errors.New("cannot begin turn in current state")
