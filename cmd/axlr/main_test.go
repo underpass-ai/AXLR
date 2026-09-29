@@ -3,8 +3,9 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/underpass-ai/AXLR"
 	"testing"
+
+	"github.com/underpass-ai/AXLR/dto"
 )
 
 func TestWorkerEmitsOnlyOneJSONResponse(t *testing.T) {
@@ -13,7 +14,7 @@ func TestWorkerEmitsOnlyOneJSONResponse(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("code %d stderr %q", code, stderr.String())
 	}
-	var result axlr.Response
+	var result dto.Response
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
@@ -31,7 +32,7 @@ func TestWorkerRejectsInvalidRequestWithExitTwo(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("code %d", code)
 	}
-	var result axlr.Response
+	var result dto.Response
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +48,7 @@ func TestWorkerAcceptsExplicitChildEnvironment(t *testing.T) {
 		t.Fatalf("code %d stderr %s", code, stderr.String())
 	}
 	var response struct {
-		Output axlr.ExecOutput `json:"output"`
+		Output dto.ExecOutput `json:"output"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &response); err != nil {
 		t.Fatal(err)
@@ -73,7 +74,7 @@ func TestWorkerPreservesValidIdentityOnArgumentRejection(t *testing.T) {
 	if code != 2 {
 		t.Fatalf("code %d", code)
 	}
-	var result axlr.Response
+	var result dto.Response
 	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}

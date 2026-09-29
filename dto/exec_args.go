@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 type ExecArgs struct {
 	Program        string   `json:"program"`

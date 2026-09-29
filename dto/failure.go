@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 type Failure struct {
 	Code    string `json:"code"`

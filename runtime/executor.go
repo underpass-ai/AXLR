@@ -1,4 +1,4 @@
-package axlr
+package runtime
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/underpass-ai/AXLR/adapters/local"
 	"github.com/underpass-ai/AXLR/application"
 	"github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/dto"
 )
 
 // Executor is a serial library entrypoint for the trusted-local profile.
@@ -73,11 +74,11 @@ func New(c Config) (*Executor, error) {
 func (e *Executor) Close() error { e.mu.Lock(); defer e.mu.Unlock(); return e.files.Close() }
 
 // Execute never interprets request_id as an idempotency key.
-func (e *Executor) Execute(ctx context.Context, req Request) Response {
+func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	start := time.Now()
-	r := Response{ProtocolVersion: ProtocolVersion, RequestID: req.RequestID, Tool: req.Tool, StartedAt: start.UTC(), Status: "completed"}
+	r := dto.Response{ProtocolVersion: ProtocolVersion, RequestID: req.RequestID, Tool: req.Tool, StartedAt: start.UTC(), Status: "completed"}
 	mapper := RequestMapper{MaxReadBytes: e.config.MaxReadBytes, MaxFileBytes: e.config.MaxFileBytes, MaxOutputBytes: e.config.MaxOutputBytes, MaxTimeout: e.config.MaxTimeout}
 	command, err := mapper.Map(req)
 	var result any
@@ -103,10 +104,10 @@ func (e *Executor) Execute(ctx context.Context, req Request) Response {
 		var fault *domain.Fault
 		if errors.As(err, &fault) {
 			r.Status = fault.Status
-			r.Error = &Failure{Code: fault.Code, Message: fault.Message}
+			r.Error = &dto.Failure{Code: fault.Code, Message: fault.Message}
 		} else {
 			r.Status = "failed"
-			r.Error = &Failure{Code: "internal_error", Message: err.Error()}
+			r.Error = &dto.Failure{Code: "internal_error", Message: err.Error()}
 		}
 	} else {
 		r.Output = (ResponseMapper{}).Map(result)

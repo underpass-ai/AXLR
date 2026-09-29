@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 type WriteArgs struct {
 	Path           string `json:"path"`

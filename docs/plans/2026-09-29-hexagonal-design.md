@@ -7,7 +7,7 @@ AXLR es el nuevo núcleo de ejecución propio de Underpass, reescrito de forma s
 ## Capas y flujo
 
 ```text
-cmd/axlr -> DTO y codec JSON -> mapper -> casos de uso -> puertos -> adaptadores locales
+cmd/axlr -> dto/ + runtime/codec -> runtime/mappers -> casos de uso -> puertos -> adaptadores locales
                                       |                  |
                                       +---- dominio ----+
 ```

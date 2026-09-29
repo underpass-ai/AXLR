@@ -1,4 +1,4 @@
-package axlr
+package runtime
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/underpass-ai/AXLR/dto"
 )
 
 func TestDecodeRejectsUnknownFieldAndSecondDocument(t *testing.T) {
@@ -47,16 +49,16 @@ func TestReadPaginatesUTF8AndFullDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "r", Tool: "read", Arguments: json.RawMessage(`{"path":"a.txt","max_bytes":2}`)})
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r", Tool: "read", Arguments: json.RawMessage(`{"path":"a.txt","max_bytes":2}`)})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
 	}
-	first := r.Output.(ReadOutput)
+	first := r.Output.(dto.ReadOutput)
 	if first.Content != "a" || first.NextOffsetBytes != 1 || !first.Truncated || first.ContentSHA256 != "" {
 		t.Fatalf("%+v", first)
 	}
-	r = e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "r2", Tool: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)})
-	full := r.Output.(ReadOutput)
+	r = e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r2", Tool: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)})
+	full := r.Output.(dto.ReadOutput)
 	if full.Content != "aéz" || full.ContentSHA256 == "" {
 		t.Fatalf("%+v", full)
 	}
@@ -68,8 +70,8 @@ func TestWriteCreateDoesNotClobberAndReplaceChecksDigest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	run := func(args string) Response {
-		return e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "r", Tool: "write", Arguments: json.RawMessage(args)})
+	run := func(args string) dto.Response {
+		return e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r", Tool: "write", Arguments: json.RawMessage(args)})
 	}
 	if r := run(`{"path":"a.txt","content":"one","mode":"create"}`); r.Status != "completed" {
 		t.Fatalf("%+v", r)
@@ -93,7 +95,7 @@ func TestEditRequiresExactlyOneMatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := Request{ProtocolVersion: 1, RequestID: "r", Tool: "edit", Arguments: json.RawMessage(`{"path":"a.txt","old_text":"a","new_text":"b"}`)}
+	req := dto.Request{ProtocolVersion: 1, RequestID: "r", Tool: "edit", Arguments: json.RawMessage(`{"path":"a.txt","old_text":"a","new_text":"b"}`)}
 	if r := e.Execute(context.Background(), req); r.Status != "rejected" {
 		t.Fatalf("%+v", r)
 	}
@@ -108,15 +110,15 @@ func TestExecDistinguishesExitCodeFromStartFailure(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "r", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","printf ok; exit 7"]}`)})
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","printf ok; exit 7"]}`)})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
 	}
-	out := r.Output.(ExecOutput)
+	out := r.Output.(dto.ExecOutput)
 	if out.ExitCode != 7 || out.Stdout != "ok" {
 		t.Fatalf("%+v", out)
 	}
-	r = e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "r2", Tool: "exec", Arguments: json.RawMessage(`{"program":"/no/such/program"}`)})
+	r = e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r2", Tool: "exec", Arguments: json.RawMessage(`{"program":"/no/such/program"}`)})
 	if r.Status != "failed" {
 		t.Fatalf("%+v", r)
 	}
@@ -130,7 +132,7 @@ func TestReadRejectsEscapedSymlinkAndSplitOffset(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "utf8"), []byte("é"), 0600)
 	e, _ := New(Config{Root: dir})
 	for _, a := range []string{`{"path":"../secret"}`, `{"path":"link"}`, `{"path":"utf8","offset_bytes":1}`} {
-		r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "r", Tool: "read", Arguments: json.RawMessage(a)})
+		r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r", Tool: "read", Arguments: json.RawMessage(a)})
 		if r.Status == "completed" {
 			t.Fatalf("accepted %s: %+v", a, r)
 		}
@@ -145,7 +147,7 @@ func TestWriteReplaceKeepsOrdinaryPermissionsAndEditChangesOneMatch(t *testing.T
 	}
 	e, _ := New(Config{Root: dir})
 	oldDigest := "cba06b5736faf67e54b07b561eae94395e774c517a7d910a54369e1263ccfbd4"
-	r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "w", Tool: "write", Arguments: json.RawMessage(`{"path":"a","content":"new","mode":"replace","expected_sha256":"` + oldDigest + `"}`)})
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "w", Tool: "write", Arguments: json.RawMessage(`{"path":"a","content":"new","mode":"replace","expected_sha256":"` + oldDigest + `"}`)})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
 	}
@@ -153,7 +155,7 @@ func TestWriteReplaceKeepsOrdinaryPermissionsAndEditChangesOneMatch(t *testing.T
 	if info.Mode().Perm() != 0640 {
 		t.Fatalf("mode %o", info.Mode().Perm())
 	}
-	r = e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "e", Tool: "edit", Arguments: json.RawMessage(`{"path":"a","old_text":"new","new_text":"done"}`)})
+	r = e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "e", Tool: "edit", Arguments: json.RawMessage(`{"path":"a","old_text":"new","new_text":"done"}`)})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
 	}
@@ -165,21 +167,21 @@ func TestWriteReplaceKeepsOrdinaryPermissionsAndEditChangesOneMatch(t *testing.T
 
 func TestExecTimeoutAndOutputLimit(t *testing.T) {
 	e, _ := New(Config{Root: t.TempDir()})
-	r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "x", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","printf 12345; printf abcde >&2"],"max_output_bytes":5}`)})
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "x", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","printf 12345; printf abcde >&2"],"max_output_bytes":5}`)})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
 	}
-	out := r.Output.(ExecOutput)
+	out := r.Output.(dto.ExecOutput)
 	if out.CapturedBytes != 5 || out.DiscardedBytes != 5 || !out.Truncated {
 		t.Fatalf("%+v", out)
 	}
-	r = e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "t", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","while :; do :; done"],"timeout_ms":20}`)})
+	r = e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "t", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","while :; do :; done"],"timeout_ms":20}`)})
 	if r.Status != "timed_out" {
 		t.Fatalf("%+v", r)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	r = e.Execute(ctx, Request{ProtocolVersion: 1, RequestID: "c", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh"}`)})
+	r = e.Execute(ctx, dto.Request{ProtocolVersion: 1, RequestID: "c", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh"}`)})
 	if r.Status != "cancelled" {
 		t.Fatalf("%+v", r)
 	}
@@ -187,7 +189,7 @@ func TestExecTimeoutAndOutputLimit(t *testing.T) {
 
 func TestExecRejectsOverflowTimeout(t *testing.T) {
 	e, _ := New(Config{Root: t.TempDir(), MaxTimeout: time.Minute})
-	r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "x", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","timeout_ms":9223372036854775807}`)})
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "x", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","timeout_ms":9223372036854775807}`)})
 	if r.Status != "rejected" {
 		t.Fatalf("%+v", r)
 	}
@@ -198,11 +200,11 @@ func TestExecDefaultsRespectReducedHostProfile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "p", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","printf abcde"]}`)})
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "p", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","printf abcde"]}`)})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
 	}
-	out := r.Output.(ExecOutput)
+	out := r.Output.(dto.ExecOutput)
 	if out.Stdout != "abcd" || out.DiscardedBytes != 1 {
 		t.Fatalf("%+v", out)
 	}
@@ -213,12 +215,12 @@ func TestExecPassesLiteralArgvAndStdinWithoutInheritedEnvironment(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	arguments, _ := json.Marshal(ExecArgs{Program: os.Args[0], Args: []string{"-test.run=TestAXLRHelperProcess", "--", "echo", "a b", "$HOME"}, Stdin: "payload"})
-	r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "h", Tool: "exec", Arguments: arguments})
+	arguments, _ := json.Marshal(dto.ExecArgs{Program: os.Args[0], Args: []string{"-test.run=TestAXLRHelperProcess", "--", "echo", "a b", "$HOME"}, Stdin: "payload"})
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "h", Tool: "exec", Arguments: arguments})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
 	}
-	out := r.Output.(ExecOutput)
+	out := r.Output.(dto.ExecOutput)
 	if out.Stdout != "payload|a b|$HOME|" {
 		t.Fatalf("%+v", out)
 	}
@@ -231,11 +233,11 @@ func TestExecCancellationStopsRunningProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	arguments, _ := json.Marshal(ExecArgs{Program: os.Args[0], Args: []string{"-test.run=TestAXLRHelperProcess", "--", "hang", marker}})
+	arguments, _ := json.Marshal(dto.ExecArgs{Program: os.Args[0], Args: []string{"-test.run=TestAXLRHelperProcess", "--", "hang", marker}})
 	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan Response, 1)
+	done := make(chan dto.Response, 1)
 	go func() {
-		done <- e.Execute(ctx, Request{ProtocolVersion: 1, RequestID: "c", Tool: "exec", Arguments: arguments})
+		done <- e.Execute(ctx, dto.Request{ProtocolVersion: 1, RequestID: "c", Tool: "exec", Arguments: arguments})
 	}()
 	deadline := time.Now().Add(2 * time.Second)
 	for {

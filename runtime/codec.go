@@ -1,4 +1,4 @@
-package axlr
+package runtime
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/dto"
 )
 
 func strictJSON(data []byte, dst any) error {
@@ -138,8 +139,8 @@ func hex4(data []byte) (uint16, bool) {
 	return value, true
 }
 
-func Decode(r io.Reader) (Request, error) {
-	var req Request
+func Decode(r io.Reader) (dto.Request, error) {
+	var req dto.Request
 	b, err := io.ReadAll(io.LimitReader(r, MaxRequestBytes+1))
 	if err != nil {
 		return req, err
@@ -153,7 +154,7 @@ func Decode(r io.Reader) (Request, error) {
 	_, err = (RequestMapper{MaxReadBytes: hardFileBytes, MaxFileBytes: hardFileBytes, MaxOutputBytes: hardFileBytes, MaxTimeout: hardTimeout}).Map(req)
 	return req, err
 }
-func MarshalResponse(r Response) ([]byte, error) {
+func MarshalResponse(r dto.Response) ([]byte, error) {
 	if r.RequestID != "" {
 		if _, err := domain.NewRequestID(r.RequestID); err != nil {
 			r.RequestID = ""
@@ -173,14 +174,14 @@ func MarshalResponse(r Response) ([]byte, error) {
 	}
 	r.Status = "failed"
 	r.Output = nil
-	r.Error = &Failure{Code: "response_too_large", Message: "response exceeded 4 MiB; operation may have had effects"}
+	r.Error = &dto.Failure{Code: "response_too_large", Message: "response exceeded 4 MiB; operation may have had effects"}
 	b, err = json.Marshal(r)
 	if err != nil || len(b) > MaxResponseBytes {
 		return nil, errors.New("unable to bound response")
 	}
 	return b, nil
 }
-func ProtocolRejection(err error) Response {
+func ProtocolRejection(err error) dto.Response {
 	now := time.Now().UTC()
-	return Response{ProtocolVersion: ProtocolVersion, Status: "rejected", StartedAt: now, FinishedAt: now, Error: &Failure{Code: "invalid_request", Message: err.Error()}}
+	return dto.Response{ProtocolVersion: ProtocolVersion, Status: "rejected", StartedAt: now, FinishedAt: now, Error: &dto.Failure{Code: "invalid_request", Message: err.Error()}}
 }

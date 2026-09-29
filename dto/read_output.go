@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 type ReadOutput struct {
 	Content          string `json:"content"`
