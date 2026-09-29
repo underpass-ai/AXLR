@@ -34,14 +34,18 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	streamCtx, cancelStream := context.WithCancelCause(ctx)
 	defer cancelStream(nil)
 	timeout := &StreamTimeoutError{}
-	timer := time.AfterFunc(c.streamInactivityTimeout, func() { cancelStream(timeout) })
-	defer timer.Stop()
+	inactivityTimer := time.AfterFunc(c.streamInactivityTimeout, func() { cancelStream(timeout) })
+	defer inactivityTimer.Stop()
+	maximumDurationTimeout := &StreamTimeoutError{maximumDuration: true}
+	maximumDurationTimer := time.AfterFunc(c.streamMaxDuration, func() { cancelStream(maximumDurationTimeout) })
+	defer maximumDurationTimer.Stop()
 	streamError := func() error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if errors.Is(context.Cause(streamCtx), context.DeadlineExceeded) {
-			return timeout
+		var streamTimeout *StreamTimeoutError
+		if errors.As(context.Cause(streamCtx), &streamTimeout) {
+			return streamTimeout
 		}
 		return nil
 	}
@@ -85,7 +89,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 			}
 			return domain.CompletionResult{}, &TransportError{Cause: err}
 		}
-		timer.Stop()
+		inactivityTimer.Stop()
 		if bytes.Equal(data, []byte("[DONE]")) {
 			return accumulator.Result()
 		}
@@ -101,6 +105,6 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 				return domain.CompletionResult{}, err
 			}
 		}
-		timer.Reset(c.streamInactivityTimeout)
+		inactivityTimer.Reset(c.streamInactivityTimeout)
 	}
 }

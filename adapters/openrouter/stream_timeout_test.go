@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -149,5 +150,44 @@ func TestStreamCancellationPrecedesInactivityTimeout(t *testing.T) {
 	cancel()
 	if err := awaitStreamError(t, done); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation error = %v", err)
+	}
+}
+
+func TestStreamMaximumDurationBoundsNonTextFrames(t *testing.T) {
+	reader, writer := io.Pipe()
+	defer writer.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	client, err := New(ClientConfig{
+		APIKey: "secret-token",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: reader, Header: make(http.Header)}, nil
+		})},
+		StreamInactivityTimeout: 80 * time.Millisecond,
+		StreamMaxDuration:       120 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Stream(ctx, simpleCompletionRequest(), func(domain.Text) error { return nil })
+		done <- err
+	}()
+	var frames atomic.Int32
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			if _, err := io.WriteString(writer, streamEvents(`{"choices":[{"index":0,"delta":{},"finish_reason":null}]}`)); err != nil {
+				return
+			}
+			frames.Add(1)
+		}
+	}()
+	err = awaitStreamError(t, done)
+	assertStreamTimedOut(t, err)
+	if !strings.Contains(err.Error(), "maximum duration") || frames.Load() < 3 {
+		t.Fatalf("err=%v, frames=%d; expected duration cap after continued frames", err, frames.Load())
 	}
 }
