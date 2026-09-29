@@ -24,6 +24,13 @@ type AppModel struct {
 	Layout            Layout
 	Theme             Theme
 	Busy, ActivityTab bool
+	Approval          ApprovalDialog
+	SearchBox         SearchBox
+	Palette           ActionPalette
+	Picker            SessionPicker
+	Help              HelpOverlay
+	Info              Transcript
+	overlay           ControlIntent
 	draft             string
 	submittedPrompt   string
 	submittedAt       int
@@ -48,10 +55,14 @@ func New(deps Dependencies) AppModel {
 	}
 	m.Status.State = m.Header.State.Status
 	m.refreshTranscript()
+	m.syncApproval()
 	return m
 }
 func (m AppModel) Init() tea.Cmd { return nil }
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if next, cmd, handled := m.navigation(msg); handled {
+		return next, cmd
+	}
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Layout = NewLayout(v.Width, v.Height)
@@ -60,6 +71,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Transcript.Viewport.SetHeight(m.Layout.BodyHeight)
 		m.Transcript.Viewport.SetYOffset(offset)
 		m.Composer.Input.SetWidth(max(1, v.Width))
+		m.SearchBox.Input.SetWidth(max(1, v.Width-18))
+		m.SearchBox.Input.SetCursor(m.SearchBox.Input.Position())
+		m.sizeApproval()
+		m.Info.Viewport.SetWidth(max(1, v.Width))
+		m.Info.Viewport.SetHeight(max(1, v.Height-4))
 		return m, nil
 	case application.Event:
 		if v.Kind == application.EventTextDelta {
@@ -84,7 +100,21 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.deps.Session != nil {
 			*m.deps.Session = v.Session
 		}
+		oldID := m.Header.State.ID
 		m.Header.State = v.Session.Export()
+		if v.Sessions != nil {
+			m.Picker = SessionPicker{Items: *v.Sessions}
+			m.overlay = "sessions"
+		}
+		if oldID != m.Header.State.ID {
+			m.overlay = ""
+			m.SearchBox = SearchBox{}
+			m.Activity = ToolActivity{}
+			m.unsentPrompts = nil
+			for _, record := range m.Header.State.Activity {
+				m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
+			}
+		}
 		if m.submittedPrompt != "" && v.Err != nil {
 			messages := m.Header.State.Messages
 			accepted := len(messages) > m.submittedAt && messages[m.submittedAt].Role == root.RoleUser && string(messages[m.submittedAt].Content) == m.submittedPrompt
@@ -103,6 +133,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Error = v.Err.Error()
 		}
 		m.refreshTranscript()
+		m.syncApproval()
 		return m, nil
 	case ControlIntent:
 		switch v {
@@ -191,18 +222,27 @@ func (m AppModel) View() tea.View {
 		controls := m.Composer.Controls(m.zones, m.prefix)
 		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, m.Composer.View(), controls, m.Status.View(m.Layout.Width))
 	}
+	if !m.Layout.TooSmall && m.Layout.Width > 0 {
+		content = m.overlayView(content)
+	}
 	content = m.zones.Scan(content)
 	if m.Theme.Monochrome {
 		content = ansi.Strip(content)
 	}
 	view := tea.NewView(content)
-	if !m.Layout.TooSmall && m.Layout.Width > 0 {
+	if !m.Layout.TooSmall && m.Layout.Width > 0 && !m.approvalFocus() && m.overlay == "" {
 		view.Cursor = m.Composer.Input.Cursor()
 		if view.Cursor != nil {
 			view.Cursor.Y += 1 + m.Layout.BodyHeight
 			if !m.Layout.SidePanel {
 				view.Cursor.Y++
 			}
+		}
+	}
+	if !m.Layout.TooSmall && m.overlay == "search" && !m.approvalFocus() {
+		view.Cursor = m.SearchBox.Input.Cursor()
+		if view.Cursor != nil {
+			view.Cursor.Y += m.Layout.BodyHeight
 		}
 	}
 	view.AltScreen = true

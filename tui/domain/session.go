@@ -216,3 +216,19 @@ func (s *Session) FinishToolExecution(id axlr.ToolCallID, outcome ToolOutcome) e
 	s.state = next
 	return nil
 }
+
+// ResumeTurn is an explicit recovery action. Pending calls return to approval;
+// completed tool effects are never replayed.
+func (s *Session) ResumeTurn() error {
+	if s.Status() != StatusInterrupted {
+		return errors.New("resume requires interrupted turn")
+	}
+	next := s.Export()
+	next.Status = StatusStreaming
+	next.Draft = ""
+	if len(s.Pending()) > 0 {
+		next.Status = StatusApproval
+	}
+	s.state = next
+	return nil
+}
