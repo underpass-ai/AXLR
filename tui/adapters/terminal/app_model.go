@@ -25,6 +25,9 @@ type AppModel struct {
 	Theme             Theme
 	Busy, ActivityTab bool
 	draft             string
+	submittedPrompt   string
+	submittedAt       int
+	unsentPrompts     []string
 	events            <-chan tea.Msg
 	cancel            context.CancelFunc
 	zones             *zone.Manager
@@ -40,8 +43,11 @@ func New(deps Dependencies) AppModel {
 	if deps.Session != nil {
 		m.Header.State = deps.Session.Export()
 	}
+	for _, record := range m.Header.State.Activity {
+		m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
+	}
 	m.Status.State = m.Header.State.Status
-	m.Transcript.SetSession(m.Header.State, "")
+	m.refreshTranscript()
 	return m
 }
 func (m AppModel) Init() tea.Cmd { return nil }
@@ -58,7 +64,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case application.Event:
 		if v.Kind == application.EventTextDelta {
 			m.draft += string(v.Text)
-			m.Transcript.SetSession(m.Header.State, m.draft)
+			m.refreshTranscript()
 		}
 		if v.Kind == application.EventState {
 			m.Status.State = v.State
@@ -79,12 +85,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			*m.deps.Session = v.Session
 		}
 		m.Header.State = v.Session.Export()
+		if m.submittedPrompt != "" && v.Err != nil {
+			messages := m.Header.State.Messages
+			accepted := len(messages) > m.submittedAt && messages[m.submittedAt].Role == root.RoleUser && string(messages[m.submittedAt].Content) == m.submittedPrompt
+			if !accepted {
+				if m.Composer.Input.Value() == "" {
+					m.Composer.Input.SetValue(m.submittedPrompt)
+				} else {
+					m.unsentPrompts = append(m.unsentPrompts, m.submittedPrompt)
+				}
+			}
+		}
+		m.submittedPrompt = ""
 		m.Status.State = v.Session.Status()
 		m.draft = ""
 		if v.Err != nil {
 			m.Status.Error = v.Err.Error()
 		}
-		m.Transcript.SetSession(m.Header.State, "")
+		m.refreshTranscript()
 		return m, nil
 	case ControlIntent:
 		switch v {
@@ -93,11 +111,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			prompt := root.Text(m.Composer.Input.Value())
+			m.submittedPrompt = string(prompt)
+			m.submittedAt = len(m.Header.State.Messages)
 			m.Composer.Input.Reset()
 			m.Status.Error = ""
 			m.draft = ""
 			m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: prompt})
-			m.Transcript.SetSession(m.Header.State, "")
+			m.refreshTranscript()
 			cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 				return m.deps.Start.Execute(ctx, s, prompt, emit)
 			})
@@ -188,4 +208,16 @@ func (m AppModel) View() tea.View {
 	view.AltScreen = true
 	view.MouseMode = tea.MouseModeCellMotion
 	return view
+}
+
+// Failed submissions remain display state, never valid model history.
+func (m *AppModel) refreshTranscript() {
+	m.Transcript.SetSession(m.Header.State, m.draft)
+	if len(m.unsentPrompts) > 0 {
+		content := m.Transcript.Viewport.GetContent()
+		for _, prompt := range m.unsentPrompts {
+			content += "\nNot sent: " + prompt
+		}
+		m.Transcript.SetContent(content)
+	}
 }
