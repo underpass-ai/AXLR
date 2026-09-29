@@ -21,7 +21,8 @@ func (u EditUseCase) Execute(c domain.EditCommand) (domain.WriteResult, error) {
 	if c.ExpectedDigest != "" && domain.DigestOf(snapshot.Content) != c.ExpectedDigest {
 		return domain.WriteResult{}, domain.Reject("conflict", "content digest does not match")
 	}
-	if bytes.Count(snapshot.Content, []byte(c.OldText)) != 1 {
+	first := bytes.Index(snapshot.Content, []byte(c.OldText))
+	if first < 0 || bytes.Index(snapshot.Content[first+1:], []byte(c.OldText)) >= 0 {
 		return domain.WriteResult{}, domain.Reject("conflict", "old_text must occur exactly once")
 	}
 	after := bytes.Replace(snapshot.Content, []byte(c.OldText), []byte(c.NewText), 1)

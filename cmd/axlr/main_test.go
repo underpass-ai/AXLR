@@ -66,3 +66,18 @@ func TestWorkerRejectsMissingProfile(t *testing.T) {
 		t.Fatalf("unexpected protocol output %q", stdout.String())
 	}
 }
+
+func TestWorkerPreservesValidIdentityOnArgumentRejection(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"--root", t.TempDir(), "--profile", "trusted-local"}, bytes.NewBufferString(`{"protocol_version":1,"request_id":"known-id","tool":"read","arguments":{"path":"a","unexpected":true}}`), &stdout, &stderr)
+	if code != 2 {
+		t.Fatalf("code %d", code)
+	}
+	var result axlr.Response
+	if err := json.Unmarshal(stdout.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.RequestID != "known-id" || result.Tool != "read" {
+		t.Fatalf("%+v", result)
+	}
+}

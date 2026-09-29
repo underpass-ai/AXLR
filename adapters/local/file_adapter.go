@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"syscall"
 	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/domain"
@@ -24,7 +25,7 @@ func NewFileAdapter(path string) (*FileAdapter, error) {
 func (a *FileAdapter) Close() error { return a.root.Close() }
 
 func (a *FileAdapter) Read(c domain.ReadCommand) (domain.ReadResult, error) {
-	f, err := a.root.Open(string(c.Path))
+	f, err := a.root.OpenFile(string(c.Path), os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return domain.ReadResult{}, fileError(err)
 	}
@@ -92,7 +93,7 @@ func (a *FileAdapter) Load(path domain.RelativePath, max int) (domain.FileSnapsh
 	if info.Size() > int64(max) {
 		return domain.FileSnapshot{}, domain.Reject("file_too_large", "file exceeds editable limit")
 	}
-	f, err := a.root.Open(string(path))
+	f, err := a.root.OpenFile(string(path), os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return domain.FileSnapshot{}, fileError(err)
 	}

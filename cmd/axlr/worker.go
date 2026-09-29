@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	"github.com/underpass-ai/AXLR"
+	"github.com/underpass-ai/AXLR/domain"
 )
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -40,6 +41,13 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	defer stop()
 	if err != nil {
 		response = axlr.ProtocolRejection(err)
+		if _, identityError := domain.NewRequestID(req.RequestID); identityError == nil {
+			response.RequestID = req.RequestID
+		}
+		switch req.Tool {
+		case "read", "write", "edit", "exec":
+			response.Tool = req.Tool
+		}
 		code = 2
 	} else {
 		response = executor.Execute(ctx, req)
