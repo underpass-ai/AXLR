@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/domain"
 )
@@ -16,20 +17,30 @@ const endpoint = "https://openrouter.ai/api/v1/chat/completions"
 const maxResponseBytes = 8 * 1024 * 1024
 
 type Client struct {
-	apiKey string
-	http   http.Client
+	apiKey                  string
+	http                    http.Client
+	streamInactivityTimeout time.Duration
 }
+
+const defaultStreamInactivityTimeout = time.Minute
 
 func New(config ClientConfig) (*Client, error) {
 	if strings.TrimSpace(config.APIKey) == "" || strings.ContainsAny(config.APIKey, "\r\n") {
 		return nil, errors.New("OpenRouter API key is required")
+	}
+	if config.StreamInactivityTimeout < 0 {
+		return nil, errors.New("OpenRouter stream inactivity timeout must not be negative")
+	}
+	streamInactivityTimeout := config.StreamInactivityTimeout
+	if streamInactivityTimeout == 0 {
+		streamInactivityTimeout = defaultStreamInactivityTimeout
 	}
 	client := http.Client{}
 	if config.HTTPClient != nil {
 		client = *config.HTTPClient
 	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{apiKey: config.APIKey, http: client}, nil
+	return &Client{apiKey: config.APIKey, http: client, streamInactivityTimeout: streamInactivityTimeout}, nil
 }
 
 func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (domain.CompletionResult, error) {

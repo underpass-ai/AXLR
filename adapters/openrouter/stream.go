@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/underpass-ai/AXLR/domain"
 )
@@ -30,7 +31,21 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not encode OpenRouter request")
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	streamCtx, cancelStream := context.WithCancelCause(ctx)
+	defer cancelStream(nil)
+	timeout := &StreamTimeoutError{}
+	timer := time.AfterFunc(c.streamInactivityTimeout, func() { cancelStream(timeout) })
+	defer timer.Stop()
+	streamError := func() error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if errors.Is(context.Cause(streamCtx), context.DeadlineExceeded) {
+			return timeout
+		}
+		return nil
+	}
+	httpReq, err := http.NewRequestWithContext(streamCtx, http.MethodPost, endpoint, bytes.NewReader(body))
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not create OpenRouter request")
 	}
@@ -39,27 +54,30 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	httpReq.Header.Set("Accept", "text/event-stream")
 	response, err := c.http.Do(httpReq)
 	if err != nil {
-		if ctx.Err() != nil {
-			return domain.CompletionResult{}, ctx.Err()
+		if cause := streamError(); cause != nil {
+			return domain.CompletionResult{}, cause
 		}
 		return domain.CompletionResult{}, &TransportError{Cause: err}
 	}
 	var closeOnce sync.Once
 	closeBody := func() { closeOnce.Do(func() { _ = response.Body.Close() }) }
-	stop := context.AfterFunc(ctx, closeBody)
+	stop := context.AfterFunc(streamCtx, closeBody)
 	defer func() { stop(); closeBody() }()
+	if cause := streamError(); cause != nil {
+		return domain.CompletionResult{}, cause
+	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		return domain.CompletionResult{}, classifyProviderError(response.StatusCode)
 	}
 	decoder := newSSEDecoder(response.Body)
 	var accumulator streamAccumulator
 	for {
-		if err := ctx.Err(); err != nil {
-			return domain.CompletionResult{}, err
+		if cause := streamError(); cause != nil {
+			return domain.CompletionResult{}, cause
 		}
 		data, err := decoder.Next()
-		if ctx.Err() != nil {
-			return domain.CompletionResult{}, ctx.Err()
+		if cause := streamError(); cause != nil {
+			return domain.CompletionResult{}, cause
 		}
 		if err != nil {
 			if errors.Is(err, io.EOF) {
@@ -67,6 +85,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 			}
 			return domain.CompletionResult{}, &TransportError{Cause: err}
 		}
+		timer.Stop()
 		if bytes.Equal(data, []byte("[DONE]")) {
 			return accumulator.Result()
 		}
@@ -82,5 +101,6 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 				return domain.CompletionResult{}, err
 			}
 		}
+		timer.Reset(c.streamInactivityTimeout)
 	}
 }
