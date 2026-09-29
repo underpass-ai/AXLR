@@ -20,13 +20,22 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 	if m.deps.Session != nil {
 		snapshot = *m.deps.Session
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	lifetime := m.lifetime
+	ctx, cancel := context.WithCancel(lifetime.ctx)
 	m.cancel = cancel
 	m.Busy = true
 	ch := make(chan tea.Msg, 32)
 	m.events = ch
 	return func() tea.Msg {
+		lifetime.mu.Lock()
+		if lifetime.closed {
+			lifetime.mu.Unlock()
+			return operationComplete{Session: snapshot, Err: context.Canceled}
+		}
+		lifetime.workers.Add(1)
+		lifetime.mu.Unlock()
 		go func() {
+			defer lifetime.workers.Done()
 			err := run(ctx, &snapshot, func(e application.Event) error {
 				if e.Usage != nil {
 					usage := *e.Usage
@@ -39,7 +48,10 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 					return ctx.Err()
 				}
 			})
-			ch <- operationComplete{Session: snapshot, Err: err}
+			select {
+			case ch <- operationComplete{Session: snapshot, Err: err}:
+			case <-lifetime.ctx.Done():
+			}
 			close(ch)
 		}()
 		return <-ch

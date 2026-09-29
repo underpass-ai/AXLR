@@ -21,16 +21,30 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Format and vet
+          cache-dependency-path: |
+            go.sum
+            tui/go.sum
+      - name: Format and module boundaries
         run: |
           test -z "$(find . -maxdepth 1 -type f -name '*.go' -print)"
           test -z "$(gofmt -l .)"
-          go vet ./...
-      - name: Test, race detector, and coverage
+          GOWORK=off go list -deps ./... > /tmp/root-deps
+          ! grep -Eq '^(charm.land/|github.com/lrstanley/bubblezone)' /tmp/root-deps
+      - name: Root vet, race tests and coverage
         run: |
-          go test -race -count=1 -coverpkg=./... -coverprofile=coverage.out ./...
-          coverage=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
-          echo "Aggregate coverage: ${coverage}%"
+          GOWORK=off go vet ./...
+          GOWORK=off go test -race -count=1 -coverpkg=./... -coverprofile=coverage-root.out ./...
+          coverage=$(GOWORK=off go tool cover -func=coverage-root.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          echo "Root aggregate coverage: ${coverage}%"
           awk -v value="$coverage" 'BEGIN { exit !(value > 80) }'
-      - name: Static worker build
-        run: CGO_ENABLED=0 go build -trimpath -o /tmp/axlr ./cmd/axlr
+      - name: TUI vet, race tests and coverage
+        run: |
+          go -C tui vet ./...
+          go -C tui test -race -count=1 -coverpkg=./... -coverprofile=coverage-tui.out ./...
+          coverage=$(go -C tui tool cover -func=coverage-tui.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          echo "TUI aggregate coverage: ${coverage}%"
+          awk -v value="$coverage" 'BEGIN { exit !(value > 80) }'
+      - name: Static executable builds
+        run: |
+          GOWORK=off CGO_ENABLED=0 go build -trimpath -o /tmp/axlr ./cmd/axlr
+          GOWORK=off CGO_ENABLED=0 go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui

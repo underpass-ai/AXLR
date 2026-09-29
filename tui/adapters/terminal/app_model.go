@@ -16,6 +16,7 @@ import (
 
 type AppModel struct {
 	deps              Dependencies
+	lifetime          *lifecycle
 	Header            Header
 	Transcript        Transcript
 	Composer          Composer
@@ -45,8 +46,13 @@ var _ tea.Model = AppModel{}
 
 func New(deps Dependencies) AppModel {
 	deps.Monochrome = deps.Monochrome || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb"
+	parent := deps.Context
+	if parent == nil {
+		parent = context.Background()
+	}
+	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
-	m := AppModel{deps: deps, Theme: Theme{deps.Monochrome}, Composer: NewComposer(deps.Monochrome), Transcript: NewTranscript(), zones: z, prefix: z.NewPrefix()}
+	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, Theme: Theme{deps.Monochrome}, Composer: NewComposer(deps.Monochrome), Transcript: NewTranscript(), zones: z, prefix: z.NewPrefix()}
 	if deps.Session != nil {
 		m.Header.State = deps.Session.Export()
 	}
