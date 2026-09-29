@@ -1,0 +1,81 @@
+package axlr
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"regexp"
+
+	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/plugins"
+	"github.com/underpass-ai/AXLR/tui/domain"
+)
+
+// ToolCatalog discovers tools through the same manager used by the executor.
+// Each returned slice belongs to its caller and is the lookup for one turn.
+type ToolCatalog struct{ Plugins *plugins.Manager }
+
+var portableName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
+
+func (c ToolCatalog) Snapshot(ctx context.Context) ([]domain.AvailableTool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	result := localToolDefinitions()
+	if c.Plugins != nil {
+		tools, err := c.Plugins.List(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, tool := range tools {
+			id, err := domain.NewPluginToolIdentity(tool.Ref)
+			if err != nil {
+				return nil, err
+			}
+			// A JSON array is an unambiguous, stable encoding of the exact pair.
+			pair, _ := json.Marshal([2]string{tool.Ref.PluginID.String(), tool.Ref.ToolName.String()})
+			digest := sha256.Sum256(pair)
+			name := root.ToolName("mcp_" + hex.EncodeToString(digest[:24]))
+			result = append(result, domain.AvailableTool{Identity: id, Definition: root.ToolDefinition{Name: name, Description: root.Text(tool.Ref.PluginID.String() + "/" + tool.Ref.ToolName.String() + ": " + tool.Description), Parameters: tool.InputSchema}})
+		}
+	}
+	if err := validateSnapshot(result); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// ResolveTool uses only the supplied turn snapshot; names never encode authority.
+func ResolveTool(snapshot []domain.AvailableTool, name root.ToolName) (domain.ToolIdentity, error) {
+	if err := validateSnapshot(snapshot); err != nil {
+		return domain.ToolIdentity{}, err
+	}
+	for _, tool := range snapshot {
+		if tool.Definition.Name == name {
+			return tool.Identity, nil
+		}
+	}
+	return domain.ToolIdentity{}, fmt.Errorf("unknown model function %q", name)
+}
+func validateSnapshot(snapshot []domain.AvailableTool) error {
+	seen := map[root.ToolName]bool{}
+	for _, tool := range snapshot {
+		name := tool.Definition.Name
+		if !portableName.MatchString(string(name)) || seen[name] {
+			return fmt.Errorf("invalid or colliding tool alias %q", name)
+		}
+		seen[name] = true
+		if err := tool.Identity.Validate(); err != nil {
+			return err
+		}
+		if _, err := root.NewJSONObject(tool.Definition.Parameters.Bytes()); err != nil {
+			return err
+		}
+		if _, err := root.NewText(string(tool.Definition.Description)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
