@@ -167,3 +167,52 @@ func (s *Session) ResumePending() error {
 	s.state = next
 	return nil
 }
+
+// PauseTurn blocks further work until an explicit user action.
+func (s *Session) PauseTurn() error {
+	if s.Status() != StatusApproval && s.Status() != StatusStreaming {
+		return errors.New("pause requires an active turn")
+	}
+	next := s.Export()
+	next.Status = StatusInterrupted
+	s.state = next
+	return nil
+}
+
+// FinishToolExecution replaces the durable uncertain checkpoint with the observed
+// result. The checkpoint itself remains a valid result if execution or saving fails.
+func (s *Session) FinishToolExecution(id axlr.ToolCallID, outcome ToolOutcome) error {
+	if s.Status() != StatusInterrupted {
+		return errors.New("execution result requires interrupted checkpoint")
+	}
+	if _, err := axlr.NewText(string(outcome.Content)); err != nil {
+		return err
+	}
+	next := s.Export()
+	found := false
+	for i, p := range next.Activity {
+		if p.Call.ID == id && p.Decision == DecisionApprove && p.Outcome != nil && p.Outcome.Uncertain {
+			next.Activity[i].Outcome = &outcome
+			found = true
+			break
+		}
+	}
+	if !found {
+		return errors.New("execution checkpoint not found")
+	}
+	for i, m := range next.Messages {
+		if m.Role == axlr.RoleTool && m.ToolCallID == id {
+			next.Messages[i].Content = outcome.Content
+			break
+		}
+	}
+	next.Status = StatusStreaming
+	for _, p := range next.Activity {
+		if p.Outcome == nil {
+			next.Status = StatusApproval
+			break
+		}
+	}
+	s.state = next
+	return nil
+}

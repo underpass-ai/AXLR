@@ -33,5 +33,5 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 		return err
 	}
 	*session = next
-	return u.Continue.Execute(ctx, session, emit)
+	return (AgentTurnUseCase{Continue: u.Continue}).Execute(ctx, session, emit)
 }
