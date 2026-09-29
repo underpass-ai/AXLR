@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- Keep `tui/` a separate Go module and root `cmd/axlr` unchanged. No new root-module terminal dependency or Pi dependency.
+- Keep `tui/` a separate Go module and root `cmd/axlr` unchanged. No new root-module terminal dependency.
 - `/model` is a control command, never a model-history message. No automatic model choice or model request on startup, catalog fetch or selection.
 - `axlr-tui` without flags uses the current directory and opens without a persisted session; exact `/model` via Enter or Ctrl+S opens the selector. Explicit `--model` bypasses discovery. `--session` loads its saved model.
 - Catalog results must support `tools` and text output. Preserve existing model, session and draft after fetch or save failure. Never show or persist the API key.

@@ -39,4 +39,4 @@ La [especificación de plugins](../superpowers/specs/2026-09-29-plugin-tools-des
 
 ## Fuera de esta entrega
 
-Sandbox, medidas comparativas y cualquier backend remoto. El contrato mantiene el núcleo independiente de posibles consumidores. La relación con el runtime anterior y la referencia conceptual a Pi se describen en [../provenance.md](../provenance.md).
+Sandbox, medidas comparativas y cualquier backend remoto. El contrato mantiene el núcleo independiente de posibles consumidores. La relación con el runtime anterior se describe en [../provenance.md](../provenance.md).

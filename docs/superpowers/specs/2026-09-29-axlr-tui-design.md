@@ -2,7 +2,7 @@
 
 ## Intent and scope
 
-AXLR needs a capable terminal console for an agent working in a local workspace. The console must support a real OpenRouter conversation, incremental output, AXLR's local tools and explicitly registered MCP tools, deliberate approval of every tool call, and sessions that can be resumed. It should remain usable with a keyboard alone while offering mouse controls. This is Underpass's own AXLR runtime and interface; it does not embed Pi or delegate execution to Pi.
+AXLR needs a capable terminal console for an agent working in a local workspace. The console must support a real OpenRouter conversation, incremental output, AXLR's local tools and explicitly registered MCP tools, deliberate approval of every tool call, and sessions that can be resumed. It should remain usable with a keyboard alone while offering mouse controls. This is Underpass's own AXLR runtime and interface.
 
 The console is a separate `tui/` Go module in this repository. Its executable is `axlr-tui`; the existing one-request `cmd/axlr` JSON worker and its protocol retain their current behavior. The first release targets the existing trusted-local Linux profile. It is a terminal application for one human user and one active agent session at a time. Saved sessions may be reopened, but concurrent processes must not write the same session.
 

@@ -12,7 +12,7 @@
 
 AXLR users can discover and select an OpenRouter model inside the console by typing `/model`. The command presents a searchable list of models that support tool calls. A selected model applies to subsequent model requests in the current session. Running `axlr-tui` without flags uses the current directory as the workspace and lets the user choose a model with `/model` before creating a session. There is no automatic picker on launch.
 
-This extends AXLR's own runtime and TUI. It does not introduce Pi or a Pi runtime dependency. The existing `cmd/axlr` JSON worker and its interface remain unchanged.
+This extends AXLR's own runtime and TUI. The existing `cmd/axlr` JSON worker and its interface remain unchanged.
 
 ## User experience
 

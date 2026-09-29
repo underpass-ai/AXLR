@@ -11,4 +11,4 @@ The architecture and quality requirements added during implementation are fixed 
 5. Cover validation, file conflicts, UTF-8 pagination, process exit, output limits, timeout, cancellation and CLI framing with Go tests.
 6. Verify format, tests, race detector, vet, static build and offline dependency graph; document the contract and limitations.
 
-The Go package is the library API; `cmd/axlr` is the worker. The first release does not claim sandbox isolation or exactly-once effects. AXLR is Underpass's own runtime, with a selective contract lineage documented in [../provenance.md](../provenance.md). Pi is a conceptual reference for the compact tool surface, not a dependency. Comparative measurements require a separate pilot.
+The Go package is the library API; `cmd/axlr` is the worker. The first release does not claim sandbox isolation or exactly-once effects. AXLR is Underpass's own runtime, with a selective contract lineage documented in [../provenance.md](../provenance.md). Comparative measurements require a separate pilot.

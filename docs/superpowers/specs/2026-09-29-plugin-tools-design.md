@@ -2,7 +2,7 @@
 
 ## Purpose and approved direction
 
-AXLR is Underpass's own runtime, selectively rewritten from `underpass-runtime`. Plugins add agent tools to AXLR. They are external processes that speak MCP over stdio. The same plugin tools must be available through the Go library and the existing one-request `axlr` worker. One AXLR binary serves local and plugin requests. AXLR does not load Pi code, use Pi as a runtime, or publish its local tools as an MCP server.
+AXLR is Underpass's own runtime, selectively rewritten from `underpass-runtime`. Plugins add agent tools to AXLR. They are external processes that speak MCP over stdio. The same plugin tools must be available through the Go library and the existing one-request `axlr` worker. One AXLR binary serves local and plugin requests. AXLR does not publish its local tools as an MCP server.
 
 The user chose external processes, tool contributions (not execution hooks), MCP stdio, and a single binary. This design preserves the four existing local tools and their JSON behavior.
 

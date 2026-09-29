@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- AXLR is Underpass's own runtime; no Pi code or runtime.
+- AXLR is Underpass's own runtime.
 - Library-only, non-streaming, fixed production endpoint `https://openrouter.ai/api/v1/chat/completions`.
 - No automatic tool execution, completion retry, provider routing, new worker operation, or root-level Go source.
 - API key injected explicitly; it must not appear in errors or logs. No redirects or optional attribution headers.

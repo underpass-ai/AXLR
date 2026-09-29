@@ -1,6 +1,6 @@
 # AXLR
 
-**Agent eXecution Local Runtime** is Underpass's own local execution runtime. It is a focused rewrite of the execution layer in our [underpass-runtime](https://github.com/underpass-ai/underpass-runtime), delivered as a Go library and a one-request JSON worker for `read`, `write`, `edit`, `exec`, and explicitly registered plugin tools. Pi informed the choice of a compact local tool surface; AXLR does not use Pi code or runtime. The first profile is `trusted-local` on Linux. It runs with the OS access of its host account; it is **not a sandbox**.
+**Agent eXecution Local Runtime** is Underpass's own local execution runtime. It is a focused rewrite of the execution layer in our [underpass-runtime](https://github.com/underpass-ai/underpass-runtime), delivered as a Go library and a one-request JSON worker for `read`, `write`, `edit`, `exec`, and explicitly registered plugin tools.
 
 ## Build and run
 
