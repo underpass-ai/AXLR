@@ -26,6 +26,30 @@ func (m RequestMapper) Map(req dto.Request) (any, error) {
 		return nil, errors.New("invalid arguments")
 	}
 	switch req.Tool {
+	case "plugins.list":
+		var a dto.PluginListArgs
+		if err := strictJSON(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		return domain.PluginListCommand{}, nil
+	case "plugins.call":
+		var a dto.PluginCallArgs
+		if err := strictJSON(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		id, err := domain.NewPluginID(a.PluginID)
+		if err != nil {
+			return nil, err
+		}
+		name, err := domain.NewPluginToolName(a.ToolName)
+		if err != nil {
+			return nil, err
+		}
+		arguments, err := domain.NewJSONObject(a.Arguments)
+		if err != nil {
+			return nil, err
+		}
+		return domain.PluginCall{Ref: domain.PluginRef{PluginID: id, ToolName: name}, Arguments: arguments}, nil
 	case "read":
 		var a dto.ReadArgs
 		if err := strictJSON(req.Arguments, &a); err != nil {
