@@ -1,6 +1,7 @@
 package plugins
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -122,7 +123,9 @@ func (m *Manager) Call(ctx context.Context, call domain.PluginCall) (domain.Plug
 		return domain.PluginResult{}, domain.Reject("unknown_plugin_tool", "plugin tool is not allowed")
 	}
 	var arguments map[string]any
-	if err := json.Unmarshal(call.Arguments.Bytes(), &arguments); err != nil || arguments == nil {
+	decoder := json.NewDecoder(bytes.NewReader(call.Arguments.Bytes()))
+	decoder.UseNumber()
+	if err := decoder.Decode(&arguments); err != nil || arguments == nil {
 		return domain.PluginResult{}, domain.Reject("invalid_arguments", "plugin arguments must be an object")
 	}
 	if err := m.connect(ctx, call.Ref.PluginID); err != nil {

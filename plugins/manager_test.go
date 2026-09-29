@@ -2,6 +2,7 @@ package plugins
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -132,6 +133,18 @@ func TestManagerCancelledCallIsNotRetried(t *testing.T) {
 	}
 }
 
+func TestManagerPreservesLargeJSONInteger(t *testing.T) {
+	m, err := NewManager([]Registration{pluginRegistration(t, "numbers", []domain.PluginToolName{"number"})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	result, err := m.Call(context.Background(), pluginCall(t, "numbers", "number", `{"n":9007199254740993}`))
+	if err != nil || len(result.Content) != 1 || !strings.Contains(string(result.Content[0].Bytes()), "9007199254740993") {
+		t.Fatalf("numeric argument changed: %+v, %v", result, err)
+	}
+}
+
 func TestPluginHelper(t *testing.T) {
 	if os.Getenv("AXLR_PLUGIN_HELPER") != "1" {
 		return
@@ -161,6 +174,13 @@ func TestPluginHelper(t *testing.T) {
 		}
 		<-ctx.Done()
 		return nil, nil, ctx.Err()
+	})
+	server.AddTool(&mcp.Tool{Name: "number", InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		var args map[string]json.RawMessage
+		if err := json.Unmarshal(request.Params.Arguments, &args); err != nil {
+			return nil, err
+		}
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(args["n"])}}}, nil
 	})
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		os.Exit(2)
