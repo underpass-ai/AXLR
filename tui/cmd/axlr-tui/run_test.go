@@ -31,7 +31,9 @@ func TestRunRejectsInvalidConfigurationBeforeLaunch(t *testing.T) {
 		args  []string
 		noKey bool
 	}{
-		{"root", []string{"--model", "test/model"}, false}, {"model", []string{"--root", rootDir}, false}, {"key", []string{"--root", rootDir, "--model", "test/model"}, true},
+		{"key", []string{"--root", rootDir, "--model", "test/model"}, true},
+		{"bare-key", nil, true},
+		{"bare-manifest", []string{"--plugin", filepath.Join(rootDir, "missing.json")}, false},
 		{"unknown", []string{"--unknown"}, false}, {"positional", []string{"--root", rootDir, "--model", "test/model", "extra"}, false},
 		{"missing-root", []string{"--root", filepath.Join(rootDir, "absent"), "--model", "test/model"}, false},
 		{"manifest", []string{"--root", rootDir, "--model", "test/model", "--plugin", filepath.Join(rootDir, "missing.json")}, false},
@@ -135,7 +137,7 @@ func TestRunResumeRequiresExplicitContinuationAndUsesConfiguredAgent(t *testing.
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"resumed\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")), Header: make(http.Header)}, nil
 	})
 	var out bytes.Buffer
-	code := run(ctx, []string{"--root", workspace, "--model", "test/model", "--session", string(s.Export().ID)}, func(k string) string { return env[k] }, func(m tea.Model) error {
+	code := run(ctx, []string{"--root", workspace, "--session", string(s.Export().ID)}, func(k string) string { return env[k] }, func(m tea.Model) error {
 		if calls != 0 || m.(terminal.AppModel).Header.State.Status != domain.StatusInterrupted {
 			t.Fatal("auto resume")
 		}

@@ -9,10 +9,14 @@ Use Go 1.26 from this repository checkout:
 ```bash
 go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
 # Supply OPENROUTER_API_KEY through your environment or secret manager.
-/tmp/axlr-tui --root "$PWD" --model 'your-provider/your-model'
+/tmp/axlr-tui
 ```
 
-Both `--root` and `--model` are required. Choose an OpenRouter model that supports tools. `OPENROUTER_API_KEY` is required at startup; it is never placed in session snapshots or plugin environments. Starting the console does not make a model request. Submit a prompt to begin. `--help` lists all flags.
+`--root` defaults to the current directory. Type `/model` and press Enter (or Ctrl+S) to choose a model before sending your first prompt. The searchable catalog lists text models that support tools, with context limits and pricing when available. Arrow keys and PgUp/PgDn navigate, Enter selects, and Esc closes; failed requests offer Retry. The action palette also offers Models and preserves a drafted prompt.
+
+Use `--model your-provider/your-model` to start directly without fetching the catalog. Bare startup does not create a session snapshot or lock file; choosing a model saves the first session. Quitting or a catalog failure before selection leaves no session. Changing models is allowed only while idle, complete, or interrupted without pending tool calls. Selection applies to subsequent requests and preserves the transcript; a failed save keeps the previous model.
+
+`OPENROUTER_API_KEY` is required at startup; it is never placed in session snapshots or plugin environments. Starting the console does not make a model request. Submit a prompt to begin. `--help` lists all flags.
 
 The separate module uses the repository's root AXLR library. `go.work` supports development, and `tui/go.mod` has a local `replace` so `GOWORK=off go -C tui build ./cmd/axlr-tui` also works without fetching an unreleased AXLR version. Build from a full repository checkout.
 
@@ -21,7 +25,7 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 | Key | Action |
 | --- | --- |
 | Ctrl+S | Send prompt |
-| Enter | Newline |
+| Enter | Newline; open models when the editor contains exactly `/model` |
 | A / D | Approve / deny the displayed tool call |
 | Esc | Close overlay or cancel the current turn |
 | Ctrl+C | Cancel active work; quit when idle |
@@ -67,11 +71,11 @@ Sessions contain prompts, model output, tool arguments and results: treat them a
 The header identifies the current session. Open another through Ctrl+O, or start with:
 
 ```bash
-/tmp/axlr-tui --root "$PWD" --model 'your-provider/your-model' \
+/tmp/axlr-tui --root "$PWD" \
   --session 0123456789abcdef0123456789abcdef
 ```
 
-The startup workspace and model must match the saved session. The picker refuses a different workspace. Restored in-progress sessions appear interrupted and do not execute anything on load. Ctrl+R explicitly continues; pending calls reopen for individual decisions. Partial output is kept as an interrupted draft, outside valid model history. SIGTERM or terminal failure cancels active work and waits for its stable save before releasing resources.
+The startup workspace must match the saved session. `--session` restores its saved model without fetching the catalog. If you also supply `--model`, it must match the saved model; use `/model` after loading to change it. The picker refuses a different workspace. Restored in-progress sessions appear interrupted and do not execute anything on load. Ctrl+R explicitly continues; pending calls reopen for individual decisions. Partial output is kept as an interrupted draft, outside valid model history. SIGTERM or terminal failure cancels active work and waits for its stable save before releasing resources.
 
 ## Development checks
 

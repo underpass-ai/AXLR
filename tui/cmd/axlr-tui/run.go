@@ -19,6 +19,7 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
+	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -40,8 +41,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	flags := flag.NewFlagSet("axlr-tui", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
-	workspaceFlag := flags.String("root", "", "existing workspace root (required)")
-	modelFlag := flags.String("model", "", "OpenRouter model ID (required)")
+	workspaceFlag := flags.String("root", ".", "existing workspace root (default current directory)")
+	modelFlag := flags.String("model", "", "OpenRouter model ID (optional; choose with /model)")
 	sessionFlag := flags.String("session", "", "saved session ID")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
@@ -54,8 +55,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		return fail(err)
 	}
-	if *workspaceFlag == "" || *modelFlag == "" || flags.NArg() != 0 {
-		return fail(errors.New("--root and --model are required; positional arguments are not accepted"))
+	if flags.NArg() != 0 {
+		return fail(errors.New("positional arguments are not accepted"))
 	}
 	workspacePath, err := filepath.Abs(*workspaceFlag)
 	if err != nil {
@@ -69,9 +70,12 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
-	model, err := root.NewModelID(*modelFlag)
-	if err != nil {
-		return fail(err)
+	var model root.ModelID
+	if *modelFlag != "" {
+		model, err = root.NewModelID(*modelFlag)
+		if err != nil {
+			return fail(err)
+		}
 	}
 	clientHTTP := &http.Client{}
 	defer clientHTTP.CloseIdleConnections()
@@ -106,17 +110,19 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		return fail(err)
 	}
 	defer store.Close()
-	var session domain.Session
+	var session *domain.Session
+	var newID domain.SessionID
 	if *sessionFlag != "" {
 		id, e := domain.NewSessionID(*sessionFlag)
 		if e != nil {
 			return fail(e)
 		}
-		session, err = store.Load(ctx, id)
-		if err != nil {
-			return fail(err)
+		loaded, loadErr := store.Load(ctx, id)
+		if loadErr != nil {
+			return fail(loadErr)
 		}
-		if session.Export().Workspace != workspace || session.Export().Model != model {
+		session = &loaded
+		if session.Export().Workspace != workspace || (*modelFlag != "" && session.Export().Model != model) {
 			return fail(errors.New("saved session workspace/model differ from --root/--model"))
 		}
 	} else {
@@ -124,25 +130,30 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if _, err = rand.Read(random[:]); err != nil {
 			return fail(err)
 		}
-		id, _ := domain.NewSessionID(hex.EncodeToString(random[:]))
-		session, err = domain.NewSession(id, workspace, model)
-		if err != nil {
-			return fail(err)
-		}
-		if err = store.Save(ctx, session); err != nil {
-			return fail(err)
+		newID, _ = domain.NewSessionID(hex.EncodeToString(random[:]))
+		if *modelFlag != "" {
+			created, createErr := (application.CreateSessionUseCase{Store: store}).Execute(ctx, newID, workspace, model)
+			if createErr != nil {
+				return fail(createErr)
+			}
+			session = &created
 		}
 	}
 	continuation := application.ContinueTurnUseCase{Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: store}
 	app := terminal.New(terminal.Dependencies{
-		Context:    ctx,
-		Start:      application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: store, Continue: continuation},
-		Resolve:    application.ResolveToolUseCase{Tools: axlr.ToolRunner{Executor: executor}, Store: store, Continue: continuation},
-		Agent:      application.AgentTurnUseCase{Continue: continuation},
-		Search:     application.SearchSessionUseCase{},
-		Store:      store,
-		Session:    &session,
-		Monochrome: getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
+		Context:      ctx,
+		Models:       application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}},
+		Create:       application.CreateSessionUseCase{Store: store},
+		Change:       application.ChangeSessionModelUseCase{Store: store},
+		Workspace:    workspace,
+		NewSessionID: newID,
+		Start:        application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: store, Continue: continuation},
+		Resolve:      application.ResolveToolUseCase{Tools: axlr.ToolRunner{Executor: executor}, Store: store, Continue: continuation},
+		Agent:        application.AgentTurnUseCase{Continue: continuation},
+		Search:       application.SearchSessionUseCase{},
+		Store:        store,
+		Session:      session,
+		Monochrome:   getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
 	})
 	defer app.Close()
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
