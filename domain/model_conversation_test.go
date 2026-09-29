@@ -106,3 +106,22 @@ func TestCompletionRequestValidatesConversation(t *testing.T) {
 		t.Fatal("repeated tool result accepted")
 	}
 }
+
+func TestJSONObjectCanServePluginAndModelToolArguments(t *testing.T) {
+	object, err := NewJSONObject([]byte(`{"query":"shared"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plugin := PluginCall{Arguments: object}
+	model := ToolCall{ID: "call_1", Name: "search", Arguments: object}
+	if string(plugin.Arguments.Bytes()) != `{"query":"shared"}` || model.validate() != nil {
+		t.Fatal("shared object is invalid for plugin or model call")
+	}
+	array, err := NewJSONValue([]byte(`[]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := (ToolCall{ID: "call_2", Name: "search", Arguments: array}).validate(); err == nil {
+		t.Fatal("model tool call accepted a JSON array")
+	}
+}

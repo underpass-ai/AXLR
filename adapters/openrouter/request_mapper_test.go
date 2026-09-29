@@ -22,7 +22,7 @@ func assertJSONEqual(t *testing.T, got []byte, want string) {
 	}
 }
 
-func testObject(t *testing.T, raw string) domain.JSONObject {
+func testObject(t *testing.T, raw string) domain.JSONValue {
 	t.Helper()
 	object, err := domain.NewJSONObject([]byte(raw))
 	if err != nil {

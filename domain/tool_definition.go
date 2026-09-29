@@ -5,7 +5,7 @@ import "errors"
 type ToolDefinition struct {
 	Name        ToolName
 	Description Text
-	Parameters  JSONObject
+	Parameters  JSONValue
 }
 
 func (d ToolDefinition) validate() error {
@@ -15,7 +15,7 @@ func (d ToolDefinition) validate() error {
 	if _, err := NewText(string(d.Description)); err != nil {
 		return err
 	}
-	if !d.Parameters.valid() {
+	if !d.Parameters.isObject() {
 		return errors.New("tool parameters must be a JSON object")
 	}
 	return nil
