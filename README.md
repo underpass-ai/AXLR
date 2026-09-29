@@ -1,6 +1,6 @@
 # AXLR
 
-**Agent eXecution Local Runtime** is a small Go library and a one-request JSON worker for four tools: `read`, `write`, `edit`, and `exec`. The first profile is `trusted-local` on Linux. It runs with the OS access of its host account; it is **not a sandbox**.
+**Agent eXecution Local Runtime** is Underpass's own local execution runtime. It is a focused rewrite of the execution layer in our [underpass-runtime](https://github.com/underpass-ai/underpass-runtime), delivered as a small Go library and a one-request JSON worker for `read`, `write`, `edit`, and `exec`. Pi informed the choice of a compact tool surface; AXLR does not use Pi code or runtime. The first profile is `trusted-local` on Linux. It runs with the OS access of its host account; it is **not a sandbox**.
 
 ## Build and run
 
@@ -44,4 +44,4 @@ The worker exits `0` after a valid protocol request even when the tool failed, `
 
 `domain/` holds value objects and operation commands/results. `application/` holds ports and use cases. `adapters/local/` implements filesystem and process ports. Root-level DTOs, mappers, codec and executor compose the public library. `cmd/axlr/` is the protocol adapter. Each Go file has one primary type where a type is needed.
 
-The [design](docs/plans/2026-09-29-hexagonal-design.md) and [implementation plan](docs/plans/2026-09-29-minimal-runtime.md) record the boundaries. Pi integration, sandboxing and comparative performance measurements require separate pilots.
+The [design](docs/plans/2026-09-29-hexagonal-design.md), [implementation plan](docs/plans/2026-09-29-minimal-runtime.md), and [provenance note](docs/provenance.md) record the boundaries and lineage. Sandboxing and comparative performance measurements are outside this delivery.

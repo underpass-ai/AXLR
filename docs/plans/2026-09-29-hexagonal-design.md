@@ -2,7 +2,7 @@
 
 ## Intención
 
-AXLR expone una biblioteca Go y un worker JSON de una solicitud para `read`, `write`, `edit` y `exec` en Linux local confiable. El host proporciona el workspace, entorno y límites. El worker no decide permisos ni mantiene estado de negocio.
+AXLR es el nuevo núcleo de ejecución propio de Underpass, reescrito de forma selectiva a partir de nuestro `underpass-runtime`. Expone una biblioteca Go y un worker JSON de una solicitud para `read`, `write`, `edit` y `exec` en Linux local confiable. El host proporciona el workspace, entorno y límites. El worker no decide permisos ni mantiene estado de negocio.
 
 ## Capas y flujo
 
@@ -35,4 +35,4 @@ Pruebas de dominio para los value objects, pruebas de casos de uso para conflict
 
 ## Fuera de esta entrega
 
-Sandbox, adaptador Pi, medidas comparativas y cualquier backend remoto. El contrato debe permitir esos consumidores sin cargar sus dependencias en el núcleo.
+Sandbox, medidas comparativas y cualquier backend remoto. El contrato mantiene el núcleo independiente de posibles consumidores. La relación con el runtime anterior y la referencia conceptual a Pi se describen en [../provenance.md](../provenance.md).
