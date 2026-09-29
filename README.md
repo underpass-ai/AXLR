@@ -17,9 +17,15 @@ The worker consumes one JSON document from stdin and emits one JSON response on 
 
 The library entrypoint is `runtime.New(runtime.Config)` followed by `Executor.Execute(ctx, dto.Request)` and `Close()`. An executor serializes requests. A host can set lower maximums in `Config`; requests cannot raise them.
 
+## Interactive agent console
+
+The separate [`tui/` module](tui/README.md) provides `axlr-tui`: OpenRouter streaming, per-call tool approval, local and MCP tools, saved sessions and transcript search. Build it from this checkout with `go -C tui build -o /tmp/axlr-tui ./cmd/axlr-tui`, then supply `OPENROUTER_API_KEY` in the environment and run `/tmp/axlr-tui --root "$PWD" --model 'your-provider/your-model'`. See the TUI guide for controls, plugin environment selections and recovery.
+
+Root and TUI modules have separate test gates. The root library has no terminal dependencies; the JSON worker above keeps its one-request contract.
+
 ## OpenRouter model client
 
-The Go library can request a non-streaming model completion through OpenRouter. The host supplies `OPENROUTER_API_KEY` through its own secret mechanism; AXLR does not read the environment or store the key for the host. The model client is separate from the JSON worker.
+The Go library supports non-streaming completions and SSE streaming through OpenRouter. `application.StreamModelUseCase` and `Client.Stream` emit text deltas and return a validated complete response; they do not execute tools. The host supplies `OPENROUTER_API_KEY` through its own secret mechanism; AXLR does not read the environment or store the key for the host. The model client is separate from the JSON worker.
 
 ```go
 import (
