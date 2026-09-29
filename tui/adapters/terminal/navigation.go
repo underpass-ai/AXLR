@@ -238,7 +238,13 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return err
 		})
 		return m, func() tea.Msg {
-			done := cmd().(operationComplete)
+			message := cmd()
+			done, ok := message.(operationComplete)
+			if !ok {
+				// Shutdown can close the operation channel without publishing
+				// completion when nobody is left to consume its events.
+				return message
+			}
 			if done.Err == nil {
 				done.Sessions = &summaries
 			}
