@@ -214,6 +214,30 @@ func TestNavigationSearchDuplicateMessageTargets(t *testing.T) {
 		t.Fatal("second identical message navigated to first")
 	}
 }
+
+func TestNavigationSearchTargetsArchivedDraftRow(t *testing.T) {
+	s := navSession(t)
+	if err := s.BeginTurn(root.Text(strings.Repeat("earlier line\n", 40)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft("archived needle"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("later question", nil); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	m = update(m, ControlIntent("search"))
+	for _, r := range "needle" {
+		m = update(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	if len(m.SearchBox.Hits) != 1 || m.SearchBox.Hits[0].ArchivedDraftIndex == nil {
+		t.Fatalf("search missed archived draft: %+v", m.SearchBox.Hits)
+	}
+	if m.Transcript.Viewport.YOffset() == 0 || !strings.Contains(m.Transcript.View(), "archived needle") {
+		t.Fatalf("search did not reveal archived row at offset %d: %q", m.Transcript.Viewport.YOffset(), m.Transcript.View())
+	}
+}
 func TestNavigationInterruptedMinimumWidth(t *testing.T) {
 	s := navSession(t)
 	s.BeginTurn("q", nil)

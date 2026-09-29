@@ -50,7 +50,11 @@ func selectionModel(t *testing.T, session *domain.Session) (AppModel, *storage.S
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { store.Close() })
-	m := update(New(Dependencies{Session: session, Workspace: "/tmp", NewSessionID: "0123456789abcdef0123456789abcdef", Store: store, Models: application.ListModelsUseCase{Catalog: modelCatalogStub{}}, Create: application.CreateSessionUseCase{Store: store}, Change: application.ChangeSessionModelUseCase{Store: store}, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
+	preference, err := storage.NewModelPreferenceStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := update(New(Dependencies{Session: session, Workspace: "/tmp", NewSessionID: "0123456789abcdef0123456789abcdef", Store: store, Models: application.ListModelsUseCase{Catalog: modelCatalogStub{}}, ModelPreference: preference, Create: application.CreateSessionUseCase{Store: store}, Change: application.ChangeSessionModelUseCase{Store: store}, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
 	t.Cleanup(m.Close)
 	return m, store
 }
@@ -97,6 +101,10 @@ func TestModelSelectionCreateAndChangePersist(t *testing.T) {
 			m = chooseModel(t, m)
 			if m.Header.State.Model != "provider/chosen" || m.overlay != "" || m.Composer.Input.Value() != "draft survives" {
 				t.Fatal("selection did not publish or lost draft")
+			}
+			preferred, err := m.deps.ModelPreference.Load(context.Background())
+			if err != nil || preferred != "provider/chosen" {
+				t.Fatalf("selected model not remembered: %q, %v", preferred, err)
 			}
 			saved, err := store.Load(context.Background(), "0123456789abcdef0123456789abcdef")
 			if err != nil || saved.Export().Model != "provider/chosen" {
@@ -157,6 +165,22 @@ func TestModelSelectionSaveFailureKeepsOldModel(t *testing.T) {
 	m = chooseModel(t, m)
 	if s.Export().Model != "model" || m.Header.State.Model != "model" || !strings.Contains(m.View().Content, "disk full") {
 		t.Fatal("failed save published selection")
+	}
+}
+
+type unavailableModelPreference struct{}
+
+func (unavailableModelPreference) Load(context.Context) (root.ModelID, error) { return "", nil }
+func (unavailableModelPreference) Save(context.Context, root.ModelID) error {
+	return errors.New("preference disk full")
+}
+
+func TestModelSelectionKeepsChosenSessionWhenDefaultCannotBeSaved(t *testing.T) {
+	m, _ := selectionModel(t, nil)
+	m.deps.ModelPreference = unavailableModelPreference{}
+	m = chooseModel(t, openModels(t, m))
+	if m.Header.State.Model != "provider/chosen" || m.overlay != "" || !strings.Contains(m.Status.Error, "default") {
+		t.Fatalf("selection and preference failure were conflated: %+v", m.Status)
 	}
 }
 func TestModelSelectionBusyAndPendingPriority(t *testing.T) {

@@ -29,3 +29,20 @@ func TestSearchSessionCaseInsensitiveStableOrder(t *testing.T) {
 		t.Fatal("spurious hits")
 	}
 }
+
+func TestSearchIncludesArchivedDraftBetweenItsUserTurns(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn("first match", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft("archived match"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("second match", nil); err != nil {
+		t.Fatal(err)
+	}
+	hits := (SearchSessionUseCase{}).Execute(s, "match")
+	if len(hits) != 3 || hits[0].MessageIndex == nil || *hits[0].MessageIndex != 0 || hits[1].ArchivedDraftIndex == nil || *hits[1].ArchivedDraftIndex != 0 || hits[2].MessageIndex == nil || *hits[2].MessageIndex != 1 {
+		t.Fatalf("archived draft search order is wrong: %+v", hits)
+	}
+}

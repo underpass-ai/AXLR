@@ -12,9 +12,9 @@ go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
 /tmp/axlr-tui
 ```
 
-`--root` defaults to the current directory. Type `/model` and press Enter to choose a model before sending your first prompt. The searchable catalog lists text models that support tools, with context limits and pricing when available. Arrow keys and PgUp/PgDn navigate, Enter selects, and Esc closes; failed requests offer Retry. The action palette also offers Models and preserves a drafted prompt.
+`--root` defaults to the current directory. Type `/model` and press Enter to choose a model before sending your first prompt. The searchable catalog lists text models that support tools, with context limits and pricing when available. Arrow keys and PgUp/PgDn navigate, Enter selects, and Esc closes; failed requests offer Retry. The action palette also offers Models and preserves a drafted prompt. The model selected through `/model` becomes the default for future new sessions.
 
-Use `--model your-provider/your-model` to start directly without fetching the catalog. Bare startup does not create a session snapshot or lock file; choosing a model saves the first session. Quitting or a catalog failure before selection leaves no session. Changing models is allowed only while idle, complete, or interrupted without pending tool calls. Selection applies to subsequent requests and preserves the transcript; a failed save keeps the previous model.
+Use `--model your-provider/your-model` to override the default for one launch without fetching the catalog. Bare startup uses the saved default, if one exists; otherwise it does not create a session snapshot or lock file until a model is chosen. Quitting or a catalog failure before the first selection leaves no session. Changing models is allowed only while idle, complete, or interrupted without pending tool calls. Selection applies to subsequent requests and preserves the transcript. If saving the default fails after a session model change, the new session model remains active and the TUI shows a warning.
 
 `OPENROUTER_API_KEY` is required at startup; it is never placed in session snapshots or plugin environments. Starting the console does not make a model request. Submit a prompt to begin. `--help` lists all flags.
 
@@ -35,12 +35,12 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 | Ctrl+P | Action palette |
 | Ctrl+O | Saved sessions; arrows select, Enter opens |
 | F1 | Help |
-| Tab | Transcript / activity at narrow widths |
+| Tab | Transcript / activity |
 | PgUp / PgDn | Scroll |
 
 Mouse controls match the keyboard actions. Tool arguments and exact targets appear before approval; scroll approval details with arrows, PgUp/PgDn or the wheel. Every tool call requires its own decision. A turn allows up to 32 tool calls. Unknown calls are rejected. Cancelled or uncertain effects are recorded and never automatically retried.
 
-Use a terminal of at least 50 columns by 15 rows. Wide terminals show activity beside the transcript; narrower terminals use tabs. Assistant rows use a subtle background selected for the terminal's light or dark theme. Set `NO_COLOR=1` for monochrome output. The terminal controls the font, including Nerd Fonts.
+Use a terminal of at least 50 columns by 15 rows. The transcript occupies the full terminal width; Tab opens the activity view. User and assistant turns are separate, full-width rows with subtle backgrounds selected for the terminal's light or dark theme. Rows wrap to their content, and the transcript scrolls as turns accumulate. Set `NO_COLOR=1` for monochrome output. The terminal controls the font, including Nerd Fonts.
 
 ## Plugins
 
@@ -66,7 +66,7 @@ Register each plugin explicitly with an absolute path to a [version 1 AXLR manif
 
 ## Local sessions and recovery
 
-Sessions contain prompts, model output, tool arguments and results: treat them as local user data. They live under `$XDG_STATE_HOME/axlr/sessions`, or `$HOME/.local/state/axlr/sessions` if XDG state home is unset or relative. Directories are owner-only (0700), snapshots are 0600, updates use atomic replacement, and each open session has an exclusive writer lock.
+Sessions contain prompts, model output, tool arguments and results: treat them as local user data. They live under `$XDG_STATE_HOME/axlr/sessions`, or `$HOME/.local/state/axlr/sessions` if XDG state home is unset or relative. The default model is stored separately at `$XDG_STATE_HOME/axlr/model-preference.json`, or the equivalent path under `$HOME/.local/state`. Directories are owner-only (0700), snapshots and the preference file are 0600, updates use atomic replacement, and each open session has an exclusive writer lock.
 
 The header identifies the current session. Open another through Ctrl+O, or start with:
 

@@ -88,3 +88,46 @@ func TestTranscriptUnsentPromptKeepsAssistantRowColor(t *testing.T) {
 		t.Fatalf("assistant color or unsent prompt lost: %q", transcript.View())
 	}
 }
+
+func TestTranscriptInterleavesRowsAndScrollsWhenTheyExceedTerminal(t *testing.T) {
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("first question", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft("first partial answer"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("second question", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "second answer"}}); err != nil {
+		t.Fatal(err)
+	}
+	transcript := NewTranscript()
+	transcript.Viewport.SetWidth(30)
+	transcript.Viewport.SetHeight(3)
+	transcript.SetSession(s.Export(), "", Theme{})
+	content := transcript.Viewport.GetContent()
+	for _, item := range []string{"user: first question", "interrupted draft: first partial answer", "user: second question", "assistant: second answer"} {
+		if !strings.Contains(content, item) {
+			t.Fatalf("missing row %q in %q", item, content)
+		}
+	}
+	if strings.Index(content, "user: first") > strings.Index(content, "interrupted draft") || strings.Index(content, "interrupted draft") > strings.Index(content, "user: second") || strings.Index(content, "user: second") > strings.Index(content, "assistant: second") {
+		t.Fatalf("rows not in conversation order: %q", content)
+	}
+	if transcript.Viewport.TotalLineCount() <= 3 || lipgloss.Height(transcript.View()) != 3 {
+		t.Fatal("rows do not scroll inside a fixed height")
+	}
+	transcript.Viewport.GotoTop()
+	if !strings.Contains(transcript.View(), "first question") || strings.Contains(transcript.View(), "second answer") {
+		t.Fatal("top of scrollable conversation is wrong")
+	}
+	transcript.Viewport.GotoBottom()
+	if !strings.Contains(transcript.View(), "second answer") || lipgloss.Width(transcript.View()) != 30 {
+		t.Fatal("bottom row is missing or not full width")
+	}
+}

@@ -225,6 +225,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.draft == "" {
 			m.Status.Error = ""
 		}
+		if v.ModelSelection && v.Err == nil && v.PreferenceErr != nil {
+			m.Status.Error = "Model selected, but its default could not be saved"
+		}
 		m.refreshTranscript()
 		m.syncApproval()
 		return m, nil
@@ -262,6 +265,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Error = ""
 			m.draft = ""
 			m.draftOperationID = 0
+			if m.Header.State.Status == domain.StatusInterrupted && m.Header.State.Draft != "" {
+				m.Header.State.ArchivedDrafts = append(m.Header.State.ArchivedDrafts, domain.ArchivedDraft{AfterMessage: len(m.Header.State.Messages), Content: m.Header.State.Draft})
+				m.Header.State.Draft = ""
+			}
 			m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: prompt})
 			m.refreshTranscript()
 			cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
@@ -330,14 +337,10 @@ func (m AppModel) View() tea.View {
 		content = ansi.Truncate("Resize terminal to at least 50 × 15", max(1, m.Layout.Width), "")
 	} else {
 		body := m.Transcript.View()
-		if m.Layout.SidePanel {
-			body = lipgloss.JoinHorizontal(lipgloss.Top, body, " ", m.Activity.View(28, m.Layout.BodyHeight))
-		} else {
-			if m.ActivityTab {
-				body = m.Activity.View(m.Layout.Width, m.Layout.BodyHeight)
-			}
-			body = lipgloss.JoinVertical(lipgloss.Left, m.Activity.Tabs(m.zones, m.prefix), body)
+		if m.ActivityTab {
+			body = m.Activity.View(m.Layout.Width, m.Layout.BodyHeight)
 		}
+		body = lipgloss.JoinVertical(lipgloss.Left, m.Activity.Tabs(m.zones, m.prefix), body)
 		controls := m.Composer.Controls(m.zones, m.prefix)
 		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, m.Composer.View(), controls, m.Status.View(m.Layout.Width))
 	}
@@ -352,10 +355,7 @@ func (m AppModel) View() tea.View {
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && !m.approvalFocus() && m.overlay == "" {
 		view.Cursor = m.Composer.Input.Cursor()
 		if view.Cursor != nil {
-			view.Cursor.Y += 1 + m.Layout.BodyHeight
-			if !m.Layout.SidePanel {
-				view.Cursor.Y++
-			}
+			view.Cursor.Y += 2 + m.Layout.BodyHeight
 		}
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && m.overlay == "models" && !m.approvalFocus() {

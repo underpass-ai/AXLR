@@ -65,6 +65,9 @@ func (s *Session) BeginTurn(prompt axlr.Text, tools []AvailableTool) error {
 		return err
 	}
 	next := s.Export()
+	if s.Status() == StatusInterrupted && next.Draft != "" {
+		next.ArchivedDrafts = append(next.ArchivedDrafts, ArchivedDraft{AfterMessage: len(next.Messages), Content: next.Draft})
+	}
 	next.Messages = append(next.Messages, message)
 	next.ToolSnapshot = append([]AvailableTool(nil), tools...)
 	next.Status = StatusStreaming

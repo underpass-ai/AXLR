@@ -10,10 +10,11 @@ import (
 )
 
 type Transcript struct {
-	Viewport      viewport.Model
-	assistantRows map[int]bool
-	visualRows    []bool
-	theme         Theme
+	Viewport   viewport.Model
+	rows       []transcriptRow
+	rowKinds   map[int]transcriptRowKind
+	visualRows []transcriptRowKind
+	theme      Theme
 }
 
 func NewTranscript() Transcript {
@@ -24,67 +25,77 @@ func NewTranscript() Transcript {
 func (t *Transcript) SetContent(s string) {
 	bottom := t.Viewport.AtBottom()
 	t.Viewport.SetContent(Sanitize(s))
-	t.assistantRows = nil
+	t.rows = nil
+	t.rowKinds = nil
 	t.visualRows = nil
 	if bottom {
 		t.Viewport.GotoBottom()
 	}
 }
 func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme) {
-	var b strings.Builder
-	rows := make(map[int]bool)
-	line := 0
-	appendEntry := func(value string, assistant, newline bool) {
-		clean := Sanitize(value)
-		count := strings.Count(clean, "\n") + 1
-		if assistant {
-			for i := range count {
-				rows[line+i] = true
-			}
+	t.rows = t.rows[:0]
+	archived := 0
+	for index, m := range s.Messages {
+		kind := transcriptRowPlain
+		if m.Role == root.RoleUser {
+			kind = transcriptRowUser
+		} else if m.Role == root.RoleAssistant {
+			kind = transcriptRowAssistant
 		}
-		b.WriteString(clean)
-		if newline {
-			b.WriteByte('\n')
-		}
-		line += count
-	}
-	for _, m := range s.Messages {
-		appendEntry(string(m.Role)+": "+string(m.Content), m.Role == root.RoleAssistant, true)
+		t.rows = append(t.rows, transcriptRow{Text: string(m.Role) + ": " + string(m.Content), Kind: kind})
 		for _, c := range m.ToolCalls {
-			appendEntry("tool request: "+string(c.Name)+" "+string(c.Arguments.Bytes()), false, true)
+			t.rows = append(t.rows, transcriptRow{Text: "tool request: " + string(c.Name) + " " + string(c.Arguments.Bytes())})
 			for _, a := range s.Activity {
 				if a.Call.ID == c.ID {
-					appendEntry("decision: "+string(a.Decision), false, true)
+					t.rows = append(t.rows, transcriptRow{Text: "decision: " + string(a.Decision)})
 				}
 			}
 		}
+		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
+			t.rows = append(t.rows, transcriptRow{Text: "interrupted draft: " + string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant})
+			archived++
+		}
 	}
 	if s.Draft != "" {
-		appendEntry("interrupted draft: "+string(s.Draft), true, true)
+		t.rows = append(t.rows, transcriptRow{Text: "interrupted draft: " + string(s.Draft), Kind: transcriptRowAssistant})
 	}
 	if draft != "" {
-		appendEntry("assistant: "+draft, true, false)
+		t.rows = append(t.rows, transcriptRow{Text: "assistant: " + draft, Kind: transcriptRowAssistant})
 	}
-	t.SetContent(b.String())
-	t.assistantRows = rows
+	t.renderRows()
 	t.ApplyTheme(theme)
 }
 func (t *Transcript) AppendUnsent(prompts []string) {
 	if len(prompts) == 0 {
 		return
 	}
-	var b strings.Builder
-	b.WriteString(t.Viewport.GetContent())
 	for _, prompt := range prompts {
-		b.WriteString("\nNot sent: ")
-		b.WriteString(Sanitize(prompt))
+		t.rows = append(t.rows, transcriptRow{Text: "Not sent: " + prompt, Kind: transcriptRowUser})
+	}
+	t.renderRows()
+	t.ApplyTheme(t.theme)
+}
+func (t *Transcript) renderRows() {
+	var b strings.Builder
+	kinds := make(map[int]transcriptRowKind)
+	line := 0
+	for index, row := range t.rows {
+		if index > 0 {
+			b.WriteByte('\n')
+		}
+		clean := Sanitize(row.Text)
+		for i := range strings.Count(clean, "\n") + 1 {
+			kinds[line+i] = row.Kind
+		}
+		line += strings.Count(clean, "\n") + 1
+		b.WriteString(clean)
 	}
 	bottom := t.Viewport.AtBottom()
 	t.Viewport.SetContent(b.String())
+	t.rowKinds = kinds
 	if bottom {
 		t.Viewport.GotoBottom()
 	}
-	t.ApplyTheme(t.theme)
 }
 func (t *Transcript) ApplyTheme(theme Theme) {
 	t.theme = theme
@@ -94,21 +105,26 @@ func (t *Transcript) ApplyTheme(theme Theme) {
 	for index, line := range strings.Split(t.Viewport.GetContent(), "\n") {
 		count := max(1, (ansi.StringWidth(line)+width-1)/width)
 		for range count {
-			t.visualRows = append(t.visualRows, t.assistantRows[index])
+			t.visualRows = append(t.visualRows, t.rowKinds[index])
 		}
 	}
 }
 func (t Transcript) View() string {
 	view := t.Viewport.View()
-	if t.theme.Monochrome || len(t.assistantRows) == 0 || view == "" {
+	if t.theme.Monochrome || len(t.rowKinds) == 0 || view == "" {
 		return view
 	}
 	lines := strings.Split(view, "\n")
-	style := t.theme.AssistantRow()
 	for i := range lines {
 		index := t.Viewport.YOffset() + i
-		if index < len(t.visualRows) && t.visualRows[index] {
-			lines[i] = style.Render(lines[i])
+		if index >= len(t.visualRows) {
+			continue
+		}
+		switch t.visualRows[index] {
+		case transcriptRowUser:
+			lines[i] = t.theme.UserRow().Render(lines[i])
+		case transcriptRowAssistant:
+			lines[i] = t.theme.AssistantRow().Render(lines[i])
 		}
 	}
 	return strings.Join(lines, "\n")

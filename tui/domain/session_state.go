@@ -12,15 +12,16 @@ import (
 // Activity retains all requested calls in transcript order, including resolved calls.
 // TurnCallCount counts calls since the last user message; Draft is never model history.
 type SessionState struct {
-	ID            SessionID
-	Workspace     Workspace
-	Model         axlr.ModelID
-	Status        SessionStatus
-	Messages      []axlr.Message
-	ToolSnapshot  []AvailableTool
-	Activity      []PendingTool
-	Draft         axlr.Text
-	TurnCallCount int
+	ID             SessionID
+	Workspace      Workspace
+	Model          axlr.ModelID
+	Status         SessionStatus
+	Messages       []axlr.Message
+	ToolSnapshot   []AvailableTool
+	Activity       []PendingTool
+	ArchivedDrafts []ArchivedDraft
+	Draft          axlr.Text
+	TurnCallCount  int
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -35,6 +36,16 @@ func RestoreSession(state SessionState) (Session, error) {
 	}
 	if _, err = axlr.NewText(string(state.Draft)); err != nil {
 		return Session{}, err
+	}
+	previous := 0
+	for _, archived := range state.ArchivedDrafts {
+		if archived.AfterMessage <= previous || archived.AfterMessage >= len(state.Messages) || archived.Content == "" || state.Messages[archived.AfterMessage].Role != axlr.RoleUser {
+			return Session{}, errors.New("archived draft has no following user turn")
+		}
+		if _, err = axlr.NewText(string(archived.Content)); err != nil {
+			return Session{}, err
+		}
+		previous = archived.AfterMessage
 	}
 	switch state.Status {
 	case StatusIdle, StatusStreaming, StatusApproval, StatusInterrupted, StatusComplete:
@@ -113,6 +124,7 @@ func cloneState(state SessionState) SessionState {
 	}
 	state.ToolSnapshot = append([]AvailableTool(nil), state.ToolSnapshot...)
 	state.Activity = append([]PendingTool(nil), state.Activity...)
+	state.ArchivedDrafts = append([]ArchivedDraft(nil), state.ArchivedDrafts...)
 	for i := range state.Activity {
 		if state.Activity[i].Outcome != nil {
 			outcome := *state.Activity[i].Outcome

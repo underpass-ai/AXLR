@@ -264,6 +264,30 @@ func TestAppModelSendShowsPromptWhileStreaming(t *testing.T) {
 	}
 }
 
+func TestAppModelOptimisticPromptKeepsPreviousInterruptedRowInOrder(t *testing.T) {
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("first prompt", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft("first partial answer"); err != nil {
+		t.Fatal(err)
+	}
+	m := update(New(Dependencies{Session: &s, Monochrome: true}), tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Composer.Input.SetValue("second prompt")
+	m = update(m, ControlIntent("send"))
+	defer m.cancel()
+	content := m.Transcript.Viewport.GetContent()
+	first := strings.Index(content, "user: first prompt")
+	partial := strings.Index(content, "interrupted draft: first partial answer")
+	second := strings.Index(content, "user: second prompt")
+	if first < 0 || partial <= first || second <= partial {
+		t.Fatalf("optimistic rows are out of order: %q", content)
+	}
+}
+
 func TestAppModelNoColorEnvironment(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	m := update(New(Dependencies{}), tea.WindowSizeMsg{Width: 100, Height: 30})

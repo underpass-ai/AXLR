@@ -6,6 +6,7 @@ type operationComplete struct {
 	ID             uint64
 	Models         *[]domain.AvailableModel
 	ModelSelection bool
+	PreferenceErr  error
 	Session        domain.Session
 	Err            error
 	Sessions       *[]domain.SessionSummary

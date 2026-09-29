@@ -250,23 +250,31 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if !ok {
 			return m, nil, true
 		}
-		create, change, id, workspace := m.deps.Create, m.deps.Change, m.deps.NewSessionID, m.deps.Workspace
+		create, change, preference, id, workspace := m.deps.Create, m.deps.Change, m.deps.ModelPreference, m.deps.NewSessionID, m.deps.Workspace
 		m.Models.SetLoading(true)
 		m.Status.Error = ""
+		var preferenceErr error
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
+			var err error
 			if s.Export().ID == "" {
-				created, err := create.Execute(ctx, id, workspace, selected.ID)
+				var created domain.Session
+				created, err = create.Execute(ctx, id, workspace, selected.ID)
 				if err == nil {
 					*s = created
 				}
-				return err
+			} else {
+				err = change.Execute(ctx, s, selected.ID)
 			}
-			return change.Execute(ctx, s, selected.ID)
+			if err == nil && preference != nil {
+				preferenceErr = preference.Save(ctx, selected.ID)
+			}
+			return err
 		})
 		return m, func() tea.Msg {
 			msg := cmd()
 			if done, ok := msg.(operationComplete); ok {
 				done.ModelSelection = true
+				done.PreferenceErr = preferenceErr
 				return done
 			}
 			return msg
@@ -409,15 +417,21 @@ func (m *AppModel) showHit() {
 	prefix.Draft = ""
 	if hit.MessageIndex != nil {
 		prefix.Messages = prefix.Messages[:*hit.MessageIndex]
+	} else if hit.ArchivedDraftIndex != nil {
+		archived := *hit.ArchivedDraftIndex
+		prefix.Messages = prefix.Messages[:prefix.ArchivedDrafts[archived].AfterMessage]
+		prefix.ArchivedDrafts = prefix.ArchivedDrafts[:archived]
 	}
 	rendered := NewTranscript()
 	rendered.SetSession(prefix, "", Theme{Monochrome: true})
 	before := rendered.Viewport.GetContent()
 	lines := 0
-	for _, line := range strings.Split(before, "\n") {
-		lines += max(1, (ansi.StringWidth(line)+max(1, m.Layout.TranscriptWidth)-1)/max(1, m.Layout.TranscriptWidth))
+	if before != "" {
+		for _, line := range strings.Split(before, "\n") {
+			lines += max(1, (ansi.StringWidth(line)+max(1, m.Layout.TranscriptWidth)-1)/max(1, m.Layout.TranscriptWidth))
+		}
 	}
-	m.Transcript.Viewport.SetYOffset(max(0, lines-1))
+	m.Transcript.Viewport.SetYOffset(lines)
 }
 func (m AppModel) overlayView(base string) string {
 	status := m.Status.View(m.Layout.Width)

@@ -129,6 +129,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		stateBase = filepath.Join(home, ".local", "state")
 	}
+	preferences, err := storage.NewModelPreferenceStore(filepath.Join(stateBase, "axlr"))
+	if err != nil {
+		return fail(err)
+	}
+	if *modelFlag == "" && *sessionFlag == "" {
+		selected, loadErr := preferences.Load(ctx)
+		if loadErr != nil {
+			fmt.Fprintln(stderr, "axlr-tui: ignoring invalid saved model preference")
+		} else {
+			model = selected
+		}
+	}
 	store, err := storage.New(filepath.Join(stateBase, "axlr", "sessions"))
 	if err != nil {
 		return fail(err)
@@ -156,7 +168,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 		newID, _ = domain.NewSessionID(hex.EncodeToString(random[:]))
-		if *modelFlag != "" {
+		if model != "" {
 			created, createErr := (application.CreateSessionUseCase{Store: loggedStore}).Execute(ctx, newID, workspace, model)
 			if createErr != nil {
 				return fail(createErr)
@@ -166,20 +178,21 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	continuation := application.ContinueTurnUseCase{Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace}
 	app := terminal.New(terminal.Dependencies{
-		Context:      ctx,
-		Diagnostics:  trace,
-		Models:       application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
-		Create:       application.CreateSessionUseCase{Store: loggedStore},
-		Change:       application.ChangeSessionModelUseCase{Store: loggedStore},
-		Workspace:    workspace,
-		NewSessionID: newID,
-		Start:        application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: loggedStore, Continue: continuation},
-		Resolve:      application.ResolveToolUseCase{Tools: axlr.ToolRunner{Executor: executor}, Store: loggedStore, Continue: continuation, Diagnostics: trace},
-		Agent:        application.AgentTurnUseCase{Continue: continuation},
-		Search:       application.SearchSessionUseCase{},
-		Store:        loggedStore,
-		Session:      session,
-		Monochrome:   getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
+		Context:         ctx,
+		Diagnostics:     trace,
+		Models:          application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
+		ModelPreference: preferences,
+		Create:          application.CreateSessionUseCase{Store: loggedStore},
+		Change:          application.ChangeSessionModelUseCase{Store: loggedStore},
+		Workspace:       workspace,
+		NewSessionID:    newID,
+		Start:           application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: loggedStore, Continue: continuation},
+		Resolve:         application.ResolveToolUseCase{Tools: axlr.ToolRunner{Executor: executor}, Store: loggedStore, Continue: continuation, Diagnostics: trace},
+		Agent:           application.AgentTurnUseCase{Continue: continuation},
+		Search:          application.SearchSessionUseCase{},
+		Store:           loggedStore,
+		Session:         session,
+		Monochrome:      getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
 	})
 	defer app.Close()
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {

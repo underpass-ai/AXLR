@@ -247,6 +247,32 @@ func TestCancellationAndInterruptedDraft(t *testing.T) {
 		t.Fatal("draft entered model history")
 	}
 }
+
+func TestStartingNewTurnArchivesInterruptedAnswerOutsideModelHistory(t *testing.T) {
+	s := session(t)
+	must(t, s.BeginTurn("first question", nil))
+	must(t, s.InterruptDraft("first partial answer"))
+	must(t, s.BeginTurn("second question", nil))
+	state := s.Export()
+	if len(state.Messages) != 2 || state.Messages[0].Role != axlr.RoleUser || state.Messages[1].Role != axlr.RoleUser {
+		t.Fatalf("model history changed: %+v", state.Messages)
+	}
+	if state.Draft != "" || len(state.ArchivedDrafts) != 1 || state.ArchivedDrafts[0].AfterMessage != 1 || state.ArchivedDrafts[0].Content != "first partial answer" {
+		t.Fatalf("interrupted answer was not archived at its turn: %+v", state)
+	}
+	must(t, s.InterruptDraft("second partial answer"))
+	must(t, s.BeginTurn("third question", nil))
+	state = s.Export()
+	if len(state.ArchivedDrafts) != 2 || state.ArchivedDrafts[1].AfterMessage != 2 {
+		t.Fatalf("archived drafts lost order: %+v", state.ArchivedDrafts)
+	}
+	restored, err := RestoreSession(state)
+	must(t, err)
+	state.Status = StatusInterrupted
+	if !reflect.DeepEqual(restored.Export(), state) {
+		t.Fatal("restoring the session lost archived answers")
+	}
+}
 func TestRestorePendingAndCopySafety(t *testing.T) {
 	s := session(t)
 	tools := catalog(t)

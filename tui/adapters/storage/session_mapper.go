@@ -30,6 +30,9 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 		}
 		d.Messages = append(d.Messages, record)
 	}
+	for _, archived := range state.ArchivedDrafts {
+		d.ArchivedDrafts = append(d.ArchivedDrafts, dto.ArchivedDraft{AfterMessage: archived.AfterMessage, Content: string(archived.Content)})
+	}
 	for _, t := range state.ToolSnapshot {
 		d.ToolSnapshot = append(d.ToolSnapshot, dto.AvailableTool{Name: string(t.Definition.Name), Description: string(t.Definition.Description), Parameters: t.Definition.Parameters.Bytes(), Kind: t.Identity.Kind, LocalOperation: t.Identity.LocalOperation, PluginID: string(t.Identity.Plugin.PluginID), PluginToolName: string(t.Identity.Plugin.ToolName)})
 	}
@@ -57,6 +60,9 @@ func restore(d dto.SessionSnapshot) (domain.Session, error) {
 			record.ToolCalls = append(record.ToolCalls, call)
 		}
 		s.Messages = append(s.Messages, record)
+	}
+	for _, archived := range d.ArchivedDrafts {
+		s.ArchivedDrafts = append(s.ArchivedDrafts, domain.ArchivedDraft{AfterMessage: archived.AfterMessage, Content: root.Text(archived.Content)})
 	}
 	for _, t := range d.ToolSnapshot {
 		params, e := root.NewJSONObject(t.Parameters)
