@@ -128,3 +128,7 @@ func TestStartTurnFailuresDoNotCallModel(t *testing.T) {
 		})
 	}
 }
+
+func (s *memoryStore) List(context.Context) ([]domain.SessionSummary, error) {
+	return nil, errors.New("not used")
+}
