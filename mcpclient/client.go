@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 	"sync"
+	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -176,6 +178,12 @@ func (c *Client) Close() error {
 	var errs []error
 	for name, session := range sessions {
 		if err := session.Close(); err != nil {
+			var exit *exec.ExitError
+			if errors.As(err, &exit) {
+				if status, ok := exit.Sys().(syscall.WaitStatus); ok && (status.Signal() == syscall.SIGTERM || status.Signal() == syscall.SIGKILL) {
+					continue
+				}
+			}
 			errs = append(errs, fmt.Errorf("close MCP server %q: %w", name, err))
 		}
 	}
