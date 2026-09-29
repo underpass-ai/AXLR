@@ -56,4 +56,4 @@
 - [x] Add an executable consumer example and state the effect/credential boundaries.
 - [x] Add a module-specific CI job that measures coverage above 80% and runs race tests, leaving root job unchanged.
 - [x] Run root and MCP test suites, coverage, vet, formatting and static root build.
-- [ ] Commit and open a draft PR targeting the existing AXLR baseline branch.
+- [x] Commit and open a draft PR targeting the existing AXLR baseline branch.
