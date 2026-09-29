@@ -17,6 +17,45 @@ The worker consumes one JSON document from stdin and emits one JSON response on 
 
 The library entrypoint is `runtime.New(runtime.Config)` followed by `Executor.Execute(ctx, dto.Request)` and `Close()`. An executor serializes requests. A host can set lower maximums in `Config`; requests cannot raise them.
 
+## OpenRouter model client
+
+The Go library can request a non-streaming model completion through OpenRouter. The host supplies `OPENROUTER_API_KEY` through its own secret mechanism; AXLR does not read the environment or store the key for the host. The model client is separate from the JSON worker.
+
+```go
+import (
+    "context"
+    "fmt"
+    "os"
+
+    "github.com/underpass-ai/AXLR/adapters/openrouter"
+    "github.com/underpass-ai/AXLR/application"
+    "github.com/underpass-ai/AXLR/domain"
+)
+
+func example() error {
+    client, err := openrouter.New(openrouter.ClientConfig{
+        APIKey: os.Getenv("OPENROUTER_API_KEY"),
+    })
+    if err != nil { return err }
+
+    model, err := domain.NewModelID("openai/gpt-4o")
+    if err != nil { return err }
+    complete := application.CompleteModelUseCase{Models: client}
+    request := domain.CompletionRequest{
+        Model: model,
+        Messages: []domain.Message{{Role: domain.RoleUser, Content: "Say hello"}},
+    }
+    result, err := complete.Execute(context.Background(), request)
+    if err != nil { return err }
+    fmt.Println(result.Message.Content)
+    return nil
+}
+```
+
+The caller chooses a model supported by its OpenRouter account.
+
+To offer tools, set `request.Tools` to typed `domain.ToolDefinition` values with JSON Schema parameters. A completion may contain text and several `result.Message.ToolCalls`. AXLR returns those calls without executing them. The host checks each requested name against its own authorized tool registry, executes any allowed call, appends `result.Message` and then one `domain.Message{Role: domain.RoleTool, ToolCallID: call.ID, Content: output}` per result to `request.Messages`, and calls `complete.Execute` again with the same `request.Tools`. Tool results and the assistant's calls must remain in the conversation history.
+
 ## Request contract
 
 All requests contain `protocol_version: 1`, a nonempty `request_id`, a supported tool name, and a typed `arguments` object. Unknown JSON fields, extra documents and bodies above 4 MiB are rejected.
