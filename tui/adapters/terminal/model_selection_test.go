@@ -2,6 +2,7 @@ package terminal
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"context"
 	"errors"
 	"fmt"
@@ -278,5 +279,19 @@ func TestModelSelectionUnsolicitedCompletionIgnored(t *testing.T) {
 	m = update(m, operationComplete{Session: navSession(t)})
 	if m.Header.State.ID != "" {
 		t.Fatal("completion without a current operation published a session")
+	}
+}
+
+func TestModelSelectionBareScreenLongWorkspaceAtMinimumWidth(t *testing.T) {
+	m := bareModel()
+	defer m.Close()
+	m.Header.State.Workspace = domain.Workspace("/home/user/projects/" + strings.Repeat("long-workspace/", 12))
+	m = update(m, tea.WindowSizeMsg{Width: 50, Height: 15})
+	view := m.View().Content
+	if !strings.Contains(view, "Type /model to choose a model") {
+		t.Fatalf("bare screen hides selection guidance: %q", view)
+	}
+	if !strings.Contains(view, "/home/") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
+		t.Fatalf("workspace missing or screen overflows: %q", view)
 	}
 }

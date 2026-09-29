@@ -180,18 +180,18 @@ func (p *ModelPicker) View(zones *zone.Manager, prefix string, width, height int
 	p.Input.SetWidth(max(1, width-9))
 	p.pageSize = max(1, height-5)
 	p.ensureVisible()
-	lines := []string{"Models — ↑↓ / PgUp PgDn / Enter"}
+	lines := []string{ansi.Truncate("Models — ↑↓ / PgUp PgDn / Enter", width, "…")}
 	lines = append(lines, ansi.Truncate(p.Input.View(), width, "…"))
 	switch {
 	case p.loading:
-		lines = append(lines, "Loading models…")
+		lines = append(lines, ansi.Truncate("Loading models…", width, "…"))
 	case p.errText != "":
 		lines = append(lines, ansi.Truncate("Error: "+p.errText, width, "…"))
-		lines = append(lines, zones.Mark(prefix+"retry", "[Retry R]"))
+		lines = append(lines, zones.Mark(prefix+"retry", ansi.Truncate("[Retry R]", width, "…")))
 	case len(p.visible) == 0:
-		lines = append(lines, "No models found")
+		lines = append(lines, ansi.Truncate("No models found", width, "…"))
 		if len(p.models) == 0 {
-			lines = append(lines, zones.Mark(prefix+"retry", "[Retry R]"))
+			lines = append(lines, zones.Mark(prefix+"retry", ansi.Truncate("[Retry R]", width, "…")))
 		}
 	default:
 		for i := p.window; i < min(len(p.visible), p.window+p.pageSize); i++ {
@@ -213,7 +213,7 @@ func (p *ModelPicker) View(zones *zone.Manager, prefix string, width, height int
 			lines = append(lines, zones.Mark(fmt.Sprintf("%smodel-%d", prefix, i), ansi.Truncate(label, width, "…")))
 		}
 	}
-	lines = append(lines, zones.Mark(prefix+"close", "[Close Esc]"))
+	lines = append(lines, zones.Mark(prefix+"close", ansi.Truncate("[Close Esc]", width, "…")))
 	if len(lines) > height {
 		lines = append(lines[:height-1], lines[len(lines)-1])
 	}

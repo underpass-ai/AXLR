@@ -77,3 +77,16 @@ func TestListModelsPropagatesCatalogFailure(t *testing.T) {
 		t.Fatalf("got %v", err)
 	}
 }
+
+func TestListModelsRejectsModelsWhenCanceledDuringCatalogList(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	u := ListModelsUseCase{Catalog: modelCatalogFunc(func(context.Context) ([]domain.AvailableModel, error) {
+		cancel()
+		return []domain.AvailableModel{catalogModel("provider/model", "Model", true, true)}, nil
+	})}
+	models, err := u.Execute(ctx)
+	if !errors.Is(err, context.Canceled) || len(models) != 0 {
+		t.Fatalf("canceled catalog returned models=%v error=%v", models, err)
+	}
+}

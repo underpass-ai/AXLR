@@ -173,3 +173,27 @@ func TestModelPickerBoundsSanitizationAndResize(t *testing.T) {
 		t.Fatalf("resize lost query/selection: %s to %s", before.ID, after.ID)
 	}
 }
+
+func TestModelPickerFitsEveryPositiveNarrowWidth(t *testing.T) {
+	for _, state := range []string{"loading", "empty", "error", "models"} {
+		t.Run(state, func(t *testing.T) {
+			p := NewModelPicker()
+			switch state {
+			case "loading":
+				p.SetLoading(true)
+			case "error":
+				p.SetError(errors.New("catalog unavailable"))
+			case "models":
+				p.SetModels(pickerModels())
+			}
+			z := zone.New()
+			defer z.Close()
+			for width := 1; width <= 32; width++ {
+				view := z.Scan(p.View(z, "picker-", width, 10))
+				if lipgloss.Width(view) > width {
+					t.Errorf("width %d: rendered width %d: %q", width, lipgloss.Width(view), view)
+				}
+			}
+		})
+	}
+}

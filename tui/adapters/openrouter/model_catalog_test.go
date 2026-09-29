@@ -67,12 +67,21 @@ func TestModelCatalogRejectsProviderFailuresWithoutLeakingSecrets(t *testing.T) 
 	for _, status := range []int{http.StatusUnauthorized, http.StatusTooManyRequests, http.StatusInternalServerError, http.StatusFound} {
 		t.Run(http.StatusText(status), func(t *testing.T) {
 			requests := 0
-			client := &http.Client{Transport: catalogRoundTrip(func(*http.Request) (*http.Response, error) {
+			targetRequests := 0
+			client := &http.Client{Transport: catalogRoundTrip(func(req *http.Request) (*http.Response, error) {
 				requests++
-				return catalogResponse(status, `{"error":"test-secret sensitive-body"}`), nil
+				if req.URL.String() == "https://openrouter.ai/redirect-target" {
+					targetRequests++
+					return catalogResponse(http.StatusOK, `{"data":[]}`), nil
+				}
+				response := catalogResponse(status, `{"error":"test-secret sensitive-body"}`)
+				if status == http.StatusFound {
+					response.Header.Set("Location", "https://openrouter.ai/redirect-target")
+				}
+				return response, nil
 			})}
 			_, err := (ModelCatalog{APIKey: "test-secret", HTTPClient: client}).List(context.Background())
-			if err == nil || strings.Contains(err.Error(), "test-secret") || strings.Contains(err.Error(), "sensitive-body") || requests != 1 {
+			if err == nil || strings.Contains(err.Error(), "test-secret") || strings.Contains(err.Error(), "sensitive-body") || requests != 1 || targetRequests != 0 {
 				t.Errorf("requests=%d error=%v", requests, err)
 			}
 		})
