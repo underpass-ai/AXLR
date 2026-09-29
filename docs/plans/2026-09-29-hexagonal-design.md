@@ -31,7 +31,11 @@ El codec acepta un documento JSON de hasta 4 MiB, campos conocidos y una herrami
 
 ## Pruebas y CI
 
-Pruebas de dominio para los value objects, pruebas de casos de uso para conflictos y límites, pruebas de adaptadores sobre un directorio temporal y procesos auxiliares Go, y pruebas de CLI para framing y exit codes. CI ejecuta formato, `go vet`, tests con race y cobertura agregada superior a 80 %, y build sin CGO. No necesita servicios ni módulos externos.
+Pruebas de dominio para los value objects, pruebas de casos de uso para conflictos y límites, pruebas de adaptadores sobre un directorio temporal y procesos auxiliares Go, y pruebas de CLI para framing y exit codes. CI ejecuta formato, `go vet`, tests con race y cobertura agregada superior a 80 %, y build sin CGO. No necesita servicios externos.
+
+## Ampliación: herramientas de plugins
+
+La [especificación de plugins](../superpowers/specs/2026-09-29-plugin-tools-design.md) añade procesos MCP por stdio como adaptadores de herramientas. `plugins/` implementa el puerto definido en `application/`; `domain/` conserva identidades y argumentos tipados sin depender de MCP. El mismo worker acepta manifiestos explícitos y mantiene las herramientas locales. `mcpclient/` forma parte del módulo Go raíz para que la biblioteca y el worker compartan la conexión MCP.
 
 ## Fuera de esta entrega
 

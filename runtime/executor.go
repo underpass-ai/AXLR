@@ -95,6 +95,18 @@ func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 				result, err = (application.EditUseCase{Files: e.files, MaxFileBytes: e.config.MaxFileBytes}).Execute(c)
 			case domain.ExecCommand:
 				result, err = (application.ExecUseCase{Processes: e.processes}).Execute(ctx, c)
+			case domain.PluginListCommand:
+				if e.config.Plugins == nil {
+					err = domain.Reject("plugins_unavailable", "plugins are not configured")
+				} else {
+					result, err = (application.ListPluginToolsUseCase{Plugins: e.config.Plugins}).Execute(ctx, c)
+				}
+			case domain.PluginCall:
+				if e.config.Plugins == nil {
+					err = domain.Reject("plugins_unavailable", "plugins are not configured")
+				} else {
+					result, err = (application.CallPluginToolUseCase{Plugins: e.config.Plugins}).Execute(ctx, c)
+				}
 			}
 		}
 	} else {
@@ -102,7 +114,13 @@ func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 	}
 	if err != nil {
 		var fault *domain.Fault
-		if errors.As(err, &fault) {
+		if errors.Is(err, context.DeadlineExceeded) {
+			r.Status = "timed_out"
+			r.Error = &dto.Failure{Code: "timeout", Message: "plugin request timed out; prior effects may remain"}
+		} else if errors.Is(err, context.Canceled) {
+			r.Status = "cancelled"
+			r.Error = &dto.Failure{Code: "cancelled", Message: "plugin request cancelled; prior effects may remain"}
+		} else if errors.As(err, &fault) {
 			r.Status = fault.Status
 			r.Error = &dto.Failure{Code: fault.Code, Message: fault.Message}
 		} else {

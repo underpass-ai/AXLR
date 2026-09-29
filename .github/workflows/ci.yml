@@ -34,22 +34,3 @@ jobs:
           awk -v value="$coverage" 'BEGIN { exit !(value > 80) }'
       - name: Static worker build
         run: CGO_ENABLED=0 go build -trimpath -o /tmp/axlr ./cmd/axlr
-
-  mcp-client:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: mcpclient
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-go@v7
-        with:
-          go-version-file: mcpclient/go.mod
-          cache-dependency-path: mcpclient/go.sum
-      - name: Vet, race tests, and coverage
-        run: |
-          go vet ./...
-          go test -race -count=1 -coverprofile=coverage.out ./...
-          coverage=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
-          echo "MCP client coverage: ${coverage}%"
-          awk -v value="$coverage" 'BEGIN { exit !(value > 80) }'

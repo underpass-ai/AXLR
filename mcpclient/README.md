@@ -1,6 +1,6 @@
 # AXLR MCP client
 
-This optional Go module consumes tools from external MCP servers. It uses the [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk), while AXLR's root module remains dependency free. AXLR's own `read`, `write`, `edit` and `exec` API is not an MCP server.
+This package consumes tools from external MCP servers in AXLR's root Go module. It uses the [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk). AXLR's own `read`, `write`, `edit` and `exec` API is not an MCP server.
 
 ```go
 package main
@@ -40,6 +40,5 @@ For HTTP, use `mcpclient.Server{Name: "search", URL: "https://example.com/mcp", 
 `ListTools` follows server pagination and returns the owning server with every tool, avoiding ambiguous names. `Call` sends one logical invocation and returns tool-level `isError` as data. The HTTP transport has automatic reconnect retries disabled. A timeout or broken connection cannot prove whether a remote side effect happened; reconcile before retrying an effectful tool. Pass a context with an appropriate deadline to `Connect`, `ListTools` and `Call`. Close the client to release sessions and stdio child processes.
 
 ```bash
-cd mcpclient
-go test -race ./...
+go test -race ./mcpclient
 ```

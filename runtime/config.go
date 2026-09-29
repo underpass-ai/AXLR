@@ -1,6 +1,10 @@
 package runtime
 
-import "time"
+import (
+	"time"
+
+	"github.com/underpass-ai/AXLR/application"
+)
 
 const (
 	ProtocolVersion    = 1
@@ -15,6 +19,7 @@ const (
 type Config struct {
 	Root           string
 	Env            []string
+	Plugins        application.PluginToolPort
 	MaxReadBytes   int
 	MaxFileBytes   int
 	MaxOutputBytes int
