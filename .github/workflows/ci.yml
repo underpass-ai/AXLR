@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Format and vet
+        run: |
+          test -z "$(gofmt -l .)"
+          go vet ./...
+      - name: Test, race detector, and coverage
+        run: |
+          go test -race -count=1 -coverpkg=./... -coverprofile=coverage.out ./...
+          coverage=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          echo "Aggregate coverage: ${coverage}%"
+          awk -v value="$coverage" 'BEGIN { exit !(value > 80) }'
+      - name: Static worker build
+        run: CGO_ENABLED=0 go build -trimpath -o /tmp/axlr ./cmd/axlr
