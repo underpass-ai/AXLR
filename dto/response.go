@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 import "time"
 

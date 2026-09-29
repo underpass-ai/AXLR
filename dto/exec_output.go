@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 type ExecOutput struct {
 	ExitCode       int    `json:"exit_code"`

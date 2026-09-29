@@ -1,10 +1,11 @@
-package axlr
+package runtime
 
 import (
 	"errors"
 	"time"
 
 	"github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/dto"
 )
 
 type RequestMapper struct {
@@ -14,7 +15,7 @@ type RequestMapper struct {
 	MaxTimeout     time.Duration
 }
 
-func (m RequestMapper) Map(req Request) (any, error) {
+func (m RequestMapper) Map(req dto.Request) (any, error) {
 	if req.ProtocolVersion != ProtocolVersion {
 		return nil, errors.New("unsupported protocol version")
 	}
@@ -26,7 +27,7 @@ func (m RequestMapper) Map(req Request) (any, error) {
 	}
 	switch req.Tool {
 	case "read":
-		var a ReadArgs
+		var a dto.ReadArgs
 		if err := strictJSON(req.Arguments, &a); err != nil {
 			return nil, err
 		}
@@ -51,7 +52,7 @@ func (m RequestMapper) Map(req Request) (any, error) {
 		}
 		return domain.ReadCommand{Path: path, Offset: offset, Limit: limit}, nil
 	case "write":
-		var a WriteArgs
+		var a dto.WriteArgs
 		if err := strictJSON(req.Arguments, &a); err != nil {
 			return nil, err
 		}
@@ -79,7 +80,7 @@ func (m RequestMapper) Map(req Request) (any, error) {
 		}
 		return domain.WriteCommand{Path: path, Content: content, Mode: mode, ExpectedDigest: expected}, nil
 	case "edit":
-		var a EditArgs
+		var a dto.EditArgs
 		if err := strictJSON(req.Arguments, &a); err != nil {
 			return nil, err
 		}
@@ -107,7 +108,7 @@ func (m RequestMapper) Map(req Request) (any, error) {
 		}
 		return domain.EditCommand{Path: path, OldText: old, NewText: next, ExpectedDigest: expected}, nil
 	case "exec":
-		var a ExecArgs
+		var a dto.ExecArgs
 		if err := strictJSON(req.Arguments, &a); err != nil {
 			return nil, err
 		}

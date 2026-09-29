@@ -10,8 +10,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/underpass-ai/AXLR"
 	"github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/dto"
+	"github.com/underpass-ai/AXLR/runtime"
 )
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
@@ -28,19 +29,19 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "axlr: --root and --profile=trusted-local are required")
 		return 1
 	}
-	executor, err := axlr.New(axlr.Config{Root: *root, Env: env})
+	executor, err := runtime.New(runtime.Config{Root: *root, Env: env})
 	if err != nil {
 		fmt.Fprintln(stderr, "axlr:", err)
 		return 1
 	}
 	defer executor.Close()
-	req, err := axlr.Decode(stdin)
+	req, err := runtime.Decode(stdin)
 	code := 0
-	var response axlr.Response
+	var response dto.Response
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err != nil {
-		response = axlr.ProtocolRejection(err)
+		response = runtime.ProtocolRejection(err)
 		if _, identityError := domain.NewRequestID(req.RequestID); identityError == nil {
 			response.RequestID = req.RequestID
 		}
@@ -52,7 +53,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	} else {
 		response = executor.Execute(ctx, req)
 	}
-	b, err := axlr.MarshalResponse(response)
+	b, err := runtime.MarshalResponse(response)
 	if err != nil {
 		fmt.Fprintln(stderr, "axlr:", err)
 		return 1

@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 type ReadArgs struct {
 	Path        string `json:"path"`

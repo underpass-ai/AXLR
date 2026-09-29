@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 type EditArgs struct {
 	Path           string `json:"path"`

@@ -1,4 +1,4 @@
-package axlr
+package dto
 
 type WriteOutput struct {
 	WrittenBytes  int    `json:"written_bytes"`

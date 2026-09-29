@@ -23,6 +23,7 @@ jobs:
           cache: true
       - name: Format and vet
         run: |
+          test -z "$(find . -maxdepth 1 -type f -name '*.go' -print)"
           test -z "$(gofmt -l .)"
           go vet ./...
       - name: Test, race detector, and coverage

@@ -15,7 +15,7 @@ printf '%s\n' '{"protocol_version":1,"request_id":"demo-1","tool":"read","argume
 
 The worker consumes one JSON document from stdin and emits one JSON response on stdout. It accepts `--root` for an existing workspace and repeatable `--env KEY=VALUE` flags for the child process environment. The child does not inherit the worker environment by default. Avoid passing secrets through command-line flags; they may be visible to other processes on the host. A host that needs secrets should use an appropriate launcher and account boundary.
 
-The library entrypoint is `New(Config)` followed by `Executor.Execute(ctx, Request)` and `Close()`. An executor serializes requests. A host can set lower maximums in `Config`; requests cannot raise them.
+The library entrypoint is `runtime.New(runtime.Config)` followed by `Executor.Execute(ctx, dto.Request)` and `Close()`. An executor serializes requests. A host can set lower maximums in `Config`; requests cannot raise them.
 
 ## Request contract
 
@@ -42,7 +42,7 @@ The worker exits `0` after a valid protocol request even when the tool failed, `
 
 ## Architecture
 
-`domain/` holds value objects and operation commands/results. `application/` holds ports and use cases. `adapters/local/` implements filesystem and process ports. Root-level DTOs, mappers, codec and executor compose the public library. `cmd/axlr/` is the protocol adapter. Each Go file has one primary type where a type is needed.
+`domain/` holds value objects and operation commands/results. `application/` holds ports and use cases. `adapters/local/` implements filesystem and process ports. `dto/` holds the JSON contract. `runtime/` composes the executor, codecs and mappers. `cmd/axlr/` is the worker adapter. No Go source lives at the repository root. Each Go file has one primary type where a type is needed.
 
 The separate [MCP client module](mcpclient/README.md) connects to external MCP servers over stdio or Streamable HTTP. It discovers and calls their tools by `(server, tool)` identity. Hosts can compose it with AXLR's local executor. AXLR does not expose its four local tools as an MCP server.
 

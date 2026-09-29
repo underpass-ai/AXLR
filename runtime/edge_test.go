@@ -1,4 +1,4 @@
-package axlr
+package runtime
 
 import (
 	"context"
@@ -9,11 +9,13 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/underpass-ai/AXLR/dto"
 )
 
-func invoke(t *testing.T, e *Executor, tool, args string) Response {
+func invoke(t *testing.T, e *Executor, tool, args string) dto.Response {
 	t.Helper()
-	return e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "edge", Tool: tool, Arguments: json.RawMessage(args)})
+	return e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "edge", Tool: tool, Arguments: json.RawMessage(args)})
 }
 
 func TestReadEmptyFileInvalidTextAndMissingPath(t *testing.T) {
@@ -23,7 +25,7 @@ func TestReadEmptyFileInvalidTextAndMissingPath(t *testing.T) {
 	os.Mkdir(filepath.Join(dir, "sub"), 0700)
 	e, _ := New(Config{Root: dir})
 	r := invoke(t, e, "read", `{"path":"empty"}`)
-	if r.Status != "completed" || r.Output.(ReadOutput).ContentSHA256 == "" {
+	if r.Status != "completed" || r.Output.(dto.ReadOutput).ContentSHA256 == "" {
 		t.Fatalf("%+v", r)
 	}
 	for _, tc := range []struct{ path, code string }{{"bad", "invalid_text"}, {"missing", "not_found"}, {"sub", "not_regular_file"}} {
@@ -69,7 +71,7 @@ func TestExecUsesOnlyConfiguredPATHAndRejectsEscapedCwd(t *testing.T) {
 	os.Symlink(outside, filepath.Join(dir, "link"))
 	e, _ := New(Config{Root: dir, Env: []string{"PATH=/bin"}})
 	r := invoke(t, e, "exec", `{"program":"sh","args":["-c","printf path-ok"]}`)
-	if r.Status != "completed" || r.Output.(ExecOutput).Stdout != "path-ok" {
+	if r.Status != "completed" || r.Output.(dto.ExecOutput).Stdout != "path-ok" {
 		t.Fatalf("%+v", r)
 	}
 	r = invoke(t, e, "exec", `{"program":"missing-axlr-program"}`)
@@ -83,7 +85,7 @@ func TestExecUsesOnlyConfiguredPATHAndRejectsEscapedCwd(t *testing.T) {
 }
 
 func TestSerializedResponseLimitIncludesEscapes(t *testing.T) {
-	r := Response{ProtocolVersion: 1, RequestID: "x", Tool: "read", Status: "completed", Output: ReadOutput{Content: strings.Repeat("\x01", 1<<20)}}
+	r := dto.Response{ProtocolVersion: 1, RequestID: "x", Tool: "read", Status: "completed", Output: dto.ReadOutput{Content: strings.Repeat("\x01", 1<<20)}}
 	b, err := MarshalResponse(r)
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +93,7 @@ func TestSerializedResponseLimitIncludesEscapes(t *testing.T) {
 	if len(b) > MaxResponseBytes {
 		t.Fatalf("%d bytes", len(b))
 	}
-	var got Response
+	var got dto.Response
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +125,7 @@ func TestExecuteRejectsMalformedRawArgumentBeforeFileMutation(t *testing.T) {
 	e, _ := New(Config{Root: dir})
 	raw := append([]byte(`{"path":"a","mode":"create","content":"`), 0xff)
 	raw = append(raw, []byte(`"}`)...)
-	r := e.Execute(context.Background(), Request{ProtocolVersion: 1, RequestID: "bad", Tool: "write", Arguments: raw})
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "bad", Tool: "write", Arguments: raw})
 	if r.Status != "rejected" {
 		t.Fatalf("%+v", r)
 	}
@@ -168,7 +170,7 @@ func TestReadRejectsFIFOWithoutBlocking(t *testing.T) {
 	}
 	e, _ := New(Config{Root: dir})
 	for _, name := range []string{"pipe", "pipe-link"} {
-		done := make(chan Response, 1)
+		done := make(chan dto.Response, 1)
 		go func() { done <- invoke(t, e, "read", `{"path":"`+name+`"}`) }()
 		select {
 		case r := <-done:
@@ -182,7 +184,7 @@ func TestReadRejectsFIFOWithoutBlocking(t *testing.T) {
 }
 
 func TestMarshalResponseBoundsInvalidLibraryIdentity(t *testing.T) {
-	r := Response{ProtocolVersion: 1, RequestID: strings.Repeat("x", 5<<20), Tool: "read", Status: "rejected", Error: &Failure{Code: "invalid_request", Message: "bad"}}
+	r := dto.Response{ProtocolVersion: 1, RequestID: strings.Repeat("x", 5<<20), Tool: "read", Status: "rejected", Error: &dto.Failure{Code: "invalid_request", Message: "bad"}}
 	b, err := MarshalResponse(r)
 	if err != nil {
 		t.Fatal(err)
