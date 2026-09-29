@@ -16,6 +16,8 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 	if m.Busy {
 		return nil
 	}
+	m.operationID++
+	id := m.operationID
 	var snapshot domain.Session
 	if m.deps.Session != nil {
 		snapshot = *m.deps.Session
@@ -30,7 +32,7 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 		lifetime.mu.Lock()
 		if lifetime.closed {
 			lifetime.mu.Unlock()
-			return operationComplete{Session: snapshot, Err: context.Canceled}
+			return operationComplete{ID: id, Session: snapshot, Err: context.Canceled}
 		}
 		lifetime.workers.Add(1)
 		lifetime.mu.Unlock()
@@ -49,7 +51,7 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 				}
 			})
 			select {
-			case ch <- operationComplete{Session: snapshot, Err: err}:
+			case ch <- operationComplete{ID: id, Session: snapshot, Err: err}:
 			case <-lifetime.ctx.Done():
 			}
 			close(ch)

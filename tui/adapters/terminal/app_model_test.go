@@ -13,7 +13,11 @@ import (
 
 func update(m AppModel, msg tea.Msg) AppModel { n, _ := m.Update(msg); return n.(AppModel) }
 func sized() AppModel {
-	return update(New(Dependencies{Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	if err != nil {
+		panic(err)
+	}
+	return update(New(Dependencies{Session: &session, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
 }
 func TestAppModelStreamRendering(t *testing.T) {
 	m := sized()

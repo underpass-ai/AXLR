@@ -128,7 +128,7 @@ func TestApprovalRefreshesSameCallIDAfterSwitch(t *testing.T) {
 	args, _ := root.NewJSONValue([]byte(`{"path":"different-target"}`))
 	s.BeginTurn("another", m.Header.State.ToolSnapshot)
 	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "one", Name: "local_write", Arguments: args}}}})
-	m = update(m, operationComplete{Session: s})
+	m = publishTestSession(t, m, s)
 	if !strings.Contains(m.View().Content, "different-target") {
 		t.Fatal("approval shows obsolete arguments")
 	}
@@ -139,7 +139,7 @@ func TestApprovalDeferredUnknownAfterKnown(t *testing.T) {
 	args, _ := root.NewJSONValue([]byte(`{}`))
 	s.BeginTurn("mixed", m.Header.State.ToolSnapshot)
 	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "known", Name: "local_write", Arguments: args}, {ID: "unknown", Name: "missing", Arguments: args}}}})
-	m = update(m, operationComplete{Session: s})
+	m = publishTestSession(t, m, s)
 	m.deps.Resolve.Continue.Models = navStream{}
 	n, c := m.Update(ControlIntent("deny"))
 	m = drain(t, n.(AppModel), c)
@@ -160,7 +160,7 @@ func TestApprovalLongArgumentsRemainScrollableWithFixedControls(t *testing.T) {
 	args, _ := root.NewJSONValue([]byte(`{"path":"exact-target.txt","content":"` + strings.Repeat("long-data", 300) + `END-MARKER"}`))
 	s.BeginTurn("long", m.Header.State.ToolSnapshot)
 	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "long", Name: "local_write", Arguments: args}}}})
-	m = update(m, operationComplete{Session: s})
+	m = publishTestSession(t, m, s)
 	m = update(m, tea.WindowSizeMsg{Width: 50, Height: 15})
 	for i := 0; i < 100; i++ {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyPgDown})
@@ -176,7 +176,7 @@ func TestApprovalRestoredPendingNeedsResumeBeforeDecision(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	m = update(m, operationComplete{Session: restored})
+	m = publishTestSession(t, m, restored)
 	m.deps.Agent = application.AgentTurnUseCase{Continue: application.ContinueTurnUseCase{Store: m.deps.Store}}
 	if strings.Contains(m.View().Content, "Approve") {
 		t.Fatal("restore reopened approval")
@@ -216,7 +216,7 @@ func TestApprovalIdentityChangeRefreshesExactTarget(t *testing.T) {
 	if e = s.ResumePending(); e != nil {
 		t.Fatal(e)
 	}
-	m = update(m, operationComplete{Session: s})
+	m = publishTestSession(t, m, s)
 	if !strings.Contains(m.View().Content, "plugin server / remote_write") {
 		t.Fatal("approval showed previous tool identity")
 	}
@@ -308,4 +308,14 @@ func (followupCall) Stream(_ context.Context, _ root.CompletionRequest, emit fun
 	}
 	args, _ := root.NewJSONObject([]byte(`{"path":"new-target.txt","content":"next"}`))
 	return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "next call", ToolCalls: []root.ToolCall{{ID: "next", Name: "local_write", Arguments: args}}}}, nil
+}
+
+// Approval fixtures publish through the same operation boundary as real workers.
+func publishTestSession(t *testing.T, m AppModel, session domain.Session) AppModel {
+	t.Helper()
+	cmd := m.BeginOperation(func(_ context.Context, snapshot *domain.Session, _ func(application.Event) error) error {
+		*snapshot = session
+		return nil
+	})
+	return drain(t, m, cmd)
 }

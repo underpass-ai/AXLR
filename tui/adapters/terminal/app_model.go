@@ -29,6 +29,8 @@ type AppModel struct {
 	SearchBox         SearchBox
 	Palette           ActionPalette
 	Picker            SessionPicker
+	Models            ModelPicker
+	operationID       uint64
 	Help              HelpOverlay
 	Info              Transcript
 	overlay           ControlIntent
@@ -59,6 +61,9 @@ func New(deps Dependencies) AppModel {
 	for _, record := range m.Header.State.Activity {
 		m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
 	}
+	if m.Header.State.ID == "" {
+		m.Header.State.Workspace = deps.Workspace
+	}
 	m.Status.State = m.Header.State.Status
 	m.refreshTranscript()
 	m.syncApproval()
@@ -72,6 +77,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.Layout = NewLayout(v.Width, v.Height)
+		if m.overlay == "models" {
+			m.Models.Input.SetWidth(max(1, v.Width-9))
+			m.Models.pageSize = max(1, v.Height-7)
+			m.Models.ensureVisible()
+		}
 		offset := m.Transcript.Viewport.YOffset()
 		m.Transcript.Viewport.SetWidth(m.Layout.TranscriptWidth)
 		m.Transcript.Viewport.SetHeight(m.Layout.BodyHeight)
@@ -97,17 +107,39 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case operationComplete:
+		if v.ID != m.operationID || !m.Busy {
+			return m, nil
+		}
 		if m.cancel != nil {
 			m.cancel()
 		}
 		m.cancel = nil
 		m.events = nil
 		m.Busy = false
-		if m.deps.Session != nil {
+		if v.Session.Export().ID != "" {
+			if m.deps.Session == nil {
+				m.deps.Session = new(domain.Session)
+			}
 			*m.deps.Session = v.Session
 		}
 		oldID := m.Header.State.ID
-		m.Header.State = v.Session.Export()
+		if v.Session.Export().ID != "" {
+			m.Header.State = v.Session.Export()
+		}
+		if v.Models != nil {
+			if v.Err != nil {
+				m.Models.SetError(v.Err)
+			} else {
+				m.Models.SetModels(*v.Models)
+			}
+		}
+		if v.ModelSelection {
+			if v.Err != nil {
+				m.Models.SetError(v.Err)
+			} else {
+				m.overlay = ""
+			}
+		}
 		if v.Sessions != nil {
 			m.Picker = SessionPicker{Items: *v.Sessions}
 			m.overlay = "sessions"
@@ -144,7 +176,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ControlIntent:
 		switch v {
 		case "send":
+			if m.Composer.Input.Value() == "/model" {
+				next, cmd, _ := m.navigation(ControlIntent("models"))
+				changed := next.(AppModel)
+				if cmd != nil {
+					changed.Composer.Input.Reset()
+				}
+				return changed, cmd
+			}
 			if m.Busy || strings.TrimSpace(m.Composer.Input.Value()) == "" {
+				return m, nil
+			}
+			if m.Header.State.ID == "" {
+				m.Status.Error = "Select a model with /model before sending"
 				return m, nil
 			}
 			prompt := root.Text(m.Composer.Input.Value())
@@ -173,6 +217,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyPressMsg:
 		switch v.String() {
+		case "enter":
+			if m.Composer.Input.Value() == "/model" {
+				return m.Update(ControlIntent("send"))
+			}
 		case "ctrl+s":
 			return m.Update(m.Composer.Intent(v))
 		case "esc":
@@ -243,6 +291,12 @@ func (m AppModel) View() tea.View {
 			if !m.Layout.SidePanel {
 				view.Cursor.Y++
 			}
+		}
+	}
+	if !m.Layout.TooSmall && m.Layout.Width > 0 && m.overlay == "models" && !m.approvalFocus() {
+		view.Cursor = m.Models.Input.Cursor()
+		if view.Cursor != nil {
+			view.Cursor.Y++
 		}
 	}
 	if !m.Layout.TooSmall && m.overlay == "search" && !m.approvalFocus() {
