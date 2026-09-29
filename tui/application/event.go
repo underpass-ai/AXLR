@@ -7,9 +7,10 @@ import (
 
 // Event is delivered synchronously. Tool activity always follows persisted history.
 type Event struct {
-	Kind  EventKind
-	Text  root.Text
-	State domain.SessionStatus
-	Tool  domain.PendingTool
-	Usage *root.TokenUsage
+	Kind         EventKind
+	Text         root.Text
+	MessageCount int
+	State        domain.SessionStatus
+	Tool         domain.PendingTool
+	Usage        *root.TokenUsage
 }

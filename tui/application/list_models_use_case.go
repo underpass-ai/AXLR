@@ -4,11 +4,15 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-type ListModelsUseCase struct{ Catalog ModelCatalogPort }
+type ListModelsUseCase struct {
+	Catalog     ModelCatalogPort
+	Diagnostics DiagnosticPort
+}
 
 func (u ListModelsUseCase) Execute(ctx context.Context) ([]domain.AvailableModel, error) {
 	if u.Catalog == nil {
@@ -17,7 +21,18 @@ func (u ListModelsUseCase) Execute(ctx context.Context) ([]domain.AvailableModel
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	started := time.Now()
+	if u.Diagnostics != nil {
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticModelCatalogStart})
+	}
 	models, err := u.Catalog.List(ctx)
+	if u.Diagnostics != nil {
+		class := DiagnosticErrorNone
+		if err != nil {
+			class = DiagnosticErrorProvider
+		}
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticModelCatalogDone, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
+	}
 	if err != nil {
 		return nil, err
 	}

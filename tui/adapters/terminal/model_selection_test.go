@@ -28,7 +28,7 @@ func TestModelSelectionBareScreenBlocksSend(t *testing.T) {
 	}
 }
 func TestSlashModelOpensWithoutHistory(t *testing.T) {
-	for _, key := range []tea.KeyPressMsg{{Code: tea.KeyEnter}, {Code: 's', Mod: tea.ModCtrl}} {
+	for _, key := range []tea.KeyPressMsg{{Code: tea.KeyEnter}} {
 		m := bareModel()
 		m.Composer.Input.SetValue("/model")
 		n, cmd := m.Update(key)
@@ -217,7 +217,7 @@ func TestSlashModelBusyControlSendPreservesCommand(t *testing.T) {
 	m, _ := selectionModel(t, nil)
 	m.Busy = true
 	m.Composer.Input.SetValue("/model")
-	n, cmd := m.Update(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	n, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = n.(AppModel)
 	if cmd != nil || m.Composer.Input.Value() != "/model" || !strings.Contains(m.Status.Error, "running") {
 		t.Fatal("busy slash send lost command")

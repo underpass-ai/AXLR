@@ -9,6 +9,7 @@ import (
 
 type Dependencies struct {
 	Context      context.Context
+	Diagnostics  application.DiagnosticPort
 	Models       application.ListModelsUseCase
 	Create       application.CreateSessionUseCase
 	Change       application.ChangeSessionModelUseCase

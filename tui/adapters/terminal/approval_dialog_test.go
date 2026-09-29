@@ -254,7 +254,7 @@ func TestApprovalFollowupVisibleBeforeOperationComplete(t *testing.T) {
 				}
 				n, cmd = m.Update(msg)
 				m = n.(AppModel)
-				if event, ok := msg.(application.Event); ok && event.Kind == application.EventTextDelta {
+				if hasTextDelta(msg) {
 					if !m.Busy || !strings.Contains(m.View().Content, "visible follow-up") {
 						// Release blocked provider via cancellation even on failure.
 						m.cancel()
@@ -272,6 +272,20 @@ func TestApprovalFollowupVisibleBeforeOperationComplete(t *testing.T) {
 			t.Fatal("no follow-up delta")
 		})
 	}
+}
+
+func hasTextDelta(msg tea.Msg) bool {
+	if event, ok := msg.(application.Event); ok {
+		return event.Kind == application.EventTextDelta
+	}
+	if batch, ok := msg.(operationBatch); ok {
+		for _, item := range batch.Messages {
+			if hasTextDelta(item) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 type heldFollowup struct{ release <-chan struct{} }

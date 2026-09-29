@@ -65,7 +65,7 @@ func TestNavigationPaletteHelpAndInfo(t *testing.T) {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: 'h', Text: "h"})
-	if !strings.Contains(m.View().Content, "Ctrl+S") || !strings.Contains(m.View().Content, "Approve") {
+	if !strings.Contains(m.View().Content, "Shift+Enter") || !strings.Contains(m.View().Content, "Approve") {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
@@ -256,7 +256,7 @@ func TestNavigationMousePaletteSearchAndHelp(t *testing.T) {
 	m = n.(AppModel)
 	n, _ = click(t, m, "help")
 	m = n.(AppModel)
-	if !strings.Contains(m.View().Content, "Ctrl+S") {
+	if !strings.Contains(m.View().Content, "Shift+Enter") {
 		t.Fatal("mouse help missing")
 	}
 }

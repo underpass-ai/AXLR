@@ -4,15 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 type ResolveToolUseCase struct {
-	Tools    ToolExecutionPort
-	Store    SessionStorePort
-	Continue ContinueTurnUseCase
+	Tools       ToolExecutionPort
+	Store       SessionStorePort
+	Continue    ContinueTurnUseCase
+	Diagnostics DiagnosticPort
 }
 
 func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) error {
@@ -31,6 +33,14 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 	}
 	if decision != domain.DecisionApprove && decision != domain.DecisionDeny {
 		return errors.New("invalid tool decision")
+	}
+	started := time.Now()
+	if u.Diagnostics != nil {
+		stage := DiagnosticToolApproved
+		if decision == domain.DecisionDeny {
+			stage = DiagnosticToolRejected
+		}
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: stage})
 	}
 	tool, known := findTool(s, pending[0].Call.Name)
 	if !known {
@@ -86,13 +96,20 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 		}
 		*s = next
 		if runErr != nil {
+			u.recordToolCompletion(started, DiagnosticErrorTool)
 			return errors.Join(runErr, emitTool(s, id, emit), emit(Event{Kind: EventState, State: s.Status()}))
 		}
 	}
 	if err := emitTool(s, id, emit); err != nil {
 		return err
 	}
+	u.recordToolCompletion(started, DiagnosticErrorNone)
 	return u.advance(ctx, s, emit)
+}
+func (u ResolveToolUseCase) recordToolCompletion(started time.Time, class DiagnosticErrorClass) {
+	if u.Diagnostics != nil {
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolCompleted, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
+	}
 }
 func (u ResolveToolUseCase) advance(ctx context.Context, s *domain.Session, emit func(Event) error) error {
 	continuation := u.Continue

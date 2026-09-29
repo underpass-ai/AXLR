@@ -411,7 +411,7 @@ func (m *AppModel) showHit() {
 		prefix.Messages = prefix.Messages[:*hit.MessageIndex]
 	}
 	rendered := NewTranscript()
-	rendered.SetSession(prefix, "")
+	rendered.SetSession(prefix, "", Theme{Monochrome: true})
 	before := rendered.Viewport.GetContent()
 	lines := 0
 	for _, line := range strings.Split(before, "\n") {

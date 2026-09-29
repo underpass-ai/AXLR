@@ -19,6 +19,7 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
+	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
@@ -28,7 +29,11 @@ import (
 
 func run(ctx context.Context, args []string, getenv func(string) string, launch func(tea.Model) error, stderr io.Writer) int {
 	key := getenv("OPENROUTER_API_KEY")
+	var trace application.DiagnosticPort
 	fail := func(err error) int {
+		if trace != nil {
+			_ = trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticOperationFailed, ErrorClass: application.DiagnosticErrorInternal})
+		}
 		message := err.Error()
 		if key != "" {
 			message = strings.ReplaceAll(message, key, "[redacted]")
@@ -43,6 +48,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	flags.SetOutput(io.Discard)
 	workspaceFlag := flags.String("root", ".", "existing workspace root (default current directory)")
 	modelFlag := flags.String("model", "", "OpenRouter model ID (optional; choose with /model)")
+	traceFlag := flags.String("trace-file", "", "append privacy-safe TUI diagnostics to JSONL file")
 	sessionFlag := flags.String("session", "", "saved session ID")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
@@ -57,6 +63,20 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	if flags.NArg() != 0 {
 		return fail(errors.New("positional arguments are not accepted"))
+	}
+	if *traceFlag != "" {
+		logger, openErr := diagnostics.Open(*traceFlag)
+		if openErr != nil {
+			return fail(openErr)
+		}
+		defer func() {
+			if logger.Close() != nil {
+				fmt.Fprintln(stderr, "axlr-tui: diagnostic trace incomplete")
+			}
+		}()
+		trace = logger
+		_ = trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticStartup})
+		defer trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticShutdown})
 	}
 	workspacePath, err := filepath.Abs(*workspaceFlag)
 	if err != nil {
@@ -77,7 +97,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 	}
-	clientHTTP := &http.Client{}
+	var transport http.RoundTripper = http.DefaultTransport
+	if trace != nil {
+		transport = diagnostics.Transport{Next: transport, Trace: trace}
+	}
+	clientHTTP := &http.Client{Transport: transport}
 	defer clientHTTP.CloseIdleConnections()
 	client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP})
 	if err != nil {
@@ -110,6 +134,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		return fail(err)
 	}
 	defer store.Close()
+	loggedStore := diagnostics.SessionStore{Next: store, Trace: trace}
 	var session *domain.Session
 	var newID domain.SessionID
 	if *sessionFlag != "" {
@@ -117,7 +142,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if e != nil {
 			return fail(e)
 		}
-		loaded, loadErr := store.Load(ctx, id)
+		loaded, loadErr := loggedStore.Load(ctx, id)
 		if loadErr != nil {
 			return fail(loadErr)
 		}
@@ -132,26 +157,27 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		newID, _ = domain.NewSessionID(hex.EncodeToString(random[:]))
 		if *modelFlag != "" {
-			created, createErr := (application.CreateSessionUseCase{Store: store}).Execute(ctx, newID, workspace, model)
+			created, createErr := (application.CreateSessionUseCase{Store: loggedStore}).Execute(ctx, newID, workspace, model)
 			if createErr != nil {
 				return fail(createErr)
 			}
 			session = &created
 		}
 	}
-	continuation := application.ContinueTurnUseCase{Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: store}
+	continuation := application.ContinueTurnUseCase{Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace}
 	app := terminal.New(terminal.Dependencies{
 		Context:      ctx,
-		Models:       application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}},
-		Create:       application.CreateSessionUseCase{Store: store},
-		Change:       application.ChangeSessionModelUseCase{Store: store},
+		Diagnostics:  trace,
+		Models:       application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
+		Create:       application.CreateSessionUseCase{Store: loggedStore},
+		Change:       application.ChangeSessionModelUseCase{Store: loggedStore},
 		Workspace:    workspace,
 		NewSessionID: newID,
-		Start:        application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: store, Continue: continuation},
-		Resolve:      application.ResolveToolUseCase{Tools: axlr.ToolRunner{Executor: executor}, Store: store, Continue: continuation},
+		Start:        application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: loggedStore, Continue: continuation},
+		Resolve:      application.ResolveToolUseCase{Tools: axlr.ToolRunner{Executor: executor}, Store: loggedStore, Continue: continuation, Diagnostics: trace},
 		Agent:        application.AgentTurnUseCase{Continue: continuation},
 		Search:       application.SearchSessionUseCase{},
-		Store:        store,
+		Store:        loggedStore,
 		Session:      session,
 		Monochrome:   getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
 	})
