@@ -14,6 +14,9 @@ import (
 
 type Manager struct {
 	mu            sync.Mutex
+	slot          chan struct{}
+	lifetime      context.Context
+	cancel        context.CancelFunc
 	registrations map[domain.PluginID]Registration
 	order         []domain.PluginID
 	connected     map[domain.PluginID]bool
@@ -22,14 +25,18 @@ type Manager struct {
 }
 
 func NewManager(registrations []Registration) (*Manager, error) {
-	m := &Manager{registrations: make(map[domain.PluginID]Registration), connected: make(map[domain.PluginID]bool), client: mcpclient.New()}
+	lifetime, cancel := context.WithCancel(context.Background())
+	m := &Manager{slot: make(chan struct{}, 1), lifetime: lifetime, cancel: cancel, registrations: make(map[domain.PluginID]Registration), connected: make(map[domain.PluginID]bool), client: mcpclient.New()}
+	m.slot <- struct{}{}
 	for _, registration := range registrations {
 		validated, err := NewRegistration(registration.Manifest, registration.Env)
 		if err != nil {
+			cancel()
 			return nil, err
 		}
 		id := validated.Manifest.ID
 		if _, exists := m.registrations[id]; exists {
+			cancel()
 			return nil, fmt.Errorf("duplicate plugin ID %q", id)
 		}
 		m.registrations[id] = validated
@@ -38,8 +45,34 @@ func NewManager(registrations []Registration) (*Manager, error) {
 	return m, nil
 }
 
+func (m *Manager) acquire(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-m.lifetime.Done():
+		return errors.New("plugin manager is closed")
+	case <-m.slot:
+	}
+	if m.lifetime.Err() != nil {
+		m.release()
+		return errors.New("plugin manager is closed")
+	}
+	return nil
+}
+
+func (m *Manager) release() { m.slot <- struct{}{} }
+
+func (m *Manager) operationContext(ctx context.Context) (context.Context, func()) {
+	opCtx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(m.lifetime, cancel)
+	return opCtx, func() { stop(); cancel() }
+}
+
 func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
-	if m.closed {
+	m.mu.Lock()
+	closed := m.closed
+	m.mu.Unlock()
+	if closed {
 		return errors.New("plugin manager is closed")
 	}
 	if m.connected[id] {
@@ -58,11 +91,12 @@ func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
 }
 
 func (m *Manager) List(ctx context.Context) ([]domain.PluginTool, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return nil, errors.New("plugin manager is closed")
+	if err := m.acquire(ctx); err != nil {
+		return nil, err
 	}
+	defer m.release()
+	ctx, finish := m.operationContext(ctx)
+	defer finish()
 	result := []domain.PluginTool{}
 	for _, id := range m.order {
 		if err := m.connect(ctx, id); err != nil {
@@ -103,11 +137,12 @@ func (m *Manager) List(ctx context.Context) ([]domain.PluginTool, error) {
 }
 
 func (m *Manager) Call(ctx context.Context, call domain.PluginCall) (domain.PluginResult, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.closed {
-		return domain.PluginResult{}, errors.New("plugin manager is closed")
+	if err := m.acquire(ctx); err != nil {
+		return domain.PluginResult{}, err
 	}
+	defer m.release()
+	ctx, finish := m.operationContext(ctx)
+	defer finish()
 	r, exists := m.registrations[call.Ref.PluginID]
 	if !exists {
 		return domain.PluginResult{}, domain.Reject("unknown_plugin", "unknown plugin")
@@ -175,10 +210,12 @@ func (m *Manager) Call(ctx context.Context, call domain.PluginCall) (domain.Plug
 
 func (m *Manager) Close() error {
 	m.mu.Lock()
-	defer m.mu.Unlock()
 	if m.closed {
+		m.mu.Unlock()
 		return nil
 	}
 	m.closed = true
+	m.cancel()
+	m.mu.Unlock()
 	return m.client.Close()
 }

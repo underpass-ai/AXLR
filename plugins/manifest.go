@@ -48,15 +48,31 @@ func LoadManifest(path string) (Manifest, error) {
 		return Manifest{}, errors.New("unsupported plugin manifest version")
 	}
 	var rawID, command string
-	var args, allow []string
+	var args []string
+	var rawArgs []json.RawMessage
+	var allow []string
 	if err := json.Unmarshal(fields["id"], &rawID); err != nil {
 		return Manifest{}, err
 	}
 	if err := json.Unmarshal(fields["command"], &command); err != nil {
 		return Manifest{}, err
 	}
-	if err := json.Unmarshal(fields["args"], &args); err != nil {
+	if err := json.Unmarshal(fields["args"], &rawArgs); err != nil {
 		return Manifest{}, err
+	}
+	if rawArgs == nil {
+		return Manifest{}, errors.New("plugin args must be an array")
+	}
+	args = make([]string, 0, len(rawArgs))
+	for _, raw := range rawArgs {
+		if len(raw) == 0 || raw[0] != '"' {
+			return Manifest{}, errors.New("plugin arguments must be strings")
+		}
+		var arg string
+		if err := json.Unmarshal(raw, &arg); err != nil {
+			return Manifest{}, err
+		}
+		args = append(args, arg)
 	}
 	if err := json.Unmarshal(fields["allow_tools"], &allow); err != nil {
 		return Manifest{}, err
@@ -65,7 +81,7 @@ func LoadManifest(path string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	if !filepath.IsAbs(command) || strings.ContainsRune(command, 0) || args == nil || len(allow) == 0 {
+	if !filepath.IsAbs(command) || strings.ContainsRune(command, 0) || len(allow) == 0 {
 		return Manifest{}, errors.New("plugin requires an absolute command, args and nonempty allow_tools")
 	}
 	for _, arg := range args {

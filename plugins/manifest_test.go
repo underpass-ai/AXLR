@@ -37,6 +37,7 @@ func TestLoadManifestRejectsMalformedRegistration(t *testing.T) {
 		"empty allowlist":     strings.Replace(base, `["find"]`, `[]`, 1),
 		"duplicate allowlist": strings.Replace(base, `["find"]`, `["find","find"]`, 1),
 		"nul argument":        strings.Replace(base, `"args":[]`, `"args":["\u0000"]`, 1),
+		"null argument":       strings.Replace(base, `"args":[]`, `"args":[null]`, 1),
 		"nul command":         strings.Replace(base, `/bin/echo`, `/bin/\u0000`, 1),
 		"invalid id":          strings.Replace(base, `"id":"search"`, `"id":"bad.id"`, 1),
 	} {

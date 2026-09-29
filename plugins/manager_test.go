@@ -145,6 +145,122 @@ func TestManagerPreservesLargeJSONInteger(t *testing.T) {
 	}
 }
 
+func TestManagerPreservesLargeStructuredResultInteger(t *testing.T) {
+	m, err := NewManager([]Registration{pluginRegistration(t, "numbers", []domain.PluginToolName{"large_result"})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	result, err := m.Call(context.Background(), pluginCall(t, "numbers", "large_result", `{}`))
+	if err != nil || result.StructuredContent == nil || string(result.StructuredContent.Bytes()) != `{"id":9007199254740993}` {
+		t.Fatalf("structured integer changed: %+v, %v", result, err)
+	}
+}
+
+func TestManagerCloseInterruptsActivePluginCall(t *testing.T) {
+	callLog := filepath.Join(t.TempDir(), "calls")
+	m, err := NewManager([]Registration{pluginRegistration(t, "slow", []domain.PluginToolName{"wait"}, "AXLR_CALL_LOG="+callLog)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	callDone := make(chan error, 1)
+	go func() { _, err := m.Call(ctx, pluginCall(t, "slow", "wait", `{}`)); callDone <- err }()
+	waitForFile(t, callLog)
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- m.Close() }()
+	select {
+	case err := <-closeDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		cancel()
+		<-closeDone
+		t.Fatal("Close blocked behind active plugin call")
+	}
+	if err := <-callDone; err == nil {
+		t.Fatal("closed manager left active call successful")
+	}
+}
+
+func TestManagerCloseInterruptsPluginInitialization(t *testing.T) {
+	startLog := filepath.Join(t.TempDir(), "init")
+	command, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := NewRegistration(Manifest{ID: "hung", Command: command, Args: []string{"-test.run=^TestHangingPluginHelper$"}, AllowTools: []domain.PluginToolName{"wait"}}, []string{"AXLR_HANG_INIT=1", "AXLR_INIT_LOG=" + startLog})
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManager([]Registration{r})
+	if err != nil {
+		t.Fatal(err)
+	}
+	listDone := make(chan error, 1)
+	go func() { _, err := m.List(context.Background()); listDone <- err }()
+	waitForFile(t, startLog)
+	closeDone := make(chan error, 1)
+	go func() { closeDone <- m.Close() }()
+	select {
+	case err := <-closeDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close blocked behind plugin initialization")
+	}
+	if err := <-listDone; err == nil {
+		t.Fatal("plugin initialization succeeded after manager closed")
+	}
+}
+
+func TestQueuedPluginCallHonorsItsDeadline(t *testing.T) {
+	callLog := filepath.Join(t.TempDir(), "calls")
+	m, err := NewManager([]Registration{pluginRegistration(t, "slow", []domain.PluginToolName{"wait", "env"}, "AXLR_CALL_LOG="+callLog)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	firstCtx, cancelFirst := context.WithCancel(context.Background())
+	defer cancelFirst()
+	firstDone := make(chan error, 1)
+	go func() { _, err := m.Call(firstCtx, pluginCall(t, "slow", "wait", `{}`)); firstDone <- err }()
+	waitForFile(t, callLog)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	secondDone := make(chan error, 1)
+	go func() { _, err := m.Call(ctx, pluginCall(t, "slow", "env", `{}`)); secondDone <- err }()
+	select {
+	case err := <-secondDone:
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("queued call error: %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		cancelFirst()
+		<-secondDone
+		t.Fatal("queued call ignored its deadline")
+	}
+	cancelFirst()
+	<-firstDone
+}
+
+func waitForFile(t *testing.T, path string) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("plugin call did not start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestPluginHelper(t *testing.T) {
 	if os.Getenv("AXLR_PLUGIN_HELPER") != "1" {
 		return
@@ -182,8 +298,19 @@ func TestPluginHelper(t *testing.T) {
 		}
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(args["n"])}}}, nil
 	})
+	server.AddTool(&mcp.Tool{Name: "large_result", InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{}, StructuredContent: json.RawMessage(`{"id":9007199254740993}`)}, nil
+	})
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		os.Exit(2)
 	}
 	os.Exit(0)
+}
+
+func TestHangingPluginHelper(t *testing.T) {
+	if os.Getenv("AXLR_HANG_INIT") != "1" {
+		return
+	}
+	_ = os.WriteFile(os.Getenv("AXLR_INIT_LOG"), []byte("started\n"), 0600)
+	time.Sleep(30 * time.Second)
 }

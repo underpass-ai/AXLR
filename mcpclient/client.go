@@ -14,14 +14,15 @@ import (
 
 // Client owns sessions to named external MCP servers.
 type Client struct {
-	mu       sync.RWMutex
-	sessions map[ServerName]*mcp.ClientSession
-	pending  map[ServerName]context.CancelFunc
-	closed   bool
+	mu        sync.RWMutex
+	sessions  map[ServerName]*mcp.ClientSession
+	observers map[ServerName]*rawCallObserver
+	pending   map[ServerName]context.CancelFunc
+	closed    bool
 }
 
 func New() *Client {
-	return &Client{sessions: make(map[ServerName]*mcp.ClientSession), pending: make(map[ServerName]context.CancelFunc)}
+	return &Client{sessions: make(map[ServerName]*mcp.ClientSession), observers: make(map[ServerName]*rawCallObserver), pending: make(map[ServerName]context.CancelFunc)}
 }
 
 func (c *Client) Connect(ctx context.Context, server Server) error {
@@ -29,10 +30,19 @@ func (c *Client) Connect(ctx context.Context, server Server) error {
 	if err != nil {
 		return err
 	}
-	return c.connect(ctx, server.Name, transport)
+	var observer *rawCallObserver
+	if server.Command != "" {
+		observer = &rawCallObserver{}
+		transport = rawTransport{base: transport, observer: observer}
+	}
+	return c.connectObserved(ctx, server.Name, transport, observer)
 }
 
 func (c *Client) connect(ctx context.Context, name ServerName, transport mcp.Transport) error {
+	return c.connectObserved(ctx, name, transport, nil)
+}
+
+func (c *Client) connectObserved(ctx context.Context, name ServerName, transport mcp.Transport, observer *rawCallObserver) error {
 	if _, err := NewServerName(name.String()); err != nil || transport == nil {
 		return errors.New("invalid MCP connection")
 	}
@@ -67,6 +77,9 @@ func (c *Client) connect(ctx context.Context, name ServerName, transport mcp.Tra
 		return errors.New("MCP client closed during connection")
 	}
 	c.sessions[name] = session
+	if observer != nil {
+		c.observers[name] = observer
+	}
 	c.mu.Unlock()
 	return nil
 }
@@ -141,7 +154,17 @@ func (c *Client) Call(ctx context.Context, ref ToolRef, arguments map[string]any
 	if _, err := json.Marshal(arguments); err != nil {
 		return Result{}, fmt.Errorf("invalid MCP tool arguments: %w", err)
 	}
+	c.mu.RLock()
+	observer := c.observers[ref.Server]
+	c.mu.RUnlock()
+	if observer != nil {
+		observer.begin()
+	}
 	response, err := session.CallTool(ctx, &mcp.CallToolParams{Name: ref.Name.String(), Arguments: arguments})
+	var rawStructured json.RawMessage
+	if observer != nil {
+		rawStructured = observer.end()
+	}
 	if err != nil {
 		return Result{}, fmt.Errorf("call MCP tool %q on %q: %w", ref.Name, ref.Server, err)
 	}
@@ -153,7 +176,9 @@ func (c *Client) Call(ctx context.Context, ref ToolRef, arguments map[string]any
 		}
 		result.Content = append(result.Content, encoded)
 	}
-	if response.StructuredContent != nil {
+	if len(rawStructured) != 0 {
+		result.StructuredContent = rawStructured
+	} else if response.StructuredContent != nil {
 		result.StructuredContent, err = json.Marshal(response.StructuredContent)
 		if err != nil {
 			return Result{}, fmt.Errorf("encode MCP structured content: %w", err)
@@ -174,6 +199,7 @@ func (c *Client) Close() error {
 	}
 	sessions := c.sessions
 	c.sessions = make(map[ServerName]*mcp.ClientSession)
+	c.observers = make(map[ServerName]*rawCallObserver)
 	c.mu.Unlock()
 	var errs []error
 	for name, session := range sessions {
