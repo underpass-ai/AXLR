@@ -1,0 +1,9 @@
+go 1.26
+
+use (
+	.
+	./tui
+)
+
+// The root module has no tagged v0.0.0 release; resolve its graph locally too.
+replace github.com/underpass-ai/AXLR v0.0.0 => .
