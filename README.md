@@ -4,7 +4,7 @@
 
 ## Build and run
 
-Go 1.26 is required. The module has no external dependencies.
+Go 1.26 is required. The root module has no external dependencies.
 
 ```bash
 go test ./...
@@ -43,5 +43,7 @@ The worker exits `0` after a valid protocol request even when the tool failed, `
 ## Architecture
 
 `domain/` holds value objects and operation commands/results. `application/` holds ports and use cases. `adapters/local/` implements filesystem and process ports. Root-level DTOs, mappers, codec and executor compose the public library. `cmd/axlr/` is the protocol adapter. Each Go file has one primary type where a type is needed.
+
+The separate [MCP client module](mcpclient/README.md) connects to external MCP servers over stdio or Streamable HTTP. It discovers and calls their tools by `(server, tool)` identity. Hosts can compose it with AXLR's local executor. AXLR does not expose its four local tools as an MCP server.
 
 The [design](docs/plans/2026-09-29-hexagonal-design.md), [implementation plan](docs/plans/2026-09-29-minimal-runtime.md), and [provenance note](docs/provenance.md) record the boundaries and lineage. Sandboxing and comparative performance measurements are outside this delivery.
