@@ -104,7 +104,7 @@ func TestApprovalApproveKeyboardAndMouse(t *testing.T) {
 		}
 		m = drain(t, n.(AppModel), c)
 		p := m.deps.Session.Export().Activity[0]
-		if p.Decision != domain.DecisionApprove || p.Outcome == nil || p.Outcome.Content != "written" || len(m.deps.Session.Pending()) != 1 {
+		if p.Decision != domain.DecisionApprove || p.Outcome == nil || p.Outcome.Content != "written" || len(m.deps.Session.Pending()) != 1 || !strings.Contains(m.View().Content, "[Approve A]") {
 			t.Fatal("approval not executed and correlated")
 		}
 	}
@@ -231,4 +231,81 @@ func TestApprovalComponentEmitsTypedDecision(t *testing.T) {
 			t.Fatalf("decision = %q", got)
 		}
 	}
+}
+
+// The worker has not completed while follow-up deltas are being displayed.
+func TestApprovalFollowupVisibleBeforeOperationComplete(t *testing.T) {
+	for _, decision := range []ControlIntent{"approve", "deny"} {
+		t.Run(string(decision), func(t *testing.T) {
+			m := approvalModel(t)
+			// Resolve the first call so the tested decision is the last in its batch.
+			n, cmd := m.Update(ControlIntent("deny"))
+			m = drain(t, n.(AppModel), cmd)
+			release := make(chan struct{})
+			defer close(release)
+			m.deps.Resolve.Tools = navTool{}
+			m.deps.Resolve.Continue.Models = heldFollowup{release: release}
+			n, cmd = m.Update(decision)
+			m = n.(AppModel)
+			for i := 0; i < 10; i++ {
+				msg := cmd()
+				if _, done := msg.(operationComplete); done {
+					t.Fatal("completed before follow-up delta")
+				}
+				n, cmd = m.Update(msg)
+				m = n.(AppModel)
+				if event, ok := msg.(application.Event); ok && event.Kind == application.EventTextDelta {
+					if !m.Busy || !strings.Contains(m.View().Content, "visible follow-up") {
+						// Release blocked provider via cancellation even on failure.
+						m.cancel()
+						t.Fatalf("follow-up hidden during operation: %s", m.View().Content)
+					}
+					// Esc remains usable while the provider is blocked.
+					n, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+					m = drain(t, n.(AppModel), cmd)
+					if m.Status.State != domain.StatusInterrupted {
+						t.Fatal("stream cancellation unavailable")
+					}
+					return
+				}
+			}
+			t.Fatal("no follow-up delta")
+		})
+	}
+}
+
+type heldFollowup struct{ release <-chan struct{} }
+
+func (s heldFollowup) Stream(ctx context.Context, _ root.CompletionRequest, emit func(root.Text) error) (root.CompletionResult, error) {
+	if err := emit("visible follow-up"); err != nil {
+		return root.CompletionResult{}, err
+	}
+	select {
+	case <-ctx.Done():
+		return root.CompletionResult{}, ctx.Err()
+	case <-s.release:
+		return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "visible follow-up"}}, nil
+	}
+}
+
+func TestApprovalReappearsForFollowupCall(t *testing.T) {
+	m := approvalModel(t)
+	n, cmd := m.Update(ControlIntent("deny"))
+	m = drain(t, n.(AppModel), cmd)
+	m.deps.Resolve.Continue.Models = followupCall{}
+	n, cmd = m.Update(ControlIntent("deny"))
+	m = drain(t, n.(AppModel), cmd)
+	if !m.approvalFocus() || !strings.Contains(m.View().Content, "new-target.txt") || m.Approval.Pending.Call.ID != "next" {
+		t.Fatalf("follow-up approval missing: %s", m.View().Content)
+	}
+}
+
+type followupCall struct{}
+
+func (followupCall) Stream(_ context.Context, _ root.CompletionRequest, emit func(root.Text) error) (root.CompletionResult, error) {
+	if err := emit("next call"); err != nil {
+		return root.CompletionResult{}, err
+	}
+	args, _ := root.NewJSONObject([]byte(`{"path":"new-target.txt","content":"next"}`))
+	return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "next call", ToolCalls: []root.ToolCall{{ID: "next", Name: "local_write", Arguments: args}}}}, nil
 }

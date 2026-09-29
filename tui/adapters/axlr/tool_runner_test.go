@@ -8,6 +8,8 @@ import (
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"os"
 	"path/filepath"
@@ -66,7 +68,7 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 	}
 	id, _ := domain.NewLocalToolIdentity("read")
 	out, err := runner.Execute(context.Background(), id, jsonValue(t, `{"path":"absent"}`))
-	if err != nil || !out.IsError {
+	if err != nil || !out.IsError || out.Uncertain {
 		t.Fatalf("%+v %v", out, err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -103,7 +105,7 @@ func TestToolRunnerMCPErrorIdentityAndDisappearance(t *testing.T) {
 		t.Fatal(err)
 	}
 	out, err := runner.Execute(context.Background(), snapshot[4].Identity, jsonValue(t, "{}"))
-	if err != nil || !out.IsError || !strings.Contains(string(out.Content), "unknown_plugin_tool") {
+	if err != nil || !out.IsError || out.Uncertain || !strings.Contains(string(out.Content), "unknown_plugin_tool") {
 		t.Fatalf("%+v %v", out, err)
 	}
 	fresh, err := (ToolCatalog{Plugins: m}).Snapshot(context.Background())
@@ -118,7 +120,7 @@ func TestToolRunnerMCPErrorIdentityAndDisappearance(t *testing.T) {
 	}
 	id, _ := domain.NewPluginToolIdentity(root.PluginRef{PluginID: "alpha", ToolName: "hidden"})
 	out, err = runner.Execute(context.Background(), id, jsonValue(t, "{}"))
-	if err != nil || !out.IsError || !strings.Contains(string(out.Content), "not allowed") {
+	if err != nil || !out.IsError || out.Uncertain || !strings.Contains(string(out.Content), "not allowed") {
 		t.Fatalf("%+v %v", out, err)
 	}
 	calls, err := os.ReadFile(marker + ".calls")
@@ -168,6 +170,9 @@ func TestMCPHelper(t *testing.T) {
 				fmt.Fprintln(f, os.Getenv("IDENTITY")+":"+req.Params.Name)
 				f.Close()
 			}
+			if string(req.Params.Arguments["lose_reply"]) == "true" {
+				os.Exit(0)
+			}
 			result = map[string]any{"isError": true, "content": []any{map[string]any{"type": "text", "text": os.Getenv("IDENTITY") + ":" + req.Params.Name + ":" + string(req.Params.Arguments["n"])}}}
 		default:
 			result = map[string]any{}
@@ -176,4 +181,57 @@ func TestMCPHelper(t *testing.T) {
 		fmt.Println(string(data))
 	}
 	os.Exit(0)
+}
+
+// A plugin effect followed by EOF must not become a definite result or resume the model.
+func TestToolRunnerLostMCPReplyPausesPersistedTurn(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "effect")
+	manager := testManager(t, marker)
+	executor, err := runtime.New(runtime.Config{Root: t.TempDir(), Plugins: manager})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer executor.Close()
+	snapshot, err := (ToolCatalog{Plugins: manager}).Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = session.BeginTurn("run plugin", snapshot); err != nil {
+		t.Fatal(err)
+	}
+	call := root.ToolCall{ID: "lost", Name: snapshot[4].Definition.Name, Arguments: jsonValue(t, `{"lose_reply":true}`)}
+	if err = session.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{call}}}); err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	model := &countingStream{}
+	resolver := application.ResolveToolUseCase{Tools: ToolRunner{Executor: executor}, Store: store, Continue: application.ContinueTurnUseCase{Models: model}}
+	runErr := resolver.Execute(context.Background(), &session, call.ID, domain.DecisionApprove, nil)
+	effect, err := os.ReadFile(marker + ".calls")
+	if err != nil || string(effect) != "alpha:echo\n" {
+		t.Fatalf("effect %q: %v", effect, err)
+	}
+	saved, err := store.Load(context.Background(), session.Export().ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcome := saved.Export().Activity[0].Outcome
+	if runErr == nil || model.calls != 0 || session.Status() != domain.StatusInterrupted || saved.Status() != domain.StatusInterrupted || outcome == nil || !outcome.Uncertain || !outcome.IsError {
+		t.Fatalf("lost reply: err=%v model calls=%d live=%s saved=%s outcome=%+v", runErr, model.calls, session.Status(), saved.Status(), outcome)
+	}
+}
+
+type countingStream struct{ calls int }
+
+func (m *countingStream) Stream(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+	m.calls++
+	return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "incorrect automatic continuation"}}, nil
 }

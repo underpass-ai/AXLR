@@ -35,6 +35,13 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 	}
 	response := r.Executor.Execute(ctx, request)
 	out := domain.ToolOutcome{IsError: response.Status != "completed", Uncertain: response.Status == "timed_out" || response.Status == "cancelled"}
+	// The root DTO maps unclassified plugin transport/protocol errors to
+	// failed/internal_error, including a lost reply after an effect. It carries
+	// no execution-stage proof, so retain uncertainty for that case. Rejected
+	// requests establish nonexecution; completed MCP is_error results are definite.
+	if id.Kind == domain.ToolKindPlugin && response.Status == "failed" && response.Error != nil && response.Error.Code == "internal_error" {
+		out.Uncertain = true
+	}
 	if plugin, ok := response.Output.(dto.PluginCallOutput); ok {
 		out.IsError = out.IsError || plugin.IsError
 	}

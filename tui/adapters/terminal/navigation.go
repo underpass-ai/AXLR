@@ -22,7 +22,9 @@ func (m AppModel) pending() (domain.PendingTool, bool) {
 }
 func (m AppModel) approvalFocus() bool {
 	_, ok := m.pending()
-	return ok && m.Header.State.Status == domain.StatusApproval
+	// A decision operation owns the pending call until it publishes a new
+	// session. Its old approval snapshot must not obscure follow-up streaming.
+	return !m.Busy && ok && m.Header.State.Status == domain.StatusApproval
 }
 func (m AppModel) knownPending() bool {
 	p, ok := m.pending()
