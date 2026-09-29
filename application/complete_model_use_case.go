@@ -20,7 +20,7 @@ func (u CompleteModelUseCase) Execute(ctx context.Context, req domain.Completion
 	return u.Models.Complete(ctx, req)
 }
 
-func modelPortIsNil(port ModelPort) bool {
+func modelPortIsNil(port any) bool {
 	if port == nil {
 		return true
 	}
