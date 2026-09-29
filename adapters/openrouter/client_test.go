@@ -157,3 +157,25 @@ func TestClientRefusesRedirect(t *testing.T) {
 		t.Fatalf("redirect result = %v; calls = %d", err, calls)
 	}
 }
+
+func TestClientRejectsToolFollowUpWithoutDefinitions(t *testing.T) {
+	calls := 0
+	client, err := New(ClientConfig{APIKey: "test-secret", HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return testResponse(200, `{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`), nil
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := domain.CompletionRequest{
+		Model: "openai/gpt-4o",
+		Messages: []domain.Message{
+			{Role: domain.RoleUser, Content: "Find it"},
+			{Role: domain.RoleAssistant, ToolCalls: []domain.ToolCall{{ID: "call_1", Name: "search", Arguments: testObject(t, `{}`)}}},
+			{Role: domain.RoleTool, ToolCallID: "call_1", Content: "Found"},
+		},
+	}
+	if _, err := client.Complete(context.Background(), req); err == nil || calls != 0 {
+		t.Fatalf("tool follow-up without definitions = %v; HTTP calls = %d", err, calls)
+	}
+}

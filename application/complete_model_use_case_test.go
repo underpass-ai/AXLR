@@ -14,6 +14,13 @@ func (f modelPortFunc) Complete(ctx context.Context, req domain.CompletionReques
 	return f(ctx, req)
 }
 
+type nilPointerModelPort struct{ calls int }
+
+func (p *nilPointerModelPort) Complete(context.Context, domain.CompletionRequest) (domain.CompletionResult, error) {
+	p.calls++
+	return domain.CompletionResult{}, nil
+}
+
 func TestCompleteModelUseCaseRejectsBeforeCallingPort(t *testing.T) {
 	calls := 0
 	u := CompleteModelUseCase{Models: modelPortFunc(func(context.Context, domain.CompletionRequest) (domain.CompletionResult, error) {
@@ -65,5 +72,17 @@ func TestCompleteModelUseCaseForwardsAndPropagates(t *testing.T) {
 	})
 	if _, err := u.Execute(ctx, req); !errors.Is(err, portFailure) {
 		t.Fatalf("port error changed: %v", err)
+	}
+}
+
+func TestCompleteModelUseCaseRejectsTypedNilPort(t *testing.T) {
+	var nilPort *nilPointerModelPort
+	u := CompleteModelUseCase{Models: nilPort}
+	valid := domain.CompletionRequest{
+		Model:    "openai/gpt-4o",
+		Messages: []domain.Message{{Role: domain.RoleUser, Content: "Hi"}},
+	}
+	if _, err := u.Execute(context.Background(), valid); err == nil {
+		t.Fatal("typed nil model port accepted")
 	}
 }

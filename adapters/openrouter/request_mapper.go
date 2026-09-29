@@ -1,10 +1,27 @@
 package openrouter
 
-import "github.com/underpass-ai/AXLR/domain"
+import (
+	"errors"
+
+	"github.com/underpass-ai/AXLR/domain"
+)
 
 func mapRequest(req domain.CompletionRequest) (requestDTO, error) {
 	if err := req.Validate(); err != nil {
 		return requestDTO{}, err
+	}
+	defined := make(map[domain.ToolName]bool, len(req.Tools))
+	for _, tool := range req.Tools {
+		defined[tool.Name] = true
+	}
+	called := make(map[domain.ToolCallID]domain.ToolName)
+	for _, message := range req.Messages {
+		for _, call := range message.ToolCalls {
+			called[call.ID] = call.Name
+		}
+		if message.Role == domain.RoleTool && !defined[called[message.ToolCallID]] {
+			return requestDTO{}, errors.New("OpenRouter tool result requires its tool definition")
+		}
 	}
 	wire := requestDTO{Model: string(req.Model), Messages: make([]messageDTO, 0, len(req.Messages)), Stream: false}
 	for _, message := range req.Messages {
