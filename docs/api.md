@@ -23,4 +23,6 @@ Typical flow:
 
 `GET /v1/tools` lists exact local and connected MCP identities and schemas. `POST /v1/tool-calls` creates a durable direct-call intent. Its `POST /v1/tool-calls/{id}/decisions` endpoint approves or denies that one call. Effectful calls persist a checkpoint before execution. An `uncertain` result after a crash or lost response requires human inspection; AXLR does not retry it automatically.
 
+The state directory contains session snapshots, event journals, call arguments and audit records. On Windows, service startup replaces inherited ACLs on that directory and its existing contents with access for the current account, SYSTEM and Administrators; it refuses reparse points. Use a dedicated directory owned by the service account.
+
 `/livez` and `/readyz` are available only on the separate loopback probe listener. Readiness requires configured model credentials and reachable KMP and MADE MCP adapters. Transport or identity failures keep the API process alive for diagnosis and readiness failing.

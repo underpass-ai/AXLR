@@ -56,6 +56,9 @@ func NewServer(cfg Config, deps Dependencies) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := secureStateDirectory(cfg.StateDir); err != nil {
+		return nil, err
+	}
 	base, err := storage.NewService(filepath.Join(cfg.StateDir, "sessions"))
 	if err != nil {
 		return nil, err
