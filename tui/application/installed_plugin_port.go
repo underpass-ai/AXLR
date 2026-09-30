@@ -2,16 +2,16 @@ package application
 
 import "context"
 
-// InstalledPlugin is a Codex plugin package, distinct from an AXLR MCP server.
+// InstalledPlugin describes one package owned by AXLR, distinct from a server connection.
 type InstalledPlugin struct {
-	ID, Name, Marketplace, Version, Source, InstallPolicy, AuthPolicy string
-	Description                                                       string
-	Components                                                        []string
-	Installed, Enabled                                                bool
+	ID, Name, Version, Source, Description string
+	Components                             []string
+	Installed, Builtin                     bool
 }
 
 type InstalledPluginPort interface {
 	List(context.Context, bool) ([]InstalledPlugin, error)
 	Install(context.Context, string) error
-	AddMarketplace(context.Context, string) error
+	AddSource(context.Context, string) error
+	Guidance(context.Context) (string, error)
 }

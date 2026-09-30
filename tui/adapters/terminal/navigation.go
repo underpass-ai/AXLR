@@ -302,7 +302,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				return m, nil, true
 			}
 			selected = m.InstalledPlugins.Items[m.InstalledPlugins.Selected]
-			if selected.Installed || selected.InstallPolicy == "NOT_AVAILABLE" {
+			if selected.Installed || selected.Builtin {
 				return m, nil, true
 			}
 		}
@@ -318,7 +318,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				return errors.New(m.Theme.T("catalog.unavailable"))
 			}
 			if marketplace {
-				if err := catalog.AddMarketplace(ctx, marketplaceSource); err != nil {
+				if err := catalog.AddSource(ctx, marketplaceSource); err != nil {
 					return err
 				}
 			}

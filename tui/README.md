@@ -1,6 +1,6 @@
 # AXLR agent console
 
-`axlr-tui` is a streaming OpenRouter console for a local workspace. It offers AXLR read, write, edit and exec tools, explicitly registered MCP servers, persistent server approval policies, a Codex plugin package catalog, transcript search and resumable sessions. It targets trusted-local Linux and runs with your account's OS access.
+`axlr-tui` is a streaming OpenRouter console for a local workspace. It offers AXLR read, write, edit and exec tools, explicitly registered MCP servers, persistent server approval policies, an AXLR plugin package catalog compatible with Codex package formats, transcript search and resumable sessions. It targets trusted-local Linux and runs with your account's OS access.
 
 ## Build and start
 
@@ -31,7 +31,7 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 | I in `/mcp` | Install a third-party MCP from a manifest path or `ID https://host/mcp` |
 | Tab in `/plugin` | Switch between installed packages and the available catalog |
 | Enter in `/plugin` | Review and install the selected available plugin |
-| M in `/plugin` | Add a Codex plugin marketplace from a Git URL, `owner/repo`, or local path |
+| M in `/plugin` | Add a Codex-compatible plugin package or marketplace from an HTTPS Git URL or absolute local path |
 | R in `/mcp` or `/plugin` | Refresh the current inventory |
 | / in `/mcp` or `/plugin` | Search servers/tools or plugin packages |
 | Tab in `/model` | Cycle provider filters |
@@ -64,7 +64,7 @@ Provider reasoning and tool preparation have separate status indicators. They sh
 
 ## Plugin packages and MCP servers
 
-`/plugin` shows the real packages installed in this Codex app. KMP and MADE appear first when installed. Press Tab to browse available packages, `/` to search, and Enter to install the selected package through `codex plugin add`. Press M to add a third-party marketplace through `codex plugin marketplace add`, then search its packages. The Codex CLI must be on `PATH`. Installing a package changes Codex's plugin installation; an MCP connection used by AXLR is configured separately in `/mcp`.
+`/plugin` manages packages in AXLR's own data directory (`$XDG_DATA_HOME/axlr/plugins` or `~/.local/share/axlr/plugins`). KMP and MADE are built in. Press M to add a local package or marketplace path, or an HTTPS Git repository; AXLR reads `.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json`. The packages appear in the available tab, where Enter installs one into AXLR. Installed package skills are indexed for the model to read on demand, and declared MCP servers are registered in AXLR with manual approval. `/mcp` shows server connections. This does not change the Codex app's plugins. AXLR currently supports plugin skills and MCP servers; other Codex plugin components are retained in the package but not activated.
 
 `/mcp` shows AXLR's connected servers, discovered tools, and their approval policies. KMP and MADE remain connected with their existing policies when present in `mcp.json`. Press I to install an additional server during the running session. Enter an absolute path to an AXLR manifest for a local stdio server, or `ID https://host/mcp` for a Streamable HTTP endpoint. The initial approval policy is manual; the connection is persisted in `mcp.json` and becomes available for the next tool discovery. An unreachable server is shown as unavailable after discovery.
 

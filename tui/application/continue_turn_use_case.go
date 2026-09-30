@@ -11,11 +11,12 @@ import (
 )
 
 type ContinueTurnUseCase struct {
-	Context     ModelContextPort
-	Validation  ToolArgumentValidationPort
-	Models      ModelStreamPort
-	Store       SessionStorePort
-	Diagnostics DiagnosticPort
+	Context        ModelContextPort
+	Validation     ToolArgumentValidationPort
+	Models         ModelStreamPort
+	Store          SessionStorePort
+	Diagnostics    DiagnosticPort
+	PluginGuidance func(context.Context) (string, error)
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {
@@ -61,7 +62,16 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	snapshot := session.ToolSnapshot()
-	req := root.CompletionRequest{Model: session.Export().Model, Messages: append([]root.Message{modelHostGuidance(session)}, projection.Messages...), Tools: ModelTools(snapshot)}
+	guidance := modelHostGuidance(session)
+	if u.PluginGuidance != nil {
+		pluginText, err := u.PluginGuidance(ctx)
+		if err != nil {
+			contextSpan.End(DiagnosticErrorInvalidState)
+			return interrupt(err)
+		}
+		guidance.Content = root.Text(string(guidance.Content) + pluginText)
+	}
+	req := root.CompletionRequest{Model: session.Export().Model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: ModelTools(snapshot)}
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticContextProjected, SpanID: CurrentDiagnosticSpan(contextCtx), Messages: len(req.Messages), Tools: len(req.Tools), OriginalMessages: projection.OriginalMessages, DroppedMessages: projection.DroppedMessages, OriginalBytes: projection.OriginalBytes, ProjectedBytes: projection.ProjectedBytes, ContextCutIndex: projection.CutIndex})
 	}

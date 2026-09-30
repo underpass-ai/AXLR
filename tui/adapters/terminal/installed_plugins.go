@@ -12,7 +12,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
-// InstalledPlugins is the Codex package catalog, not the MCP connection list.
+// InstalledPlugins is the AXLR package catalog, separate from MCP connections.
 type InstalledPlugins struct {
 	Theme                 Theme
 	Items                 []application.InstalledPlugin
@@ -77,7 +77,7 @@ func (p *InstalledPlugins) visible() []int {
 		if !p.Available && !item.Installed {
 			continue
 		}
-		if q != "" && !strings.Contains(strings.ToLower(item.ID+" "+item.Name+" "+item.Marketplace), q) {
+		if q != "" && !strings.Contains(strings.ToLower(item.ID+" "+item.Name+" "+item.Source), q) {
 			continue
 		}
 		result = append(result, i)
@@ -108,13 +108,7 @@ func (p *InstalledPlugins) refresh() {
 	if item.Installed {
 		status = p.Theme.T("catalog.installed")
 	}
-	if item.Installed && !item.Enabled {
-		status = p.Theme.T("catalog.disabled")
-	}
-	if item.InstallPolicy == "NOT_AVAILABLE" {
-		status = p.Theme.T("catalog.unavailableStatus")
-	}
-	content := fmt.Sprintf("%s\n\n%s\n%s\n%s\n%s\n%s\n%s", item.Name, p.Theme.Tf("catalog.id", item.ID), p.Theme.Tf("catalog.version", item.Version), p.Theme.Tf("catalog.marketplace", item.Marketplace), p.Theme.Tf("catalog.status", status), p.Theme.Tf("catalog.installPolicy", catalogEnum(p.Theme, "catalog.install.", item.InstallPolicy)), p.Theme.Tf("catalog.authPolicy", catalogEnum(p.Theme, "catalog.auth.", item.AuthPolicy)))
+	content := fmt.Sprintf("%s\n\n%s\n%s\n%s", item.Name, p.Theme.Tf("catalog.id", item.ID), p.Theme.Tf("catalog.version", item.Version), p.Theme.Tf("catalog.status", status))
 	if item.Description != "" {
 		content += "\n\n" + item.Description
 	}
@@ -228,7 +222,7 @@ func (p *InstalledPlugins) Update(msg tea.Msg) ControlIntent {
 			p.MarketplaceInput.Focus()
 			return ""
 		case "enter", "i":
-			if len(p.visible()) > 0 && p.Selected < len(p.Items) && !p.Items[p.Selected].Installed && p.Items[p.Selected].InstallPolicy != "NOT_AVAILABLE" {
+			if len(p.visible()) > 0 && p.Selected < len(p.Items) && !p.Items[p.Selected].Installed {
 				p.confirming = true
 			}
 			return ""
@@ -282,9 +276,6 @@ func (p InstalledPlugins) View(w, h int) string {
 			status := p.Theme.T("catalog.available")
 			if item.Installed {
 				status = p.Theme.T("catalog.installed")
-			}
-			if item.InstallPolicy == "NOT_AVAILABLE" {
-				status = p.Theme.T("catalog.unavailableStatus")
 			}
 			row := fmt.Sprintf("%s · %s", singleLine(item.Name), status)
 			if index == p.Selected {

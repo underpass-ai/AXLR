@@ -29,7 +29,7 @@ func (s *pluginCatalogStub) Install(_ context.Context, id string) error {
 	}
 	return nil
 }
-func (s *pluginCatalogStub) AddMarketplace(_ context.Context, source string) error {
+func (s *pluginCatalogStub) AddSource(_ context.Context, source string) error {
 	s.marketplace = source
 	return nil
 }
@@ -81,15 +81,17 @@ func TestPluginMarketplaceInput(t *testing.T) {
 	}
 }
 
-func TestUnavailablePluginCannotBeInstalled(t *testing.T) {
+func (s *pluginCatalogStub) Guidance(context.Context) (string, error) { return "", nil }
+
+func TestBuiltinPluginCannotBeInstalled(t *testing.T) {
 	p := NewInstalledPlugins()
 	p.Theme = Theme{Locale: English, Monochrome: true}
 	p.Available = true
-	p.SetItems([]application.InstalledPlugin{{ID: "blocked@market", Name: "Blocked", InstallPolicy: "NOT_AVAILABLE"}})
+	p.SetItems([]application.InstalledPlugin{{ID: "kmp", Name: "KMP", Installed: true, Builtin: true}})
 	if got := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); got != "" || p.confirming {
 		t.Fatal("unavailable plugin was offered for installation")
 	}
-	if !strings.Contains(p.View(80, 20), "Unavailable") {
+	if !strings.Contains(p.View(80, 20), "Installed") {
 		t.Fatal("availability not shown")
 	}
 }

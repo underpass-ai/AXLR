@@ -65,6 +65,27 @@ func (s *MCPConfigStore) SaveApproval(ctx context.Context, id root.PluginID, mod
 // AddManifest installs a third-party stdio MCP server from an AXLR manifest.
 // Its initial policy is manual; existing KMP/MADE entries are preserved.
 func (s *MCPConfigStore) AddManifest(ctx context.Context, path string) error {
+	return s.AddManifestWithEnvironment(ctx, path, nil, nil)
+}
+
+// AddManifestWithEnvironment persists explicit values and host variable names for a package MCP.
+func (s *MCPConfigStore) AddManifestWithEnvironment(ctx context.Context, path string, envFrom, env map[string]string) error {
+	for key, source := range envFrom {
+		if !mcpEnvironmentName.MatchString(key) || !mcpEnvironmentName.MatchString(source) || key == "OPENROUTER_API_KEY" || source == "OPENROUTER_API_KEY" {
+			return errors.New("invalid MCP environment source")
+		}
+	}
+	for key, value := range env {
+		if !mcpEnvironmentName.MatchString(key) || key == "OPENROUTER_API_KEY" || strings.ContainsRune(value, 0) {
+			return errors.New("invalid MCP environment value")
+		}
+		if _, exists := envFrom[key]; exists {
+			return errors.New("duplicate MCP environment key")
+		}
+	}
+	if len(envFrom)+len(env) > 64 {
+		return errors.New("too many MCP environment entries")
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -102,7 +123,7 @@ func (s *MCPConfigStore) AddManifest(ctx context.Context, path string) error {
 		return errors.New("MCP server limit reached")
 	}
 	config.Version = 1
-	config.Plugins = append(config.Plugins, dto.MCPPluginConfig{Manifest: path, Name: manifest.ID.String(), Purpose: "tools", Approval: "manual"})
+	config.Plugins = append(config.Plugins, dto.MCPPluginConfig{Manifest: path, Name: manifest.ID.String(), Purpose: "tools", Approval: "manual", EnvFrom: envFrom, Env: env})
 	return s.write(ctx, config)
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -203,4 +204,20 @@ func requestHasTool(r root.CompletionRequest, name root.ToolName) bool {
 		}
 	}
 	return false
+}
+
+func TestContinueTurnIncludesInstalledAXLRSkillIndex(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn("use the package", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	u := ContinueTurnUseCase{Store: &memoryStore{}, PluginGuidance: func(context.Context) (string, error) { return "\nInstalled AXLR plugin skill: sample/example\n", nil }, Models: streamFunc(func(_ context.Context, request root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		if len(request.Messages) == 0 || request.Messages[0].Role != root.RoleSystem || !strings.Contains(string(request.Messages[0].Content), "sample/example") {
+			t.Fatalf("package skill index missing: %+v", request.Messages)
+		}
+		return assistant("done"), nil
+	})}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
 }

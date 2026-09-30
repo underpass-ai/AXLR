@@ -336,3 +336,37 @@ func TestMCPConfigLockRejectsSymlinkAndPublicFile(t *testing.T) {
 		})
 	}
 }
+
+func TestMCPConfigStorePackageEnvironment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.json")
+	manifest := filepath.Join(t.TempDir(), "server.json")
+	if err := os.WriteFile(manifest, []byte(`{"manifest_version":1,"id":"example-worker","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store := MCPConfigStore{Path: path}
+	if err := store.AddManifestWithEnvironment(context.Background(), manifest, map[string]string{"API_KEY": "TEST_API_KEY"}, map[string]string{"HOME": "/tmp"}); err != nil {
+		t.Fatal(err)
+	}
+	config, err := readMCPConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Plugins) != 1 || config.Plugins[0].EnvFrom["API_KEY"] != "TEST_API_KEY" || config.Plugins[0].Env["HOME"] != "/tmp" {
+		t.Fatalf("config: %+v", config)
+	}
+	loaded, err := LoadMCPConfiguration(path, func(key string) string {
+		if key == "TEST_API_KEY" {
+			return "secret"
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Registrations) != 1 || len(loaded.Registrations[0].Env) != 2 {
+		t.Fatalf("registration: %+v", loaded)
+	}
+	if err := store.AddManifestWithEnvironment(context.Background(), manifest, map[string]string{"OPENROUTER_API_KEY": "OPENROUTER_API_KEY"}, nil); err == nil {
+		t.Fatal("provider credential forwarded")
+	}
+}
