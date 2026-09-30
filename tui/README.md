@@ -20,7 +20,8 @@ Supply `OPENROUTER_API_KEY` through the host environment before launch. Type `/m
 |:--|:--|
 | First launch and prerequisites | [Getting started](../docs/getting-started.md) |
 | Models, controls, sessions, themes and diagnostics | [Console](../docs/console.md) |
-| Codex packages, MCP registration and approval | [Plugins and MCP](../docs/plugins.md) |
+| AXLR packages, MCP registration and approval | [Plugins and MCP](../docs/plugins.md) |
+| KMP memory and MADE orchestration | [KMP runbook](../docs/runbooks/kmp.md), [MADE runbook](../docs/runbooks/made.md) |
 | Startup or session problems | [Troubleshooting](../docs/troubleshooting.md) |
 | Package responsibilities and execution boundary | [Architecture](../docs/architecture.md) |
 

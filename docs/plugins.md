@@ -1,19 +1,21 @@
-# Plugins and MCP connections
+# Packages and MCP connections
 
-AXLR shows two inventories. They serve different hosts and persist in different places:
+AXLR shows two related inventories:
 
 | In the console | Owns | Changes when you install |
 |:--|:--|:--|
-| `/plugin` | Codex plugin packages in the local Codex installation | Codex's package catalogue and installed package set |
+| `/plugin` | Packages copied into AXLR's data directory and their indexed skills | `$XDG_DATA_HOME/axlr/plugins` or `$HOME/.local/share/axlr/plugins` |
 | `/mcp` | MCP servers AXLR can discover and call | AXLR's `mcp.json` and server approval policy |
 
-Installing a Codex package does not connect its MCP server to AXLR. Connecting an MCP server to AXLR does not install a Codex package. KMP and MADE can appear in both lists when both registrations exist.
+KMP and MADE appear as built-in catalogue entries. Those entries identify AXLR's intended memory and orchestration engines; they do not install an engine binary or prove that its MCP server is connected. Check `/mcp` for the live state. Use the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks to connect, verify or remove them.
 
-## Browse Codex packages
+## Install a package into AXLR
 
-Open `/plugin`. Tab switches installed and available packages; `/` searches; Enter reviews installation; `M` adds a marketplace from a Git URL, `owner/repo` or local path; `R` refreshes. The `codex` CLI must be on `PATH`. AXLR invokes Codex's plugin commands; it does not implement an independent marketplace or change plugin approval settings.
+Open `/plugin`. Tab switches installed and available packages, `/` searches and `R` refreshes. Press `M` to add an **absolute local path** or **HTTPS Git URL** (optionally with `#subdir`) containing `.codex-plugin/plugin.json` or `.agents/plugins/marketplace.json`. AXLR reads the Codex-compatible package format but owns this installation; it does not invoke the Codex CLI or change the Codex app's packages. Select a staged package and press Enter to install it.
 
-## Connect an MCP server in the console
+AXLR indexes installed skills for the model to read on demand. If a package declares MCP servers, AXLR registers them in its MCP configuration with **manual** approval. Inspect the exact connection in `/mcp`. Other package components are retained but not activated. Package storage and MCP registration are different records; removing one does not mean its engine's persistent data was deleted.
+
+## Connect an MCP server directly
 
 Open `/mcp` and press `I`. Enter one of:
 

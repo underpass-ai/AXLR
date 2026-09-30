@@ -13,7 +13,7 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Enter` / `Shift+Enter` | Send / insert a newline |
 | `/model` | Choose a model |
 | `/mcp` | Inspect connected MCP servers, tools and approvals |
-| `/plugin` | Browse installed and available Codex plugin packages |
+| `/plugin` | Browse packages installed in AXLR and available sources |
 | `/theme` | Preview and save appearance |
 | `Ctrl+P` | Open the action palette |
 | `Ctrl+O` | Open a saved session |

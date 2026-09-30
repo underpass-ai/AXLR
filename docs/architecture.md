@@ -1,6 +1,6 @@
 # Architecture and boundaries
 
-AXLR separates local execution from the host that asks for it. The root module has no terminal dependency; the TUI is a separate host module. The JSON worker is another host adapter with a one-request lifecycle.
+AXLR separates local execution from the host that asks for it. It grew from simplifying `underpass-runtime`'s execution layer, with Pi as a conceptual reference for a compact tool surface. AXLR owns the agent loop, local tools, session state and execution approvals. KMP owns durable, evidence-backed agent memory. MADE owns ceremony state, orchestration and human decision records. The engines are separate MCP servers; an installed catalogue entry is not an active connection. The root module has no terminal dependency; the TUI is a separate host module. The JSON worker is another host adapter with a one-request lifecycle.
 
 ```mermaid
 flowchart TB
@@ -19,6 +19,8 @@ flowchart TB
     T --> O[OpenRouter model adapter]
     G --> O
     T --> S[Private session and config storage]
+    M --> K[KMP memory engine]
+    M --> C[MADE orchestration engine]
 ```
 
 | Package | Responsibility |
@@ -38,7 +40,7 @@ flowchart TB
 
 The worker's `trusted-local` profile and the console run with the host account's permissions. `os.Root` anchors file operations inside the selected workspace. The `exec` program, its arguments and connected MCP servers can act with broader account authority; the console therefore shows local tool calls for review and persists explicit per-server MCP approval policies. The JSON worker has no interactive approval layer; its host must enforce one if needed.
 
-No tool is registered through directory scanning. A manifest must name the MCP transport and its allowed tools. A Codex plugin package is a separate installation from an AXLR MCP connection. Model output does not grant a capability; the host's registry and policy decide what can run.
+No tool is registered through directory scanning. A manifest must name the MCP transport and its allowed tools. AXLR's package catalogue reads Codex-compatible manifests into AXLR's own storage and can register declared MCP servers; `/mcp` remains the source of truth for active connections. Model output does not grant a capability; the host's registry and policy decide what can run.
 
 ## State and failure
 

@@ -15,6 +15,8 @@ GOWORK=off CGO_ENABLED=0 go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-t
 
 The root and `tui/` directories are separate Go modules. The checked-in workspace and TUI replace directive let the console build from this repository.
 
+AXLR can start without KMP or MADE, but its intended product layers are KMP-governed memory and MADE-governed orchestration. Connect them with the [KMP runbook](runbooks/kmp.md) and [MADE runbook](runbooks/made.md), then confirm both in `/mcp`. Their built-in `/plugin` catalogue entries do not establish a connection.
+
 ## 2. Start a console
 
 Provide `OPENROUTER_API_KEY` through your shell's environment or secret manager, then run:

@@ -7,8 +7,8 @@ Start with the visible symptom, then use the relevant check. AXLR prints startup
 | `axlr-tui` rejects startup | Run `/tmp/axlr-tui --help` and check `OPENROUTER_API_KEY`, `--root` and `--lang` | Supply a key through the host environment, use an existing workspace and `en` or `es` |
 | No model is selected | Open `/model` or pass `--model provider/model` | Choose a tool-capable text model available to the OpenRouter account |
 | Model catalog fails | Inspect the error and use its Retry action | Check connectivity, account access and key; `--model` can bypass catalog lookup for a known model |
-| `/plugin` is unavailable | Check `codex` on `PATH` | Install or expose the Codex CLI; the AXLR MCP list remains separate |
-| A server is unavailable in `/mcp` | Inspect its manifest path, executable or URL and the configured environment | Repair the server, then press `R` to refresh; installing a Codex package alone does not connect it |
+| `/plugin` cannot add a source | Check that it is an absolute local path or an HTTPS Git URL containing a supported marketplace or package manifest | Fix the source and retry; AXLR stores packages in its own data directory |
+| A server is unavailable in `/mcp` | Inspect its manifest path, executable or URL and the configured environment | Repair the server, then press `R` to refresh; a built-in catalogue entry alone does not connect it |
 | MCP configuration is rejected | Check that `mcp.json` is regular, private (`0600`), valid version 1 JSON and under 64 KiB | Correct the file and restart the console |
 | An MCP call asks for approval | Inspect the target, arguments and server policy | Approve once, or deliberately set that persisted server to `auto` in `/mcp` |
 | A restored session is interrupted | Confirm the workspace matches the saved session | Press `Ctrl+R` to continue; AXLR does not run pending tools merely by loading it |
