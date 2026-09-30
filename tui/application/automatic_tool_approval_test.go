@@ -9,6 +9,42 @@ import (
 	"testing"
 )
 
+type skillReadFunc func(context.Context, string, string, string, int, int) (SkillPage, error)
+
+func (f skillReadFunc) ReadSkill(ctx context.Context, plugin, skill, path string, offset, limit int) (SkillPage, error) {
+	return f(ctx, plugin, skill, path, offset, limit)
+}
+
+func TestAutomaticSkillReadUsesInstalledCatalog(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn("read installed skill", append(turnTools(), HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteAssistant(assistant("", root.ToolCall{ID: "skill", Name: HostSkillName, Arguments: hostJSON(t, `{"plugin":"sample","skill":"example"}`)})); err != nil {
+		t.Fatal(err)
+	}
+	reads := 0
+	reader := skillReadFunc(func(_ context.Context, plugin, skill, path string, offset, limit int) (SkillPage, error) {
+		reads++
+		if plugin != "sample" || skill != "example" || path != "SKILL.md" || offset != 0 || limit != 4096 {
+			t.Fatalf("wrong skill read: %s %s %s %d %d", plugin, skill, path, offset, limit)
+		}
+		return SkillPage{Plugin: plugin, Skill: skill, Text: "instructions", TotalBytes: 12, NextOffsetBytes: 12}, nil
+	})
+	store := &memoryStore{}
+	models := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		return assistant("done"), nil
+	})
+	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: store, Models: models, PluginSkills: reader}}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	activity := s.Export().Activity
+	if reads != 1 || len(activity) != 1 || activity[0].Decision != domain.DecisionAutoApprove || activity[0].Outcome.IsError || !strings.Contains(string(activity[0].Outcome.Content), "instructions") || s.Status() != domain.StatusComplete {
+		t.Fatalf("skill auto read: reads=%d activity=%+v state=%s", reads, activity, s.Status())
+	}
+}
+
 type approvalFunc func(domain.ToolIdentity) bool
 
 func (f approvalFunc) AutoApproves(id domain.ToolIdentity) bool { return f(id) }

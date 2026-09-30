@@ -126,7 +126,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		var runErr error
 		if tool.Identity.Kind == domain.ToolKindHost {
 			hostCtx, hostSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolExecution, DiagnosticEvent{Bytes: len(toolArgs.Bytes())})
-			outcome, runErr = (HostToolUseCase{}).Execute(hostCtx, *s, tool.Identity, toolArgs)
+			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills}).Execute(hostCtx, *s, tool.Identity, toolArgs)
 			class := DiagnosticErrorNone
 			if runErr != nil || outcome.IsError {
 				class = DiagnosticErrorTool

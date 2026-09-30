@@ -17,6 +17,7 @@ type ContinueTurnUseCase struct {
 	Store          SessionStorePort
 	Diagnostics    DiagnosticPort
 	PluginGuidance func(context.Context) (string, error)
+	PluginSkills   PluginSkillPort
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {

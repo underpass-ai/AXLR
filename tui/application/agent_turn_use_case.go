@@ -34,7 +34,7 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 			pending := s.Pending()[0]
 			tool, _, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending.Call)
 			if known && resolveErr == nil && automaticallyApproves(u.Approval, tool.Identity) {
-				resolver := ResolveToolUseCase{Tools: u.Tools, Store: u.Continue.Store, Diagnostics: u.Continue.Diagnostics, Approval: u.Approval, Validation: u.Continue.Validation}
+				resolver := ResolveToolUseCase{Tools: u.Tools, Store: u.Continue.Store, Diagnostics: u.Continue.Diagnostics, Approval: u.Approval, Validation: u.Continue.Validation, Continue: u.Continue}
 				if err := resolver.resolveOne(ctx, s, pending.Call.ID, domain.DecisionAutoApprove, emit); err != nil {
 					return err
 				}

@@ -176,7 +176,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, getenv)
 	pluginManager.SetURLInstaller(configStore.AddURL)
 	pluginManager.Diagnostics = trace
-	executor, err := runtime.New(runtime.Config{Root: workspacePath, Plugins: manager})
+	executor, err := runtime.New(runtime.Config{Root: workspacePath, Env: localRuntimeEnvironment(getenv), Plugins: manager})
 	if err != nil {
 		return fail(err)
 	}
@@ -255,7 +255,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance}
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog}
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
 	app := terminal.New(terminal.Dependencies{
 		Context:           ctx,
@@ -284,6 +284,23 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		return fail(err)
 	}
 	return 0
+}
+
+// The local executor needs PATH to resolve commands, but receives no other
+// ambient variables (in particular no model provider credentials).
+func localRuntimeEnvironment(getenv func(string) string) []string {
+	paths := make([]string, 0)
+	seen := map[string]bool{}
+	for _, dir := range filepath.SplitList(getenv("PATH")) {
+		if filepath.IsAbs(dir) && !seen[dir] {
+			paths = append(paths, dir)
+			seen[dir] = true
+		}
+	}
+	if len(paths) == 0 {
+		paths = []string{"/usr/local/bin", "/usr/bin", "/bin"}
+	}
+	return []string{"PATH=" + strings.Join(paths, string(os.PathListSeparator))}
 }
 
 func pluginRegistrations(paths, selections []string, getenv func(string) string) ([]plugins.Registration, error) {
