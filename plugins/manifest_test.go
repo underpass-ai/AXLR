@@ -27,6 +27,19 @@ func TestLoadManifestAcceptsExplicitTool(t *testing.T) {
 	}
 }
 
+func TestLoadManifestAllowsExplicitWildcard(t *testing.T) {
+	m, err := LoadManifest(writeManifest(t, `{"manifest_version":1,"id":"search","command":"/bin/echo","args":[],"allow_tools":["*"]}`))
+	if err != nil || !m.AllowAll || len(m.AllowTools) != 0 {
+		t.Fatalf("wildcard manifest: %#v, %v", m, err)
+	}
+	if _, err := NewRegistration(m, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadManifest(writeManifest(t, `{"manifest_version":1,"id":"search","command":"/bin/echo","args":[],"allow_tools":["*","find"]}`)); err == nil {
+		t.Fatal("mixed wildcard accepted")
+	}
+}
+
 func TestLoadManifestRejectsMalformedRegistration(t *testing.T) {
 	base := `{"manifest_version":1,"id":"search","command":"/bin/echo","args":[],"allow_tools":["find"]}`
 	for name, body := range map[string]string{

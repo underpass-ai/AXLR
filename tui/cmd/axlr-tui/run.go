@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -50,6 +51,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	modelFlag := flags.String("model", "", "OpenRouter model ID (optional; choose with /model)")
 	traceFlag := flags.String("trace-file", "", "append privacy-safe TUI diagnostics to JSONL file")
 	sessionFlag := flags.String("session", "", "saved session ID")
+	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
 	flags.Func("plugin-env-from", "ID:KEY=HOST_ENV_VAR; repeatable", func(v string) error { selections = append(selections, v); return nil })
@@ -107,10 +109,29 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
+	configPath := *mcpConfigFlag
+	if configPath == "" {
+		configBase := getenv("XDG_CONFIG_HOME")
+		if !filepath.IsAbs(configBase) {
+			home := getenv("HOME")
+			if !filepath.IsAbs(home) {
+				return fail(errors.New("absolute HOME or XDG_CONFIG_HOME is required for MCP config"))
+			}
+			configBase = filepath.Join(home, ".config")
+		}
+		configPath = filepath.Join(configBase, "axlr", "mcp.json")
+	} else if _, err := os.Stat(configPath); err != nil {
+		return fail(err)
+	}
+	persisted, err := storage.LoadMCPConfig(configPath, getenv)
+	if err != nil {
+		return fail(err)
+	}
 	registrations, err := pluginRegistrations(paths, selections, getenv)
 	if err != nil {
 		return fail(err)
 	}
+	registrations = append(persisted, registrations...)
 	manager, err := plugins.NewManager(registrations)
 	if err != nil {
 		return fail(err)

@@ -21,6 +21,7 @@ type Manifest struct {
 	Command    string
 	Args       []string
 	AllowTools []domain.PluginToolName
+	AllowAll   bool
 }
 
 func LoadManifest(path string) (Manifest, error) {
@@ -91,6 +92,9 @@ func LoadManifest(path string) (Manifest, error) {
 	}
 	seen := map[domain.PluginToolName]bool{}
 	tools := make([]domain.PluginToolName, 0, len(allow))
+	if len(allow) == 1 && allow[0] == "*" {
+		return Manifest{ID: id, Command: command, Args: args, AllowAll: true}, nil
+	}
 	for _, raw := range allow {
 		name, err := domain.NewPluginToolName(raw)
 		if err != nil || seen[name] {

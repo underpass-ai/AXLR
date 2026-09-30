@@ -80,6 +80,32 @@ func TestManagerDiscoversOnlyAllowedTools(t *testing.T) {
 	}
 }
 
+func TestManagerWildcardDiscoversAndCallsAdvertisedTools(t *testing.T) {
+	command, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	registration, err := NewRegistration(Manifest{ID: "all", Command: command, Args: []string{"-test.run=^TestPluginHelper$"}, AllowAll: true}, []string{"AXLR_PLUGIN_HELPER=1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := NewManager([]Registration{registration})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	tools, err := manager.List(context.Background())
+	if err != nil || len(tools) < 3 {
+		t.Fatalf("wildcard tool list: %+v %v", tools, err)
+	}
+	if _, err := manager.Call(context.Background(), pluginCall(t, "all", "hidden", `{}`)); err != nil {
+		t.Fatalf("advertised wildcard tool rejected: %v", err)
+	}
+	if _, err := manager.Call(context.Background(), pluginCall(t, "all", "not_advertised", `{}`)); err == nil {
+		t.Fatal("wildcard called tool not advertised by server")
+	}
+}
+
 func TestManagerUsesOneIsolatedChildSession(t *testing.T) {
 	t.Setenv("AXLR_INHERITED_SECRET", "must-not-leak")
 	logPath := filepath.Join(t.TempDir(), "starts")

@@ -115,7 +115,7 @@ func (m *Manager) List(ctx context.Context) ([]domain.PluginTool, error) {
 		}
 		for _, tool := range tools {
 			name := domain.PluginToolName(tool.Ref.Name)
-			if !allowed[name] {
+			if !allowed[name] && !m.registrations[id].Manifest.AllowAll {
 				continue
 			}
 			input, err := domain.NewJSONValue(tool.InputSchema)
@@ -147,7 +147,7 @@ func (m *Manager) Call(ctx context.Context, call domain.PluginCall) (domain.Plug
 	if !exists {
 		return domain.PluginResult{}, domain.Reject("unknown_plugin", "unknown plugin")
 	}
-	allowed := false
+	allowed := r.Manifest.AllowAll
 	for _, name := range r.Manifest.AllowTools {
 		if name == call.Ref.ToolName {
 			allowed = true

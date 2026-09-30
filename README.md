@@ -83,14 +83,14 @@ A plugin is an external MCP server over stdio. The host registers it with an exp
 {"manifest_version":1,"id":"search","command":"/absolute/path/search-server","args":[],"allow_tools":["find"]}
 ```
 
-Run the existing worker with repeatable `--plugin /absolute/path/manifest.json` flags. Use repeatable `--plugin-env ID:KEY=VALUE` flags for a plugin's complete child environment. A plugin receives no inherited worker environment by default. AXLR rejects unknown manifest fields, duplicate plugin IDs, invalid identities and duplicate allowlist entries before launching any plugin. No directory is scanned automatically; plugins start only on `plugins.list` or a call to that plugin. Local tools do not start plugins.
+Run the existing worker with repeatable `--plugin /absolute/path/manifest.json` flags. Use repeatable `--plugin-env ID:KEY=VALUE` flags for a plugin's complete child environment. A plugin receives no inherited worker environment by default. `allow_tools:["*"]` explicitly permits all tools currently advertised by that server; an exact list limits exposure. AXLR rejects unknown manifest fields, duplicate plugin IDs, invalid identities and duplicate allowlist entries before launching any plugin. No directory is scanned automatically; plugins start only on `plugins.list` or a call to that plugin. Local tools do not start plugins.
 
 ```bash
 printf '%s\n' '{"protocol_version":1,"request_id":"tools-1","tool":"plugins.list","arguments":{}}' |
   bin/axlr --root "$PWD" --profile trusted-local --plugin /absolute/path/search.json
 ```
 
-The `plugins.Manager` Go API provides `List`, `Call` and `Close`, and can be passed as `runtime.Config.Plugins`. It reuses plugin sessions in a long-lived host. The one-request worker closes its sessions after responding. `plugins.list` fails if any configured plugin is unavailable. `plugins.call` only invokes a tool named in `allow_tools` and currently advertised by its server. MCP descriptions and schemas are data, not grants of authority. Plugins execute with the host account's OS access; configure only trusted executables. AXLR does not expose its local tools as an MCP server.
+The `plugins.Manager` Go API provides `List`, `Call` and `Close`, and can be passed as `runtime.Config.Plugins`. It reuses plugin sessions in a long-lived host. The one-request worker closes its sessions after responding. `plugins.list` fails if any configured plugin is unavailable. `plugins.call` only invokes a tool permitted by `allow_tools` and currently advertised by its server. MCP descriptions and schemas are data, not grants of authority. Plugins execute with the host account's OS access; configure only trusted executables. AXLR does not expose its local tools as an MCP server.
 
 An MCP `is_error: true` result is a `completed` AXLR response with `is_error` in the output. Launch and protocol errors are `failed`; malformed or unauthorized calls are `rejected`. Cancellation and timeouts retain their own statuses. A lost response does not prove the tool had no effect, so AXLR never retries a plugin call automatically. Worker responses stay within 4 MiB.
 

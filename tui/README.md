@@ -44,7 +44,7 @@ Use a terminal of at least 50 columns by 15 rows. The transcript occupies the fu
 
 ## Plugins
 
-Register each plugin explicitly with an absolute path to a [version 1 AXLR manifest](../README.md#external-tool-plugins). There is no directory scanning. A manifest specifies an absolute executable, arguments and allowed tool names:
+Register each plugin explicitly with an absolute path to a [version 1 AXLR manifest](../README.md#external-tool-plugins). There is no directory scanning. A manifest specifies an absolute executable, arguments and allowed tool names. `"*"` opts in to every tool advertised by that server; use exact names to restrict it:
 
 ```json
 {
@@ -56,13 +56,29 @@ Register each plugin explicitly with an absolute path to a [version 1 AXLR manif
 }
 ```
 
+For persistent connections, create `$XDG_CONFIG_HOME/axlr/mcp.json` (or `$HOME/.config/axlr/mcp.json`) with mode `0600`:
+
+```json
+{
+  "version": 1,
+  "plugins": [
+    {
+      "manifest": "/absolute/path/to/notes.json",
+      "env_from": {"TOKEN": "NOTES_API_TOKEN"}
+    }
+  ]
+}
+```
+
+AXLR loads this file at every start, including launches without `--plugin`. `env_from` copies only named host variables; optional `env` supplies literal values for a plugin. Both maps become that plugin's complete child environment. Use `--mcp-config /absolute/path/config.json` to select another file. The config lists manifests explicitly, so tools from unrelated applications are not silently started.
+
 ```bash
 /tmp/axlr-tui --root "$PWD" --model 'your-provider/your-model' \
   --plugin /absolute/path/to/notes.json \
   --plugin-env-from 'notes:TOKEN=NOTES_API_TOKEN'
 ```
 
-`--plugin` and `--plugin-env-from ID:KEY=HOST_ENV_VAR` are repeatable. The latter copies only the selected host variable into that plugin's `KEY`. Values stay out of command-line arguments. Plugin processes receive only explicit selections; local exec starts with an empty environment. Use absolute executable paths. Forwarding `OPENROUTER_API_KEY` to plugins is rejected. Plugin connections start when a turn discovers tools and close when the console exits.
+`--plugin` and `--plugin-env-from ID:KEY=HOST_ENV_VAR` are repeatable and add one-launch registrations. The latter copies only the selected host variable into that plugin's `KEY`. Values stay out of command-line arguments. Plugin processes receive only explicit selections; local exec starts with an empty environment. Use absolute executable paths. Forwarding `OPENROUTER_API_KEY` to plugins is rejected. Plugin connections start when a turn discovers tools and close when the console exits. A configured server that fails discovery reports an error before the model request.
 
 ## Local sessions and recovery
 
