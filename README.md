@@ -2,7 +2,7 @@
 
 <p align="center"><strong>Run an agent in your workspace. Keep the execution boundary explicit.</strong></p>
 
-AXLR is Underpass's agentic execution runtime, extracted from the execution layer of `underpass-runtime` and simplified with Pi as a conceptual reference. AXLR owns the model loop and local execution. KMP governs durable, evidence-backed memory; MADE governs orchestration through ceremonies and human decisions. Both connect as separate MCP engines. The console streams OpenRouter responses, runs local tools and saves sessions; the Go library and JSON worker expose the execution core to other hosts.
+AXLR is Underpass's agentic execution runtime. It owns the model loop and local execution. KMP governs durable, evidence-backed memory; MADE governs orchestration through ceremonies and human decisions. Both connect as separate MCP engines. The console streams OpenRouter responses, runs local tools and saves sessions; the Go library and JSON worker expose the execution core to other hosts.
 
 AXLR runs in a **trusted local** Linux workspace. It is not a sandbox. File tools stay inside the selected root; an executed program and connected MCP servers still run with the authority you give them.
 
@@ -58,6 +58,6 @@ The JSON worker, `cmd/axlr`, accepts exactly one request on stdin and returns on
 
 ## Project status
 
-AXLR is an evolving pre-1.0 project. The repository has two Go modules and tests each independently. The current console is a trusted-local Linux application. The worker exposes a one-request process API; a network service API is being designed. The [provenance note](docs/provenance.md) explains its relationship to the earlier Underpass runtime and Pi.
+AXLR is an evolving pre-1.0 project. The repository has two Go modules and tests each independently. The current console is a trusted-local Linux application. The worker exposes a one-request process API; a network service API is being designed.
 
 Part of [Underpass AI](https://underpassai.com).
