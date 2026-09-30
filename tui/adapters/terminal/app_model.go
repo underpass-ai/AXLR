@@ -161,6 +161,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.memoryActive = v.Memory
 		}
 		if v.Kind == application.EventStreamStart {
+			m.Status.Phase = domain.ProviderWaiting
 			m.providerWaiting = true
 			m.providerWaitStarted = time.Now()
 			m.memoryActive = false
@@ -180,6 +181,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.draft += string(v.Text)
 			m.draftOperationID = m.operationID
 			m.refreshTranscript()
+		}
+		if v.Kind == application.EventProviderActivity && m.Busy && m.streamPending {
+			m.Status.Phase = v.ProviderPhase
+			m.providerWaiting = v.ProviderPhase != domain.ProviderContent
 		}
 		if v.Kind == application.EventState {
 			m.Status.State = v.State

@@ -8,7 +8,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-func rejectUnknownCall(ctx context.Context, s *domain.Session, store SessionStorePort, trace DiagnosticPort, p domain.PendingTool) (returnErr error) {
+func rejectUnknownCall(ctx context.Context, s *domain.Session, store SessionStorePort, trace DiagnosticPort, p domain.PendingTool, invalid ...error) (returnErr error) {
 	ctx, span := StartDiagnosticSpan(ctx, trace, DiagnosticActionToolResolve, DiagnosticEvent{ToolOrdinal: toolDiagnosticOrdinal(s, p.Call.ID)})
 	defer func() {
 		class := DiagnosticErrorNone
@@ -24,7 +24,14 @@ func rejectUnknownCall(ctx context.Context, s *domain.Session, store SessionStor
 		span.End(class)
 	}()
 	next := *s
-	if err := next.RecordToolOutcome(p.Call.ID, domain.DecisionDeny, domain.ToolOutcome{Content: root.Text(fmt.Sprintf("unknown tool %q rejected", p.Call.Name)), IsError: true}); err != nil {
+	reason := fmt.Sprintf("unknown tool %q rejected", p.Call.Name)
+	if len(invalid) > 0 && invalid[0] != nil {
+		reason = "invalid tool invocation rejected: " + invalid[0].Error()
+		if len(reason) > 1024 {
+			reason = reason[:1024]
+		}
+	}
+	if err := next.RecordToolOutcome(p.Call.ID, domain.DecisionDeny, domain.ToolOutcome{Content: root.Text(reason), IsError: true}); err != nil {
 		return err
 	}
 	if err := store.Save(ctx, next); err != nil {

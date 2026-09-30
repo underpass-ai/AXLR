@@ -5,6 +5,7 @@ package application
 type DiagnosticStage string
 
 const (
+	DiagnosticContextProjected  DiagnosticStage = "context_projected"
 	DiagnosticActionStart       DiagnosticStage = "action_start"
 	DiagnosticActionEnd         DiagnosticStage = "action_end"
 	DiagnosticRequestSent       DiagnosticStage = "request_sent"
@@ -44,6 +45,8 @@ const (
 
 func (stage DiagnosticStage) Valid() bool {
 	switch stage {
+	case DiagnosticContextProjected:
+		return true
 	case DiagnosticActionStart, DiagnosticActionEnd, DiagnosticRequestSent, DiagnosticWireBytes, DiagnosticFrame, DiagnosticReasoning,
 		DiagnosticToolDelta, DiagnosticContent, DiagnosticHeartbeat, DiagnosticWireDone,
 		DiagnosticPayloadSaved, DiagnosticPayloadFailed,

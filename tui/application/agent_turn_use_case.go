@@ -30,11 +30,11 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 		if err := rejectUnknown(ctx, s, u.Continue.Store, emit, u.Continue.Diagnostics); err != nil {
 			return err
 		}
-		if s.Status() == domain.StatusApproval && len(s.Pending()) > 0 && u.Approval != nil {
+		if s.Status() == domain.StatusApproval && len(s.Pending()) > 0 {
 			pending := s.Pending()[0]
-			tool, known := findTool(s, pending.Call.Name)
-			if known && u.Approval.AutoApproves(tool.Identity) {
-				resolver := ResolveToolUseCase{Tools: u.Tools, Store: u.Continue.Store, Diagnostics: u.Continue.Diagnostics, Approval: u.Approval}
+			tool, _, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending.Call)
+			if known && resolveErr == nil && automaticallyApproves(u.Approval, tool.Identity) {
+				resolver := ResolveToolUseCase{Tools: u.Tools, Store: u.Continue.Store, Diagnostics: u.Continue.Diagnostics, Approval: u.Approval, Validation: u.Continue.Validation}
 				if err := resolver.resolveOne(ctx, s, pending.Call.ID, domain.DecisionAutoApprove, emit); err != nil {
 					return err
 				}
@@ -60,10 +60,11 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 func rejectUnknown(ctx context.Context, s *domain.Session, store SessionStorePort, emit func(Event) error, trace DiagnosticPort) error {
 	for s.Status() == domain.StatusApproval && len(s.Pending()) > 0 {
 		p := s.Pending()[0]
-		if _, known := findTool(s, p.Call.Name); known {
+		_, _, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), p.Call)
+		if known && resolveErr == nil {
 			return nil
 		}
-		if err := rejectUnknownCall(ctx, s, store, trace, p); err != nil {
+		if err := rejectUnknownCall(ctx, s, store, trace, p, resolveErr); err != nil {
 			return err
 		}
 		if err := emitTool(s, p.Call.ID, emit); err != nil {

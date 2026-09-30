@@ -227,7 +227,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			session = &created
 		}
 	}
-	continuation := application.ContinueTurnUseCase{Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace}
+	validator := axlr.NewToolArgumentValidator()
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace}
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
 	app := terminal.New(terminal.Dependencies{
 		Context:         ctx,
@@ -240,7 +241,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Workspace:       workspace,
 		NewSessionID:    newID,
 		Start:           application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: pluginManager},
-		Resolve:         application.ResolveToolUseCase{Tools: runner, Approval: pluginManager, Store: loggedStore, Continue: continuation, Diagnostics: trace},
+		Resolve:         application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: pluginManager, Store: loggedStore, Continue: continuation, Diagnostics: trace},
 		Agent:           application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: pluginManager},
 		Search:          application.SearchSessionUseCase{},
 		Store:           loggedStore,

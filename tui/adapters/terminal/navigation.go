@@ -31,12 +31,8 @@ func (m AppModel) knownPending() bool {
 	if !ok {
 		return false
 	}
-	for _, tool := range m.Header.State.ToolSnapshot {
-		if tool.Definition.Name == p.Call.Name {
-			return true
-		}
-	}
-	return false
+	_, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
+	return known && err == nil
 }
 func (m *AppModel) syncApproval() {
 	p, ok := m.pending()
@@ -44,13 +40,14 @@ func (m *AppModel) syncApproval() {
 		return
 	}
 	target := "unknown tool"
-	for _, tool := range m.Header.State.ToolSnapshot {
-		if tool.Definition.Name == p.Call.Name {
-			if tool.Identity.Kind == domain.ToolKindLocal {
-				target = fmt.Sprintf("local %s in %s", tool.Identity.LocalOperation, m.Header.State.Workspace)
-			} else {
-				target = fmt.Sprintf("plugin %s / %s", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
-			}
+	if tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call); known && err == nil {
+		switch tool.Identity.Kind {
+		case domain.ToolKindLocal:
+			target = fmt.Sprintf("local %s in %s", tool.Identity.LocalOperation, m.Header.State.Workspace)
+		case domain.ToolKindPlugin:
+			target = fmt.Sprintf("plugin %s / %s", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
+		case domain.ToolKindHost:
+			target = fmt.Sprintf("read-only host %s", tool.Identity.LocalOperation)
 		}
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {

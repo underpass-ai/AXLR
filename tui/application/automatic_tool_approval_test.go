@@ -28,7 +28,7 @@ func TestAutomaticApprovalPersistsEachEffectAndStopsAtManualCall(t *testing.T) {
 	}
 	executed := 0
 	snapshots := 0
-	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: store}, Approval: approvalFunc(func(id domain.ToolIdentity) bool { return id == identity }), Tools: executionFunc(func(_ context.Context, id domain.ToolIdentity, _ root.JSONValue) (domain.ToolOutcome, error) {
+	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: store, Validation: argumentValidationFunc(func(root.ToolDefinition, root.JSONValue) error { return nil })}, Approval: approvalFunc(func(id domain.ToolIdentity) bool { return id == identity }), Tools: executionFunc(func(_ context.Context, id domain.ToolIdentity, _ root.JSONValue) (domain.ToolOutcome, error) {
 		executed++
 		st := store.states[len(store.states)-1]
 		if id != identity || st.Status != domain.StatusInterrupted || st.Activity[executed-1].Decision != domain.DecisionAutoApprove || !st.Activity[executed-1].Outcome.Uncertain {

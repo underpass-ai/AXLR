@@ -3,6 +3,13 @@ package application
 // DiagnosticEvent carries numeric measurements and allowlisted labels only.
 // In particular, never add raw text, errors, model IDs, paths, or tool names.
 type DiagnosticEvent struct {
+	OriginalMessages    int                  `json:"original_messages,omitempty"`
+	DroppedMessages     int                  `json:"dropped_messages,omitempty"`
+	OriginalBytes       int                  `json:"original_bytes,omitempty"`
+	ProjectedBytes      int                  `json:"projected_bytes,omitempty"`
+	ContextCutIndex     int                  `json:"context_cut_index,omitempty"`
+	MessageBytes        int                  `json:"message_bytes,omitempty"`
+	ToolSchemaBytes     int                  `json:"tool_schema_bytes,omitempty"`
 	Endpoint            DiagnosticEndpoint   `json:"endpoint,omitempty"`
 	ToolOrdinal         int                  `json:"tool_ordinal,omitempty"`
 	PluginOrdinal       int                  `json:"plugin_ordinal,omitempty"`

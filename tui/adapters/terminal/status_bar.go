@@ -7,6 +7,7 @@ import (
 )
 
 type StatusBar struct {
+	Phase       domain.ProviderPhase
 	State       domain.SessionStatus
 	Error       string
 	Waiting     bool
@@ -16,7 +17,14 @@ type StatusBar struct {
 func (s StatusBar) View(w int) string {
 	text := "Status: " + string(s.State)
 	if s.Waiting {
-		text += fmt.Sprintf(" | Waiting for model · %ds", s.WaitSeconds)
+		label := "Waiting for model"
+		switch s.Phase {
+		case domain.ProviderReasoning:
+			label = "Model is reasoning"
+		case domain.ProviderToolCall:
+			label = "Model is preparing tools"
+		}
+		text += fmt.Sprintf(" | %s · %ds", label, s.WaitSeconds)
 	}
 	if s.Error != "" {
 		text += " | Error: " + singleLine(s.Error)

@@ -61,12 +61,19 @@ func (t Transport) RoundTrip(request *http.Request) (*http.Response, error) {
 		}
 		if captureErr == nil {
 			var summary struct {
-				Messages []json.RawMessage `json:"messages"`
-				Tools    []json.RawMessage `json:"tools"`
+				Messages json.RawMessage `json:"messages"`
+				Tools    json.RawMessage `json:"tools"`
 			}
 			if json.Unmarshal(data, &summary) == nil {
-				event.Messages = len(summary.Messages)
-				event.Tools = len(summary.Tools)
+				var messages, tools []json.RawMessage
+				if json.Unmarshal(summary.Messages, &messages) == nil {
+					event.Messages = len(messages)
+					event.MessageBytes = len(summary.Messages)
+				}
+				if json.Unmarshal(summary.Tools, &tools) == nil {
+					event.Tools = len(tools)
+					event.ToolSchemaBytes = len(summary.Tools)
+				}
 			}
 		}
 		if t.Payloads != nil {

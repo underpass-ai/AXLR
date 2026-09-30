@@ -11,6 +11,8 @@ import (
 )
 
 type ContinueTurnUseCase struct {
+	Context     ModelContextPort
+	Validation  ToolArgumentValidationPort
 	Models      ModelStreamPort
 	Store       SessionStorePort
 	Diagnostics DiagnosticPort
@@ -44,11 +46,24 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
 	}
-	_, contextSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionContext, DiagnosticEvent{Messages: len(session.Messages()), Tools: len(session.ToolSnapshot())})
-	req := root.CompletionRequest{Model: session.Export().Model, Messages: modelMessages(session)}
+	contextCtx, contextSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionContext, DiagnosticEvent{Messages: len(session.Messages()), Tools: len(session.ToolSnapshot())})
+	if err := session.EnsureHostTools(HostTools()); err != nil {
+		contextSpan.End(DiagnosticErrorInvalidState)
+		return interrupt(err)
+	}
+	projector := u.Context
+	if projector == nil {
+		projector = NewDefaultModelContextProjector()
+	}
+	projection, err := projector.Project(session.Messages())
+	if err != nil {
+		contextSpan.End(DiagnosticErrorInvalidState)
+		return interrupt(err)
+	}
 	snapshot := session.ToolSnapshot()
-	for _, tool := range snapshot {
-		req.Tools = append(req.Tools, tool.Definition)
+	req := root.CompletionRequest{Model: session.Export().Model, Messages: append([]root.Message{modelHostGuidance(session)}, projection.Messages...), Tools: ModelTools(snapshot)}
+	if u.Diagnostics != nil {
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticContextProjected, SpanID: CurrentDiagnosticSpan(contextCtx), Messages: len(req.Messages), Tools: len(req.Tools), OriginalMessages: projection.OriginalMessages, DroppedMessages: projection.DroppedMessages, OriginalBytes: projection.OriginalBytes, ProjectedBytes: projection.ProjectedBytes, ContextCutIndex: projection.CutIndex})
 	}
 	if err := req.Validate(); err != nil {
 		contextSpan.End(DiagnosticErrorInvalidState)
@@ -63,6 +78,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	started := time.Now()
 	modelCtx, modelSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionModel, DiagnosticEvent{Messages: len(req.Messages), Tools: len(req.Tools)})
+	modelCtx = WithProviderActivity(modelCtx, func(phase domain.ProviderPhase) { _ = emit(Event{Kind: EventProviderActivity, ProviderPhase: phase}) })
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderStart, SpanID: CurrentDiagnosticSpan(modelCtx)})
 	}
@@ -121,26 +137,13 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return err
 	}
 	*session = next
-	if err := emitSession(session, emit); err != nil {
-		return err
-	}
 	// Reject only at the head: tool results must retain model order. Decision
 	// resolution must apply this lookup again as later calls reach the head.
-	for len(session.Pending()) > 0 {
-		pending := session.Pending()[0]
-		known := false
-		for _, tool := range snapshot {
-			if tool.Definition.Name == pending.Call.Name {
-				known = true
-				break
-			}
-		}
-		if known {
-			break
-		}
-		if err := rejectUnknownCall(ctx, session, u.Store, u.Diagnostics, pending); err != nil {
-			return err
-		}
+	if err := rejectUnknown(ctx, session, u.Store, func(Event) error { return nil }, u.Diagnostics); err != nil {
+		return err
+	}
+	if err := emitSession(session, emit); err != nil {
+		return err
 	}
 	// Export clones outcomes as well as slices so callbacks cannot alter history.
 	activity := session.Export().Activity

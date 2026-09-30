@@ -31,6 +31,7 @@ func (c ToolCatalog) Snapshot(ctx context.Context) ([]domain.AvailableTool, erro
 		return nil, err
 	}
 	result := localToolDefinitions()
+	result = append(result, application.HostTools()...)
 	if c.Plugins != nil {
 		var tools []root.PluginTool
 		if c.Profiles == nil {

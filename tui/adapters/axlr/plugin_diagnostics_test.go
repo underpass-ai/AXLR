@@ -58,7 +58,8 @@ func TestPluginDiscoveryOrdinalsStayConsistentBetweenPanelAndToolCatalog(t *test
 	catalogCtx, catalogSpan := application.StartDiagnosticSpan(ctx, trace, application.DiagnosticActionTools, application.DiagnosticEvent{})
 	snapshot, err := (ToolCatalog{Plugins: raw, Diagnostics: trace, Profiles: manager.Profiles}).Snapshot(catalogCtx)
 	catalogSpan.End(application.DiagnosticErrorNone)
-	if err != nil || len(snapshot) != 6 || snapshot[4].Identity.Plugin.PluginID != "beta" || snapshot[5].Identity.Plugin.PluginID != "alpha" {
+	pluginSnapshot := pluginTools(snapshot)
+	if err != nil || len(pluginSnapshot) != 2 || pluginSnapshot[0].Identity.Plugin.PluginID != "beta" || pluginSnapshot[1].Identity.Plugin.PluginID != "alpha" {
 		t.Fatal("catalog discovery changed profile order", snapshot, err)
 	}
 	if profiles[0].ID != "beta" || manager.Profiles()[0].ID != "beta" {

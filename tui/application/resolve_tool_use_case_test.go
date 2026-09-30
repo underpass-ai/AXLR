@@ -37,7 +37,7 @@ func TestResolveToolOrderedDecisionsAndContinuation(t *testing.T) {
 		}
 		return domain.ToolOutcome{Content: "ok"}, nil
 	}), Continue: ContinueTurnUseCase{Store: store, Models: streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
-		if len(r.Tools) != 1 || len(r.Messages) != 6 {
+		if len(r.Tools) != 4 || len(r.Messages) != 6 {
 			t.Fatalf("request %+v", r)
 		}
 		for i, id := range []root.ToolCallID{"a", "bad", "b"} {
@@ -156,7 +156,7 @@ func TestResolveToolAllUnknownAutomaticallyContinues(t *testing.T) {
 		if n == 1 {
 			return assistant("", call("bad", "unknown")), nil
 		}
-		if len(r.Tools) != 1 || len(r.Messages) != 4 || r.Messages[3].ToolCallID != "bad" {
+		if len(r.Tools) != 4 || len(r.Messages) != 4 || r.Messages[3].ToolCallID != "bad" {
 			t.Fatalf("request %+v", r)
 		}
 		return assistant("done"), nil

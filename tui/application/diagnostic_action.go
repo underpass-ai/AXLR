@@ -4,6 +4,7 @@ package application
 type DiagnosticAction string
 
 const (
+	DiagnosticActionToolValidation  DiagnosticAction = "tool_validation"
 	DiagnosticActionErrorDrain      DiagnosticAction = "error_response_drain"
 	DiagnosticActionPluginDiscovery DiagnosticAction = "plugin_discovery"
 	DiagnosticActionPluginPolicy    DiagnosticAction = "plugin_policy"
@@ -26,6 +27,8 @@ const (
 
 func (a DiagnosticAction) Valid() bool {
 	switch a {
+	case DiagnosticActionToolValidation:
+		return true
 	case DiagnosticActionErrorDrain, DiagnosticActionPluginDiscovery, DiagnosticActionPluginPolicy, DiagnosticActionContext, DiagnosticActionModel, DiagnosticActionTools,
 		DiagnosticActionToolResolve, DiagnosticActionToolExecution, DiagnosticActionSessionSave,
 		DiagnosticActionSessionLoad, DiagnosticActionSessionList, DiagnosticActionCatalog,

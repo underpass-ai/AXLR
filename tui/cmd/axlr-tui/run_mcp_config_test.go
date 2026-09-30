@@ -76,7 +76,7 @@ func TestRunLoadsPersistentMCPAndExecutesApprovedTool(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(configDir, "mcp.json"), configData, 0600); err != nil {
 		t.Fatal(err)
 	}
-	alias := "echo"
+	alias := "axlr_call_tool"
 	previous := http.DefaultTransport
 	defer func() { http.DefaultTransport = previous }()
 	calls := 0
@@ -85,10 +85,10 @@ func TestRunLoadsPersistentMCPAndExecutesApprovedTool(t *testing.T) {
 		body, _ := io.ReadAll(request.Body)
 		var chunk string
 		if calls == 1 {
-			if !bytes.Contains(body, []byte(alias)) || !bytes.Contains(body, []byte("probe/echo")) {
-				t.Errorf("configured MCP tool not offered to model: %s", body)
+			if !bytes.Contains(body, []byte(alias)) || !bytes.Contains(body, []byte("axlr_tools")) {
+				t.Errorf("configured MCP bridge not offered to model: %s", body)
 			}
-			chunk = `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"mcp-1","type":"function","function":{"name":"` + alias + `","arguments":"{\"text\":\"hi\"}"}}]},"finish_reason":"tool_calls"}]}`
+			chunk = `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"mcp-1","type":"function","function":{"name":"` + alias + `","arguments":"{\"name\":\"echo\",\"arguments\":{\"text\":\"hi\"}}"}}]},"finish_reason":"tool_calls"}]}`
 		} else {
 			if !bytes.Contains(body, []byte("echo:hi")) || !bytes.Contains(body, []byte("mcp-1")) {
 				t.Errorf("MCP tool result not returned to model: %s", body)

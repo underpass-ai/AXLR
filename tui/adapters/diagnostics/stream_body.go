@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/domain"
 	"io"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 // streamBody observes bytes without altering the provider's stream or callbacks.
 // Non-text frames are measured separately from visible answer text.
 type streamBody struct {
+	phase           domain.ProviderPhase
 	next            io.ReadCloser
 	trace           application.DiagnosticPort
 	payloads        *PayloadRecorder
@@ -47,6 +49,16 @@ func (b *streamBody) record(stage application.DiagnosticStage, size, count int) 
 	if b.trace != nil {
 		_ = b.trace.Record(application.DiagnosticEvent{Stage: stage, Endpoint: b.endpoint, SpanID: application.CurrentDiagnosticSpan(b.ctx), RequestID: b.id, Bytes: size, Chunks: count, ElapsedMilliseconds: time.Since(b.started).Milliseconds()})
 	}
+}
+
+func (b *streamBody) activity(phase domain.ProviderPhase) {
+	// Text is final for this stream's status. A late duplicated reasoning frame
+	// must not turn a visible answer back into a waiting indicator.
+	if b.phase == domain.ProviderContent || b.phase == phase {
+		return
+	}
+	b.phase = phase
+	application.NotifyProviderActivity(b.ctx, phase)
 }
 func (b *streamBody) Read(p []byte) (int, error) {
 	b.readMu.Lock()
@@ -154,6 +166,7 @@ func (b *streamBody) observeFrame(data []byte) {
 	}
 	for _, choice := range frame.Choices {
 		if choice.Delta.Content != "" {
+			b.activity(domain.ProviderContent)
 			b.record(application.DiagnosticContent, len(choice.Delta.Content), 1)
 		}
 		size := len(choice.Delta.Reasoning) + len(choice.Delta.ReasoningContent)
@@ -163,7 +176,8 @@ func (b *streamBody) observeFrame(data []byte) {
 				size += len(detail.Text) + len(detail.Summary)
 			}
 		}
-		if size > 0 {
+		if size > 0 || len(choice.Delta.ReasoningDetails) > 0 {
+			b.activity(domain.ProviderReasoning)
 			b.record(application.DiagnosticReasoning, size, 1)
 		}
 		size = 0
@@ -171,6 +185,7 @@ func (b *streamBody) observeFrame(data []byte) {
 			size += len(call.Function.Name) + len(call.Function.Arguments)
 		}
 		if len(choice.Delta.ToolCalls) > 0 {
+			b.activity(domain.ProviderToolCall)
 			b.record(application.DiagnosticToolDelta, size, len(choice.Delta.ToolCalls))
 		}
 	}

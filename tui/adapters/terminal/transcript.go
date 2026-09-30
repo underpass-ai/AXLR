@@ -44,14 +44,14 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 		}
 		text := string(m.Role) + ": " + string(m.Content)
 		if m.Role == root.RoleTool {
-			name := root.ToolName("")
+			call := root.ToolCall{}
 			for _, record := range s.Activity {
 				if record.Call.ID == m.ToolCallID {
-					name = record.Call.Name
+					call = record.Call
 					break
 				}
 			}
-			label, memory := toolPresentation(s, name)
+			label, memory := toolCallPresentation(s, call)
 			text = "tool result: " + label + " · " + toolSummary(string(m.Content))
 			if memory {
 				kind = transcriptRowMemory
@@ -62,7 +62,7 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			t.rows = append(t.rows, transcriptRow{Text: text, Kind: kind})
 		}
 		for _, c := range m.ToolCalls {
-			label, memory := toolPresentation(s, c.Name)
+			label, memory := toolCallPresentation(s, c)
 			kind := transcriptRowPlain
 			prefix := "tool request: "
 			if memory {

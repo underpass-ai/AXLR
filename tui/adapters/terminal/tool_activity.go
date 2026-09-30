@@ -23,8 +23,8 @@ func (a *ToolActivity) Apply(e application.Event) {
 		a.Tokens = e.Usage.TotalTokens
 	}
 	if e.Kind == application.EventToolActivity {
-		label := string(e.Tool.Call.Name)
-		if display, ok := a.labels[e.Tool.Call.Name]; ok {
+		label := string(presentationName(e.Tool.Call))
+		if display, ok := a.labels[presentationName(e.Tool.Call)]; ok {
 			label = display
 		}
 		line := label + ": " + string(e.Tool.Decision)
