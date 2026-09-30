@@ -14,12 +14,24 @@ import (
 )
 
 type pluginPanelStub struct {
-	items   []domain.PluginState
-	err     error
-	toggles int
+	items    []domain.PluginState
+	err      error
+	toggles  int
+	manifest string
+	urlID    root.PluginID
+	url      string
 }
 
 func (p *pluginPanelStub) List(context.Context) ([]domain.PluginState, error) { return p.items, p.err }
+func (p *pluginPanelStub) InstallManifest(_ context.Context, path string) error {
+	p.manifest = path
+	return nil
+}
+func (p *pluginPanelStub) InstallURL(_ context.Context, id root.PluginID, url string) error {
+	p.urlID = id
+	p.url = url
+	return nil
+}
 func (p *pluginPanelStub) SetApproval(_ context.Context, id root.PluginID, mode domain.ApprovalMode) error {
 	p.toggles++
 	if p.err != nil {
@@ -43,8 +55,8 @@ func runUIOperation(m AppModel, cmd tea.Cmd) AppModel {
 	}
 	return m
 }
-func TestPluginCommandsAndExplicitPolicyToggle(t *testing.T) {
-	for _, command := range []string{"/mcp", "/plugin"} {
+func TestMCPCommandAndExplicitPolicyToggle(t *testing.T) {
+	for _, command := range []string{"/mcp"} {
 		t.Run(command, func(t *testing.T) {
 			manager := &pluginPanelStub{items: []domain.PluginState{pluginItem("kmp")}}
 			m := sized()
@@ -63,12 +75,6 @@ func TestPluginCommandsAndExplicitPolicyToggle(t *testing.T) {
 			}
 			next, cmd = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
 			m = next.(AppModel)
-			if command == "/mcp" {
-				if cmd != nil || manager.toggles != 0 {
-					t.Fatal("inventory keyboard changed policy")
-				}
-				return
-			}
 			if cmd != nil || manager.toggles != 0 || !strings.Contains(m.View().Content, "Enter confirm") {
 				t.Fatal("policy changed before confirmation")
 			}
@@ -88,12 +94,36 @@ func TestPluginCommandsAndExplicitPolicyToggle(t *testing.T) {
 		})
 	}
 }
+
+func TestMCPInstallAcceptsManifestAndURL(t *testing.T) {
+	for _, input := range []string{"/absolute/third-party.json", "search https://example.com/mcp"} {
+		t.Run(input, func(t *testing.T) {
+			manager := &pluginPanelStub{}
+			m := sized()
+			defer m.zones.Close()
+			m.deps.Plugins = manager
+			next, cmd := m.Update(ControlIntent("mcp"))
+			m = runUIOperation(next.(AppModel), cmd)
+			next, _ = m.Update(tea.KeyPressMsg{Code: 'i', Text: "i"})
+			m = next.(AppModel)
+			m.Plugins.InstallInput.SetValue(input)
+			next, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+			m = runUIOperation(next.(AppModel), cmd)
+			if input[0] == '/' && manager.manifest != input {
+				t.Fatal("manifest not installed")
+			}
+			if input[0] != '/' && (manager.urlID != "search" || manager.url != "https://example.com/mcp") {
+				t.Fatal("URL not installed")
+			}
+		})
+	}
+}
 func TestPluginPolicyFailureKeepsVisibleManualPolicy(t *testing.T) {
 	manager := &pluginPanelStub{items: []domain.PluginState{pluginItem("kmp")}}
 	m := sized()
 	defer m.zones.Close()
 	m.deps.Plugins = manager
-	next, cmd := m.Update(ControlIntent("plugins"))
+	next, cmd := m.Update(ControlIntent("mcp"))
 	m = runUIOperation(next.(AppModel), cmd)
 	manager.err = errors.New("cannot persist policy")
 	next, cmd = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
@@ -148,6 +178,10 @@ func (p *pluginRefreshFailureStub) SetApproval(_ context.Context, _ root.PluginI
 	p.profile.Approval = mode
 	return nil
 }
+func (p *pluginRefreshFailureStub) InstallManifest(context.Context, string) error { return nil }
+func (p *pluginRefreshFailureStub) InstallURL(context.Context, root.PluginID, string) error {
+	return nil
+}
 func TestPluginPolicyRemainsVisibleWhenDiscoveryAfterSaveFails(t *testing.T) {
 	for _, err := range []error{errors.New("discovery failed"), context.Canceled} {
 		t.Run(err.Error(), func(t *testing.T) {
@@ -155,7 +189,7 @@ func TestPluginPolicyRemainsVisibleWhenDiscoveryAfterSaveFails(t *testing.T) {
 			m := sized()
 			defer m.zones.Close()
 			m.deps.Plugins = manager
-			next, cmd := m.Update(ControlIntent("plugins"))
+			next, cmd := m.Update(ControlIntent("mcp"))
 			m = runUIOperation(next.(AppModel), cmd)
 			next, cmd = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
 			m = next.(AppModel)

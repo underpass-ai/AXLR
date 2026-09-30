@@ -20,6 +20,7 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
+	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
@@ -171,6 +172,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	defer manager.Close()
 	configStore := storage.MCPConfigStore{Path: configPath}
 	pluginManager := axlr.NewPluginManager(manager, profiles, configStore.SaveApproval)
+	pluginManager.SetInstaller(configStore.AddManifest)
+	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, getenv)
+	pluginManager.SetURLInstaller(configStore.AddURL)
 	pluginManager.Diagnostics = trace
 	executor, err := runtime.New(runtime.Config{Root: workspacePath, Plugins: manager})
 	if err != nil {
@@ -241,13 +245,23 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			session = &created
 		}
 	}
+	dataBase := getenv("XDG_DATA_HOME")
+	if !filepath.IsAbs(dataBase) {
+		home := getenv("HOME")
+		if !filepath.IsAbs(home) {
+			return fail(errors.New("absolute HOME or XDG_DATA_HOME is required for AXLR plugins"))
+		}
+		dataBase = filepath.Join(home, ".local", "share")
+	}
+	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace}
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance}
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
 	app := terminal.New(terminal.Dependencies{
 		Context:           ctx,
 		Diagnostics:       trace,
 		Plugins:           pluginManager,
+		InstalledPlugins:  axlrCatalog,
 		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
 		ModelPreference:   preferences,
 		UIPreferenceStore: uiStore,

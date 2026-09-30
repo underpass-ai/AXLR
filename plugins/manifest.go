@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +20,7 @@ const maxManifestBytes = 64 << 10
 type Manifest struct {
 	ID         domain.PluginID
 	Command    string
+	URL        string
 	Args       []string
 	AllowTools []domain.PluginToolName
 	AllowAll   bool
@@ -48,20 +50,29 @@ func LoadManifest(path string) (Manifest, error) {
 	if err := json.Unmarshal(fields["manifest_version"], &version); err != nil || version != 1 {
 		return Manifest{}, errors.New("unsupported plugin manifest version")
 	}
-	var rawID, command string
+	var rawID, command, endpoint string
 	var args []string
 	var rawArgs []json.RawMessage
 	var allow []string
 	if err := json.Unmarshal(fields["id"], &rawID); err != nil {
 		return Manifest{}, err
 	}
-	if err := json.Unmarshal(fields["command"], &command); err != nil {
-		return Manifest{}, err
+	if raw, ok := fields["command"]; ok {
+		if err := json.Unmarshal(raw, &command); err != nil {
+			return Manifest{}, err
+		}
 	}
-	if err := json.Unmarshal(fields["args"], &rawArgs); err != nil {
-		return Manifest{}, err
+	if raw, ok := fields["url"]; ok {
+		if err := json.Unmarshal(raw, &endpoint); err != nil {
+			return Manifest{}, err
+		}
 	}
-	if rawArgs == nil {
+	if raw, ok := fields["args"]; ok {
+		if err := json.Unmarshal(raw, &rawArgs); err != nil {
+			return Manifest{}, err
+		}
+	}
+	if command != "" && rawArgs == nil {
 		return Manifest{}, errors.New("plugin args must be an array")
 	}
 	args = make([]string, 0, len(rawArgs))
@@ -82,8 +93,17 @@ func LoadManifest(path string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	if !filepath.IsAbs(command) || strings.ContainsRune(command, 0) || len(allow) == 0 {
-		return Manifest{}, errors.New("plugin requires an absolute command, args and nonempty allow_tools")
+	if len(allow) == 0 || (command == "") == (endpoint == "") {
+		return Manifest{}, errors.New("plugin requires one MCP transport and nonempty allow_tools")
+	}
+	if command != "" && (!filepath.IsAbs(command) || strings.ContainsRune(command, 0)) {
+		return Manifest{}, errors.New("plugin requires an absolute command")
+	}
+	if endpoint != "" {
+		u, err := url.Parse(endpoint)
+		if err != nil || u == nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil || u.Fragment != "" || len(args) != 0 {
+			return Manifest{}, errors.New("invalid MCP URL")
+		}
 	}
 	for _, arg := range args {
 		if strings.ContainsRune(arg, 0) {
@@ -93,7 +113,7 @@ func LoadManifest(path string) (Manifest, error) {
 	seen := map[domain.PluginToolName]bool{}
 	tools := make([]domain.PluginToolName, 0, len(allow))
 	if len(allow) == 1 && allow[0] == "*" {
-		return Manifest{ID: id, Command: command, Args: args, AllowAll: true}, nil
+		return Manifest{ID: id, Command: command, URL: endpoint, Args: args, AllowAll: true}, nil
 	}
 	for _, raw := range allow {
 		name, err := domain.NewPluginToolName(raw)
@@ -103,7 +123,7 @@ func LoadManifest(path string) (Manifest, error) {
 		seen[name] = true
 		tools = append(tools, name)
 	}
-	return Manifest{ID: id, Command: command, Args: args, AllowTools: tools}, nil
+	return Manifest{ID: id, Command: command, URL: endpoint, Args: args, AllowTools: tools}, nil
 }
 
 func parseManifestFields(data []byte) (map[string]json.RawMessage, error) {
@@ -112,7 +132,7 @@ func parseManifestFields(data []byte) (map[string]json.RawMessage, error) {
 	if err != nil || token != json.Delim('{') {
 		return nil, errors.New("plugin manifest must be a JSON object")
 	}
-	allowed := map[string]bool{"manifest_version": true, "id": true, "command": true, "args": true, "allow_tools": true}
+	allowed := map[string]bool{"manifest_version": true, "id": true, "command": true, "args": true, "url": true, "allow_tools": true}
 	fields := make(map[string]json.RawMessage, len(allowed))
 	for d.More() {
 		token, err := d.Token()
@@ -139,7 +159,7 @@ func parseManifestFields(data []byte) (map[string]json.RawMessage, error) {
 	if err := d.Decode(&extra); err != io.EOF {
 		return nil, errors.New("plugin manifest has trailing JSON")
 	}
-	for key := range allowed {
+	for _, key := range []string{"manifest_version", "id", "allow_tools"} {
 		if _, exists := fields[key]; !exists {
 			return nil, fmt.Errorf("missing plugin manifest field %q", key)
 		}

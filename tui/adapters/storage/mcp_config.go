@@ -89,7 +89,7 @@ func LoadMCPConfiguration(path string, getenv func(string) string) (MCPConfigura
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		env := make([]string, 0, len(keys))
+		var env []string
 		for _, key := range keys {
 			env = append(env, key+"="+values[key])
 		}

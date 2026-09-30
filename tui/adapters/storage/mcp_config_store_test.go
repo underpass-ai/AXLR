@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/plugins"
 	"os"
 	"path/filepath"
 	"testing"
@@ -84,6 +85,55 @@ func TestMCPConfigStorePersistsPolicyAndPreservesEnvironment(t *testing.T) {
 	leftovers, _ := filepath.Glob(filepath.Join(filepath.Dir(path), ".axlr-mcp-*"))
 	if len(leftovers) != 0 {
 		t.Fatal("temporary files remain")
+	}
+}
+
+func TestMCPInstallPreservesDefaultsAndLoadsHTTP(t *testing.T) {
+	path := configuredPlugin(t)
+	store := MCPConfigStore{Path: path}
+	if err := store.AddURL(context.Background(), "search", "https://example.com/mcp"); err != nil {
+		t.Fatal(err)
+	}
+	config, err := readMCPConfig(path)
+	if err != nil || len(config.Plugins) != 2 || config.Plugins[0].Name != "KMP" || config.Plugins[1].Approval != "manual" {
+		t.Fatalf("config: %+v %v", config, err)
+	}
+	manifest, err := plugins.LoadManifest(config.Plugins[1].Manifest)
+	if err != nil || manifest.URL != "https://example.com/mcp" {
+		t.Fatalf("HTTP manifest: %+v %v", manifest, err)
+	}
+	loaded, err := LoadMCPConfiguration(path, func(string) string { return "" })
+	if err != nil || len(loaded.Registrations) != 2 || loaded.Registrations[1].Manifest.URL != "https://example.com/mcp" {
+		t.Fatalf("reload: %+v %v", loaded, err)
+	}
+	manager, err := plugins.NewManager(loaded.Registrations)
+	if err != nil {
+		t.Fatalf("HTTP registration failed: %v", err)
+	}
+	manager.Close()
+	if err := store.AddURL(context.Background(), "search", "https://example.com/mcp"); err == nil {
+		t.Fatal("duplicate MCP installed")
+	}
+}
+
+func TestInstallLocalMCPIntoNewConfiguration(t *testing.T) {
+	root := t.TempDir()
+	manifestPath := filepath.Join(root, "third-party.json")
+	if err := os.WriteFile(manifestPath, []byte(`{"manifest_version":1,"id":"thirdparty","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(root, "config", "mcp.json")
+	store := MCPConfigStore{Path: path}
+	if err := store.AddManifest(context.Background(), manifestPath); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadMCPConfiguration(path, func(string) string { return "" })
+	if err != nil || len(loaded.Profiles) != 1 || loaded.Profiles[0].ID != "thirdparty" || loaded.Profiles[0].Approval != domain.ApprovalManual {
+		t.Fatalf("installed config: %+v %v", loaded, err)
+	}
+	info, err := os.Stat(path)
+	if err != nil || info.Mode().Perm() != 0600 {
+		t.Fatalf("unsafe config mode: %v %v", info, err)
 	}
 }
 func TestMCPConfigStoreRejectsInvalidAndCancelledChange(t *testing.T) {
@@ -284,5 +334,39 @@ func TestMCPConfigLockRejectsSymlinkAndPublicFile(t *testing.T) {
 				t.Fatal("unsafe lock path accepted")
 			}
 		})
+	}
+}
+
+func TestMCPConfigStorePackageEnvironment(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.json")
+	manifest := filepath.Join(t.TempDir(), "server.json")
+	if err := os.WriteFile(manifest, []byte(`{"manifest_version":1,"id":"example-worker","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store := MCPConfigStore{Path: path}
+	if err := store.AddManifestWithEnvironment(context.Background(), manifest, map[string]string{"API_KEY": "TEST_API_KEY"}, map[string]string{"HOME": "/tmp"}); err != nil {
+		t.Fatal(err)
+	}
+	config, err := readMCPConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Plugins) != 1 || config.Plugins[0].EnvFrom["API_KEY"] != "TEST_API_KEY" || config.Plugins[0].Env["HOME"] != "/tmp" {
+		t.Fatalf("config: %+v", config)
+	}
+	loaded, err := LoadMCPConfiguration(path, func(key string) string {
+		if key == "TEST_API_KEY" {
+			return "secret"
+		}
+		return ""
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(loaded.Registrations) != 1 || len(loaded.Registrations[0].Env) != 2 {
+		t.Fatalf("registration: %+v", loaded)
+	}
+	if err := store.AddManifestWithEnvironment(context.Background(), manifest, map[string]string{"OPENROUTER_API_KEY": "OPENROUTER_API_KEY"}, nil); err == nil {
+		t.Fatal("provider credential forwarded")
 	}
 }

@@ -9,4 +9,6 @@ import (
 type PluginManagementPort interface {
 	List(context.Context) ([]domain.PluginState, error)
 	SetApproval(context.Context, root.PluginID, domain.ApprovalMode) error
+	InstallManifest(context.Context, string) error
+	InstallURL(context.Context, root.PluginID, string) error
 }

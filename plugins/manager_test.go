@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -14,6 +16,31 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/underpass-ai/AXLR/domain"
 )
+
+func TestRegisterThirdPartyHTTPServer(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "third-party", Version: "1.0.0"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "ping"}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "pong"}}}, nil, nil
+	})
+	httpServer := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+	defer httpServer.Close()
+	manager, err := NewManager(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	registration, err := NewRegistration(Manifest{ID: "remote", URL: httpServer.URL, AllowAll: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.Register(context.Background(), registration); err != nil {
+		t.Fatal(err)
+	}
+	tools, err := manager.ListServer(context.Background(), "remote")
+	if err != nil || len(tools) != 1 || tools[0].Ref.ToolName != "ping" {
+		t.Fatalf("HTTP tools: %+v %v", tools, err)
+	}
+}
 
 func pluginRegistration(t *testing.T, id string, allowed []domain.PluginToolName, extraEnv ...string) Registration {
 	t.Helper()

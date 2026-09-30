@@ -35,6 +35,7 @@ type AppModel struct {
 	Picker              SessionPicker
 	Models              ModelPicker
 	Plugins             PluginPanel
+	InstalledPlugins    InstalledPlugins
 	memoryActive        bool
 	providerWaiting     bool
 	providerWaitStarted time.Time
@@ -88,7 +89,7 @@ func New(deps Dependencies) AppModel {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
-	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix()}
+	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix()}
 	m.Composer.Theme = m.Theme
 	m.Composer.Input.Placeholder = m.Theme.T("composer.placeholder")
 	m.Activity.Locale = m.Theme.Locale
@@ -96,6 +97,7 @@ func New(deps Dependencies) AppModel {
 	m.Models.Theme = m.Theme
 	m.Models.Input.Prompt = m.Theme.T("common.searchPrompt")
 	m.Plugins.Theme = m.Theme
+	m.InstalledPlugins.Theme = m.Theme
 	m.Plugins.Search.Placeholder = m.Theme.T("plugins.searchPlaceholder")
 	if deps.Session != nil {
 		m.Header.State = deps.Session.Export()
@@ -168,6 +170,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Models.ensureVisible()
 		}
 		m.Plugins.Resize(v.Width, v.Height-2)
+		m.InstalledPlugins.Resize(v.Width, v.Height-2)
 		offset := m.Transcript.Viewport.YOffset()
 		m.Transcript.Viewport.SetWidth(max(1, m.Layout.TranscriptWidth-2*m.Transcript.Gutter))
 		m.Transcript.Viewport.SetHeight(m.Layout.BodyHeight)
@@ -280,6 +283,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Plugins.SetItems(*v.Plugins)
 			}
 			m.Plugins.Resize(m.Layout.Width, m.Layout.Height-2)
+		}
+		if v.InstalledPlugins != nil {
+			m.InstalledPlugins.Loading = false
+			if v.Err != nil {
+				m.InstalledPlugins.Error = v.Err.Error()
+			} else {
+				m.InstalledPlugins.SetItems(*v.InstalledPlugins)
+			}
+			m.InstalledPlugins.Resize(m.Layout.Width, m.Layout.Height-2)
 		}
 		if v.Models != nil {
 			if v.Err != nil {
@@ -514,10 +526,32 @@ func (m AppModel) View() tea.View {
 			view.Cursor.Y += 4
 		}
 	}
-	if !m.Layout.TooSmall && (m.overlay == "mcp" || m.overlay == "plugins") && m.Plugins.searching {
-		view.Cursor = m.Plugins.Search.Cursor()
+	if !m.Layout.TooSmall && m.overlay == "mcp" && (m.Plugins.searching || m.Plugins.installing) {
+		if m.Plugins.installing {
+			view.Cursor = m.Plugins.InstallInput.Cursor()
+		} else {
+			view.Cursor = m.Plugins.Search.Cursor()
+		}
 		if view.Cursor != nil {
-			view.Cursor.Y++
+			if m.Plugins.installing {
+				view.Cursor.Y += 4
+			} else {
+				view.Cursor.Y++
+			}
+		}
+	}
+	if !m.Layout.TooSmall && m.overlay == "plugins" && (m.InstalledPlugins.searching || m.InstalledPlugins.addingMarketplace) {
+		if m.InstalledPlugins.addingMarketplace {
+			view.Cursor = m.InstalledPlugins.MarketplaceInput.Cursor()
+		} else {
+			view.Cursor = m.InstalledPlugins.Search.Cursor()
+		}
+		if view.Cursor != nil {
+			if m.InstalledPlugins.addingMarketplace {
+				view.Cursor.Y += 4
+			} else {
+				view.Cursor.Y++
+			}
 		}
 	}
 	if !m.Layout.TooSmall && m.overlay == "search" && !m.approvalFocus() {

@@ -7,16 +7,137 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"sort"
 	"sync"
+	"time"
 )
 
 // PluginManager projects plugin capabilities and exact, persisted authorization policies.
 type PluginManager struct {
-	Diagnostics application.DiagnosticPort
-	manager     *plugins.Manager
-	mu          sync.RWMutex
-	profiles    []domain.PluginProfile
-	persist     func(context.Context, root.PluginID, domain.ApprovalMode) error
+	Diagnostics           application.DiagnosticPort
+	manager               *plugins.Manager
+	mu                    sync.RWMutex
+	profiles              []domain.PluginProfile
+	persist               func(context.Context, root.PluginID, domain.ApprovalMode) error
+	persistInstall        func(context.Context, string) error
+	persistInstallWithEnv func(context.Context, string, map[string]string, map[string]string) error
+	resolveEnv            func(string) string
+	persistURL            func(context.Context, root.PluginID, string) error
+}
+
+func (m *PluginManager) SetInstaller(install func(context.Context, string) error) {
+	m.persistInstall = install
+}
+
+func (m *PluginManager) SetEnvironmentInstaller(install func(context.Context, string, map[string]string, map[string]string) error, getenv func(string) string) {
+	m.persistInstallWithEnv = install
+	m.resolveEnv = getenv
+}
+
+func (m *PluginManager) InstallManifestWithEnvironment(ctx context.Context, path string, envFrom, env map[string]string) error {
+	if m.persistInstallWithEnv == nil || m.resolveEnv == nil {
+		return errors.New("MCP environment installation is unavailable")
+	}
+	manifest, err := plugins.LoadManifest(path)
+	if err != nil {
+		return err
+	}
+	values := map[string]string{}
+	for key, value := range env {
+		values[key] = value
+	}
+	for key, source := range envFrom {
+		if _, exists := values[key]; exists {
+			return errors.New("duplicate MCP environment key")
+		}
+		values[key] = m.resolveEnv(source)
+	}
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	entries := make([]string, 0, len(keys))
+	for _, key := range keys {
+		entries = append(entries, key+"="+values[key])
+	}
+	registration, err := plugins.NewRegistration(manifest, entries)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, profile := range m.profiles {
+		if profile.ID == manifest.ID {
+			return errors.New("MCP server is already installed")
+		}
+	}
+	if err := m.persistInstallWithEnv(ctx, path, envFrom, env); err != nil {
+		return err
+	}
+	if err := m.manager.Register(ctx, registration); err != nil {
+		return err
+	}
+	m.profiles = append(m.profiles, domain.PluginProfile{ID: manifest.ID, Name: root.Text(manifest.ID), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
+	return nil
+}
+
+func (m *PluginManager) SetURLInstaller(install func(context.Context, root.PluginID, string) error) {
+	m.persistURL = install
+}
+
+func (m *PluginManager) InstallURL(ctx context.Context, id root.PluginID, endpoint string) error {
+	if m.persistURL == nil {
+		return errors.New("MCP installation requires persistent configuration")
+	}
+	registration, err := plugins.NewRegistration(plugins.Manifest{ID: id, URL: endpoint, AllowAll: true}, nil)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, profile := range m.profiles {
+		if profile.ID == id {
+			return errors.New("MCP server is already installed")
+		}
+	}
+	if err := m.persistURL(ctx, id, endpoint); err != nil {
+		return err
+	}
+	if err := m.manager.Register(ctx, registration); err != nil {
+		return err
+	}
+	m.profiles = append(m.profiles, domain.PluginProfile{ID: id, Name: root.Text(id), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
+	return nil
+}
+
+func (m *PluginManager) InstallManifest(ctx context.Context, path string) error {
+	if m.persistInstall == nil {
+		return errors.New("MCP installation requires persistent configuration")
+	}
+	manifest, err := plugins.LoadManifest(path)
+	if err != nil {
+		return err
+	}
+	registration, err := plugins.NewRegistration(manifest, nil)
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, profile := range m.profiles {
+		if profile.ID == manifest.ID {
+			return errors.New("MCP server is already installed")
+		}
+	}
+	if err := m.persistInstall(ctx, path); err != nil {
+		return err
+	}
+	if err := m.manager.Register(ctx, registration); err != nil {
+		return err
+	}
+	m.profiles = append(m.profiles, domain.PluginProfile{ID: manifest.ID, Name: root.Text(manifest.ID), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
+	return nil
 }
 
 func NewPluginManager(manager *plugins.Manager, profiles []domain.PluginProfile, persist func(context.Context, root.PluginID, domain.ApprovalMode) error) *PluginManager {
@@ -71,8 +192,10 @@ func (m *PluginManager) List(ctx context.Context) (result []domain.PluginState, 
 		return states, nil
 	}
 	for i, profile := range profiles {
-		serverCtx, serverSpan := application.StartDiagnosticSpan(ctx, m.Diagnostics, application.DiagnosticActionPluginDiscovery, application.DiagnosticEvent{PluginOrdinal: pluginOrdinal(profiles, profile.ID)})
+		bounded, cancel := context.WithTimeout(ctx, 12*time.Second)
+		serverCtx, serverSpan := application.StartDiagnosticSpan(bounded, m.Diagnostics, application.DiagnosticActionPluginDiscovery, application.DiagnosticEvent{PluginOrdinal: pluginOrdinal(profiles, profile.ID)})
 		tools, err := m.manager.ListServer(serverCtx, profile.ID)
+		cancel()
 		serverSpan.End(pluginDiagnosticError(errors.Join(err, ctx.Err())))
 		if ctx.Err() != nil {
 			return nil, ctx.Err()

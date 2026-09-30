@@ -45,6 +45,25 @@ func NewManager(registrations []Registration) (*Manager, error) {
 	return m, nil
 }
 
+// Register makes an installed MCP server available to the next tool discovery.
+func (m *Manager) Register(ctx context.Context, registration Registration) error {
+	validated, err := NewRegistration(registration.Manifest, registration.Env)
+	if err != nil {
+		return err
+	}
+	if err := m.acquire(ctx); err != nil {
+		return err
+	}
+	defer m.release()
+	id := validated.Manifest.ID
+	if _, exists := m.registrations[id]; exists {
+		return fmt.Errorf("MCP server %q is already registered", id)
+	}
+	m.registrations[id] = validated
+	m.order = append(m.order, id)
+	return nil
+}
+
 func (m *Manager) acquire(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
@@ -79,7 +98,7 @@ func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
 		return nil
 	}
 	r := m.registrations[id]
-	err := m.client.Connect(ctx, mcpclient.Server{Name: mcpclient.ServerName(id), Command: r.Manifest.Command, Args: r.Manifest.Args, Env: r.Env})
+	err := m.client.Connect(ctx, mcpclient.Server{Name: mcpclient.ServerName(id), Command: r.Manifest.Command, URL: r.Manifest.URL, Args: r.Manifest.Args, Env: r.Env})
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}

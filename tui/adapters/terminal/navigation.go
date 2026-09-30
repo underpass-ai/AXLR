@@ -136,8 +136,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.search()
 			return m, cmd, true
 		}
-		if m.overlay == "mcp" || m.overlay == "plugins" {
+		if m.overlay == "mcp" {
 			m.Plugins.Update(paste, m.overlay)
+			return m, nil, true
+		}
+		if m.overlay == "plugins" {
+			m.InstalledPlugins.Update(paste)
 			return m, nil, true
 		}
 		if m.overlay != "" {
@@ -164,16 +168,23 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 		} else if m.overlay != "" {
 			if k.String() == "esc" {
-				if (m.overlay == "mcp" || m.overlay == "plugins") && (m.Plugins.searching || m.Plugins.confirming) {
+				if m.overlay == "mcp" && (m.Plugins.searching || m.Plugins.confirming || m.Plugins.installing) {
 					m.Plugins.Update(k, m.overlay)
+					return m, nil, true
+				}
+				if m.overlay == "plugins" && (m.InstalledPlugins.searching || m.InstalledPlugins.confirming || m.InstalledPlugins.addingMarketplace) {
+					m.InstalledPlugins.Update(k)
 					return m, nil, true
 				}
 				intent = "close"
 				hasIntent = true
 			} else {
 				switch m.overlay {
-				case "mcp", "plugins":
+				case "mcp":
 					intent = m.Plugins.Update(k, m.overlay)
+					hasIntent = intent != ""
+				case "plugins":
+					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
 				case "info":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
@@ -247,8 +258,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 	}
-	if wheel, ok := msg.(tea.MouseWheelMsg); ok && (m.overlay == "mcp" || m.overlay == "plugins") {
+	if wheel, ok := msg.(tea.MouseWheelMsg); ok && m.overlay == "mcp" {
 		m.Plugins.Update(wheel, m.overlay)
+		return m, nil, true
+	}
+	if wheel, ok := msg.(tea.MouseWheelMsg); ok && m.overlay == "plugins" {
+		m.InstalledPlugins.Update(wheel)
 		return m, nil, true
 	}
 	if wheel, ok := msg.(tea.MouseWheelMsg); ok && m.approvalFocus() {
@@ -266,12 +281,70 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.ThemePicker = NewThemePicker(m.UIPreferences, m.Theme.Locale)
 		m.overlay = "theme"
 		return m, nil, true
-	case "mcp", "plugins", "plugins-refresh", "plugins-toggle":
+	case "plugins", "catalog-refresh", "catalog-change", "catalog-marketplace":
 		if m.Busy {
 			m.Status.Error = m.Theme.T("error.pluginsBusy")
 			return m, nil, true
 		}
-		if intent == "mcp" || intent == "plugins" {
+		if intent == "plugins" {
+			m.overlay = "plugins"
+			m.InstalledPlugins = NewInstalledPlugins()
+			m.InstalledPlugins.Theme = m.Theme
+			m.InstalledPlugins.Resize(m.Layout.Width, m.Layout.Height-2)
+		}
+		catalog := m.deps.InstalledPlugins
+		change := intent == "catalog-change"
+		marketplace := intent == "catalog-marketplace"
+		marketplaceSource := strings.TrimSpace(m.InstalledPlugins.MarketplaceInput.Value())
+		var selected application.InstalledPlugin
+		if change {
+			if m.overlay != "plugins" || len(m.InstalledPlugins.Items) == 0 {
+				return m, nil, true
+			}
+			selected = m.InstalledPlugins.Items[m.InstalledPlugins.Selected]
+			if selected.Installed || selected.Builtin {
+				return m, nil, true
+			}
+		}
+		if marketplace {
+			m.InstalledPlugins.Available = true
+		}
+		available := m.InstalledPlugins.Available
+		m.InstalledPlugins.Loading = true
+		m.InstalledPlugins.Error = ""
+		var items []application.InstalledPlugin
+		cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
+			if catalog == nil {
+				return errors.New(m.Theme.T("catalog.unavailable"))
+			}
+			if marketplace {
+				if err := catalog.AddSource(ctx, marketplaceSource); err != nil {
+					return err
+				}
+			}
+			if change {
+				if err := catalog.Install(ctx, selected.ID); err != nil {
+					return err
+				}
+			}
+			var err error
+			items, err = catalog.List(ctx, available)
+			return err
+		})
+		return m, func() tea.Msg {
+			msg := cmd()
+			if done, ok := msg.(operationComplete); ok {
+				done.InstalledPlugins = &items
+				return done
+			}
+			return msg
+		}, true
+	case "mcp", "plugins-refresh", "plugins-toggle", "mcp-install":
+		if m.Busy {
+			m.Status.Error = m.Theme.T("error.pluginsBusy")
+			return m, nil, true
+		}
+		if intent == "mcp" {
 			m.overlay = intent
 			m.Plugins = NewPluginPanel()
 			m.Plugins.Theme = m.Theme
@@ -281,7 +354,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		manager := m.deps.Plugins
 		var items []domain.PluginState
 		toggle := intent == "plugins-toggle"
-		if toggle && (m.overlay != "plugins" || len(m.Plugins.Items) == 0) {
+		install := intent == "mcp-install"
+		manifestPath := strings.TrimSpace(m.Plugins.InstallInput.Value())
+		if toggle && (m.overlay != "mcp" || len(m.Plugins.Items) == 0) {
 			return m, nil, true
 		}
 		var id root.PluginID
@@ -302,6 +377,21 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 			if manager == nil {
 				return errors.New(m.Theme.T("error.pluginUnavailable"))
+			}
+			if install {
+				if strings.HasPrefix(manifestPath, "/") {
+					if err := manager.InstallManifest(ctx, manifestPath); err != nil {
+						return err
+					}
+				} else {
+					parts := strings.Fields(manifestPath)
+					if len(parts) != 2 {
+						return errors.New(m.Theme.T("mcp.installFormat"))
+					}
+					if err := manager.InstallURL(ctx, root.PluginID(parts[0]), parts[1]); err != nil {
+						return err
+					}
+				}
 			}
 			if toggle {
 				if err := manager.SetApproval(ctx, id, mode); err != nil {
@@ -570,8 +660,10 @@ func (m AppModel) overlayView(base string) string {
 	}
 	var body string
 	switch m.overlay {
-	case "mcp", "plugins":
+	case "mcp":
 		body = m.Plugins.View(m.overlay, m.Layout.Width, m.Layout.Height-2)
+	case "plugins":
+		body = m.InstalledPlugins.View(m.Layout.Width, m.Layout.Height-2)
 	case "theme":
 		body = m.ThemePicker.View(m.Theme, m.Layout.Width, m.Layout.Height-2)
 	case "models":
