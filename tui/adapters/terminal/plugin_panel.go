@@ -14,23 +14,27 @@ import (
 
 // PluginPanel keeps the selected manifest identity separate from list filters.
 type PluginPanel struct {
-	Theme      Theme
-	Items      []domain.PluginState
-	Selected   int
-	Loading    bool
-	Error      string
-	Details    viewport.Model
-	Search     textinput.Model
-	searching  bool
-	confirming bool
-	filter     int // all, connected, unavailable, manual, automatic
-	w, h       int
+	Theme        Theme
+	Items        []domain.PluginState
+	Selected     int
+	Loading      bool
+	Error        string
+	Details      viewport.Model
+	Search       textinput.Model
+	InstallInput textinput.Model
+	searching    bool
+	installing   bool
+	confirming   bool
+	filter       int // all, connected, unavailable, manual, automatic
+	w, h         int
 }
 
 func NewPluginPanel() PluginPanel {
 	search := textinput.New()
 	search.Placeholder = Translate(English, "plugins.searchPlaceholder")
-	return PluginPanel{Details: viewport.New(), Search: search}
+	install := textinput.New()
+	install.Placeholder = Translate(English, "mcp.manifestPlaceholder")
+	return PluginPanel{Details: viewport.New(), Search: search, InstallInput: install}
 }
 
 func (p *PluginPanel) SetItems(items []domain.PluginState) {
@@ -65,11 +69,11 @@ func (p *PluginPanel) visible(mode ControlIntent) []int {
 				continue
 			}
 		case 3:
-			if mode == "plugins" && item.Profile.Approval != domain.ApprovalManual {
+			if mode == "mcp" && item.Profile.Approval != domain.ApprovalManual {
 				continue
 			}
 		case 4:
-			if mode == "plugins" && item.Profile.Approval != domain.ApprovalAuto {
+			if mode == "mcp" && item.Profile.Approval != domain.ApprovalAuto {
 				continue
 			}
 		}
@@ -85,7 +89,7 @@ func (p *PluginPanel) visible(mode ControlIntent) []int {
 }
 
 func (p *PluginPanel) ensureVisible() {
-	visible := p.visible("plugins")
+	visible := p.visible("mcp")
 	if len(visible) == 0 {
 		return
 	}
@@ -125,6 +129,7 @@ func (p *PluginPanel) refresh() {
 func (p *PluginPanel) Resize(w, h int) {
 	p.w, p.h = max(1, w), max(1, h)
 	p.Search.SetWidth(max(1, w-12))
+	p.InstallInput.SetWidth(max(1, w-12))
 	detailWidth := w
 	if w >= 80 {
 		detailWidth = w - max(32, w*42/100) - 2
@@ -138,6 +143,25 @@ func (p *PluginPanel) Resize(w, h int) {
 }
 
 func (p *PluginPanel) Update(msg tea.Msg, mode ControlIntent) ControlIntent {
+	if p.installing {
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			switch key.String() {
+			case "esc":
+				p.installing = false
+				p.InstallInput.Blur()
+				return ""
+			case "enter":
+				if strings.TrimSpace(p.InstallInput.Value()) == "" {
+					return ""
+				}
+				p.installing = false
+				p.InstallInput.Blur()
+				return "mcp-install"
+			}
+		}
+		p.InstallInput, _ = p.InstallInput.Update(msg)
+		return ""
+	}
 	if p.confirming {
 		if key, ok := msg.(tea.KeyPressMsg); ok {
 			switch key.String() {
@@ -173,7 +197,7 @@ func (p *PluginPanel) Update(msg tea.Msg, mode ControlIntent) ControlIntent {
 			return ""
 		case "tab":
 			limit := 2
-			if mode == "plugins" {
+			if mode == "mcp" {
 				limit = 4
 			}
 			p.filter = (p.filter + 1) % (limit + 1)
@@ -202,8 +226,13 @@ func (p *PluginPanel) Update(msg tea.Msg, mode ControlIntent) ControlIntent {
 			return ""
 		case "r":
 			return "plugins-refresh"
+		case "i":
+			p.installing = true
+			p.InstallInput.Reset()
+			p.InstallInput.Focus()
+			return ""
 		case "a", "enter":
-			if mode == "plugins" && len(p.Items) > 0 && len(p.visible(mode)) > 0 {
+			if mode == "mcp" && len(p.Items) > 0 && len(p.visible(mode)) > 0 {
 				p.confirming = true
 			}
 			return ""
@@ -217,12 +246,12 @@ func (p PluginPanel) View(mode ControlIntent, w, h int) string {
 	w, h = max(1, w), max(1, h)
 	p.Search.Placeholder = p.Theme.T("plugins.searchPlaceholder")
 	title := p.Theme.T("plugins.mcpTitle")
-	if mode == "plugins" {
-		title = p.Theme.T("plugins.title")
-	}
 	filters := []string{p.Theme.T("filters.all"), p.Theme.T("filters.connected"), p.Theme.T("filters.errors"), p.Theme.T("filters.manualTitle"), p.Theme.T("filters.autoTitle")}
 	filter := filters[min(p.filter, len(filters)-1)]
 	lines := []string{p.Theme.Heading(title), p.Search.View(), p.Theme.Muted(p.Theme.Tf("plugins.filterHint", filter))}
+	if p.installing {
+		lines = append(lines, p.Theme.T("mcp.manifestPrompt"), p.InstallInput.View())
+	}
 	if p.Loading {
 		lines = append(lines, p.Theme.Muted(p.Theme.T("plugins.loading")))
 	}
@@ -299,7 +328,7 @@ func (p PluginPanel) View(mode ControlIntent, w, h int) string {
 		}
 	}
 	footer := p.Theme.T("plugins.mcpFooter")
-	if mode == "plugins" {
+	if mode == "mcp" {
 		footer = p.Theme.T("plugins.footer")
 	}
 	if p.confirming && p.Selected < len(p.Items) {

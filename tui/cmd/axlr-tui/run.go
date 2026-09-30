@@ -20,6 +20,7 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
+	"github.com/underpass-ai/AXLR/tui/adapters/codex"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
@@ -171,6 +172,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	defer manager.Close()
 	configStore := storage.MCPConfigStore{Path: configPath}
 	pluginManager := axlr.NewPluginManager(manager, profiles, configStore.SaveApproval)
+	pluginManager.SetInstaller(configStore.AddManifest)
+	pluginManager.SetURLInstaller(configStore.AddURL)
 	pluginManager.Diagnostics = trace
 	executor, err := runtime.New(runtime.Config{Root: workspacePath, Plugins: manager})
 	if err != nil {
@@ -248,6 +251,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Context:           ctx,
 		Diagnostics:       trace,
 		Plugins:           pluginManager,
+		InstalledPlugins:  codex.PluginCatalog{},
 		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
 		ModelPreference:   preferences,
 		UIPreferenceStore: uiStore,

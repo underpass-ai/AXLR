@@ -1,6 +1,6 @@
 # AXLR agent console
 
-`axlr-tui` is a streaming OpenRouter console for a local workspace. It offers AXLR read, write, edit and exec tools, explicitly registered MCP plugins, persistent plugin approval policies, transcript search and resumable sessions. It targets trusted-local Linux and runs with your account's OS access.
+`axlr-tui` is a streaming OpenRouter console for a local workspace. It offers AXLR read, write, edit and exec tools, explicitly registered MCP servers, persistent server approval policies, a Codex plugin package catalog, transcript search and resumable sessions. It targets trusted-local Linux and runs with your account's OS access.
 
 ## Build and start
 
@@ -27,9 +27,13 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 | Key | Action |
 | --- | --- |
 | Enter | Send prompt; run `/model`, `/mcp`, `/plugin` or `/theme` |
-| A or Enter in `/plugin` | Review a policy change; Enter confirms it, Esc cancels |
-| R in `/mcp` or `/plugin` | Refresh server/tool inventory |
-| / in `/mcp` or `/plugin` | Search servers and tool names; Tab cycles status or approval filters |
+| A or Enter in `/mcp` | Review server approval; Enter confirms it, Esc cancels |
+| I in `/mcp` | Install a third-party MCP from a manifest path or `ID https://host/mcp` |
+| Tab in `/plugin` | Switch between installed packages and the available catalog |
+| Enter in `/plugin` | Review and install the selected available plugin |
+| M in `/plugin` | Add a Codex plugin marketplace from a Git URL, `owner/repo`, or local path |
+| R in `/mcp` or `/plugin` | Refresh the current inventory |
+| / in `/mcp` or `/plugin` | Search servers/tools or plugin packages |
 | Tab in `/model` | Cycle provider filters |
 | I / A in `/theme` | Cycle icon profiles / toggle reduced motion |
 | Shift+Enter | Newline in the prompt |
@@ -45,7 +49,7 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 | Tab | Transcript / activity |
 | PgUp / PgDn | Scroll |
 
-Mouse controls match the keyboard actions. Tool arguments and exact targets appear before approval; scroll approval details with arrows, PgUp/PgDn or the wheel. Local tools and plugins default to an individual decision. A configured plugin may opt into automatic approval; `/plugin` shows the exact ID and policy scope before confirming and persisting a change. Local catalog/history reads are automatically resolved; they do not grant approval to plugin calls. A turn allows up to 32 tool calls. Unknown calls are rejected. Cancelled or uncertain effects are recorded and never automatically retried.
+Mouse controls match the keyboard actions. Tool arguments and exact targets appear before approval; scroll approval details with arrows, PgUp/PgDn or the wheel. Local tools and MCP servers default to an individual decision. A configured MCP server may opt into automatic approval; `/mcp` shows the exact ID and policy scope before confirming and persisting a change. Local catalog/history reads are automatically resolved; they do not grant approval to MCP calls. A turn allows up to 32 tool calls. Unknown calls are rejected. Cancelled or uncertain effects are recorded and never automatically retried.
 
 Use a terminal of at least 50 columns by 15 rows. The transcript occupies the full terminal width; Tab opens the activity view. The composer grows with multiline drafts. User and assistant turns are separate, full-width rows. `/theme` previews Auto, Ink, Aurora, Paper and Phosphor; Enter saves the choice under `$XDG_STATE_HOME/axlr/ui-preference.json`, and Esc restores the previous theme. Icon profiles are Safe, Nerd Mono and ASCII. The terminal controls the font; Nerd Mono requires a Nerd Font installed in your terminal. `NO_COLOR=1` disables color. KMP tool requests and results use distinct memory rows; a memory indicator appears while KMP executes. Tool rows show compact previews; Actions → Info retains the full saved results in a scrollable view. Waiting and tool execution show an activity indicator and elapsed time, with a static indicator when reduced motion is enabled. Rows wrap to their content, and the transcript scrolls as turns accumulate.
 
@@ -58,9 +62,13 @@ The model initially receives the four local tools and three host controls: `axlr
 
 Provider reasoning and tool preparation have separate status indicators. They show activity without displaying hidden reasoning text. See the [implementation research and measurements](../docs/research/2026-09-30-context-policy.md).
 
-## Plugins
+## Plugin packages and MCP servers
 
-Register each plugin explicitly with an absolute path to a [version 1 AXLR manifest](../README.md#external-tool-plugins). There is no directory scanning. A manifest specifies an absolute executable, arguments and allowed tool names. `"*"` opts in to every tool advertised by that server; use exact names to restrict it:
+`/plugin` shows the real packages installed in this Codex app. KMP and MADE appear first when installed. Press Tab to browse available packages, `/` to search, and Enter to install the selected package through `codex plugin add`. Press M to add a third-party marketplace through `codex plugin marketplace add`, then search its packages. The Codex CLI must be on `PATH`. Installing a package changes Codex's plugin installation; an MCP connection used by AXLR is configured separately in `/mcp`.
+
+`/mcp` shows AXLR's connected servers, discovered tools, and their approval policies. KMP and MADE remain connected with their existing policies when present in `mcp.json`. Press I to install an additional server during the running session. Enter an absolute path to an AXLR manifest for a local stdio server, or `ID https://host/mcp` for a Streamable HTTP endpoint. The initial approval policy is manual; the connection is persisted in `mcp.json` and becomes available for the next tool discovery. An unreachable server is shown as unavailable after discovery.
+
+Register a local server with an absolute path to a [version 1 AXLR manifest](../README.md#external-tool-plugins). A manifest specifies an absolute executable, arguments and allowed tool names. `"*"` opts in to every tool advertised by that server; use exact names to restrict it:
 
 ```json
 {
@@ -90,7 +98,7 @@ For persistent connections, create `$XDG_CONFIG_HOME/axlr/mcp.json` (or `$HOME/.
 }
 ```
 
-Optional `purpose` is `tools` (default), `memory` or `ceremony`. Optional `approval` is `manual` (default) or `auto`. Automatic approval applies to tools allowed by that plugin's manifest, including future tools if `allow_tools` is `"*"`. Policies are persisted with a process-shared lock and atomic private-file replacement. `/mcp` shows each server and its tool inventory; `/plugin` shows policies and supports changing them. MADE ceremony tools use the same exact-plugin policy: set MADE to `auto` in `/plugin` or its persisted entry to execute allowed ceremony calls without individual approval. Command-line-only registrations remain manual unless placed in the persistent config.
+Optional `purpose` is `tools` (default), `memory` or `ceremony`. Optional `approval` is `manual` (default) or `auto`. Automatic approval applies to tools allowed by that server's manifest, including future tools if `allow_tools` is `"*"`. Policies are persisted with a process-shared lock and atomic private-file replacement. MADE ceremony tools use the same exact-server policy: set MADE to `auto` in `/mcp` or its persisted entry to execute allowed ceremony calls without individual approval. Command-line-only registrations remain manual unless placed in the persistent config.
 
 AXLR loads this file at every start, including launches without `--plugin`. `env_from` copies only named host variables; optional `env` supplies literal values for a plugin. Both maps become that plugin's complete child environment. Use `--mcp-config /absolute/path/config.json` to select another file. The config lists manifests explicitly, so tools from unrelated applications are not silently started.
 

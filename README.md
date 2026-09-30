@@ -19,7 +19,7 @@ The library entrypoint is `runtime.New(runtime.Config)` followed by `Executor.Ex
 
 ## Interactive agent console
 
-The separate [`tui/` module](tui/README.md) provides `axlr-tui`: OpenRouter streaming, `/mcp` and `/plugin`, configurable plugin approval, local and MCP tools, saved sessions and transcript search. Build it from this checkout with `go -C tui build -o /tmp/axlr-tui ./cmd/axlr-tui`, then supply `OPENROUTER_API_KEY` in the environment and run `/tmp/axlr-tui`. It uses the current workspace; type `/model` to choose a model, or pass `--model ID` for direct startup. See the TUI guide for controls, plugin environment selections and recovery.
+The separate [`tui/` module](tui/README.md) provides `axlr-tui`: OpenRouter streaming, `/mcp` installation and approval for AXLR connections, `/plugin` installation from Codex marketplaces, local and MCP tools, saved sessions and transcript search. Build it from this checkout with `go -C tui build -o /tmp/axlr-tui ./cmd/axlr-tui`, then supply `OPENROUTER_API_KEY` in the environment and run `/tmp/axlr-tui`. It uses the current workspace; type `/model` to choose a model, or pass `--model ID` for direct startup. See the TUI guide for controls, plugin environment selections and recovery.
 
 Root and TUI modules have separate test gates. The root library has no terminal dependencies; the JSON worker above keeps its one-request contract.
 

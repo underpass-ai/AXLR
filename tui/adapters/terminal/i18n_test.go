@@ -170,8 +170,8 @@ func TestSpanishSurfacesAndStoredContent(t *testing.T) {
 	m.Plugins = NewPluginPanel()
 	m.Plugins.Theme = m.Theme
 	m.Plugins.SetItems([]domain.PluginState{pluginItem("kmp")})
-	m.overlay = "plugins"
-	if !strings.Contains(m.View().Content, "aprobación explícita") || !strings.Contains(m.Plugins.Details.GetContent(), "Herramientas permitidas") {
+	m.overlay = "mcp"
+	if !strings.Contains(m.View().Content, "servidores y herramientas") || !strings.Contains(m.Plugins.Details.GetContent(), "Herramientas permitidas") {
 		t.Fatalf("plugin panel is not localized: view=%q details=%q", m.View().Content, m.Plugins.Details.GetContent())
 	}
 	state := domain.SessionState{Messages: []root.Message{{Role: root.RoleUser, Content: "Exact user text · no translation"}}}

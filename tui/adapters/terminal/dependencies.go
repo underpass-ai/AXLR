@@ -11,6 +11,7 @@ type Dependencies struct {
 	Context           context.Context
 	Diagnostics       application.DiagnosticPort
 	Plugins           application.PluginManagementPort
+	InstalledPlugins  application.InstalledPluginPort
 	Models            application.ListModelsUseCase
 	ModelPreference   application.ModelPreferencePort
 	UIPreferenceStore application.UIPreferencePort
