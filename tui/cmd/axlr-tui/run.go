@@ -176,6 +176,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, getenv)
 	pluginManager.SetURLInstaller(configStore.AddURL)
 	pluginManager.Diagnostics = trace
+	approvalSettings, err := storage.NewApprovalSettings(filepath.Join(filepath.Dir(configPath), "approvals.json"), pluginManager)
+	if err != nil {
+		return fail(err)
+	}
 	executor, err := runtime.New(runtime.Config{Root: workspacePath, Env: localRuntimeEnvironment(getenv), Plugins: manager})
 	if err != nil {
 		return fail(err)
@@ -266,14 +270,15 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ModelPreference:   preferences,
 		UIPreferenceStore: uiStore,
 		UIPreferences:     uiPreferences,
+		ApprovalSettings:  approvalSettings,
 		Locale:            locale,
 		Create:            application.CreateSessionUseCase{Store: loggedStore},
 		Change:            application.ChangeSessionModelUseCase{Store: loggedStore},
 		Workspace:         workspace,
 		NewSessionID:      newID,
-		Start:             application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: pluginManager},
-		Resolve:           application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: pluginManager, Store: loggedStore, Continue: continuation, Diagnostics: trace},
-		Agent:             application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: pluginManager},
+		Start:             application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: approvalSettings},
+		Resolve:           application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: approvalSettings, Store: loggedStore, Continue: continuation, Diagnostics: trace},
+		Agent:             application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: approvalSettings},
 		Search:            application.SearchSessionUseCase{},
 		Store:             loggedStore,
 		Session:           session,

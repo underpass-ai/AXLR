@@ -32,6 +32,8 @@ func (d ApprovalDialog) Intent(msg tea.Msg) domain.ToolDecision {
 		switch k.String() {
 		case "a":
 			return domain.DecisionApprove
+		case "l":
+			return domain.DecisionAutoApprove
 		case "d":
 			return domain.DecisionDeny
 		}
@@ -40,6 +42,8 @@ func (d ApprovalDialog) Intent(msg tea.Msg) domain.ToolDecision {
 		switch click {
 		case "approve":
 			return domain.DecisionApprove
+		case "always-allow":
+			return domain.DecisionAutoApprove
 		case "deny":
 			return domain.DecisionDeny
 		}
@@ -47,6 +51,6 @@ func (d ApprovalDialog) Intent(msg tea.Msg) domain.ToolDecision {
 	return ""
 }
 func (d ApprovalDialog) View(theme Theme, z *zone.Manager, prefix string, width, height int) string {
-	footer := z.Mark(prefix+"approve", "["+theme.T("approval.approve")+"]") + "  " + z.Mark(prefix+"deny", "["+theme.T("approval.deny")+"]") + "  " + z.Mark(prefix+"cancel", "["+theme.T("common.cancel")+"]")
+	footer := z.Mark(prefix+"approve", "["+theme.T("approval.approve")+"]") + "  " + z.Mark(prefix+"always-allow", "["+theme.T("approval.alwaysAllow")+"]") + "  " + z.Mark(prefix+"deny", "["+theme.T("approval.deny")+"]") + "  " + z.Mark(prefix+"cancel", "["+theme.T("common.cancel")+"]")
 	return theme.Overlay(theme.T("approval.title"), theme.T("approval.subtitle"), d.Details.View(), footer, width, height)
 }

@@ -58,6 +58,10 @@ type AppModel struct {
 	submittedPrompt     string
 	submittedAt         int
 	unsentPrompts       []string
+	steerPrompt         string
+	promptHistory       []string
+	historyIndex        int
+	historyDraft        string
 	events              <-chan tea.Msg
 	cancel              context.CancelFunc
 	zones               *zone.Manager
@@ -102,6 +106,7 @@ func New(deps Dependencies) AppModel {
 	if deps.Session != nil {
 		m.Header.State = deps.Session.Export()
 	}
+	m.resetPromptHistory()
 	m.Activity.SetSession(m.Header.State)
 	for _, record := range m.Header.State.Activity {
 		m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
@@ -111,6 +116,9 @@ func New(deps Dependencies) AppModel {
 	}
 	m.Status.State = m.Header.State.Status
 	m.Status.Locale = m.Theme.Locale
+	if deps.ApprovalSettings != nil {
+		m.Status.Autonomous = deps.ApprovalSettings.Autonomous()
+	}
 	m.refreshTranscript()
 	m.syncApproval()
 	return m
@@ -203,6 +211,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.memoryActive = v.Memory
 		}
 		if v.Kind == application.EventStreamStart {
+			if m.steerPrompt != "" && m.cancel != nil {
+				m.cancel()
+			}
 			m.toolExecuting = false
 			m.Status.Phase = domain.ProviderWaiting
 			m.providerWaiting = true
@@ -317,6 +328,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Activity = ToolActivity{Locale: m.Theme.Locale}
 			m.Activity.SetSession(m.Header.State)
 			m.unsentPrompts = nil
+			m.resetPromptHistory()
 			m.draft = ""
 			m.draftOperationID = 0
 			for _, record := range m.Header.State.Activity {
@@ -336,6 +348,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.submittedPrompt = ""
 		m.Status.State = v.Session.Status()
+		if m.deps.ApprovalSettings != nil {
+			m.Status.Autonomous = m.deps.ApprovalSettings.Autonomous()
+		}
 		state := v.Session.Export()
 		if assistantInMessages(state.Messages, m.streamMessages) || (m.draftOperationID == v.ID && state.Draft == root.Text(m.draft)) {
 			m.draft = ""
@@ -354,11 +369,54 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.refreshTranscript()
 		m.syncApproval()
+		if m.steerPrompt != "" {
+			prompt := root.Text(m.steerPrompt)
+			m.steerPrompt = ""
+			m.submittedPrompt = string(prompt)
+			m.submittedAt = len(m.Header.State.Messages)
+			start := m.deps.Start
+			store := m.deps.Store
+			cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+				if len(s.Pending()) != 0 {
+					next := *s
+					if err := next.CancelPending(); err != nil {
+						return err
+					}
+					if err := store.Save(ctx, next); err != nil {
+						return err
+					}
+					*s = next
+				}
+				return start.Execute(ctx, s, prompt, emit)
+			})
+			return m, cmd
+		}
 		return m, nil
 	case ControlIntent:
 		switch v {
 		case "send":
 			command := strings.TrimSpace(m.Composer.Input.Value())
+			if command == "/approvals" {
+				m.Composer.Input.Reset()
+				return m.Update(ControlIntent("approvals"))
+			}
+			if command == "/autonomy on" || command == "/autonomy off" || command == "/autonomy" {
+				settings := m.deps.ApprovalSettings
+				if settings == nil {
+					m.Status.Error = m.Theme.T("error.approvalSettings")
+					return m, nil
+				}
+				if command != "/autonomy" {
+					if err := settings.SetAutonomous(m.lifetime.ctx, command == "/autonomy on"); err != nil {
+						m.Status.Error = err.Error()
+						return m, nil
+					}
+				}
+				m.Status.Autonomous = settings.Autonomous()
+				m.Status.Error = ""
+				m.Composer.Input.Reset()
+				return m, nil
+			}
 			if command == "/theme" {
 				m.Composer.Input.Reset()
 				next, cmd, _ := m.navigation(ControlIntent("theme"))
@@ -384,6 +442,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return changed, cmd
 			}
+			if m.Busy && command != "" && (m.submittedPrompt != "" || m.Header.State.Status == domain.StatusStreaming || m.Header.State.Status == domain.StatusApproval || m.toolExecuting || m.providerWaiting) {
+				message := m.Composer.Input.Value()
+				m.rememberPrompt(message)
+				if m.steerPrompt == "" {
+					m.steerPrompt = message
+				} else {
+					m.steerPrompt += "\n\n" + message
+				}
+				m.Composer.Input.Reset()
+				if !m.toolExecuting && m.Header.State.Status != domain.StatusApproval && (m.providerWaiting || m.streamPending || m.draftOperationID == m.operationID) && m.cancel != nil {
+					m.cancel()
+				}
+				return m, nil
+			}
 			if m.Busy || strings.TrimSpace(m.Composer.Input.Value()) == "" {
 				return m, nil
 			}
@@ -400,6 +472,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			prompt := root.Text(m.Composer.Input.Value())
+			m.rememberPrompt(string(prompt))
 			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
@@ -431,6 +504,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyPressMsg:
 		switch v.String() {
+		case "up":
+			if m.overlay == "" && (m.historyIndex < len(m.promptHistory) || m.Composer.Input.Line() == 0) && m.previousPrompt() {
+				return m, nil
+			}
+		case "down":
+			if m.overlay == "" && m.historyIndex < len(m.promptHistory) && m.nextPrompt() {
+				return m, nil
+			}
 		case "enter":
 			return m.Update(m.Composer.Intent(v))
 		case "esc":
