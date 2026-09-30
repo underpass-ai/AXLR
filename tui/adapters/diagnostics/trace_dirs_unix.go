@@ -23,6 +23,26 @@ func secureTraceDirectories(path, base string) error {
 		if err != nil {
 			return fmt.Errorf("inspect diagnostic directory: %w", err)
 		}
+		isBase := index == len(parts)-3
+		private := index >= len(parts)-2
+		if info.Mode()&os.ModeSymlink != 0 {
+			// macOS exposes /var (and thus its temporary test directories)
+			// through a root-owned link to /private/var. Resolve only trusted
+			// system ancestors, never the state base or private AXLR paths.
+			link, ok := info.Sys().(*syscall.Stat_t)
+			if !ok || link.Uid != 0 || isBase || private {
+				return errors.New("diagnostic directory must be a real directory")
+			}
+			resolved, err := filepath.EvalSymlinks(current)
+			if err != nil {
+				return err
+			}
+			current = resolved
+			info, err = os.Lstat(current)
+			if err != nil {
+				return err
+			}
+		}
 		if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			return errors.New("diagnostic directory must be a real directory")
 		}
@@ -30,10 +50,9 @@ func secureTraceDirectories(path, base string) error {
 		if !ok || (stat.Uid != uint32(os.Geteuid()) && stat.Uid != 0) {
 			return errors.New("diagnostic directory has an untrusted owner")
 		}
-		if current == base && (stat.Uid != uint32(os.Geteuid()) || info.Mode().Perm()&0o022 != 0) {
+		if isBase && (stat.Uid != uint32(os.Geteuid()) || info.Mode().Perm()&0o022 != 0) {
 			return errors.New("diagnostic state directory must belong to this account and reject other writers")
 		}
-		private := index >= len(parts)-2
 		if info.Mode().Perm()&0o022 != 0 && (private || info.Mode()&os.ModeSticky == 0) {
 			return errors.New("diagnostic directory is writable by another account")
 		}

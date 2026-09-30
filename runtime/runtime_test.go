@@ -7,12 +7,22 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/underpass-ai/AXLR/dto"
 )
+
+func newTestExecutor(t *testing.T, config Config) (*Executor, error) {
+	t.Helper()
+	executor, err := New(config)
+	if err == nil {
+		t.Cleanup(func() { _ = executor.Close() })
+	}
+	return executor, err
+}
 
 func TestDecodeRejectsUnknownFieldAndSecondDocument(t *testing.T) {
 	for _, input := range []string{
@@ -45,7 +55,7 @@ func TestReadPaginatesUTF8AndFullDigest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("aéz"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	e, err := New(Config{Root: dir})
+	e, err := newTestExecutor(t, Config{Root: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +76,7 @@ func TestReadPaginatesUTF8AndFullDigest(t *testing.T) {
 
 func TestWriteCreateDoesNotClobberAndReplaceChecksDigest(t *testing.T) {
 	dir := t.TempDir()
-	e, err := New(Config{Root: dir})
+	e, err := newTestExecutor(t, Config{Root: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +101,7 @@ func TestWriteCreateDoesNotClobberAndReplaceChecksDigest(t *testing.T) {
 func TestEditRequiresExactlyOneMatch(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a a"), 0600)
-	e, err := New(Config{Root: dir})
+	e, err := newTestExecutor(t, Config{Root: dir})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +116,10 @@ func TestEditRequiresExactlyOneMatch(t *testing.T) {
 }
 
 func TestExecDistinguishesExitCodeFromStartFailure(t *testing.T) {
-	e, err := New(Config{Root: t.TempDir()})
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
+	e, err := newTestExecutor(t, Config{Root: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +143,7 @@ func TestReadRejectsEscapedSymlinkAndSplitOffset(t *testing.T) {
 	os.WriteFile(filepath.Join(outside, "secret"), []byte("secret"), 0600)
 	os.Symlink(filepath.Join(outside, "secret"), filepath.Join(dir, "link"))
 	os.WriteFile(filepath.Join(dir, "utf8"), []byte("é"), 0600)
-	e, _ := New(Config{Root: dir})
+	e, _ := newTestExecutor(t, Config{Root: dir})
 	for _, a := range []string{`{"path":"../secret"}`, `{"path":"link"}`, `{"path":"utf8","offset_bytes":1}`} {
 		r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r", Tool: "read", Arguments: json.RawMessage(a)})
 		if r.Status == "completed" {
@@ -145,14 +158,14 @@ func TestWriteReplaceKeepsOrdinaryPermissionsAndEditChangesOneMatch(t *testing.T
 	if err := os.WriteFile(path, []byte("old"), 0640); err != nil {
 		t.Fatal(err)
 	}
-	e, _ := New(Config{Root: dir})
+	e, _ := newTestExecutor(t, Config{Root: dir})
 	oldDigest := "cba06b5736faf67e54b07b561eae94395e774c517a7d910a54369e1263ccfbd4"
 	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "w", Tool: "write", Arguments: json.RawMessage(`{"path":"a","content":"new","mode":"replace","expected_sha256":"` + oldDigest + `"}`)})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
 	}
 	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0640 {
+	if goruntime.GOOS != "windows" && info.Mode().Perm() != 0640 {
 		t.Fatalf("mode %o", info.Mode().Perm())
 	}
 	r = e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "e", Tool: "edit", Arguments: json.RawMessage(`{"path":"a","old_text":"new","new_text":"done"}`)})
@@ -166,7 +179,10 @@ func TestWriteReplaceKeepsOrdinaryPermissionsAndEditChangesOneMatch(t *testing.T
 }
 
 func TestExecTimeoutAndOutputLimit(t *testing.T) {
-	e, _ := New(Config{Root: t.TempDir()})
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
+	e, _ := newTestExecutor(t, Config{Root: t.TempDir()})
 	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "x", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","printf 12345; printf abcde >&2"],"max_output_bytes":5}`)})
 	if r.Status != "completed" {
 		t.Fatalf("%+v", r)
@@ -188,7 +204,7 @@ func TestExecTimeoutAndOutputLimit(t *testing.T) {
 }
 
 func TestExecRejectsOverflowTimeout(t *testing.T) {
-	e, _ := New(Config{Root: t.TempDir(), MaxTimeout: time.Minute})
+	e, _ := newTestExecutor(t, Config{Root: t.TempDir(), MaxTimeout: time.Minute})
 	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "x", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","timeout_ms":9223372036854775807}`)})
 	if r.Status != "rejected" {
 		t.Fatalf("%+v", r)
@@ -196,7 +212,10 @@ func TestExecRejectsOverflowTimeout(t *testing.T) {
 }
 
 func TestExecDefaultsRespectReducedHostProfile(t *testing.T) {
-	e, err := New(Config{Root: t.TempDir(), MaxOutputBytes: 4, MaxTimeout: time.Second})
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
+	e, err := newTestExecutor(t, Config{Root: t.TempDir(), MaxOutputBytes: 4, MaxTimeout: time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +230,7 @@ func TestExecDefaultsRespectReducedHostProfile(t *testing.T) {
 }
 
 func TestExecPassesLiteralArgvAndStdinWithoutInheritedEnvironment(t *testing.T) {
-	e, err := New(Config{Root: t.TempDir(), Env: []string{"AXLR_TEST_HELPER=1"}})
+	e, err := newTestExecutor(t, Config{Root: t.TempDir(), Env: []string{"AXLR_TEST_HELPER=1"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +248,7 @@ func TestExecPassesLiteralArgvAndStdinWithoutInheritedEnvironment(t *testing.T) 
 func TestExecCancellationStopsRunningProcess(t *testing.T) {
 	dir := t.TempDir()
 	marker := filepath.Join(dir, "started")
-	e, err := New(Config{Root: dir, Env: []string{"AXLR_TEST_HELPER=1"}})
+	e, err := newTestExecutor(t, Config{Root: dir, Env: []string{"AXLR_TEST_HELPER=1"}})
 	if err != nil {
 		t.Fatal(err)
 	}

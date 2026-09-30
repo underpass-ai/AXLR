@@ -6,7 +6,8 @@ temp=$(mktemp -d)
 container="axlr-smoke-$$"
 cleanup() {
   docker rm -f "$container" >/dev/null 2>&1 || true
-  rm -rf "$temp"
+  # The non-root container creates private state directories owned by its UID.
+  sudo -n rm -rf -- "$temp" || rm -rf -- "$temp"
 }
 trap cleanup EXIT
 

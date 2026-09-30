@@ -23,7 +23,7 @@ func TestReadEmptyFileInvalidTextAndMissingPath(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "empty"), nil, 0600)
 	os.WriteFile(filepath.Join(dir, "bad"), []byte{0xff}, 0600)
 	os.Mkdir(filepath.Join(dir, "sub"), 0700)
-	e, _ := New(Config{Root: dir})
+	e, _ := newTestExecutor(t, Config{Root: dir})
 	r := invoke(t, e, "read", `{"path":"empty"}`)
 	if r.Status != "completed" || r.Output.(dto.ReadOutput).ContentSHA256 == "" {
 		t.Fatalf("%+v", r)
@@ -44,7 +44,7 @@ func TestReadEmptyFileInvalidTextAndMissingPath(t *testing.T) {
 func TestWriteAndEditRejectInvalidPreconditionsWithoutMutating(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a"), []byte("alpha"), 0600)
-	e, _ := New(Config{Root: dir, MaxFileBytes: 8})
+	e, _ := newTestExecutor(t, Config{Root: dir, MaxFileBytes: 8})
 	cases := []struct{ tool, args, code string }{
 		{"write", `{"path":"a","content":"x","mode":"replace"}`, "invalid_arguments"},
 		{"write", `{"path":"a","content":"x","mode":"create"}`, "conflict"},
@@ -66,10 +66,13 @@ func TestWriteAndEditRejectInvalidPreconditionsWithoutMutating(t *testing.T) {
 }
 
 func TestExecUsesOnlyConfiguredPATHAndRejectsEscapedCwd(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
 	dir := t.TempDir()
 	outside := t.TempDir()
 	os.Symlink(outside, filepath.Join(dir, "link"))
-	e, _ := New(Config{Root: dir, Env: []string{"PATH=/bin"}})
+	e, _ := newTestExecutor(t, Config{Root: dir, Env: []string{"PATH=/bin"}})
 	r := invoke(t, e, "exec", `{"program":"sh","args":["-c","printf path-ok"]}`)
 	if r.Status != "completed" || r.Output.(dto.ExecOutput).Stdout != "path-ok" {
 		t.Fatalf("%+v", r)
@@ -105,7 +108,7 @@ func TestSerializedResponseLimitIncludesEscapes(t *testing.T) {
 func TestHostProfileValidation(t *testing.T) {
 	dir := t.TempDir()
 	for _, c := range []Config{{Root: dir, MaxTimeout: 6 * time.Minute}, {Root: dir, MaxReadBytes: 2 << 20}, {Root: dir, Env: []string{"BAD"}}, {Root: filepath.Join(dir, "missing")}} {
-		if e, err := New(c); err == nil {
+		if e, err := newTestExecutor(t, c); err == nil {
 			e.Close()
 			t.Fatalf("accepted %+v", c)
 		}
@@ -122,7 +125,7 @@ func TestDecodeRejectsMalformedUTF8InsteadOfReplacingIt(t *testing.T) {
 
 func TestExecuteRejectsMalformedRawArgumentBeforeFileMutation(t *testing.T) {
 	dir := t.TempDir()
-	e, _ := New(Config{Root: dir})
+	e, _ := newTestExecutor(t, Config{Root: dir})
 	raw := append([]byte(`{"path":"a","mode":"create","content":"`), 0xff)
 	raw = append(raw, []byte(`"}`)...)
 	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "bad", Tool: "write", Arguments: raw})
@@ -149,7 +152,7 @@ func TestEditRejectsOverlappingMatches(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "a")
 	os.WriteFile(path, []byte("aaa"), 0600)
-	e, _ := New(Config{Root: dir})
+	e, _ := newTestExecutor(t, Config{Root: dir})
 	r := invoke(t, e, "edit", `{"path":"a","old_text":"aa","new_text":"b"}`)
 	if r.Error == nil || r.Error.Code != "conflict" {
 		t.Fatalf("%+v", r)
@@ -171,7 +174,7 @@ func TestReadRejectsFIFOWithoutBlocking(t *testing.T) {
 	if err := os.Symlink("pipe", filepath.Join(dir, "pipe-link")); err != nil {
 		t.Fatal(err)
 	}
-	e, _ := New(Config{Root: dir})
+	e, _ := newTestExecutor(t, Config{Root: dir})
 	for _, name := range []string{"pipe", "pipe-link"} {
 		done := make(chan dto.Response, 1)
 		go func() { done <- invoke(t, e, "read", `{"path":"`+name+`"}`) }()
