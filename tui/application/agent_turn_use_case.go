@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -28,7 +27,7 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := rejectUnknown(ctx, s, u.Continue.Store, emit); err != nil {
+		if err := rejectUnknown(ctx, s, u.Continue.Store, emit, u.Continue.Diagnostics); err != nil {
 			return err
 		}
 		if s.Status() == domain.StatusApproval && len(s.Pending()) > 0 && u.Approval != nil {
@@ -58,20 +57,15 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 	}
 	return domain.AvailableTool{}, false
 }
-func rejectUnknown(ctx context.Context, s *domain.Session, store SessionStorePort, emit func(Event) error) error {
+func rejectUnknown(ctx context.Context, s *domain.Session, store SessionStorePort, emit func(Event) error, trace DiagnosticPort) error {
 	for s.Status() == domain.StatusApproval && len(s.Pending()) > 0 {
 		p := s.Pending()[0]
 		if _, known := findTool(s, p.Call.Name); known {
 			return nil
 		}
-		next := *s
-		if err := next.RecordToolOutcome(p.Call.ID, domain.DecisionDeny, domain.ToolOutcome{Content: root.Text(fmt.Sprintf("unknown tool %q rejected", p.Call.Name)), IsError: true}); err != nil {
+		if err := rejectUnknownCall(ctx, s, store, trace, p); err != nil {
 			return err
 		}
-		if err := store.Save(ctx, next); err != nil {
-			return err
-		}
-		*s = next
 		if err := emitTool(s, p.Call.ID, emit); err != nil {
 			return err
 		}

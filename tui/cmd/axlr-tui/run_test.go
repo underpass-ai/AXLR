@@ -22,7 +22,13 @@ import (
 
 func cliEnv(t *testing.T) map[string]string {
 	t.Helper()
-	return map[string]string{"OPENROUTER_API_KEY": "test-key-never-print", "XDG_STATE_HOME": t.TempDir(), "HOME": t.TempDir()}
+	state, home := t.TempDir(), t.TempDir()
+	for _, path := range []string{state, home} {
+		if err := os.Chmod(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return map[string]string{"OPENROUTER_API_KEY": "test-key-never-print", "XDG_STATE_HOME": state, "HOME": home}
 }
 func TestRunRejectsInvalidConfigurationBeforeLaunch(t *testing.T) {
 	rootDir := t.TempDir()

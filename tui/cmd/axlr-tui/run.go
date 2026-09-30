@@ -49,7 +49,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	flags.SetOutput(io.Discard)
 	workspaceFlag := flags.String("root", ".", "existing workspace root (default current directory)")
 	modelFlag := flags.String("model", "", "OpenRouter model ID (optional; choose with /model)")
-	traceFlag := flags.String("trace-file", "", "append privacy-safe TUI diagnostics to JSONL file")
+	traceFlag := flags.String("trace-file", "", "privacy-safe JSONL diagnostics (default a private file under $XDG_STATE_HOME/axlr/logs)")
+	tracePayloads := flags.Bool("trace-payloads", true, "capture redacted request/response bodies in a private per-run directory")
 	sessionFlag := flags.String("session", "", "saved session ID")
 	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
 	var paths, selections []string
@@ -66,20 +67,29 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if flags.NArg() != 0 {
 		return fail(errors.New("positional arguments are not accepted"))
 	}
-	if *traceFlag != "" {
-		logger, openErr := diagnostics.Open(*traceFlag)
-		if openErr != nil {
-			return fail(openErr)
+	tracePath := *traceFlag
+	var logger *diagnostics.FileLogger
+	var openErr error
+	if tracePath == "" {
+		logger, tracePath, openErr = diagnostics.OpenDefault(getenv)
+	} else {
+		tracePath, openErr = filepath.Abs(tracePath)
+		if openErr == nil {
+			logger, openErr = diagnostics.Open(tracePath)
 		}
-		defer func() {
-			if logger.Close() != nil {
-				fmt.Fprintln(stderr, "axlr-tui: diagnostic trace incomplete")
-			}
-		}()
-		trace = logger
-		_ = trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticStartup})
-		defer trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticShutdown})
 	}
+	if openErr != nil {
+		return fail(openErr)
+	}
+	defer func() {
+		if logger.Close() != nil {
+			fmt.Fprintln(stderr, "axlr-tui: diagnostic trace incomplete")
+		}
+	}()
+	trace = logger
+	fmt.Fprintln(stderr, "axlr-tui: diagnostics:", tracePath)
+	_ = trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticStartup})
+	defer trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticShutdown})
 	workspacePath, err := filepath.Abs(*workspaceFlag)
 	if err != nil {
 		return fail(err)
@@ -101,7 +111,20 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	var transport http.RoundTripper = http.DefaultTransport
 	if trace != nil {
-		transport = diagnostics.Transport{Next: transport, Trace: trace}
+		var payloads *diagnostics.PayloadRecorder
+		if *tracePayloads {
+			payloadDirectory, createErr := os.MkdirTemp(filepath.Dir(tracePath), filepath.Base(tracePath)+".payloads-")
+			if createErr != nil {
+				return fail(createErr)
+			}
+			payloads, err = diagnostics.NewPayloadRecorder(payloadDirectory, key)
+			if err != nil {
+				_ = os.Remove(payloadDirectory)
+				return fail(err)
+			}
+			fmt.Fprintln(stderr, "axlr-tui: payloads:", payloadDirectory)
+		}
+		transport = diagnostics.Transport{Next: transport, Trace: trace, Payloads: payloads}
 	}
 	clientHTTP := &http.Client{Transport: transport}
 	defer clientHTTP.CloseIdleConnections()
@@ -143,6 +166,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	defer manager.Close()
 	configStore := storage.MCPConfigStore{Path: configPath}
 	pluginManager := axlr.NewPluginManager(manager, profiles, configStore.SaveApproval)
+	pluginManager.Diagnostics = trace
 	executor, err := runtime.New(runtime.Config{Root: workspacePath, Plugins: manager})
 	if err != nil {
 		return fail(err)
@@ -204,7 +228,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 	}
 	continuation := application.ContinueTurnUseCase{Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace}
-	runner := axlr.ToolRunner{Executor: executor}
+	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
 	app := terminal.New(terminal.Dependencies{
 		Context:         ctx,
 		Diagnostics:     trace,
@@ -215,7 +239,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Change:          application.ChangeSessionModelUseCase{Store: loggedStore},
 		Workspace:       workspace,
 		NewSessionID:    newID,
-		Start:           application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: pluginManager},
+		Start:           application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: pluginManager},
 		Resolve:         application.ResolveToolUseCase{Tools: runner, Approval: pluginManager, Store: loggedStore, Continue: continuation, Diagnostics: trace},
 		Agent:           application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: pluginManager},
 		Search:          application.SearchSessionUseCase{},

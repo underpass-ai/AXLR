@@ -17,6 +17,7 @@ type FileLogger struct {
 	mu      sync.Mutex
 	file    *os.File
 	failure error
+	runID   uint64
 }
 
 // Open creates or appends to a regular file with owner-only permissions.
@@ -43,7 +44,7 @@ func Open(path string) (*FileLogger, error) {
 		file.Close()
 		return nil, fmt.Errorf("secure diagnostic log: %w", err)
 	}
-	return &FileLogger{file: file}, nil
+	return &FileLogger{file: file, runID: uint64(time.Now().UnixNano())}, nil
 }
 
 // Record validates all string labels before serializing them. Callers may
@@ -52,13 +53,23 @@ func (logger *FileLogger) Record(event application.DiagnosticEvent) error {
 	if !event.Stage.Valid() || !event.ErrorClass.Valid() {
 		return errors.New("invalid diagnostic event label")
 	}
-	if event.Chunks < 0 || event.Bytes < 0 || event.ElapsedMilliseconds < 0 || event.Width < 0 || event.Height < 0 {
+	if event.ToolOrdinal < 0 || event.PluginOrdinal < 0 || event.ElapsedMicroseconds < 0 || event.Messages < 0 || event.Tools < 0 || event.HTTPStatus < 0 || event.Chunks < 0 || event.Bytes < 0 || event.ElapsedMilliseconds < 0 || event.Width < 0 || event.Height < 0 {
 		return errors.New("negative diagnostic measurement")
 	}
+	if event.Endpoint != "" && !event.Endpoint.Valid() {
+		return errors.New("invalid diagnostic endpoint")
+	}
+	if event.Action != "" && !event.Action.Valid() {
+		return errors.New("invalid diagnostic action")
+	}
+	if (event.Stage == application.DiagnosticActionStart || event.Stage == application.DiagnosticActionEnd) && (!event.Action.Valid() || event.SpanID == 0) {
+		return errors.New("diagnostic action requires span and valid action")
+	}
 	record := struct {
+		RunID     uint64    `json:"run_id"`
 		Timestamp time.Time `json:"timestamp"`
 		application.DiagnosticEvent
-	}{Timestamp: time.Now().UTC(), DiagnosticEvent: event}
+	}{RunID: logger.runID, Timestamp: time.Now().UTC(), DiagnosticEvent: event}
 	line, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("encode diagnostic event: %w", err)

@@ -23,7 +23,18 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	tools, err := u.Catalog.Snapshot(ctx)
+	toolsCtx, toolsSpan := StartDiagnosticSpan(ctx, u.Continue.Diagnostics, DiagnosticActionTools, DiagnosticEvent{})
+	tools, err := u.Catalog.Snapshot(toolsCtx)
+	class := DiagnosticErrorNone
+	if err != nil {
+		class = DiagnosticErrorTool
+		if errors.Is(err, context.Canceled) {
+			class = DiagnosticErrorCancelled
+		} else if errors.Is(err, context.DeadlineExceeded) {
+			class = DiagnosticErrorTimeout
+		}
+	}
+	toolsSpan.End(class)
 	if err != nil {
 		return err
 	}

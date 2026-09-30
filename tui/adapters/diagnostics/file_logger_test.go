@@ -148,3 +148,41 @@ func TestFileLoggerSerializesConcurrentRecordsAndCloses(t *testing.T) {
 		t.Fatalf("records = %d; want 100", count)
 	}
 }
+
+func TestFileLoggerRejectsInvalidActionAndKeepsDistinctRunIDs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "trace.jsonl")
+	logger, err := diagnostics.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range []application.DiagnosticEvent{
+		{Stage: application.DiagnosticActionStart},
+		{Stage: application.DiagnosticActionEnd, SpanID: 1, Action: "secret"},
+		{Stage: application.DiagnosticRender, ElapsedMicroseconds: -1},
+	} {
+		if logger.Record(e) == nil {
+			t.Fatal("invalid span accepted")
+		}
+	}
+	_ = logger.Record(application.DiagnosticEvent{Stage: application.DiagnosticStartup})
+	_ = logger.Close()
+	logger, err = diagnostics.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = logger.Record(application.DiagnosticEvent{Stage: application.DiagnosticStartup})
+	_ = logger.Close()
+	data, _ := os.ReadFile(path)
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 2 {
+		t.Fatal(string(data))
+	}
+	var first, second struct {
+		RunID uint64 `json:"run_id"`
+	}
+	_ = json.Unmarshal([]byte(lines[0]), &first)
+	_ = json.Unmarshal([]byte(lines[1]), &second)
+	if first.RunID == 0 || first.RunID == second.RunID {
+		t.Fatal("run IDs reused")
+	}
+}

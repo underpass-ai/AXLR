@@ -30,7 +30,20 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 	}
 	return u.advance(ctx, s, emit)
 }
-func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) error {
+func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) (returnErr error) {
+	ctx, span := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolResolve, DiagnosticEvent{ToolOrdinal: toolDiagnosticOrdinal(s, id)})
+	spanClass := DiagnosticErrorNone
+	defer func() {
+		if returnErr != nil {
+			spanClass = DiagnosticErrorTool
+			if errors.Is(returnErr, context.Canceled) {
+				spanClass = DiagnosticErrorCancelled
+			} else if errors.Is(returnErr, context.DeadlineExceeded) {
+				spanClass = DiagnosticErrorTimeout
+			}
+		}
+		span.End(spanClass)
+	}()
 	if s == nil || u.Store == nil {
 		return errors.New("resolve tool requires session and store")
 	}
@@ -53,11 +66,11 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		if decision == domain.DecisionDeny {
 			stage = DiagnosticToolRejected
 		}
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: stage})
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: stage, SpanID: CurrentDiagnosticSpan(ctx)})
 	}
 	tool, known := findTool(s, pending[0].Call.Name)
 	if !known {
-		return rejectUnknown(ctx, s, u.Store, emit)
+		return rejectUnknown(ctx, s, u.Store, emit, u.Diagnostics)
 	}
 	if decision == domain.DecisionAutoApprove && (u.Approval == nil || !u.Approval.AutoApproves(tool.Identity)) {
 		return errors.New("tool is not configured for automatic approval")
@@ -90,6 +103,9 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			return err
 		}
 		outcome, runErr := u.Tools.Execute(ctx, tool.Identity, pending[0].Call.Arguments)
+		if outcome.IsError || outcome.Uncertain {
+			spanClass = DiagnosticErrorTool
+		}
 		runErr = errors.Join(runErr, ctx.Err())
 		if runErr != nil {
 			outcome = domain.ToolOutcome{Content: root.Text(fmt.Sprintf("tool execution failed; effect unknown: %v", runErr)), IsError: true, Uncertain: true}
@@ -115,19 +131,19 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		}
 		*s = next
 		if runErr != nil {
-			u.recordToolCompletion(started, DiagnosticErrorTool)
+			u.recordToolCompletion(ctx, started, DiagnosticErrorTool)
 			return errors.Join(runErr, emitTool(s, id, emit), emit(Event{Kind: EventState, State: s.Status()}))
 		}
 	}
 	if err := emitTool(s, id, emit); err != nil {
 		return err
 	}
-	u.recordToolCompletion(started, DiagnosticErrorNone)
+	u.recordToolCompletion(ctx, started, spanClass)
 	return emitSession(s, emit)
 }
-func (u ResolveToolUseCase) recordToolCompletion(started time.Time, class DiagnosticErrorClass) {
+func (u ResolveToolUseCase) recordToolCompletion(ctx context.Context, started time.Time, class DiagnosticErrorClass) {
 	if u.Diagnostics != nil {
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolCompleted, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolCompleted, SpanID: CurrentDiagnosticSpan(ctx), ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
 	}
 }
 func (u ResolveToolUseCase) advance(ctx context.Context, s *domain.Session, emit func(Event) error) error {

@@ -97,6 +97,8 @@ func (m AppModel) Init() tea.Cmd {
 	return tea.RequestBackgroundColor
 }
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionUpdate, application.DiagnosticEvent{OperationID: m.operationID})
+	defer span.End(application.DiagnosticErrorNone)
 	if next, cmd, handled := m.navigation(msg); handled {
 		return next, cmd
 	}
@@ -333,7 +335,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			prompt := root.Text(m.Composer.Input.Value())
-			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, Bytes: len(prompt)})
+			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
 			m.Composer.Input.Reset()
@@ -403,6 +405,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 func (m AppModel) View() tea.View {
+	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionRender, application.DiagnosticEvent{OperationID: m.operationID, Width: max(0, m.Layout.Width), Height: max(0, m.Layout.Height)})
+	defer span.End(application.DiagnosticErrorNone)
 	var started time.Time
 	if m.deps.Diagnostics != nil {
 		started = time.Now()

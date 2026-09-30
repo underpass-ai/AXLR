@@ -5,16 +5,18 @@ import (
 	"errors"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"sync"
 )
 
 // PluginManager projects plugin capabilities and exact, persisted authorization policies.
 type PluginManager struct {
-	manager  *plugins.Manager
-	mu       sync.RWMutex
-	profiles []domain.PluginProfile
-	persist  func(context.Context, root.PluginID, domain.ApprovalMode) error
+	Diagnostics application.DiagnosticPort
+	manager     *plugins.Manager
+	mu          sync.RWMutex
+	profiles    []domain.PluginProfile
+	persist     func(context.Context, root.PluginID, domain.ApprovalMode) error
 }
 
 func NewPluginManager(manager *plugins.Manager, profiles []domain.PluginProfile, persist func(context.Context, root.PluginID, domain.ApprovalMode) error) *PluginManager {
@@ -41,7 +43,15 @@ func (m *PluginManager) AutoApproves(identity domain.ToolIdentity) bool {
 	return false
 }
 
-func (m *PluginManager) List(ctx context.Context) ([]domain.PluginState, error) {
+func (m *PluginManager) List(ctx context.Context) (result []domain.PluginState, returnErr error) {
+	ctx, span := application.StartDiagnosticSpan(ctx, m.Diagnostics, application.DiagnosticActionTools, application.DiagnosticEvent{})
+	class := application.DiagnosticErrorNone
+	defer func() {
+		if returnErr != nil {
+			class = pluginDiagnosticError(returnErr)
+		}
+		span.End(class)
+	}()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -54,17 +64,21 @@ func (m *PluginManager) List(ctx context.Context) ([]domain.PluginState, error) 
 		return states, nil
 	}
 	if m.manager == nil {
+		class = application.DiagnosticErrorTool
 		for i := range states {
 			states[i].Error = "MCP manager is unavailable"
 		}
 		return states, nil
 	}
 	for i, profile := range profiles {
-		tools, err := m.manager.ListServer(ctx, profile.ID)
+		serverCtx, serverSpan := application.StartDiagnosticSpan(ctx, m.Diagnostics, application.DiagnosticActionPluginDiscovery, application.DiagnosticEvent{PluginOrdinal: pluginOrdinal(profiles, profile.ID)})
+		tools, err := m.manager.ListServer(serverCtx, profile.ID)
+		serverSpan.End(pluginDiagnosticError(errors.Join(err, ctx.Err())))
 		if ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
 		if err != nil {
+			class = application.DiagnosticErrorTool
 			// Process errors can contain paths or environment values. Only expose a safe status.
 			states[i].Error = "MCP discovery failed; check the configured server"
 			continue
@@ -78,7 +92,15 @@ func (m *PluginManager) List(ctx context.Context) ([]domain.PluginState, error) 
 	return states, nil
 }
 
-func (m *PluginManager) SetApproval(ctx context.Context, id root.PluginID, mode domain.ApprovalMode) error {
+func (m *PluginManager) SetApproval(ctx context.Context, id root.PluginID, mode domain.ApprovalMode) (returnErr error) {
+	ctx, span := application.StartDiagnosticSpan(ctx, m.Diagnostics, application.DiagnosticActionPluginPolicy, application.DiagnosticEvent{PluginOrdinal: pluginOrdinal(m.Profiles(), id)})
+	class := application.DiagnosticErrorNone
+	defer func() {
+		if returnErr != nil && class == application.DiagnosticErrorNone {
+			class = pluginDiagnosticError(returnErr)
+		}
+		span.End(class)
+	}()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -98,6 +120,10 @@ func (m *PluginManager) SetApproval(ctx context.Context, id root.PluginID, mode 
 			return errors.New("plugin approval requires a persistent configuration")
 		}
 		if err := m.persist(ctx, id, mode); err != nil {
+			class = application.DiagnosticErrorStorage
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				class = pluginDiagnosticError(err)
+			}
 			return err
 		}
 		m.profiles[i].Approval = mode

@@ -5,6 +5,18 @@ package application
 type DiagnosticStage string
 
 const (
+	DiagnosticActionStart       DiagnosticStage = "action_start"
+	DiagnosticActionEnd         DiagnosticStage = "action_end"
+	DiagnosticRequestSent       DiagnosticStage = "request_sent"
+	DiagnosticWireBytes         DiagnosticStage = "provider_wire_bytes"
+	DiagnosticFrame             DiagnosticStage = "provider_frame"
+	DiagnosticReasoning         DiagnosticStage = "provider_reasoning"
+	DiagnosticToolDelta         DiagnosticStage = "provider_tool_delta"
+	DiagnosticContent           DiagnosticStage = "provider_content"
+	DiagnosticHeartbeat         DiagnosticStage = "provider_heartbeat"
+	DiagnosticWireDone          DiagnosticStage = "provider_wire_done"
+	DiagnosticPayloadSaved      DiagnosticStage = "payload_saved"
+	DiagnosticPayloadFailed     DiagnosticStage = "payload_failed"
 	DiagnosticStartup           DiagnosticStage = "startup"
 	DiagnosticShutdown          DiagnosticStage = "shutdown"
 	DiagnosticModelCatalogStart DiagnosticStage = "model_catalog_start"
@@ -32,7 +44,10 @@ const (
 
 func (stage DiagnosticStage) Valid() bool {
 	switch stage {
-	case DiagnosticStartup, DiagnosticShutdown,
+	case DiagnosticActionStart, DiagnosticActionEnd, DiagnosticRequestSent, DiagnosticWireBytes, DiagnosticFrame, DiagnosticReasoning,
+		DiagnosticToolDelta, DiagnosticContent, DiagnosticHeartbeat, DiagnosticWireDone,
+		DiagnosticPayloadSaved, DiagnosticPayloadFailed,
+		DiagnosticStartup, DiagnosticShutdown,
 		DiagnosticModelCatalogStart, DiagnosticModelCatalogDone,
 		DiagnosticSessionLoad, DiagnosticSessionList, DiagnosticSessionSave, DiagnosticInputSubmitted,
 		DiagnosticOperationStarted, DiagnosticProviderStart, DiagnosticProviderHeaders,

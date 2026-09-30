@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -45,14 +44,17 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
 	}
+	_, contextSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionContext, DiagnosticEvent{Messages: len(session.Messages()), Tools: len(session.ToolSnapshot())})
 	req := root.CompletionRequest{Model: session.Export().Model, Messages: modelMessages(session)}
 	snapshot := session.ToolSnapshot()
 	for _, tool := range snapshot {
 		req.Tools = append(req.Tools, tool.Definition)
 	}
 	if err := req.Validate(); err != nil {
+		contextSpan.End(DiagnosticErrorInvalidState)
 		return interrupt(err)
 	}
+	contextSpan.End(DiagnosticErrorNone)
 	if err := emit(Event{Kind: EventStreamStart, MessageCount: len(session.Messages())}); err != nil {
 		return interrupt(err)
 	}
@@ -60,11 +62,12 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	started := time.Now()
+	modelCtx, modelSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionModel, DiagnosticEvent{Messages: len(req.Messages), Tools: len(req.Tools)})
 	if u.Diagnostics != nil {
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderStart})
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderStart, SpanID: CurrentDiagnosticSpan(modelCtx)})
 	}
 	chunks, bytes := 0, 0
-	result, err := u.Models.Stream(ctx, req, func(delta root.Text) error {
+	result, err := u.Models.Stream(modelCtx, req, func(delta root.Text) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
@@ -75,21 +78,23 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		chunks++
 		bytes += len(delta)
 		if u.Diagnostics != nil {
-			_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderProgress, Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds()})
+			_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderProgress, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds()})
 		}
 		return emit(Event{Kind: EventTextDelta, Text: delta})
 	})
-	if u.Diagnostics != nil {
-		class := DiagnosticErrorNone
-		if err != nil {
-			class = DiagnosticErrorProvider
-			if errors.Is(err, context.DeadlineExceeded) {
-				class = DiagnosticErrorTimeout
-			} else if errors.Is(err, context.Canceled) {
-				class = DiagnosticErrorCancelled
-			}
+	class := DiagnosticErrorNone
+	streamErr := errors.Join(err, ctx.Err())
+	if streamErr != nil {
+		class = DiagnosticErrorProvider
+		if errors.Is(streamErr, context.DeadlineExceeded) {
+			class = DiagnosticErrorTimeout
+		} else if errors.Is(streamErr, context.Canceled) {
+			class = DiagnosticErrorCancelled
 		}
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderDone, Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
+	}
+	modelSpan.End(class)
+	if u.Diagnostics != nil {
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderDone, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
 	}
 	if err != nil {
 		return interrupt(err)
@@ -98,7 +103,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	if len(result.Message.ToolCalls) > 0 && u.Diagnostics != nil {
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolRequested, Chunks: len(result.Message.ToolCalls)})
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolRequested, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: len(result.Message.ToolCalls)})
 	}
 	next := *session
 	if err := next.CompleteAssistant(result); err != nil {
@@ -133,15 +138,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		if known {
 			break
 		}
-		next = *session
-		outcome := domain.ToolOutcome{Content: root.Text(fmt.Sprintf("unknown tool %q rejected", pending.Call.Name)), IsError: true}
-		if err := next.RecordToolOutcome(pending.Call.ID, domain.DecisionDeny, outcome); err != nil {
+		if err := rejectUnknownCall(ctx, session, u.Store, u.Diagnostics, pending); err != nil {
 			return err
 		}
-		if err := u.Store.Save(ctx, next); err != nil {
-			return err
-		}
-		*session = next
 	}
 	// Export clones outcomes as well as slices so callbacks cannot alter history.
 	activity := session.Export().Activity
