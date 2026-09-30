@@ -20,6 +20,7 @@ const (
 	HostOperationTools    = "tools"
 	HostOperationCallTool = "call_tool"
 	HostOperationHistory  = "history"
+	HostOperationSkill    = "skill"
 )
 
 func NewLocalToolIdentity(operation string) (ToolIdentity, error) {
@@ -41,7 +42,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill:
 			return nil
 		}
 	case ToolKindLocal:

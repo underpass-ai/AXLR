@@ -230,3 +230,59 @@ func TestHistoryRecoveryPageSurvivesDefaultProjectionExactly(t *testing.T) {
 		t.Fatal("invalid recovery cursor", err)
 	}
 }
+
+func TestInstalledSkillHostToolIsAvailableWithoutApproval(t *testing.T) {
+	id, err := domain.NewHostToolIdentity("skill")
+	if err != nil {
+		t.Fatal("installed skill reader is not a host tool:", err)
+	}
+	if !automaticallyApproves(nil, id) {
+		t.Fatal("reading an installed skill requires approval")
+	}
+	for _, tool := range HostTools() {
+		if tool.Definition.Name == "axlr_skill" && tool.Identity == id {
+			return
+		}
+	}
+	t.Fatal("model cannot call installed skill reader")
+}
+
+type skillPortFunc func(context.Context, string, string, string, int, int) (SkillPage, error)
+
+func (f skillPortFunc) ReadSkill(ctx context.Context, plugin, skill, path string, offset, limit int) (SkillPage, error) {
+	return f(ctx, plugin, skill, path, offset, limit)
+}
+
+func TestHostSkillReadsExactInstalledSkillByName(t *testing.T) {
+	reader := skillPortFunc(func(_ context.Context, plugin, skill, path string, offset, limit int) (SkillPage, error) {
+		if plugin != "visualization" || skill != "chart" || path != "SKILL.md" || offset != 0 || limit != 4096 {
+			t.Fatalf("wrong request: %s %s %s %d %d", plugin, skill, path, offset, limit)
+		}
+		return SkillPage{Plugin: plugin, Skill: skill, Text: "# Chart guidance", TotalBytes: 16, NextOffsetBytes: 16}, nil
+	})
+	id, err := domain.NewHostToolIdentity("skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := (HostToolUseCase{Skills: reader}).Execute(context.Background(), domain.Session{}, id, hostJSON(t, `{"plugin":"visualization","skill":"chart"}`))
+	if err != nil || out.IsError || !strings.Contains(string(out.Content), "# Chart guidance") {
+		t.Fatalf("skill read failed: %+v %v", out, err)
+	}
+}
+
+func TestHostSkillRejectsInvalidSelectorsBeforeReading(t *testing.T) {
+	reader := skillPortFunc(func(context.Context, string, string, string, int, int) (SkillPage, error) {
+		t.Fatal("invalid selector reached reader")
+		return SkillPage{}, nil
+	})
+	id, err := domain.NewHostToolIdentity("skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range []string{`{}`, `{"plugin":"../escape","skill":"chart"}`, `{"plugin":"visualization","skill":"../escape"}`, `{"plugin":"visualization","skill":"chart","offset_bytes":-1}`, `{"plugin":"visualization","skill":"chart","limit_bytes":5000}`, `{"plugin":"visualization","skill":"chart","extra":true}`} {
+		out, err := (HostToolUseCase{Skills: reader}).Execute(context.Background(), domain.Session{}, id, hostJSON(t, args))
+		if err != nil || !out.IsError {
+			t.Fatalf("accepted %s: %+v %v", args, out, err)
+		}
+	}
+}

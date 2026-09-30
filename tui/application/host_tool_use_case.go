@@ -11,9 +11,9 @@ import (
 
 // HostToolUseCase provides read-only discovery and session recovery. Invocation
 // wrappers are resolved separately and always use the target plugin's policy.
-type HostToolUseCase struct{}
+type HostToolUseCase struct{ Skills PluginSkillPort }
 
-func (HostToolUseCase) Execute(ctx context.Context, session domain.Session, identity domain.ToolIdentity, arguments root.JSONValue) (domain.ToolOutcome, error) {
+func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, identity domain.ToolIdentity, arguments root.JSONValue) (domain.ToolOutcome, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.ToolOutcome{}, err
 	}
@@ -30,6 +30,8 @@ func (HostToolUseCase) Execute(ctx context.Context, session domain.Session, iden
 		result, err = hostDiscover(session.ToolSnapshot(), arguments)
 	case domain.HostOperationHistory:
 		result, err = hostHistory(session.Messages(), arguments)
+	case domain.HostOperationSkill:
+		result, err = u.readSkill(ctx, arguments)
 	default:
 		err = errors.New("invocation bridge must resolve and approve its exact plugin target")
 	}

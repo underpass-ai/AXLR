@@ -15,10 +15,26 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/dto"
+	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
+
+func TestTUIExecutorResolvesCommandsWithoutForwardingCredentials(t *testing.T) {
+	env := map[string]string{"PATH": "/usr/bin:/bin", "OPENROUTER_API_KEY": "private-key"}
+	executor, err := runtime.New(runtime.Config{Root: t.TempDir(), Env: localRuntimeEnvironment(func(name string) string { return env[name] })})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer executor.Close()
+	result := executor.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "path-test", Tool: "exec", Arguments: json.RawMessage(`{"program":"sh","args":["-c","printf path-ok; test -z \"$OPENROUTER_API_KEY\""]}`)})
+	output, ok := result.Output.(dto.ExecOutput)
+	if result.Status != "completed" || result.Error != nil || !ok || output.ExitCode != 0 || output.Stdout != "path-ok" {
+		t.Fatalf("basic shell command unavailable or credential forwarded: %+v", result)
+	}
+}
 
 func cliEnv(t *testing.T) map[string]string {
 	t.Helper()

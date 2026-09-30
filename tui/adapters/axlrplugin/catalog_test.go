@@ -62,7 +62,7 @@ func TestCodexMarketplaceInstallsOnlyIntoAXLR(t *testing.T) {
 		t.Fatalf("Codex source mutated: %v", err)
 	}
 	guidance, err := catalog.Guidance(ctx)
-	if err != nil || !strings.Contains(guidance, "Example skill") || !strings.Contains(guidance, "SKILL.md") {
+	if err != nil || !strings.Contains(guidance, "Example skill") || !strings.Contains(guidance, "axlr_skill") || strings.Contains(guidance, packageRoot) {
 		t.Fatalf("guidance: %q %v", guidance, err)
 	}
 }
@@ -112,5 +112,78 @@ func TestCodexMCPFileAndEnvironment(t *testing.T) {
 	}
 	if !strings.Contains(string(data), filepath.Join(rootDir, "run.sh")) {
 		t.Fatalf("root token not expanded: %s", data)
+	}
+}
+
+func TestInstalledSkillReadIsPagedAndWorkspaceIndependent(t *testing.T) {
+	source := t.TempDir()
+	mustWrite(t, filepath.Join(source, ".codex-plugin", "plugin.json"), `{"name":"sample","version":"1.0","skills":"./skills/"}`)
+	mustWrite(t, filepath.Join(source, "skills", "example", "SKILL.md"), "# A😊B")
+	catalog := Catalog{Root: t.TempDir()}
+	ctx := context.Background()
+	if err := catalog.AddSource(ctx, source); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := catalog.ReadSkill(ctx, "sample", "example", "SKILL.md", 0, 4); err == nil {
+		t.Fatal("staged skill was readable")
+	}
+	if err := catalog.Install(ctx, "sample"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := catalog.ReadSkill(ctx, "sample", "example", "SKILL.md", 0, 4)
+	if err != nil || first.Text != "# A" || first.NextOffsetBytes != 3 || first.TotalBytes != 8 || !first.HasMore {
+		t.Fatalf("first page: %+v %v", first, err)
+	}
+	second, err := catalog.ReadSkill(ctx, "sample", "example", "SKILL.md", 3, 4)
+	if err != nil || second.Text != "😊" || second.NextOffsetBytes != 7 || !second.HasMore {
+		t.Fatalf("second page: %+v %v", second, err)
+	}
+	third, err := catalog.ReadSkill(ctx, "sample", "example", "SKILL.md", 7, 4)
+	if err != nil || third.Text != "B" || third.HasMore {
+		t.Fatalf("third page: %+v %v", third, err)
+	}
+}
+
+func TestInstalledSkillReadRejectsEscapes(t *testing.T) {
+	source := t.TempDir()
+	mustWrite(t, filepath.Join(source, ".codex-plugin", "plugin.json"), `{"name":"sample","version":"1.0","skills":"./skills/"}`)
+	mustWrite(t, filepath.Join(source, "skills", "example", "SKILL.md"), "safe")
+	mustWrite(t, filepath.Join(source, "references", "detail.md"), "reference details")
+	catalog := Catalog{Root: t.TempDir()}
+	ctx := context.Background()
+	if err := catalog.AddSource(ctx, source); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.Install(ctx, "sample"); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		plugin, skill string
+		offset, limit int
+	}{{"../sample", "example", 0, 4}, {"sample", "../example", 0, 4}, {"sample", "example", -1, 4}, {"sample", "example", 1, 0}} {
+		if _, err := catalog.ReadSkill(ctx, tc.plugin, tc.skill, "SKILL.md", tc.offset, tc.limit); err == nil {
+			t.Fatalf("accepted %+v", tc)
+		}
+	}
+	outside := filepath.Join(t.TempDir(), "secret.txt")
+	mustWrite(t, outside, "outside")
+	installed := filepath.Join(catalog.Root, "plugins", "installed", "sample", "skills", "example", "SKILL.md")
+	if err := os.Remove(installed); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, installed); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := catalog.ReadSkill(ctx, "sample", "example", "SKILL.md", 0, 4); err == nil {
+		t.Fatal("symlink escaped installed package")
+	}
+	page, err := catalog.ReadSkill(ctx, "sample", "example", "../../references/detail.md", 0, 4096)
+	if err != nil || page.Text != "reference details" {
+		t.Fatalf("shared skill reference: %+v %v", page, err)
+	}
+	for _, path := range []string{"../../../secret.txt", "/etc/passwd", "../../.axlr-source.json"} {
+		if _, err := catalog.ReadSkill(ctx, "sample", "example", path, 0, 4096); err == nil {
+			t.Fatalf("read unsafe plugin path %q", path)
+		}
 	}
 }
