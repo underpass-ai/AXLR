@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- AXLR is Underpass's own selective rewrite of `underpass-runtime`; Pi is an influence on compact tool selection, not a runtime or dependency.
+- AXLR is Underpass's own selective rewrite of `underpass-runtime`.
 - Hexagonal boundaries, typed DTOs and value objects, one primary type per Go file, tests above 80%, fast CI.
 - No MCP server endpoint for `read`, `write`, `edit`, or `exec`.
 - The host owns server commands, URLs and credentials. MCP tool descriptions and annotations are untrusted data.

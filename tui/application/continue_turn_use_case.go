@@ -5,14 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 type ContinueTurnUseCase struct {
-	Models ModelStreamPort
-	Store  SessionStorePort
+	Models      ModelStreamPort
+	Store       SessionStorePort
+	Diagnostics DiagnosticPort
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {
@@ -51,9 +53,17 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if err := req.Validate(); err != nil {
 		return interrupt(err)
 	}
+	if err := emit(Event{Kind: EventStreamStart, MessageCount: len(session.Messages())}); err != nil {
+		return interrupt(err)
+	}
 	if err := emit(Event{Kind: EventState, State: domain.StatusStreaming}); err != nil {
 		return interrupt(err)
 	}
+	started := time.Now()
+	if u.Diagnostics != nil {
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderStart})
+	}
+	chunks, bytes := 0, 0
 	result, err := u.Models.Stream(ctx, req, func(delta root.Text) error {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -62,13 +72,33 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 			return err
 		}
 		draft.WriteString(string(delta))
+		chunks++
+		bytes += len(delta)
+		if u.Diagnostics != nil {
+			_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderProgress, Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds()})
+		}
 		return emit(Event{Kind: EventTextDelta, Text: delta})
 	})
+	if u.Diagnostics != nil {
+		class := DiagnosticErrorNone
+		if err != nil {
+			class = DiagnosticErrorProvider
+			if errors.Is(err, context.DeadlineExceeded) {
+				class = DiagnosticErrorTimeout
+			} else if errors.Is(err, context.Canceled) {
+				class = DiagnosticErrorCancelled
+			}
+		}
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderDone, Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
+	}
 	if err != nil {
 		return interrupt(err)
 	}
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
+	}
+	if len(result.Message.ToolCalls) > 0 && u.Diagnostics != nil {
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolRequested, Chunks: len(result.Message.ToolCalls)})
 	}
 	next := *session
 	if err := next.CompleteAssistant(result); err != nil {

@@ -1,0 +1,80 @@
+package storage
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestLoadMCPConfigRegistersPersistentPluginWithSelectedEnvironment(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "kmp-manifest.json")
+	if err := os.WriteFile(manifest, []byte(`{"manifest_version":1,"id":"kmp","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(dir, "mcp.json")
+	data, _ := json.Marshal(map[string]any{"version": 1, "plugins": []any{map[string]any{"manifest": manifest, "env": map[string]string{"MODE": "embedded"}, "env_from": map[string]string{"ACCESS_TOKEN": "SELECTED_TOKEN"}}}})
+	if err := os.WriteFile(config, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	registrations, err := LoadMCPConfig(config, func(key string) string {
+		if key == "SELECTED_TOKEN" {
+			return "selected"
+		}
+		return "must-not-leak"
+	})
+	if err != nil || len(registrations) != 1 || !registrations[0].Manifest.AllowAll {
+		t.Fatalf("registrations: %+v %v", registrations, err)
+	}
+	if strings.Join(registrations[0].Env, ",") != "ACCESS_TOKEN=selected,MODE=embedded" {
+		t.Fatalf("wrong plugin environment: %v", registrations[0].Env)
+	}
+	if none, err := LoadMCPConfig(filepath.Join(dir, "absent.json"), func(string) string { return "" }); err != nil || len(none) != 0 {
+		t.Fatalf("missing config: %+v %v", none, err)
+	}
+}
+
+func TestLoadMCPConfigRejectsUnsafeOrInvalidFile(t *testing.T) {
+	dir := t.TempDir()
+	manifest := filepath.Join(dir, "m.json")
+	if err := os.WriteFile(manifest, []byte(`{"manifest_version":1,"id":"plugin","command":"/bin/echo","args":[],"allow_tools":["read"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	valid, _ := json.Marshal(map[string]any{"version": 1, "plugins": []any{map[string]any{"manifest": manifest}}})
+	config := filepath.Join(dir, "mcp.json")
+	for name, body := range map[string]string{
+		"unknown":       strings.Replace(string(valid), `"version":1`, `"extra":1,"version":1`, 1),
+		"version":       strings.Replace(string(valid), `"version":1`, `"version":2`, 1),
+		"secret source": `{"version":1,"plugins":[{"manifest":"` + manifest + `","env_from":{"TOKEN":"OPENROUTER_API_KEY"}}]}`,
+		"invalid env":   `{"version":1,"plugins":[{"manifest":"` + manifest + `","env":{"A=B":"x"}}]}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := os.WriteFile(config, []byte(body), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := LoadMCPConfig(config, func(string) string { return "secret" }); err == nil {
+				t.Fatal("unsafe config accepted")
+			}
+		})
+	}
+	if err := os.WriteFile(config, valid, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(config, 0644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadMCPConfig(config, func(string) string { return "" }); err == nil {
+		t.Fatal("public config accepted")
+	}
+	if err := os.Remove(config); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(manifest, config); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadMCPConfig(config, func(string) string { return "" }); err == nil {
+		t.Fatal("symlink config accepted")
+	}
+}

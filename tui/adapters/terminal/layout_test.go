@@ -12,7 +12,7 @@ func TestLayoutSizes(t *testing.T) {
 	for _, tc := range []struct {
 		w, h       int
 		side, tiny bool
-	}{{100, 30, true, false}, {70, 20, false, false}, {40, 10, false, true}} {
+	}{{100, 30, false, false}, {70, 20, false, false}, {40, 10, false, true}} {
 		m := update(New(Dependencies{Monochrome: true}), tea.WindowSizeMsg{Width: tc.w, Height: tc.h})
 		if m.Layout.SidePanel != tc.side || m.Layout.TooSmall != tc.tiny {
 			t.Fatalf("layout: %+v", m.Layout)
@@ -23,6 +23,9 @@ func TestLayoutSizes(t *testing.T) {
 		}
 		if lipgloss.Width(got) > tc.w || lipgloss.Height(got) > tc.h {
 			t.Fatalf("overflow %dx%d: %dx%d", tc.w, tc.h, lipgloss.Width(got), lipgloss.Height(got))
+		}
+		if !tc.tiny && m.Layout.TranscriptWidth != tc.w {
+			t.Fatalf("conversation does not use full terminal width: %+v", m.Layout)
 		}
 	}
 }

@@ -2,18 +2,24 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 func update(m AppModel, msg tea.Msg) AppModel { n, _ := m.Update(msg); return n.(AppModel) }
 func sized() AppModel {
-	return update(New(Dependencies{Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	if err != nil {
+		panic(err)
+	}
+	return update(New(Dependencies{Session: &session, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
 }
 func TestAppModelStreamRendering(t *testing.T) {
 	m := sized()
@@ -25,20 +31,137 @@ func TestAppModelStreamRendering(t *testing.T) {
 		t.Fatal("terminal modes absent")
 	}
 }
+func TestAppModelRequestsTerminalBackground(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	t.Setenv("TERM", "xterm-256color")
+	if cmd := New(Dependencies{}).Init(); cmd == nil {
+		t.Fatal("terminal background is never queried")
+	}
+}
+
+func TestAppModelKeepsUnpersistedDraftOnFailureAndClearsOldError(t *testing.T) {
+	m := sized()
+	m.Busy = true
+	m.operationID = 1
+	m.draft = "partial answer"
+	m.draftOperationID = 1
+	m.Status.Error = "previous error"
+	m = update(m, operationComplete{ID: 1, Session: *m.deps.Session, Err: errors.New("save failed")})
+	if m.draft != "partial answer" || !strings.Contains(m.View().Content, "partial answer") {
+		t.Fatal("failed save lost visible draft")
+	}
+	m.Busy = true
+	m.operationID = 2
+	m = update(m, operationComplete{ID: 2, Session: *m.deps.Session})
+	if m.Status.Error != "save failed" {
+		t.Fatal("unrelated successful operation hid unsaved draft error")
+	}
+	if m.draft != "partial answer" {
+		t.Fatal("unrelated successful operation lost an unpersisted draft")
+	}
+}
+
+func TestAppModelSuccessfulOperationClearsOldErrorWithoutUnsavedDraft(t *testing.T) {
+	m := sized()
+	m.Busy = true
+	m.operationID = 1
+	m.Status.Error = "old error"
+	m = update(m, operationComplete{ID: 1, Session: *m.deps.Session})
+	if m.Status.Error != "" {
+		t.Fatal("successful operation retained an unrelated old error")
+	}
+}
+
+func TestAppModelDoesNotMatchDraftAgainstOldAnswerAndClearsOnSessionSwitch(t *testing.T) {
+	m := sized()
+	m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleAssistant, Content: "same answer"})
+	m.Busy = true
+	m.operationID = 1
+	m.draft = "same answer"
+	m.draftOperationID = 1
+	m.operationMessages = 1
+	m = update(m, operationComplete{ID: 1, Session: *m.deps.Session, Err: errors.New("save failed")})
+	if m.draft != "same answer" {
+		t.Fatal("old assistant answer matched current unpersisted draft")
+	}
+	other, err := domain.NewSession("fedcba9876543210fedcba9876543210", "/tmp", "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Busy = true
+	m.operationID = 2
+	m = update(m, operationComplete{ID: 2, Session: other})
+	if m.draft != "" || strings.Contains(m.View().Content, "same answer") {
+		t.Fatal("unpersisted draft leaked to another session")
+	}
+}
+
+func TestAppModelRetryStartsFreshDraftWithoutDroppingPreviousBeforeDelta(t *testing.T) {
+	m := sized()
+	m.draft = "old partial"
+	m.draftOperationID = 1
+	m.operationID = 1
+	m.Header.State.Status = domain.StatusStreaming
+	m = update(m, ControlIntent("continue"))
+	if m.draft != "old partial" || !m.Busy {
+		t.Fatal("retry discarded old output before replacement arrived")
+	}
+	m = update(m, application.Event{Kind: application.EventTextDelta, Text: "new answer"})
+	if m.draft != "new answer" || strings.Contains(m.View().Content, "old partial") {
+		t.Fatal("retry concatenated old and new output")
+	}
+	m.cancel()
+}
+
+func TestAppModelRejectsNewPromptWhileSessionIsStreaming(t *testing.T) {
+	m := sized()
+	m.Header.State.Status = domain.StatusStreaming
+	m.draft = "unpersisted answer"
+	m.Composer.Input.SetValue("another prompt")
+	m = update(m, ControlIntent("send"))
+	if m.Busy || m.draft != "unpersisted answer" || m.Composer.Input.Value() != "another prompt" {
+		t.Fatal("invalid new prompt cleared the unpersisted output")
+	}
+}
+
+func TestAppModelKeepsSecondStreamDraftWhenItsSaveFails(t *testing.T) {
+	m := sized()
+	m.Busy = true
+	m.operationID = 1
+	m.operationMessages = 1
+	m = update(m, application.Event{Kind: application.EventStreamStart, MessageCount: 1})
+	m = update(m, application.Event{Kind: application.EventTextDelta, Text: "first saved answer"})
+	m = update(m, application.Event{Kind: application.EventStreamStart, MessageCount: 3})
+	m = update(m, application.Event{Kind: application.EventTextDelta, Text: "second unsaved answer"})
+	if m.draft != "second unsaved answer" {
+		t.Fatalf("stream boundary did not reset draft: %q", m.draft)
+	}
+	private := *m.deps.Session
+	if err := private.BeginTurn("question", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := private.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "first saved answer"}}); err != nil {
+		t.Fatal(err)
+	}
+	m = update(m, operationComplete{ID: 1, Session: private, Err: errors.New("second save failed")})
+	if m.draft != "second unsaved answer" || !strings.Contains(m.View().Content, "second unsaved answer") {
+		t.Fatal("first saved answer hid the second unsaved draft")
+	}
+}
 func TestAppModelMultilineAndSend(t *testing.T) {
 	m := sized()
 	m.Composer.Input.SetValue("first")
-	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift})
 	m = update(m, tea.KeyPressMsg{Code: 'x', Text: "x"})
 	if m.Composer.Input.Value() != "first\nx" {
 		t.Fatal(m.Composer.Input.Value())
 	}
-	m = update(m, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if !m.Busy || m.Composer.Input.Value() != "" {
 		t.Fatal("send did not start operation")
 	}
 	m.Composer.Input.SetValue("second")
-	m = update(m, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.Composer.Input.Value() != "second" {
 		t.Fatal("busy operation accepted another turn")
 	}
@@ -141,6 +264,30 @@ func TestAppModelSendShowsPromptWhileStreaming(t *testing.T) {
 	}
 }
 
+func TestAppModelOptimisticPromptKeepsPreviousInterruptedRowInOrder(t *testing.T) {
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("first prompt", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft("first partial answer"); err != nil {
+		t.Fatal(err)
+	}
+	m := update(New(Dependencies{Session: &s, Monochrome: true}), tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Composer.Input.SetValue("second prompt")
+	m = update(m, ControlIntent("send"))
+	defer m.cancel()
+	content := m.Transcript.Viewport.GetContent()
+	first := strings.Index(content, "user: first prompt")
+	partial := strings.Index(content, "interrupted draft: first partial answer")
+	second := strings.Index(content, "user: second prompt")
+	if first < 0 || partial <= first || second <= partial {
+		t.Fatalf("optimistic rows are out of order: %q", content)
+	}
+}
+
 func TestAppModelNoColorEnvironment(t *testing.T) {
 	t.Setenv("NO_COLOR", "1")
 	m := update(New(Dependencies{}), tea.WindowSizeMsg{Width: 100, Height: 30})
@@ -150,11 +297,14 @@ func TestAppModelNoColorEnvironment(t *testing.T) {
 }
 func TestAppModelChildSendIntent(t *testing.T) {
 	c := NewComposer(true)
-	if c.Intent(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}) != ControlIntent("send") {
+	if c.Intent(tea.KeyPressMsg{Code: tea.KeyEnter}) != ControlIntent("send") {
 		t.Fatal("composer did not emit send intent")
 	}
-	if c.Intent(tea.KeyPressMsg{Code: tea.KeyEnter}) != "" {
+	if c.Intent(tea.KeyPressMsg{Code: tea.KeyEnter, Mod: tea.ModShift}) != "" {
 		t.Fatal("newline emits action")
+	}
+	if c.Intent(tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}) != "" {
+		t.Fatal("Ctrl+S still sends")
 	}
 }
 

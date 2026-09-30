@@ -79,6 +79,28 @@ func TestStreamTextAndParallelCalls(t *testing.T) {
 	}
 }
 
+func TestStreamIgnoresDeltasAfterFinish(t *testing.T) {
+	wire := streamEvents(textChunk, stopChunk,
+		`{"choices":[{"index":0,"delta":{"content":"late","tool_calls":[{"index":0,"id":"ignored","type":"function","function":{"name":"read","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[],"usage":{"prompt_tokens":3,"completion_tokens":4,"total_tokens":7}}`, "[DONE]")
+	body := &trackedStreamBody{Reader: strings.NewReader(wire)}
+	c, _ := streamClient(t, body, 200)
+	var deltas []domain.Text
+	got, err := c.Stream(context.Background(), simpleCompletionRequest(), func(text domain.Text) error {
+		deltas = append(deltas, text)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Message.Content != "hé🌍" || len(got.Message.ToolCalls) != 0 || got.FinishReason != "stop" || got.Usage == nil || got.Usage.TotalTokens != 7 || len(deltas) != 1 || deltas[0] != "hé🌍" {
+		t.Fatalf("result = %+v; deltas = %v", got, deltas)
+	}
+	if !body.closed {
+		t.Fatal("response body was not closed")
+	}
+}
+
 func TestStreamRejectsIncompleteMalformedAndOversized(t *testing.T) {
 	for name, wire := range map[string]string{
 		"missing finish":       streamEvents(textChunk, "[DONE]"),

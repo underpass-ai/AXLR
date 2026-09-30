@@ -88,6 +88,60 @@ func TestIdentityValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestChangeModelAllowedStatesPreserveHistory(t *testing.T) {
+	for _, status := range []SessionStatus{StatusIdle, StatusComplete, StatusInterrupted} {
+		t.Run(string(status), func(t *testing.T) {
+			s := session(t)
+			if status != StatusIdle {
+				must(t, s.BeginTurn("hello", nil))
+				if status == StatusComplete {
+					must(t, s.CompleteAssistant(completion(t)))
+				} else {
+					must(t, s.InterruptDraft("partial"))
+				}
+			}
+			before := s.Export()
+			must(t, s.ChangeModel("next/model"))
+			got := s.Export()
+			if got.Model != "next/model" {
+				t.Fatalf("model: %q", got.Model)
+			}
+			got.Model = before.Model
+			if !reflect.DeepEqual(got, before) {
+				t.Fatalf("model change modified history or status: %+v", s.Export())
+			}
+		})
+	}
+}
+
+func TestChangeModelRejectsInvalidBusyAndPending(t *testing.T) {
+	for _, state := range []string{"invalid", "streaming", "approval", "interrupted-pending"} {
+		t.Run(state, func(t *testing.T) {
+			s := session(t)
+			if state != "invalid" {
+				must(t, s.BeginTurn("hello", catalog(t)))
+			}
+			if state == "approval" || state == "interrupted-pending" {
+				must(t, s.CompleteAssistant(completion(t, "one")))
+			}
+			if state == "interrupted-pending" {
+				must(t, s.PauseTurn())
+			}
+			before := s.Export()
+			model := axlr.ModelID("next/model")
+			if state == "invalid" {
+				model = ""
+			}
+			if err := s.ChangeModel(model); err == nil {
+				t.Fatal("accepted forbidden model change")
+			}
+			if !reflect.DeepEqual(s.Export(), before) {
+				t.Fatal("rejected change mutated session")
+			}
+		})
+	}
+}
 func TestOrderedTurnAndDecisions(t *testing.T) {
 	s := session(t)
 	if s.Status() != StatusIdle {
@@ -191,6 +245,32 @@ func TestCancellationAndInterruptedDraft(t *testing.T) {
 	must(t, s.InterruptDraft("partial"))
 	if !reflect.DeepEqual(before, s.Messages()) || s.Export().Draft != "partial" {
 		t.Fatal("draft entered model history")
+	}
+}
+
+func TestStartingNewTurnArchivesInterruptedAnswerOutsideModelHistory(t *testing.T) {
+	s := session(t)
+	must(t, s.BeginTurn("first question", nil))
+	must(t, s.InterruptDraft("first partial answer"))
+	must(t, s.BeginTurn("second question", nil))
+	state := s.Export()
+	if len(state.Messages) != 2 || state.Messages[0].Role != axlr.RoleUser || state.Messages[1].Role != axlr.RoleUser {
+		t.Fatalf("model history changed: %+v", state.Messages)
+	}
+	if state.Draft != "" || len(state.ArchivedDrafts) != 1 || state.ArchivedDrafts[0].AfterMessage != 1 || state.ArchivedDrafts[0].Content != "first partial answer" {
+		t.Fatalf("interrupted answer was not archived at its turn: %+v", state)
+	}
+	must(t, s.InterruptDraft("second partial answer"))
+	must(t, s.BeginTurn("third question", nil))
+	state = s.Export()
+	if len(state.ArchivedDrafts) != 2 || state.ArchivedDrafts[1].AfterMessage != 2 {
+		t.Fatalf("archived drafts lost order: %+v", state.ArchivedDrafts)
+	}
+	restored, err := RestoreSession(state)
+	must(t, err)
+	state.Status = StatusInterrupted
+	if !reflect.DeepEqual(restored.Export(), state) {
+		t.Fatal("restoring the session lost archived answers")
 	}
 }
 func TestRestorePendingAndCopySafety(t *testing.T) {

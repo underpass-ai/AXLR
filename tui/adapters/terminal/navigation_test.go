@@ -65,7 +65,7 @@ func TestNavigationPaletteHelpAndInfo(t *testing.T) {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: 'h', Text: "h"})
-	if !strings.Contains(m.View().Content, "Ctrl+S") || !strings.Contains(m.View().Content, "Approve") {
+	if !strings.Contains(m.View().Content, "Shift+Enter") || !strings.Contains(m.View().Content, "Approve") {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
@@ -214,6 +214,30 @@ func TestNavigationSearchDuplicateMessageTargets(t *testing.T) {
 		t.Fatal("second identical message navigated to first")
 	}
 }
+
+func TestNavigationSearchTargetsArchivedDraftRow(t *testing.T) {
+	s := navSession(t)
+	if err := s.BeginTurn(root.Text(strings.Repeat("earlier line\n", 40)), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft("archived needle"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("later question", nil); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	m = update(m, ControlIntent("search"))
+	for _, r := range "needle" {
+		m = update(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	if len(m.SearchBox.Hits) != 1 || m.SearchBox.Hits[0].ArchivedDraftIndex == nil {
+		t.Fatalf("search missed archived draft: %+v", m.SearchBox.Hits)
+	}
+	if m.Transcript.Viewport.YOffset() == 0 || !strings.Contains(m.Transcript.View(), "archived needle") {
+		t.Fatalf("search did not reveal archived row at offset %d: %q", m.Transcript.Viewport.YOffset(), m.Transcript.View())
+	}
+}
 func TestNavigationInterruptedMinimumWidth(t *testing.T) {
 	s := navSession(t)
 	s.BeginTurn("q", nil)
@@ -256,7 +280,7 @@ func TestNavigationMousePaletteSearchAndHelp(t *testing.T) {
 	m = n.(AppModel)
 	n, _ = click(t, m, "help")
 	m = n.(AppModel)
-	if !strings.Contains(m.View().Content, "Ctrl+S") {
+	if !strings.Contains(m.View().Content, "Shift+Enter") {
 		t.Fatal("mouse help missing")
 	}
 }

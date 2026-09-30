@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -29,6 +30,12 @@ type AppModel struct {
 	SearchBox         SearchBox
 	Palette           ActionPalette
 	Picker            SessionPicker
+	Models            ModelPicker
+	operationID       uint64
+	operationMessages int
+	streamMessages    int
+	streamPending     bool
+	draftOperationID  uint64
 	Help              HelpOverlay
 	Info              Transcript
 	overlay           ControlIntent
@@ -42,6 +49,15 @@ type AppModel struct {
 	prefix            string
 }
 
+func assistantInMessages(messages []root.Message, start int) bool {
+	for i := len(messages) - 1; i >= start; i-- {
+		if messages[i].Role == root.RoleAssistant {
+			return true
+		}
+	}
+	return false
+}
+
 var _ tea.Model = AppModel{}
 
 func New(deps Dependencies) AppModel {
@@ -52,26 +68,52 @@ func New(deps Dependencies) AppModel {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
-	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, Theme: Theme{deps.Monochrome}, Composer: NewComposer(deps.Monochrome), Transcript: NewTranscript(), zones: z, prefix: z.NewPrefix()}
+	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, Theme: Theme{Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome), Transcript: NewTranscript(), zones: z, prefix: z.NewPrefix()}
 	if deps.Session != nil {
 		m.Header.State = deps.Session.Export()
 	}
 	for _, record := range m.Header.State.Activity {
 		m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
 	}
+	if m.Header.State.ID == "" {
+		m.Header.State.Workspace = deps.Workspace
+	}
 	m.Status.State = m.Header.State.Status
 	m.refreshTranscript()
 	m.syncApproval()
 	return m
 }
-func (m AppModel) Init() tea.Cmd { return nil }
+func (m AppModel) Init() tea.Cmd {
+	if m.Theme.Monochrome {
+		return nil
+	}
+	return tea.RequestBackgroundColor
+}
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if next, cmd, handled := m.navigation(msg); handled {
 		return next, cmd
 	}
 	switch v := msg.(type) {
+	case tea.BackgroundColorMsg:
+		m.Theme.Light = !v.IsDark()
+		m.Transcript.ApplyTheme(m.Theme)
+		return m, nil
+	case operationBatch:
+		var cmd tea.Cmd
+		for _, item := range v.Messages {
+			var next tea.Model
+			next, cmd = m.Update(item)
+			m = next.(AppModel)
+		}
+		return m, cmd
 	case tea.WindowSizeMsg:
+		m.record(application.DiagnosticEvent{Stage: application.DiagnosticResize, Width: v.Width, Height: v.Height})
 		m.Layout = NewLayout(v.Width, v.Height)
+		if m.overlay == "models" {
+			m.Models.Input.SetWidth(max(1, v.Width-9))
+			m.Models.pageSize = max(1, v.Height-7)
+			m.Models.ensureVisible()
+		}
 		offset := m.Transcript.Viewport.YOffset()
 		m.Transcript.Viewport.SetWidth(m.Layout.TranscriptWidth)
 		m.Transcript.Viewport.SetHeight(m.Layout.BodyHeight)
@@ -82,10 +124,25 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sizeApproval()
 		m.Info.Viewport.SetWidth(max(1, v.Width))
 		m.Info.Viewport.SetHeight(max(1, v.Height-4))
+		m.Transcript.ApplyTheme(m.Theme)
 		return m, nil
 	case application.Event:
+		m.record(application.DiagnosticEvent{Stage: application.DiagnosticEventConsumed, Chunks: 1, Bytes: len(v.Text)})
+		if v.Kind == application.EventStreamStart {
+			m.streamMessages = v.MessageCount
+			m.streamPending = true
+			if m.draftOperationID == m.operationID {
+				m.draft = ""
+				m.draftOperationID = 0
+			}
+		}
 		if v.Kind == application.EventTextDelta {
+			if m.streamPending || (m.draftOperationID != 0 && m.draftOperationID != m.operationID) {
+				m.draft = ""
+			}
+			m.streamPending = false
 			m.draft += string(v.Text)
+			m.draftOperationID = m.operationID
 			m.refreshTranscript()
 		}
 		if v.Kind == application.EventState {
@@ -97,17 +154,39 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case operationComplete:
+		if v.ID != m.operationID || !m.Busy {
+			return m, nil
+		}
 		if m.cancel != nil {
 			m.cancel()
 		}
 		m.cancel = nil
 		m.events = nil
 		m.Busy = false
-		if m.deps.Session != nil {
+		if v.Session.Export().ID != "" {
+			if m.deps.Session == nil {
+				m.deps.Session = new(domain.Session)
+			}
 			*m.deps.Session = v.Session
 		}
 		oldID := m.Header.State.ID
-		m.Header.State = v.Session.Export()
+		if v.Session.Export().ID != "" {
+			m.Header.State = v.Session.Export()
+		}
+		if v.Models != nil {
+			if v.Err != nil {
+				m.Models.SetError(v.Err)
+			} else {
+				m.Models.SetModels(*v.Models)
+			}
+		}
+		if v.ModelSelection {
+			if v.Err != nil {
+				m.Models.SetError(v.Err)
+			} else {
+				m.overlay = ""
+			}
+		}
 		if v.Sessions != nil {
 			m.Picker = SessionPicker{Items: *v.Sessions}
 			m.overlay = "sessions"
@@ -117,6 +196,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.SearchBox = SearchBox{}
 			m.Activity = ToolActivity{}
 			m.unsentPrompts = nil
+			m.draft = ""
+			m.draftOperationID = 0
 			for _, record := range m.Header.State.Activity {
 				m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
 			}
@@ -134,9 +215,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.submittedPrompt = ""
 		m.Status.State = v.Session.Status()
-		m.draft = ""
+		state := v.Session.Export()
+		if assistantInMessages(state.Messages, m.streamMessages) || (m.draftOperationID == v.ID && state.Draft == root.Text(m.draft)) {
+			m.draft = ""
+			m.draftOperationID = 0
+		}
 		if v.Err != nil {
 			m.Status.Error = v.Err.Error()
+		} else if m.draft == "" {
+			m.Status.Error = ""
+		}
+		if v.ModelSelection && v.Err == nil && v.PreferenceErr != nil {
+			m.Status.Error = "Model selected, but its default could not be saved"
 		}
 		m.refreshTranscript()
 		m.syncApproval()
@@ -144,15 +234,41 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ControlIntent:
 		switch v {
 		case "send":
+			if m.Composer.Input.Value() == "/model" {
+				next, cmd, _ := m.navigation(ControlIntent("models"))
+				changed := next.(AppModel)
+				if cmd != nil {
+					changed.Composer.Input.Reset()
+				}
+				return changed, cmd
+			}
 			if m.Busy || strings.TrimSpace(m.Composer.Input.Value()) == "" {
 				return m, nil
 			}
+			if m.Header.State.ID == "" {
+				m.Status.Error = "Select a model with /model before sending"
+				return m, nil
+			}
+			if m.Header.State.Status != domain.StatusIdle && m.Header.State.Status != domain.StatusComplete && m.Header.State.Status != domain.StatusInterrupted {
+				m.Status.Error = "Finish or continue the current turn before sending another prompt"
+				return m, nil
+			}
+			if m.deps.Session == nil || len(m.deps.Session.Pending()) != 0 {
+				m.Status.Error = "Resolve pending tool calls before sending another prompt"
+				return m, nil
+			}
 			prompt := root.Text(m.Composer.Input.Value())
+			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, Bytes: len(prompt)})
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
 			m.Composer.Input.Reset()
 			m.Status.Error = ""
 			m.draft = ""
+			m.draftOperationID = 0
+			if m.Header.State.Status == domain.StatusInterrupted && m.Header.State.Draft != "" {
+				m.Header.State.ArchivedDrafts = append(m.Header.State.ArchivedDrafts, domain.ArchivedDraft{AfterMessage: len(m.Header.State.Messages), Content: m.Header.State.Draft})
+				m.Header.State.Draft = ""
+			}
 			m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: prompt})
 			m.refreshTranscript()
 			cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
@@ -173,7 +289,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyPressMsg:
 		switch v.String() {
-		case "ctrl+s":
+		case "enter":
 			return m.Update(m.Composer.Intent(v))
 		case "esc":
 			return m.Update(ControlIntent("cancel"))
@@ -212,19 +328,19 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 func (m AppModel) View() tea.View {
+	var started time.Time
+	if m.deps.Diagnostics != nil {
+		started = time.Now()
+	}
 	var content string
 	if m.Layout.TooSmall || m.Layout.Width == 0 {
 		content = ansi.Truncate("Resize terminal to at least 50 × 15", max(1, m.Layout.Width), "")
 	} else {
 		body := m.Transcript.View()
-		if m.Layout.SidePanel {
-			body = lipgloss.JoinHorizontal(lipgloss.Top, body, " ", m.Activity.View(28, m.Layout.BodyHeight))
-		} else {
-			if m.ActivityTab {
-				body = m.Activity.View(m.Layout.Width, m.Layout.BodyHeight)
-			}
-			body = lipgloss.JoinVertical(lipgloss.Left, m.Activity.Tabs(m.zones, m.prefix), body)
+		if m.ActivityTab {
+			body = m.Activity.View(m.Layout.Width, m.Layout.BodyHeight)
 		}
+		body = lipgloss.JoinVertical(lipgloss.Left, m.Activity.Tabs(m.zones, m.prefix), body)
 		controls := m.Composer.Controls(m.zones, m.prefix)
 		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, m.Composer.View(), controls, m.Status.View(m.Layout.Width))
 	}
@@ -239,10 +355,13 @@ func (m AppModel) View() tea.View {
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && !m.approvalFocus() && m.overlay == "" {
 		view.Cursor = m.Composer.Input.Cursor()
 		if view.Cursor != nil {
-			view.Cursor.Y += 1 + m.Layout.BodyHeight
-			if !m.Layout.SidePanel {
-				view.Cursor.Y++
-			}
+			view.Cursor.Y += 2 + m.Layout.BodyHeight
+		}
+	}
+	if !m.Layout.TooSmall && m.Layout.Width > 0 && m.overlay == "models" && !m.approvalFocus() {
+		view.Cursor = m.Models.Input.Cursor()
+		if view.Cursor != nil {
+			view.Cursor.Y++
 		}
 	}
 	if !m.Layout.TooSmall && m.overlay == "search" && !m.approvalFocus() {
@@ -253,17 +372,16 @@ func (m AppModel) View() tea.View {
 	}
 	view.AltScreen = true
 	view.MouseMode = tea.MouseModeCellMotion
+	if m.deps.Diagnostics != nil {
+		m.record(application.DiagnosticEvent{Stage: application.DiagnosticRender, Width: lipgloss.Width(content), Height: lipgloss.Height(content), ElapsedMilliseconds: time.Since(started).Milliseconds()})
+	}
 	return view
 }
 
 // Failed submissions remain display state, never valid model history.
 func (m *AppModel) refreshTranscript() {
-	m.Transcript.SetSession(m.Header.State, m.draft)
+	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {
-		content := m.Transcript.Viewport.GetContent()
-		for _, prompt := range m.unsentPrompts {
-			content += "\nNot sent: " + prompt
-		}
-		m.Transcript.SetContent(content)
+		m.Transcript.AppendUnsent(m.unsentPrompts)
 	}
 }

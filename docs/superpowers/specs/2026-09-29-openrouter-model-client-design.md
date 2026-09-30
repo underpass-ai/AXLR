@@ -2,7 +2,7 @@
 
 ## Purpose and approved scope
 
-AXLR needs a Go library client that can request a model completion through OpenRouter and return either assistant text, tool-call requests, or both. This is part of Underpass's own AXLR runtime. It does not use Pi code or Pi as a runtime. The host owns the conversation, chooses the model, provides the API key, decides whether to execute a requested tool, and supplies tool results in a later completion request.
+AXLR needs a Go library client that can request a model completion through OpenRouter and return either assistant text, tool-call requests, or both. This is part of Underpass's own AXLR runtime. The host owns the conversation, chooses the model, provides the API key, decides whether to execute a requested tool, and supplies tool results in a later completion request.
 
 The first delivery is library-only and non-streaming. It does not add a worker JSON operation, an agent loop, automatic tool execution, model discovery, or provider routing. It must work without the pending plugin PR: OpenRouter's tool definitions and calls are model-side data, while MCP plugins are one possible future execution target.
 

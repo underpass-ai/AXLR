@@ -67,6 +67,21 @@ func (m *AppModel) sizeApproval() {
 // navigation routes modal input before editor input. It never reads a worker's
 // session: all decisions use the UI's last published state.
 func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	if m.overlay == "models" && !m.approvalFocus() {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseClickMsg, tea.MouseWheelMsg:
+			if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
+				return m, nil, false
+			}
+			var intent ControlIntent
+			var cmd tea.Cmd
+			m.Models, intent, cmd = m.Models.Update(msg, m.zones, m.prefix+"models-")
+			if intent != "" {
+				return m.navigation(intent)
+			}
+			return m, cmd, true
+		}
+	}
 	if paste, ok := msg.(tea.PasteMsg); ok {
 		if m.approvalFocus() {
 			return m, nil, true
@@ -158,7 +173,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"approve", "deny", "cancel", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
+		ids := []string{"approve", "deny", "cancel", "models", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
 		if m.overlay == "sessions" {
 			for i := range m.Picker.Items {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
@@ -191,6 +206,85 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 	switch intent {
+	case "models", ModelRetryIntent:
+		if m.Busy {
+			m.Status.Error = "Cannot choose a model while an operation is running"
+			return m, nil, true
+		}
+		if _, pending := m.pending(); pending {
+			m.Status.Error = "Resolve pending tool calls before choosing a model"
+			return m, nil, true
+		}
+		if m.Header.State.ID != "" && m.Header.State.Status != domain.StatusIdle && m.Header.State.Status != domain.StatusComplete && m.Header.State.Status != domain.StatusInterrupted {
+			m.Status.Error = "Cannot choose a model while a turn is active"
+			return m, nil, true
+		}
+		if intent == "models" {
+			m.Models = NewModelPicker()
+		}
+		m.Models.pageSize = max(1, m.Layout.Height-7)
+		m.Models.Input.SetWidth(max(1, m.Layout.Width-9))
+		m.Models.SetLoading(true)
+		m.overlay = "models"
+		m.Status.Error = ""
+		var models []domain.AvailableModel
+		catalog := m.deps.Models
+		cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
+			var err error
+			models, err = catalog.Execute(ctx)
+			return err
+		})
+		return m, func() tea.Msg {
+			msg := cmd()
+			if done, ok := msg.(operationComplete); ok {
+				done.Models = &models
+				return done
+			}
+			return msg
+		}, true
+	case ModelSelectIntent:
+		if m.Busy || m.overlay != "models" {
+			return m, nil, true
+		}
+		selected, ok := m.Models.SelectedModel()
+		if !ok {
+			return m, nil, true
+		}
+		create, change, preference, id, workspace := m.deps.Create, m.deps.Change, m.deps.ModelPreference, m.deps.NewSessionID, m.deps.Workspace
+		m.Models.SetLoading(true)
+		m.Status.Error = ""
+		var preferenceErr error
+		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
+			var err error
+			if s.Export().ID == "" {
+				var created domain.Session
+				created, err = create.Execute(ctx, id, workspace, selected.ID)
+				if err == nil {
+					*s = created
+				}
+			} else {
+				err = change.Execute(ctx, s, selected.ID)
+			}
+			if err == nil && preference != nil {
+				preferenceErr = preference.Save(ctx, selected.ID)
+			}
+			return err
+		})
+		return m, func() tea.Msg {
+			msg := cmd()
+			if done, ok := msg.(operationComplete); ok {
+				done.ModelSelection = true
+				done.PreferenceErr = preferenceErr
+				return done
+			}
+			return msg
+		}, true
+	case ModelCloseIntent:
+		if m.cancel != nil {
+			m.cancel()
+		}
+		m.overlay = ""
+		return m, nil, true
 	case "approve", "deny":
 		if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() {
 			return m, nil, true
@@ -323,15 +417,21 @@ func (m *AppModel) showHit() {
 	prefix.Draft = ""
 	if hit.MessageIndex != nil {
 		prefix.Messages = prefix.Messages[:*hit.MessageIndex]
+	} else if hit.ArchivedDraftIndex != nil {
+		archived := *hit.ArchivedDraftIndex
+		prefix.Messages = prefix.Messages[:prefix.ArchivedDrafts[archived].AfterMessage]
+		prefix.ArchivedDrafts = prefix.ArchivedDrafts[:archived]
 	}
 	rendered := NewTranscript()
-	rendered.SetSession(prefix, "")
+	rendered.SetSession(prefix, "", Theme{Monochrome: true})
 	before := rendered.Viewport.GetContent()
 	lines := 0
-	for _, line := range strings.Split(before, "\n") {
-		lines += max(1, (ansi.StringWidth(line)+max(1, m.Layout.TranscriptWidth)-1)/max(1, m.Layout.TranscriptWidth))
+	if before != "" {
+		for _, line := range strings.Split(before, "\n") {
+			lines += max(1, (ansi.StringWidth(line)+max(1, m.Layout.TranscriptWidth)-1)/max(1, m.Layout.TranscriptWidth))
+		}
 	}
-	m.Transcript.Viewport.SetYOffset(max(0, lines-1))
+	m.Transcript.Viewport.SetYOffset(lines)
 }
 func (m AppModel) overlayView(base string) string {
 	status := m.Status.View(m.Layout.Width)
@@ -343,6 +443,8 @@ func (m AppModel) overlayView(base string) string {
 	}
 	var body string
 	switch m.overlay {
+	case "models":
+		body = m.Models.View(m.zones, m.prefix+"models-", m.Layout.Width, m.Layout.Height-2)
 	case "palette":
 		body = m.Palette.View(m.zones, m.prefix)
 	case "help":

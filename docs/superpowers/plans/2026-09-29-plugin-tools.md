@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- AXLR is Underpass's own runtime; no Pi code or Pi runtime dependency.
+- AXLR is Underpass's own runtime.
 - One binary, `cmd/axlr`, handles local and plugin requests; local `read`/`write`/`edit`/`exec` JSON behavior is unchanged.
 - Plugins are external MCP stdio processes contributing tools only; no hooks and no AXLR MCP server.
 - Manifests are explicit, strict JSON, at most 64 KiB, with version 1, absolute command, argv and nonempty allowlist. No auto-discovery or hot reload.

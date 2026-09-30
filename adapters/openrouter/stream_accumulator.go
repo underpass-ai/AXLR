@@ -69,7 +69,9 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 			return nil, errors.New("unsupported OpenRouter stream choice index")
 		}
 		if a.finish != "" {
-			return nil, errors.New("OpenRouter stream has a delta after finish")
+			// The finish reason closes the assistant message. Some providers send
+			// another choice before [DONE]; it cannot change the completed result.
+			continue
 		}
 		if choice.Delta.Role != "" && choice.Delta.Role != "assistant" {
 			return nil, errors.New("OpenRouter stream is not an assistant message")

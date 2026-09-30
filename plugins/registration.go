@@ -17,7 +17,7 @@ func NewRegistration(manifest Manifest, env []string) (Registration, error) {
 	if _, err := domain.NewPluginID(manifest.ID.String()); err != nil {
 		return Registration{}, err
 	}
-	if !filepath.IsAbs(manifest.Command) || strings.ContainsRune(manifest.Command, 0) || len(manifest.AllowTools) == 0 {
+	if !filepath.IsAbs(manifest.Command) || strings.ContainsRune(manifest.Command, 0) || (len(manifest.AllowTools) == 0 && !manifest.AllowAll) || (len(manifest.AllowTools) != 0 && manifest.AllowAll) {
 		return Registration{}, errors.New("invalid plugin command or allowlist")
 	}
 	for _, arg := range manifest.Args {
