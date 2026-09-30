@@ -14,16 +14,29 @@ type ListModelsUseCase struct {
 	Diagnostics DiagnosticPort
 }
 
-func (u ListModelsUseCase) Execute(ctx context.Context) ([]domain.AvailableModel, error) {
+func (u ListModelsUseCase) Execute(ctx context.Context) (result []domain.AvailableModel, returnErr error) {
 	if u.Catalog == nil {
 		return nil, errors.New("model catalog is unavailable")
 	}
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	ctx, span := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionCatalog, DiagnosticEvent{})
+	defer func() {
+		class := DiagnosticErrorNone
+		if returnErr != nil {
+			class = DiagnosticErrorProvider
+			if errors.Is(returnErr, context.Canceled) {
+				class = DiagnosticErrorCancelled
+			} else if errors.Is(returnErr, context.DeadlineExceeded) {
+				class = DiagnosticErrorTimeout
+			}
+		}
+		span.End(class)
+	}()
 	started := time.Now()
 	if u.Diagnostics != nil {
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticModelCatalogStart})
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticModelCatalogStart, SpanID: CurrentDiagnosticSpan(ctx)})
 	}
 	models, err := u.Catalog.List(ctx)
 	if u.Diagnostics != nil {
@@ -31,7 +44,7 @@ func (u ListModelsUseCase) Execute(ctx context.Context) ([]domain.AvailableModel
 		if err != nil {
 			class = DiagnosticErrorProvider
 		}
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticModelCatalogDone, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
+		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticModelCatalogDone, SpanID: CurrentDiagnosticSpan(ctx), ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
 	}
 	if err != nil {
 		return nil, err

@@ -10,4 +10,6 @@ type operationComplete struct {
 	Session        domain.Session
 	Err            error
 	Sessions       *[]domain.SessionSummary
+	Plugins        *[]domain.PluginState
+	PluginApproval *domain.PluginProfile
 }

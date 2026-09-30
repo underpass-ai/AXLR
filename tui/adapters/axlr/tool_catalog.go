@@ -5,17 +5,24 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // ToolCatalog discovers tools through the same manager used by the executor.
 // Each returned slice belongs to its caller and is the lookup for one turn.
-type ToolCatalog struct{ Plugins *plugins.Manager }
+type ToolCatalog struct {
+	Plugins     *plugins.Manager
+	Diagnostics application.DiagnosticPort
+	Profiles    func() []domain.PluginProfile
+}
 
 var portableName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
@@ -24,10 +31,36 @@ func (c ToolCatalog) Snapshot(ctx context.Context) ([]domain.AvailableTool, erro
 		return nil, err
 	}
 	result := localToolDefinitions()
+	result = append(result, application.HostTools()...)
 	if c.Plugins != nil {
-		tools, err := c.Plugins.List(ctx)
-		if err != nil {
-			return nil, err
+		var tools []root.PluginTool
+		if c.Profiles == nil {
+			var err error
+			tools, err = c.Plugins.List(ctx)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			profiles := c.Profiles()
+			for _, profile := range profiles {
+				serverCtx, span := application.StartDiagnosticSpan(ctx, c.Diagnostics, application.DiagnosticActionPluginDiscovery, application.DiagnosticEvent{PluginOrdinal: pluginOrdinal(profiles, profile.ID)})
+				serverTools, err := c.Plugins.ListServer(serverCtx, profile.ID)
+				span.End(pluginDiagnosticError(errors.Join(err, ctx.Err())))
+				if err != nil {
+					return nil, err
+				}
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				tools = append(tools, serverTools...)
+			}
+		}
+		nativeCounts := map[string]int{}
+		for _, tool := range result {
+			nativeCounts[string(tool.Definition.Name)]++
+		}
+		for _, tool := range tools {
+			nativeCounts[tool.Ref.ToolName.String()]++
 		}
 		for _, tool := range tools {
 			id, err := domain.NewPluginToolIdentity(tool.Ref)
@@ -38,6 +71,13 @@ func (c ToolCatalog) Snapshot(ctx context.Context) ([]domain.AvailableTool, erro
 			pair, _ := json.Marshal([2]string{tool.Ref.PluginID.String(), tool.Ref.ToolName.String()})
 			digest := sha256.Sum256(pair)
 			name := root.ToolName("mcp_" + hex.EncodeToString(digest[:24]))
+			native := tool.Ref.ToolName.String()
+			// Native names make schema/guide instructions actionable. Colliding or
+			// nonportable names retain opaque, unambiguous aliases; identity is
+			// always resolved from the frozen snapshot, never parsed from a name.
+			if portableName.MatchString(native) && nativeCounts[native] == 1 && !strings.HasPrefix(native, "mcp_") {
+				name = root.ToolName(native)
+			}
 			result = append(result, domain.AvailableTool{Identity: id, Definition: root.ToolDefinition{Name: name, Description: root.Text(tool.Ref.PluginID.String() + "/" + tool.Ref.ToolName.String() + ": " + tool.Description), Parameters: tool.InputSchema}})
 		}
 	}

@@ -22,7 +22,13 @@ import (
 
 func cliEnv(t *testing.T) map[string]string {
 	t.Helper()
-	return map[string]string{"OPENROUTER_API_KEY": "test-key-never-print", "XDG_STATE_HOME": t.TempDir(), "HOME": t.TempDir()}
+	state, home := t.TempDir(), t.TempDir()
+	for _, path := range []string{state, home} {
+		if err := os.Chmod(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return map[string]string{"OPENROUTER_API_KEY": "test-key-never-print", "XDG_STATE_HOME": state, "HOME": home}
 }
 func TestRunRejectsInvalidConfigurationBeforeLaunch(t *testing.T) {
 	rootDir := t.TempDir()
@@ -96,7 +102,19 @@ func drain(t *testing.T, m tea.Model, cmd tea.Cmd) terminal.AppModel {
 			t.Fatal("busy without command")
 		}
 		result := make(chan tea.Msg, 1)
-		go func() { result <- cmd() }()
+		go func() {
+			message := cmd()
+			// Dispatch the operation reader in Bubble Tea batches; timer ticks
+			// are exercised separately by terminal tests and the PTY harness.
+			for {
+				batch, ok := message.(tea.BatchMsg)
+				if !ok {
+					break
+				}
+				message = batch[0]()
+			}
+			result <- message
+		}()
 		select {
 		case msg := <-result:
 			m, cmd = m.Update(msg)
@@ -131,7 +149,7 @@ func TestRunResumeRequiresExplicitContinuationAndUsesConfiguredAgent(t *testing.
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			t.Fatal(err)
 		}
-		if body.Model != "test/model" || body.Messages[0].Content != "resume me" || r.Header.Get("Authorization") != "Bearer test-key-never-print" {
+		if body.Model != "test/model" || len(body.Messages) != 2 || body.Messages[1].Content != "resume me" || r.Header.Get("Authorization") != "Bearer test-key-never-print" {
 			t.Fatalf("wrong request %+v", body)
 		}
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"resumed\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n")), Header: make(http.Header)}, nil

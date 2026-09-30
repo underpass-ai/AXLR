@@ -158,7 +158,7 @@ func TestClientRefusesRedirect(t *testing.T) {
 	}
 }
 
-func TestClientRejectsToolFollowUpWithoutDefinitions(t *testing.T) {
+func TestClientAllowsHistoricalToolResultWithoutCurrentDefinition(t *testing.T) {
 	calls := 0
 	client, err := New(ClientConfig{APIKey: "test-secret", HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		calls++
@@ -176,6 +176,10 @@ func TestClientRejectsToolFollowUpWithoutDefinitions(t *testing.T) {
 		},
 	}
 	if _, err := client.Complete(context.Background(), req); err == nil || calls != 0 {
-		t.Fatalf("tool follow-up without definitions = %v; HTTP calls = %d", err, calls)
+		t.Fatalf("follow-up omitted current tools: %v; HTTP calls = %d", err, calls)
+	}
+	req.Tools = []domain.ToolDefinition{{Name: "different_current_tool", Description: "current capability", Parameters: testObject(t, `{"type":"object"}`)}}
+	if _, err := client.Complete(context.Background(), req); err != nil || calls != 1 {
+		t.Fatalf("historical or rejected call blocked: %v; HTTP calls = %d", err, calls)
 	}
 }

@@ -1,0 +1,232 @@
+package application
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/domain"
+	"strings"
+	"testing"
+	"unicode/utf8"
+)
+
+func hostSession(t *testing.T, text string, plugins ...domain.AvailableTool) domain.Session {
+	t.Helper()
+	s := turnSession(t)
+	tools := append(turnTools(), HostTools()...)
+	tools = append(tools, plugins...)
+	if err := s.BeginTurn("user instruction", tools); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteAssistant(assistant(root.Text(text))); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := domain.RestoreSession(s.Export())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return restored
+}
+
+func hostExecute(t *testing.T, s domain.Session, op, args string) domain.ToolOutcome {
+	t.Helper()
+	id, err := domain.NewHostToolIdentity(op)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := (HostToolUseCase{}).Execute(context.Background(), s, id, hostJSON(t, args))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Content) > MaxHostResultBytes || !json.Valid([]byte(out.Content)) || out.Uncertain {
+		t.Fatalf("invalid bounded read-only result: %+v", out)
+	}
+	return out
+}
+
+func TestHostDiscoveryListsStableSummariesAndExactSchema(t *testing.T) {
+	s := hostSession(t, "reply", hostPlugin(t, "zeta", "made", "run"), hostPlugin(t, "alpha", "kmp", "kmp_wake"))
+	out := hostExecute(t, s, domain.HostOperationTools, `{"limit":1}`)
+	var result struct {
+		Tools        []struct{ Name string }
+		TotalMatches int  `json:"total_matches"`
+		HasMore      bool `json:"has_more"`
+	}
+	if err := json.Unmarshal([]byte(out.Content), &result); err != nil || out.IsError || len(result.Tools) != 1 || result.Tools[0].Name != "alpha" || result.TotalMatches != 2 || !result.HasMore {
+		t.Fatalf("%s %v", out.Content, err)
+	}
+	out = hostExecute(t, s, domain.HostOperationTools, `{"query":"KMP WAKE"}`)
+	if out.IsError || !strings.Contains(string(out.Content), `"name":"alpha"`) || strings.Contains(string(out.Content), `"name":"zeta"`) || strings.Contains(string(out.Content), `"properties"`) {
+		t.Fatalf("%s", out.Content)
+	}
+	out = hostExecute(t, s, domain.HostOperationTools, `{"name":"alpha"}`)
+	if out.IsError || !strings.Contains(string(out.Content), `"parameters":{"type":"object"`) || !strings.Contains(string(out.Content), `"plugin":"kmp"`) {
+		t.Fatalf("%s", out.Content)
+	}
+	out = hostExecute(t, s, domain.HostOperationTools, `{"query":"no such capability"}`)
+	if out.IsError || !strings.Contains(string(out.Content), `"total_matches":0`) {
+		t.Fatalf("%s", out.Content)
+	}
+}
+
+func TestHostDiscoveryRejectsInvalidRangesAndSchemaWithoutTruncation(t *testing.T) {
+	s := hostSession(t, "reply", hostPlugin(t, "memory", "kmp", "kmp_wake"))
+	for _, args := range []string{`{"name":"read"}`, `{"name":"unknown"}`, `{"name":null}`, `{"name":"memory","query":"wake"}`, `{"query":3}`, `{"query":null}`, `{"limit":0}`, `{"limit":21}`, `{"limit":1.5}`, `{"limit":null}`, `{"query":"x","query":"y"}`, `{"extra":true}`, `{"offset":-1}`, `{"offset":null}`, `{"offset":1.5}`, `{"offset":2}`, `{"name":"memory","offset":0}`} {
+		if out := hostExecute(t, s, domain.HostOperationTools, args); !out.IsError {
+			t.Fatalf("accepted %s: %s", args, out.Content)
+		}
+	}
+	query, _ := json.Marshal(map[string]string{"query": strings.Repeat("x", 513)})
+	if out := hostExecute(t, s, domain.HostOperationTools, string(query)); !out.IsError {
+		t.Fatal("unbounded query")
+	}
+	huge := hostPlugin(t, "huge", "kmp", "kmp_guide")
+	schema, _ := json.Marshal(map[string]any{"type": "object", "description": strings.Repeat("z", MaxHostResultBytes)})
+	huge.Definition.Parameters = hostJSON(t, string(schema))
+	s = hostSession(t, "reply", huge)
+	if out := hostExecute(t, s, domain.HostOperationTools, `{"name":"huge"}`); !out.IsError || !strings.Contains(string(out.Content), "exceeds") {
+		t.Fatalf("schema silently cut: %s", out.Content)
+	}
+}
+
+func TestHostHistoryRecoversUnicodeMessageByBoundedPages(t *testing.T) {
+	s := hostSession(t, strings.Repeat("historia 😊\n", 3000))
+	expected, _ := json.Marshal(s.Messages()[1])
+	var recovered strings.Builder
+	offset := 0
+	for {
+		args, _ := json.Marshal(map[string]int{"message_index": 1, "offset_bytes": offset, "limit_bytes": 97})
+		out := hostExecute(t, s, domain.HostOperationHistory, string(args))
+		if out.IsError {
+			t.Fatal(out.Content)
+		}
+		var page struct {
+			Text  string
+			Next  int  `json:"next_offset_bytes"`
+			Total int  `json:"total_bytes"`
+			More  bool `json:"has_more"`
+		}
+		if err := json.Unmarshal([]byte(out.Content), &page); err != nil {
+			t.Fatal(err)
+		}
+		if !utf8.ValidString(page.Text) || len(page.Text) > 97 || page.Total != len(expected) || page.Next <= offset {
+			t.Fatalf("bad page: %+v", page)
+		}
+		recovered.WriteString(page.Text)
+		offset = page.Next
+		if !page.More {
+			break
+		}
+	}
+	if recovered.String() != string(expected) {
+		t.Fatal("paged history lost content")
+	}
+	args, _ := json.Marshal(map[string]int{"message_index": 1, "offset_bytes": len(expected)})
+	if out := hostExecute(t, s, domain.HostOperationHistory, string(args)); out.IsError || !strings.Contains(string(out.Content), `"has_more":false`) {
+		t.Fatal("EOF page")
+	}
+}
+
+func TestHostHistoryRejectsBadRangesAndBoundsEscapedPayload(t *testing.T) {
+	s := hostSession(t, "😊 reply")
+	for _, args := range []string{`{}`, `{"message_index":-1}`, `{"message_index":9}`, `{"message_index":null}`, `{"message_index":1,"offset_bytes":-1}`, `{"message_index":1,"offset_bytes":999}`, `{"message_index":1,"limit_bytes":0}`, `{"message_index":1,"limit_bytes":16385}`, `{"message_index":1,"limit_bytes":null}`, `{"message_index":1,"limit_bytes":1.2}`, `{"message_index":1,"other":true}`} {
+		if out := hostExecute(t, s, domain.HostOperationHistory, args); !out.IsError {
+			t.Fatalf("accepted %s", args)
+		}
+	}
+	data, _ := json.Marshal(s.Messages()[1])
+	start := strings.Index(string(data), "😊")
+	for _, test := range []map[string]int{{"message_index": 1, "offset_bytes": start + 1}, {"message_index": 1, "offset_bytes": start, "limit_bytes": 1}} {
+		args, _ := json.Marshal(test)
+		if out := hostExecute(t, s, domain.HostOperationHistory, string(args)); !out.IsError {
+			t.Fatal("UTF8 split accepted")
+		}
+	}
+	s = hostSession(t, strings.Repeat("\"\\", 20000))
+	out := hostExecute(t, s, domain.HostOperationHistory, `{"message_index":1,"limit_bytes":16384}`)
+	if out.IsError || contentJSONBytes(string(out.Content)) > MaxHistoryReadBytes-256 {
+		t.Fatal("escaped page exceeded model result cap")
+	}
+}
+
+func TestHostExecutionHasNoWrapperPrivilegeOrUncertainEffects(t *testing.T) {
+	s := hostSession(t, "reply")
+	if out := hostExecute(t, s, domain.HostOperationCallTool, `{"name":"made_run","arguments":{}}`); !out.IsError {
+		t.Fatal("host directly executed plugin wrapper")
+	}
+	local, _ := domain.NewLocalToolIdentity("exec")
+	for _, id := range []domain.ToolIdentity{local, {}} {
+		out, err := (HostToolUseCase{}).Execute(context.Background(), s, id, hostJSON(t, `{}`))
+		if err != nil || !out.IsError || out.Uncertain {
+			t.Fatal("non-host identity admitted")
+		}
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	id, _ := domain.NewHostToolIdentity(domain.HostOperationHistory)
+	if _, err := (HostToolUseCase{}).Execute(ctx, s, id, hostJSON(t, `{}`)); !errors.Is(err, context.Canceled) {
+		t.Fatal("cancellation ignored")
+	}
+	if len(hostFailure(errors.New(strings.Repeat("bad", 10000))).Content) > MaxHostResultBytes {
+		t.Fatal("unbounded host error")
+	}
+}
+
+func TestHostDiscoveryPagesEveryRegisteredTool(t *testing.T) {
+	plugins := make([]domain.AvailableTool, 25)
+	for i := range plugins {
+		plugins[i] = hostPlugin(t, fmt.Sprintf("tool_%02d", i), "kmp", fmt.Sprintf("action_%02d", i))
+	}
+	s := hostSession(t, "reply", plugins...)
+	offset := 0
+	names := map[string]bool{}
+	for {
+		out := hostExecute(t, s, domain.HostOperationTools, fmt.Sprintf(`{"limit":7,"offset":%d}`, offset))
+		var page struct {
+			Tools []struct{ Name string }
+			Next  int  `json:"next_offset"`
+			More  bool `json:"has_more"`
+		}
+		if err := json.Unmarshal([]byte(out.Content), &page); err != nil || out.IsError {
+			t.Fatal(out.Content, err)
+		}
+		for _, tool := range page.Tools {
+			if names[tool.Name] {
+				t.Fatal("duplicate tool")
+			}
+			names[tool.Name] = true
+		}
+		if !page.More {
+			break
+		}
+		if page.Next <= offset {
+			t.Fatal("nonadvancing pagination")
+		}
+		offset = page.Next
+	}
+	if len(names) != 25 {
+		t.Fatalf("catalog incomplete: %d", len(names))
+	}
+}
+
+func TestHistoryRecoveryPageSurvivesDefaultProjectionExactly(t *testing.T) {
+	s := hostSession(t, strings.Repeat(`"\😊`, 10000))
+	out := hostExecute(t, s, domain.HostOperationHistory, `{"message_index":1,"limit_bytes":16384}`)
+	messages := []root.Message{{Role: root.RoleUser, Content: "recover page"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "history", Name: HostHistoryName, Arguments: hostJSON(t, `{"message_index":1}`)}}}, {Role: root.RoleTool, ToolCallID: "history", Content: out.Content}}
+	projection, err := NewDefaultModelContextProjector().Project(messages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if projection.Messages[2].Content != out.Content {
+		t.Fatal("recovery page was truncated a second time")
+	}
+	var page struct {
+		Next int  `json:"next_offset_bytes"`
+		More bool `json:"has_more"`
+	}
+	if err := json.Unmarshal([]byte(projection.Messages[2].Content), &page); err != nil || page.Next <= 0 || !page.More {
+		t.Fatal("invalid recovery cursor", err)
+	}
+}

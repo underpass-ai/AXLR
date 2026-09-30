@@ -119,7 +119,7 @@ func (s *Session) RecordToolOutcome(id axlr.ToolCallID, decision ToolDecision, o
 	if s.Status() != StatusApproval {
 		return errors.New("tool result requires approval state")
 	}
-	if decision != DecisionApprove && decision != DecisionDeny {
+	if decision != DecisionApprove && decision != DecisionAutoApprove && decision != DecisionDeny {
 		return errors.New("invalid tool decision")
 	}
 	if _, err := axlr.NewText(string(outcome.Content)); err != nil {
@@ -207,7 +207,7 @@ func (s *Session) FinishToolExecution(id axlr.ToolCallID, outcome ToolOutcome) e
 	next := s.Export()
 	found := false
 	for i, p := range next.Activity {
-		if p.Call.ID == id && p.Decision == DecisionApprove && p.Outcome != nil && p.Outcome.Uncertain {
+		if p.Call.ID == id && (p.Decision == DecisionApprove || p.Decision == DecisionAutoApprove) && p.Outcome != nil && p.Outcome.Uncertain {
 			next.Activity[i].Outcome = &outcome
 			found = true
 			break

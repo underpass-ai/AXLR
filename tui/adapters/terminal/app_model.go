@@ -16,37 +16,43 @@ import (
 )
 
 type AppModel struct {
-	deps              Dependencies
-	lifetime          *lifecycle
-	Header            Header
-	Transcript        Transcript
-	Composer          Composer
-	Activity          ToolActivity
-	Status            StatusBar
-	Layout            Layout
-	Theme             Theme
-	Busy, ActivityTab bool
-	Approval          ApprovalDialog
-	SearchBox         SearchBox
-	Palette           ActionPalette
-	Picker            SessionPicker
-	Models            ModelPicker
-	operationID       uint64
-	operationMessages int
-	streamMessages    int
-	streamPending     bool
-	draftOperationID  uint64
-	Help              HelpOverlay
-	Info              Transcript
-	overlay           ControlIntent
-	draft             string
-	submittedPrompt   string
-	submittedAt       int
-	unsentPrompts     []string
-	events            <-chan tea.Msg
-	cancel            context.CancelFunc
-	zones             *zone.Manager
-	prefix            string
+	deps                Dependencies
+	lifetime            *lifecycle
+	Header              Header
+	Transcript          Transcript
+	Composer            Composer
+	Activity            ToolActivity
+	Status              StatusBar
+	Layout              Layout
+	Theme               Theme
+	Busy, ActivityTab   bool
+	Approval            ApprovalDialog
+	SearchBox           SearchBox
+	Palette             ActionPalette
+	Picker              SessionPicker
+	Models              ModelPicker
+	Plugins             PluginPanel
+	memoryActive        bool
+	providerWaiting     bool
+	providerWaitStarted time.Time
+	waitTickScheduled   bool
+	updatingBatch       bool
+	operationID         uint64
+	operationMessages   int
+	streamMessages      int
+	streamPending       bool
+	draftOperationID    uint64
+	Help                HelpOverlay
+	Info                Transcript
+	overlay             ControlIntent
+	draft               string
+	submittedPrompt     string
+	submittedAt         int
+	unsentPrompts       []string
+	events              <-chan tea.Msg
+	cancel              context.CancelFunc
+	zones               *zone.Manager
+	prefix              string
 }
 
 func assistantInMessages(messages []root.Message, start int) bool {
@@ -68,10 +74,11 @@ func New(deps Dependencies) AppModel {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
-	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, Theme: Theme{Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome), Transcript: NewTranscript(), zones: z, prefix: z.NewPrefix()}
+	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, Theme: Theme{Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome), Transcript: NewTranscript(), Plugins: NewPluginPanel(), zones: z, prefix: z.NewPrefix()}
 	if deps.Session != nil {
 		m.Header.State = deps.Session.Export()
 	}
+	m.Activity.SetSession(m.Header.State)
 	for _, record := range m.Header.State.Activity {
 		m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
 	}
@@ -90,6 +97,8 @@ func (m AppModel) Init() tea.Cmd {
 	return tea.RequestBackgroundColor
 }
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionUpdate, application.DiagnosticEvent{OperationID: m.operationID})
+	defer span.End(application.DiagnosticErrorNone)
 	if next, cmd, handled := m.navigation(msg); handled {
 		return next, cmd
 	}
@@ -98,13 +107,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Theme.Light = !v.IsDark()
 		m.Transcript.ApplyTheme(m.Theme)
 		return m, nil
+	case providerWaitTick:
+		if v.OperationID != m.operationID || !m.Busy {
+			return m, nil
+		}
+		m.waitTickScheduled = false
+		cmd := m.waitingCommand(nil)
+		return m, cmd
 	case operationBatch:
+		outerBatch := m.updatingBatch
+		m.updatingBatch = true
 		var cmd tea.Cmd
 		for _, item := range v.Messages {
 			var next tea.Model
 			next, cmd = m.Update(item)
 			m = next.(AppModel)
 		}
+		m.updatingBatch = outerBatch
+		cmd = m.waitingCommand(cmd)
 		return m, cmd
 	case tea.WindowSizeMsg:
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticResize, Width: v.Width, Height: v.Height})
@@ -114,6 +134,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Models.pageSize = max(1, v.Height-7)
 			m.Models.ensureVisible()
 		}
+		m.Plugins.Resize(v.Width, v.Height-2)
 		offset := m.Transcript.Viewport.YOffset()
 		m.Transcript.Viewport.SetWidth(m.Layout.TranscriptWidth)
 		m.Transcript.Viewport.SetHeight(m.Layout.BodyHeight)
@@ -128,7 +149,22 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case application.Event:
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticEventConsumed, Chunks: 1, Bytes: len(v.Text)})
+		if v.Kind == application.EventSession && v.Snapshot != nil {
+			m.providerWaiting = false
+			m.Header.State = *v.Snapshot
+			m.draft = ""
+			m.draftOperationID = 0
+			m.refreshTranscript()
+		}
+		if v.Kind == application.EventToolExecutionStarted {
+			m.providerWaiting = false
+			m.memoryActive = v.Memory
+		}
 		if v.Kind == application.EventStreamStart {
+			m.Status.Phase = domain.ProviderWaiting
+			m.providerWaiting = true
+			m.providerWaitStarted = time.Now()
+			m.memoryActive = false
 			m.streamMessages = v.MessageCount
 			m.streamPending = true
 			if m.draftOperationID == m.operationID {
@@ -137,6 +173,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if v.Kind == application.EventTextDelta {
+			m.providerWaiting = false
 			if m.streamPending || (m.draftOperationID != 0 && m.draftOperationID != m.operationID) {
 				m.draft = ""
 			}
@@ -145,14 +182,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.draftOperationID = m.operationID
 			m.refreshTranscript()
 		}
+		if v.Kind == application.EventProviderActivity && m.Busy && m.streamPending {
+			m.Status.Phase = v.ProviderPhase
+			m.providerWaiting = v.ProviderPhase != domain.ProviderContent
+		}
 		if v.Kind == application.EventState {
 			m.Status.State = v.State
 		}
 		m.Activity.Apply(v)
 		if m.events != nil {
-			return m, readOperation(m.events)
+			cmd := m.waitingCommand(readOperation(m.events))
+			return m, cmd
 		}
-		return m, nil
+		cmd := m.waitingCommand(nil)
+		return m, cmd
 	case operationComplete:
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
@@ -163,6 +206,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.cancel = nil
 		m.events = nil
 		m.Busy = false
+		m.providerWaiting = false
+		m.waitTickScheduled = false
+		m.memoryActive = false
 		if v.Session.Export().ID != "" {
 			if m.deps.Session == nil {
 				m.deps.Session = new(domain.Session)
@@ -172,6 +218,25 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		oldID := m.Header.State.ID
 		if v.Session.Export().ID != "" {
 			m.Header.State = v.Session.Export()
+		}
+		if v.PluginApproval != nil {
+			for i := range m.Plugins.Items {
+				if m.Plugins.Items[i].Profile.ID == v.PluginApproval.ID {
+					m.Plugins.Items[i].Profile.Approval = v.PluginApproval.Approval
+				}
+			}
+		}
+		if v.Plugins != nil {
+			m.Plugins.Loading = false
+			if v.Err != nil {
+				m.Plugins.Error = v.Err.Error()
+				if v.PluginApproval != nil {
+					m.Plugins.Error = "Approval saved; inventory refresh failed: " + v.Err.Error()
+				}
+			} else {
+				m.Plugins.SetItems(*v.Plugins)
+			}
+			m.Plugins.Resize(m.Layout.Width, m.Layout.Height-2)
 		}
 		if v.Models != nil {
 			if v.Err != nil {
@@ -195,6 +260,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
 			m.Activity = ToolActivity{}
+			m.Activity.SetSession(m.Header.State)
 			m.unsentPrompts = nil
 			m.draft = ""
 			m.draftOperationID = 0
@@ -222,6 +288,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.Err != nil {
 			m.Status.Error = v.Err.Error()
+			if v.PluginApproval != nil {
+				m.Status.Error = "Approval saved; inventory refresh failed: " + v.Err.Error()
+			}
 		} else if m.draft == "" {
 			m.Status.Error = ""
 		}
@@ -234,7 +303,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ControlIntent:
 		switch v {
 		case "send":
-			if m.Composer.Input.Value() == "/model" {
+			command := strings.TrimSpace(m.Composer.Input.Value())
+			if command == "/mcp" || command == "/plugin" {
+				intent := ControlIntent("mcp")
+				if command == "/plugin" {
+					intent = "plugins"
+				}
+				next, cmd, _ := m.navigation(intent)
+				changed := next.(AppModel)
+				if cmd != nil {
+					changed.Composer.Input.Reset()
+				}
+				return changed, cmd
+			}
+			if command == "/model" {
 				next, cmd, _ := m.navigation(ControlIntent("models"))
 				changed := next.(AppModel)
 				if cmd != nil {
@@ -258,7 +340,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			prompt := root.Text(m.Composer.Input.Value())
-			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, Bytes: len(prompt)})
+			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
 			m.Composer.Input.Reset()
@@ -328,6 +410,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 func (m AppModel) View() tea.View {
+	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionRender, application.DiagnosticEvent{OperationID: m.operationID, Width: max(0, m.Layout.Width), Height: max(0, m.Layout.Height)})
+	defer span.End(application.DiagnosticErrorNone)
 	var started time.Time
 	if m.deps.Diagnostics != nil {
 		started = time.Now()
@@ -337,12 +421,17 @@ func (m AppModel) View() tea.View {
 		content = ansi.Truncate("Resize terminal to at least 50 × 15", max(1, m.Layout.Width), "")
 	} else {
 		body := m.Transcript.View()
+
 		if m.ActivityTab {
 			body = m.Activity.View(m.Layout.Width, m.Layout.BodyHeight)
 		}
-		body = lipgloss.JoinVertical(lipgloss.Left, m.Activity.Tabs(m.zones, m.prefix), body)
+		tabs := m.Activity.Tabs(m.zones, m.prefix)
+		if m.memoryActive {
+			tabs = m.Theme.MemoryRow().Render("Memory · KMP is running")
+		}
+		body = lipgloss.JoinVertical(lipgloss.Left, tabs, body)
 		controls := m.Composer.Controls(m.zones, m.prefix)
-		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, m.Composer.View(), controls, m.Status.View(m.Layout.Width))
+		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, m.Composer.View(), controls, m.statusView())
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 {
 		content = m.overlayView(content)
@@ -380,6 +469,7 @@ func (m AppModel) View() tea.View {
 
 // Failed submissions remain display state, never valid model history.
 func (m *AppModel) refreshTranscript() {
+	m.Activity.SetSession(m.Header.State)
 	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)

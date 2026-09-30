@@ -103,6 +103,9 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 		lifetime.mu.Unlock()
 		go func() {
 			defer lifetime.workers.Done()
+			ctx, span := application.StartDiagnosticSpan(ctx, trace, application.DiagnosticActionOperation, application.DiagnosticEvent{OperationID: id})
+			var operationErr error
+			defer func() { span.End(diagnosticErrorClass(operationErr)) }()
 			started := time.Now()
 			chunks, bytes := 0, 0
 			err := run(ctx, &snapshot, func(e application.Event) error {
@@ -110,8 +113,10 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 					usage := *e.Usage
 					e.Usage = &usage
 				}
+				_, delivery := application.StartDiagnosticSpan(ctx, trace, application.DiagnosticActionEventDelivery, application.DiagnosticEvent{OperationID: id, Bytes: len(e.Text)})
 				select {
 				case ch <- e:
+					delivery.End(application.DiagnosticErrorNone)
 					chunks++
 					bytes += len(e.Text)
 					if trace != nil {
@@ -119,9 +124,11 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 					}
 					return nil
 				case <-ctx.Done():
+					delivery.End(diagnosticErrorClass(ctx.Err()))
 					return ctx.Err()
 				}
 			})
+			operationErr = err
 			stage := application.DiagnosticOperationDone
 			if err != nil {
 				stage = application.DiagnosticOperationFailed

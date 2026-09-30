@@ -91,7 +91,8 @@ func TestToolRunnerMCPErrorIdentityAndDisappearance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tool := range snapshot[4:] {
+	pluginSnapshot := pluginTools(snapshot)
+	for _, tool := range pluginSnapshot {
 		id, err := ResolveTool(snapshot, tool.Definition.Name)
 		if err != nil {
 			t.Fatal(err)
@@ -104,18 +105,18 @@ func TestToolRunnerMCPErrorIdentityAndDisappearance(t *testing.T) {
 	if err := os.WriteFile(marker, []byte("gone"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	out, err := runner.Execute(context.Background(), snapshot[4].Identity, jsonValue(t, "{}"))
+	out, err := runner.Execute(context.Background(), pluginSnapshot[0].Identity, jsonValue(t, "{}"))
 	if err != nil || !out.IsError || out.Uncertain || !strings.Contains(string(out.Content), "unknown_plugin_tool") {
 		t.Fatalf("%+v %v", out, err)
 	}
 	fresh, err := (ToolCatalog{Plugins: m}).Snapshot(context.Background())
-	if err != nil || len(fresh) != 4 {
+	if err != nil || len(pluginTools(fresh)) != 0 {
 		t.Fatalf("fresh: %+v %v", fresh, err)
 	}
-	if _, err := ResolveTool(snapshot, snapshot[4].Definition.Name); err != nil {
+	if _, err := ResolveTool(snapshot, pluginSnapshot[0].Definition.Name); err != nil {
 		t.Fatal("old snapshot was changed", err)
 	}
-	if _, err := ResolveTool(fresh, snapshot[4].Definition.Name); err == nil {
+	if _, err := ResolveTool(fresh, pluginSnapshot[0].Definition.Name); err == nil {
 		t.Fatal("missing tool present in fresh snapshot")
 	}
 	id, _ := domain.NewPluginToolIdentity(root.PluginRef{PluginID: "alpha", ToolName: "hidden"})
@@ -156,7 +157,11 @@ func TestMCPHelper(t *testing.T) {
 		case "tools/list":
 			list := []any{}
 			if _, err := os.Stat(os.Getenv("MARKER")); os.IsNotExist(err) {
-				for _, name := range []string{"echo", "hidden"} {
+				names := []string{"echo", "hidden"}
+				if custom := os.Getenv("AXLR_TUI_TOOL_NAMES"); custom != "" {
+					names = strings.Split(custom, ",")
+				}
+				for _, name := range names {
 					list = append(list, map[string]any{"name": name, "inputSchema": map[string]any{"type": "object"}})
 				}
 			}
@@ -203,7 +208,7 @@ func TestToolRunnerLostMCPReplyPausesPersistedTurn(t *testing.T) {
 	if err = session.BeginTurn("run plugin", snapshot); err != nil {
 		t.Fatal(err)
 	}
-	call := root.ToolCall{ID: "lost", Name: snapshot[4].Definition.Name, Arguments: jsonValue(t, `{"lose_reply":true}`)}
+	call := root.ToolCall{ID: "lost", Name: pluginTools(snapshot)[0].Definition.Name, Arguments: jsonValue(t, `{"lose_reply":true}`)}
 	if err = session.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{call}}}); err != nil {
 		t.Fatal(err)
 	}
@@ -213,7 +218,7 @@ func TestToolRunnerLostMCPReplyPausesPersistedTurn(t *testing.T) {
 	}
 	defer store.Close()
 	model := &countingStream{}
-	resolver := application.ResolveToolUseCase{Tools: ToolRunner{Executor: executor}, Store: store, Continue: application.ContinueTurnUseCase{Models: model}}
+	resolver := application.ResolveToolUseCase{Validation: NewToolArgumentValidator(), Tools: ToolRunner{Executor: executor}, Store: store, Continue: application.ContinueTurnUseCase{Models: model}}
 	runErr := resolver.Execute(context.Background(), &session, call.ID, domain.DecisionApprove, nil)
 	effect, err := os.ReadFile(marker + ".calls")
 	if err != nil || string(effect) != "alpha:echo\n" {

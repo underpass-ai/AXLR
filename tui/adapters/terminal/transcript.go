@@ -42,12 +42,37 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 		} else if m.Role == root.RoleAssistant {
 			kind = transcriptRowAssistant
 		}
-		t.rows = append(t.rows, transcriptRow{Text: string(m.Role) + ": " + string(m.Content), Kind: kind})
+		text := string(m.Role) + ": " + string(m.Content)
+		if m.Role == root.RoleTool {
+			call := root.ToolCall{}
+			for _, record := range s.Activity {
+				if record.Call.ID == m.ToolCallID {
+					call = record.Call
+					break
+				}
+			}
+			label, memory := toolCallPresentation(s, call)
+			text = "tool result: " + label + " · " + toolSummary(string(m.Content))
+			if memory {
+				kind = transcriptRowMemory
+				text = "memory result: " + label + " · " + toolSummary(string(m.Content))
+			}
+		}
+		if m.Content != "" || m.Role != root.RoleAssistant {
+			t.rows = append(t.rows, transcriptRow{Text: text, Kind: kind})
+		}
 		for _, c := range m.ToolCalls {
-			t.rows = append(t.rows, transcriptRow{Text: "tool request: " + string(c.Name) + " " + string(c.Arguments.Bytes())})
+			label, memory := toolCallPresentation(s, c)
+			kind := transcriptRowPlain
+			prefix := "tool request: "
+			if memory {
+				kind = transcriptRowMemory
+				prefix = "memory request: "
+			}
+			t.rows = append(t.rows, transcriptRow{Text: prefix + label + " " + toolSummary(string(c.Arguments.Bytes())), Kind: kind})
 			for _, a := range s.Activity {
 				if a.Call.ID == c.ID {
-					t.rows = append(t.rows, transcriptRow{Text: "decision: " + string(a.Decision)})
+					t.rows = append(t.rows, transcriptRow{Text: "decision: " + string(a.Decision), Kind: kind})
 				}
 			}
 		}
@@ -125,6 +150,8 @@ func (t Transcript) View() string {
 			lines[i] = t.theme.UserRow().Render(lines[i])
 		case transcriptRowAssistant:
 			lines[i] = t.theme.AssistantRow().Render(lines[i])
+		case transcriptRowMemory:
+			lines[i] = t.theme.MemoryRow().Render(lines[i])
 		}
 	}
 	return strings.Join(lines, "\n")

@@ -340,3 +340,37 @@ func TestHangingPluginHelper(t *testing.T) {
 	_ = os.WriteFile(os.Getenv("AXLR_INIT_LOG"), []byte("started\n"), 0600)
 	time.Sleep(30 * time.Second)
 }
+
+func TestManagerListServerIsolatesFailuresAndHonorsLifecycle(t *testing.T) {
+	good := pluginRegistration(t, "good", []domain.PluginToolName{"echo"})
+	bad, err := NewRegistration(Manifest{ID: "bad", Command: "/nonexistent-axlr-mcp", AllowTools: []domain.PluginToolName{"echo"}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManager([]Registration{bad, good})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if _, err := m.ListServer(context.Background(), "bad"); err == nil {
+		t.Fatal("missing server appeared available")
+	}
+	tools, err := m.ListServer(context.Background(), "good")
+	if err != nil || len(tools) != 1 || tools[0].Ref.PluginID != "good" {
+		t.Fatalf("healthy server lost: %+v %v", tools, err)
+	}
+	if _, err := m.ListServer(context.Background(), "unknown"); err == nil {
+		t.Fatal("unknown server accepted")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := m.ListServer(ctx, "good"); !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	if err := m.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.ListServer(context.Background(), "good"); err == nil {
+		t.Fatal("closed manager reused")
+	}
+}

@@ -3,7 +3,6 @@ package application
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -11,7 +10,11 @@ import (
 
 // AgentTurnUseCase advances until a final answer or a human decision is needed.
 // ContinueTurnUseCase remains responsible for exactly one model stream.
-type AgentTurnUseCase struct{ Continue ContinueTurnUseCase }
+type AgentTurnUseCase struct {
+	Continue ContinueTurnUseCase
+	Tools    ToolExecutionPort
+	Approval ToolApprovalPolicyPort
+}
 
 func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit func(Event) error) error {
 	if s == nil || u.Continue.Store == nil {
@@ -24,8 +27,19 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := rejectUnknown(ctx, s, u.Continue.Store, emit); err != nil {
+		if err := rejectUnknown(ctx, s, u.Continue.Store, emit, u.Continue.Diagnostics); err != nil {
 			return err
+		}
+		if s.Status() == domain.StatusApproval && len(s.Pending()) > 0 {
+			pending := s.Pending()[0]
+			tool, _, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending.Call)
+			if known && resolveErr == nil && automaticallyApproves(u.Approval, tool.Identity) {
+				resolver := ResolveToolUseCase{Tools: u.Tools, Store: u.Continue.Store, Diagnostics: u.Continue.Diagnostics, Approval: u.Approval, Validation: u.Continue.Validation}
+				if err := resolver.resolveOne(ctx, s, pending.Call.ID, domain.DecisionAutoApprove, emit); err != nil {
+					return err
+				}
+				continue
+			}
 		}
 		if s.Status() != domain.StatusStreaming {
 			return nil
@@ -43,20 +57,16 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 	}
 	return domain.AvailableTool{}, false
 }
-func rejectUnknown(ctx context.Context, s *domain.Session, store SessionStorePort, emit func(Event) error) error {
+func rejectUnknown(ctx context.Context, s *domain.Session, store SessionStorePort, emit func(Event) error, trace DiagnosticPort) error {
 	for s.Status() == domain.StatusApproval && len(s.Pending()) > 0 {
 		p := s.Pending()[0]
-		if _, known := findTool(s, p.Call.Name); known {
+		_, _, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), p.Call)
+		if known && resolveErr == nil {
 			return nil
 		}
-		next := *s
-		if err := next.RecordToolOutcome(p.Call.ID, domain.DecisionDeny, domain.ToolOutcome{Content: root.Text(fmt.Sprintf("unknown tool %q rejected", p.Call.Name)), IsError: true}); err != nil {
+		if err := rejectUnknownCall(ctx, s, store, trace, p, resolveErr); err != nil {
 			return err
 		}
-		if err := store.Save(ctx, next); err != nil {
-			return err
-		}
-		*s = next
 		if err := emitTool(s, p.Call.ID, emit); err != nil {
 			return err
 		}
@@ -70,4 +80,9 @@ func emitTool(s *domain.Session, id root.ToolCallID, emit func(Event) error) err
 		}
 	}
 	return nil
+}
+
+func emitSession(s *domain.Session, emit func(Event) error) error {
+	snapshot := s.Export()
+	return emit(Event{Kind: EventSession, Snapshot: &snapshot, State: s.Status()})
 }

@@ -12,6 +12,10 @@ func (ActionPalette) Intent(msg tea.Msg) ControlIntent {
 		switch k.String() {
 		case "m":
 			return "models"
+		case "p":
+			return "plugins"
+		case "e":
+			return "mcp"
 		case "s":
 			return "search"
 		case "o":
@@ -29,5 +33,5 @@ func (ActionPalette) Intent(msg tea.Msg) ControlIntent {
 	return ""
 }
 func (ActionPalette) View(z *zone.Manager, p string) string {
-	return "Actions\n" + z.Mark(p+"models", "[Models M]") + "\n" + z.Mark(p+"search", "[Search S]") + "\n" + z.Mark(p+"sessions", "[Sessions O]") + "\n" + z.Mark(p+"help", "[Help H]") + "\n" + z.Mark(p+"info", "[Model / workspace I]") + "\n" + z.Mark(p+"continue", "[Continue interrupted turn R]") + "\n" + z.Mark(p+"cancel", "[Cancel turn C]") + "\n" + z.Mark(p+"close", "[Close Esc]")
+	return "Actions\n" + z.Mark(p+"mcp", "[MCP servers E]") + "\n" + z.Mark(p+"plugins", "[Plugins P]") + "\n" + z.Mark(p+"models", "[Models M]") + "\n" + z.Mark(p+"search", "[Search S]") + "\n" + z.Mark(p+"sessions", "[Sessions O]") + "\n" + z.Mark(p+"help", "[Help H]") + "\n" + z.Mark(p+"info", "[Model / workspace / full tool results I]") + "\n" + z.Mark(p+"continue", "[Continue interrupted turn R]") + "\n" + z.Mark(p+"cancel", "[Cancel turn C]") + "\n" + z.Mark(p+"close", "[Close Esc]")
 }

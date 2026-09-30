@@ -99,39 +99,63 @@ func (m *Manager) List(ctx context.Context) ([]domain.PluginTool, error) {
 	defer finish()
 	result := []domain.PluginTool{}
 	for _, id := range m.order {
-		if err := m.connect(ctx, id); err != nil {
-			return nil, err
-		}
-		tools, err := m.client.ListTools(ctx, mcpclient.ServerName(id))
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
+		tools, err := m.listServer(ctx, id)
 		if err != nil {
 			return nil, err
 		}
-		allowed := map[domain.PluginToolName]bool{}
-		for _, name := range m.registrations[id].Manifest.AllowTools {
-			allowed[name] = true
+		result = append(result, tools...)
+
+	}
+	return result, nil
+}
+
+// ListServer discovers one configured server without conflating other failures.
+func (m *Manager) ListServer(ctx context.Context, id domain.PluginID) ([]domain.PluginTool, error) {
+	if err := m.acquire(ctx); err != nil {
+		return nil, err
+	}
+	defer m.release()
+	ctx, finish := m.operationContext(ctx)
+	defer finish()
+	if _, known := m.registrations[id]; !known {
+		return nil, errors.New("unknown plugin")
+	}
+	return m.listServer(ctx, id)
+}
+func (m *Manager) listServer(ctx context.Context, id domain.PluginID) ([]domain.PluginTool, error) {
+	result := []domain.PluginTool{}
+	if err := m.connect(ctx, id); err != nil {
+		return nil, err
+	}
+	tools, err := m.client.ListTools(ctx, mcpclient.ServerName(id))
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	if err != nil {
+		return nil, err
+	}
+	allowed := map[domain.PluginToolName]bool{}
+	for _, name := range m.registrations[id].Manifest.AllowTools {
+		allowed[name] = true
+	}
+	for _, tool := range tools {
+		name := domain.PluginToolName(tool.Ref.Name)
+		if !allowed[name] && !m.registrations[id].Manifest.AllowAll {
+			continue
 		}
-		for _, tool := range tools {
-			name := domain.PluginToolName(tool.Ref.Name)
-			if !allowed[name] && !m.registrations[id].Manifest.AllowAll {
-				continue
-			}
-			input, err := domain.NewJSONValue(tool.InputSchema)
+		input, err := domain.NewJSONValue(tool.InputSchema)
+		if err != nil {
+			return nil, err
+		}
+		var output *domain.JSONValue
+		if len(tool.OutputSchema) != 0 {
+			v, err := domain.NewJSONValue(tool.OutputSchema)
 			if err != nil {
 				return nil, err
 			}
-			var output *domain.JSONValue
-			if len(tool.OutputSchema) != 0 {
-				v, err := domain.NewJSONValue(tool.OutputSchema)
-				if err != nil {
-					return nil, err
-				}
-				output = &v
-			}
-			result = append(result, domain.PluginTool{Ref: domain.PluginRef{PluginID: id, ToolName: name}, Description: tool.Description, InputSchema: input, OutputSchema: output})
+			output = &v
 		}
+		result = append(result, domain.PluginTool{Ref: domain.PluginRef{PluginID: id, ToolName: name}, Description: tool.Description, InputSchema: input, OutputSchema: output})
 	}
 	return result, nil
 }

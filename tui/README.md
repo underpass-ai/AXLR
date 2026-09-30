@@ -1,6 +1,6 @@
 # AXLR agent console
 
-`axlr-tui` is a streaming OpenRouter console for a local workspace. It offers AXLR read, write, edit and exec tools, explicitly registered MCP plugins, per-call approval, transcript search and resumable sessions. It targets trusted-local Linux and runs with your account's OS access.
+`axlr-tui` is a streaming OpenRouter console for a local workspace. It offers AXLR read, write, edit and exec tools, explicitly registered MCP plugins, persistent plugin approval policies, transcript search and resumable sessions. It targets trusted-local Linux and runs with your account's OS access.
 
 ## Build and start
 
@@ -24,7 +24,9 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 
 | Key | Action |
 | --- | --- |
-| Enter | Send prompt; open models when the editor contains exactly `/model` |
+| Enter | Send prompt; run `/model`, `/mcp` or `/plugin` |
+| A in `/plugin` | Toggle automatic/manual approval for the selected plugin |
+| R in `/mcp` or `/plugin` | Refresh server/tool inventory |
 | Shift+Enter | Newline in the prompt |
 | A / D | Approve / deny the displayed tool call |
 | Esc | Close overlay or cancel the current turn |
@@ -38,9 +40,18 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 | Tab | Transcript / activity |
 | PgUp / PgDn | Scroll |
 
-Mouse controls match the keyboard actions. Tool arguments and exact targets appear before approval; scroll approval details with arrows, PgUp/PgDn or the wheel. Every tool call requires its own decision. A turn allows up to 32 tool calls. Unknown calls are rejected. Cancelled or uncertain effects are recorded and never automatically retried.
+Mouse controls match the keyboard actions. Tool arguments and exact targets appear before approval; scroll approval details with arrows, PgUp/PgDn or the wheel. Local tools and plugins default to an individual decision. A configured plugin may opt into automatic approval; `/plugin` changes and persists that policy for its exact ID. Local catalog/history reads are automatically resolved; they do not grant approval to plugin calls. A turn allows up to 32 tool calls. Unknown calls are rejected. Cancelled or uncertain effects are recorded and never automatically retried.
 
-Use a terminal of at least 50 columns by 15 rows. The transcript occupies the full terminal width; Tab opens the activity view. User and assistant turns are separate, full-width rows with subtle backgrounds selected for the terminal's light or dark theme. Rows wrap to their content, and the transcript scrolls as turns accumulate. Set `NO_COLOR=1` for monochrome output. The terminal controls the font, including Nerd Fonts.
+Use a terminal of at least 50 columns by 15 rows. The transcript occupies the full terminal width; Tab opens the activity view. User and assistant turns are separate, full-width rows with subtle backgrounds selected for the terminal's light or dark theme. KMP tool requests and results use distinct memory rows; a memory indicator appears while KMP executes. Tool rows show compact previews; Actions → Info retains the full saved results in a scrollable view. Before the first text delta, the status shows the elapsed wait for the model. Rows wrap to their content, and the transcript scrolls as turns accumulate. Set `NO_COLOR=1` for monochrome output. The terminal controls the font, including Nerd Fonts.
+
+
+## Model context
+
+The full conversation and tool outcomes remain in the private session store. Model requests use a separate bounded projection: 96 KiB of history, a 64 KiB low watermark, up to 16 KiB per tool result and an 8 KiB extractive checkpoint. Checkpoints quote historical inputs and mark omissions explicitly. The current prompt and tool arguments are never silently shortened; an oversized active turn produces an explicit error. Restoring a session reproduces the projection without deleting history or calling a summarization model.
+
+The model initially receives the four local tools and three host controls: `axlr_tools` searches or retrieves exact plugin schemas; `axlr_call_tool` invokes the registered plugin target; `axlr_history` reads original messages in pages. Discovery uses `offset` and returned `next_offset`; history uses `message_index`, `offset_bytes` and returned `next_offset_bytes`. Retrieved schemas can be reused for the frozen catalog. Exact schema results are limited to 32 KiB. Plugin arguments are validated locally against that schema before execution, and unsupported schema assertions produce an explicit tool error.
+
+Provider reasoning and tool preparation have separate status indicators. They show activity without displaying hidden reasoning text. See the [implementation research and measurements](../docs/research/2026-09-30-context-policy.md).
 
 ## Plugins
 
@@ -64,11 +75,17 @@ For persistent connections, create `$XDG_CONFIG_HOME/axlr/mcp.json` (or `$HOME/.
   "plugins": [
     {
       "manifest": "/absolute/path/to/notes.json",
+      "name": "Notes",
+      "description": "Workspace knowledge",
+      "purpose": "memory",
+      "approval": "auto",
       "env_from": {"TOKEN": "NOTES_API_TOKEN"}
     }
   ]
 }
 ```
+
+Optional `purpose` is `tools` (default), `memory` or `ceremony`. Optional `approval` is `manual` (default) or `auto`. Automatic approval applies to tools allowed by that plugin's manifest, including future tools if `allow_tools` is `"*"`. Policies are persisted with a process-shared lock and atomic private-file replacement. `/mcp` shows each server and its tool inventory; `/plugin` shows policies and supports changing them. MADE ceremony tools use the same exact-plugin policy: set MADE to `auto` in `/plugin` or its persisted entry to execute allowed ceremony calls without individual approval. Command-line-only registrations remain manual unless placed in the persistent config.
 
 AXLR loads this file at every start, including launches without `--plugin`. `env_from` copies only named host variables; optional `env` supplies literal values for a plugin. Both maps become that plugin's complete child environment. Use `--mcp-config /absolute/path/config.json` to select another file. The config lists manifests explicitly, so tools from unrelated applications are not silently started.
 
@@ -91,11 +108,15 @@ The header identifies the current session. Open another through Ctrl+O, or start
   --session 0123456789abcdef0123456789abcdef
 ```
 
-The startup workspace must match the saved session. `--session` restores its saved model without fetching the catalog. If you also supply `--model`, it must match the saved model; use `/model` after loading to change it. The picker refuses a different workspace. Restored in-progress sessions appear interrupted and do not execute anything on load. Ctrl+R explicitly continues; pending calls reopen for individual decisions. Partial output is kept as an interrupted draft, outside valid model history. SIGTERM or terminal failure cancels active work and waits for its stable save before releasing resources.
+The startup workspace must match the saved session. `--session` restores its saved model without fetching the catalog. If you also supply `--model`, it must match the saved model; use `/model` after loading to change it. The picker refuses a different workspace. Restored in-progress sessions appear interrupted and do not execute anything on load. Ctrl+R explicitly continues; pending calls resume under the current plugin policy; local tools and manual plugins still require individual decisions. Partial output is kept as an interrupted draft, outside valid model history. SIGTERM or terminal failure cancels active work and waits for its stable save before releasing resources.
 
 ## Diagnostics
 
-Pass `--trace-file /absolute/path/axlr-tui.jsonl` to record startup, model requests, streaming progress, event delivery, rendering dimensions and time, session saves, and completion. The file is owner-only (`0600`). Records contain event names, counts, timings, dimensions and error classes; they omit prompts, responses, model IDs, tool arguments and credentials. The trace is optional and appends to an existing file.
+Every launch records startup, model requests, streaming progress, event delivery, rendering dimensions and time, session saves, and completion. Traces are written to a unique file under `$XDG_STATE_HOME/axlr/logs`, or `$HOME/.local/state/axlr/logs`. The path is printed on startup. Directories are private (`0700`), and files are owner-only (`0600`). Each measured action has `action_start` and `action_end`, a span ID and parent ID, with microsecond durations. Records include a run ID to distinguish launches appended to one trace, correlated request IDs, endpoint categories, byte counts, timings, dimensions and error classes; they omit prompts, responses, model IDs, tool arguments and credentials. `--trace-file /path/axlr-tui.jsonl` overrides the location and appends to an existing file; relative paths are also accepted.
+
+All OpenRouter API requests and response bodies, including the model catalog and HTTP errors, are captured by default in a separate private directory beside the trace. Each launch gets a unique payload directory, including when the trace file is reused. Its path is printed on startup. Authorization headers are never captured, and the configured API key and recognizable credential patterns are redacted from bodies. Payloads contain conversation content and tool results; captures are limited to **8 MiB per file**. There is no per-launch byte budget that stops later requests from being captured. HTTP error bodies are read on close with an 8 MiB / 500 ms bound; partial captures, unavailable responses and I/O failures have an explicit `payload_failed` record. Use `--trace-payloads=false` to keep timing logs without body captures.
+
+The `context_projected` record reports original/projected message counts and bytes, dropped messages and the cut index. `request_sent` reports message count, tool count, separate message/schema bytes and outgoing bytes. Plugin argument validation has its own timed `tool_validation` action. `provider_headers.elapsed_ms` measures time to HTTP headers; `provider_content.elapsed_ms` measures arrival of visible answer text. `provider_reasoning`, `provider_tool_delta`, `provider_heartbeat` and `provider_wire_bytes` distinguish reasoning, tool requests, keepalives and received bytes from visible text. Tool completion and render timings distinguish MCP latency from provider waits. See [the measured MCP diagnostic](../docs/diagnostics/2026-09-30-tui-mcp.md) and [the payload audit and live generation probe](../docs/diagnostics/2026-09-30-tui-payloads.md).
 
 ## Development checks
 

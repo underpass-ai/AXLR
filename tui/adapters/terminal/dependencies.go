@@ -10,6 +10,7 @@ import (
 type Dependencies struct {
 	Context         context.Context
 	Diagnostics     application.DiagnosticPort
+	Plugins         application.PluginManagementPort
 	Models          application.ListModelsUseCase
 	ModelPreference application.ModelPreferencePort
 	Create          application.CreateSessionUseCase
