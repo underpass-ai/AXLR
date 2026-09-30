@@ -28,7 +28,7 @@ This runbook uses a directly managed local `kmp-mcp` stdio process. See the [KMP
   "name": "KMP",
   "purpose": "memory",
   "approval": "manual",
-  "env": {"KMP_MCP_DATA_DIR": "/absolute/path/to/memory"}
+  "env": {"KMP_MCP_BACKEND": "embedded", "KMP_MCP_DATA_DIR": "/absolute/path/to/memory"}
 }
 ```
 
@@ -36,7 +36,15 @@ Use `{"version":1,"plugins":[...]}` as the top-level shape if this is the first 
 
 5. Restart AXLR. Open `/mcp`, refresh and verify that `kmp` lists tools. Ask the agent to read KMP's guide and perform a read-only `kmp_wake` or `kmp_ask`. On a fresh store, synchronize the matching KMP guide assets using KMP's documented guide workflow before relying on guided recall. Approval remains manual until you deliberately change `kmp`'s policy in `/mcp`.
 
-For a one-launch check without changing persistent configuration, use `axlr-tui --root /absolute/workspace --plugin /absolute/path/to/kmp.json`. The worker also accepts `--plugin` for a one-request MCP call. Its process lifetime ends after that response.
+For a one-launch check without changing persistent configuration, keep the same explicit store:
+
+```bash
+AXLR_KMP_DATA_DIR=/absolute/path/to/memory \
+  axlr-tui --root /absolute/workspace --plugin /absolute/path/to/kmp.json \
+  --plugin-env-from 'kmp:KMP_MCP_DATA_DIR=AXLR_KMP_DATA_DIR'
+```
+
+The worker also accepts `--plugin` for a one-request MCP call; supply the same store through `--plugin-env`. Its process lifetime ends after that response.
 
 ## Disconnect KMP from AXLR
 

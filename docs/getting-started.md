@@ -37,7 +37,7 @@ Useful launch options:
 | `--session ID` | Restore a saved session in the same workspace |
 | `--trace-payloads=false` | Keep timing diagnostics without saved HTTP bodies |
 
-Press `F1` for keyboard help. `Ctrl+P` opens the action palette. AXLR asks before local tool calls unless a connected MCP server has an explicit automatic approval policy. Review the target and arguments shown in the approval dialog.
+Press `F1` for keyboard help. `Ctrl+P` opens the action palette. AXLR asks before tool calls by default; saved per-tool choices, a server's automatic policy or full autonomy can approve them automatically. `/approvals` shows the saved choices. Review the target and arguments shown in the approval dialog.
 
 ## 3. Try the one-request worker
 

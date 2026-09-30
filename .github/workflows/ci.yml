@@ -13,6 +13,17 @@ permissions:
   contents: read
 
 jobs:
+  brand:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: 22
+      - name: Pixel renderer and generated assets
+        run: |
+          node --test tools/pixelart/render.test.mjs
+          node tools/pixelart/cli.mjs --check
   go:
     runs-on: ubuntu-latest
     steps:
