@@ -36,6 +36,7 @@ type AppModel struct {
 	Models              ModelPicker
 	Plugins             PluginPanel
 	InstalledPlugins    InstalledPlugins
+	Changes             ChangeViewer
 	memoryActive        bool
 	providerWaiting     bool
 	providerWaitStarted time.Time
@@ -95,6 +96,8 @@ func New(deps Dependencies) AppModel {
 	z := zone.New()
 	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix()}
 	m.Composer.Theme = m.Theme
+	m.Changes = NewChangeViewer()
+	m.Changes.Theme = m.Theme
 	m.Composer.Input.Placeholder = m.Theme.T("composer.placeholder")
 	m.Activity.Locale = m.Theme.Locale
 	m.Transcript.Gutter = 2
@@ -178,6 +181,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Models.ensureVisible()
 		}
 		m.Plugins.Resize(v.Width, v.Height-2)
+		m.Changes.Resize(v.Width, v.Height-1)
 		m.InstalledPlugins.Resize(v.Width, v.Height-2)
 		offset := m.Transcript.Viewport.YOffset()
 		m.Transcript.Viewport.SetWidth(max(1, m.Layout.TranscriptWidth-2*m.Transcript.Gutter))
@@ -399,6 +403,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/approvals" {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("approvals"))
+			}
+			if command == "/changes" || command == "/diff" {
+				m.Composer.Input.Reset()
+				return m.Update(ControlIntent("changes"))
 			}
 			if command == "/autonomy on" || command == "/autonomy off" || command == "/autonomy" {
 				settings := m.deps.ApprovalSettings
@@ -651,6 +659,7 @@ func (m AppModel) View() tea.View {
 
 // Failed submissions remain display state, never valid model history.
 func (m *AppModel) refreshTranscript() {
+	m.Changes.SetSession(m.Header.State)
 	m.Activity.SetSession(m.Header.State)
 	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {
