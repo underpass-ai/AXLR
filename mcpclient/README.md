@@ -1,6 +1,8 @@
 # AXLR MCP client
 
-This package consumes tools from external MCP servers in AXLR's root Go module. It uses the [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk). AXLR's own `read`, `write`, `edit` and `exec` API is not an MCP server.
+`mcpclient` is the root Go module's client for external MCP servers. It uses the [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) over stdio or Streamable HTTP. AXLR's own `read`, `write`, `edit` and `exec` contract is not an MCP server.
+
+## Connect, discover and call
 
 ```go
 package main
@@ -18,27 +20,32 @@ func main() {
     client := mcpclient.New()
     defer client.Close()
 
-    err := client.Connect(ctx, mcpclient.Server{
+    if err := client.Connect(ctx, mcpclient.Server{
         Name: "search",
-        Command: "/path/to/search-mcp-server",
+        Command: "/absolute/path/to/search-mcp-server",
         Args: []string{"--stdio"},
-    })
-    if err != nil { log.Fatal(err) }
+    }); err != nil { log.Fatal(err) }
 
     tools, err := client.ListTools(ctx, "search")
     if err != nil { log.Fatal(err) }
-    fmt.Println("available tools:", len(tools))
+    fmt.Println("tools:", len(tools))
 
-    result, err := client.Call(ctx, mcpclient.ToolRef{Server: "search", Name: "find"}, map[string]any{"query": "AXLR"})
+    result, err := client.Call(ctx,
+        mcpclient.ToolRef{Server: "search", Name: "find"},
+        map[string]any{"query": "AXLR"})
     if err != nil { log.Fatal(err) }
     fmt.Printf("tool error: %t, content: %v\n", result.IsError, result.Content)
 }
 ```
 
-For HTTP, use `mcpclient.Server{Name: "search", URL: "https://example.com/mcp", HTTPClient: clientWithAuth}`. The host supplies authorization through its `http.Client`. For stdio, `Env: nil` inherits the host process environment; a non-nil `Env` is the child's entire environment. Server commands and endpoints run with the authority and credentials given by the host, so configure only trusted servers. Treat discovered descriptions, annotations and content as untrusted data.
+For Streamable HTTP, use `mcpclient.Server{Name: "search", URL: "https://example.com/mcp", HTTPClient: clientWithAuth}`. The host supplies authorization through its `http.Client`. For stdio, `Env: nil` inherits the host process environment; a non-nil `Env` is the child's complete environment. This low-level client differs from AXLR's TUI registration policy, which builds an explicit child environment for configured servers.
 
-`ListTools` follows server pagination and returns the owning server with every tool, avoiding ambiguous names. `Call` sends one logical invocation and returns tool-level `isError` as data. The HTTP transport has automatic reconnect retries disabled. A timeout or broken connection cannot prove whether a remote side effect happened; reconcile before retrying an effectful tool. Pass a context with an appropriate deadline to `Connect`, `ListTools` and `Call`. Close the client to release sessions and stdio child processes.
+`ListTools` follows server pagination and returns the owning server with each tool, avoiding ambiguous names. `Call` sends one logical invocation and returns MCP `isError` as data. Automatic reconnect retries are disabled for the HTTP transport. A timeout or broken connection cannot prove whether an effectful call ran; inspect the target before retrying it.
+
+Pass a context with a suitable deadline to `Connect`, `ListTools` and `Call`, and close the client to release sessions and child processes. Treat discovered descriptions, annotations, schemas and content as untrusted data. The host decides which servers and tools are authorized.
 
 ```bash
-go test -race ./mcpclient
+GOWORK=off go test -race ./mcpclient
 ```
+
+For console registration, manifests and approval policies, see [Plugins and MCP](../docs/plugins.md). For the library's other entry points, see [Go library](../docs/library.md).

@@ -1,115 +1,63 @@
-# AXLR
+<p align="center"><img src="docs/assets/axlr-wordmark.png" width="760" alt="AXLR pixel-art wordmark"></p>
 
-**Agent eXecution Local Runtime** is Underpass's own local execution runtime. It is a focused rewrite of the execution layer in our [underpass-runtime](https://github.com/underpass-ai/underpass-runtime), delivered as a Go library and a one-request JSON worker for `read`, `write`, `edit`, `exec`, and explicitly registered plugin tools.
+<p align="center"><strong>Run an agent in your workspace. Keep the execution boundary explicit.</strong></p>
 
-## Build and run
+AXLR is Underpass's agentic execution runtime, extracted from the execution layer of `underpass-runtime` and simplified with Pi as a conceptual reference. AXLR owns the model loop and local execution. KMP governs durable, evidence-backed memory; MADE governs orchestration through ceremonies and human decisions. Both connect as separate MCP engines. The console streams OpenRouter responses, runs local tools and saves sessions; the Go library and JSON worker expose the execution core to other hosts.
 
-Go 1.26 is required. The root module uses the official Go MCP SDK to connect to external tool plugins.
+AXLR runs in a **trusted local** Linux workspace. It is not a sandbox. File tools stay inside the selected root; an executed program and connected MCP servers still run with the authority you give them.
 
-```bash
-go test ./...
-CGO_ENABLED=0 go build -trimpath -o bin/axlr ./cmd/axlr
-printf '%s\n' '{"protocol_version":1,"request_id":"demo-1","tool":"read","arguments":{"path":"README.md"}}' |
-  bin/axlr --root "$PWD" --profile trusted-local
-```
+## Start the console
 
-The worker consumes one JSON document from stdin and emits one JSON response on stdout. It accepts `--root` for an existing workspace and repeatable `--env KEY=VALUE` flags for the child process environment. The child does not inherit the worker environment by default. Avoid passing secrets through command-line flags; they may be visible to other processes on the host. A host that needs secrets should use an appropriate launcher and account boundary.
-
-The library entrypoint is `runtime.New(runtime.Config)` followed by `Executor.Execute(ctx, dto.Request)` and `Close()`. An executor serializes requests. A host can set lower maximums in `Config`; requests cannot raise them.
-
-## Interactive agent console
-
-The separate [`tui/` module](tui/README.md) provides `axlr-tui`: OpenRouter streaming, `/mcp` installation and approval for AXLR connections, `/plugin` installation of AXLR plugins from Codex-compatible packages and marketplaces, local and MCP tools, saved sessions and transcript search. Build it from this checkout with `go -C tui build -o /tmp/axlr-tui ./cmd/axlr-tui`, then supply `OPENROUTER_API_KEY` in the environment and run `/tmp/axlr-tui`. It uses the current workspace; type `/model` to choose a model, or pass `--model ID` for direct startup. See the TUI guide for controls, plugin environment selections and recovery.
-
-Root and TUI modules have separate test gates. The root library has no terminal dependencies; the JSON worker above keeps its one-request contract.
-
-## OpenRouter model client
-
-The Go library supports non-streaming completions and SSE streaming through OpenRouter. `application.StreamModelUseCase` and `Client.Stream` emit text deltas and return a validated complete response; they do not execute tools. The host supplies `OPENROUTER_API_KEY` through its own secret mechanism; AXLR does not read the environment or store the key for the host. The model client is separate from the JSON worker.
-
-```go
-import (
-    "context"
-    "fmt"
-    "os"
-
-    "github.com/underpass-ai/AXLR/adapters/openrouter"
-    "github.com/underpass-ai/AXLR/application"
-    "github.com/underpass-ai/AXLR/domain"
-)
-
-func example() error {
-    client, err := openrouter.New(openrouter.ClientConfig{
-        APIKey: os.Getenv("OPENROUTER_API_KEY"),
-    })
-    if err != nil { return err }
-
-    model, err := domain.NewModelID("openai/gpt-4o")
-    if err != nil { return err }
-    complete := application.CompleteModelUseCase{Models: client}
-    request := domain.CompletionRequest{
-        Model: model,
-        Messages: []domain.Message{{Role: domain.RoleUser, Content: "Say hello"}},
-    }
-    result, err := complete.Execute(context.Background(), request)
-    if err != nil { return err }
-    fmt.Println(result.Message.Content)
-    return nil
-}
-```
-
-The caller chooses a model supported by its OpenRouter account.
-
-To offer tools, set `request.Tools` to typed `domain.ToolDefinition` values with JSON Schema parameters. A completion may contain text and several `result.Message.ToolCalls`. AXLR returns those calls without executing them. The host checks each requested name against its own authorized tool registry, executes any allowed call, appends `result.Message` and then one `domain.Message{Role: domain.RoleTool, ToolCallID: call.ID, Content: output}` per result to `request.Messages`, and calls `complete.Execute` again with the same `request.Tools`. Tool results and the assistant's calls must remain in the conversation history.
-
-## Request contract
-
-All requests contain `protocol_version: 1`, a nonempty `request_id`, a supported tool name, and a typed `arguments` object. Unknown JSON fields, extra documents and bodies above 4 MiB are rejected.
-
-| Tool | Arguments | Result |
-| --- | --- | --- |
-| `read` | `path`, optional `offset_bytes`, `max_bytes` | UTF-8 `content`, byte offsets, `truncated`, full-file `content_sha256` when complete |
-| `write` | `path`, `content`, `mode: create\|replace`, `expected_sha256` for replace | `written_bytes`, `content_sha256` |
-| `edit` | `path`, `old_text`, `new_text`, optional `expected_sha256` | `written_bytes`, `content_sha256` |
-| `exec` | `program`, optional `args`, `cwd`, `stdin`, `timeout_ms`, `max_output_bytes` | `exit_code`, `stdout`, `stderr`, capture and discarded byte counts |
-| `plugins.list` | `{}` | `tools` with plugin ID, tool name, description and input/output schemas |
-| `plugins.call` | `plugin_id`, `tool_name`, `arguments` object | MCP `content`, optional `structured_content`, `is_error` |
-
-## External tool plugins
-
-A plugin is an external MCP server over stdio. The host registers it with an explicit JSON manifest (64 KiB maximum):
-
-```json
-{"manifest_version":1,"id":"search","command":"/absolute/path/search-server","args":[],"allow_tools":["find"]}
-```
-
-Run the existing worker with repeatable `--plugin /absolute/path/manifest.json` flags. Use repeatable `--plugin-env ID:KEY=VALUE` flags for a plugin's complete child environment. A plugin receives no inherited worker environment by default. `allow_tools:["*"]` explicitly permits all tools currently advertised by that server; an exact list limits exposure. AXLR rejects unknown manifest fields, duplicate plugin IDs, invalid identities and duplicate allowlist entries before launching any plugin. No directory is scanned automatically; plugins start only on `plugins.list` or a call to that plugin. Local tools do not start plugins.
+Build from a full checkout with Go 1.26:
 
 ```bash
-printf '%s\n' '{"protocol_version":1,"request_id":"tools-1","tool":"plugins.list","arguments":{}}' |
-  bin/axlr --root "$PWD" --profile trusted-local --plugin /absolute/path/search.json
+GOWORK=off go test ./...
+GOWORK=off go -C tui test ./...
+go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
+/tmp/axlr-tui --root "$PWD"
 ```
 
-The `plugins.Manager` Go API provides `List`, `Call` and `Close`, and can be passed as `runtime.Config.Plugins`. It reuses plugin sessions in a long-lived host. The one-request worker closes its sessions after responding. `plugins.list` fails if any configured plugin is unavailable. `plugins.call` only invokes a tool permitted by `allow_tools` and currently advertised by its server. MCP descriptions and schemas are data, not grants of authority. Plugins execute with the host account's OS access; configure only trusted executables. AXLR does not expose its local tools as an MCP server.
+Supply `OPENROUTER_API_KEY` through your normal environment or secret manager before launching. In the console, choose a model with `/model` and send a prompt. Use `F1` for controls, `/mcp` for AXLR's server connections, and `/plugin` for AXLR-managed packages.
 
-An MCP `is_error: true` result is a `completed` AXLR response with `is_error` in the output. Launch and protocol errors are `failed`; malformed or unauthorized calls are `rejected`. Cancellation and timeouts retain their own statuses. A lost response does not prove the tool had no effect, so AXLR never retries a plugin call automatically. Worker responses stay within 4 MiB.
+The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker.
 
-Paths for file tools are relative to the host workspace and anchored using `os.Root`; they cannot traverse outside through `..` or a symlink. `cwd` is also checked against the workspace, but `exec` itself has the host account's access. `program` and `args` are passed as argv without an implicit shell. To run shell syntax, explicitly choose `/bin/sh` as the program.
+## Choose a path
 
-`write` create never overwrites an existing destination. Replace requires the SHA-256 of the previously observed full file. `edit` replaces exactly one literal occurrence; zero or multiple matches are conflicts. These checks do not promise a transaction against concurrent external writers. The host should serialize its own mutations.
+| You want to… | Read |
+|:--|:--|
+| Install, launch and send a first prompt | [Getting started](docs/getting-started.md) |
+| Use models, controls, sessions and diagnostics | [Console guide](docs/console.md) |
+| Connect KMP or MADE | [KMP runbook](docs/runbooks/kmp.md), [MADE runbook](docs/runbooks/made.md) |
+| Connect an MCP server or install a package | [Plugins and MCP](docs/plugins.md) |
+| Call AXLR from a process through JSON | [Worker contract](docs/worker.md) |
+| Review the planned HTTP API, Helm and release CI | [Service specification](docs/specs/axlr-service-api.md), [implementation plan](docs/plans/axlr-service-helm-release.md) |
+| Embed AXLR in Go or use its MCP client | [Go library](docs/library.md) |
+| Understand boundaries and package ownership | [Architecture](docs/architecture.md) |
+| Resolve a startup, model, plugin or session problem | [Troubleshooting](docs/troubleshooting.md) |
 
-Default read size is 64 KiB; the maximum is 1 MiB. Editable files are capped at 1 MiB. Default combined process output capture is 256 KiB; the maximum is 1 MiB. Default process timeout is 30 seconds; the maximum is five minutes. Output is drained and discarded bytes counted after the capture budget is exhausted. A serialized response larger than 4 MiB becomes a `response_too_large` failure because JSON escapes can expand text.
+[Documentation home](docs/index.md) includes the current guides and the historical design record.
 
-## Results and worker exit codes
+## What runs where
 
-Each response contains `status`, UTC timestamps, monotonic `duration_ms`, and either `output` or a stable error `code` and English `message`. `completed` for `exec` means the process was observed to exit; `exit_code` may be nonzero. `rejected`, `failed`, `cancelled`, and `timed_out` are distinct. Cancellation and timeout do not undo effects already produced.
+```mermaid
+flowchart LR
+    U[You] --> T[axlr-tui]
+    T --> O[OpenRouter]
+    T --> R[AXLR runtime]
+    R --> F[Workspace file tools]
+    R --> E[Local process]
+    T --> M[Selected MCP servers]
+    M --> K[KMP · governed memory]
+    M --> C[MADE · governed orchestration]
+    H[Your Go host or JSON client] --> R
+```
 
-The worker exits `0` after a valid protocol request even when the tool failed, `2` for malformed protocol input with a JSON rejection when possible, and `1` for a fatal worker or response write failure. `request_id` is for correlation, not deduplication. If the worker vanishes without a complete response, the host must treat the effect as unknown and reconcile before retrying.
+In the console, the model can request a tool; AXLR shows or enforces the relevant approval policy before calling it. AXLR uses Codex-compatible plugin manifests and standard MCP connections: a Codex plugin built around skills and MCP servers will often work in AXLR without repackaging. `/plugin` installs the package into AXLR and registers declared servers with manual approval; `/mcp` shows the actual connections. A built-in KMP or MADE catalogue entry alone does not start either engine. See the [compatibility table](docs/plugins.md#codex-plugin-compatibility) for the supported components.
 
-## Architecture
+The JSON worker, `cmd/axlr`, accepts exactly one request on stdin and returns one response on stdout. It exposes `read`, `write`, `edit`, `exec`, `plugins.list` and `plugins.call`. The library exposes typed use cases and an OpenRouter client for non-streaming and streaming completions. See the [worker](docs/worker.md) and [library](docs/library.md) guides for examples.
 
-`domain/` holds value objects and operation commands/results. `application/` holds ports and use cases. `adapters/local/` implements filesystem and process ports; `plugins/` adapts MCP stdio servers to the plugin tool port. `dto/` holds the JSON contract. `runtime/` composes the executor, codecs and mappers. `cmd/axlr/` is the worker adapter. No Go source lives at the repository root. Each Go file has one primary type where a type is needed.
+## Project status
 
-The [MCP client package](mcpclient/README.md) also connects to external MCP servers over stdio or Streamable HTTP. It discovers and calls their tools by `(server, tool)` identity. The plugin adapter uses its stdio transport.
+AXLR is an evolving pre-1.0 project. The repository has two Go modules and tests each independently. The current console is a trusted-local Linux application. The worker exposes a one-request process API; a network service API is being designed. The [provenance note](docs/provenance.md) explains its relationship to the earlier Underpass runtime and Pi.
 
-The [design](docs/plans/2026-09-29-hexagonal-design.md), [implementation plan](docs/plans/2026-09-29-minimal-runtime.md), and [provenance note](docs/provenance.md) record the boundaries and lineage. Sandboxing and comparative performance measurements are outside this delivery.
+Part of [Underpass AI](https://underpassai.com).
