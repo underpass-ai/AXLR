@@ -33,7 +33,7 @@ func NewPayloadRecorder(directory string, secrets ...string) (*PayloadRecorder, 
 	if err != nil {
 		return nil, err
 	}
-	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+	if !privatePayloadDirectory(info) {
 		return nil, errors.New("payload directory must be a private directory")
 	}
 	return &PayloadRecorder{directory: directory, secrets: append([]string(nil), secrets...)}, nil

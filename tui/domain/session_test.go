@@ -11,7 +11,7 @@ import (
 
 func session(t *testing.T) Session {
 	t.Helper()
-	s, err := NewSession("0123456789abcdef0123456789abcdef", "/workspace", "test/model")
+	s, err := NewSession("0123456789abcdef0123456789abcdef", Workspace(t.TempDir()), "test/model")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestIdentityValidation(t *testing.T) {
 			t.Errorf("accepted workspace %q", raw)
 		}
 	}
-	if _, e := NewWorkspace("/does/not/exist"); e != nil {
+	if _, e := NewWorkspace(t.TempDir()); e != nil {
 		t.Fatal(e)
 	}
 	for _, op := range []string{"read", "write", "edit", "exec"} {

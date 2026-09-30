@@ -228,7 +228,7 @@ func TestClosedOversizedProtocolForcesRecoverableWholeTurnCut(t *testing.T) {
 			if _, err := NewDefaultModelContextProjector().Project(closed); !errors.Is(err, ErrContextBudgetExceeded) {
 				t.Fatalf("active oversized control must fail explicitly: %v", err)
 			}
-			session, err := domain.NewSession("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "/tmp", "test/model")
+			session, err := domain.NewSession("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", domain.Workspace(t.TempDir()), "test/model")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -426,7 +426,7 @@ func TestGuideRecoveryUsesPacketShapeNotWriteProseOrOpaqueAlias(t *testing.T) {
 }
 
 func TestColdRestoreWithOpaqueGuideToolReproducesProjectionAndIdentity(t *testing.T) {
-	session, err := domain.NewSession("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "/tmp", "test/model")
+	session, err := domain.NewSession("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", domain.Workspace(t.TempDir()), "test/model")
 	if err != nil {
 		t.Fatal(err)
 	}

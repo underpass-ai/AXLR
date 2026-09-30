@@ -26,11 +26,11 @@ func TestPayloadRecorderPrivateRedactedAndBounded(t *testing.T) {
 		t.Fatal("secret leaked")
 	}
 	info, _ := os.Stat(p)
-	if info.Mode().Perm() != 0600 {
+	if !testMode(info, 0600) {
 		t.Fatal("payload permissions")
 	}
 	info, _ = os.Stat(dir)
-	if info.Mode().Perm() != 0700 {
+	if !testMode(info, 0700) {
 		t.Fatal("directory permissions")
 	}
 	if err := recorder.Save(1, "request", raw); err == nil {

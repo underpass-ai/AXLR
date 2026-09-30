@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func must(t *testing.T, e error) {
 }
 func fixture(t *testing.T) domain.Session {
 	t.Helper()
-	s, e := domain.NewSession("0123456789abcdef0123456789abcdef", "/workspace", "test/model")
+	s, e := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "test/model")
 	must(t, e)
 	return s
 }
@@ -48,7 +49,7 @@ func TestSessionStoreRoundTripListPermissionsAndNoAPIKey(t *testing.T) {
 	}
 	list, e := store.List(context.Background())
 	must(t, e)
-	if len(list) != 1 || list[0].ID != s.Export().ID || list[0].Workspace != "/workspace" || list[0].Model != "test/model" || list[0].Status != domain.StatusInterrupted {
+	if len(list) != 1 || list[0].ID != s.Export().ID || list[0].Workspace != s.Export().Workspace || list[0].Model != "test/model" || list[0].Status != domain.StatusInterrupted {
 		t.Fatalf("bad list: %+v", list)
 	}
 	for _, p := range []string{dir, filepath.Join(dir, string(s.Export().ID)+".json"), filepath.Join(dir, string(s.Export().ID)+".lock")} {
@@ -58,7 +59,7 @@ func TestSessionStoreRoundTripListPermissionsAndNoAPIKey(t *testing.T) {
 		if info.IsDir() {
 			want = 0700
 		}
-		if info.Mode().Perm() != want {
+		if runtime.GOOS != "windows" && info.Mode().Perm() != want {
 			t.Fatalf("permissions %s: %o", p, info.Mode().Perm())
 		}
 	}
@@ -206,7 +207,7 @@ func TestSessionStoreLockAndClose(t *testing.T) {
 	if e = second.Save(context.Background(), s); e == nil {
 		t.Fatal("second writer accepted")
 	}
-	other, e := domain.NewSession("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "/workspace", "test/model")
+	other, e := domain.NewSession("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", domain.Workspace(t.TempDir()), "test/model")
 	must(t, e)
 	must(t, second.Save(context.Background(), other))
 	must(t, store.Close())

@@ -403,3 +403,66 @@ func TestDirectApprovalRunsExactCallOnce(t *testing.T) {
 		t.Fatalf("sensitive values in audit: %s", audit)
 	}
 }
+
+func TestSessionApprovalAdvancesOnlyThePendingCall(t *testing.T) {
+	s, ts, client, _ := testServer(t)
+	id := domain.SessionID("0123456789abcdef0123456789abcdef")
+	session, err := domain.NewSession(id, domain.Workspace(s.Config.Workspace), "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools, err := s.deps.Catalog.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, err := root.NewJSONObject([]byte(`{"path":"sample.txt"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.BeginTurn("read the file", tools); err != nil {
+		t.Fatal(err)
+	}
+	call := root.ToolCall{ID: "read-once", Name: "local_read", Arguments: args}
+	if err := session.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{call}}}); err != nil {
+		t.Fatal(err)
+	}
+	session.SetServiceMetadata("alice", 0, "original-turn")
+	if err := s.sessions.Save(context.Background(), session); err != nil {
+		t.Fatal(err)
+	}
+	url := ts.URL + "/v1/sessions/" + string(id) + "/approvals/read-once"
+	decision := `{"decision":"approve","expected_revision":1}`
+	response := apiRequest(t, client, "POST", url, decision, "approval-key-123456")
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("approval status: %d", response.StatusCode)
+	}
+	response.Body.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		stored, err := s.sessions.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if stored.Status() == domain.StatusComplete {
+			state := stored.Export()
+			if len(state.Activity) != 1 || state.Activity[0].Outcome == nil || state.Activity[0].Outcome.Content != "done" || state.Activity[0].Decision != domain.DecisionApprove {
+				t.Fatalf("wrong call resolved: %+v", state.Activity)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("approval did not finish: %+v", stored.Export())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	response = apiRequest(t, client, "POST", url, decision, "approval-key-123456")
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("idempotent approval status: %d", response.StatusCode)
+	}
+	response.Body.Close()
+	response = apiRequest(t, client, "POST", url, decision, "another-key-123456")
+	if response.StatusCode != http.StatusConflict {
+		t.Fatalf("stale approval status: %d", response.StatusCode)
+	}
+	response.Body.Close()
+}

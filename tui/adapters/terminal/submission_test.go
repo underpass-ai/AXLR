@@ -25,7 +25,7 @@ func TestAppModelRestoresOnlyUnacceptedSubmission(t *testing.T) {
 		{name: "accepted then continuation fails", accepted: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+			s, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -72,7 +72,7 @@ func TestAppModelRestoresOnlyUnacceptedSubmission(t *testing.T) {
 }
 
 func TestAppModelRestoresActivityPresentation(t *testing.T) {
-	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
 	if err != nil {
 		t.Fatal(err)
 	}

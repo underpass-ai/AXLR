@@ -207,7 +207,7 @@ func (c *Client) Close() error {
 		if err := session.Close(); err != nil {
 			var exit *exec.ExitError
 			if errors.As(err, &exit) {
-				if runtime.GOOS == "windows" {
+				if runtime.GOOS == "windows" && exit.ExitCode() == 1 {
 					// Closing a stdio transport terminates the Windows child.
 					continue
 				}

@@ -35,7 +35,7 @@ func TestFileLoggerWritesPrivateJSONLWithOnlyTypedMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
+	if got := info.Mode().Perm(); runtime.GOOS != "windows" && got != 0o600 {
 		t.Fatalf("mode = %o; want 600", got)
 	}
 	data, err := os.ReadFile(path)

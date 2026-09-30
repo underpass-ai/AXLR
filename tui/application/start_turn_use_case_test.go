@@ -50,7 +50,7 @@ func turnTools() []domain.AvailableTool {
 }
 func turnSession(t *testing.T) domain.Session {
 	t.Helper()
-	s, e := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "test/model")
+	s, e := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "test/model")
 	if e != nil {
 		t.Fatal(e)
 	}

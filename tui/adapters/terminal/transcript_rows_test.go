@@ -90,7 +90,7 @@ func TestTranscriptUnsentPromptKeepsAssistantRowColor(t *testing.T) {
 }
 
 func TestTranscriptInterleavesRowsAndScrollsWhenTheyExceedTerminal(t *testing.T) {
-	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "test/model")
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "test/model")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,7 +29,7 @@ func approvalModel(t *testing.T) AppModel {
 func TestApprovalVisibilityAndFocus(t *testing.T) {
 	m := approvalModel(t)
 	v := m.View().Content
-	for _, want := range []string{"exact-target.txt", "all arguments", "local", "write", "/tmp", "Approve", "Deny"} {
+	for _, want := range []string{"exact-target.txt", "all arguments", "local", "write", string(testWorkspace()), "Approve", "Deny"} {
 		if !strings.Contains(v, want) {
 			t.Fatalf("missing %s: %s", want, v)
 		}

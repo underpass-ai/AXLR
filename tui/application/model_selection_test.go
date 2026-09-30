@@ -12,7 +12,7 @@ import (
 
 func TestCreateSessionPersistsBeforeReturn(t *testing.T) {
 	store := &memoryStore{}
-	s, err := (CreateSessionUseCase{Store: store}).Execute(context.Background(), "0123456789abcdef0123456789abcdef", "/workspace", "chosen/model")
+	s, err := (CreateSessionUseCase{Store: store}).Execute(context.Background(), "0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "chosen/model")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +37,7 @@ func TestCreateSessionRejectsInvalidAndSaveFailure(t *testing.T) {
 			if tc.fail {
 				store.err = errors.New("disk failed")
 			}
-			s, err := (CreateSessionUseCase{Store: store}).Execute(context.Background(), tc.id, "/workspace", tc.model)
+			s, err := (CreateSessionUseCase{Store: store}).Execute(context.Background(), tc.id, domain.Workspace(t.TempDir()), tc.model)
 			if err == nil || !reflect.DeepEqual(s, domain.Session{}) || len(store.states) != 0 {
 				t.Fatalf("created invalid or unsaved session: %+v, %v", s, err)
 			}

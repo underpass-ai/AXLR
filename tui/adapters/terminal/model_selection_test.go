@@ -54,7 +54,7 @@ func selectionModel(t *testing.T, session *domain.Session) (AppModel, *storage.S
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := update(New(Dependencies{Session: session, Workspace: "/tmp", NewSessionID: "0123456789abcdef0123456789abcdef", Store: store, Models: application.ListModelsUseCase{Catalog: modelCatalogStub{}}, ModelPreference: preference, Create: application.CreateSessionUseCase{Store: store}, Change: application.ChangeSessionModelUseCase{Store: store}, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
+	m := update(New(Dependencies{Session: session, Workspace: testWorkspace(), NewSessionID: "0123456789abcdef0123456789abcdef", Store: store, Models: application.ListModelsUseCase{Catalog: modelCatalogStub{}}, ModelPreference: preference, Create: application.CreateSessionUseCase{Store: store}, Change: application.ChangeSessionModelUseCase{Store: store}, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
 	t.Cleanup(m.Close)
 	return m, store
 }
@@ -252,7 +252,7 @@ func TestModelSelectionCreateFailureKeepsUnconfiguredWorkspace(t *testing.T) {
 	m = openModels(t, m)
 	m.deps.Create.Store = submissionStore{err: errors.New("disk full")}
 	m = chooseModel(t, m)
-	if m.Header.State.ID != "" || m.Header.State.Workspace != "/tmp" {
+	if m.Header.State.ID != "" || m.Header.State.Workspace != testWorkspace() {
 		t.Fatal("failed creation published aggregate or erased workspace")
 	}
 	rows, _ := store.List(context.Background())

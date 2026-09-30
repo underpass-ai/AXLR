@@ -16,7 +16,7 @@ import (
 
 func navSession(t *testing.T) domain.Session {
 	t.Helper()
-	s, e := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	s, e := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -80,7 +80,7 @@ func TestNavigationPaletteHelpAndInfo(t *testing.T) {
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = update(m, ControlIntent("info"))
-	if !strings.Contains(m.View().Content, "/tmp") {
+	if !strings.Contains(m.View().Content, string(testWorkspace())) {
 		t.Fatal(m.View().Content)
 	}
 	if m.Composer.Input.Value() != "keep draft" {
@@ -139,7 +139,7 @@ func (navStream) Stream(_ context.Context, req root.CompletionRequest, _ func(ro
 func TestNavigationSessionPickerLoadsWithoutExecution(t *testing.T) {
 	s := navSession(t)
 	m := navModel(t, &s)
-	other, _ := domain.NewSession("1123456789abcdef0123456789abcdef", "/tmp", "other-model")
+	other, _ := domain.NewSession("1123456789abcdef0123456789abcdef", testWorkspace(), "other-model")
 	other.BeginTurn("saved question", nil)
 	other.InterruptDraft("saved partial")
 	if e := m.deps.Store.Save(context.Background(), other); e != nil {
@@ -204,7 +204,7 @@ func TestNavigationSwitchRejectsDifferentWorkspace(t *testing.T) {
 	m = drain(t, n.(AppModel), c)
 	n, c = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = drain(t, n.(AppModel), c)
-	if s.Export().Workspace != "/tmp" || !strings.Contains(m.Status.Error, "differs from active workspace") {
+	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "differs from active workspace") {
 		t.Fatal("workspace compatibility not enforced")
 	}
 }

@@ -3,10 +3,13 @@
 package local
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func pathEnvironment(value string) bool {
@@ -39,6 +42,11 @@ func configureProcess(cmd *exec.Cmd) {
 func killProcessTree(cmd *exec.Cmd) error {
 	if cmd.Process == nil {
 		return os.ErrProcessDone
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := exec.CommandContext(ctx, "taskkill", "/T", "/F", "/PID", strconv.Itoa(cmd.Process.Pid)).Run(); err == nil {
+		return nil
 	}
 	return cmd.Process.Kill()
 }

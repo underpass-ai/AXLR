@@ -59,7 +59,7 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 		{"exec", `{"program":"/bin/echo","args":["worked"]}`, "worked"},
 	}
 	if goruntime.GOOS == "windows" {
-		arguments, err := json.Marshal(map[string]any{"program": os.Args[0], "args": []string{"-test.run=^TestExecEchoHelper$", "--axlr-echo-helper"}})
+		arguments, err := json.Marshal(map[string]any{"program": os.Args[0], "args": []string{"-test.run=^TestExecEchoHelper$", "--", "axlr-echo-helper"}})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -90,7 +90,7 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 
 func TestExecEchoHelper(t *testing.T) {
 	for _, arg := range os.Args {
-		if arg == "--axlr-echo-helper" {
+		if arg == "axlr-echo-helper" {
 			fmt.Print("worked")
 			os.Exit(0)
 		}
@@ -219,7 +219,7 @@ func TestToolRunnerLostMCPReplyPausesPersistedTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "model")
 	if err != nil {
 		t.Fatal(err)
 	}

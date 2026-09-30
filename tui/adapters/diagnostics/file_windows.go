@@ -9,6 +9,8 @@ import (
 	"golang.org/x/sys/windows"
 )
 
+func privatePayloadDirectory(info os.FileInfo) bool { return info.IsDir() }
+
 func openDiagnosticFile(path string, flags int, _ os.FileMode) (*os.File, error) {
 	p, err := windows.UTF16PtrFromString(path)
 	if err != nil {
