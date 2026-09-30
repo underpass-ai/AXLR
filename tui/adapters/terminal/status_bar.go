@@ -17,6 +17,7 @@ type StatusBar struct {
 	Executing   bool
 	ToolName    string
 	ToolSeconds int
+	Autonomous  bool
 }
 
 func (s StatusBar) View(w int) string {
@@ -25,6 +26,9 @@ func (s StatusBar) View(w int) string {
 		state = domain.StatusIdle
 	}
 	text := Translate(s.Locale, "status.prefix") + Translate(s.Locale, "status."+string(state))
+	if s.Autonomous {
+		text += " | " + Translate(s.Locale, "status.autonomous")
+	}
 	indicator := s.Indicator
 	if indicator != "" {
 		indicator += "  "

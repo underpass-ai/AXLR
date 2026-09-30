@@ -16,6 +16,7 @@ type Dependencies struct {
 	ModelPreference   application.ModelPreferencePort
 	UIPreferenceStore application.UIPreferencePort
 	UIPreferences     domain.UIPreferences
+	ApprovalSettings  application.ApprovalSettingsPort
 	Locale            Locale
 	Create            application.CreateSessionUseCase
 	Change            application.ChangeSessionModelUseCase

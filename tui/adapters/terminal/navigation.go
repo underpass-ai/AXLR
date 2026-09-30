@@ -155,6 +155,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
+			if k.String() == "f" {
+				intent = "autonomy-on"
+			}
+			if intent == ControlIntent(domain.DecisionAutoApprove) {
+				intent = "always-allow"
+			}
 			if k.String() == "esc" || k.String() == "ctrl+c" {
 				intent = "cancel"
 			}
@@ -186,7 +192,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "plugins":
 					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
-				case "info":
+				case "info", "approvals":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
 					switch k.String() {
@@ -236,7 +242,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"mcp", "plugins", "approve", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
+		ids := []string{"mcp", "plugins", "approve", "always-allow", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
 		if m.overlay == "sessions" {
 			for i := range m.Picker.Items {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
@@ -273,7 +279,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	if !hasIntent {
 		return m, nil, false
 	}
-	if m.approvalFocus() && intent != "approve" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
+	if m.approvalFocus() && intent != "approve" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
 		return m, nil, true
 	}
 	switch intent {
@@ -495,14 +501,37 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		m.overlay = ""
 		return m, nil, true
-	case "approve", "deny":
+	case "approve", "always-allow", "autonomy-on", "deny":
 		if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() {
 			return m, nil, true
 		}
 		p, _ := m.pending()
 		decision := m.Approval.Intent(intent)
 		resolve := m.deps.Resolve
+		settings := m.deps.ApprovalSettings
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+			if intent == "autonomy-on" {
+				if settings == nil {
+					return errors.New("approval settings are unavailable")
+				}
+				if err := settings.SetAutonomous(ctx, true); err != nil {
+					return err
+				}
+				decision = domain.DecisionApprove
+			}
+			if intent == "always-allow" {
+				if settings == nil {
+					return errors.New("approval settings are unavailable")
+				}
+				tool, _, known, err := application.ResolveToolCall(s.ToolSnapshot(), p.Call)
+				if !known || err != nil {
+					return errors.New("cannot save approval for unknown tool")
+				}
+				if err := settings.Allow(ctx, tool.Identity); err != nil {
+					return err
+				}
+				decision = domain.DecisionApprove
+			}
 			return resolve.Execute(ctx, s, p.Call.ID, decision, emit)
 		})
 		return m, cmd, true
@@ -582,13 +611,20 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.Palette = NewActionPalette(m.Theme.Locale)
 		m.overlay = intent
 		return m, nil, true
-	case "help", "info":
+	case "help", "info", "approvals":
 		if intent == "info" {
 			m.Info = NewTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 			m.Info.Viewport.SetWidth(w)
 			m.Info.Viewport.SetHeight(h)
 			m.Info.SetContent(infoContentLocale(m.Header.State, m.Theme.Locale))
+			m.Info.Viewport.GotoTop()
+		} else if intent == "approvals" {
+			m.Info = NewTranscript()
+			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
+			m.Info.Viewport.SetWidth(w)
+			m.Info.Viewport.SetHeight(h)
+			m.Info.SetContent(approvalContent(m.deps.ApprovalSettings, m.Theme.Locale))
 			m.Info.Viewport.GotoTop()
 		}
 		m.overlay = intent
@@ -672,8 +708,12 @@ func (m AppModel) overlayView(base string) string {
 		body = m.Palette.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
 	case "help":
 		body = m.Help.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
-	case "info":
-		body = m.Theme.Overlay(m.Theme.T("info.title"), m.Theme.T("info.subtitle"), m.Info.View(), m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
+	case "info", "approvals":
+		title, subtitle := m.Theme.T("info.title"), m.Theme.T("info.subtitle")
+		if m.overlay == "approvals" {
+			title, subtitle = m.Theme.T("approvals.title"), m.Theme.T("approvals.subtitle")
+		}
+		body = m.Theme.Overlay(title, subtitle, m.Info.View(), m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
 	case "sessions":
 		body = m.Picker.View(m.Theme, m.zones, m.prefix, m.Layout.Height-1, m.Layout.Width)
 	case "search":

@@ -5,8 +5,10 @@ import (
 	"charm.land/lipgloss/v2"
 	"context"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -107,6 +109,66 @@ func TestApprovalApproveKeyboardAndMouse(t *testing.T) {
 		if p.Decision != domain.DecisionApprove || p.Outcome == nil || p.Outcome.Content != "written" || len(m.deps.Session.Pending()) != 1 || !strings.Contains(m.View().Content, "[Approve A]") {
 			t.Fatal("approval not executed and correlated")
 		}
+	}
+}
+
+func TestApprovalAlwaysAllowPersistsAndApprovesFollowingCall(t *testing.T) {
+	m := approvalModel(t)
+	path := filepath.Join(t.TempDir(), "approvals.json")
+	settings, err := storage.NewApprovalSettings(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.deps.ApprovalSettings = settings
+	m.deps.Resolve.Approval = settings
+	m.deps.Resolve.Tools = navTool{}
+	m.deps.Resolve.Continue.Models = navStream{}
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'l', Text: "l"})
+	m = drain(t, next.(AppModel), cmd)
+	identity, _ := domain.NewLocalToolIdentity("write")
+	activity := m.deps.Session.Export().Activity
+	if !settings.AutoApproves(identity) || len(activity) != 2 || activity[0].Decision != domain.DecisionApprove || activity[1].Decision != domain.DecisionAutoApprove {
+		t.Fatalf("always allow did not apply to next call: %+v", activity)
+	}
+	reloaded, err := storage.NewApprovalSettings(path, nil)
+	if err != nil || !reloaded.AutoApproves(identity) {
+		t.Fatal("always allow did not persist")
+	}
+}
+
+func TestApprovalFullAutonomyKeyRunsPendingCalls(t *testing.T) {
+	m := approvalModel(t)
+	settings, err := storage.NewApprovalSettings(filepath.Join(t.TempDir(), "approvals.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.deps.ApprovalSettings = settings
+	m.deps.Resolve.Approval = settings
+	m.deps.Resolve.Tools = navTool{}
+	m.deps.Resolve.Continue.Models = navStream{}
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'f', Text: "f"})
+	m = drain(t, next.(AppModel), cmd)
+	activity := m.deps.Session.Export().Activity
+	if !settings.Autonomous() || !m.Status.Autonomous || len(activity) != 2 || activity[0].Decision != domain.DecisionApprove || activity[1].Decision != domain.DecisionAutoApprove {
+		t.Fatalf("full autonomy did not run pending calls: %+v", activity)
+	}
+}
+
+func TestApprovalsCommandShowsOnlySavedChoices(t *testing.T) {
+	m := sized()
+	settings, err := storage.NewApprovalSettings(filepath.Join(t.TempDir(), "approvals.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, _ := domain.NewLocalToolIdentity("write")
+	if err := settings.Allow(context.Background(), identity); err != nil {
+		t.Fatal(err)
+	}
+	m.deps.ApprovalSettings = settings
+	m.Composer.Input.SetValue("/approvals")
+	m = update(m, ControlIntent("send"))
+	if m.overlay != "approvals" || !strings.Contains(m.View().Content, "write") || m.Composer.Input.Value() != "" {
+		t.Fatal("saved approval list did not open")
 	}
 }
 func TestApprovalUnknownKeyboardContinuation(t *testing.T) {

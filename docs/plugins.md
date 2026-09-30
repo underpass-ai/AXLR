@@ -74,6 +74,8 @@ The console reads `$XDG_CONFIG_HOME/axlr/mcp.json`, or `$HOME/.config/axlr/mcp.j
 
 `purpose` is `tools` (default), `memory` or `ceremony`. `approval` is `manual` (default) or `auto`. In `/mcp`, `A` or Enter opens a review of the exact server and policy change; confirmation persists it. Automatic approval applies to the allowed tools of that server, including future advertised tools when the manifest uses `["*"]`. Command-line-only registrations remain manual unless added to the persistent file.
 
+At a tool approval dialog, `L` saves an always-allow choice for the exact local operation or registered plugin tool and approves the current call. `/approvals` shows those choices. `/autonomy on` enables automatic approval for all known tools; `/autonomy off` returns to saved per-tool and per-server policies. These settings are stored in `approvals.json` beside `mcp.json` (or beside the file supplied with `--mcp-config`).
+
 `env_from` copies selected host variables by name. `env` can supply literal values, but secrets are better kept in the host environment. For a stdio server, these maps form the **complete** child environment; AXLR does not inherit everything by default. `OPENROUTER_API_KEY` cannot be forwarded to plugins through these fields. HTTP registrations do not accept child environment entries. The console also accepts `--mcp-config /absolute/path/config.json` to choose another file.
 
 For one launch, use repeatable flags:

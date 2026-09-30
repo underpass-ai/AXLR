@@ -162,8 +162,8 @@ func TestAppModelMultilineAndSend(t *testing.T) {
 	}
 	m.Composer.Input.SetValue("second")
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.Composer.Input.Value() != "second" {
-		t.Fatal("busy operation accepted another turn")
+	if m.Composer.Input.Value() != "" || m.steerPrompt != "second" {
+		t.Fatal("busy operation did not queue steering message")
 	}
 	m.cancel()
 }

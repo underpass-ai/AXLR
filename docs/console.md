@@ -4,7 +4,7 @@
 
 ## Work in a session
 
-The console uses the current directory unless `--root` names another existing workspace. Type a prompt and press Enter. Use Shift+Enter for a newline. The first model choice is made through `/model` or `--model`; selecting a model in `/model` also saves it as the default for future new sessions.
+The console uses the current directory unless `--root` names another existing workspace. Type a prompt and press Enter. Use Shift+Enter for a newline. While AXLR is running, sending another message steers the turn: an active model stream is interrupted and the new user message starts the next turn. If a tool is executing, AXLR waits for that effect to finish before steering. Up and Down in the composer browse only this session's user messages and return to the current draft. The first model choice is made through `/model` or `--model`; selecting a model in `/model` also saves it as the default for future new sessions.
 
 The model picker filters to text models that support tools. Tab changes provider, arrows and PgUp/PgDn move, and Enter selects. A catalog failure offers Retry. A `--model` value bypasses the catalog for that launch. The selected model can change later only when the turn is idle, complete or interrupted without pending tool calls; the transcript remains in the session.
 
@@ -13,6 +13,8 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Enter` / `Shift+Enter` | Send / insert a newline |
 | `/model` | Choose a model |
 | `/mcp` | Inspect connected MCP servers, tools and approvals |
+| `/approvals` | Show saved always-allow tools and autonomy mode |
+| `/autonomy on` / `/autonomy off` | Automatically approve all known tools, or restore normal policy |
 | `/plugin` | Browse packages installed in AXLR and available sources |
 | `/theme` | Preview and save appearance |
 | `Ctrl+P` | Open the action palette |
@@ -24,7 +26,7 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Esc` | Close an overlay or cancel the active turn |
 | `Ctrl+C` | Cancel active work; quit when idle |
 
-The interface supports mouse controls where the terminal supplies them. In an approval dialog, inspect the exact target and arguments with arrows, PgUp/PgDn or the wheel; `A` approves and `D` denies. Unknown tool names cannot be approved. A turn is limited to 32 tool calls. Cancellation does not reverse an effect that already happened.
+The interface supports mouse controls where the terminal supplies them. In an approval dialog, inspect the exact target and arguments with arrows, PgUp/PgDn or the wheel; `A` approves once, `L` executes this call and always allows the exact tool identity on future calls, `F` activates full autonomy and executes this call, and `D` denies. `/approvals` lists saved choices. The autonomy switch approves every known local or registered tool without a dialog; it persists until turned off. Unknown tool names cannot be approved. A turn is limited to 32 tool calls. Cancellation does not reverse an effect that already happened.
 
 ## Appearance and language
 
