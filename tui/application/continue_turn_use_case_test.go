@@ -45,7 +45,7 @@ func TestContinueTurnQueuesCompleteAssistantBeforeToolActivity(t *testing.T) {
 		}
 	}
 	u.Models = streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
-		if len(r.Tools) != 1 || r.Tools[0].Name != "read" || len(r.Messages) != 4 || r.Messages[2].ToolCallID != "model-call-1" || r.Messages[3].ToolCallID != "model-call-2" {
+		if len(r.Tools) != 1 || r.Tools[0].Name != "read" || len(r.Messages) != 5 || r.Messages[0].Role != root.RoleSystem || r.Messages[3].ToolCallID != "model-call-1" || r.Messages[4].ToolCallID != "model-call-2" {
 			t.Fatalf("continued request: %+v", r)
 		}
 		return assistant("done"), nil

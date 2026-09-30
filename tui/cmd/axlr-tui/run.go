@@ -123,7 +123,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	} else if _, err := os.Stat(configPath); err != nil {
 		return fail(err)
 	}
-	persisted, err := storage.LoadMCPConfig(configPath, getenv)
+	persisted, err := storage.LoadMCPConfiguration(configPath, getenv)
 	if err != nil {
 		return fail(err)
 	}
@@ -131,12 +131,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
-	registrations = append(persisted, registrations...)
+	profiles := append([]domain.PluginProfile(nil), persisted.Profiles...)
+	for _, registration := range registrations {
+		profiles = append(profiles, domain.PluginProfile{ID: registration.Manifest.ID, Name: root.Text(registration.Manifest.ID), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
+	}
+	registrations = append(persisted.Registrations, registrations...)
 	manager, err := plugins.NewManager(registrations)
 	if err != nil {
 		return fail(err)
 	}
 	defer manager.Close()
+	configStore := storage.MCPConfigStore{Path: configPath}
+	pluginManager := axlr.NewPluginManager(manager, profiles, configStore.SaveApproval)
 	executor, err := runtime.New(runtime.Config{Root: workspacePath, Plugins: manager})
 	if err != nil {
 		return fail(err)
@@ -198,18 +204,20 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 	}
 	continuation := application.ContinueTurnUseCase{Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace}
+	runner := axlr.ToolRunner{Executor: executor}
 	app := terminal.New(terminal.Dependencies{
 		Context:         ctx,
 		Diagnostics:     trace,
+		Plugins:         pluginManager,
 		Models:          application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
 		ModelPreference: preferences,
 		Create:          application.CreateSessionUseCase{Store: loggedStore},
 		Change:          application.ChangeSessionModelUseCase{Store: loggedStore},
 		Workspace:       workspace,
 		NewSessionID:    newID,
-		Start:           application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: loggedStore, Continue: continuation},
-		Resolve:         application.ResolveToolUseCase{Tools: axlr.ToolRunner{Executor: executor}, Store: loggedStore, Continue: continuation, Diagnostics: trace},
-		Agent:           application.AgentTurnUseCase{Continue: continuation},
+		Start:           application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: pluginManager},
+		Resolve:         application.ResolveToolUseCase{Tools: runner, Approval: pluginManager, Store: loggedStore, Continue: continuation, Diagnostics: trace},
+		Agent:           application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: pluginManager},
 		Search:          application.SearchSessionUseCase{},
 		Store:           loggedStore,
 		Session:         session,

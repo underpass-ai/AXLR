@@ -7,6 +7,8 @@ import (
 
 // Event is delivered synchronously. Tool activity always follows persisted history.
 type Event struct {
+	Snapshot     *domain.SessionState
+	Memory       bool
 	Kind         EventKind
 	Text         root.Text
 	MessageCount int

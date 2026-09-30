@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -78,9 +76,7 @@ func TestRunLoadsPersistentMCPAndExecutesApprovedTool(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(configDir, "mcp.json"), configData, 0600); err != nil {
 		t.Fatal(err)
 	}
-	pair, _ := json.Marshal([2]string{"probe", "echo"})
-	digest := sha256.Sum256(pair)
-	alias := "mcp_" + hex.EncodeToString(digest[:24])
+	alias := "echo"
 	previous := http.DefaultTransport
 	defer func() { http.DefaultTransport = previous }()
 	calls := 0

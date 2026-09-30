@@ -37,3 +37,15 @@ func (t Theme) Heading(s string) string {
 	}
 	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6")).Render(s)
 }
+
+func (t Theme) MemoryRow() lipgloss.Style {
+	style := lipgloss.NewStyle()
+	if t.Monochrome {
+		return style
+	}
+	background := lipgloss.Color("#30283D")
+	if t.Light {
+		background = lipgloss.Color("#F1ECF8")
+	}
+	return style.Background(background)
+}

@@ -6,6 +6,7 @@ const (
 	transcriptRowPlain transcriptRowKind = iota
 	transcriptRowUser
 	transcriptRowAssistant
+	transcriptRowMemory
 )
 
 // transcriptRow is one conversation entry. The viewport wraps it to the

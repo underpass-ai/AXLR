@@ -120,6 +120,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				hasIntent = true
 			} else {
 				switch m.overlay {
+				case "mcp", "plugins":
+					intent = m.Plugins.Update(k, m.overlay)
+					hasIntent = intent != ""
 				case "info":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "palette":
@@ -173,7 +176,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"approve", "deny", "cancel", "models", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
+		ids := []string{"mcp", "plugins", "approve", "deny", "cancel", "models", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
 		if m.overlay == "sessions" {
 			for i := range m.Picker.Items {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
@@ -195,6 +198,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 	}
+	if wheel, ok := msg.(tea.MouseWheelMsg); ok && (m.overlay == "mcp" || m.overlay == "plugins") {
+		m.Plugins.Update(wheel, m.overlay)
+		return m, nil, true
+	}
 	if wheel, ok := msg.(tea.MouseWheelMsg); ok && m.approvalFocus() {
 		m.Approval.Details.Viewport, _ = m.Approval.Details.Viewport.Update(wheel)
 		return m, nil, true
@@ -206,6 +213,60 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 	switch intent {
+	case "mcp", "plugins", "plugins-refresh", "plugins-toggle":
+		if m.Busy {
+			m.Status.Error = "Wait for the current operation before managing plugins"
+			return m, nil, true
+		}
+		if intent == "mcp" || intent == "plugins" {
+			m.overlay = intent
+		}
+		manager := m.deps.Plugins
+		var items []domain.PluginState
+		toggle := intent == "plugins-toggle"
+		if toggle && (m.overlay != "plugins" || len(m.Plugins.Items) == 0) {
+			return m, nil, true
+		}
+		var id root.PluginID
+		var selectedPolicy domain.PluginProfile
+		policySaved := false
+		mode := domain.ApprovalManual
+		if toggle {
+			selected := m.Plugins.Items[m.Plugins.Selected]
+			id = selected.Profile.ID
+			selectedPolicy = selected.Profile
+			if selected.Profile.Approval == domain.ApprovalManual {
+				mode = domain.ApprovalAuto
+			}
+		}
+		selectedPolicy.Approval = mode
+		m.Plugins.Loading = true
+		m.Plugins.Error = ""
+		cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
+			if manager == nil {
+				return errors.New("plugin management unavailable")
+			}
+			if toggle {
+				if err := manager.SetApproval(ctx, id, mode); err != nil {
+					return err
+				}
+				policySaved = true
+			}
+			var err error
+			items, err = manager.List(ctx)
+			return err
+		})
+		return m, func() tea.Msg {
+			msg := cmd()
+			if done, ok := msg.(operationComplete); ok {
+				done.Plugins = &items
+				if policySaved {
+					done.PluginApproval = &selectedPolicy
+				}
+				return done
+			}
+			return msg
+		}, true
 	case "models", ModelRetryIntent:
 		if m.Busy {
 			m.Status.Error = "Cannot choose a model while an operation is running"
@@ -373,7 +434,14 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.Info = NewTranscript()
 			m.Info.Viewport.SetWidth(max(1, m.Layout.Width))
 			m.Info.Viewport.SetHeight(max(1, m.Layout.Height-4))
-			m.Info.SetContent(fmt.Sprintf("Model: %s\nWorkspace: %s\nSession: %s\nSessions are local user data.", m.Header.State.Model, m.Header.State.Workspace, m.Header.State.ID))
+			detail := fmt.Sprintf("Model: %s\nWorkspace: %s\nSession: %s\nSessions are local user data.\n\nFull tool results (saved history):", m.Header.State.Model, m.Header.State.Workspace, m.Header.State.ID)
+			for _, record := range m.Header.State.Activity {
+				if record.Outcome != nil {
+					label, _ := toolPresentation(m.Header.State, record.Call.Name)
+					detail += "\n\n" + label + " · " + string(record.Decision) + "\n" + string(record.Outcome.Content)
+				}
+			}
+			m.Info.SetContent(detail)
 			m.Info.Viewport.GotoTop()
 		}
 		m.overlay = intent
@@ -434,7 +502,7 @@ func (m *AppModel) showHit() {
 	m.Transcript.Viewport.SetYOffset(lines)
 }
 func (m AppModel) overlayView(base string) string {
-	status := m.Status.View(m.Layout.Width)
+	status := m.statusView()
 	if m.approvalFocus() {
 		if m.knownPending() {
 			return m.Approval.View(m.zones, m.prefix) + "\n" + status
@@ -443,6 +511,8 @@ func (m AppModel) overlayView(base string) string {
 	}
 	var body string
 	switch m.overlay {
+	case "mcp", "plugins":
+		body = m.Plugins.View(m.overlay, m.Layout.Width, m.Layout.Height-2)
 	case "models":
 		body = m.Models.View(m.zones, m.prefix+"models-", m.Layout.Width, m.Layout.Height-2)
 	case "palette":

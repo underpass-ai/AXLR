@@ -11,6 +11,7 @@ import (
 )
 
 type ResolveToolUseCase struct {
+	Approval    ToolApprovalPolicyPort
 	Tools       ToolExecutionPort
 	Store       SessionStorePort
 	Continue    ContinueTurnUseCase
@@ -18,6 +19,18 @@ type ResolveToolUseCase struct {
 }
 
 func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) error {
+	if decision != domain.DecisionApprove && decision != domain.DecisionDeny {
+		return errors.New("invalid human tool decision")
+	}
+	if emit == nil {
+		emit = func(Event) error { return nil }
+	}
+	if err := u.resolveOne(ctx, s, id, decision, emit); err != nil {
+		return err
+	}
+	return u.advance(ctx, s, emit)
+}
+func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) error {
 	if s == nil || u.Store == nil {
 		return errors.New("resolve tool requires session and store")
 	}
@@ -31,7 +44,7 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 	if s.Status() != domain.StatusApproval || len(pending) == 0 || pending[0].Call.ID != id {
 		return errors.New("decision must resolve the first pending call")
 	}
-	if decision != domain.DecisionApprove && decision != domain.DecisionDeny {
+	if decision != domain.DecisionApprove && decision != domain.DecisionAutoApprove && decision != domain.DecisionDeny {
 		return errors.New("invalid tool decision")
 	}
 	started := time.Now()
@@ -44,7 +57,10 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 	}
 	tool, known := findTool(s, pending[0].Call.Name)
 	if !known {
-		return u.advance(ctx, s, emit)
+		return rejectUnknown(ctx, s, u.Store, emit)
+	}
+	if decision == domain.DecisionAutoApprove && (u.Approval == nil || !u.Approval.AutoApproves(tool.Identity)) {
+		return errors.New("tool is not configured for automatic approval")
 	}
 	next := *s
 	if decision == domain.DecisionDeny {
@@ -70,6 +86,9 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 			return err
 		}
 		*s = next
+		if err := emit(Event{Kind: EventToolExecutionStarted, Tool: domain.PendingTool{Call: pending[0].Call, Decision: decision}, Memory: tool.Identity.Kind == domain.ToolKindPlugin && tool.Identity.Plugin.PluginID == "kmp"}); err != nil {
+			return err
+		}
 		outcome, runErr := u.Tools.Execute(ctx, tool.Identity, pending[0].Call.Arguments)
 		runErr = errors.Join(runErr, ctx.Err())
 		if runErr != nil {
@@ -104,7 +123,7 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 		return err
 	}
 	u.recordToolCompletion(started, DiagnosticErrorNone)
-	return u.advance(ctx, s, emit)
+	return emitSession(s, emit)
 }
 func (u ResolveToolUseCase) recordToolCompletion(started time.Time, class DiagnosticErrorClass) {
 	if u.Diagnostics != nil {
@@ -114,7 +133,7 @@ func (u ResolveToolUseCase) recordToolCompletion(started time.Time, class Diagno
 func (u ResolveToolUseCase) advance(ctx context.Context, s *domain.Session, emit func(Event) error) error {
 	continuation := u.Continue
 	continuation.Store = u.Store
-	if err := (AgentTurnUseCase{Continue: continuation}).Execute(ctx, s, emit); err != nil {
+	if err := (AgentTurnUseCase{Continue: continuation, Tools: u.Tools, Approval: u.Approval}).Execute(ctx, s, emit); err != nil {
 		return err
 	}
 	return emit(Event{Kind: EventState, State: s.Status()})

@@ -11,7 +11,11 @@ import (
 
 // AgentTurnUseCase advances until a final answer or a human decision is needed.
 // ContinueTurnUseCase remains responsible for exactly one model stream.
-type AgentTurnUseCase struct{ Continue ContinueTurnUseCase }
+type AgentTurnUseCase struct {
+	Continue ContinueTurnUseCase
+	Tools    ToolExecutionPort
+	Approval ToolApprovalPolicyPort
+}
 
 func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit func(Event) error) error {
 	if s == nil || u.Continue.Store == nil {
@@ -26,6 +30,17 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 		}
 		if err := rejectUnknown(ctx, s, u.Continue.Store, emit); err != nil {
 			return err
+		}
+		if s.Status() == domain.StatusApproval && len(s.Pending()) > 0 && u.Approval != nil {
+			pending := s.Pending()[0]
+			tool, known := findTool(s, pending.Call.Name)
+			if known && u.Approval.AutoApproves(tool.Identity) {
+				resolver := ResolveToolUseCase{Tools: u.Tools, Store: u.Continue.Store, Diagnostics: u.Continue.Diagnostics, Approval: u.Approval}
+				if err := resolver.resolveOne(ctx, s, pending.Call.ID, domain.DecisionAutoApprove, emit); err != nil {
+					return err
+				}
+				continue
+			}
 		}
 		if s.Status() != domain.StatusStreaming {
 			return nil
@@ -70,4 +85,9 @@ func emitTool(s *domain.Session, id root.ToolCallID, emit func(Event) error) err
 		}
 	}
 	return nil
+}
+
+func emitSession(s *domain.Session, emit func(Event) error) error {
+	snapshot := s.Export()
+	return emit(Event{Kind: EventSession, Snapshot: &snapshot, State: s.Status()})
 }

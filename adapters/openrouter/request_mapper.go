@@ -2,7 +2,6 @@ package openrouter
 
 import (
 	"errors"
-
 	"github.com/underpass-ai/AXLR/domain"
 )
 
@@ -10,17 +9,13 @@ func mapRequest(req domain.CompletionRequest) (requestDTO, error) {
 	if err := req.Validate(); err != nil {
 		return requestDTO{}, err
 	}
-	defined := make(map[domain.ToolName]bool, len(req.Tools))
-	for _, tool := range req.Tools {
-		defined[tool.Name] = true
-	}
-	called := make(map[domain.ToolCallID]domain.ToolName)
+	// History may contain denied unknown calls or tools removed between turns.
+	// Tool result correlation is validated by CompletionRequest; historical
+	// definitions are not required for sending their results to the provider.
+	// OpenRouter still requires the current tool surface on follow-up requests.
 	for _, message := range req.Messages {
-		for _, call := range message.ToolCalls {
-			called[call.ID] = call.Name
-		}
-		if message.Role == domain.RoleTool && !defined[called[message.ToolCallID]] {
-			return requestDTO{}, errors.New("OpenRouter tool result requires its tool definition")
+		if message.Role == domain.RoleTool && len(req.Tools) == 0 {
+			return requestDTO{}, errors.New("OpenRouter tool result requires current tool definitions")
 		}
 	}
 	wire := requestDTO{Model: string(req.Model), Messages: make([]messageDTO, 0, len(req.Messages)), Stream: false}

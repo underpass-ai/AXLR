@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
+	"os"
 	"regexp"
 	"testing"
 )
@@ -69,5 +70,25 @@ func TestToolCatalogFilteredPluginsAndSameName(t *testing.T) {
 	}
 	if snapshot[4].Identity.Plugin.PluginID == snapshot[5].Identity.Plugin.PluginID {
 		t.Fatal("plugin identity lost")
+	}
+}
+
+func TestToolCatalogKeepsUniqueNativeNamesUsableFromGuides(t *testing.T) {
+	registration, err := plugins.NewRegistration(plugins.Manifest{ID: "guide-plugin", Command: os.Args[0], Args: []string{"-test.run=^TestMCPHelper$"}, AllowTools: []root.PluginToolName{"echo"}}, []string{"AXLR_TUI_HELPER=1", "IDENTITY=guide-plugin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager, err := plugins.NewManager([]plugins.Registration{registration})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer manager.Close()
+	snapshot, err := (ToolCatalog{Plugins: manager}).Snapshot(context.Background())
+	if err != nil || len(snapshot) != 5 || snapshot[4].Definition.Name != "echo" {
+		t.Fatalf("unique native name lost: %+v %v", snapshot, err)
+	}
+	id, err := ResolveTool(snapshot, "echo")
+	if err != nil || id.Plugin.PluginID != "guide-plugin" || id.Plugin.ToolName != "echo" {
+		t.Fatalf("native name lost exact identity: %+v %v", id, err)
 	}
 }

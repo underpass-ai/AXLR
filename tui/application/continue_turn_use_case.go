@@ -45,7 +45,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
 	}
-	req := root.CompletionRequest{Model: session.Export().Model, Messages: session.Messages()}
+	req := root.CompletionRequest{Model: session.Export().Model, Messages: modelMessages(session)}
 	snapshot := session.ToolSnapshot()
 	for _, tool := range snapshot {
 		req.Tools = append(req.Tools, tool.Definition)
@@ -116,6 +116,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return err
 	}
 	*session = next
+	if err := emitSession(session, emit); err != nil {
+		return err
+	}
 	// Reject only at the head: tool results must retain model order. Decision
 	// resolution must apply this lookup again as later calls reach the head.
 	for len(session.Pending()) > 0 {

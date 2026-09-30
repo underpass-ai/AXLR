@@ -24,7 +24,7 @@ func (t Transport) RoundTrip(request *http.Request) (*http.Response, error) {
 		if err != nil || response == nil || response.StatusCode >= 400 {
 			class = application.DiagnosticErrorProvider
 		}
-		_ = t.Trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticProviderHeaders, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
+		_ = t.Trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticProviderHeaders, Bytes: int(request.ContentLength), ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
 	}
 	return response, err
 }

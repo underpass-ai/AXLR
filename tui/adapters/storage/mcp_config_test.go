@@ -5,7 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 func TestLoadMCPConfigRegistersPersistentPluginWithSelectedEnvironment(t *testing.T) {
@@ -76,5 +78,36 @@ func TestLoadMCPConfigRejectsUnsafeOrInvalidFile(t *testing.T) {
 	}
 	if _, err := LoadMCPConfig(config, func(string) string { return "" }); err == nil {
 		t.Fatal("symlink config accepted")
+	}
+}
+
+func TestLoadMCPConfigRejectsFIFOWithoutBlocking(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.json")
+	if err := syscall.Mkfifo(path, 0600); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { _, err := LoadMCPConfig(path, func(string) string { return "" }); done <- err }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("FIFO config accepted")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("config reader blocked opening FIFO")
+	}
+}
+
+func TestLoadMCPConfigRejectsDirectoryAndOversizedFile(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := LoadMCPConfig(dir, func(string) string { return "" }); err == nil {
+		t.Fatal("directory config accepted")
+	}
+	path := filepath.Join(dir, "mcp.json")
+	if err := os.WriteFile(path, make([]byte, maxMCPConfigBytes+1), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadMCPConfig(path, func(string) string { return "" }); err == nil {
+		t.Fatal("oversized config accepted")
 	}
 }

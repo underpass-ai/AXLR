@@ -34,7 +34,17 @@ func navModel(t *testing.T, s *domain.Session) AppModel {
 func drain(t *testing.T, m AppModel, cmd tea.Cmd) AppModel {
 	t.Helper()
 	for n := 0; cmd != nil && n < 100; n++ {
-		next, c := m.Update(cmd())
+		message := cmd()
+		// Bubble Tea dispatches a BatchMsg before calling Update. This helper
+		// follows the operation reader; clock ticks have separate tests.
+		for {
+			batch, ok := message.(tea.BatchMsg)
+			if !ok {
+				break
+			}
+			message = batch[0]()
+		}
+		next, c := m.Update(message)
 		m = next.(AppModel)
 		cmd = c
 	}

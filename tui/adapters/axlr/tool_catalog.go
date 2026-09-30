@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
@@ -29,6 +30,13 @@ func (c ToolCatalog) Snapshot(ctx context.Context) ([]domain.AvailableTool, erro
 		if err != nil {
 			return nil, err
 		}
+		nativeCounts := map[string]int{}
+		for _, tool := range result {
+			nativeCounts[string(tool.Definition.Name)]++
+		}
+		for _, tool := range tools {
+			nativeCounts[tool.Ref.ToolName.String()]++
+		}
 		for _, tool := range tools {
 			id, err := domain.NewPluginToolIdentity(tool.Ref)
 			if err != nil {
@@ -38,6 +46,13 @@ func (c ToolCatalog) Snapshot(ctx context.Context) ([]domain.AvailableTool, erro
 			pair, _ := json.Marshal([2]string{tool.Ref.PluginID.String(), tool.Ref.ToolName.String()})
 			digest := sha256.Sum256(pair)
 			name := root.ToolName("mcp_" + hex.EncodeToString(digest[:24]))
+			native := tool.Ref.ToolName.String()
+			// Native names make schema/guide instructions actionable. Colliding or
+			// nonportable names retain opaque, unambiguous aliases; identity is
+			// always resolved from the frozen snapshot, never parsed from a name.
+			if portableName.MatchString(native) && nativeCounts[native] == 1 && !strings.HasPrefix(native, "mcp_") {
+				name = root.ToolName(native)
+			}
 			result = append(result, domain.AvailableTool{Identity: id, Definition: root.ToolDefinition{Name: name, Description: root.Text(tool.Ref.PluginID.String() + "/" + tool.Ref.ToolName.String() + ": " + tool.Description), Parameters: tool.InputSchema}})
 		}
 	}
