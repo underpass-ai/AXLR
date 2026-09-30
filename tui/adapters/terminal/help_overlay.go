@@ -1,9 +1,42 @@
 package terminal
 
-import zone "github.com/lrstanley/bubblezone/v2"
+import (
+	"strings"
+
+	zone "github.com/lrstanley/bubblezone/v2"
+)
 
 type HelpOverlay struct{}
 
-func (HelpOverlay) View(z *zone.Manager, p string) string {
-	return "Keyboard help\nEnter Send • Shift+Enter Newline\n/model Models · /mcp Servers · /plugin Policies\nCtrl+P Actions • Ctrl+F Search\nCtrl+O Sessions • F1 Help • Ctrl+R Continue\nTab Transcript / activity • PgUp/PgDn Scroll\nApproval: A Approve • D Deny • Esc Cancel\nApproval details: ↑↓ / PgUp/PgDn / wheel\nSearch: Enter Next • Shift+Enter Previous\nPlugins: A Autoapprove on/off · R Refresh\nSessions: ↑↓ Select • Enter Open\nEsc Close overlay / cancel turn • Ctrl+C Quit\n" + z.Mark(p+"close", "[Close Esc]")
+func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, height int) string {
+	rows := []string{
+		theme.Accent(theme.T("help.write")),
+		theme.T("help.sendFull"),
+		theme.T("help.commandsModelTheme"),
+		theme.T("help.commandsMCPPlugins"),
+		"",
+		theme.Accent(theme.T("help.navigate")),
+		theme.T("help.shortcuts"),
+		theme.T("help.views"),
+		theme.T("help.quitFull"),
+		"",
+		theme.Accent(theme.T("help.approvals")),
+		theme.T("help.approveFull"),
+		theme.T("help.pluginReview"),
+		theme.T("help.modelSelect"),
+		theme.T("help.themeOptions"),
+	}
+	if height < 20 {
+		rows = []string{
+			theme.T("help.sendShort"),
+			theme.T("help.commandsModelTheme"),
+			theme.T("help.commandsMCPPlugins"),
+			theme.T("help.shortcuts"),
+			theme.T("help.views"),
+			theme.T("help.approveShort"),
+			theme.T("help.quitShort"),
+		}
+	}
+	footer := z.Mark(prefix+"close", "["+theme.T("common.close")+"]")
+	return theme.Overlay(theme.T("palette.helpTitle"), theme.T("help.subtitle"), strings.Join(rows, "\n"), footer, width, height)
 }

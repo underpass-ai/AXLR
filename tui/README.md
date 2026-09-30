@@ -12,7 +12,9 @@ go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
 /tmp/axlr-tui
 ```
 
-`--root` defaults to the current directory. Type `/model` and press Enter to choose a model before sending your first prompt. The searchable catalog lists text models that support tools, with context limits and pricing when available. Arrow keys and PgUp/PgDn navigate, Enter selects, and Esc closes; failed requests offer Retry. The action palette also offers Models and preserves a drafted prompt. The model selected through `/model` becomes the default for future new sessions.
+`--root` defaults to the current directory. Type `/model` and press Enter to choose a model before sending your first prompt. The searchable catalog lists text models that support tools, with provider filters and a detail pane showing context limits and pricing when available. Arrow keys and PgUp/PgDn navigate, Tab changes provider, Enter selects, and Esc closes; failed requests offer Retry. The action palette also offers Models and preserves a drafted prompt. The model selected through `/model` becomes the default for future new sessions.
+
+The interface defaults to English. Start with `--lang es` for Spanish, or set `AXLR_LANG=es`; `--lang` takes precedence. Language changes affect interface labels only, preserving prompts, session history and tool results exactly as stored. Both catalogs use stable labels in `adapters/terminal/i18n.go`.
 
 Use `--model your-provider/your-model` to override the default for one launch without fetching the catalog. Bare startup uses the saved default, if one exists; otherwise it does not create a session snapshot or lock file until a model is chosen. Quitting or a catalog failure before the first selection leaves no session. Changing models is allowed only while idle, complete, or interrupted without pending tool calls. Selection applies to subsequent requests and preserves the transcript. If saving the default fails after a session model change, the new session model remains active and the TUI shows a warning.
 
@@ -24,9 +26,12 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 
 | Key | Action |
 | --- | --- |
-| Enter | Send prompt; run `/model`, `/mcp` or `/plugin` |
-| A in `/plugin` | Toggle automatic/manual approval for the selected plugin |
+| Enter | Send prompt; run `/model`, `/mcp`, `/plugin` or `/theme` |
+| A or Enter in `/plugin` | Review a policy change; Enter confirms it, Esc cancels |
 | R in `/mcp` or `/plugin` | Refresh server/tool inventory |
+| / in `/mcp` or `/plugin` | Search servers and tool names; Tab cycles status or approval filters |
+| Tab in `/model` | Cycle provider filters |
+| I / A in `/theme` | Cycle icon profiles / toggle reduced motion |
 | Shift+Enter | Newline in the prompt |
 | A / D | Approve / deny the displayed tool call |
 | Esc | Close overlay or cancel the current turn |
@@ -40,9 +45,9 @@ The separate module uses the repository's root AXLR library. `go.work` supports 
 | Tab | Transcript / activity |
 | PgUp / PgDn | Scroll |
 
-Mouse controls match the keyboard actions. Tool arguments and exact targets appear before approval; scroll approval details with arrows, PgUp/PgDn or the wheel. Local tools and plugins default to an individual decision. A configured plugin may opt into automatic approval; `/plugin` changes and persists that policy for its exact ID. Local catalog/history reads are automatically resolved; they do not grant approval to plugin calls. A turn allows up to 32 tool calls. Unknown calls are rejected. Cancelled or uncertain effects are recorded and never automatically retried.
+Mouse controls match the keyboard actions. Tool arguments and exact targets appear before approval; scroll approval details with arrows, PgUp/PgDn or the wheel. Local tools and plugins default to an individual decision. A configured plugin may opt into automatic approval; `/plugin` shows the exact ID and policy scope before confirming and persisting a change. Local catalog/history reads are automatically resolved; they do not grant approval to plugin calls. A turn allows up to 32 tool calls. Unknown calls are rejected. Cancelled or uncertain effects are recorded and never automatically retried.
 
-Use a terminal of at least 50 columns by 15 rows. The transcript occupies the full terminal width; Tab opens the activity view. User and assistant turns are separate, full-width rows with subtle backgrounds selected for the terminal's light or dark theme. KMP tool requests and results use distinct memory rows; a memory indicator appears while KMP executes. Tool rows show compact previews; Actions → Info retains the full saved results in a scrollable view. Before the first text delta, the status shows the elapsed wait for the model. Rows wrap to their content, and the transcript scrolls as turns accumulate. Set `NO_COLOR=1` for monochrome output. The terminal controls the font, including Nerd Fonts.
+Use a terminal of at least 50 columns by 15 rows. The transcript occupies the full terminal width; Tab opens the activity view. The composer grows with multiline drafts. User and assistant turns are separate, full-width rows. `/theme` previews Auto, Ink, Aurora, Paper and Phosphor; Enter saves the choice under `$XDG_STATE_HOME/axlr/ui-preference.json`, and Esc restores the previous theme. Icon profiles are Safe, Nerd Mono and ASCII. The terminal controls the font; Nerd Mono requires a Nerd Font installed in your terminal. `NO_COLOR=1` disables color. KMP tool requests and results use distinct memory rows; a memory indicator appears while KMP executes. Tool rows show compact previews; Actions → Info retains the full saved results in a scrollable view. Waiting and tool execution show an activity indicator and elapsed time, with a static indicator when reduced motion is enabled. Rows wrap to their content, and the transcript scrolls as turns accumulate.
 
 
 ## Model context
@@ -99,7 +104,7 @@ AXLR loads this file at every start, including launches without `--plugin`. `env
 
 ## Local sessions and recovery
 
-Sessions contain prompts, model output, tool arguments and results: treat them as local user data. They live under `$XDG_STATE_HOME/axlr/sessions`, or `$HOME/.local/state/axlr/sessions` if XDG state home is unset or relative. The default model is stored separately at `$XDG_STATE_HOME/axlr/model-preference.json`, or the equivalent path under `$HOME/.local/state`. Directories are owner-only (0700), snapshots and the preference file are 0600, updates use atomic replacement, and each open session has an exclusive writer lock.
+Sessions contain prompts, model output, tool arguments and results: treat them as local user data. They live under `$XDG_STATE_HOME/axlr/sessions`, or `$HOME/.local/state/axlr/sessions` if XDG state home is unset or relative. The default model and interface settings are stored separately as `model-preference.json` and `ui-preference.json` in that `axlr` directory. Directories are owner-only (0700), snapshots and preference files are 0600, updates use atomic replacement, and each open session has an exclusive writer lock.
 
 The header identifies the current session. Open another through Ctrl+O, or start with:
 

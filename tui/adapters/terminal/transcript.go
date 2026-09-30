@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/viewport"
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -11,6 +12,7 @@ import (
 
 type Transcript struct {
 	Viewport   viewport.Model
+	Gutter     int
 	rows       []transcriptRow
 	rowKinds   map[int]transcriptRowKind
 	visualRows []transcriptRowKind
@@ -33,6 +35,7 @@ func (t *Transcript) SetContent(s string) {
 	}
 }
 func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme) {
+	t.theme = theme
 	t.rows = t.rows[:0]
 	archived := 0
 	for index, m := range s.Messages {
@@ -42,7 +45,7 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 		} else if m.Role == root.RoleAssistant {
 			kind = transcriptRowAssistant
 		}
-		text := string(m.Role) + ": " + string(m.Content)
+		text := theme.T("role."+string(m.Role)) + ": " + string(m.Content)
 		if m.Role == root.RoleTool {
 			call := root.ToolCall{}
 			for _, record := range s.Activity {
@@ -52,40 +55,40 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 				}
 			}
 			label, memory := toolCallPresentation(s, call)
-			text = "tool result: " + label + " · " + toolSummary(string(m.Content))
+			text = theme.T("transcript.toolResult") + label + " · " + toolResultSummaryLocale(string(m.Content), theme.Locale)
 			if memory {
 				kind = transcriptRowMemory
-				text = "memory result: " + label + " · " + toolSummary(string(m.Content))
+				text = theme.T("transcript.memoryResult") + label + " · " + toolResultSummaryLocale(string(m.Content), theme.Locale)
 			}
 		}
 		if m.Content != "" || m.Role != root.RoleAssistant {
-			t.rows = append(t.rows, transcriptRow{Text: text, Kind: kind})
+			t.rows = append(t.rows, transcriptRow{Text: text, Kind: kind, GapBefore: len(t.rows) > 0})
 		}
 		for _, c := range m.ToolCalls {
 			label, memory := toolCallPresentation(s, c)
 			kind := transcriptRowPlain
-			prefix := "tool request: "
+			prefix := theme.T("transcript.toolRequest")
 			if memory {
 				kind = transcriptRowMemory
-				prefix = "memory request: "
+				prefix = theme.T("transcript.memoryRequest")
 			}
-			t.rows = append(t.rows, transcriptRow{Text: prefix + label + " " + toolSummary(string(c.Arguments.Bytes())), Kind: kind})
+			t.rows = append(t.rows, transcriptRow{Text: prefix + label + " " + toolSummaryLocale(string(c.Arguments.Bytes()), theme.Locale), Kind: kind, GapBefore: len(t.rows) > 0})
 			for _, a := range s.Activity {
 				if a.Call.ID == c.ID {
-					t.rows = append(t.rows, transcriptRow{Text: "decision: " + string(a.Decision), Kind: kind})
+					t.rows = append(t.rows, transcriptRow{Text: theme.T("transcript.decision") + theme.T("decision."+string(a.Decision)), Kind: kind})
 				}
 			}
 		}
 		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
-			t.rows = append(t.rows, transcriptRow{Text: "interrupted draft: " + string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant})
+			t.rows = append(t.rows, transcriptRow{Text: theme.T("transcript.interruptedDraft") + string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0})
 			archived++
 		}
 	}
 	if s.Draft != "" {
-		t.rows = append(t.rows, transcriptRow{Text: "interrupted draft: " + string(s.Draft), Kind: transcriptRowAssistant})
+		t.rows = append(t.rows, transcriptRow{Text: theme.T("transcript.interruptedDraft") + string(s.Draft), Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0})
 	}
 	if draft != "" {
-		t.rows = append(t.rows, transcriptRow{Text: "assistant: " + draft, Kind: transcriptRowAssistant})
+		t.rows = append(t.rows, transcriptRow{Text: theme.T("transcript.assistant") + draft, Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0})
 	}
 	t.renderRows()
 	t.ApplyTheme(theme)
@@ -95,7 +98,7 @@ func (t *Transcript) AppendUnsent(prompts []string) {
 		return
 	}
 	for _, prompt := range prompts {
-		t.rows = append(t.rows, transcriptRow{Text: "Not sent: " + prompt, Kind: transcriptRowUser})
+		t.rows = append(t.rows, transcriptRow{Text: t.theme.T("transcript.notSent") + prompt, Kind: transcriptRowUser, GapBefore: len(t.rows) > 0})
 	}
 	t.renderRows()
 	t.ApplyTheme(t.theme)
@@ -107,6 +110,11 @@ func (t *Transcript) renderRows() {
 	for index, row := range t.rows {
 		if index > 0 {
 			b.WriteByte('\n')
+			if row.GapBefore {
+				b.WriteByte('\n')
+				kinds[line] = transcriptRowGap
+				line++
+			}
 		}
 		clean := Sanitize(row.Text)
 		for i := range strings.Count(clean, "\n") + 1 {
@@ -136,22 +144,30 @@ func (t *Transcript) ApplyTheme(theme Theme) {
 }
 func (t Transcript) View() string {
 	view := t.Viewport.View()
-	if t.theme.Monochrome || len(t.rowKinds) == 0 || view == "" {
+	if view == "" {
 		return view
 	}
 	lines := strings.Split(view, "\n")
+	outerWidth := max(1, t.Viewport.Width()+2*t.Gutter)
 	for i := range lines {
+		line := strings.Repeat(" ", t.Gutter) + lines[i]
+		line = ansi.Truncate(line, outerWidth, "")
 		index := t.Viewport.YOffset() + i
-		if index >= len(t.visualRows) {
+		if t.theme.Monochrome || index >= len(t.visualRows) {
+			lines[i] = lipgloss.NewStyle().Width(outerWidth).Render(line)
 			continue
 		}
 		switch t.visualRows[index] {
 		case transcriptRowUser:
-			lines[i] = t.theme.UserRow().Render(lines[i])
+			lines[i] = t.theme.UserRow().Width(outerWidth).Render(line)
 		case transcriptRowAssistant:
-			lines[i] = t.theme.AssistantRow().Render(lines[i])
+			lines[i] = t.theme.AssistantRow().Width(outerWidth).Render(line)
 		case transcriptRowMemory:
-			lines[i] = t.theme.MemoryRow().Render(lines[i])
+			lines[i] = t.theme.MemoryRow().Width(outerWidth).Render(line)
+		case transcriptRowGap:
+			lines[i] = lipgloss.NewStyle().Width(outerWidth).Render(line)
+		default:
+			lines[i] = t.theme.ToolRow().Width(outerWidth).Render(line)
 		}
 	}
 	return strings.Join(lines, "\n")

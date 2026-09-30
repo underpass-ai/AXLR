@@ -1,0 +1,15 @@
+AXLR · muestra de iconos y alineación · 80 columnas
+        1         2         3         4         5         6         7
+12345678901234567890123456789012345678901234567890123456789012345678901234567890
+┌────────┬───────────────────┬───────────────────────────────────────────────┐
+│ GLIFO  │ USO               │ EJEMPLO                                       │
+├────────┼───────────────────┼───────────────────────────────────────────────┤
+│       │ repositorio        │   underpass-ai/AXLR                           │
+│   󰊢    │ control de cambios │ 󰊢  codex/tui-mcp-controls                     │
+│   󰈙    │ documento          │ 󰈙  historial privado                          │
+│   󰘳    │ atajo              │ 󰘳  Enter enviar · Shift+Enter línea           │
+│   ◇    │ memoria            │ ◇  KMP · recuperando project:AXLR            │
+│   ●    │ estado             │ ●  conectado / ◌ esperando / ⚠ error         │
+└────────┴───────────────────┴───────────────────────────────────────────────┘
+Sin Nerd Font: [GIT] [DOC] [KEY] [MEM] [OK] [WAIT] [ERR]
+Español: razón, sesión, política; números: 1.000.000 · $0,70.

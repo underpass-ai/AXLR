@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"context"
 	"errors"
@@ -39,31 +40,77 @@ func (m *AppModel) syncApproval() {
 	if !ok {
 		return
 	}
-	target := "unknown tool"
+	target := m.Theme.T("approval.unknownTarget")
 	if tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call); known && err == nil {
 		switch tool.Identity.Kind {
 		case domain.ToolKindLocal:
-			target = fmt.Sprintf("local %s in %s", tool.Identity.LocalOperation, m.Header.State.Workspace)
+			target = m.Theme.Tf("approval.localTarget", tool.Identity.LocalOperation, m.Header.State.Workspace)
 		case domain.ToolKindPlugin:
-			target = fmt.Sprintf("plugin %s / %s", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
+			target = m.Theme.Tf("approval.pluginTarget", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
 		case domain.ToolKindHost:
-			target = fmt.Sprintf("read-only host %s", tool.Identity.LocalOperation)
+			target = m.Theme.Tf("approval.hostTarget", tool.Identity.LocalOperation)
 		}
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
-		m.Approval = NewApprovalDialog(p, target)
+		m.Approval = NewApprovalDialog(p, target, m.Theme.Locale)
 	}
 
 	m.sizeApproval()
 }
 func (m *AppModel) sizeApproval() {
-	m.Approval.Details.Viewport.SetWidth(max(1, m.Layout.Width))
-	m.Approval.Details.Viewport.SetHeight(max(1, m.Layout.Height-4))
+	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
+	m.Approval.Details.Viewport.SetWidth(w)
+	m.Approval.Details.Viewport.SetHeight(h)
 }
 
 // navigation routes modal input before editor input. It never reads a worker's
 // session: all decisions use the UI's last published state.
 func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	if m.overlay == "palette" && !m.approvalFocus() {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseWheelMsg, list.FilterMatchesMsg:
+			if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
+				return m, nil, false
+			}
+			var intent ControlIntent
+			var cmd tea.Cmd
+			m.Palette, intent, cmd = m.Palette.Update(msg)
+			if intent != "" {
+				return m.navigation(intent)
+			}
+			return m, cmd, true
+		}
+	}
+	if m.overlay == "theme" && !m.approvalFocus() {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseClickMsg, tea.MouseWheelMsg:
+			if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
+				return m, nil, false
+			}
+			var intent ControlIntent
+			var cmd tea.Cmd
+			m.ThemePicker, intent, cmd = m.ThemePicker.Update(msg)
+			switch intent {
+			case "theme-preview":
+				m.applyUIPreferences(m.ThemePicker.Preview)
+			case "theme-cancel":
+				m.applyUIPreferences(m.ThemePicker.Original)
+				m.overlay = ""
+			case "theme-save":
+				if m.deps.UIPreferenceStore != nil {
+					if err := m.deps.UIPreferenceStore.Save(m.lifetime.ctx, m.ThemePicker.Preview); err != nil {
+						m.Status.Error = m.Theme.T("error.saveTheme") + err.Error()
+						return m, nil, true
+					}
+				}
+				m.UIPreferences = m.ThemePicker.Preview
+				m.applyUIPreferences(m.UIPreferences)
+				m.Status.Error = ""
+				m.overlay = ""
+			}
+			return m, cmd, true
+		}
+	}
 	if m.overlay == "models" && !m.approvalFocus() {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseClickMsg, tea.MouseWheelMsg:
@@ -89,6 +136,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.search()
 			return m, cmd, true
 		}
+		if m.overlay == "mcp" || m.overlay == "plugins" {
+			m.Plugins.Update(paste, m.overlay)
+			return m, nil, true
+		}
 		if m.overlay != "" {
 			return m, nil, true
 		}
@@ -113,6 +164,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 		} else if m.overlay != "" {
 			if k.String() == "esc" {
+				if (m.overlay == "mcp" || m.overlay == "plugins") && (m.Plugins.searching || m.Plugins.confirming) {
+					m.Plugins.Update(k, m.overlay)
+					return m, nil, true
+				}
 				intent = "close"
 				hasIntent = true
 			} else {
@@ -122,9 +177,6 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					hasIntent = intent != ""
 				case "info":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
-				case "palette":
-					intent = m.Palette.Intent(k)
-					hasIntent = intent != ""
 				case "sessions":
 					switch k.String() {
 					case "up":
@@ -173,7 +225,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"mcp", "plugins", "approve", "deny", "cancel", "models", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
+		ids := []string{"mcp", "plugins", "approve", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
 		if m.overlay == "sessions" {
 			for i := range m.Picker.Items {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
@@ -210,13 +262,21 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 	switch intent {
+	case "theme":
+		m.ThemePicker = NewThemePicker(m.UIPreferences, m.Theme.Locale)
+		m.overlay = "theme"
+		return m, nil, true
 	case "mcp", "plugins", "plugins-refresh", "plugins-toggle":
 		if m.Busy {
-			m.Status.Error = "Wait for the current operation before managing plugins"
+			m.Status.Error = m.Theme.T("error.pluginsBusy")
 			return m, nil, true
 		}
 		if intent == "mcp" || intent == "plugins" {
 			m.overlay = intent
+			m.Plugins = NewPluginPanel()
+			m.Plugins.Theme = m.Theme
+			m.Plugins.Search.Placeholder = m.Theme.T("plugins.searchPlaceholder")
+			m.Plugins.Resize(m.Layout.Width, m.Layout.Height-2)
 		}
 		manager := m.deps.Plugins
 		var items []domain.PluginState
@@ -241,7 +301,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.Plugins.Error = ""
 		cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 			if manager == nil {
-				return errors.New("plugin management unavailable")
+				return errors.New(m.Theme.T("error.pluginUnavailable"))
 			}
 			if toggle {
 				if err := manager.SetApproval(ctx, id, mode); err != nil {
@@ -266,19 +326,21 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}, true
 	case "models", ModelRetryIntent:
 		if m.Busy {
-			m.Status.Error = "Cannot choose a model while an operation is running"
+			m.Status.Error = m.Theme.T("error.modelBusy")
 			return m, nil, true
 		}
 		if _, pending := m.pending(); pending {
-			m.Status.Error = "Resolve pending tool calls before choosing a model"
+			m.Status.Error = m.Theme.T("error.modelPending")
 			return m, nil, true
 		}
 		if m.Header.State.ID != "" && m.Header.State.Status != domain.StatusIdle && m.Header.State.Status != domain.StatusComplete && m.Header.State.Status != domain.StatusInterrupted {
-			m.Status.Error = "Cannot choose a model while a turn is active"
+			m.Status.Error = m.Theme.T("error.modelActive")
 			return m, nil, true
 		}
 		if intent == "models" {
 			m.Models = NewModelPicker()
+			m.Models.Theme = m.Theme
+			m.Models.Input.Prompt = m.Theme.T("common.searchPrompt")
 		}
 		m.Models.pageSize = max(1, m.Layout.Height-7)
 		m.Models.Input.SetWidth(max(1, m.Layout.Width-9))
@@ -385,7 +447,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		var summaries []domain.SessionSummary
 		cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 			if store == nil {
-				return errors.New("session store unavailable")
+				return errors.New(m.Theme.T("error.sessionStoreUnavailable"))
 			}
 			var err error
 			summaries, err = store.List(ctx)
@@ -413,39 +475,37 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		workspace := m.Header.State.Workspace
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
 			if store == nil {
-				return errors.New("session store unavailable")
+				return errors.New(m.Theme.T("error.sessionStoreUnavailable"))
 			}
 			loaded, err := store.Load(ctx, id)
 			if err != nil {
 				return err
 			}
 			if loaded.Export().Workspace != workspace {
-				return fmt.Errorf("session workspace %s differs from active workspace %s; reopen with that workspace", loaded.Export().Workspace, workspace)
+				return errors.New(m.Theme.Tf("error.workspaceMismatch", loaded.Export().Workspace, workspace))
 			}
 			*s = loaded
 			return nil
 		})
 		return m, cmd, true
-	case "palette", "help", "info":
+	case "palette":
+		m.Palette = NewActionPalette(m.Theme.Locale)
+		m.overlay = intent
+		return m, nil, true
+	case "help", "info":
 		if intent == "info" {
 			m.Info = NewTranscript()
-			m.Info.Viewport.SetWidth(max(1, m.Layout.Width))
-			m.Info.Viewport.SetHeight(max(1, m.Layout.Height-4))
-			detail := fmt.Sprintf("Model: %s\nWorkspace: %s\nSession: %s\nSessions are local user data.\n\nFull tool results (saved history):", m.Header.State.Model, m.Header.State.Workspace, m.Header.State.ID)
-			for _, record := range m.Header.State.Activity {
-				if record.Outcome != nil {
-					label, _ := toolPresentation(m.Header.State, record.Call.Name)
-					detail += "\n\n" + label + " · " + string(record.Decision) + "\n" + string(record.Outcome.Content)
-				}
-			}
-			m.Info.SetContent(detail)
+			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
+			m.Info.Viewport.SetWidth(w)
+			m.Info.Viewport.SetHeight(h)
+			m.Info.SetContent(infoContentLocale(m.Header.State, m.Theme.Locale))
 			m.Info.Viewport.GotoTop()
 		}
 		m.overlay = intent
 		return m, nil, true
 	case "search":
 		m.overlay = "search"
-		m.SearchBox = NewSearchBox()
+		m.SearchBox = NewSearchBox(m.Theme.Locale)
 		m.SearchBox.Input.SetWidth(max(1, m.Layout.Width-18))
 		return m, nil, true
 	case "close":
@@ -493,7 +553,8 @@ func (m *AppModel) showHit() {
 	lines := 0
 	if before != "" {
 		for _, line := range strings.Split(before, "\n") {
-			lines += max(1, (ansi.StringWidth(line)+max(1, m.Layout.TranscriptWidth)-1)/max(1, m.Layout.TranscriptWidth))
+			width := max(1, m.Transcript.Viewport.Width())
+			lines += max(1, (ansi.StringWidth(line)+width-1)/width)
 		}
 	}
 	m.Transcript.Viewport.SetYOffset(lines)
@@ -502,34 +563,48 @@ func (m AppModel) overlayView(base string) string {
 	status := m.statusView()
 	if m.approvalFocus() {
 		if m.knownPending() {
-			return m.Approval.View(m.zones, m.prefix) + "\n" + status
+			return m.Approval.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1) + "\n" + status
 		}
-		return "Unknown tool request cannot be approved\n" + m.Approval.Details.View() + "\n" + m.zones.Mark(m.prefix+"continue", "[Reject and continue Ctrl+R]") + " " + m.zones.Mark(m.prefix+"cancel", "[Cancel Esc]") + "\n" + status
+		footer := m.zones.Mark(m.prefix+"continue", "["+m.Theme.T("approval.rejectContinue")+"]") + "  " + m.zones.Mark(m.prefix+"cancel", "["+m.Theme.T("common.cancel")+"]")
+		return m.Theme.Overlay(m.Theme.T("approval.unknownTitle"), m.Theme.T("approval.unknownSubtitle"), m.Approval.Details.View(), footer, m.Layout.Width, m.Layout.Height-1) + "\n" + status
 	}
 	var body string
 	switch m.overlay {
 	case "mcp", "plugins":
 		body = m.Plugins.View(m.overlay, m.Layout.Width, m.Layout.Height-2)
+	case "theme":
+		body = m.ThemePicker.View(m.Theme, m.Layout.Width, m.Layout.Height-2)
 	case "models":
 		body = m.Models.View(m.zones, m.prefix+"models-", m.Layout.Width, m.Layout.Height-2)
 	case "palette":
-		body = m.Palette.View(m.zones, m.prefix)
+		body = m.Palette.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
 	case "help":
-		body = m.Help.View(m.zones, m.prefix)
+		body = m.Help.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
 	case "info":
-		body = "Model / workspace — ↑↓ / PgUp PgDn\n" + m.Info.View() + "\n" + m.zones.Mark(m.prefix+"close", "[Close Esc]")
+		body = m.Theme.Overlay(m.Theme.T("info.title"), m.Theme.T("info.subtitle"), m.Info.View(), m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
 	case "sessions":
-		body = m.Picker.View(m.zones, m.prefix, m.Layout.Height-2, m.Layout.Width)
+		body = m.Picker.View(m.Theme, m.zones, m.prefix, m.Layout.Height-1, m.Layout.Width)
 	case "search":
 		body = m.Transcript.View() + "\n" + m.SearchBox.View(m.zones, m.prefix)
 	}
 	if body != "" {
-		return body + "\n" + status
+		return fitOverlay(body, m.Layout.Width, m.Layout.Height-1) + "\n" + status
 	}
 	// Keep the original editor geometry while making navigation discoverable.
-	nav := m.zones.Mark(m.prefix+"palette", "[Actions Ctrl+P]") + " " + m.zones.Mark(m.prefix+"help", "[Help F1]")
+	nav := m.zones.Mark(m.prefix+"palette", "["+m.Theme.T("nav.actions")+"]") + " " + m.zones.Mark(m.prefix+"help", "["+m.Theme.T("nav.help")+"]")
 	if m.Header.State.Status == domain.StatusInterrupted || m.Header.State.Status == domain.StatusStreaming {
-		nav += " " + m.zones.Mark(m.prefix+"continue", "[Continue Ctrl+R]")
+		nav += " " + m.zones.Mark(m.prefix+"continue", "["+m.Theme.T("nav.continue")+"]")
 	}
-	return strings.Replace(base, status, nav+"\n"+status, 1)
+	return strings.Replace(base, status, m.Theme.overlayLine(nav, m.Layout.Width, false)+"\n"+status, 1)
+}
+
+func fitOverlay(body string, width, height int) string {
+	lines := strings.Split(body, "\n")
+	if len(lines) > height {
+		lines = append(lines[:height-1], lines[len(lines)-1])
+	}
+	for i, line := range lines {
+		lines[i] = ansi.Truncate(line, max(1, width), "…")
+	}
+	return strings.Join(lines, "\n")
 }

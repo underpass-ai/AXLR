@@ -75,7 +75,7 @@ func TestNavigationPaletteHelpAndInfo(t *testing.T) {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: 'h', Text: "h"})
-	if !strings.Contains(m.View().Content, "Shift+Enter") || !strings.Contains(m.View().Content, "Approve") {
+	if !strings.Contains(m.View().Content, "Shift+Enter") || !strings.Contains(m.View().Content, "approve") {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})

@@ -69,11 +69,18 @@ func TestPluginCommandsAndExplicitPolicyToggle(t *testing.T) {
 				}
 				return
 			}
+			if cmd != nil || manager.toggles != 0 || !strings.Contains(m.View().Content, "Enter confirm") {
+				t.Fatal("policy changed before confirmation")
+			}
+			next, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+			m = next.(AppModel)
 			m = runUIOperation(m, cmd)
 			if manager.toggles != 1 || m.Plugins.Items[0].Profile.Approval != domain.ApprovalAuto {
 				t.Fatal("policy did not become automatic")
 			}
 			next, cmd = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+			m = next.(AppModel)
+			next, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 			m = runUIOperation(next.(AppModel), cmd)
 			if m.Plugins.Items[0].Profile.Approval != domain.ApprovalManual {
 				t.Fatal("policy did not return to manual")
@@ -90,6 +97,8 @@ func TestPluginPolicyFailureKeepsVisibleManualPolicy(t *testing.T) {
 	m = runUIOperation(next.(AppModel), cmd)
 	manager.err = errors.New("cannot persist policy")
 	next, cmd = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m = next.(AppModel)
+	next, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = runUIOperation(next.(AppModel), cmd)
 	if m.Plugins.Items[0].Profile.Approval != domain.ApprovalManual || !strings.Contains(m.View().Content, "cannot persist policy") {
 		t.Fatal("failed save appeared successful")
@@ -153,6 +162,8 @@ func TestPluginPolicyRemainsVisibleWhenDiscoveryAfterSaveFails(t *testing.T) {
 			if m.Plugins.Items[0].Profile.Approval != domain.ApprovalManual {
 				t.Fatal("policy changed before persistence")
 			}
+			next, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+			m = next.(AppModel)
 			m = runUIOperation(m, cmd)
 			if manager.profile.Approval != domain.ApprovalAuto || m.Plugins.Items[0].Profile.Approval != domain.ApprovalAuto {
 				t.Fatal("successfully persisted policy was hidden by discovery failure")

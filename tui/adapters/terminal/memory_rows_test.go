@@ -26,7 +26,7 @@ func TestMemoryRowsAreCompactDistinctAndChronological(t *testing.T) {
 	if strings.Index(text, "user: remember") >= strings.Index(text, "memory request:") || strings.Index(text, "memory result:") >= strings.Index(text, "assistant: recovered") {
 		t.Fatal("conversation order is wrong")
 	}
-	if !strings.Contains(tr.View(), "48;2;48;40;61") {
+	if !strings.Contains(tr.View(), "48;2;52;43;77") {
 		t.Fatal("memory row has no distinct background")
 	}
 	if state.Messages[2].Content != root.Text(strings.Repeat("memory evidence ", 10000)) {
@@ -79,7 +79,7 @@ func TestHistoricalHashedToolsKeepMemoryPresentationWithNativeSnapshot(t *testin
 	if strings.Contains(text, string(oldAlias)) || !strings.Contains(text, "memory request: kmp / kmp_wake") || !strings.Contains(text, "memory result: kmp / kmp_wake") {
 		t.Fatal("historical tools lost their identity when snapshot switched to native names")
 	}
-	if !strings.Contains(tr.View(), "48;2;48;40;61") {
+	if !strings.Contains(tr.View(), "48;2;52;43;77") {
 		t.Fatal("historical memory rows lost their background")
 	}
 	m := sized()

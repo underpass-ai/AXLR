@@ -7,27 +7,47 @@ import (
 )
 
 type StatusBar struct {
+	Locale      Locale
 	Phase       domain.ProviderPhase
 	State       domain.SessionStatus
 	Error       string
 	Waiting     bool
 	WaitSeconds int
+	Indicator   string
+	Executing   bool
+	ToolName    string
+	ToolSeconds int
 }
 
 func (s StatusBar) View(w int) string {
-	text := "Status: " + string(s.State)
+	state := s.State
+	if state == "" {
+		state = domain.StatusIdle
+	}
+	text := Translate(s.Locale, "status.prefix") + Translate(s.Locale, "status."+string(state))
+	indicator := s.Indicator
+	if indicator != "" {
+		indicator += "  "
+	}
 	if s.Waiting {
-		label := "Waiting for model"
+		label := Translate(s.Locale, "status.waiting")
 		switch s.Phase {
 		case domain.ProviderReasoning:
-			label = "Model is reasoning"
+			label = Translate(s.Locale, "status.reasoning")
 		case domain.ProviderToolCall:
-			label = "Model is preparing tools"
+			label = Translate(s.Locale, "status.preparingTools")
 		}
-		text += fmt.Sprintf(" | %s · %ds", label, s.WaitSeconds)
+		text += fmt.Sprintf(" | %s%s · %ds", indicator, label, s.WaitSeconds)
+	}
+	if s.Executing {
+		name := s.ToolName
+		if name == "" {
+			name = Translate(s.Locale, "common.tool")
+		}
+		text += " | " + indicator + Translatef(s.Locale, "status.executing", name, s.ToolSeconds)
 	}
 	if s.Error != "" {
-		text += " | Error: " + singleLine(s.Error)
+		text += " | " + Translate(s.Locale, "status.error") + singleLine(s.Error)
 	}
 	return ansi.Truncate(text, w, "…")
 }

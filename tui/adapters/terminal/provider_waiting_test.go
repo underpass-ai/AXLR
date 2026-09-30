@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
@@ -69,8 +70,14 @@ func TestWaitingStopsOnTextSnapshotToolAndCompletion(t *testing.T) {
 			m = update(m, event)
 			next, cmd := m.Update(providerWaitTick{OperationID: 1})
 			m = next.(AppModel)
-			if m.providerWaiting || cmd != nil || strings.Contains(m.View().Content, "Waiting for model") {
+			if m.providerWaiting || strings.Contains(m.View().Content, "Waiting for model") {
 				t.Fatal("waiting continued after provider finished waiting")
+			}
+			if kind == application.EventToolExecutionStarted && (cmd == nil || !m.toolExecuting) {
+				t.Fatal("tool execution has no activity timer")
+			}
+			if kind != application.EventToolExecutionStarted && cmd != nil {
+				t.Fatal("idle state kept an activity timer")
 			}
 		})
 	}
@@ -101,5 +108,86 @@ func TestWaitingStartsFromCoalescedEventsAndAvoidsUnneededTimer(t *testing.T) {
 	m = next.(AppModel)
 	if cmd != nil || m.waitTickScheduled {
 		t.Fatal("immediate provider scheduled an unnecessary timer")
+	}
+}
+
+func TestSpinnerRestartsAfterIdleTickInSameOperation(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Busy = true
+	m.operationID = 1
+	m = update(m, application.Event{Kind: application.EventStreamStart})
+	if !m.spinnerScheduled {
+		t.Fatal("waiting did not schedule animation")
+	}
+	m = update(m, application.Event{Kind: application.EventTextDelta, Text: "answer"})
+	m = update(m, providerAnimationTick{OperationID: 1, Tick: m.activitySpinner.Tick()})
+	if m.spinnerScheduled {
+		t.Fatal("idle animation tick left the spinner scheduled")
+	}
+	m = update(m, application.Event{Kind: application.EventStreamStart})
+	if !m.spinnerScheduled {
+		t.Fatal("new waiting phase did not restart animation")
+	}
+	before := m.activitySpinner.View()
+	m = update(m, providerAnimationTick{OperationID: 1, Tick: m.activitySpinner.Tick()})
+	if m.activitySpinner.View() == before {
+		t.Fatal("restarted spinner did not advance")
+	}
+}
+
+func TestSpinnerTickRunsWhileProviderReadIsBlocked(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Busy = true
+	m.operationID = 1
+	events := make(chan tea.Msg)
+	m.events = events
+	next, cmd := m.Update(application.Event{Kind: application.EventStreamStart})
+	m = next.(AppModel)
+	if cmd == nil {
+		t.Fatal("waiting has no commands")
+	}
+	batched := cmd()
+	batch, ok := batched.(tea.BatchMsg)
+	if !ok || len(batch) < 3 {
+		t.Fatalf("want provider read and independent timers, got %T", batched)
+	}
+	readResult := make(chan tea.Msg, 1)
+	go func() { readResult <- batch[0]() }()
+	defer func() {
+		close(events)
+		<-readResult
+	}()
+	animation := batch[len(batch)-1]
+	result := make(chan tea.Msg, 1)
+	go func() { result <- animation() }()
+	select {
+	case msg := <-result:
+		if _, ok := msg.(providerAnimationTick); !ok {
+			t.Fatalf("animation command returned %T", msg)
+		}
+		before := m.activitySpinner.View()
+		m = update(m, msg)
+		if m.activitySpinner.View() == before {
+			t.Fatal("spinner did not advance while provider read was blocked")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("spinner waited for the provider read")
+	}
+}
+
+func TestStatusSpinnerHasSpaceBeforeText(t *testing.T) {
+	for _, status := range []StatusBar{
+		{Indicator: "◐", Waiting: true},
+		{Indicator: "◐", Executing: true, ToolName: "kmp_wake"},
+	} {
+		view := ansi.Strip(status.View(100))
+		if strings.Contains(view, "◐Waiting") || strings.Contains(view, "◐Executing") {
+			t.Fatalf("spinner touches status text: %q", view)
+		}
+		if !strings.Contains(view, "◐  ") {
+			t.Fatalf("spinner needs two cells of separation: %q", view)
+		}
 	}
 }

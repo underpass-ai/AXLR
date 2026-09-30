@@ -27,7 +27,7 @@ func TestTranscriptAssistantRowsFillWidthAndGrowWithText(t *testing.T) {
 	if transcript.Viewport.StyleLineFunc != nil {
 		t.Fatal("styling before viewport wrap risks adding visual rows")
 	}
-	if !strings.Contains(transcript.View(), "\x1b[48;") {
+	if !strings.Contains(transcript.View(), "48;2;27;32;48") {
 		t.Fatal("assistant rows have no background")
 	}
 }
@@ -36,7 +36,7 @@ func TestTranscriptAssistantRowsRespectMonochrome(t *testing.T) {
 	transcript := NewTranscript()
 	transcript.Viewport.SetWidth(50)
 	transcript.SetSession(domain.SessionState{Messages: []root.Message{{Role: root.RoleAssistant, Content: "answer"}}}, "", Theme{Monochrome: true})
-	if strings.Contains(transcript.View(), "\x1b[48;") {
+	if strings.Contains(transcript.View(), "48;2;") {
 		t.Fatal("monochrome transcript has a background")
 	}
 }
@@ -84,7 +84,7 @@ func TestTranscriptUnsentPromptKeepsAssistantRowColor(t *testing.T) {
 	transcript.SetSession(domain.SessionState{Messages: []root.Message{{Role: root.RoleAssistant, Content: "saved answer"}}}, "", Theme{})
 	transcript.AppendUnsent([]string{"retry me"})
 	lines := strings.Split(transcript.View(), "\n")
-	if !strings.Contains(lines[0], "\x1b[48;") || strings.Contains(lines[2], "\x1b[48;") || !strings.Contains(strings.Join(lines, "\n"), "Not sent: retry me") {
+	if !strings.Contains(lines[0], "48;2;27;32;48") || strings.Contains(lines[1], "48;2;") || !strings.Contains(lines[2], "48;2;32;60;72") || !strings.Contains(strings.Join(lines, "\n"), "Not sent: retry me") {
 		t.Fatalf("assistant color or unsent prompt lost: %q", transcript.View())
 	}
 }

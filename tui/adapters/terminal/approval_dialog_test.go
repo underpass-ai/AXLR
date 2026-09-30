@@ -249,6 +249,13 @@ func TestApprovalFollowupVisibleBeforeOperationComplete(t *testing.T) {
 			m = n.(AppModel)
 			for i := 0; i < 10; i++ {
 				msg := cmd()
+				for {
+					batch, ok := msg.(tea.BatchMsg)
+					if !ok {
+						break
+					}
+					msg = batch[0]()
+				}
 				if _, done := msg.(operationComplete); done {
 					t.Fatal("completed before follow-up delta")
 				}

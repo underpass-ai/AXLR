@@ -4,7 +4,6 @@ import (
 	"bytes"
 	tea "charm.land/bubbletea/v2"
 	"encoding/json"
-	"fmt"
 	zone "github.com/lrstanley/bubblezone/v2"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -16,11 +15,15 @@ type ApprovalDialog struct {
 	Details Transcript
 }
 
-func NewApprovalDialog(p domain.PendingTool, target string) ApprovalDialog {
+func NewApprovalDialog(p domain.PendingTool, target string, locales ...Locale) ApprovalDialog {
+	locale := English
+	if len(locales) > 0 {
+		locale = locales[0]
+	}
 	var args bytes.Buffer
 	_ = json.Indent(&args, p.Call.Arguments.Bytes(), "", "  ")
 	d := ApprovalDialog{Pending: p, Target: target, Details: NewTranscript()}
-	d.Details.SetContent(fmt.Sprintf("Tool: %s\nTarget: %s\nArguments:\n%s", p.Call.Name, target, args.String()))
+	d.Details.SetContent(Translatef(locale, "approval.details", p.Call.Name, target, args.String()))
 	d.Details.Viewport.GotoTop()
 	return d
 }
@@ -43,6 +46,7 @@ func (d ApprovalDialog) Intent(msg tea.Msg) domain.ToolDecision {
 	}
 	return ""
 }
-func (d ApprovalDialog) View(z *zone.Manager, prefix string) string {
-	return "Tool approval — inspect arguments (↑↓ / PgUp PgDn)\n" + d.Details.View() + "\n" + z.Mark(prefix+"approve", "[Approve A]") + " " + z.Mark(prefix+"deny", "[Deny D]") + " " + z.Mark(prefix+"cancel", "[Cancel Esc]")
+func (d ApprovalDialog) View(theme Theme, z *zone.Manager, prefix string, width, height int) string {
+	footer := z.Mark(prefix+"approve", "["+theme.T("approval.approve")+"]") + "  " + z.Mark(prefix+"deny", "["+theme.T("approval.deny")+"]") + "  " + z.Mark(prefix+"cancel", "["+theme.T("common.cancel")+"]")
+	return theme.Overlay(theme.T("approval.title"), theme.T("approval.subtitle"), d.Details.View(), footer, width, height)
 }
