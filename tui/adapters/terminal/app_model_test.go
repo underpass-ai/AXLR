@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,9 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-func testWorkspace() domain.Workspace { return domain.Workspace(os.TempDir()) }
+func testWorkspace() domain.Workspace {
+	return domain.Workspace(filepath.VolumeName(os.TempDir()) + string(filepath.Separator) + "axlr-test")
+}
 
 func update(m AppModel, msg tea.Msg) AppModel { n, _ := m.Update(msg); return n.(AppModel) }
 func sized() AppModel {

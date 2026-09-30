@@ -185,7 +185,8 @@ func (s *Server) runTurn(ctx context.Context, id, op, actor, request string, pro
 		return
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
-	err = s.deps.Start.Execute(ctx, &session, prompt, func(event application.Event) error { return s.recordApplicationEvent(id, op, actor, request, event) })
+	batch := newEventBatcher(s, id, op, actor, request)
+	err = errors.Join(s.deps.Start.Execute(ctx, &session, prompt, batch.Emit), batch.Flush())
 	if err != nil {
 		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
 	}
@@ -427,7 +428,8 @@ func (s *Server) runApproval(ctx context.Context, id, op, actor, request string,
 		}
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
-	err = s.deps.Resolve.Execute(ctx, &session, call, decision, func(event application.Event) error { return s.recordApplicationEvent(id, op, actor, request, event) })
+	batch := newEventBatcher(s, id, op, actor, request)
+	err = errors.Join(s.deps.Resolve.Execute(ctx, &session, call, decision, batch.Emit), batch.Flush())
 	if err != nil {
 		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
 	}

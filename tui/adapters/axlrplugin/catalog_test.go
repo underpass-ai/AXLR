@@ -123,7 +123,7 @@ func TestCodexMCPFileAndEnvironment(t *testing.T) {
 		Command string   `json:"command"`
 		Args    []string `json:"args"`
 	}
-	if err := json.Unmarshal(data, &manifest); err != nil || manifest.Command != filepath.Join(rootDir, "run.sh") || len(manifest.Args) != 1 || manifest.Args[0] != filepath.Join(rootDir, "config.json") {
+	if err := json.Unmarshal(data, &manifest); err != nil || filepath.Clean(manifest.Command) != filepath.Join(rootDir, "run.sh") || len(manifest.Args) != 1 || filepath.Clean(manifest.Args[0]) != filepath.Join(rootDir, "config.json") {
 		t.Fatalf("root token not expanded: %s", data)
 	}
 }

@@ -198,7 +198,7 @@ func TestNavigationMinimumSizeOverlays(t *testing.T) {
 func TestNavigationSwitchRejectsDifferentWorkspace(t *testing.T) {
 	s := navSession(t)
 	m := navModel(t, &s)
-	other, _ := domain.NewSession("1123456789abcdef0123456789abcdef", "/another-workspace", "model")
+	other, _ := domain.NewSession("1123456789abcdef0123456789abcdef", domain.Workspace(string(testWorkspace())+"-other"), "model")
 	m.deps.Store.Save(context.Background(), other)
 	n, c := m.Update(ControlIntent("sessions"))
 	m = drain(t, n.(AppModel), c)

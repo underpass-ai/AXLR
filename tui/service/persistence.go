@@ -131,6 +131,13 @@ func (s *eventStore) readLocked(id string) ([]Event, error) {
 		offset += int64(8 + n)
 	}
 	if truncatedTail {
+		// An inflated length in an interior header can make a later valid
+		// record look like a partial tail. Preserve the file for inspection.
+		if later, err := hasLaterValidFrame(s.path(id), offset, id, uint64(len(events))); err != nil {
+			return nil, err
+		} else if later {
+			return nil, errors.New("event journal has a damaged interior frame")
+		}
 		if err := f.Truncate(offset); err != nil {
 			return nil, err
 		}
@@ -139,6 +146,28 @@ func (s *eventStore) readLocked(id string) ([]Event, error) {
 		}
 	}
 	return events, nil
+}
+
+func hasLaterValidFrame(path string, after int64, sessionID string, sequence uint64) (bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false, err
+	}
+	for start := int(after) + 1; start+8 <= len(data); start++ {
+		n := int(binary.BigEndian.Uint32(data[start : start+4]))
+		if n == 0 || n > 4<<20 || start+8+n > len(data) {
+			continue
+		}
+		body := data[start+8 : start+8+n]
+		if crc32.ChecksumIEEE(body) != binary.BigEndian.Uint32(data[start+4:start+8]) {
+			continue
+		}
+		var event Event
+		if json.Unmarshal(body, &event) == nil && event.SessionID == sessionID && event.Sequence > sequence {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (s *eventStore) Read(id string, after uint64) ([]Event, <-chan struct{}, error) {

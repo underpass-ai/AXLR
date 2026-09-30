@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"os"
 	"path/filepath"
@@ -97,6 +98,31 @@ func TestEventJournalRejectsInteriorCorruptionWithoutTruncating(t *testing.T) {
 	}
 	if got := mustRead(t, path); !bytes.Equal(got, data) {
 		t.Fatal("corrupt journal was silently truncated")
+	}
+}
+
+func TestEventJournalKeepsLaterRecordsAfterInflatedInteriorLength(t *testing.T) {
+	journal, err := newEventStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := "0123456789abcdef0123456789abcdef"
+	for _, kind := range []string{"turn.started", "turn.completed"} {
+		if _, err := journal.Append(id, "op", kind, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := journal.path(id)
+	data := mustRead(t, path)
+	binary.BigEndian.PutUint32(data[:4], uint32(len(data)+100))
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := journal.Read(id, 0); err == nil {
+		t.Fatal("damaged interior frame accepted")
+	}
+	if got := mustRead(t, path); !bytes.Equal(got, data) {
+		t.Fatal("later valid record was truncated")
 	}
 }
 

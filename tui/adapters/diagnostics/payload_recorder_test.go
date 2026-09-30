@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -79,9 +80,11 @@ func TestPayloadRecorderRejectsUnsafeDirectory(t *testing.T) {
 			t.Fatal("unsafe directory accepted")
 		}
 	}
-	_ = os.Chmod(target, 0755)
-	if _, err := NewPayloadRecorder(target); err == nil {
-		t.Fatal("public directory accepted")
+	if runtime.GOOS != "windows" {
+		_ = os.Chmod(target, 0755)
+		if _, err := NewPayloadRecorder(target); err == nil {
+			t.Fatal("public directory accepted")
+		}
 	}
 	file := filepath.Join(base, "file")
 	_ = os.WriteFile(file, nil, 0600)
