@@ -50,7 +50,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	flags.SetOutput(io.Discard)
 	workspaceFlag := flags.String("root", ".", "existing workspace root (default current directory)")
 	modelFlag := flags.String("model", "", "OpenRouter model ID (optional; choose with /model)")
-	langFlag := flags.String("lang", getenv("AXLR_LANG"), "interface language: en or es (default en; AXLR_LANG)")
+	langFlag := flags.String("lang", "", "interface language: en or es (overrides AXLR_LANG and settings.json)")
 	traceFlag := flags.String("trace-file", "", "privacy-safe JSONL diagnostics (default a private file under $XDG_STATE_HOME/axlr/logs)")
 	tracePayloads := flags.Bool("trace-payloads", true, "capture redacted request/response bodies in a private per-run directory")
 	sessionFlag := flags.String("session", "", "saved session ID")
@@ -68,10 +68,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	if flags.NArg() != 0 {
 		return fail(errors.New("positional arguments are not accepted"))
-	}
-	locale, err := terminal.ParseLocale(*langFlag)
-	if err != nil {
-		return fail(err)
 	}
 	tracePath := *traceFlag
 	var logger *diagnostics.FileLogger
@@ -96,6 +92,70 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	fmt.Fprintln(stderr, "axlr-tui: diagnostics:", tracePath)
 	_ = trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticStartup})
 	defer trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticShutdown})
+	configBase := getenv("XDG_CONFIG_HOME")
+	if !filepath.IsAbs(configBase) {
+		home := getenv("HOME")
+		if !filepath.IsAbs(home) {
+			return fail(errors.New("absolute HOME or XDG_CONFIG_HOME is required for settings"))
+		}
+		configBase = filepath.Join(home, ".config")
+	}
+	settingsPath := filepath.Join(configBase, "axlr", "settings.json")
+	initialSettings := storage.DefaultUserSettings()
+	if _, statErr := os.Lstat(settingsPath); errors.Is(statErr, os.ErrNotExist) {
+		stateBase := getenv("XDG_STATE_HOME")
+		if !filepath.IsAbs(stateBase) {
+			home := getenv("HOME")
+			if !filepath.IsAbs(home) {
+				return fail(errors.New("absolute HOME or XDG_STATE_HOME is required for preferences"))
+			}
+			stateBase = filepath.Join(home, ".local", "state")
+		}
+		legacyDir := filepath.Join(stateBase, "axlr")
+		legacyUI, legacyErr := storage.NewUIPreferenceStore(legacyDir)
+		if legacyErr != nil {
+			return fail(legacyErr)
+		}
+		ui, loadErr := legacyUI.Load(ctx)
+		if loadErr == nil {
+			initialSettings.Theme = string(ui.Theme)
+			initialSettings.Icons = string(ui.Icons)
+			initialSettings.ReduceMotion = ui.ReduceMotion
+		} else {
+			fmt.Fprintln(stderr, "axlr-tui: ignoring invalid saved UI preference")
+		}
+		legacyModel, legacyErr := storage.NewModelPreferenceStore(legacyDir)
+		if legacyErr != nil {
+			return fail(legacyErr)
+		}
+		selected, loadErr := legacyModel.Load(ctx)
+		if loadErr == nil {
+			initialSettings.Model = string(selected)
+		} else if *modelFlag == "" && *sessionFlag == "" {
+			fmt.Fprintln(stderr, "axlr-tui: ignoring invalid saved model preference")
+		}
+	} else if statErr != nil {
+		return fail(statErr)
+	}
+	settingsStore, err := storage.NewUserSettingsStore(settingsPath, initialSettings)
+	if err != nil {
+		return fail(err)
+	}
+	settings, err := settingsStore.Load(ctx)
+	if err != nil {
+		return fail(err)
+	}
+	language := settings.Language
+	if fromEnvironment := getenv("AXLR_LANG"); fromEnvironment != "" {
+		language = fromEnvironment
+	}
+	if *langFlag != "" {
+		language = *langFlag
+	}
+	locale, err := terminal.ParseLocale(language)
+	if err != nil {
+		return fail(err)
+	}
 	workspacePath, err := filepath.Abs(*workspaceFlag)
 	if err != nil {
 		return fail(err)
@@ -140,14 +200,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	configPath := *mcpConfigFlag
 	if configPath == "" {
-		configBase := getenv("XDG_CONFIG_HOME")
-		if !filepath.IsAbs(configBase) {
-			home := getenv("HOME")
-			if !filepath.IsAbs(home) {
-				return fail(errors.New("absolute HOME or XDG_CONFIG_HOME is required for MCP config"))
-			}
-			configBase = filepath.Join(home, ".config")
-		}
 		configPath = filepath.Join(configBase, "axlr", "mcp.json")
 	} else if _, err := os.Stat(configPath); err != nil {
 		return fail(err)
@@ -193,26 +245,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		stateBase = filepath.Join(home, ".local", "state")
 	}
-	preferences, err := storage.NewModelPreferenceStore(filepath.Join(stateBase, "axlr"))
-	if err != nil {
-		return fail(err)
-	}
-	uiStore, err := storage.NewUIPreferenceStore(filepath.Join(stateBase, "axlr"))
-	if err != nil {
-		return fail(err)
-	}
-	uiPreferences, err := uiStore.Load(ctx)
-	if err != nil {
-		fmt.Fprintln(stderr, "axlr-tui: ignoring invalid saved UI preference")
-		uiPreferences = domain.DefaultUIPreferences()
-	}
+	preferences := settingsStore.ModelPreference()
+	uiStore := settingsStore.UIPreference()
+	uiPreferences := settings.UIPreferences()
 	if *modelFlag == "" && *sessionFlag == "" {
-		selected, loadErr := preferences.Load(ctx)
-		if loadErr != nil {
-			fmt.Fprintln(stderr, "axlr-tui: ignoring invalid saved model preference")
-		} else {
-			model = selected
-		}
+		model = root.ModelID(settings.Model)
 	}
 	store, err := storage.New(filepath.Join(stateBase, "axlr", "sessions"))
 	if err != nil {

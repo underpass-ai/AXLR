@@ -34,6 +34,24 @@ The interface supports mouse controls where the terminal supplies them. In an ap
 
 English is the default. `--lang es` or `AXLR_LANG=es` changes interface labels only. Prompts, tool results and stored conversation text are not translated.
 
+## Edit settings as JSON
+
+The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/settings.json` when `XDG_CONFIG_HOME` is unset. Create or edit it with any text editor:
+
+```json
+{
+  "model": "provider/model",
+  "language": "es",
+  "theme": "auto",
+  "icons": "safe",
+  "reduce_motion": false
+}
+```
+
+All keys are optional. `model` may be empty to choose a model in the console. `language` accepts `en` or `es`; `theme` accepts `auto`, `ink`, `aurora`, `paper` or `phosphor`; `icons` accepts `safe`, `nerd-mono` or `ascii`. Edits take effect on the next launch. `--model` overrides the JSON model for one launch; `--lang` overrides `AXLR_LANG`, which overrides the JSON language. Selecting `/model` or saving `/theme` updates the corresponding JSON keys while retaining other settings, including keys from newer AXLR versions. The console writes the file with owner-only permissions and rejects invalid JSON without replacing it.
+
+Existing `model-preference.json` and `ui-preference.json` files under the state directory are read until `settings.json` exists. The next `/model` or `/theme` save writes their values into `settings.json`; the old files are left in place. MCP connections and approval rules remain in the separate `$XDG_CONFIG_HOME/axlr/mcp.json` file.
+
 ## Model context
 
 The private session store retains the full transcript. Model requests receive a bounded projection of it: a 96 KiB history ceiling, 64 KiB low watermark, at most 16 KiB per tool result and an 8 KiB extractive checkpoint. The checkpoint quotes historical inputs and marks omissions. The current prompt and tool arguments are never silently shortened; an oversized active turn produces an error.
@@ -42,7 +60,7 @@ The model initially sees four local tools and three host controls: `axlr_tools` 
 
 ## Saved sessions and recovery
 
-Sessions live under `$XDG_STATE_HOME/axlr/sessions` or `$HOME/.local/state/axlr/sessions`. The selected model and UI settings are stored separately in `model-preference.json` and `ui-preference.json`. Directories use owner-only permissions; snapshots and preferences are private files. An open session has an exclusive writer lock.
+Sessions live under `$XDG_STATE_HOME/axlr/sessions` or `$HOME/.local/state/axlr/sessions`. User settings live in the [editable JSON file](#edit-settings-as-json). Directories use owner-only permissions; snapshots and settings written by AXLR are private files. An open session has an exclusive writer lock.
 
 Open a session with `Ctrl+O` or start with:
 
