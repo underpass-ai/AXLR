@@ -7,11 +7,25 @@ AXLR shows two related inventories:
 | `/plugin` | Packages copied into AXLR's data directory and their indexed skills | `$XDG_DATA_HOME/axlr/plugins` or `$HOME/.local/share/axlr/plugins` |
 | `/mcp` | MCP servers AXLR can discover and call | AXLR's `mcp.json` and server approval policy |
 
+AXLR adopts the Codex plugin package format and standard MCP transports. A plugin made for Codex will usually work in AXLR when its useful components are skills and MCP servers. AXLR owns its copy of the package and its MCP approval policy; installation in one host does not install it in the other.
+
 KMP and MADE appear as built-in catalogue entries. Those entries identify AXLR's intended memory and orchestration engines; they do not install an engine binary or prove that its MCP server is connected. Check `/mcp` for the live state. Use the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks to connect, verify or remove them.
+
+## Codex plugin compatibility
+
+| Codex package component | AXLR behavior |
+|:--|:--|
+| `.codex-plugin/plugin.json` | Reads package name, version, skill path and MCP server declarations |
+| `.agents/plugins/marketplace.json` | Reads a marketplace source and stages its packages |
+| Skills in the declared directory | Indexes `SKILL.md` files for the model to read on demand |
+| `mcpServers` inline or in a referenced JSON file | Converts stdio or URL servers to AXLR MCP registrations with manual approval |
+| Other Codex plugin components | Retains their files in the package but does not activate them |
+
+The MCP server must still have its executable, credentials and configuration available to AXLR. The supported package shape is the compatibility promise; arbitrary Codex host behavior and future manifest fields are not automatically implemented. Test a candidate by adding its source in `/plugin`, installing it, then checking skills and live servers in `/mcp`.
 
 ## Install a package into AXLR
 
-Open `/plugin`. Tab switches installed and available packages, `/` searches and `R` refreshes. Press `M` to add an **absolute local path** or **HTTPS Git URL** (optionally with `#subdir`) containing `.codex-plugin/plugin.json` or `.agents/plugins/marketplace.json`. AXLR reads the Codex-compatible package format but owns this installation; it does not invoke the Codex CLI or change the Codex app's packages. Select a staged package and press Enter to install it.
+Open `/plugin`. Tab switches installed and available packages, `/` searches and `R` refreshes. Press `M` to add an **absolute local path** or **HTTPS Git URL** (optionally with `#subdir`) containing `.codex-plugin/plugin.json` or `.agents/plugins/marketplace.json`. AXLR reads the Codex package format but owns this installation; it does not invoke the Codex CLI or change the Codex app's packages. Select a staged package and press Enter to install it.
 
 AXLR indexes installed skills for the model to read on demand. If a package declares MCP servers, AXLR registers them in its MCP configuration with **manual** approval. Inspect the exact connection in `/mcp`. Other package components are retained but not activated. Package storage and MCP registration are different records; removing one does not mean its engine's persistent data was deleted.
 

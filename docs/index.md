@@ -11,7 +11,7 @@ AXLR has three entry points. Start with the console if you want to work interact
 ## Concepts
 
 - [Architecture and boundaries](architecture.md) explains which component owns execution, model calls, policy and persistence.
-- [Plugins and MCP](plugins.md) distinguishes AXLR-managed packages from active MCP connections and documents both transport types.
+- [Plugins and MCP](plugins.md) explains Codex package compatibility, AXLR-managed installation, active MCP connections and both standard transports.
 - [KMP runbook](runbooks/kmp.md) and [MADE runbook](runbooks/made.md) cover connection, verification and removal of each engine.
 - [Release plan](releasing.md) describes the proposed cross-platform packages and checksums; tagged release CI is not implemented yet.
 - [Brand assets](brand.md) contains the logo, palette and usage guidance.

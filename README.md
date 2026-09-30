@@ -52,7 +52,7 @@ flowchart LR
     H[Your Go host or JSON client] --> R
 ```
 
-In the console, the model can request a tool; AXLR shows or enforces the relevant approval policy before calling it. `/plugin` installs packages into AXLR and can register their declared MCP servers with manual approval. `/mcp` shows the actual server connections. A built-in KMP or MADE catalogue entry alone does not start either engine.
+In the console, the model can request a tool; AXLR shows or enforces the relevant approval policy before calling it. AXLR uses Codex-compatible plugin manifests and standard MCP connections: a Codex plugin built around skills and MCP servers will often work in AXLR without repackaging. `/plugin` installs the package into AXLR and registers declared servers with manual approval; `/mcp` shows the actual connections. A built-in KMP or MADE catalogue entry alone does not start either engine. See the [compatibility table](docs/plugins.md#codex-plugin-compatibility) for the supported components.
 
 The JSON worker, `cmd/axlr`, accepts exactly one request on stdin and returns one response on stdout. It exposes `read`, `write`, `edit`, `exec`, `plugins.list` and `plugins.call`. The library exposes typed use cases and an OpenRouter client for non-streaming and streaming completions. See the [worker](docs/worker.md) and [library](docs/library.md) guides for examples.
 

@@ -40,7 +40,7 @@ flowchart TB
 
 The worker's `trusted-local` profile and the console run with the host account's permissions. `os.Root` anchors file operations inside the selected workspace. The `exec` program, its arguments and connected MCP servers can act with broader account authority; the console therefore shows local tool calls for review and persists explicit per-server MCP approval policies. The JSON worker has no interactive approval layer; its host must enforce one if needed.
 
-No tool is registered through directory scanning. A manifest must name the MCP transport and its allowed tools. AXLR's package catalogue reads Codex-compatible manifests into AXLR's own storage and can register declared MCP servers; `/mcp` remains the source of truth for active connections. Model output does not grant a capability; the host's registry and policy decide what can run.
+No tool is registered through directory scanning. A manifest must name the MCP transport and its allowed tools. AXLR's package catalogue reads the Codex plugin format into AXLR's own storage and can register declared MCP servers. Skills and MCP declarations are the supported compatibility surface; other package files are retained but not activated. `/mcp` remains the source of truth for active connections. Model output does not grant a capability; the host's registry and policy decide what can run.
 
 ## State and failure
 

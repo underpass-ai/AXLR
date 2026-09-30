@@ -6,6 +6,8 @@ Estado: **plan, sin implementación**. Fecha: 30-09-2026. Especificación: [API 
 
 AXLR procede de simplificar la capa de ejecución de `underpass-runtime`, con Pi como referencia conceptual para una superficie pequeña de herramientas. AXLR ejecuta turnos agénticos, herramientas, sesiones y aprobaciones. KMP gobierna memoria duradera y MADE gobierna orquestación y decisiones ceremoniales. El servicio debe ejecutar herramientas tanto dentro de un turno como por una llamada directa explícita.
 
+La API y Helm conservarán la compatibilidad ya adoptada con los manifiestos de plugins de Codex para skills y MCP. La instalación seguirá siendo propiedad de AXLR y sus servidores conservarán política de aprobación propia. Ningún componente del paquete que hoy solo se retiene pasará a activarse implícitamente por desplegar el servicio.
+
 La primera API será HTTP `/v1`, con JSON para comandos y SSE para eventos. Exigirá mTLS incluso en localhost. Un despliegue remoto se hará con Helm; el chart instala **solo AXLR** y se conecta a KMP y MADE existentes. En Kubernetes, `kmp-mcp` y `made-mcp` son adaptadores MCP stdio dentro del pod; hablan gRPC con los motores remotos usando mTLS. No alojan el store de KMP ni el de MADE. Se mantiene una réplica de AXLR hasta disponer de almacenamiento y leases distribuidos.
 
 ### Estado comprobado que condiciona el plan
