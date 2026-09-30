@@ -1,0 +1,27 @@
+# Replace every name, endpoint, DNS name and digest with real deployment values.
+image:
+  digest: sha256:0000000000000000000000000000000000000000000000000000000000000000
+workspace:
+  existingClaim: replace-workspace-pvc
+state:
+  existingClaim: replace-state-pvc
+api:
+  serverTLS:
+    existingSecret: replace-axlr-server-tls
+  clientCA:
+    existingSecret: replace-axlr-client-ca
+  principals:
+    existingSecret: replace-axlr-principals
+model:
+  apiKey:
+    existingSecret: replace-openrouter-key
+kmp:
+  endpoint: kmp.example.invalid:443
+  tls:
+    existingSecret: replace-kmp-client-tls
+    serverName: kmp.example.invalid
+made:
+  endpoint: made.example.invalid:443
+  tls:
+    existingSecret: replace-made-client-tls
+    serverName: made.example.invalid

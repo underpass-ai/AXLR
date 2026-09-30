@@ -1,0 +1,42 @@
+replicaCount: 1
+image:
+  repository: ghcr.io/underpass-ai/axlr
+  digest: ""
+workspace:
+  existingClaim: ""
+  mountPath: /workspace
+state:
+  existingClaim: ""
+  volumeClaimTemplate: {}
+service:
+  type: ClusterIP
+  port: 8443
+api:
+  serverTLS:
+    existingSecret: ""
+  clientCA:
+    existingSecret: ""
+  principals:
+    existingSecret: ""
+model:
+  apiKey:
+    existingSecret: ""
+kmp:
+  endpoint: ""
+  tls:
+    existingSecret: ""
+    serverName: ""
+made:
+  endpoint: ""
+  tls:
+    existingSecret: ""
+    serverName: ""
+resources: {}
+networkPolicy:
+  enabled: false
+  ingressFrom: []
+  egressTo: []
+podDisruptionBudget:
+  enabled: false
+ingress:
+  enabled: false

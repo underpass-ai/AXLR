@@ -8,7 +8,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/dto"
 )
 
-const snapshotVersion = 1
+const snapshotVersion = 2
 
 func encodeCall(c root.ToolCall) dto.ToolCall {
 	return dto.ToolCall{ID: string(c.ID), Name: string(c.Name), Arguments: c.Arguments.Bytes()}
@@ -22,7 +22,7 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 	if _, e := domain.RestoreSession(state); e != nil {
 		return dto.SessionSnapshot{}, e
 	}
-	d := dto.SessionSnapshot{Version: snapshotVersion, ID: string(state.ID), Workspace: string(state.Workspace), Model: string(state.Model), Status: string(state.Status), Draft: string(state.Draft), TurnCallCount: state.TurnCallCount}
+	d := dto.SessionSnapshot{Version: snapshotVersion, ID: string(state.ID), Owner: state.Owner, Revision: state.Revision, OperationID: state.OperationID, Workspace: string(state.Workspace), Model: string(state.Model), Status: string(state.Status), Draft: string(state.Draft), TurnCallCount: state.TurnCallCount}
 	for _, m := range state.Messages {
 		record := dto.Message{Role: string(m.Role), Content: string(m.Content), ToolCallID: string(m.ToolCallID)}
 		for _, c := range m.ToolCalls {
@@ -46,10 +46,10 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 	return d, nil
 }
 func restore(d dto.SessionSnapshot) (domain.Session, error) {
-	if d.Version != snapshotVersion {
+	if d.Version != 1 && d.Version != snapshotVersion {
 		return domain.Session{}, errors.New("unsupported session snapshot version")
 	}
-	s := domain.SessionState{ID: domain.SessionID(d.ID), Workspace: domain.Workspace(d.Workspace), Model: root.ModelID(d.Model), Status: domain.SessionStatus(d.Status), Draft: root.Text(d.Draft), TurnCallCount: d.TurnCallCount}
+	s := domain.SessionState{ID: domain.SessionID(d.ID), Owner: d.Owner, Revision: d.Revision, OperationID: d.OperationID, Workspace: domain.Workspace(d.Workspace), Model: root.ModelID(d.Model), Status: domain.SessionStatus(d.Status), Draft: root.Text(d.Draft), TurnCallCount: d.TurnCallCount}
 	for _, m := range d.Messages {
 		record := root.Message{Role: root.MessageRole(m.Role), Content: root.Text(m.Content), ToolCallID: root.ToolCallID(m.ToolCallID)}
 		for _, c := range m.ToolCalls {

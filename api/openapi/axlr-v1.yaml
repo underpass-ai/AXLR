@@ -1,0 +1,316 @@
+openapi: 3.1.0
+info:
+  title: AXLR service API
+  version: 0.1.0
+  description: Versioned agent sessions and exact tool calls over mandatory client-certificate TLS.
+servers:
+  - url: https://localhost:8443
+security:
+  - clientCertificate: []
+paths:
+  /v1/sessions:
+    post:
+      operationId: createSession
+      description: Requires session_client or admin. Workspace is fixed by the server.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [model]
+              properties:
+                model: {type: string, minLength: 1}
+      responses:
+        '201':
+          description: Session created.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CreatedSession'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/sessions/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/SessionID'}
+    get:
+      operationId: getSession
+      description: Owner or admin only.
+      responses:
+        '200':
+          description: Session snapshot, revision and event cursor.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Session'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/sessions/{id}/turns:
+    parameters:
+      - {$ref: '#/components/parameters/SessionID'}
+    post:
+      operationId: startTurn
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [prompt, expected_revision]
+              properties:
+                prompt: {type: string, minLength: 1}
+                expected_revision: {type: integer, minimum: 1}
+      responses:
+        '202':
+          description: Turn accepted; follow the event URL.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Operation'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/sessions/{id}/events:
+    parameters:
+      - {$ref: '#/components/parameters/SessionID'}
+    get:
+      operationId: streamEvents
+      description: >-
+        Ordered replay after the exclusive cursor, followed by live events. Each SSE frame
+        has id as decimal sequence, event as type, and data as a JSON Event. Heartbeats
+        are SSE comments. Disconnecting does not cancel the turn.
+      parameters:
+        - {name: after, in: query, schema: {type: integer, minimum: 0}}
+        - {name: Last-Event-ID, in: header, schema: {type: integer, minimum: 0}}
+      responses:
+        '200':
+          description: SSE stream.
+          content:
+            text/event-stream:
+              schema: {$ref: '#/components/schemas/Event'}
+        '410': {$ref: '#/components/responses/Error'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/sessions/{id}/approvals/{call_id}:
+    parameters:
+      - {$ref: '#/components/parameters/SessionID'}
+      - {name: call_id, in: path, required: true, schema: {type: string, minLength: 1}}
+    post:
+      operationId: decideSessionTool
+      description: Requires approver or admin; authorizes exactly the first pending call.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        $ref: '#/components/requestBodies/Decision'
+      responses:
+        '202':
+          description: Decision accepted.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/Operation'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/sessions/{id}/cancel:
+    parameters:
+      - {$ref: '#/components/parameters/SessionID'}
+    post:
+      operationId: cancelSessionTurn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision]
+              properties:
+                expected_revision: {type: integer, minimum: 1}
+      responses:
+        '202':
+          description: Cancellation requested; external effects cannot be rolled back.
+        default: {$ref: '#/components/responses/Error'}
+  /v1/tools:
+    get:
+      operationId: listTools
+      description: Requires tool_operator or admin. Lists exact local and MCP tool identities.
+      parameters:
+        - {name: origin, in: query, schema: {type: string, enum: [local, mcp]}}
+      responses:
+        '200':
+          description: Available tools and JSON schemas.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tools]
+                properties:
+                  tools: {type: array, items: {$ref: '#/components/schemas/Tool'}}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/tool-calls:
+    post:
+      operationId: createToolCall
+      description: Requires tool_operator or admin. Manual review is the default.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [tool, arguments]
+              properties:
+                tool: {type: string}
+                arguments: {type: object}
+      responses:
+        '202':
+          description: Call intent persisted.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CallReference'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/tool-calls/{id}:
+    parameters:
+      - {$ref: '#/components/parameters/CallID'}
+    get:
+      operationId: getToolCall
+      responses:
+        '200':
+          description: Durable call state and result.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ToolCall'}
+        default: {$ref: '#/components/responses/Error'}
+  /v1/tool-calls/{id}/decisions:
+    parameters:
+      - {$ref: '#/components/parameters/CallID'}
+    post:
+      operationId: decideToolCall
+      description: Requires approver or admin. Approves or denies this exact call.
+      parameters:
+        - {$ref: '#/components/parameters/IdempotencyKey'}
+      requestBody:
+        $ref: '#/components/requestBodies/Decision'
+      responses:
+        '202':
+          description: Decision persisted.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CallReference'}
+        default: {$ref: '#/components/responses/Error'}
+  /livez:
+    get:
+      operationId: liveness
+      security: []
+      description: Served only on the separate loopback probe listener.
+      responses:
+        '204': {description: Process is live.}
+  /readyz:
+    get:
+      operationId: readiness
+      security: []
+      description: Served only on the separate loopback probe listener; checks model configuration and both engines.
+      responses:
+        '204': {description: Service is ready.}
+        '503': {description: Required dependency unavailable.}
+components:
+  securitySchemes:
+    clientCertificate: {type: mutualTLS}
+  parameters:
+    SessionID: {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{32}$'}}
+    CallID: {name: id, in: path, required: true, schema: {type: string, pattern: '^[0-9a-f]{32}$'}}
+    IdempotencyKey: {name: Idempotency-Key, in: header, required: true, schema: {type: string, pattern: '^[A-Za-z0-9._~-]{16,128}$'}}
+  requestBodies:
+    Decision:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [decision, expected_revision]
+            properties:
+              decision: {type: string, enum: [approve, deny]}
+              expected_revision: {type: integer, minimum: 1}
+  responses:
+    Error:
+      description: Error; codes include invalid_json, invalid_id, forbidden, not_found, stale_revision, idempotency_conflict, engine_unavailable, storage_error and internal_error.
+      content:
+        application/json:
+          schema: {$ref: '#/components/schemas/Error'}
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            request_id: {type: string}
+    CreatedSession:
+      type: object
+      required: [id, model, status, revision]
+      properties:
+        id: {type: string}
+        model: {type: string}
+        status: {type: string, const: idle}
+        revision: {type: integer, minimum: 1}
+    Session:
+      type: object
+      required: [id, model, status, revision, last_sequence, messages]
+      properties:
+        id: {type: string}
+        model: {type: string}
+        status: {type: string, enum: [idle, streaming, approval, interrupted, complete]}
+        revision: {type: integer}
+        operation_id: {type: string}
+        last_sequence: {type: integer}
+        messages: {type: array, items: {type: object}}
+        pending: {type: array, items: {type: object}}
+    Operation:
+      type: object
+      required: [operation_id, session_id, status]
+      properties:
+        operation_id: {type: string}
+        session_id: {type: string}
+        status: {type: string}
+        events_url: {type: string}
+    Event:
+      type: object
+      required: [session_id, operation_id, sequence, time, type, payload]
+      properties:
+        session_id: {type: string}
+        operation_id: {type: string}
+        sequence: {type: integer, minimum: 1}
+        time: {type: string, format: date-time}
+        type: {type: string, enum: [turn.started, text.delta, tool.requested, approval.required, tool.completed, turn.completed, turn.interrupted, operation.failed, approval.decision]}
+        payload: {type: object}
+    Tool:
+      type: object
+      required: [name, origin, identity, schema, available]
+      properties:
+        name: {type: string}
+        origin: {type: string, enum: [local, mcp]}
+        identity: {type: object}
+        description: {type: string}
+        schema: {type: object}
+        available: {type: boolean}
+    CallReference:
+      type: object
+      required: [call_id, status, revision]
+      properties:
+        call_id: {type: string}
+        status: {type: string}
+        revision: {type: integer}
+    ToolCall:
+      type: object
+      required: [call_id, owner, tool, identity, arguments, status, revision]
+      properties:
+        call_id: {type: string}
+        owner: {type: string}
+        tool: {type: string}
+        identity: {type: object}
+        arguments: {type: object}
+        status: {type: string, enum: [pending_approval, running, completed, failed, rejected, cancelled, timed_out, uncertain]}
+        revision: {type: integer}
+        decision: {type: string}
+        result: {type: object}

@@ -1,0 +1,5 @@
+{{- if ne (int .Values.replicaCount) 1 }}{{ fail "AXLR requires replicaCount: 1" }}{{ end -}}
+{{- if .Values.ingress.enabled }}{{ fail "ingress must preserve end-to-end client mTLS; configure an external passthrough ingress" }}{{ end -}}
+{{- if and (not .Values.state.existingClaim) (not .Values.state.volumeClaimTemplate.size) }}{{ fail "state PVC is required" }}{{ end -}}
+{{- if and .Values.state.existingClaim .Values.state.volumeClaimTemplate.size }}{{ fail "choose one state PVC source" }}{{ end -}}
+{{- if and .Values.networkPolicy.enabled (or (not .Values.networkPolicy.ingressFrom) (not .Values.networkPolicy.egressTo)) }}{{ fail "networkPolicy selectors are required when enabled" }}{{ end -}}

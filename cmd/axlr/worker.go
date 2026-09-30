@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/underpass-ai/AXLR/buildinfo"
 	"github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/dto"
 	"github.com/underpass-ai/AXLR/plugins"
@@ -18,6 +19,10 @@ import (
 )
 
 func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	if len(args) == 1 && args[0] == "--version" {
+		fmt.Fprintln(stdout, buildinfo.Version)
+		return 0
+	}
 	flags := flag.NewFlagSet("axlr", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	root := flags.String("root", "", "existing workspace root")

@@ -13,6 +13,9 @@ import (
 // TurnCallCount counts calls since the last user message; Draft is never model history.
 type SessionState struct {
 	ID             SessionID
+	Owner          string
+	Revision       uint64
+	OperationID    string
 	Workspace      Workspace
 	Model          axlr.ModelID
 	Status         SessionStatus

@@ -1,0 +1,270 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.version.outputs.value }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: version
+        shell: bash
+        run: |
+          python3 -m unittest discover -s scripts/release -p 'test_*.py'
+          version=$(python3 scripts/release/preflight.py --ref "$GITHUB_REF" --sha "$GITHUB_SHA" --output expected.json --require-clean)
+          echo "value=$version" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-inventory
+          path: expected.json
+          if-no-files-found: error
+
+  native:
+    needs: preflight
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, goos: linux, goarch: amd64, race: true}
+          - {runner: ubuntu-24.04-arm, goos: linux, goarch: arm64, race: true}
+          - {runner: macos-15-intel, goos: darwin, goarch: amd64, race: true}
+          - {runner: macos-15, goos: darwin, goarch: arm64, race: true}
+          - {runner: windows-2025, goos: windows, goarch: amd64, race: true}
+          - {runner: windows-11-arm, goos: windows, goarch: arm64, race: false}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: |
+            go.sum
+            tui/go.sum
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Native tests and vet
+        shell: bash
+        run: |
+          go vet ./...
+          go -C tui vet ./...
+          if [[ '${{ matrix.race }}' == 'true' ]]; then
+            go test -race ./...
+            go -C tui test -race ./...
+          else
+            go test ./...
+            go -C tui test ./...
+          fi
+      - name: Verify third-party license bundle
+        if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
+        shell: bash
+        run: |
+          go install github.com/google/go-licenses@v2.0.1
+          python scripts/release/licenses.py --tool "$(go env GOPATH)/bin/go-licenses"
+      - name: Package three binaries
+        shell: bash
+        run: python scripts/release/package.py '${{ needs.preflight.outputs.version }}' '${{ matrix.goos }}' '${{ matrix.goarch }}' --output dist
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: binary-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
+  chart:
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Validate chart
+        shell: bash
+        run: |
+          cmp LICENSE charts/axlr/LICENSE
+          cmp NOTICE charts/axlr/NOTICE
+          helm lint charts/axlr -f charts/axlr/values.example.yaml
+          helm template test charts/axlr -f charts/axlr/values.example.yaml > rendered.yaml
+          if helm template test charts/axlr >/dev/null 2>&1; then exit 1; fi
+          for field in image.digest workspace.existingClaim state.existingClaim api.serverTLS.existingSecret api.clientCA.existingSecret api.principals.existingSecret model.apiKey.existingSecret kmp.endpoint kmp.tls.existingSecret kmp.tls.serverName made.endpoint made.tls.existingSecret made.tls.serverName; do
+            if helm template test charts/axlr -f charts/axlr/values.example.yaml --set-string "$field=" >/dev/null 2>&1; then
+              echo "missing $field was accepted" >&2
+              exit 1
+            fi
+          done
+          if helm template test charts/axlr -f charts/axlr/values.example.yaml --set replicaCount=2 >/dev/null 2>&1; then exit 1; fi
+          if helm template test charts/axlr -f charts/axlr/values.example.yaml --set ingress.enabled=true >/dev/null 2>&1; then exit 1; fi
+      - name: Package release chart
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          mkdir -p dist
+          helm package charts/axlr --destination dist
+          cd dist
+          sha256sum "axlr-${{ needs.preflight.outputs.version }}.tgz" > "axlr-${{ needs.preflight.outputs.version }}.tgz.sha256"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: release-chart
+          path: dist/*
+          if-no-files-found: error
+
+  image:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: Build multiarch image without publishing
+        shell: bash
+        run: |
+          mkdir -p dist
+          docker buildx build --platform linux/amd64,linux/arm64 --file distribution/Dockerfile --build-arg VERSION='${{ needs.preflight.outputs.version }}' --output type=oci,dest=dist/image.oci .
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-image
+          path: dist/image.oci
+          if-no-files-found: error
+
+  image-smoke:
+    needs: preflight
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {runner: ubuntu-24.04, arch: amd64}
+          - {runner: ubuntu-24.04-arm, arch: arm64}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build and smoke native image
+        shell: bash
+        run: |
+          docker build --platform "linux/${{ matrix.arch }}" --file distribution/Dockerfile --build-arg TARGETARCH='${{ matrix.arch }}' --build-arg VERSION='${{ needs.preflight.outputs.version }}' --tag axlr-smoke:local .
+          bash scripts/release/smoke_image.sh axlr-smoke:local
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [preflight, native, chart, image, image-smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      packages: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VERSION: ${{ needs.preflight.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-inventory
+          path: dist/meta
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: binary-*
+          merge-multiple: true
+          path: dist/assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-chart
+          path: dist/assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-image
+          path: dist/image
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      - name: Verify immutable inventory and every archive checksum
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          manifest=json.loads(Path('dist/meta/expected.json').read_text())
+          expected=set(manifest['assets'])-{'image-digest.json'}
+          found={p.name for p in Path('dist/assets').iterdir() if p.is_file()}
+          if found != expected or len(manifest['assets']) != len(set(manifest['assets'])):
+              raise SystemExit(f'inventory mismatch: missing={expected-found}, extra={found-expected}')
+          for checksum in Path('dist/assets').glob('*.sha256'):
+              digest, name=checksum.read_text().strip().split(None,1)
+              name=name.strip()
+              if name not in expected or hashlib.sha256((Path('dist/assets')/name).read_bytes()).hexdigest()!=digest:
+                  raise SystemExit(f'checksum mismatch: {name}')
+          if not Path('dist/image/image.oci').is_file():
+              raise SystemExit('multiarch image missing')
+          PY
+      - name: Publish verified image by version and record digest
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq skopeo
+          wanted=$(skopeo inspect --raw "oci-archive:dist/image/image.oci" | sha256sum | cut -d' ' -f1)
+          if existing=$(skopeo inspect --raw --creds "${GITHUB_ACTOR}:${GH_TOKEN}" "docker://ghcr.io/underpass-ai/axlr:v${VERSION}" 2>/dev/null | sha256sum | cut -d' ' -f1); then
+            test "$existing" = "$wanted"
+          else
+            skopeo copy --all --preserve-digests --dest-creds "${GITHUB_ACTOR}:${GH_TOKEN}" "oci-archive:dist/image/image.oci" "docker://ghcr.io/underpass-ai/axlr:v${VERSION}"
+          fi
+          got=$(skopeo inspect --raw --creds "${GITHUB_ACTOR}:${GH_TOKEN}" "docker://ghcr.io/underpass-ai/axlr:v${VERSION}" | sha256sum | cut -d' ' -f1)
+          test "$got" = "$wanted"
+          digest="sha256:$got"
+          DIGEST="$digest" python3 -c 'import json,os,pathlib; pathlib.Path("dist/assets/image-digest.json").write_text(json.dumps({"version":os.environ["VERSION"],"image":"ghcr.io/underpass-ai/axlr@"+os.environ["DIGEST"]},sort_keys=True)+"\n")'
+      - name: Publish chart and release assets without replacing different bytes
+        shell: bash
+        run: |
+          echo "$GH_TOKEN" | helm registry login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          mkdir -p /tmp/axlr-existing
+          if helm pull "oci://ghcr.io/underpass-ai/charts/axlr" --version "$VERSION" --destination /tmp/axlr-existing 2>/dev/null; then
+            cmp "/tmp/axlr-existing/axlr-${VERSION}.tgz" "dist/assets/axlr-${VERSION}.tgz"
+          else
+            helm push "dist/assets/axlr-${VERSION}.tgz" "oci://ghcr.io/underpass-ai/charts"
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          expected=set(json.loads(Path('dist/meta/expected.json').read_text())['assets'])
+          found={p.name for p in Path('dist/assets').iterdir() if p.is_file()}
+          if found != expected:
+              raise SystemExit(f'final inventory mismatch: {expected^found}')
+          PY
+          if gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release view "v${VERSION}" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,isPrerelease > /tmp/axlr-existing-release.json
+            python3 - <<'PY'
+          import json,os
+          from pathlib import Path
+          release=json.loads(Path('/tmp/axlr-existing-release.json').read_text())
+          expected=set(json.loads(Path('dist/meta/expected.json').read_text())['assets'])
+          names={asset['name'] for asset in release['assets']}
+          if release['isDraft'] or release['isPrerelease'] != ('-' in os.environ['VERSION']) or not names<=expected:
+              raise SystemExit('existing release identity or asset inventory differs')
+          PY
+            mkdir -p /tmp/axlr-remote-assets
+            gh release download "v${VERSION}" --repo "$GITHUB_REPOSITORY" --dir /tmp/axlr-remote-assets
+            for file in /tmp/axlr-remote-assets/*; do cmp "$file" "dist/assets/$(basename "$file")"; done
+            for file in dist/assets/*; do
+              if [[ ! -f "/tmp/axlr-remote-assets/$(basename "$file")" ]]; then
+                gh release upload "v${VERSION}" "$file" --repo "$GITHUB_REPOSITORY"
+              fi
+            done
+          else
+            extra=()
+            if [[ "$VERSION" == *-* ]]; then extra+=(--prerelease); fi
+            gh release create "v${VERSION}" dist/assets/* --repo "$GITHUB_REPOSITORY" --title "AXLR v${VERSION}" "${extra[@]}"
+          fi

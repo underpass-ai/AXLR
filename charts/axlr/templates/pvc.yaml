@@ -1,0 +1,18 @@
+{{- if not .Values.state.existingClaim }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "axlr.name" . }}
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    {{- include "axlr.labels" . | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  {{- with .Values.state.volumeClaimTemplate.storageClassName }}
+  storageClassName: {{ . | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.state.volumeClaimTemplate.size | quote }}
+{{- end }}

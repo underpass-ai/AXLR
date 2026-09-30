@@ -30,7 +30,7 @@ The console is a separate Go module in [`tui/`](tui/README.md). It can start wit
 | Connect KMP or MADE | [KMP runbook](docs/runbooks/kmp.md), [MADE runbook](docs/runbooks/made.md) |
 | Connect an MCP server or install a package | [Plugins and MCP](docs/plugins.md) |
 | Call AXLR from a process through JSON | [Worker contract](docs/worker.md) |
-| Review the planned HTTP API, Helm and release CI | [Service specification](docs/specs/axlr-service-api.md), [implementation plan](docs/plans/axlr-service-helm-release.md) |
+| Run the HTTP service or deploy AXLR with Helm | [Service API](docs/api.md), [Helm guide](docs/helm.md), [release process](docs/releasing.md) |
 | Embed AXLR in Go or use its MCP client | [Go library](docs/library.md) |
 | Understand boundaries and package ownership | [Architecture](docs/architecture.md) |
 | Resolve a startup, model, plugin or session problem | [Troubleshooting](docs/troubleshooting.md) |
@@ -58,6 +58,6 @@ The JSON worker, `cmd/axlr`, accepts exactly one request on stdin and returns on
 
 ## Project status
 
-AXLR is an evolving pre-1.0 project. The repository has two Go modules and tests each independently. The current console is a trusted-local Linux application. The worker exposes a one-request process API; a network service API is being designed.
+AXLR is an evolving pre-1.0 project. The repository has two Go modules and tests each independently. The console is a trusted-local application. The worker exposes a one-request process API; `axlr-serve` exposes a source-build HTTP `/v1` API with mTLS. The chart and release workflow are checked in; published release assets require a successful tagged run.
 
 Part of [Underpass AI](https://underpassai.com).

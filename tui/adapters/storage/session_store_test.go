@@ -81,13 +81,39 @@ func TestSessionStoreRestoresChangedModelFromVersionOneSnapshot(t *testing.T) {
 	must(t, err)
 	var record map[string]any
 	must(t, json.Unmarshal(raw, &record))
-	if record["version"] != float64(1) {
+	if record["version"] != float64(2) {
 		t.Fatalf("snapshot version changed: %v", record["version"])
 	}
 	got, err := store.Load(context.Background(), s.Export().ID)
 	must(t, err)
 	if got.Export().Model != "next/model" || !reflect.DeepEqual(got.Messages(), before) {
 		t.Fatalf("restored model or transcript changed: %+v", got.Export())
+	}
+}
+func TestSessionStoreReadsVersionOneAndPreservesServiceMetadata(t *testing.T) {
+	store, dir := openStore(t)
+	s := fixture(t)
+	must(t, store.Save(context.Background(), s))
+	path := filepath.Join(dir, string(s.Export().ID)+".json")
+	raw, err := os.ReadFile(path)
+	must(t, err)
+	var record map[string]any
+	must(t, json.Unmarshal(raw, &record))
+	record["version"] = 1
+	legacy, err := json.Marshal(record)
+	must(t, err)
+	must(t, os.WriteFile(path, legacy, 0600))
+	loaded, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	if loaded.Export().Owner != "" || loaded.Export().Revision != 0 {
+		t.Fatalf("legacy metadata not empty: %+v", loaded.Export())
+	}
+	loaded.SetServiceMetadata("alice", 7, "operation-1")
+	must(t, store.Save(context.Background(), loaded))
+	got, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	if got.Export().Owner != "alice" || got.Export().Revision != 7 || got.Export().OperationID != "operation-1" {
+		t.Fatalf("service metadata lost: %+v", got.Export())
 	}
 }
 func TestSessionStorePreservesInterruptedAnswersInConversationOrder(t *testing.T) {

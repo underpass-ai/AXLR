@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["replicaCount", "image", "workspace", "state", "api", "model", "kmp", "made"],
+  "properties": {
+    "replicaCount": {"const": 1},
+    "image": {"type":"object","required":["repository","digest"],"properties":{"repository":{"type":"string","minLength":1},"digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}},
+    "workspace": {"type":"object","required":["existingClaim","mountPath"],"properties":{"existingClaim":{"type":"string","minLength":1},"mountPath":{"type":"string","pattern":"^/[^ ]+"}}},
+    "state": {"type":"object","anyOf":[{"properties":{"existingClaim":{"type":"string","minLength":1}}},{"properties":{"volumeClaimTemplate":{"type":"object","required":["size"],"properties":{"size":{"type":"string","minLength":1}}}}}]},
+    "api": {"type":"object","required":["serverTLS","clientCA","principals"],"properties":{"serverTLS":{"$ref":"#/definitions/secret"},"clientCA":{"$ref":"#/definitions/secret"},"principals":{"$ref":"#/definitions/secret"}}},
+    "model": {"type":"object","required":["apiKey"],"properties":{"apiKey":{"$ref":"#/definitions/secret"}}},
+    "kmp": {"$ref":"#/definitions/engine"},
+    "made": {"$ref":"#/definitions/engine"},
+    "ingress": {"type":"object","properties":{"enabled":{"const":false}}}
+  },
+  "definitions": {
+    "secret": {"type":"object","required":["existingSecret"],"properties":{"existingSecret":{"type":"string","minLength":1}}},
+    "engine": {"type":"object","required":["endpoint","tls"],"properties":{"endpoint":{"type":"string","pattern":"^[^ ]+:[0-9]+$"},"tls":{"type":"object","required":["existingSecret","serverName"],"properties":{"existingSecret":{"type":"string","minLength":1},"serverName":{"type":"string","minLength":1}}}}}
+  }
+}

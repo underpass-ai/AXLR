@@ -1,6 +1,6 @@
 # Plan de implementación: API de AXLR, Helm y releases
 
-Estado: **plan de servicio, sin implementación**. Fecha: 30-09-2026; revisión: 01-10-2026. Especificación: [API de servicio](../specs/axlr-service-api.md). Este documento describe trabajo futuro; los únicos ejecutables de producto actuales son `axlr` (worker JSON de una petición) y `axlr-tui` (consola local). La API, el chart y la CI de releases aquí descritos aún no están implementados.
+Estado: **implementado en código, pendiente de release candidata y pruebas con KMP/MADE remotos**. Fecha del plan: 30-09-2026; revisión: 01-10-2026. Especificación: [API de servicio](../specs/axlr-service-api.md). El repositorio contiene `axlr` (worker JSON de una petición), `axlr-tui` (consola local) y `axlr-serve` (API HTTP mTLS). Este documento conserva el contrato y la lista de aceptación; la [guía de releases](../releasing.md) describe la publicación.
 
 ## 0. Contrato de producto y decisiones cerradas
 
@@ -22,8 +22,8 @@ La primera API será HTTP `/v1`, con JSON para comandos y SSE para eventos. Exig
 | `mcp.json` solo expone entorno a procesos stdio | `tui/adapters/storage/mcp_config.go` | Generar registros internos con entorno desde Secrets montados; no meter secretos en el chart |
 | MADE remoto es gRPC con mTLS, no un endpoint MCP HTTP | `made/docs/operations/deploy-kubernetes.md`, `made-mcp/src/backend.rs` | `made-mcp` en modo `grpc` dentro del pod |
 | KMP remoto puede servirse con adaptador gRPC o gateway HTTP | `kmp/docs/enterprise/README.md` | Elegir adaptador gRPC para simetría y probar el gateway en otra fase |
-| La CI actual solo prueba Linux | `.github/workflows/ci.yml` | La nueva matriz valida construcción y ejecución por plataforma antes de publicar |
-| El ejecutor y los locks usan primitivas Unix sin separación por sistema | `adapters/local/process_adapter.go`, `file_adapter.go`, `tui/adapters/storage/session_lock.go`, `mcp_config_lock.go`, `mcp_config.go` | Añadir adaptadores de plataforma y pruebas nativas antes de ofrecer Windows |
+| La CI previa solo probaba Linux | `.github/workflows/ci.yml` | La matriz de release valida construcción y ejecución por plataforma antes de publicar |
+| El ejecutor y los locks usaban primitivas Unix sin separación por sistema | `adapters/local/process_adapter.go`, `file_adapter.go`, `tui/adapters/storage/session_lock.go`, `mcp_config_lock.go`, `mcp_config.go` | Los adaptadores de plataforma y las pruebas nativas son necesarios antes de ofrecer Windows |
 
 ## 1. Estructura exacta de la entrega
 
@@ -31,7 +31,7 @@ Las rutas son propuestas concretas para implementar. Mantener las responsabilida
 
 | Ruta | Responsabilidad |
 |:--|:--|
-| `tui/cmd/axlr-serve/main.go`, `run.go`, `probe.go` | CLI del servicio: configuración, señales, arranque, cierre y subcomando `probe`. Vive en el módulo `tui` porque el módulo raíz no puede importar `tui/application` sin un ciclo. El binario se llama `axlr-serve`. |
+| `tui/cmd/axlr-serve/main.go`, `run.go` | CLI del servicio: configuración, señales, arranque, cierre y modo `--probe`. Vive en el módulo `tui` porque el módulo raíz no puede importar `tui/application` sin un ciclo. El binario se llama `axlr-serve`. |
 | `tui/service/config.go` | Configuración estricta: listen, workspace fijo, modelo, límites, rutas TLS, policy, state, KMP y MADE. Rechaza campos desconocidos, rutas relativas y secretos literales. |
 | `tui/service/server.go` | Composición de casos de uso, HTTP server, timeouts y shutdown. Ninguna lógica de herramientas en handlers. |
 | `tui/service/http_*.go` | Handlers separados para sesiones/turnos, SSE, aprobaciones, herramientas, probes y errores. |

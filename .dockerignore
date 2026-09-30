@@ -1,0 +1,6 @@
+.git
+.kmp
+.kernel
+dist
+**/__pycache__
+*.pyc
