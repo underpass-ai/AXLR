@@ -1,6 +1,6 @@
 # Plan de implementación: API de AXLR, Helm y releases
 
-Estado: **plan, sin implementación**. Fecha: 30-09-2026. Especificación: [API de servicio](../specs/axlr-service-api.md). Este documento describe trabajo futuro; los únicos ejecutables actuales son `axlr` (worker JSON de una petición) y `axlr-tui` (consola local). La tarea presente modifica documentación, no código ni CI.
+Estado: **plan de servicio, sin implementación**. Fecha: 30-09-2026; revisión: 01-10-2026. Especificación: [API de servicio](../specs/axlr-service-api.md). Este documento describe trabajo futuro; los únicos ejecutables de producto actuales son `axlr` (worker JSON de una petición) y `axlr-tui` (consola local). La API, el chart y la CI de releases aquí descritos aún no están implementados.
 
 ## 0. Contrato de producto y decisiones cerradas
 
@@ -23,6 +23,7 @@ La primera API será HTTP `/v1`, con JSON para comandos y SSE para eventos. Exig
 | MADE remoto es gRPC con mTLS, no un endpoint MCP HTTP | `made/docs/operations/deploy-kubernetes.md`, `made-mcp/src/backend.rs` | `made-mcp` en modo `grpc` dentro del pod |
 | KMP remoto puede servirse con adaptador gRPC o gateway HTTP | `kmp/docs/enterprise/README.md` | Elegir adaptador gRPC para simetría y probar el gateway en otra fase |
 | La CI actual solo prueba Linux | `.github/workflows/ci.yml` | La nueva matriz valida construcción y ejecución por plataforma antes de publicar |
+| El ejecutor y los locks usan primitivas Unix sin separación por sistema | `adapters/local/process_adapter.go`, `file_adapter.go`, `tui/adapters/storage/session_lock.go`, `mcp_config_lock.go`, `mcp_config.go` | Añadir adaptadores de plataforma y pruebas nativas antes de ofrecer Windows |
 
 ## 1. Estructura exacta de la entrega
 
@@ -30,7 +31,7 @@ Las rutas son propuestas concretas para implementar. Mantener las responsabilida
 
 | Ruta | Responsabilidad |
 |:--|:--|
-| `tui/cmd/axlr-serve/main.go`, `run.go` | CLI del servicio: configuración, señales, arranque y cierre ordenado. Vive en el módulo `tui` porque el módulo raíz no puede importar `tui/application` sin un ciclo. El binario se llama `axlr-serve`. |
+| `tui/cmd/axlr-serve/main.go`, `run.go`, `probe.go` | CLI del servicio: configuración, señales, arranque, cierre y subcomando `probe`. Vive en el módulo `tui` porque el módulo raíz no puede importar `tui/application` sin un ciclo. El binario se llama `axlr-serve`. |
 | `tui/service/config.go` | Configuración estricta: listen, workspace fijo, modelo, límites, rutas TLS, policy, state, KMP y MADE. Rechaza campos desconocidos, rutas relativas y secretos literales. |
 | `tui/service/server.go` | Composición de casos de uso, HTTP server, timeouts y shutdown. Ninguna lógica de herramientas en handlers. |
 | `tui/service/http_*.go` | Handlers separados para sesiones/turnos, SSE, aprobaciones, herramientas, probes y errores. |
@@ -57,8 +58,8 @@ No mover los paquetes de `tui/application` al módulo raíz en esta entrega. La 
 - Prefijo `/v1`; `Content-Type: application/json` para comandos; UTF-8; JSON estricto sin campos desconocidos; cuerpo máximo 4 MiB como el worker. Responder `415` a otro tipo de contenido y `413` si excede el límite.
 - `X-Request-Id` opcional del cliente; si falta, generar uno. Devolverlo en cabecera y errores. No usarlo como clave de idempotencia.
 - `Idempotency-Key` obligatoria en POST que inicia turno, crea llamada directa o toma una decisión. Longitud 16–128 caracteres ASCII seguros; guardar hash de método+ruta+cuerpo y principal. Igual clave e igual petición devuelve recurso anterior; igual clave con distinto contenido devuelve `409 idempotency_conflict`.
-- IDs de sesión, operación, evento y llamada generados por servidor. Todas las rutas validan IDs antes de tocar almacenamiento. `If-Match` o `expected_revision` obliga a compare-and-set en decisiones y cancelación; respuesta `409 stale_revision` al perder la carrera.
-- Errores uniformes: `{"error":{"code":"...","message":"...","request_id":"..."}}`; sin rutas de secretos, argumentos confidenciales ni detalles internos. `400/401/403/404/409/413/415/422/429/500/503` tienen códigos estables en OpenAPI.
+- IDs de sesión, operación y llamada generados por servidor: 16 bytes aleatorios codificados en 32 caracteres hexadecimales minúsculos. Eventos usan una secuencia decimal creciente por sesión. Todas las rutas validan IDs antes de tocar almacenamiento. `If-Match: "<revision>"` o `expected_revision` obliga a compare-and-set al iniciar turno, decidir o cancelar. Falta de revisión devuelve `428 revision_required`; valores contradictorios en cabecera y cuerpo devuelven `400 revision_conflict`; perder la carrera devuelve `409 stale_revision`.
+- Errores uniformes: `{"error":{"code":"...","message":"...","request_id":"..."}}`; sin rutas de secretos, argumentos confidenciales ni detalles internos. `400/401/403/404/409/410/413/415/422/428/429/500/503` tienen códigos estables en OpenAPI.
 - El servidor limita concurrencia, tamaño de respuesta y tiempo de handler; streaming SSE tiene heartbeat y límite de clientes. El modelo puede seguir trabajando aunque el cliente SSE se desconecte; desconectar no equivale a cancelar.
 
 ### 2.2 Rutas y estados
@@ -74,10 +75,10 @@ No mover los paquetes de `tui/application` al módulo raíz en esta entrega. La 
 | `GET /v1/tools` | Filtros opcionales de origen | Nombres exactos, esquemas y disponibilidad local/MCP; nunca confundir catálogo built-in con servidor conectado |
 | `POST /v1/tool-calls` | `{tool,arguments}` + `Idempotency-Key` | `202 {call_id,status:"pending_approval"|"running",revision}`; intención persistida antes de ejecutar |
 | `POST /v1/tool-calls/{id}/decisions` | `{decision,expected_revision}` + clave | `202` estado de la llamada; autoriza la llamada exacta, no una capacidad genérica |
-| `GET /v1/tool-calls/{id}` | Sin cuerpo | Resultado con estados del worker (`completed`, `failed`, `rejected`, `cancelled`, `timed_out`, `uncertain`) |
+| `GET /v1/tool-calls/{id}` | Sin cuerpo | Estado de ciclo de vida (`pending_approval`, `running`), estados finales compartidos con el worker (`completed`, `failed`, `rejected`, `cancelled`, `timed_out`) y estado adicional de servicio `uncertain` |
 | `GET /livez`, `GET /readyz` | Sin cuerpo, listener de probes separado | Liveness local; readiness comprueba proveedor, KMP y MADE requeridos; datos mínimos |
 
-Los eventos SSE tienen `id: <secuencia>`, `event: <tipo>` y `data: <JSON>`. Tipos mínimos: `turn.started`, `text.delta`, `tool.requested`, `approval.required`, `tool.completed`, `turn.completed`, `turn.interrupted`, `operation.failed`. Cada evento lleva `session_id`, `operation_id`, `sequence`, `time` y payload tipado. Nunca enviar un delta antes de que su registro durable esté disponible para replay. Coalescer deltas de texto en fragmentos limitados para evitar fsync por carácter, pero fijar el ID solo después de persistir el fragmento. El servidor responde al replay en orden estricto y evita emitir dos veces el mismo ID dentro de una conexión.
+Los eventos SSE tienen `id: <secuencia>`, `event: <tipo>` y `data: <JSON>`. El cursor `after` y `Last-Event-ID` son enteros decimales no negativos, exclusivos: se devuelve la secuencia siguiente. Si ambos están presentes deben coincidir; en caso contrario responder `400 cursor_conflict`. Un cursor futuro devuelve `409 cursor_ahead`; uno anterior al mínimo retenido, `410 events_expired` con ese mínimo. Tipos mínimos: `turn.started`, `text.delta`, `tool.requested`, `approval.required`, `tool.completed`, `turn.completed`, `turn.interrupted`, `operation.failed`. Cada evento lleva `session_id`, `operation_id`, `sequence`, `time` y payload tipado. Nunca enviar un delta antes de que su registro durable esté disponible para replay. Coalescer deltas de texto en fragmentos limitados para evitar fsync por carácter, pero fijar el ID solo después de persistir el fragmento. El servidor responde al replay en orden estricto y evita emitir dos veces el mismo ID dentro de una conexión.
 
 ### 2.3 Principal y autorización
 
@@ -112,7 +113,7 @@ Los eventos SSE tienen `id: <secuencia>`, `event: <tipo>` y `data: <JSON>`. Tipo
 
 ### 4.3 Fallo y ciclo de vida
 
-- Iniciar AXLR con ambos registros obligatorios en perfil Helm. Si falla la autenticación, DNS, catálogo o versión compatible, `readyz` falla y las llamadas devuelven `engine_unavailable` con ID preciso; el proceso puede seguir vivo para diagnóstico.
+- Iniciar AXLR con ambos registros obligatorios en perfil Helm. Si falla la autenticación, DNS, catálogo o versión compatible, `readyz` falla y las llamadas devuelven `engine_unavailable` con ID preciso; el proceso puede seguir vivo para diagnóstico. Readiness consulta el estado cacheado de inicialización y conexión, actualizado mediante reconexión con backoff; una probe no escribe memoria, inicia ceremonias ni genera una respuesta de modelo facturable.
 - No hacer fallback silencioso a KMP/MADE embebidos, ni crear stores vacíos en el pod. No copiar sus credenciales a `mcp.json`/ConfigMap; generar registros desde rutas de Secret y configuración no secreta.
 - Rotación de certificados: montar Secrets actualizables, vigilar cambio o reiniciar pod de modo controlado; volver a conectar MCP sin reejecutar una llamada con efecto. Probar revocación/CA incorrecta y DNS incorrecto.
 
@@ -127,7 +128,7 @@ Los eventos SSE tienen `id: <secuencia>`, `event: <tipo>` y `data: <JSON>`. Tipo
 ### 5.2 Recursos y defaults
 
 - Deployment sin token de service account montado, UID/GID no root, `readOnlyRootFilesystem`, `allowPrivilegeEscalation:false`, capacidades Linux descartadas y `seccompProfile:RuntimeDefault`. Volúmenes de solo lectura para credenciales; PVC de estado y workspace; `emptyDir` acotado para temporal.
-- Service `ClusterIP` en puerto API. Listener de probes en loopback/puerto separado dentro del pod. Probes no revelan nombres de herramienta ni secretos. `PodDisruptionBudget` opcional coherente con una réplica.
+- Service `ClusterIP` en puerto API. Listener de probes HTTP en `127.0.0.1:9090`, sin rutas de datos ni Service. Kubernetes usa probes `exec`: `["/usr/local/bin/axlr-serve","probe","--kind","live","--address","127.0.0.1:9090"]`, y `--kind ready` para readiness. El subcomando solo consulta el endpoint local correspondiente, con timeout de un segundo, y devuelve exit code `0` para HTTP `200` y `1` en otro caso; no carga claves ni inicia el agente. Una probe `httpGet` del kubelet no alcanza ese loopback y no debe generarse. Probes no revelan nombres de herramienta ni secretos. `PodDisruptionBudget` opcional coherente con una réplica.
 - NetworkPolicy opcional con ingreso solo de clientes/ingress previstos y salida a OpenRouter, KMP, MADE y DNS. No inventar selectors universales; documentar los que el operador debe completar.
 - `helm template` falla si falta un motor, Secret, digest o PVC requerido. Las plantillas nunca incluyen bytes de secretos. Etiquetas llevan chart/app version. `helm upgrade` conserva PVC y no borra estados al desinstalar chart.
 
@@ -137,7 +138,18 @@ Los eventos SSE tienen `id: <secuencia>`, `event: <tipo>` y `data: <JSON>`. Tipo
 
 Crear `scripts/release/preflight.py` y pruebas de tabla. En PR/main: producir versión de desarrollo `0.0.0-dev+<sha>` sin publicar. En tag `vMAJOR.MINOR.PATCH` o prerelease semver: verificar que tag, `Chart.yaml` `version`/`appVersion` y la versión inyectada en binarios coinciden; rechazar tag malformado, checkout sucio en empaque local, asset repetido, versión sin lock de motores o commit fuera de la rama de release acordada. Generar inventario esperado **antes** de compilar: seis archivos binarios, sus seis `.sha256`, chart `.tgz` y checksum, imagen multiarch/digest metadata y SBOM/attestation si se activa esa política. Mantener el inventario como artefacto inmutable del job.
 
-### 6.2 Matriz de binarios
+### 6.2 Portabilidad antes de la matriz
+
+El código actual usa `Setpgid`, señales de grupo, `Flock`, `O_NOFOLLOW`, `O_NONBLOCK` y fixtures `/bin/sh` sin una implementación Windows equivalente. No basta con cambiar `GOOS`. Separar esas operaciones tras helpers: los archivos `_unix.go` requieren `//go:build unix` explícito; los `_windows.go` se seleccionan por el sufijo de sistema. Revisar también los build tags de sus tests:
+
+- **Procesos:** conservar cancelación de todo el grupo en Unix. En Windows, asignar el proceso a un Job Object con cierre que termine sus descendientes; probar timeout y cancelación con un hijo que cree otro proceso. No sustituirlo por matar solo al padre.
+- **Archivos privados y locks:** conservar comprobación sobre el descriptor abierto, rechazo de reparse points/symlinks en archivos de estado y adquisición exclusiva no bloqueante. Windows necesita `LockFileEx` y ACL limitada al propietario; `chmod 0600` por sí solo no demuestra privacidad allí. Conservar validación de archivos regulares y límites antes de leer.
+- **Entorno y rutas:** probar volúmenes y separadores Windows, rutas absolutas, variables y herramientas `.exe`. Adaptar los defaults XDG de estado/configuración y documentar el fallback nativo. El perfil remoto Helm continúa siendo Linux.
+- **Fixtures:** sustituir pruebas dependientes de `/bin/sh` y `Mkfifo` por helpers de prueba nativos o limitar solo esas pruebas con tags, aportando una prueba equivalente de la propiedad que protegían. Un skip no demuestra portabilidad.
+
+Antes del empaquetado, `go build`, `go vet`, tests y un smoke de lectura/edición/exec/cancelación deben pasar en cada OS nativo para ambos módulos y para el servicio cuando exista. Registrar el soporte verificado en documentación; no extender la promesa actual de Linux hasta completar este paso.
+
+### 6.3 Matriz de binarios
 
 | Target | Artefacto | Prueba requerida |
 |:--|:--|:--|
@@ -150,13 +162,13 @@ Crear `scripts/release/preflight.py` y pruebas de tabla. En PR/main: producir ve
 
 Cada archivo incluye `axlr`, `axlr-tui`, `axlr-serve` (con `.exe` en Windows), `VERSION`, licencia y README de instalación; el empaquetador verifica nombre, arquitectura y versión de los tres binarios. Construir con `CGO_ENABLED=0`, `-trimpath`, versión por `-ldflags`, `GOWORK=off` para raíz y `go -C tui` para los otros dos. No cambiar el worker a proceso persistente. Ejecutar `go vet` y `go test -race` en runners nativos pertinentes; los cross-builds no cuentan como smoke nativo. Antes de publicar, confirmar etiquetas de runners disponibles en GitHub o aportar runners propios, especialmente para Windows ARM64; si falta uno, fallar la release o declarar ese target no soportado con aprobación explícita. No etiquetar seis targets como verificados cuando solo cuatro arrancaron.
 
-### 6.3 Paquete, imagen y chart
+### 6.4 Paquete, imagen y chart
 
 - `scripts/release/package.sh` recibe versión, GOOS y GOARCH, crea staging nuevo, compila ambos módulos, prueba `--version`, empaqueta orden estable y genera SHA-256. Test local de reproducibilidad: dos empaques del mismo commit producen igual checksum salvo metadatos deliberados documentados.
 - Construir imagen Linux `amd64/arm64` desde el mismo commit y versión. Descargar adaptadores KMP/MADE según `distribution/engines.lock.json`, verificar checksum antes de copiarlos. Probar arranque, `livez`, rechazo de cliente sin certificado y fallo de `readyz` sin motores. Publicar digest multiarch; jamás `latest` como identidad de release.
 - `helm lint`, `helm template` con overlay de prueba y validación de schema. Publicar chart OCI en `ghcr.io/underpass-ai/charts/axlr` con versión correspondiente **después** de publicar y verificar el digest de imagen. Adjuntar el chart `.tgz` y checksum a GitHub Release. El chart renderizado usa imagen por digest.
 
-### 6.4 Permisos y publicación
+### 6.5 Permisos y publicación
 
 Seguir la separación de MADE: jobs de preflight, tests, matriz y empaquetado con `contents: read`; solo un job final, condicionado a tag, usa `contents: write` y `packages: write`. Ese job no hace checkout ni ejecuta scripts de la PR: descarga artefactos, compara inventario exacto y verifica cada checksum antes de crear/adjuntar la release. En reejecución, si existe un asset con el mismo nombre compara bytes; no sobreescribe un asset distinto. Rechaza assets inesperados y releases draft o prerelease con identidad distinta. Pin de acciones por SHA revisado, `timeout-minutes`, `concurrency` por ref y sin publicar desde pull requests.
 
@@ -172,8 +184,9 @@ Cada paso deja el repositorio compilando; no fusionar un paso si falta su prueba
 6. **Herramientas directas.** Crear recurso de llamada, decisión y resultado usando registro/política ya existente. Tests `read`, `write`, `edit`, `exec`, MCP, nombre desconocido, JSON inválido, denegación, auto policy explícita, timeout y estado `uncertain` tras fallo simulado. Nunca reintentar efectos automáticamente.
 7. **Motores remotos.** Implementar registros internos y packaging de adaptadores. Tests de entorno completo, KMP/MADE exact IDs, certificados, endpoint caído, versión incompatible, `readyz` y ausencia de fallback local. Smoke contra despliegues de prueba de ambos motores.
 8. **Helm.** Chart y Dockerfile. `helm lint/template` de perfiles válidos y pruebas negativas de cada Secret/ref/digest/motor/PVC ausente; verificar recursos de seguridad y borrado del release sin borrar stores externos.
-9. **Release CI.** Preflight, empaquetador, matriz de seis y job final sin checkout, más imagen/chart. Test de inventario faltante/sobrante, checksum alterado, tag y versiones incoherentes, release existente diferente y PR sin permisos de escritura. Hacer release candidata antes de `v1.0.0` y descargar/probar cada archivo.
-10. **Documentación de operación.** Actualizar README, `docs/index.md`, arquitectura, consola, API, Helm, runbooks local/remoto y troubleshooting contra binarios/manifest reales. Eliminar frases de “API en diseño” solo cuando los tests y release estén publicados.
+9. **Portabilidad nativa.** Separar primitivas de archivo, locks y procesos; implementar Windows y verificar macOS. Pruebas de permisos, bloqueo concurrente, rutas, descendientes y cancelación por OS; los dos módulos y el servicio deben compilar y funcionar antes de habilitar un target.
+10. **Release CI.** Preflight, empaquetador, matriz de seis y job final sin checkout, más imagen/chart. Test de inventario faltante/sobrante, checksum alterado, tag y versiones incoherentes, release existente diferente y PR sin permisos de escritura. Hacer release candidata antes de `v1.0.0` y descargar/probar cada archivo.
+11. **Documentación de operación.** Actualizar README, `docs/index.md`, arquitectura, consola, API, Helm, runbooks local/remoto y troubleshooting contra binarios/manifest reales. Eliminar frases de “API en diseño” solo cuando los tests y release estén publicados.
 
 ## 8. Criterios de aceptación y límites
 

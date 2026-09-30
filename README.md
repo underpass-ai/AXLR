@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/assets/brand/axlr-spectrum.png" width="760" alt="AXLR pixel-art wordmark with Spectrum bars"></p>
+<p align="center"><img src="docs/assets/brand/axlr-spectrum.svg" width="760" alt="AXLR pixel-art wordmark with Spectrum bars"></p>
 
 <p align="center"><strong>Run an agent in your workspace. Keep the execution boundary explicit.</strong></p>
 

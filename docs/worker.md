@@ -34,7 +34,7 @@ printf '%s\n' '{"protocol_version":1,"request_id":"read-1","tool":"read","argume
 | `plugins.list` | Empty object | Allowed tools with plugin ID, name, description and schemas |
 | `plugins.call` | `plugin_id`, `tool_name` and an `arguments` object | MCP `content`, optional `structured_content` and `is_error` |
 
-File paths are relative to the workspace. AXLR anchors file operations through `os.Root` and refuses traversal through `..` or symlinks. `cwd` is checked against the workspace, but the executed program has the host account's OS access. `program` and `args` are argv, without an implicit shell; choose `/bin/sh` explicitly if shell syntax is required.
+File paths are relative to the workspace. AXLR anchors file operations through `os.Root` and refuses escapes through `..` or symlinks. Reading a symlink whose target remains inside the root is permitted; editing requires a regular file at the requested path. `cwd` is checked against the workspace, but the executed program has the host account's OS access. `program` and `args` are argv, without an implicit shell; choose `/bin/sh` explicitly if shell syntax is required.
 
 `write` in `create` mode never overwrites a destination. `replace` needs the SHA-256 of a previously observed full file. `edit` replaces exactly one literal occurrence; zero or multiple matches are conflicts. These checks do not create a transaction against concurrent external writers. A host should serialize its mutations.
 

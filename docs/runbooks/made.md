@@ -6,7 +6,7 @@ This runbook uses a directly managed embedded `made-mcp` stdio process. Follow t
 
 ## Install and connect
 
-1. Install the release-matched `made-mcp` binary for your platform and verify `made-mcp --version`. The referenced MADE guide currently documents `cargo install made-mcp --version 0.9.0 --locked` and checksummed 0.9.0 assets. Use its current release instructions when they change.
+1. Install the release-matched `made-mcp` binary for your platform and verify `made-mcp --version`. The published release checked on 1 October 2026 is [0.9.1](https://github.com/underpass-ai/made/releases/tag/v0.9.1), also available through `cargo install made-mcp --version 0.9.1 --locked`. The upstream local guide describes the 0.9.0 setup contract; use the matching 0.9.1 binary and its checksummed release assets. Recheck the release instructions when upgrading.
 2. Choose an absolute SQLite store path and stable, nonempty policy, trusted-host and store IDs. Generate a private 32-byte cursor HMAC key as 64 hexadecimal characters. Keep the key stable across restarts, in a secret manager or environment variable; do not commit it. Bootstrap authorization for the **same store and IDs** with the matching binary:
 
 ```bash
