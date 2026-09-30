@@ -145,6 +145,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
+	fmt.Fprintln(stderr, "axlr-tui: settings:", settingsPath)
 	language := settings.Language
 	if fromEnvironment := getenv("AXLR_LANG"); fromEnvironment != "" {
 		language = fromEnvironment
@@ -228,7 +229,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, getenv)
 	pluginManager.SetURLInstaller(configStore.AddURL)
 	pluginManager.Diagnostics = trace
-	approvalSettings, err := storage.NewApprovalSettings(filepath.Join(filepath.Dir(configPath), "approvals.json"), pluginManager)
+	approvalSettings, err := storage.NewApprovalSettingsInUserSettings(settingsStore, filepath.Join(filepath.Dir(configPath), "approvals.json"), pluginManager)
 	if err != nil {
 		return fail(err)
 	}

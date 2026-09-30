@@ -22,7 +22,7 @@ func TestRunUsesEditableSettingsJSONAndExplicitOverrides(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(`{"model":"provider/from-json","language":"es","theme":"paper","icons":"ascii","reduce_motion":true}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"model":"provider/from-json","language":"es","theme":"paper","icons":"ascii","reduce_motion":true,"approvals":{"autonomous":true,"allowed":[]}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	getenv := func(key string) string { return env[key] }
@@ -40,8 +40,8 @@ func TestRunUsesEditableSettingsJSONAndExplicitOverrides(t *testing.T) {
 			var output bytes.Buffer
 			code := run(context.Background(), args, getenv, func(model tea.Model) error {
 				app := model.(terminal.AppModel)
-				if string(app.Header.State.Model) != tc.model || app.Theme.Locale != tc.language || app.UIPreferences != (domain.UIPreferences{Theme: domain.ThemePaper, Icons: domain.IconsASCII, ReduceMotion: true}) {
-					t.Fatalf("settings not applied: model=%q locale=%q UI=%+v", app.Header.State.Model, app.Theme.Locale, app.UIPreferences)
+				if string(app.Header.State.Model) != tc.model || app.Theme.Locale != tc.language || app.UIPreferences != (domain.UIPreferences{Theme: domain.ThemePaper, Icons: domain.IconsASCII, ReduceMotion: true}) || !app.Status.Autonomous {
+					t.Fatalf("settings not applied: model=%q locale=%q UI=%+v autonomy=%v", app.Header.State.Model, app.Theme.Locale, app.UIPreferences, app.Status.Autonomous)
 				}
 				return nil
 			}, &output)

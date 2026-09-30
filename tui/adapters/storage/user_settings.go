@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -28,7 +29,52 @@ type UserSettings struct {
 	Theme        string                     `json:"theme"`
 	Icons        string                     `json:"icons"`
 	ReduceMotion bool                       `json:"reduce_motion"`
+	Approvals    *ApprovalPreferences       `json:"approvals,omitempty"`
 	Extra        map[string]json.RawMessage `json:"-"`
+}
+
+type ApprovalPreferences struct {
+	Autonomous bool                       `json:"autonomous"`
+	Allowed    []domain.ToolIdentity      `json:"allowed"`
+	Extra      map[string]json.RawMessage `json:"-"`
+}
+
+func (p *ApprovalPreferences) UnmarshalJSON(data []byte) error {
+	type known ApprovalPreferences
+	var value known
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil || fields == nil {
+		return errors.New("approvals must be a JSON object")
+	}
+	for key := range fields {
+		if strings.EqualFold(key, "autonomous") || strings.EqualFold(key, "allowed") {
+			delete(fields, key)
+		}
+	}
+	*p = ApprovalPreferences(value)
+	p.Extra = fields
+	return nil
+}
+
+func (p ApprovalPreferences) MarshalJSON() ([]byte, error) {
+	type known ApprovalPreferences
+	data, err := json.Marshal(known(p))
+	if err != nil {
+		return nil, err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+	for key, value := range p.Extra {
+		if _, owned := fields[key]; !owned {
+			fields[key] = value
+		}
+	}
+	return json.Marshal(fields)
 }
 
 // Keep settings added by newer AXLR versions when an older console saves a
@@ -46,8 +92,13 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 	if fields == nil {
 		return errors.New("settings.json must contain a JSON object")
 	}
-	for _, key := range []string{"model", "language", "theme", "icons", "reduce_motion"} {
-		delete(fields, key)
+	for key := range fields {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals"} {
+			if strings.EqualFold(key, knownKey) {
+				delete(fields, key)
+				break
+			}
+		}
 	}
 	*s = UserSettings(value)
 	s.Extra = fields
@@ -84,6 +135,13 @@ func (s UserSettings) Validate() error {
 	}
 	if s.Language != "en" && s.Language != "es" {
 		return errors.New("settings language must be en or es")
+	}
+	if s.Approvals != nil {
+		for _, id := range s.Approvals.Allowed {
+			if id.Validate() != nil || id.Kind == domain.ToolKindHost {
+				return errors.New("invalid approved tool identity in settings.json")
+			}
+		}
 	}
 	return (domain.UIPreferences{Theme: domain.ThemeID(s.Theme), Icons: domain.IconProfile(s.Icons), ReduceMotion: s.ReduceMotion}).Validate()
 }

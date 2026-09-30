@@ -16,7 +16,7 @@ func TestUserSettingsCanBeEditedAndSelectorsPreserveOtherSettings(t *testing.T) 
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(`{"model":"provider/hand-edited","language":"es","theme":"paper","icons":"ascii","reduce_motion":true,"future":{"new_setting":42}}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"model":"provider/hand-edited","language":"es","theme":"paper","icons":"ascii","reduce_motion":true,"approvals":{"autonomous":false,"future_policy":"keep"},"future":{"new_setting":42}}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	store, err := NewUserSettingsStore(path, DefaultUserSettings())
@@ -43,7 +43,7 @@ func TestUserSettingsCanBeEditedAndSelectorsPreserveOtherSettings(t *testing.T) 
 		t.Fatalf("settings mode = %v, %v", info, err)
 	}
 	data, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(data), `"new_setting": 42`) {
+	if err != nil || !strings.Contains(string(data), `"new_setting": 42`) || !strings.Contains(string(data), `"future_policy": "keep"`) {
 		t.Fatalf("future setting lost: %q, %v", data, err)
 	}
 }
@@ -66,6 +66,7 @@ func TestUserSettingsRejectInvalidFileWithoutOverwritingIt(t *testing.T) {
 		`{"language":"fr"}`,
 		`{"model":"   "}`,
 		`{"reduce_motion":"yes"}`,
+		`{"approvals":{"allowed":[{"Kind":"host","LocalOperation":"tools"}]}}`,
 		`null`,
 		`{"theme":"ink"} {"theme":"paper"}`,
 	} {

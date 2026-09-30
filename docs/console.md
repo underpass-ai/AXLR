@@ -44,13 +44,17 @@ The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/
   "language": "es",
   "theme": "auto",
   "icons": "safe",
-  "reduce_motion": false
+  "reduce_motion": false,
+  "approvals": {
+    "autonomous": false,
+    "allowed": []
+  }
 }
 ```
 
-All keys are optional. `model` may be empty to choose a model in the console. `language` accepts `en` or `es`; `theme` accepts `auto`, `ink`, `aurora`, `paper` or `phosphor`; `icons` accepts `safe`, `nerd-mono` or `ascii`. Edits take effect on the next launch. `--model` overrides the JSON model for one launch; `--lang` overrides `AXLR_LANG`, which overrides the JSON language. Selecting `/model` or saving `/theme` updates the corresponding JSON keys while retaining other settings, including keys from newer AXLR versions. The console writes the file with owner-only permissions and rejects invalid JSON without replacing it.
+All keys are optional. `model` may be empty to choose a model in the console. `language` accepts `en` or `es`; `theme` accepts `auto`, `ink`, `aurora`, `paper` or `phosphor`; `icons` accepts `safe`, `nerd-mono` or `ascii`. In `approvals`, `autonomous` enables automatic approval for every known tool; `allowed` contains exact tool identities saved by the approval dialog. Edits take effect on the next launch. `--model` overrides the JSON model for one launch; `--lang` overrides `AXLR_LANG`, which overrides the JSON language. Selecting `/model`, saving `/theme`, or changing `/autonomy` or always-allow choices updates the corresponding JSON keys while retaining other settings, including keys from newer AXLR versions. The console writes the file with owner-only permissions and rejects invalid JSON without replacing it.
 
-Existing `model-preference.json` and `ui-preference.json` files under the state directory are read until `settings.json` exists. The next `/model` or `/theme` save writes their values into `settings.json`; the old files are left in place. MCP connections and approval rules remain in the separate `$XDG_CONFIG_HOME/axlr/mcp.json` file.
+Existing `model-preference.json` and `ui-preference.json` files under the state directory are read until `settings.json` exists. Existing `approvals.json` choices are read until `settings.json` has an `approvals` section. The next related change writes those values into `settings.json`; the old files are left in place. MCP server connections and their own approval policies remain in the separate `$XDG_CONFIG_HOME/axlr/mcp.json` file.
 
 ## Model context
 
