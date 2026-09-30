@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-	"syscall"
 	"unicode/utf8"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -107,7 +106,7 @@ func readMCPConfig(path string) (dto.MCPConfig, error) {
 		return dto.MCPConfig{}, errors.New("MCP config path must be absolute")
 	}
 	// Open and verify the same descriptor: a path swap cannot bypass privacy checks.
-	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	file, err := openNoFollow(path, os.O_RDONLY, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return dto.MCPConfig{}, nil
 	}
@@ -119,7 +118,7 @@ func readMCPConfig(path string) (dto.MCPConfig, error) {
 	if err != nil {
 		return dto.MCPConfig{}, err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || info.Size() > maxMCPConfigBytes {
+	if !privateRegular(info) || info.Size() > maxMCPConfigBytes {
 		return dto.MCPConfig{}, errors.New("MCP config must be a private regular file of at most 64 KiB")
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxMCPConfigBytes+1))

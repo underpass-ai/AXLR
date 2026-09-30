@@ -132,9 +132,15 @@ func (s *Server) handleCreateToolCall(w http.ResponseWriter, r *http.Request) {
 	call := toolCall{ID: resource, Owner: principal(r).ID, Tool: input.Tool, Identity: selected.Identity, Args: append(json.RawMessage(nil), args.Bytes()...), Status: "pending_approval", Revision: 1}
 	if auto {
 		call.Decision = "approve"
+		call.Approver = "policy:auto"
+		call.DecisionRequestID = requestID(r)
 	}
 	if err := s.calls.Save(call); err != nil {
 		writeError(w, requestID(r), 500, "storage_error", "unable to save call intent")
+		return
+	}
+	if err := s.audit.Append(auditRecord{Principal: principal(r).ID, RequestID: requestID(r), Action: "tool_call.create", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID}); err != nil {
+		writeError(w, requestID(r), 500, "storage_error", "unable to audit call intent")
 		return
 	}
 	if auto {
@@ -246,6 +252,8 @@ func (s *Server) handleToolDecision(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	call.Decision = input.Decision
+	call.Approver = principal(r).ID
+	call.DecisionRequestID = requestID(r)
 	if input.Decision == "deny" {
 		call.Status = "rejected"
 		call.Result = &domain.ToolOutcome{Content: "tool call denied", IsError: true}
@@ -253,6 +261,10 @@ func (s *Server) handleToolDecision(w http.ResponseWriter, r *http.Request) {
 	call.Revision++
 	if err := s.calls.Save(call); err != nil {
 		writeError(w, requestID(r), 500, "storage_error", "unable to save decision")
+		return
+	}
+	if err := s.audit.Append(auditRecord{Principal: principal(r).ID, RequestID: requestID(r), Action: "tool_call.decision", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID}); err != nil {
+		writeError(w, requestID(r), 500, "storage_error", "unable to audit decision")
 		return
 	}
 	if input.Decision == "approve" {

@@ -34,6 +34,7 @@ type Server struct {
 	events      *eventStore
 	keys        *idempotencyStore
 	calls       *callStore
+	audit       *auditStore
 	principals  map[string]Principal
 	mu          sync.Mutex
 	jobs        sync.WaitGroup
@@ -55,7 +56,7 @@ func NewServer(cfg Config, deps Dependencies) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	base, err := storage.New(filepath.Join(cfg.StateDir, "sessions"))
+	base, err := storage.NewService(filepath.Join(cfg.StateDir, "sessions"))
 	if err != nil {
 		return nil, err
 	}
@@ -78,13 +79,28 @@ func NewServer(cfg Config, deps Dependencies) (*Server, error) {
 		base.Close()
 		return nil, err
 	}
+	audit, err := newAuditStore(filepath.Join(cfg.StateDir, "audit"))
+	if err != nil {
+		base.Close()
+		return nil, err
+	}
 	wrapped := &sessionStore{next: base}
+	if err := recoverSessions(wrapped, events); err != nil {
+		audit.Close()
+		base.Close()
+		return nil, err
+	}
+	if err := recoverClaims(keys, calls, events); err != nil {
+		audit.Close()
+		base.Close()
+		return nil, err
+	}
 	deps.Start.Store = wrapped
 	deps.Start.Continue.Store = wrapped
 	deps.Resolve.Store = wrapped
 	deps.Resolve.Continue.Store = wrapped
 	root, stop := context.WithCancel(context.Background())
-	return &Server{Config: cfg, deps: deps, base: base, sessions: wrapped, events: events, keys: keys, calls: calls, principals: policy, operations: map[string]context.CancelFunc{}, locks: map[string]*sync.Mutex{}, callLocks: map[string]*sync.Mutex{}, directSlots: make(chan struct{}, 8), streamSlots: make(chan struct{}, 64), root: root, stop: stop}, nil
+	return &Server{Config: cfg, deps: deps, base: base, sessions: wrapped, events: events, keys: keys, calls: calls, audit: audit, principals: policy, operations: map[string]context.CancelFunc{}, locks: map[string]*sync.Mutex{}, callLocks: map[string]*sync.Mutex{}, directSlots: make(chan struct{}, 8), streamSlots: make(chan struct{}, 64), root: root, stop: stop}, nil
 }
 
 func (s *Server) Close() error {
@@ -96,7 +112,7 @@ func (s *Server) Close() error {
 	}
 	s.mu.Unlock()
 	s.jobs.Wait()
-	return s.base.Close()
+	return errors.Join(s.base.Close(), s.audit.Close())
 }
 
 func (s *Server) startBackground(run func()) bool {

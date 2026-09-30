@@ -46,6 +46,10 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 	return d, nil
 }
 func restore(d dto.SessionSnapshot) (domain.Session, error) {
+	return restoreSnapshot(d, false)
+}
+
+func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool) (domain.Session, error) {
 	if d.Version != 1 && d.Version != snapshotVersion {
 		return domain.Session{}, errors.New("unsupported session snapshot version")
 	}
@@ -81,6 +85,9 @@ func restore(d dto.SessionSnapshot) (domain.Session, error) {
 			record.Outcome = &domain.ToolOutcome{Content: root.Text(p.Outcome.Content), IsError: p.Outcome.IsError, Uncertain: p.Outcome.Uncertain}
 		}
 		s.Activity = append(s.Activity, record)
+	}
+	if preserveActive {
+		return domain.RestoreSessionActive(s)
 	}
 	return domain.RestoreSession(s)
 }

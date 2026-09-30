@@ -146,5 +146,5 @@ func (s *ModelPreferenceStore) Save(ctx context.Context, model root.ModelID) err
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return syncDirectoryFile(dir)
 }

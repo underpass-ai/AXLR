@@ -14,15 +14,17 @@ import (
 )
 
 type toolCall struct {
-	ID       string              `json:"call_id"`
-	Owner    string              `json:"owner"`
-	Tool     string              `json:"tool"`
-	Identity domain.ToolIdentity `json:"identity"`
-	Args     json.RawMessage     `json:"arguments"`
-	Status   string              `json:"status"`
-	Revision uint64              `json:"revision"`
-	Decision string              `json:"decision,omitempty"`
-	Result   *domain.ToolOutcome `json:"result,omitempty"`
+	ID                string              `json:"call_id"`
+	Owner             string              `json:"owner"`
+	Tool              string              `json:"tool"`
+	Identity          domain.ToolIdentity `json:"identity"`
+	Args              json.RawMessage     `json:"arguments"`
+	Status            string              `json:"status"`
+	Revision          uint64              `json:"revision"`
+	Decision          string              `json:"decision,omitempty"`
+	Approver          string              `json:"approver,omitempty"`
+	DecisionRequestID string              `json:"decision_request_id,omitempty"`
+	Result            *domain.ToolOutcome `json:"result,omitempty"`
 }
 
 type callStore struct {
@@ -104,7 +106,7 @@ func (s *callStore) Save(call toolCall) error {
 	if err != nil {
 		return err
 	}
-	err = d.Sync()
+	err = syncDirectoryFile(d)
 	d.Close()
 	return err
 }
@@ -163,6 +165,13 @@ func (s *Server) runDirectCall(id string) {
 	if s.calls.Save(call) != nil {
 		return
 	}
+	actor := call.Approver
+	if actor == "" {
+		actor = call.Owner
+	}
+	if s.audit.Append(auditRecord{Principal: actor, RequestID: call.DecisionRequestID, Action: "tool_call.execute", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID}) != nil {
+		return
+	}
 	ctx, cancel := context.WithTimeout(s.root, 30*time.Second)
 	defer cancel()
 	args, err := root.NewJSONObject(call.Args)
@@ -185,5 +194,7 @@ func (s *Server) runDirectCall(id string) {
 	}
 	call.Result = &result
 	call.Revision++
-	_ = s.calls.Save(call)
+	if s.calls.Save(call) == nil {
+		_ = s.audit.Append(auditRecord{Principal: actor, RequestID: call.DecisionRequestID, Action: "tool_call.result", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID})
+	}
 }

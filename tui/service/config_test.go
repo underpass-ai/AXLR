@@ -9,7 +9,7 @@ import (
 )
 
 func validConfig(dir string) Config {
-	return Config{APIListen: "127.0.0.1:8443", ProbeListen: "127.0.0.1:8081", Workspace: dir, StateDir: filepath.Join(dir, "state"), ServerCertFile: filepath.Join(dir, "server.crt"), ServerKeyFile: filepath.Join(dir, "server.key"), ClientCAFile: filepath.Join(dir, "ca.crt"), PrincipalsFile: filepath.Join(dir, "principals.json"), ModelAPIKeyFile: filepath.Join(dir, "model-key"), KMP: EngineConfig{Endpoint: "kmp.example:443", ServerName: "kmp.example", TLSDir: filepath.Join(dir, "kmp"), Command: "/bin/kmp-mcp"}, MADE: EngineConfig{Endpoint: "made.example:443", ServerName: "made.example", TLSDir: filepath.Join(dir, "made"), Command: "/bin/made-mcp"}}
+	return Config{APIListen: "127.0.0.1:8443", ProbeListen: "127.0.0.1:8081", Workspace: dir, StateDir: filepath.Join(dir, "state"), ServerCertFile: filepath.Join(dir, "server.crt"), ServerKeyFile: filepath.Join(dir, "server.key"), ClientCAFile: filepath.Join(dir, "ca.crt"), PrincipalsFile: filepath.Join(dir, "principals.json"), ModelAPIKeyFile: filepath.Join(dir, "model-key"), KMP: EngineConfig{Endpoint: "kmp.example:443", ServerName: "kmp.example", TLSDir: filepath.Join(dir, "kmp"), Command: filepath.Join(dir, "kmp-mcp.exe")}, MADE: EngineConfig{Endpoint: "made.example:443", ServerName: "made.example", TLSDir: filepath.Join(dir, "made"), Command: filepath.Join(dir, "made-mcp.exe")}}
 }
 
 func TestConfigRejectsUnknownFieldsAndUnsafeListeners(t *testing.T) {
@@ -54,7 +54,7 @@ func TestRemoteRegistrationHasCompleteMTLSEnvironment(t *testing.T) {
 		t.Fatalf("profiles: %+v", profiles)
 	}
 	for _, reg := range registrations {
-		if !reg.Manifest.AllowAll || !strings.HasPrefix(reg.Manifest.Command, "/bin/") || len(reg.Env) != 7 {
+		if !reg.Manifest.AllowAll || !filepath.IsAbs(reg.Manifest.Command) || len(reg.Env) != 7 {
 			t.Fatalf("registration: %+v", reg)
 		}
 		joined := strings.Join(reg.Env, "\n")

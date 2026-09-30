@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
-	"syscall"
 )
 
 // PayloadRecorder saves redacted bodies only, never authorization headers.
@@ -80,11 +79,10 @@ func (p *PayloadRecorder) save(id uint64, kind string, body []byte, responseExte
 		extension = responseExtension
 	}
 	path := filepath.Join(p.directory, fmt.Sprintf("%06d-%s.%s", id, kind, extension))
-	fd, err := syscall.Open(path, syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
+	file, err := openDiagnosticFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
-	file := os.NewFile(uintptr(fd), path)
 	_, writeErr := file.Write(body)
 	closeErr := file.Close()
 	if err := errors.Join(writeErr, closeErr); err != nil {

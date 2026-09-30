@@ -106,7 +106,7 @@ func testServer(t *testing.T) (*Server, *httptest.Server, *http.Client, *http.Cl
 	serverKeyPEM := serverPEM[len(pem.EncodeToMemory(serverBlock)):]
 	digest := sha256.Sum256(clientCert.Certificate[0])
 	policy, _ := json.Marshal(map[string]any{"version": 1, "entries": []any{map[string]any{"certificate_sha256": hex.EncodeToString(digest[:]), "principal_id": "alice", "roles": []string{"session_client", "approver", "tool_operator"}}}})
-	cfg := Config{APIListen: "127.0.0.1:0", ProbeListen: "127.0.0.1:0", Workspace: dir, StateDir: filepath.Join(dir, "state"), ServerCertFile: write("server.crt", pem.EncodeToMemory(serverBlock)), ServerKeyFile: write("server.key", serverKeyPEM), ClientCAFile: write("ca.crt", caPEM), PrincipalsFile: write("principals.json", policy), ModelAPIKeyFile: write("model-key", []byte("key")), KMP: EngineConfig{Endpoint: "127.0.0.1:1", ServerName: "kmp.example", TLSDir: dir, Command: "/bin/true"}, MADE: EngineConfig{Endpoint: "127.0.0.1:2", ServerName: "made.example", TLSDir: dir, Command: "/bin/true"}}
+	cfg := Config{APIListen: "127.0.0.1:0", ProbeListen: "127.0.0.1:0", Workspace: dir, StateDir: filepath.Join(dir, "state"), ServerCertFile: write("server.crt", pem.EncodeToMemory(serverBlock)), ServerKeyFile: write("server.key", serverKeyPEM), ClientCAFile: write("ca.crt", caPEM), PrincipalsFile: write("principals.json", policy), ModelAPIKeyFile: write("model-key", []byte("key")), KMP: EngineConfig{Endpoint: "127.0.0.1:1", ServerName: "kmp.example", TLSDir: dir, Command: filepath.Join(dir, "kmp.exe")}, MADE: EngineConfig{Endpoint: "127.0.0.1:2", ServerName: "made.example", TLSDir: dir, Command: filepath.Join(dir, "made.exe")}}
 	validator := axlr.NewToolArgumentValidator()
 	continuation := application.ContinueTurnUseCase{Models: fixedModel{}, Validation: validator}
 	deps := Dependencies{Catalog: axlr.ToolCatalog{}, Start: application.StartTurnUseCase{Catalog: axlr.ToolCatalog{}, Continue: continuation, Tools: fixedTool{}}, Resolve: application.ResolveToolUseCase{Continue: continuation, Tools: fixedTool{}}, Tools: fixedTool{}, Validation: validator, Ready: func(context.Context) error { return nil }}
@@ -350,7 +350,7 @@ func TestSSEReplayAndProbeReadiness(t *testing.T) {
 }
 
 func TestDirectApprovalRunsExactCallOnce(t *testing.T) {
-	_, ts, client, _ := testServer(t)
+	s, ts, client, _ := testServer(t)
 	response := apiRequest(t, client, "POST", ts.URL+"/v1/tool-calls", `{"tool":"local_read","arguments":{"path":"sample.txt"}}`, "1234567890abcdef")
 	if response.StatusCode != 202 {
 		t.Fatalf("create: %d", response.StatusCode)
@@ -389,5 +389,17 @@ func TestDirectApprovalRunsExactCallOnce(t *testing.T) {
 			t.Fatalf("call did not finish: %+v", result)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+	audit, err := os.ReadFile(filepath.Join(s.Config.StateDir, "audit", "audit.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{`"principal":"alice"`, `"action":"tool_call.create"`, `"action":"tool_call.decision"`, `"action":"tool_call.execute"`, `"action":"tool_call.result"`, `"tool":"local_read"`} {
+		if !strings.Contains(string(audit), required) {
+			t.Fatalf("missing audit field %s: %s", required, audit)
+		}
+	}
+	if strings.Contains(string(audit), "sample.txt") || strings.Contains(string(audit), `"arguments"`) || strings.Contains(string(audit), `"result"`) {
+		t.Fatalf("sensitive values in audit: %s", audit)
 	}
 }

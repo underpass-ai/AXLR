@@ -94,35 +94,49 @@ func (s *eventStore) readLocked(id string) ([]Event, error) {
 	reader := bufio.NewReader(f)
 	var events []Event
 	var offset int64
+	truncatedTail := false
 	for {
 		var header [8]byte
 		_, err := io.ReadFull(reader, header[:])
 		if errors.Is(err, io.EOF) {
 			break
 		}
-		if err != nil {
+		if errors.Is(err, io.ErrUnexpectedEOF) {
+			truncatedTail = true
 			break
+		}
+		if err != nil {
+			return nil, err
 		}
 		n := binary.BigEndian.Uint32(header[:4])
 		if n == 0 || n > 4<<20 {
-			break
+			return nil, errors.New("event journal has an invalid frame length")
 		}
 		body := make([]byte, n)
 		if _, err = io.ReadFull(reader, body); err != nil {
-			break
+			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				truncatedTail = true
+				break
+			}
+			return nil, err
 		}
 		if crc32.ChecksumIEEE(body) != binary.BigEndian.Uint32(header[4:]) {
-			break
+			return nil, errors.New("event journal checksum mismatch")
 		}
 		var event Event
 		if err = json.Unmarshal(body, &event); err != nil || event.Sequence != uint64(len(events)+1) || event.SessionID != id {
-			break
+			return nil, errors.New("event journal contains an invalid event")
 		}
 		events = append(events, event)
 		offset += int64(8 + n)
 	}
-	if err := f.Truncate(offset); err != nil {
-		return nil, err
+	if truncatedTail {
+		if err := f.Truncate(offset); err != nil {
+			return nil, err
+		}
+		if err := f.Sync(); err != nil {
+			return nil, err
+		}
 	}
 	return events, nil
 }
@@ -189,6 +203,7 @@ type idempotencyRecord struct {
 	Principal string `json:"principal"`
 	Request   string `json:"request"`
 	Resource  string `json:"resource"`
+	Path      string `json:"path,omitempty"`
 }
 
 type idempotencyStore struct {
@@ -232,7 +247,7 @@ func (s *idempotencyStore) Claim(principal, key, method, path string, body []byt
 	defer s.mu.Unlock()
 	identity := sha256.Sum256([]byte(principal + "\x00" + key))
 	request := sha256.Sum256(append([]byte(method+"\x00"+path+"\x00"), body...))
-	record := idempotencyRecord{Principal: principal, Request: hex.EncodeToString(request[:]), Resource: resource}
+	record := idempotencyRecord{Principal: principal, Request: hex.EncodeToString(request[:]), Resource: resource, Path: path}
 	filePath := filepath.Join(s.dir, hex.EncodeToString(identity[:])+".json")
 	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if errors.Is(err, os.ErrExist) {
@@ -267,7 +282,32 @@ func (s *idempotencyStore) Claim(principal, key, method, path string, body []byt
 	if err != nil {
 		return "", false, err
 	}
-	err = d.Sync()
+	err = syncDirectoryFile(d)
 	d.Close()
 	return resource, false, err
+}
+
+func (s *idempotencyStore) Records() ([]idempotencyRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	var records []idempotencyRecord
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(s.dir, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		var record idempotencyRecord
+		if err := json.Unmarshal(data, &record); err != nil || record.Principal == "" || record.Resource == "" {
+			return nil, errors.New("invalid idempotency record")
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }

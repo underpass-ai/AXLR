@@ -214,5 +214,5 @@ func (s *MCPConfigStore) write(ctx context.Context, config dto.MCPConfig) error 
 	if s.syncDirectory != nil {
 		return s.syncDirectory(directory)
 	}
-	return directory.Sync()
+	return syncDirectoryFile(directory)
 }

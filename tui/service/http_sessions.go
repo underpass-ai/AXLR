@@ -159,8 +159,13 @@ func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx, cancel := context.WithCancel(s.root)
+	if _, err := s.events.Append(id, resource, "operation.accepted", map[string]any{"status": "accepted"}); err != nil {
+		cancel()
+		writeError(w, requestID(r), 500, "storage_error", "unable to save operation intent")
+		return
+	}
 	s.registerOperation(id, cancel)
-	if !s.startBackground(func() { s.runTurn(ctx, id, resource, prompt) }) {
+	if !s.startBackground(func() { s.runTurn(ctx, id, resource, principal(r).ID, requestID(r), prompt) }) {
 		cancel()
 		s.finishOperation(id)
 		writeError(w, requestID(r), 503, "server_stopping", "server is stopping")
@@ -169,7 +174,7 @@ func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 202, map[string]any{"operation_id": resource, "session_id": id, "status": "accepted", "events_url": "/v1/sessions/" + id + "/events"})
 }
 
-func (s *Server) runTurn(ctx context.Context, id, op string, prompt root.Text) {
+func (s *Server) runTurn(ctx context.Context, id, op, actor, request string, prompt root.Text) {
 	lock := s.sessionLock(id)
 	lock.Lock()
 	defer lock.Unlock()
@@ -180,13 +185,13 @@ func (s *Server) runTurn(ctx context.Context, id, op string, prompt root.Text) {
 		return
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
-	err = s.deps.Start.Execute(ctx, &session, prompt, func(event application.Event) error { return s.recordApplicationEvent(id, op, event) })
+	err = s.deps.Start.Execute(ctx, &session, prompt, func(event application.Event) error { return s.recordApplicationEvent(id, op, actor, request, event) })
 	if err != nil {
 		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
 	}
 }
 
-func (s *Server) recordApplicationEvent(id, op string, e application.Event) error {
+func (s *Server) recordApplicationEvent(id, op, actor, request string, e application.Event) error {
 	kind := ""
 	var payload any = map[string]any{}
 	switch e.Kind {
@@ -217,8 +222,13 @@ func (s *Server) recordApplicationEvent(id, op string, e application.Event) erro
 	if kind == "" {
 		return nil
 	}
-	_, err := s.events.Append(id, op, kind, payload)
-	return err
+	if _, err := s.events.Append(id, op, kind, payload); err != nil {
+		return err
+	}
+	if kind == "tool.requested" || kind == "tool.completed" {
+		return s.audit.Append(auditRecord{Principal: actor, RequestID: request, Action: kind, Tool: string(e.Tool.Call.Name), Decision: string(e.Tool.Decision), Status: kind, SessionID: id, CallID: string(e.Tool.Call.ID), OperationID: op})
+	}
+	return nil
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
@@ -384,7 +394,14 @@ func (s *Server) handleApproval(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 500, "storage_error", "unable to save decision event")
 		return
 	}
-	if !s.startBackground(func() { s.runApproval(ctx, id, resource, pending[0].Call.ID, decision) }) {
+	if err := s.audit.Append(auditRecord{Principal: principal(r).ID, RequestID: requestID(r), Action: "approval.decision", Tool: string(pending[0].Call.Name), Decision: input.Decision, Status: "accepted", SessionID: id, CallID: string(pending[0].Call.ID), OperationID: resource}); err != nil {
+		cancel()
+		s.finishOperation(id)
+		_, _ = s.events.Append(id, resource, "operation.failed", map[string]string{"code": "audit_unavailable"})
+		writeError(w, requestID(r), 500, "storage_error", "unable to audit decision")
+		return
+	}
+	if !s.startBackground(func() { s.runApproval(ctx, id, resource, principal(r).ID, requestID(r), pending[0].Call.ID, decision) }) {
 		cancel()
 		s.finishOperation(id)
 		writeError(w, requestID(r), 503, "server_stopping", "server is stopping")
@@ -393,7 +410,7 @@ func (s *Server) handleApproval(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 202, map[string]any{"operation_id": resource, "session_id": id, "status": "accepted"})
 }
 
-func (s *Server) runApproval(ctx context.Context, id, op string, call root.ToolCallID, decision domain.ToolDecision) {
+func (s *Server) runApproval(ctx context.Context, id, op, actor, request string, call root.ToolCallID, decision domain.ToolDecision) {
 	lock := s.sessionLock(id)
 	lock.Lock()
 	defer lock.Unlock()
@@ -410,7 +427,7 @@ func (s *Server) runApproval(ctx context.Context, id, op string, call root.ToolC
 		}
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
-	err = s.deps.Resolve.Execute(ctx, &session, call, decision, func(event application.Event) error { return s.recordApplicationEvent(id, op, event) })
+	err = s.deps.Resolve.Execute(ctx, &session, call, decision, func(event application.Event) error { return s.recordApplicationEvent(id, op, actor, request, event) })
 	if err != nil {
 		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
 	}
@@ -439,6 +456,16 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 		lock := s.sessionLock(id)
 		lock.Lock()
 		defer lock.Unlock()
+		// The turn may have completed after the first read. Never save that
+		// stale snapshot over a newer transcript.
+		session, ok = s.ownedSession(w, r)
+		if !ok {
+			return
+		}
+		if session.Export().Revision != input.ExpectedRevision {
+			writeError(w, requestID(r), 409, "stale_revision", "session revision changed")
+			return
+		}
 		if session.Status() != domain.StatusInterrupted && session.Status() != domain.StatusApproval && session.Status() != domain.StatusStreaming {
 			writeError(w, requestID(r), 409, "invalid_state", "session has no active turn")
 			return

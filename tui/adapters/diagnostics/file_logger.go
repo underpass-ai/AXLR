@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -26,11 +25,10 @@ func Open(path string) (*FileLogger, error) {
 	if path == "" {
 		return nil, errors.New("diagnostic log path is empty")
 	}
-	fd, err := syscall.Open(path, syscall.O_WRONLY|syscall.O_APPEND|syscall.O_CREAT|syscall.O_CLOEXEC|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0o600)
+	file, err := openDiagnosticFile(path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("open diagnostic log: %w", err)
 	}
-	file := os.NewFile(uintptr(fd), path)
 	info, err := file.Stat()
 	if err != nil {
 		file.Close()

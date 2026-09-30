@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -161,8 +161,11 @@ func TestEditRejectsOverlappingMatches(t *testing.T) {
 }
 
 func TestReadRejectsFIFOWithoutBlocking(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX FIFO")
+	}
 	dir := t.TempDir()
-	if err := syscall.Mkfifo(filepath.Join(dir, "pipe"), 0600); err != nil {
+	if err := makeFIFO(filepath.Join(dir, "pipe")); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink("pipe", filepath.Join(dir, "pipe-link")); err != nil {

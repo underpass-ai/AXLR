@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
@@ -82,8 +82,11 @@ func TestLoadMCPConfigRejectsUnsafeOrInvalidFile(t *testing.T) {
 }
 
 func TestLoadMCPConfigRejectsFIFOWithoutBlocking(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX FIFO")
+	}
 	path := filepath.Join(t.TempDir(), "mcp.json")
-	if err := syscall.Mkfifo(path, 0600); err != nil {
+	if err := makeFIFO(path); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)
