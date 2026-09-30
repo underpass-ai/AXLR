@@ -8,20 +8,23 @@ import (
 )
 
 type Dependencies struct {
-	Context         context.Context
-	Diagnostics     application.DiagnosticPort
-	Plugins         application.PluginManagementPort
-	Models          application.ListModelsUseCase
-	ModelPreference application.ModelPreferencePort
-	Create          application.CreateSessionUseCase
-	Change          application.ChangeSessionModelUseCase
-	Workspace       domain.Workspace
-	NewSessionID    domain.SessionID
-	Start           application.StartTurnUseCase
-	Resolve         application.ResolveToolUseCase
-	Agent           application.AgentTurnUseCase
-	Search          application.SearchSessionUseCase
-	Store           application.SessionStorePort
-	Session         *domain.Session
-	Monochrome      bool
+	Context           context.Context
+	Diagnostics       application.DiagnosticPort
+	Plugins           application.PluginManagementPort
+	Models            application.ListModelsUseCase
+	ModelPreference   application.ModelPreferencePort
+	UIPreferenceStore application.UIPreferencePort
+	UIPreferences     domain.UIPreferences
+	Locale            Locale
+	Create            application.CreateSessionUseCase
+	Change            application.ChangeSessionModelUseCase
+	Workspace         domain.Workspace
+	NewSessionID      domain.SessionID
+	Start             application.StartTurnUseCase
+	Resolve           application.ResolveToolUseCase
+	Agent             application.AgentTurnUseCase
+	Search            application.SearchSessionUseCase
+	Store             application.SessionStorePort
+	Session           *domain.Session
+	Monochrome        bool
 }

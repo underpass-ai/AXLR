@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -25,6 +26,8 @@ type AppModel struct {
 	Status              StatusBar
 	Layout              Layout
 	Theme               Theme
+	UIPreferences       domain.UIPreferences
+	ThemePicker         ThemePicker
 	Busy, ActivityTab   bool
 	Approval            ApprovalDialog
 	SearchBox           SearchBox
@@ -36,6 +39,11 @@ type AppModel struct {
 	providerWaiting     bool
 	providerWaitStarted time.Time
 	waitTickScheduled   bool
+	activitySpinner     spinner.Model
+	spinnerScheduled    bool
+	toolExecuting       bool
+	toolStarted         time.Time
+	toolName            string
 	updatingBatch       bool
 	operationID         uint64
 	operationMessages   int
@@ -67,14 +75,28 @@ func assistantInMessages(messages []root.Message, start int) bool {
 var _ tea.Model = AppModel{}
 
 func New(deps Dependencies) AppModel {
+	if deps.Locale != Spanish {
+		deps.Locale = English
+	}
 	deps.Monochrome = deps.Monochrome || os.Getenv("NO_COLOR") != "" || os.Getenv("TERM") == "dumb"
+	if deps.UIPreferences.Theme == "" {
+		deps.UIPreferences = domain.DefaultUIPreferences()
+	}
 	parent := deps.Context
 	if parent == nil {
 		parent = context.Background()
 	}
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
-	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, Theme: Theme{Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome), Transcript: NewTranscript(), Plugins: NewPluginPanel(), zones: z, prefix: z.NewPrefix()}
+	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix()}
+	m.Composer.Theme = m.Theme
+	m.Composer.Input.Placeholder = m.Theme.T("composer.placeholder")
+	m.Activity.Locale = m.Theme.Locale
+	m.Transcript.Gutter = 2
+	m.Models.Theme = m.Theme
+	m.Models.Input.Prompt = m.Theme.T("common.searchPrompt")
+	m.Plugins.Theme = m.Theme
+	m.Plugins.Search.Placeholder = m.Theme.T("plugins.searchPlaceholder")
 	if deps.Session != nil {
 		m.Header.State = deps.Session.Export()
 	}
@@ -86,6 +108,7 @@ func New(deps Dependencies) AppModel {
 		m.Header.State.Workspace = deps.Workspace
 	}
 	m.Status.State = m.Header.State.Status
+	m.Status.Locale = m.Theme.Locale
 	m.refreshTranscript()
 	m.syncApproval()
 	return m
@@ -105,7 +128,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.BackgroundColorMsg:
 		m.Theme.Light = !v.IsDark()
-		m.Transcript.ApplyTheme(m.Theme)
+		m.applyUIPreferences(m.UIPreferences)
 		return m, nil
 	case providerWaitTick:
 		if v.OperationID != m.operationID || !m.Busy {
@@ -114,6 +137,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.waitTickScheduled = false
 		cmd := m.waitingCommand(nil)
 		return m, cmd
+	case providerAnimationTick:
+		if v.OperationID != m.operationID || !m.Busy {
+			return m, nil
+		}
+		m.spinnerScheduled = false
+		if !m.providerWaiting && !m.toolExecuting {
+			return m, nil
+		}
+		m.activitySpinner, _ = m.activitySpinner.Update(v.Tick)
+		return m, m.waitingCommand(nil)
 	case operationBatch:
 		outerBatch := m.updatingBatch
 		m.updatingBatch = true
@@ -136,21 +169,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.Plugins.Resize(v.Width, v.Height-2)
 		offset := m.Transcript.Viewport.YOffset()
-		m.Transcript.Viewport.SetWidth(m.Layout.TranscriptWidth)
+		m.Transcript.Viewport.SetWidth(max(1, m.Layout.TranscriptWidth-2*m.Transcript.Gutter))
 		m.Transcript.Viewport.SetHeight(m.Layout.BodyHeight)
 		m.Transcript.Viewport.SetYOffset(offset)
 		m.Composer.Input.SetWidth(max(1, v.Width))
+		m.resizeComposer()
 		m.SearchBox.Input.SetWidth(max(1, v.Width-18))
 		m.SearchBox.Input.SetCursor(m.SearchBox.Input.Position())
 		m.sizeApproval()
-		m.Info.Viewport.SetWidth(max(1, v.Width))
-		m.Info.Viewport.SetHeight(max(1, v.Height-4))
+		infoWidth, infoHeight := OverlayBodySize(v.Width, v.Height-1)
+		m.Info.Viewport.SetWidth(infoWidth)
+		m.Info.Viewport.SetHeight(infoHeight)
 		m.Transcript.ApplyTheme(m.Theme)
 		return m, nil
 	case application.Event:
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticEventConsumed, Chunks: 1, Bytes: len(v.Text)})
 		if v.Kind == application.EventSession && v.Snapshot != nil {
 			m.providerWaiting = false
+			m.toolExecuting = false
 			m.Header.State = *v.Snapshot
 			m.draft = ""
 			m.draftOperationID = 0
@@ -158,9 +194,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.Kind == application.EventToolExecutionStarted {
 			m.providerWaiting = false
+			m.toolExecuting = true
+			m.toolStarted = time.Now()
+			m.toolName = singleLine(string(v.Tool.Call.Name))
 			m.memoryActive = v.Memory
 		}
 		if v.Kind == application.EventStreamStart {
+			m.toolExecuting = false
 			m.Status.Phase = domain.ProviderWaiting
 			m.providerWaiting = true
 			m.providerWaitStarted = time.Now()
@@ -174,6 +214,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.Kind == application.EventTextDelta {
 			m.providerWaiting = false
+			m.toolExecuting = false
 			if m.streamPending || (m.draftOperationID != 0 && m.draftOperationID != m.operationID) {
 				m.draft = ""
 			}
@@ -208,6 +249,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Busy = false
 		m.providerWaiting = false
 		m.waitTickScheduled = false
+		m.spinnerScheduled = false
+		m.toolExecuting = false
 		m.memoryActive = false
 		if v.Session.Export().ID != "" {
 			if m.deps.Session == nil {
@@ -231,7 +274,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if v.Err != nil {
 				m.Plugins.Error = v.Err.Error()
 				if v.PluginApproval != nil {
-					m.Plugins.Error = "Approval saved; inventory refresh failed: " + v.Err.Error()
+					m.Plugins.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
 				}
 			} else {
 				m.Plugins.SetItems(*v.Plugins)
@@ -259,7 +302,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if oldID != m.Header.State.ID {
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
-			m.Activity = ToolActivity{}
+			m.Activity = ToolActivity{Locale: m.Theme.Locale}
 			m.Activity.SetSession(m.Header.State)
 			m.unsentPrompts = nil
 			m.draft = ""
@@ -289,13 +332,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Err != nil {
 			m.Status.Error = v.Err.Error()
 			if v.PluginApproval != nil {
-				m.Status.Error = "Approval saved; inventory refresh failed: " + v.Err.Error()
+				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
 			}
 		} else if m.draft == "" {
 			m.Status.Error = ""
 		}
 		if v.ModelSelection && v.Err == nil && v.PreferenceErr != nil {
-			m.Status.Error = "Model selected, but its default could not be saved"
+			m.Status.Error = m.Theme.T("error.modelDefault")
 		}
 		m.refreshTranscript()
 		m.syncApproval()
@@ -304,6 +347,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch v {
 		case "send":
 			command := strings.TrimSpace(m.Composer.Input.Value())
+			if command == "/theme" {
+				m.Composer.Input.Reset()
+				next, cmd, _ := m.navigation(ControlIntent("theme"))
+				return next, cmd
+			}
 			if command == "/mcp" || command == "/plugin" {
 				intent := ControlIntent("mcp")
 				if command == "/plugin" {
@@ -328,15 +376,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if m.Header.State.ID == "" {
-				m.Status.Error = "Select a model with /model before sending"
+				m.Status.Error = m.Theme.T("error.noModel")
 				return m, nil
 			}
 			if m.Header.State.Status != domain.StatusIdle && m.Header.State.Status != domain.StatusComplete && m.Header.State.Status != domain.StatusInterrupted {
-				m.Status.Error = "Finish or continue the current turn before sending another prompt"
+				m.Status.Error = m.Theme.T("error.turnActive")
 				return m, nil
 			}
 			if m.deps.Session == nil || len(m.deps.Session.Pending()) != 0 {
-				m.Status.Error = "Resolve pending tool calls before sending another prompt"
+				m.Status.Error = m.Theme.T("error.promptPending")
 				return m, nil
 			}
 			prompt := root.Text(m.Composer.Input.Value())
@@ -407,6 +455,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.Composer, cmd = m.Composer.Update(msg)
+	m.resizeComposer()
 	return m, cmd
 }
 func (m AppModel) View() tea.View {
@@ -418,20 +467,20 @@ func (m AppModel) View() tea.View {
 	}
 	var content string
 	if m.Layout.TooSmall || m.Layout.Width == 0 {
-		content = ansi.Truncate("Resize terminal to at least 50 × 15", max(1, m.Layout.Width), "")
+		content = ansi.Truncate(m.Theme.T("app.resize"), max(1, m.Layout.Width), "")
 	} else {
 		body := m.Transcript.View()
 
 		if m.ActivityTab {
 			body = m.Activity.View(m.Layout.Width, m.Layout.BodyHeight)
 		}
-		tabs := m.Activity.Tabs(m.zones, m.prefix)
+		tabs := m.Activity.Tabs(m.Theme, m.zones, m.prefix, m.Layout.Width, m.ActivityTab)
 		if m.memoryActive {
-			tabs = m.Theme.MemoryRow().Render("Memory · KMP is running")
+			tabs = m.Theme.overlayLine(m.Theme.Accent(m.Theme.T("app.memoryRunning")), m.Layout.Width, false)
 		}
 		body = lipgloss.JoinVertical(lipgloss.Left, tabs, body)
-		controls := m.Composer.Controls(m.zones, m.prefix)
-		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, m.Composer.View(), controls, m.statusView())
+		controls := ansi.Truncate(m.Composer.Controls(m.zones, m.prefix), m.Layout.Width, "…")
+		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, m.Composer.View(), m.Theme.overlayLine(controls, m.Layout.Width, false), m.statusView())
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 {
 		content = m.overlayView(content)
@@ -441,14 +490,32 @@ func (m AppModel) View() tea.View {
 		content = ansi.Strip(content)
 	}
 	view := tea.NewView(content)
+	if !m.Theme.Monochrome && m.Theme.ID != "" && m.Theme.ID != domain.ThemeAuto {
+		p := m.Theme.palette()
+		view.BackgroundColor = lipgloss.Color(p.Background)
+		view.ForegroundColor = lipgloss.Color(p.Text)
+	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && !m.approvalFocus() && m.overlay == "" {
 		view.Cursor = m.Composer.Input.Cursor()
 		if view.Cursor != nil {
-			view.Cursor.Y += 2 + m.Layout.BodyHeight
+			view.Cursor.Y += 3 + m.Layout.BodyHeight
 		}
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && m.overlay == "models" && !m.approvalFocus() {
 		view.Cursor = m.Models.Input.Cursor()
+		if view.Cursor != nil {
+			view.Cursor.Y++
+		}
+	}
+	if !m.Layout.TooSmall && m.overlay == "palette" && m.Palette.List.SettingFilter() && !m.approvalFocus() {
+		view.Cursor = m.Palette.List.FilterInput.Cursor()
+		if view.Cursor != nil {
+			view.Cursor.X += 2
+			view.Cursor.Y += 4
+		}
+	}
+	if !m.Layout.TooSmall && (m.overlay == "mcp" || m.overlay == "plugins") && m.Plugins.searching {
+		view.Cursor = m.Plugins.Search.Cursor()
 		if view.Cursor != nil {
 			view.Cursor.Y++
 		}

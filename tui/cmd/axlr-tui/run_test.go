@@ -41,6 +41,7 @@ func TestRunRejectsInvalidConfigurationBeforeLaunch(t *testing.T) {
 		{"bare-key", nil, true},
 		{"bare-manifest", []string{"--plugin", filepath.Join(rootDir, "missing.json")}, false},
 		{"unknown", []string{"--unknown"}, false}, {"positional", []string{"--root", rootDir, "--model", "test/model", "extra"}, false},
+		{"language", []string{"--lang", "fr"}, false},
 		{"missing-root", []string{"--root", filepath.Join(rootDir, "absent"), "--model", "test/model"}, false},
 		{"manifest", []string{"--root", rootDir, "--model", "test/model", "--plugin", filepath.Join(rootDir, "missing.json")}, false},
 		{"env-syntax", []string{"--root", rootDir, "--model", "test/model", "--plugin-env-from", "broken"}, false},
@@ -57,6 +58,39 @@ func TestRunRejectsInvalidConfigurationBeforeLaunch(t *testing.T) {
 			code := run(context.Background(), tc.args, func(k string) string { return env[k] }, func(tea.Model) error { called = true; return nil }, &out)
 			if code == 0 || called || out.Len() == 0 || strings.Contains(out.String(), "test-key-never-print") {
 				t.Fatalf("code=%d called=%v output=%s", code, called, &out)
+			}
+		})
+	}
+}
+
+func TestRunLanguageFlagOverridesEnvironment(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		env  string
+		flag string
+		want terminal.Locale
+	}{
+		{"default", "", "", terminal.English},
+		{"environment", "es_ES.UTF-8", "", terminal.Spanish},
+		{"flag", "es", "en", terminal.English},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			env := cliEnv(t)
+			env["AXLR_LANG"] = test.env
+			args := []string{"--root", t.TempDir(), "--model", "test/model"}
+			if test.flag != "" {
+				args = append(args, "--lang", test.flag)
+			}
+			var output bytes.Buffer
+			code := run(context.Background(), args, func(k string) string { return env[k] }, func(model tea.Model) error {
+				app := model.(terminal.AppModel)
+				if app.Theme.Locale != test.want {
+					t.Fatalf("locale=%q, want %q", app.Theme.Locale, test.want)
+				}
+				return nil
+			}, &output)
+			if code != 0 {
+				t.Fatalf("run failed: %s", &output)
 			}
 		})
 	}

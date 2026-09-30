@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
@@ -14,7 +13,11 @@ import (
 
 // toolSummary bounds rendering work; the complete result stays in session history.
 func toolSummary(text string) string {
-	const limit = 160
+	return toolSummaryLocale(text, English)
+}
+
+func toolSummaryLocale(text string, locale Locale) string {
+	const limit = 96
 	short := text
 	if len(short) > 1024 {
 		short = short[:1024]
@@ -22,9 +25,26 @@ func toolSummary(text string) string {
 	short = strings.Join(strings.Fields(Sanitize(short)), " ")
 	short = ansi.Truncate(short, limit, "…")
 	if len(text) > len(short) {
-		short += fmt.Sprintf(" [%d bytes; full result saved]", len(text))
+		short += Translatef(locale, "transcript.savedBytes", len(text))
 	}
 	return short
+}
+
+func toolResultSummary(text string) string {
+	return toolResultSummaryLocale(text, English)
+}
+
+func toolResultSummaryLocale(text string, locale Locale) string {
+	if len(text) <= 4<<10 {
+		var result struct {
+			Status string `json:"status"`
+		}
+		if json.Unmarshal([]byte(text), &result) == nil && result.Status != "" {
+			status := ansi.Truncate(singleLine(result.Status), 30, "…")
+			return Translatef(locale, "transcript.savedResult", status, len(text))
+		}
+	}
+	return toolSummaryLocale(text, locale)
 }
 
 // Historical tool names are display metadata only. Matching their legacy alias

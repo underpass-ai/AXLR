@@ -49,6 +49,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	flags.SetOutput(io.Discard)
 	workspaceFlag := flags.String("root", ".", "existing workspace root (default current directory)")
 	modelFlag := flags.String("model", "", "OpenRouter model ID (optional; choose with /model)")
+	langFlag := flags.String("lang", getenv("AXLR_LANG"), "interface language: en or es (default en; AXLR_LANG)")
 	traceFlag := flags.String("trace-file", "", "privacy-safe JSONL diagnostics (default a private file under $XDG_STATE_HOME/axlr/logs)")
 	tracePayloads := flags.Bool("trace-payloads", true, "capture redacted request/response bodies in a private per-run directory")
 	sessionFlag := flags.String("session", "", "saved session ID")
@@ -66,6 +67,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	if flags.NArg() != 0 {
 		return fail(errors.New("positional arguments are not accepted"))
+	}
+	locale, err := terminal.ParseLocale(*langFlag)
+	if err != nil {
+		return fail(err)
 	}
 	tracePath := *traceFlag
 	var logger *diagnostics.FileLogger
@@ -184,6 +189,15 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
+	uiStore, err := storage.NewUIPreferenceStore(filepath.Join(stateBase, "axlr"))
+	if err != nil {
+		return fail(err)
+	}
+	uiPreferences, err := uiStore.Load(ctx)
+	if err != nil {
+		fmt.Fprintln(stderr, "axlr-tui: ignoring invalid saved UI preference")
+		uiPreferences = domain.DefaultUIPreferences()
+	}
 	if *modelFlag == "" && *sessionFlag == "" {
 		selected, loadErr := preferences.Load(ctx)
 		if loadErr != nil {
@@ -231,22 +245,25 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace}
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
 	app := terminal.New(terminal.Dependencies{
-		Context:         ctx,
-		Diagnostics:     trace,
-		Plugins:         pluginManager,
-		Models:          application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
-		ModelPreference: preferences,
-		Create:          application.CreateSessionUseCase{Store: loggedStore},
-		Change:          application.ChangeSessionModelUseCase{Store: loggedStore},
-		Workspace:       workspace,
-		NewSessionID:    newID,
-		Start:           application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: pluginManager},
-		Resolve:         application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: pluginManager, Store: loggedStore, Continue: continuation, Diagnostics: trace},
-		Agent:           application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: pluginManager},
-		Search:          application.SearchSessionUseCase{},
-		Store:           loggedStore,
-		Session:         session,
-		Monochrome:      getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
+		Context:           ctx,
+		Diagnostics:       trace,
+		Plugins:           pluginManager,
+		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
+		ModelPreference:   preferences,
+		UIPreferenceStore: uiStore,
+		UIPreferences:     uiPreferences,
+		Locale:            locale,
+		Create:            application.CreateSessionUseCase{Store: loggedStore},
+		Change:            application.ChangeSessionModelUseCase{Store: loggedStore},
+		Workspace:         workspace,
+		NewSessionID:      newID,
+		Start:             application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: pluginManager},
+		Resolve:           application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: pluginManager, Store: loggedStore, Continue: continuation, Diagnostics: trace},
+		Agent:             application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: pluginManager},
+		Search:            application.SearchSessionUseCase{},
+		Store:             loggedStore,
+		Session:           session,
+		Monochrome:        getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
 	})
 	defer app.Close()
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {

@@ -9,11 +9,9 @@ type Header struct{ State domain.SessionState }
 
 func (h Header) View(width int, theme Theme) string {
 	if h.State.ID == "" {
-		const prefix = "AXLR | "
-		const guidance = " | Type /model to choose a model"
-		workspaceWidth := max(0, width-ansi.StringWidth(prefix+guidance))
-		workspace := ansi.Truncate(singleLine(string(h.State.Workspace)), workspaceWidth, "…")
-		return theme.Heading(ansi.Truncate(prefix+workspace+guidance, width, "…"))
+		content := theme.Heading("AXLR") + theme.Muted(" · "+theme.T("header.chooseModel")+" · "+singleLine(string(h.State.Workspace)))
+		return theme.overlayLine(ansi.Truncate(content, max(1, width-4), "…"), width, true)
 	}
-	return theme.Heading(ansi.Truncate("AXLR | "+singleLine(string(h.State.Model))+" | "+singleLine(string(h.State.Workspace)), width, "…"))
+	content := theme.Heading("AXLR") + theme.Muted("  │  "+singleLine(string(h.State.Model))+"  │  "+singleLine(string(h.State.Workspace)))
+	return theme.overlayLine(ansi.Truncate(content, max(1, width-4), "…"), width, true)
 }

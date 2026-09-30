@@ -96,7 +96,7 @@ func TestModelSelectionCreateAndChangePersist(t *testing.T) {
 			}
 			m = openModels(t, m)
 			if !strings.Contains(m.View().Content, "provider/chosen") {
-				t.Fatal("catalog not rendered")
+				t.Fatalf("catalog not rendered: %q", m.View().Content)
 			}
 			m = chooseModel(t, m)
 			if m.Header.State.Model != "provider/chosen" || m.overlay != "" || m.Composer.Input.Value() != "draft survives" {
@@ -138,7 +138,7 @@ func TestModelSelectionFailureRetryAndFocus(t *testing.T) {
 	}
 	m = drain(t, m, cmd)
 	if !strings.Contains(m.View().Content, "unavailable") || !strings.Contains(m.View().Content, "Retry") {
-		t.Fatal("no retry error")
+		t.Fatalf("no retry error: %q", m.View().Content)
 	}
 	rows, _ := store.List(context.Background())
 	if len(rows) != 0 {
