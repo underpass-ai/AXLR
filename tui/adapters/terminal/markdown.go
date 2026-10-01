@@ -22,6 +22,8 @@ var (
 // does, because the search jump measures a monochrome copy of the transcript.
 type markdownStyle struct {
 	boldOn, boldOff, accent, code, muted, text string
+	// width is the columns a table may use; 0 means unbounded.
+	width int
 }
 
 func newMarkdownStyle(theme Theme) markdownStyle {
@@ -52,7 +54,14 @@ func (s markdownStyle) colour(code, text string) string {
 // sanitized text; unclosed markers stay literal so streamed drafts render
 // safely while they are incomplete.
 func renderMarkdown(src string, theme Theme) string {
+	return renderMarkdownWidth(src, theme, 0)
+}
+
+// renderMarkdownWidth renders like renderMarkdown, laying tables that do not
+// fit the width out one row per line instead of in broken columns.
+func renderMarkdownWidth(src string, theme Theme, width int) string {
 	s := newMarkdownStyle(theme)
+	s.width = width
 	lines := strings.Split(src, "\n")
 	out := make([]string, 0, len(lines))
 	fenced := false
@@ -169,6 +178,13 @@ func (s markdownStyle) table(rows []string) []string {
 			widths[i] = max(widths[i], ansi.StringWidth(cell))
 		}
 	}
+	total := 2 * (columns - 1)
+	for _, w := range widths {
+		total += w
+	}
+	if s.width > 0 && total > s.width {
+		return s.stackedTable(cells, ruleAt)
+	}
 	out := make([]string, 0, len(cells))
 	for index, row := range cells {
 		var b strings.Builder
@@ -190,6 +206,29 @@ func (s markdownStyle) table(rows []string) []string {
 			}
 		}
 		out = append(out, strings.TrimRight(b.String(), " "))
+	}
+	return out
+}
+
+// stackedTable writes each data row as "first — second · third": readable at
+// any width, unlike columns that wrap into each other.
+func (s markdownStyle) stackedTable(cells [][]string, ruleAt int) []string {
+	var out []string
+	for index, row := range cells {
+		if index == ruleAt || len(row) == 0 || ruleAt > 0 && index < ruleAt && len(cells) > ruleAt+1 {
+			continue
+		}
+		line := row[0]
+		var rest []string
+		for _, cell := range row[1:] {
+			if ansi.Strip(cell) != "" {
+				rest = append(rest, cell)
+			}
+		}
+		if len(rest) > 0 {
+			line += s.colour(s.muted, " — ") + strings.Join(rest, s.colour(s.muted, " · "))
+		}
+		out = append(out, line)
 	}
 	return out
 }

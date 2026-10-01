@@ -32,9 +32,15 @@ func NewTranscript() Transcript {
 // SetWidth resizes the viewport and rewraps the content when the width changes.
 func (t *Transcript) SetWidth(width int) {
 	t.Viewport.SetWidth(width)
-	if width != t.wrapWidth {
-		t.reflow()
+	if width == t.wrapWidth {
+		return
 	}
+	if len(t.rows) > 0 {
+		// Tables lay out for the width, so rows render again.
+		t.renderRows()
+		return
+	}
+	t.reflow()
 }
 func (t *Transcript) SetContent(s string) {
 	t.rows = nil
@@ -160,7 +166,7 @@ func (t *Transcript) renderRows() {
 		}
 		clean := Sanitize(row.Text)
 		if row.Markdown {
-			clean = renderMarkdown(clean, t.theme)
+			clean = renderMarkdownWidth(clean, t.theme, t.Viewport.Width())
 		}
 		label := Sanitize(row.Label)
 		indent := 0

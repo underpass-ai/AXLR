@@ -96,3 +96,33 @@ func TestTranscriptRendersAssistantMarkdownButNotToolRows(t *testing.T) {
 		t.Fatalf("user text should stay verbatim: %q", text)
 	}
 }
+
+func TestWideTablesStackOneRowPerLineWhenTheyDoNotFit(t *testing.T) {
+	table := "| Ceremonia | Para qué |\n|:--|:--|\n| `axlr_change` | Edición pequeña, entendida y reversible |\n| `axlr_delivery` | Feature o refactor no trivial con build → verificación → revisión |"
+	wide := renderMarkdownWidth(table, Theme{Monochrome: true}, 120)
+	if !strings.Contains(wide, "Ceremonia      Para qué") {
+		t.Fatalf("a table that fits lost its columns:\n%s", wide)
+	}
+	narrow := renderMarkdownWidth(table, Theme{Monochrome: true}, 50)
+	want := "axlr_change — Edición pequeña, entendida y reversible\naxlr_delivery — Feature o refactor no trivial con build → verificación → revisión"
+	if narrow != want {
+		t.Fatalf("narrow table:\n%s\nwant:\n%s", narrow, want)
+	}
+	if ansi.Strip(renderMarkdownWidth(table, Theme{ID: domain.ThemeInk}, 50)) != narrow {
+		t.Fatal("styling changed the stacked layout")
+	}
+}
+
+func TestTranscriptRelaysTablesWhenTheWidthChanges(t *testing.T) {
+	s := domain.SessionState{Messages: []root.Message{{Role: root.RoleAssistant, Content: root.Text("| A | B |\n|--|--|\n| " + strings.Repeat("x", 30) + " | " + strings.Repeat("y", 30) + " |")}}}
+	tr := NewTranscript()
+	tr.SetWidth(100)
+	tr.SetSession(s, "", Theme{Monochrome: true})
+	if !strings.Contains(tr.Text(), "A  ") {
+		t.Fatalf("wide viewport should keep columns: %q", tr.Text())
+	}
+	tr.SetWidth(40)
+	if !strings.Contains(tr.Text(), strings.Repeat("x", 30)+" — ") {
+		t.Fatalf("narrow viewport should stack the table: %q", tr.Text())
+	}
+}
