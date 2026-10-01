@@ -440,6 +440,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("changes"))
 			}
+			if mode, ok := slashModes[command]; ok {
+				return m.switchMode(mode)
+			}
 			if command == "/autonomy on" || command == "/autonomy off" || command == "/autonomy" {
 				settings := m.deps.ApprovalSettings
 				if settings == nil {

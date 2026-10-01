@@ -11,6 +11,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -25,7 +26,15 @@ func sized() AppModel {
 	if err != nil {
 		panic(err)
 	}
-	return update(New(Dependencies{Session: &session, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
+	dir, err := os.MkdirTemp("", "axlr-sized-store")
+	if err != nil {
+		panic(err)
+	}
+	store, err := storage.New(dir)
+	if err != nil {
+		panic(err)
+	}
+	return update(New(Dependencies{Session: &session, Store: store, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
 }
 func TestAppModelStreamRendering(t *testing.T) {
 	m := sized()
