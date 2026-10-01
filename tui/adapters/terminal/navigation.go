@@ -58,8 +58,13 @@ func (m *AppModel) syncApproval() {
 	m.sizeApproval()
 }
 func (m *AppModel) sizeApproval() {
+	// A known call is decided in the inline card; an unknown one keeps the
+	// full-screen dialog.
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Approval.Details.SetWidth(w)
+	if m.knownPending() {
+		h = m.approvalDetailRows()
+	}
 	m.Approval.Details.Viewport.SetHeight(h)
 }
 
@@ -256,7 +261,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
+		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
 		if m.overlay == "sessions" {
 			for i := range m.Picker.Items {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
@@ -707,10 +712,10 @@ func (m AppModel) overlayView(base string) string {
 	status := m.statusView()
 	if m.approvalFocus() {
 		if m.knownPending() {
-			return m.Approval.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1) + "\n" + status
+			return base
 		}
 		footer := m.zones.Mark(m.prefix+"continue", "["+m.Theme.T("approval.rejectContinue")+"]") + "  " + m.zones.Mark(m.prefix+"cancel", "["+m.Theme.T("common.cancel")+"]")
-		return m.Theme.Overlay(m.Theme.T("approval.unknownTitle"), m.Theme.T("approval.unknownSubtitle"), m.Approval.Details.View(), footer, m.Layout.Width, m.Layout.Height-1) + "\n" + status
+		return m.Theme.Overlay(m.Theme.T("approval.unknownTitle"), m.Theme.T("approval.unknownSubtitle")+" · "+string(m.Approval.Pending.Call.Name), m.Approval.Details.View(), footer, m.Layout.Width, m.Layout.Height-1) + "\n" + status
 	}
 	var body string
 	switch m.overlay {

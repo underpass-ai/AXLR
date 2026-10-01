@@ -36,6 +36,10 @@ func (m AppModel) footerView() string {
 		hints = append(hints, footerHint{"changes", "ctrl+d", m.Theme.Tf("footer.changes", count)})
 	}
 	hints = append(hints, footerHint{"palette", "ctrl+p", m.Theme.T("footer.actions")}, footerHint{"help", "f1", m.Theme.T("footer.help")})
+	if m.inlineApproval() {
+		// The approval card lists the only keys that work until it is decided.
+		hints = nil
+	}
 	right := m.footerStatus()
 	room := width - 2 - ansi.StringWidth(right) - 2
 	var left []string
@@ -49,6 +53,9 @@ func (m AppModel) footerView() string {
 		used += ansi.StringWidth(plain) + 2
 	}
 	line := " " + strings.Join(left, "  ")
+	if len(left) == 0 {
+		line = ""
+	}
 	gap := max(1, width-ansi.StringWidth(line)-ansi.StringWidth(right)-1)
 	return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(line+strings.Repeat(" ", gap)+right, width, "…"))
 }

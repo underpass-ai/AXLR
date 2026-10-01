@@ -4,6 +4,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"context"
+	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -29,7 +30,7 @@ func approvalModel(t *testing.T) AppModel {
 func TestApprovalVisibilityAndFocus(t *testing.T) {
 	m := approvalModel(t)
 	v := m.View().Content
-	for _, want := range []string{"exact-target.txt", "all arguments", "local", "write", string(testWorkspace()), "Approve", "Deny"} {
+	for _, want := range []string{"exact-target.txt", "all arguments", "local", "write", string(testWorkspace()), "a approve", "d deny"} {
 		if !strings.Contains(v, want) {
 			t.Fatalf("missing %s: %s", want, v)
 		}
@@ -38,7 +39,7 @@ func TestApprovalVisibilityAndFocus(t *testing.T) {
 	for _, msg := range []tea.Msg{ControlIntent("search"), ControlIntent("sessions"), ControlIntent("send"), tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl}, tea.KeyPressMsg{Code: 'x', Text: "x"}} {
 		m = update(m, msg)
 	}
-	if m.Busy || m.Composer.Input.Value() != "draft" || !strings.Contains(m.View().Content, "Approve") {
+	if m.Busy || m.Composer.Input.Value() != "draft" || !strings.Contains(m.View().Content, "a approve") {
 		t.Fatal("approval lost focus")
 	}
 }
@@ -83,7 +84,7 @@ func TestApprovalUnknownNeverOffersApproval(t *testing.T) {
 	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "unknown", Name: "missing", Arguments: args}}}})
 	m = New(Dependencies{Session: &s, Store: m.deps.Store, Agent: application.AgentTurnUseCase{Continue: application.ContinueTurnUseCase{Store: m.deps.Store, Models: navStream{}}}})
 	m = update(m, tea.WindowSizeMsg{Width: 70, Height: 20})
-	if strings.Contains(m.View().Content, "Approve") {
+	if strings.Contains(m.View().Content, "a approve") {
 		t.Fatal("unknown tool can be approved")
 	}
 	n, c := m.Update(ControlIntent("continue"))
@@ -106,7 +107,7 @@ func TestApprovalApproveKeyboardAndMouse(t *testing.T) {
 		}
 		m = drain(t, n.(AppModel), c)
 		p := m.deps.Session.Export().Activity[0]
-		if p.Decision != domain.DecisionApprove || p.Outcome == nil || p.Outcome.Content != "written" || len(m.deps.Session.Pending()) != 1 || !strings.Contains(m.View().Content, "[Approve A]") {
+		if p.Decision != domain.DecisionApprove || p.Outcome == nil || p.Outcome.Content != "written" || len(m.deps.Session.Pending()) != 1 || !strings.Contains(m.View().Content, "a approve") {
 			t.Fatal("approval not executed and correlated")
 		}
 	}
@@ -228,8 +229,8 @@ func TestApprovalLongArgumentsRemainScrollableWithFixedControls(t *testing.T) {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyPgDown})
 	}
 	v := m.View().Content
-	if !strings.Contains(v, "END-MARKER") || !strings.Contains(v, "[Approve A]") || lipgloss.Width(v) > 50 || lipgloss.Height(v) > 15 {
-		t.Fatal("details or controls not accessible", v)
+	if !strings.Contains(v, "END-MARKER") || !strings.Contains(v, "a approve") || lipgloss.Width(v) > 50 || lipgloss.Height(v) > 15 {
+		t.Fatalf("details or controls not accessible (%dx%d):\n%s", lipgloss.Width(v), lipgloss.Height(v), ansi.Strip(v))
 	}
 }
 func TestApprovalRestoredPendingNeedsResumeBeforeDecision(t *testing.T) {
@@ -240,12 +241,12 @@ func TestApprovalRestoredPendingNeedsResumeBeforeDecision(t *testing.T) {
 	}
 	m = publishTestSession(t, m, restored)
 	m.deps.Agent = application.AgentTurnUseCase{Continue: application.ContinueTurnUseCase{Store: m.deps.Store}}
-	if strings.Contains(m.View().Content, "Approve") {
+	if strings.Contains(m.View().Content, "a approve") {
 		t.Fatal("restore reopened approval")
 	}
 	n, c := m.Update(ControlIntent("continue"))
 	m = drain(t, n.(AppModel), c)
-	if m.Status.State != domain.StatusApproval || !strings.Contains(m.View().Content, "Approve") || m.Header.State.Activity[0].Decision != "" {
+	if m.Status.State != domain.StatusApproval || !strings.Contains(m.View().Content, "a approve") || m.Header.State.Activity[0].Decision != "" {
 		t.Fatal("resume did not only reopen approvals")
 	}
 }
