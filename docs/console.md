@@ -17,6 +17,7 @@ The model picker filters to text models that support tools. Tab changes provider
 | `/autonomy on` / `/autonomy off` | Automatically approve all known tools, or restore normal policy |
 | `/plugin` | Browse packages installed in AXLR and available sources |
 | `/theme` | Preview and save appearance |
+| `/changes` / `/diff` / `Ctrl+D` | Review this session's file changes |
 | `Ctrl+P` | Open the action palette |
 | `Ctrl+O` | Open a saved session |
 | `Ctrl+F` | Search the current conversation |
@@ -27,6 +28,16 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Ctrl+C` | Cancel active work; quit when idle |
 
 The interface supports mouse controls where the terminal supplies them. In an approval dialog, inspect the exact target and arguments with arrows, PgUp/PgDn or the wheel; `A` approves once, `L` executes this call and always allows the exact tool identity on future calls, `F` activates full autonomy and executes this call, and `D` denies. `/approvals` lists saved choices. The autonomy switch approves every known local or registered tool without a dialog; it persists until turned off. Unknown tool names cannot be approved. A turn is limited to 32 tool calls. Cancellation does not reverse an effect that already happened.
+
+## Review file changes
+
+Open `/changes` (or `/diff`, `Ctrl+D`, or **File changes** in the action palette) to review completed local `write` and `edit` calls, newest first. A Changes button with a count appears after the first change. Each entry represents one recorded edit, so repeated edits to a file remain individually reviewable. The preview shows the exact before and after text, line numbers, three lines of context, and added/removed counts. It works without Git and survives reopening the session, even if the workspace file has since changed.
+
+![File changes in the running console, with Ink and Spanish labels; fixture session](assets/console-changes.png)
+
+Use Up/Down to select an entry and Tab to focus its diff. PgUp/PgDn and the wheel scroll; Left/Right pan long lines; Home/End jump to the beginning/end; `[` and `]` select another entry while reading. Esc returns to the conversation and preserves the draft. At 90 columns or more the list and diff appear together; narrower terminals switch between them with Tab. File rows and Close also support the mouse.
+
+Previews retain at most 64 KiB and fewer than 2,000 newlines per version. Larger files and unavailable text previews show an explicit notice, without a partial or guessed diff. Failed, denied, cancelled and unchanged edits do not appear. Empty file creation does. File snapshots are stored privately with tool activity, outside the messages sent to the model. Existing sessions without snapshots remain readable; old edits cannot be reconstructed. `exec` commands and MCP/plugin effects do not produce file snapshots.
 
 ## Appearance and language
 

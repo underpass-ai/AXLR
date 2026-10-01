@@ -1,7 +1,8 @@
 package dto
 
 type ToolOutcome struct {
-	Content   string `json:"content"`
-	IsError   bool   `json:"is_error"`
-	Uncertain bool   `json:"uncertain"`
+	Content   string      `json:"content"`
+	IsError   bool        `json:"is_error"`
+	Uncertain bool        `json:"uncertain"`
+	Change    *FileChange `json:"change,omitempty"`
 }

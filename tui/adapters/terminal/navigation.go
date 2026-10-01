@@ -66,6 +66,18 @@ func (m *AppModel) sizeApproval() {
 // navigation routes modal input before editor input. It never reads a worker's
 // session: all decisions use the UI's last published state.
 func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	if m.overlay == "changes" && !m.approvalFocus() {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseClickMsg, tea.MouseWheelMsg:
+			if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
+				return m, nil, false
+			}
+			if intent := m.Changes.Update(msg, m.zones, m.prefix+"changes-"); intent != "" {
+				return m.navigation(intent)
+			}
+			return m, nil, true
+		}
+	}
 	if m.overlay == "palette" && !m.approvalFocus() {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseWheelMsg, list.FilterMatchesMsg:
@@ -231,6 +243,8 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				intent = "search"
 			case "ctrl+o":
 				intent = "sessions"
+			case "ctrl+d":
+				intent = "changes"
 			case "f1":
 				intent = "help"
 			case "ctrl+r":
@@ -242,7 +256,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"mcp", "plugins", "updates", "approve", "always-allow", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
+		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
 		if m.overlay == "sessions" {
 			for i := range m.Picker.Items {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
@@ -286,6 +300,14 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case "updates":
 		next, cmd := m.updateEngines()
 		return next, cmd, true
+	case "changes":
+		m.Changes.SetSession(m.Header.State)
+		m.Changes.selected, m.Changes.window = 0, 0
+		m.Changes.Details.GotoTop()
+		m.Changes.Details.SetXOffset(0)
+		m.Changes.Resize(m.Layout.Width, m.Layout.Height-1)
+		m.overlay = "changes"
+		return m, nil, true
 	case "theme":
 		m.ThemePicker = NewThemePicker(m.UIPreferences, m.Theme.Locale)
 		m.overlay = "theme"
@@ -699,6 +721,8 @@ func (m AppModel) overlayView(base string) string {
 	}
 	var body string
 	switch m.overlay {
+	case "changes":
+		body = m.Changes.View(m.zones, m.prefix+"changes-", m.Layout.Width, m.Layout.Height-1)
 	case "mcp":
 		body = m.Plugins.View(m.overlay, m.Layout.Width, m.Layout.Height-2)
 	case "plugins":
@@ -730,6 +754,9 @@ func (m AppModel) overlayView(base string) string {
 	}
 	// Keep the original editor geometry while making navigation discoverable.
 	nav := m.zones.Mark(m.prefix+"palette", "["+m.Theme.T("nav.actions")+"]") + " " + m.zones.Mark(m.prefix+"help", "["+m.Theme.T("nav.help")+"]")
+	if count := len(m.Changes.records); count > 0 {
+		nav += " " + m.zones.Mark(m.prefix+"changes", "["+m.Theme.Tf("nav.changes", count)+"]")
+	}
 	if m.Header.State.Status == domain.StatusInterrupted || m.Header.State.Status == domain.StatusStreaming {
 		nav += " " + m.zones.Mark(m.prefix+"continue", "["+m.Theme.T("nav.continue")+"]")
 	}

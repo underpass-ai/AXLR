@@ -13,6 +13,7 @@ func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, heig
 		theme.Accent(theme.T("help.write")),
 		theme.T("help.sendFull"),
 		theme.T("help.commandsModelTheme"),
+		theme.T("help.changes"),
 		theme.T("help.commandsMCPPlugins"),
 		theme.T("help.commandsUpdate"),
 		"",
@@ -31,6 +32,7 @@ func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, heig
 		rows = []string{
 			theme.T("help.sendShort"),
 			theme.T("help.commandsModelTheme"),
+			theme.T("help.changes"),
 			theme.T("help.commandsMCPPlugins"),
 			theme.T("help.commandsUpdate"),
 			theme.T("help.shortcuts"),

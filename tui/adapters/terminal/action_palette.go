@@ -33,6 +33,7 @@ var actionItems = []list.Item{
 	actionItem{"continue", "palette.continueTitle", "palette.continueDescription", "r"},
 	actionItem{"cancel", "palette.cancelTitle", "palette.cancelDescription", "c"},
 	actionItem{"updates", "palette.updatesTitle", "palette.updatesDescription", "u"},
+	actionItem{"changes", "palette.changesTitle", "palette.changesDescription", "d"},
 }
 
 type actionDelegate struct {

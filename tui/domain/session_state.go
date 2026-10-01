@@ -127,7 +127,7 @@ func cloneState(state SessionState) SessionState {
 	state.ArchivedDrafts = append([]ArchivedDraft(nil), state.ArchivedDrafts...)
 	for i := range state.Activity {
 		if state.Activity[i].Outcome != nil {
-			outcome := *state.Activity[i].Outcome
+			outcome := cloneOutcome(*state.Activity[i].Outcome)
 			state.Activity[i].Outcome = &outcome
 		}
 	}
@@ -141,5 +141,11 @@ func sameActivity(a, b PendingTool) bool {
 	if a.Outcome == nil || b.Outcome == nil {
 		return a.Outcome == nil && b.Outcome == nil
 	}
-	return *a.Outcome == *b.Outcome
+	if a.Outcome.Content != b.Outcome.Content || a.Outcome.IsError != b.Outcome.IsError || a.Outcome.Uncertain != b.Outcome.Uncertain {
+		return false
+	}
+	if a.Outcome.Change == nil || b.Outcome.Change == nil {
+		return a.Outcome.Change == nil && b.Outcome.Change == nil
+	}
+	return *a.Outcome.Change == *b.Outcome.Change
 }

@@ -8,6 +8,8 @@ func (m *AppModel) applyUIPreferences(p domain.UIPreferences) {
 	m.Composer.Theme = m.Theme
 	m.Composer.Input.Placeholder = m.Theme.T("composer.placeholder")
 	m.Models.Theme = m.Theme
+	m.Changes.Theme = m.Theme
+	m.Changes.Resize(m.Layout.Width, m.Layout.Height-1)
 	m.Models.Input.Prompt = m.Theme.T("common.searchPrompt")
 	m.Plugins.Theme = m.Theme
 	m.InstalledPlugins.Theme = m.Theme

@@ -116,6 +116,15 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 	return nil
 }
 func (s *Session) RecordToolOutcome(id axlr.ToolCallID, decision ToolDecision, outcome ToolOutcome) error {
+	if outcome.Change != nil {
+		if outcome.IsError || outcome.Uncertain || decision == DecisionDeny {
+			return errors.New("file change requires a completed execution")
+		}
+		if err := outcome.Change.Validate(); err != nil {
+			return err
+		}
+	}
+	outcome = cloneOutcome(outcome)
 	if s.Status() != StatusApproval {
 		return errors.New("tool result requires approval state")
 	}
@@ -198,6 +207,15 @@ func (s *Session) PauseTurn() error {
 // FinishToolExecution replaces the durable uncertain checkpoint with the observed
 // result. The checkpoint itself remains a valid result if execution or saving fails.
 func (s *Session) FinishToolExecution(id axlr.ToolCallID, outcome ToolOutcome) error {
+	if outcome.Change != nil {
+		if outcome.IsError || outcome.Uncertain {
+			return errors.New("file change requires a completed execution")
+		}
+		if err := outcome.Change.Validate(); err != nil {
+			return err
+		}
+	}
+	outcome = cloneOutcome(outcome)
 	if s.Status() != StatusInterrupted {
 		return errors.New("execution result requires interrupted checkpoint")
 	}

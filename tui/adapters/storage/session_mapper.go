@@ -40,6 +40,9 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 		record := dto.ToolActivity{Call: encodeCall(p.Call), Decision: string(p.Decision)}
 		if p.Outcome != nil {
 			record.Outcome = &dto.ToolOutcome{Content: string(p.Outcome.Content), IsError: p.Outcome.IsError, Uncertain: p.Outcome.Uncertain}
+			if c := p.Outcome.Change; c != nil {
+				record.Outcome.Change = &dto.FileChange{Path: string(c.Path), Before: string(c.Before), After: string(c.After), Created: c.Created, Unavailable: c.Unavailable}
+			}
 		}
 		d.Activity = append(d.Activity, record)
 	}
@@ -79,6 +82,9 @@ func restore(d dto.SessionSnapshot) (domain.Session, error) {
 		record := domain.PendingTool{Call: call, Decision: domain.ToolDecision(p.Decision)}
 		if p.Outcome != nil {
 			record.Outcome = &domain.ToolOutcome{Content: root.Text(p.Outcome.Content), IsError: p.Outcome.IsError, Uncertain: p.Outcome.Uncertain}
+			if c := p.Outcome.Change; c != nil {
+				record.Outcome.Change = &domain.FileChange{Path: root.RelativePath(c.Path), Before: root.Text(c.Before), After: root.Text(c.After), Created: c.Created, Unavailable: c.Unavailable}
+			}
 		}
 		s.Activity = append(s.Activity, record)
 	}
