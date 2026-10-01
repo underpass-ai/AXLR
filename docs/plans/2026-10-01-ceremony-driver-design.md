@@ -1,6 +1,6 @@
 # Ceremony Driver Design
 
-Status: design, awaiting two decisions (end of document) before the task-level plan.
+Status: design with decisions taken; next step is the task-level plan after the spikes.
 Builds on: [work modes](2026-10-01-work-modes.md), which must merge first.
 Spec: ceremony review https://claude.ai/artifact/ScnDk7CV34Lt5e1iCUjNeH and Tirso's decisions of 1 Oct 2026 (the host drives MADE; only delivery and debug remain as ceremonies, as 2.0; `/resume` replaces handoff).
 
@@ -71,7 +71,7 @@ The grant `axlr-default-work-v1` (AXLR#43) already covers start, claim, complete
 ## Flow (`/debug`)
 
 1. The user runs `/debug` then describes the failure, or runs `/debug <description>`. The console:
-   - wakes memory, if bound (decision 2);
+   - wakes memory for `ws:<session_id>` (decision 2);
    - starts `axlr_debug` 2.0 with `failure_brief`;
    - claims `reproduce`;
    - begins a model turn with the step instruction (about 600 bytes) and the wake packet.
@@ -88,13 +88,7 @@ A turn limit hit mid-step is harmless: the instance and claim survive, and Ctrl+
 - Whether claim leases need renewal during a long model step (`renew_ceremony_step_lease` is in the work grant), or a long lease TTL is enough.
 - What the 1.0 skill and `axlr-ceremonies` guidance become. Proposal: delete the 1.0 skill and YAMLs from the binary once 2.0 ships. Published 1.0 definitions stay in stores (immutable) and are never started again.
 
-## Decisions needed
+## Decisions (Tirso, 1 Oct 2026)
 
-1. **Approving the console's check command.** The console runs a command the model proposed (`check_command`), so it is arbitrary execution.
-   - (a) **Recommended.** Approve it once, when the step that proposes it ends. The approval card shows the exact command; the console then re-runs exactly that string each round without asking. A different command needs a new approval.
-   - (b) Every run goes through normal approval, which autonomy can auto-approve.
-   - (c) Only commands from a per-workspace allowlist (`go test ./...`, `python3 -m unittest`…).
-2. **Which KMP `about` the console wakes and writes to.** KMP forbids constructing abouts. The console cannot derive one from the workspace path.
-   - (a) **Recommended.** A per-workspace binding the user sets once. `/memory` lists the abouts KMP already has; the user picks one or lets KMP create one through its own flow. It is stored in AXLR's settings by workspace path. Unbound workspaces run ceremonies without memory, and the footer says so.
-   - (b) The model chooses the about in the first step and returns it in `axlr_step_done`.
-   - (c) No KMP from the console in this plan; memory stays guidance-level, as in the work modes.
+1. **Check command: approved once per ceremony.** When the step that proposes `check_command` ends, the approval card shows the exact command. The console then re-runs exactly that string each round without asking. A different command needs a new approval. The approved command is stored in the `<id>.ceremony` sidecar with the instance.
+2. **KMP about: `ws:<session_id>`.** Each AXLR session that runs a ceremony has its own about, `ws:` followed by the 32-hex session id. Tirso, as KMP's author, set this convention, so it is not an about the console infers. The console wakes it on entry (an empty wake on a new about is expected) and writes the outcome to it. KMP's multidimensional labels carry the rest, on every record: `{"ceremony":["axlr_debug"],"step":["repair"],"ws":["<workspace path>"]}`. Spike: confirm the first `kmp_write_memory` on a new about creates it, and that reusing `ws` as both prefix and label key is fine.
