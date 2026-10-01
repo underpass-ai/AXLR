@@ -56,13 +56,16 @@ type fakeChecks struct {
 func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckResult, error) {
 	f.runs = append(f.runs, command)
 	if command.Program == "git" {
-		return CheckResult{Output: "abc123\n"}, nil
+		return CheckResult{Ran: true, Output: "abc123\n"}, nil
 	}
 	exit := 0
 	if len(f.exits) > 0 {
 		exit, f.exits = f.exits[0], f.exits[1:]
 	}
-	return CheckResult{ExitCode: exit, Output: "tail"}, nil
+	if exit == -1 {
+		return CheckResult{ExitCode: -1, Output: "program not found"}, nil
+	}
+	return CheckResult{Ran: true, ExitCode: exit, Output: "tail"}, nil
 }
 
 type fakeMemory struct{ about, summary string }
@@ -245,4 +248,25 @@ func TestAcceptedStepUpdatesTheSessionAndRestartsTheBudget(t *testing.T) {
 		t.Fatal("advanced run was not saved")
 	}
 	_ = root.Text("")
+}
+
+func TestACommandThatNeverRanDoesNotReproduceOrRepair(t *testing.T) {
+	engine := &fakeEngine{}
+	d := &CeremonyDriver{Engine: engine, Checks: &fakeChecks{exits: []int{-1}}}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "x"); err != nil {
+		t.Fatal(err)
+	}
+	before := len(engine.calls)
+	result, err := d.StepDone(context.Background(), s, mustObject(t, reproduceArgs))
+	if err != nil || result.Accepted || len(engine.calls) != before {
+		t.Fatalf("a command that never ran reproduced the failure: %+v", result)
+	}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "repair", Iteration: 1, Fence: "fence-repair", Check: domain.CheckCommand{Program: "nope"}}); err != nil {
+		t.Fatal(err)
+	}
+	d.Checks = &fakeChecks{exits: []int{-1}}
+	if r := step(t, d, &s, `{"summary":"x"}`); r["next_step"] != "repair" || !strings.Contains(r["feedback"].(string), "did not run") {
+		t.Fatalf("a check that never ran counted as passing: %v", r)
+	}
 }

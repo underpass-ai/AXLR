@@ -204,6 +204,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if err != nil {
 			return StepResult{}, err
 		}
+		if !result.Ran {
+			return refuse("the check command did not run (" + result.Output + "); give program and args separately, with a program that exists"), nil
+		}
 		reproduced := result.ExitCode != 0
 		output = map[string]any{"expected": done.Expected, "observed": done.Observed, "reproduced": reproduced, "settled": reproduced}
 		addEvidence(output, report, command, result)
@@ -249,7 +252,7 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if err != nil {
 			return StepResult{}, err
 		}
-		passed := result.ExitCode == 0
+		passed := result.Ran && result.ExitCode == 0
 		field, success, exhausted := "repaired", "repaired", "repair_exhausted"
 		if run.Step == "build" {
 			field, success, exhausted = "verified", "verified", "build_exhausted"
@@ -264,6 +267,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		default:
 			repeat = true
 			report["feedback"] = "the check command still fails; fix what its output shows"
+			if !result.Ran {
+				report["feedback"] = "the check command did not run: " + result.Output
+			}
 		}
 	case "integrate":
 		if done.Report == "" {

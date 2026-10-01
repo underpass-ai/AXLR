@@ -31,6 +31,9 @@ type CheckRunnerPort interface {
 }
 
 type CheckResult struct {
+	// Ran is false when the program never started (not found, timed out,
+	// refused); ExitCode is then meaningless.
+	Ran      bool
 	ExitCode int
 	// Output is the bounded tail of stdout and stderr.
 	Output string
