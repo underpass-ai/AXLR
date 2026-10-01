@@ -325,6 +325,19 @@ func TestSessionModeChangesOnlyBetweenTurns(t *testing.T) {
 		t.Fatal("mode changed during a streaming turn")
 	}
 }
+
+func TestSessionModeCarriesIntoTheNextTurn(t *testing.T) {
+	s := idleSession(t)
+	if err := s.SetMode(ModeReview); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn(axlr.Text("revisa"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if s.Mode() != ModeReview {
+		t.Fatalf("turn dropped the mode: %q", s.Mode())
+	}
+}
 ```
 
 Session IDs are 32 lowercase hex characters. If `BeginTurn` with a nil tool list is rejected, pass the tool list those tests use.
@@ -647,7 +660,7 @@ git commit -m "Keep each session's work mode in an <id>.mode sidecar"
 
 - [ ] **Step 1: Write the failing test**
 
-Reuse the helpers the package tests already have. `turnSession(t)` and `hostPlugin(...)` exist in `model_context_test.go` and `host_tool_resolution_test.go`. Find a helper that builds a session with one pending local call and a store: `grep -n "func .*pending\|memoryStore\|fakeStore" tui/application/*_test.go`. The test below assumes two helpers you write in this file if none fit: `pendingCall(t, mode, name, args)`, which returns a session in `StatusApproval` with that single call pending and its tool in the snapshot, and an in-memory `SessionStorePort`.
+The test reuses `turnSession(t)`, `assistant(...)` and `memoryStore` from `start_turn_use_case_test.go`. `pendingCall` and `localSnapshot` are defined in the test file itself.
 
 ```go
 package application
@@ -663,11 +676,45 @@ import (
 
 type allowEverything struct{}
 
+func localSnapshot(t *testing.T) []domain.AvailableTool {
+	t.Helper()
+	snapshot := HostTools()
+	for _, op := range []string{"read", "write", "edit", "exec"} {
+		id, err := domain.NewLocalToolIdentity(op)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot = append(snapshot, domain.AvailableTool{Definition: root.ToolDefinition{Name: root.ToolName("local_" + op), Description: "x", Parameters: mustObject(t, `{"type":"object"}`)}, Identity: id})
+	}
+	return snapshot
+}
+
+// pendingCall returns a session in the given mode awaiting approval of one
+// local call, and the store the rejection path saves into.
+func pendingCall(t *testing.T, mode domain.WorkMode, name, arguments string) (domain.Session, *memoryStore) {
+	t.Helper()
+	s := turnSession(t)
+	if err := s.SetMode(mode); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("haz el cambio", localSnapshot(t)); err != nil {
+		t.Fatal(err)
+	}
+	pending := root.ToolCall{ID: "call-1", Name: root.ToolName(name), Arguments: mustObject(t, arguments)}
+	if err := s.CompleteAssistant(assistant("", pending)); err != nil {
+		t.Fatal(err)
+	}
+	if s.Status() != domain.StatusApproval || len(s.Pending()) != 1 {
+		t.Fatalf("fixture is not awaiting approval: %s", s.Status())
+	}
+	return s, &memoryStore{}
+}
+
 func (allowEverything) AutoApproves(domain.ToolIdentity) bool { return true }
 
 func TestReviewModeRejectsWritesWithAModelVisibleReason(t *testing.T) {
 	s, store := pendingCall(t, domain.ModeReview, "local_write", `{"path":"wc.py","content":"x"}`)
-	if err := rejectUnknown(context.Background(), &s, store, nil, nil); err != nil {
+	if err := rejectUnknown(context.Background(), &s, store, ignoreEvent, nil); err != nil {
 		t.Fatal(err)
 	}
 	activity := s.Export().Activity
@@ -679,7 +726,7 @@ func TestReviewModeRejectsWritesWithAModelVisibleReason(t *testing.T) {
 
 func TestWriterModeLetsDocumentsThrough(t *testing.T) {
 	s, store := pendingCall(t, domain.ModeWriter, "local_write", `{"path":"docs/usage.md","content":"x"}`)
-	if err := rejectUnknown(context.Background(), &s, store, nil, nil); err != nil {
+	if err := rejectUnknown(context.Background(), &s, store, ignoreEvent, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(s.Pending()) != 1 {
@@ -701,11 +748,7 @@ func TestModesKeepExecUnderHumanApprovalEvenWithAutonomy(t *testing.T) {
 }
 
 func TestReviewModeHidesWriteToolsFromTheModel(t *testing.T) {
-	snapshot := HostTools()
-	for _, op := range []string{"read", "write", "edit", "exec"} {
-		id, _ := domain.NewLocalToolIdentity(op)
-		snapshot = append(snapshot, domain.AvailableTool{Definition: root.ToolDefinition{Name: root.ToolName("local_" + op), Description: "x", Parameters: mustObject(t, `{"type":"object"}`)}, Identity: id})
-	}
+	snapshot := localSnapshot(t)
 	names := func(mode domain.WorkMode) string {
 		var out []string
 		for _, tool := range ModeTools(mode, snapshot) {
@@ -721,14 +764,19 @@ func TestReviewModeHidesWriteToolsFromTheModel(t *testing.T) {
 	}
 }
 
-func TestGuidanceDescribesTheActiveMode(t *testing.T) {
-	s := turnSession(t)
-	if err := s.SetMode(domain.ModeWriter); err != nil {
-		t.Fatal(err)
-	}
-	text := string(modelHostGuidance(&s).Content)
-	if !strings.Contains(text, "Mode: writer.") || strings.Contains(text, "axlr-ceremonies") {
-		t.Fatalf("writer guidance missing or still routing to ceremonies: %s", text)
+func TestGuidanceDescribesTheActiveModeAndNoLongerRoutesToTheSkill(t *testing.T) {
+	for _, mode := range []domain.WorkMode{domain.ModeNormal, domain.ModeReview, domain.ModeWriter, domain.ModeResearch} {
+		s := turnSession(t)
+		if err := s.SetMode(mode); err != nil {
+			t.Fatal(err)
+		}
+		text := string(modelHostGuidance(&s).Content)
+		if strings.Contains(text, "axlr-ceremonies") {
+			t.Fatalf("%s guidance still routes work to the 1.0 skill", mode)
+		}
+		if mode != domain.ModeNormal && !strings.Contains(text, "Mode: "+string(mode)+".") {
+			t.Fatalf("%s guidance missing", mode)
+		}
 	}
 }
 
@@ -852,7 +900,13 @@ func ModeTools(mode domain.WorkMode, snapshot []domain.AvailableTool) []root.Too
 
 `continue_turn_use_case.go:75`. Change `Tools: ModelTools(snapshot)` to `Tools: ModeTools(session.Mode(), snapshot)`.
 
-`model_context.go`. In `modelHostGuidance`, write the ceremony paragraph (the second `WriteString`) only when `s.Mode() == domain.ModeNormal`. Then, after the fourth fixed paragraph, add:
+`model_context.go`. In `modelHostGuidance`, replace the second fixed paragraph (the one beginning "For substantive work, read the built-in made:axlr-ceremonies skill…") in every mode with:
+
+```go
+	guidance.WriteString("Use a MADE ceremony only when the user asks for one or a mode starts it; otherwise work directly with your tools.\n")
+```
+
+Measured on 1 Oct 2026, that routing paragraph made the model spend about 25 protocol calls before any work. The 1.0 catalogue it routes to is being retired; delivery and debug come back as console-driven modes in the ceremony driver plan. Then, after the fourth fixed paragraph, add:
 
 ```go
 	if text, ok := modeGuidance[s.Mode()]; ok {

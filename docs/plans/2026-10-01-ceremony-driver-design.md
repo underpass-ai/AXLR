@@ -51,7 +51,7 @@ The model cannot set a guard field. The console writes the model's fields and it
 | Layer | New or changed | Responsibility |
 |:--|:--|:--|
 | `tui/domain` | `ceremony_run.go`: `CeremonyRun{Instance, Definition, Version, State, Step, Iteration, CheckCommand}` | What the session knows about its live instance |
-| | `WorkMode` gains `ModeDelivery`, `ModeDebug` | Modes that start a ceremony |
+| | `WorkMode` gains `ModeDelivery`, `ModeDebug`; `Judge` returns `VerdictAllow` for both, so the model can edit code | Modes that start a ceremony |
 | | `HostOperationStepDone` in `tool_identity.go` | New host tool identity |
 | `tui/application` | `ceremony_engine_port.go`: `Start`, `Claim`, `Complete`, `Transition`, `Get`, `FindOpen(workspace)` | MADE as seen by the driver; DTOs only, no MCP shapes |
 | | `check_runner_port.go`: `Run(ctx, workspace, command) CheckResult` | Runs one command in the workspace with a time limit |
@@ -66,7 +66,7 @@ The model cannot set a guard field. The console writes the model's fields and it
 | | `storage/session_ceremony.go` | `<id>.ceremony` sidecar (same reason as `<id>.mode`) |
 | | `terminal` | `/delivery`, `/debug`, `/resume`; footer `debug · reproduce` / `delivery · round 2/3 · check ✓` |
 
-The grant `axlr-default-work-v1` (AXLR#43) already covers start, claim, complete, transition, get and search. Publishing 2.0 needs the install grants, so the work identity still cannot publish. The console publishes through the same trusted-host path that `/mcp` → P uses.
+The grant `axlr-default-work-v1` (AXLR#43) already covers start, claim, complete, transition, get and search. Publishing 2.0 is a trusted-host write, so it belongs to the explicit `/mcp` → P action, which already runs as trusted host; a mode command never performs it. If 2.0 is not in the store, `/debug` and `/delivery` refuse with "Prepare MADE first: /mcp → P".
 
 ## Flow (`/debug`)
 
@@ -76,7 +76,7 @@ The grant `axlr-default-work-v1` (AXLR#43) already covers start, claim, complete
    - claims `reproduce`;
    - begins a model turn with the step instruction (about 600 bytes) and the wake packet.
 2. The model investigates with its normal tools and calls `axlr_step_done{check_command, expected, observed}`.
-3. The console runs the command (decision 1), completes `reproduce` with the model's fields, its evidence and `reproduced`, and applies the transition. If the command does not fail, the console tells the model why and the step stays open; there is no new instance.
+3. The console runs the command (decision 1), completes `reproduce` with the model's fields, its evidence and `reproduced`, and applies the transition. If the command does not fail, the console tells the model why and `reproduce` repeats, at most 3 times; there is no new instance. Exhaustion, or the model returning `reproducible=false` for a failure no command can show, leads to `BLOCKED` through `step_repeat_exhausted:reproduce` or an output guard.
 4. The same pattern runs for `diagnose` and `repair`. After three failed repairs, `BLOCKED` records the last output and the console says so.
 5. `integrate` records the revision. The console writes the outcome to KMP: cause, fix and evidence, related to the woken context. The mode returns to normal.
 
