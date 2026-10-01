@@ -745,7 +745,8 @@ func (m AppModel) overlayView(base string) string {
 	case "sessions":
 		body = m.Picker.View(m.Theme, m.zones, m.prefix, m.Layout.Height-1, m.Layout.Width)
 	case "search":
-		body = m.Transcript.View() + "\n" + m.SearchBox.View(m.zones, m.prefix)
+		// Search lives in the main view, in place of the composer.
+		return base
 	}
 	if body != "" {
 		return fitOverlay(body, m.Layout.Width, m.Layout.Height-1) + "\n" + status
