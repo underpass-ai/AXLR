@@ -11,7 +11,7 @@ func TestSessionStampsEveryAddedMessageInUTCSeconds(t *testing.T) {
 	at := time.Date(2026, 10, 1, 18, 2, 3, 900, time.FixedZone("CEST", 2*3600))
 	defer func(previous func() time.Time) { now = previous }(now)
 	now = func() time.Time { return at }
-	s, err := NewSession("0123456789abcdef0123456789abcdef", "/w", "test/model")
+	s, err := NewSession("0123456789abcdef0123456789abcdef", Workspace(t.TempDir()), "test/model")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestSessionStampsEveryAddedMessageInUTCSeconds(t *testing.T) {
 }
 
 func TestOldSessionsWithoutTimesGetUnknownEntriesPadded(t *testing.T) {
-	s, err := RestoreSession(SessionState{ID: "0123456789abcdef0123456789abcdef", Workspace: "/w", Model: "test/model", Status: StatusComplete, Messages: []axlr.Message{{Role: axlr.RoleUser, Content: "old"}, {Role: axlr.RoleAssistant, Content: "answer"}}})
+	s, err := RestoreSession(SessionState{ID: "0123456789abcdef0123456789abcdef", Workspace: Workspace(t.TempDir()), Model: "test/model", Status: StatusComplete, Messages: []axlr.Message{{Role: axlr.RoleUser, Content: "old"}, {Role: axlr.RoleAssistant, Content: "answer"}}})
 	if err != nil {
 		t.Fatal(err)
 	}
