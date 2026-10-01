@@ -6,4 +6,5 @@ type ToolOutcome struct {
 	Content   axlr.Text
 	IsError   bool
 	Uncertain bool
+	Change    *FileChange
 }

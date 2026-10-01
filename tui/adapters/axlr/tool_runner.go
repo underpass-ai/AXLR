@@ -51,6 +51,7 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 		}
 		request.Arguments = encoded
 	}
+	change := r.prepareChange(ctx, id, args)
 	response := r.Executor.Execute(ctx, request)
 	if response.Status == "timed_out" {
 		responseClass = application.DiagnosticErrorTimeout
@@ -58,6 +59,7 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 		responseClass = application.DiagnosticErrorCancelled
 	}
 	out = domain.ToolOutcome{IsError: response.Status != "completed", Uncertain: response.Status == "timed_out" || response.Status == "cancelled"}
+	out.Change = completedChange(change, response)
 	// The root DTO maps unclassified plugin transport/protocol errors to
 	// failed/internal_error, including a lost reply after an effect. It carries
 	// no execution-stage proof, so retain uncertainty for that case. Rejected
