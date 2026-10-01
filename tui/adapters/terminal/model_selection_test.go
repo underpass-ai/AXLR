@@ -279,6 +279,9 @@ func TestModelSelectionResizeUpdatesKeyboardPage(t *testing.T) {
 func TestModelSelectionMouseSelectionAndSavedSessionFromBare(t *testing.T) {
 	m, store := selectionModel(t, nil)
 	saved := navSession(t)
+	if err := saved.BeginTurn("saved prompt", nil); err != nil {
+		t.Fatal(err)
+	}
 	if err := store.Save(context.Background(), saved); err != nil {
 		t.Fatal(err)
 	}

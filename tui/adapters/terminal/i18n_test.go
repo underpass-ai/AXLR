@@ -151,7 +151,7 @@ func TestSpanishSurfacesAndStoredContent(t *testing.T) {
 		t.Fatal("info screen is not localized")
 	}
 	m.overlay = "sessions"
-	if !strings.Contains(m.View().Content, "No hay sesiones guardadas") {
+	if !strings.Contains(m.View().Content, "No hay sesiones con mensajes en este espacio") {
 		t.Fatal("sessions screen is not localized")
 	}
 	m.ThemePicker = NewThemePicker(domain.DefaultUIPreferences(), Spanish)

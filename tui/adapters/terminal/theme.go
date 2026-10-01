@@ -112,6 +112,8 @@ func (t Theme) Icon(kind string) string {
 			return ">>"
 		case "attention":
 			return "!"
+		case "search":
+			return "/"
 		case "done":
 			return "+"
 		case "failed":
@@ -153,6 +155,8 @@ func (t Theme) Icon(kind string) string {
 		return "››"
 	case "attention":
 		return "▲"
+	case "search":
+		return "⌕"
 	case "done":
 		return "✓"
 	case "failed":

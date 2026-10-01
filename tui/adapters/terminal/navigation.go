@@ -212,14 +212,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "info", "approvals", "updates":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
-					switch k.String() {
-					case "up":
-						m.Picker.Selected = max(0, m.Picker.Selected-1)
-					case "down":
-						m.Picker.Selected = min(max(0, len(m.Picker.Items)-1), m.Picker.Selected+1)
-					case "enter":
+					if k.String() == "enter" {
 						intent = "open-session"
 						hasIntent = true
+					} else {
+						m.Picker.Key(k.String(), k.Text)
 					}
 				case "search":
 					switch k.String() {
@@ -263,7 +260,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
 		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
 		if m.overlay == "sessions" {
-			for i := range m.Picker.Items {
+			for i := range m.Picker.Visible() {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
 					m.Picker.Selected = i
 					intent = "open-session"
@@ -466,6 +463,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if intent == "models" {
 			m.Models = NewModelPicker()
 			m.Models.Theme = m.Theme
+			m.Models.SetCurrent(string(m.Header.State.Model))
 			m.Models.Input.Prompt = m.Theme.T("common.searchPrompt")
 		}
 		m.Models.pageSize = max(1, m.Layout.Height-7)
@@ -616,10 +614,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return done
 		}, true
 	case "open-session":
-		if m.Busy || len(m.Picker.Items) == 0 {
+		selected, ok := m.Picker.Current()
+		if m.Busy || !ok {
 			return m, nil, true
 		}
-		id := m.Picker.Items[m.Picker.Selected].ID
+		id := selected.ID
 		store := m.deps.Store
 		workspace := m.Header.State.Workspace
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
@@ -631,7 +630,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				return err
 			}
 			if loaded.Export().Workspace != workspace {
-				return errors.New(m.Theme.Tf("error.workspaceMismatch", loaded.Export().Workspace, workspace))
+				return errors.New(m.Theme.Tf("error.workspaceMismatch", shortenHome(string(loaded.Export().Workspace)), shortenHome(string(workspace))))
 			}
 			*s = loaded
 			return nil

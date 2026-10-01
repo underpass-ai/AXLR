@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"github.com/underpass-ai/AXLR/tui/dto"
@@ -211,7 +212,17 @@ func (s *SessionStore) List(ctx context.Context) ([]domain.SessionSummary, error
 			return nil, fmt.Errorf("session %s: %w", id, e)
 		}
 		state := session.Export()
-		result = append(result, domain.SessionSummary{ID: state.ID, Workspace: state.Workspace, Model: state.Model, Status: state.Status})
+		summary := domain.SessionSummary{ID: state.ID, Workspace: state.Workspace, Model: state.Model, Status: state.Status, MessageCount: len(state.Messages)}
+		for _, message := range state.Messages {
+			if message.Role == root.RoleUser {
+				summary.Title = message.Content
+				break
+			}
+		}
+		if info, err := entry.Info(); err == nil {
+			summary.UpdatedAt = info.ModTime()
+		}
+		result = append(result, summary)
 	}
 	return result, nil
 }

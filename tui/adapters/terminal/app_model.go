@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 	"time"
@@ -38,6 +39,7 @@ type AppModel struct {
 	InstalledPlugins    InstalledPlugins
 	Changes             ChangeViewer
 	memoryActive        bool
+	slashSelected       int
 	providerWaiting     bool
 	providerWaitStarted time.Time
 	waitTickScheduled   bool
@@ -329,7 +331,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if v.Sessions != nil {
-			m.Picker = SessionPicker{Items: *v.Sessions}
+			m.Picker = NewSessionPicker(*v.Sessions, m.Header.State.Workspace)
 			m.overlay = "sessions"
 		}
 		if oldID != m.Header.State.ID {
@@ -402,6 +404,22 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch v {
 		case "send":
 			command := strings.TrimSpace(m.Composer.Input.Value())
+			if suggestions := slashSuggestions(command); len(suggestions) > 0 && m.overlay == "" {
+				// Enter on a partial command runs the highlighted suggestion.
+				command = suggestions[min(m.slashSelected, len(suggestions)-1)].name
+			}
+			command, _ = isSlashCommand(command)
+			if command == "/exit" {
+				if m.Busy {
+					return m.Update(ControlIntent("cancel"))
+				}
+				m.zones.Close()
+				return m, tea.Quit
+			}
+			if unknownSlashWord(command) {
+				m.Status.Error = m.Theme.Tf("error.unknownCommand", command)
+				return m, nil
+			}
 			if command == "/update" {
 				changed, cmd := m.updateEngines()
 				if cmd != nil {
@@ -514,6 +532,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case tea.KeyPressMsg:
+		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
+			switch v.String() {
+			case "up":
+				m.slashSelected = max(0, min(m.slashSelected, len(suggestions)-1)-1)
+				return m, nil
+			case "down":
+				m.slashSelected = min(len(suggestions)-1, m.slashSelected+1)
+				return m, nil
+			case "tab":
+				m.Composer.Input.SetValue(suggestions[min(m.slashSelected, len(suggestions)-1)].name)
+				m.slashSelected = 0
+				return m, nil
+			}
+		}
 		switch v.String() {
 		case "up":
 			if m.overlay == "" && (m.historyIndex < len(m.promptHistory) || m.Composer.Input.Line() == 0) && m.previousPrompt() {
@@ -547,6 +579,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m.Update(ControlIntent(id))
 				}
 			}
+			suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value()))
+			for i := range suggestions {
+				if m.zones.Get(fmt.Sprintf("%sslash-%d", m.prefix, i)).InBounds(v) {
+					m.slashSelected = i
+					return m.Update(ControlIntent("send"))
+				}
+			}
 		}
 		return m, nil
 	case tea.MouseWheelMsg:
@@ -555,7 +594,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 	var cmd tea.Cmd
+	before := m.Composer.Input.Value()
 	m.Composer, cmd = m.Composer.Update(msg)
+	if m.Composer.Input.Value() != before {
+		m.slashSelected = 0
+	}
 	m.resizeComposer()
 	return m, cmd
 }
@@ -576,7 +619,13 @@ func (m AppModel) View() tea.View {
 		} else if m.overlay == "search" {
 			composer, footer = m.searchArea(), m.searchFooter()
 		}
-		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), m.mainTranscript(), composer, footer)
+		body := m.mainTranscript()
+		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
+			lines := strings.Split(body, "\n")
+			menu := m.slashMenu(suggestions[:min(len(suggestions), len(lines))])
+			body = strings.Join(append(lines[:len(lines)-len(menu)], menu...), "\n")
+		}
+		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, composer, footer)
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 {
 		content = m.overlayView(content)
