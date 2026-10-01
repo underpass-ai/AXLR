@@ -65,6 +65,13 @@ const BARS = [
     [139, 40],
   ],
 ];
+// Four straight stripes, 13 units high with 4-unit gaps, occupy a 64 × 64 square.
+const SQUARE_BARS = Array.from({ length: 4 }, (_, i) => [
+  [0, i * 17 + 13],
+  [0, i * 17],
+  [64, i * 17],
+  [64, i * 17 + 13],
+]);
 // Legacy manifests without explicit bar colors keep the original Spectrum ink.
 const DEFAULT_BAR_COLORS = ["red", "yellow", "green", "cyan"];
 const number = (value) => Number(value.toFixed(6)).toString();
@@ -186,6 +193,10 @@ export function validateManifest(manifest) {
       );
     }
     if (logo.spectrum) {
+      requireValue(
+        ["horizontal", "square"].includes(logo.spectrum.layout ?? "horizontal"),
+        `${logo.id}: invalid Spectrum layout`,
+      );
       pair(logo.spectrum.origin, `${logo.id} Spectrum origin`);
       requireValue(
         Number.isFinite(logo.spectrum.scale) && logo.spectrum.scale > 0,
@@ -242,7 +253,8 @@ export function buildScene(manifest, logo) {
     });
   });
   if (logo.spectrum) {
-    BARS.forEach((points, i) =>
+    const bars = logo.spectrum.layout === "square" ? SQUARE_BARS : BARS;
+    bars.forEach((points, i) =>
       shapes.push({
         type: "polygon",
         color:

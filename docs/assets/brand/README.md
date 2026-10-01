@@ -2,11 +2,11 @@
 
 | Product | Vector | Raster | Dimensions |
 | --- | --- | --- | --- |
-| KMP | [SVG](kmp-spectrum.svg) | [PNG](kmp-spectrum.png) | 712 × 300 |
-| MADE | [SVG](made-spectrum.svg) | [PNG](made-spectrum.png) | 936 × 350 |
-| AXLR | [SVG](axlr-spectrum.svg) | [PNG](axlr-spectrum.png) | 1600 × 552 |
+| KMP | [SVG](kmp-spectrum.svg) | [PNG](kmp-spectrum.png) | 712 × 320 |
+| MADE | [SVG](made-spectrum.svg) | [PNG](made-spectrum.png) | 936 × 374 |
+| AXLR | [SVG](axlr-spectrum.svg) | [PNG](axlr-spectrum.png) | 1600 × 593 |
 
-All exports have transparent backgrounds and the same four diagonal Spectrum bar shapes. Each product uses its own palette, in the following order for the bars and for MADE and AXLR's letters:
+All exports have transparent backgrounds and four horizontal Spectrum bars stacked vertically to form a square. The bars have equal widths and straight ends, with uniform transparent gaps. The block sits below the wordmark, aligned with its right edge. Each product uses its own palette, in the following top-to-bottom order for the bars and left-to-right order for MADE and AXLR's letters:
 
 | Product | Copper | Gold | Brown | Sand |
 | --- | --- | --- | --- | --- |

@@ -19,7 +19,7 @@
       "id": "kmp",
       "title": "KMP",
       "width": 712,
-      "height": 300,
+      "height": 320,
       "origin": [20, 20],
       "cell": [24, 36],
       "rows": [
@@ -41,8 +41,9 @@
         ]
       },
       "spectrum": {
-        "origin": [540, 246],
+        "origin": [634.8, 246],
         "scale": 0.8,
+        "layout": "square",
         "colors": ["kmp-copper", "kmp-gold", "kmp-brown", "kmp-sand"]
       }
     },
@@ -50,7 +51,7 @@
       "id": "made",
       "title": "MADE",
       "width": 936,
-      "height": 350,
+      "height": 374,
       "origin": [48, 52],
       "cell": [24, 36],
       "rows": [
@@ -70,8 +71,9 @@
         ]
       },
       "spectrum": {
-        "origin": [674, 285],
+        "origin": [818, 285],
         "scale": 1,
+        "layout": "square",
         "colors": ["made-copper", "made-gold", "made-brown", "made-sand"]
       }
     },
@@ -79,7 +81,7 @@
       "id": "axlr",
       "title": "AXLR",
       "width": 1600,
-      "height": 552,
+      "height": 593,
       "origin": [82, 37],
       "cell": [44.875, 67.4],
       "rows": [
@@ -99,8 +101,9 @@
         ]
       },
       "spectrum": {
-        "origin": [1230, 449],
+        "origin": [1397.98125, 449],
         "scale": 1.7,
+        "layout": "square",
         "colors": ["axlr-copper", "axlr-gold", "axlr-brown", "axlr-sand"]
       }
     }

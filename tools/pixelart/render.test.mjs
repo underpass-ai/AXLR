@@ -46,6 +46,49 @@ test("source glyphs preserve terminal columns, per-letter ink and transparent co
       scene.shapes.slice(-4).map((shape) => shape.color),
       brandColors[logo.id],
     );
+    const bars = scene.shapes.slice(-4);
+    for (const bar of bars) {
+      assert.equal(
+        bar.points[0][0],
+        bar.points[1][0],
+        "left ends are straight",
+      );
+      assert.equal(
+        bar.points[2][0],
+        bar.points[3][0],
+        "right ends are straight",
+      );
+      assert.equal(
+        bar.points[0][1],
+        bar.points[3][1],
+        "bottom edges are horizontal",
+      );
+      assert.equal(
+        bar.points[1][1],
+        bar.points[2][1],
+        "top edges are horizontal",
+      );
+    }
+    const xs = bars.flatMap((bar) => bar.points.map(([x]) => x));
+    const ys = bars.flatMap((bar) => bar.points.map(([, y]) => y));
+    assert.ok(
+      Math.abs(
+        Math.max(...xs) - Math.min(...xs) - (Math.max(...ys) - Math.min(...ys)),
+      ) < 0.000001,
+      "the four bars form a square",
+    );
+    for (let i = 1; i < bars.length; i++) {
+      assert.equal(
+        bars[i].points[0][0],
+        bars[0].points[0][0],
+        "bars share a left edge",
+      );
+      assert.ok(
+        Math.min(...bars[i].points.map(([, y]) => y)) >
+          Math.max(...bars[i - 1].points.map(([, y]) => y)),
+        "bars are stacked with transparent gaps",
+      );
+    }
     assert.deepEqual(
       [...new Set(scene.shapes.map((shape) => shape.color))],
       brandColors[logo.id],
@@ -86,6 +129,8 @@ test("older manifests retain default Spectrum colors when no bar ink is specifie
     cyan: "#42d4ed",
   });
   delete legacy.logos[0].spectrum.colors;
+  delete legacy.logos[0].spectrum.layout;
+  legacy.logos[0].spectrum.origin = [540, 246];
   validateManifest(legacy);
   assert.deepEqual(
     buildScene(legacy, legacy.logos[0])
@@ -93,13 +138,22 @@ test("older manifests retain default Spectrum colors when no bar ink is specifie
       .map((shape) => shape.color),
     ["#f04445", "#ffda36", "#32cd76", "#42d4ed"],
   );
+  const bars = buildScene(legacy, legacy.logos[0]).shapes.slice(-4);
+  assert.equal(
+    Math.max(...bars.flatMap((bar) => bar.points.map(([x]) => x))),
+    680,
+  );
+  assert.equal(
+    Math.max(...bars.flatMap((bar) => bar.points.map(([, y]) => y))),
+    278,
+  );
 });
 
 test("SVG escapes labels, has vector shapes only and shares the PNG's dimensions", () => {
   const scene = buildScene(manifest, manifest.logos[0]);
   scene.title = 'KMP <test> & "logo"';
   const svg = renderSVG(scene, 2).toString();
-  assert.match(svg, /width="1424" height="600" viewBox="0 0 712 300"/);
+  assert.match(svg, /width="1424" height="640" viewBox="0 0 712 320"/);
   assert.match(svg, /KMP &lt;test&gt; &amp; &quot;logo&quot;/);
   assert.doesNotMatch(svg, /<image|<text|#101114|by Underpass/);
   assert.equal((svg.match(/<polygon /g) ?? []).length, 4);
@@ -159,6 +213,7 @@ test("bad definitions fail before rendering or allocating image buffers", () => 
     [(m) => (m.logos[0].spectrum.colors[0] = "missing"), /Spectrum/],
     [(m) => m.logos[0].spectrum.colors.pop(), /Spectrum/],
     [(m) => (m.logos[0].spectrum.colors = "kmp-copper"), /Spectrum/],
+    [(m) => (m.logos[0].spectrum.layout = "diagonal"), /layout/],
   ];
   for (const [mutate, expected] of cases) {
     const value = copy();
