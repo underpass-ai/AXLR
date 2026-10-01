@@ -36,9 +36,11 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		case "made":
 			pluginGuidance.WriteString("MADE is Underpass's engine for agentic ceremonies: structured procedures, working sessions, review loops and human approval. It is available through the registered MADE MCP tools. Discover existing ceremonies and their required transitions through its tools; never invent ceremony results or approvals.\n")
 		}
+		// Entry names must be cheap orientation. Capability discovery returns a
+		// whole catalogue, so it is reached through axlr_tools only when needed.
 		entries := []string{}
 		for _, name := range plugins[id] {
-			if strings.Contains(name, "guide") || strings.Contains(name, "capabilities") || strings.Contains(name, "discover") {
+			if strings.Contains(name, "guide") {
 				entries = append(entries, name)
 			}
 		}
@@ -46,7 +48,11 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		if len(entries) > 4 {
 			entries = entries[:4]
 		}
-		fmt.Fprintf(&pluginGuidance, "Registered MCP plugin %s: %d tools. Entry names: %s. Discover other names and schemas with axlr_tools.\n", id, len(plugins[id]), strings.Join(entries, ", "))
+		if len(entries) > 0 {
+			fmt.Fprintf(&pluginGuidance, "Registered MCP plugin %s: %d tools. Entry names: %s. Discover other names and schemas with axlr_tools.\n", id, len(plugins[id]), strings.Join(entries, ", "))
+		} else {
+			fmt.Fprintf(&pluginGuidance, "Registered MCP plugin %s: %d tools. Discover names and schemas with axlr_tools.\n", id, len(plugins[id]))
+		}
 		if guidance.Len()+pluginGuidance.Len() > 12*1024 {
 			fmt.Fprintf(&guidance, "%d additional registered plugins omitted from this manifest; enumerate with axlr_tools query/offset.\n", len(ids)-ordinal)
 			break

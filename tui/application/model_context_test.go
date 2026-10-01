@@ -39,3 +39,20 @@ func TestLegacySessionHostUpgradeCannotReplaceAuthority(t *testing.T) {
 		t.Fatal("failed migration mutated catalog")
 	}
 }
+
+func TestModelHostGuidanceDoesNotOfferCatalogueDiscoveryAsEntry(t *testing.T) {
+	s := turnSession(t)
+	tools := append(HostTools(),
+		hostPlugin(t, "made_discover_capabilities", "made", "made_discover_capabilities"),
+		hostPlugin(t, "kmp_guide", "kmp", "kmp_guide"))
+	if err := s.BeginTurn(root.Text("hello"), tools); err != nil {
+		t.Fatal(err)
+	}
+	guidance := string(modelHostGuidance(&s).Content)
+	if strings.Contains(guidance, "made_discover_capabilities") {
+		t.Fatal("whole-catalogue discovery offered as an entry name")
+	}
+	if !strings.Contains(guidance, "Entry names: kmp_guide") {
+		t.Fatal("cheap guide entry lost")
+	}
+}
