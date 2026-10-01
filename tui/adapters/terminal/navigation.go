@@ -49,6 +49,9 @@ func (m *AppModel) syncApproval() {
 			target = m.Theme.Tf("approval.pluginTarget", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
 		case domain.ToolKindHost:
 			target = m.Theme.Tf("approval.hostTarget", tool.Identity.LocalOperation)
+			if tool.Identity.LocalOperation == domain.HostOperationStepDone {
+				target = m.Theme.T("approval.checkCommand")
+			}
 		}
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {

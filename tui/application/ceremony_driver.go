@@ -41,7 +41,7 @@ var stepInstructions = map[string]string{
 	"repair":    "Apply the smallest fix for the diagnosed cause and add a regression test when it protects real behaviour. Call axlr_step_done with summary. The console reruns the approved check command; it must exit zero.",
 	"brief":     "Read the repository and settle the change. Call axlr_step_done with criteria (observable behaviour), scope and check_command {program, args} (no shell) whose zero exit proves the criteria. The console runs it once as a baseline.",
 	"build":     "Implement the smallest change that meets the criteria; in later rounds fix what the previous check output shows, without growing scope. Call axlr_step_done with summary. The console reruns the approved check command; it must exit zero.",
-	"integrate": "Write the report for the user: what changed, the evidence and the limits. Call axlr_step_done with report. The console records the revision.",
+	"integrate": "Write the report for the user in their language: what changed, the evidence and the limits. Call axlr_step_done with report and summary_en, two or three plain English sentences for project memory. The console records the revision and stores summary_en in KMP.",
 }
 
 // CeremonyDriver walks a MADE ceremony on the model's behalf: it starts the
@@ -77,6 +77,7 @@ type stepDone struct {
 	Scope        string `json:"scope"`
 	Summary      string `json:"summary"`
 	Report       string `json:"report"`
+	SummaryEN    string `json:"summary_en"`
 }
 
 func decodeStepDone(arguments root.JSONValue) (stepDone, error) {
@@ -272,12 +273,12 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 			}
 		}
 	case "integrate":
-		if done.Report == "" {
-			return refuse("integrate needs report"), nil
+		if done.Report == "" || done.SummaryEN == "" {
+			return refuse("integrate needs report and summary_en"), nil
 		}
 		revision, _ := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"rev-parse", "HEAD"}})
 		dirty, _ := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"status", "--porcelain"}})
-		output = map[string]any{"report": done.Report, "revision": strings.TrimSpace(revision.Output), "dirty": strings.TrimSpace(dirty.Output), "integrated": true}
+		output = map[string]any{"report": done.Report, "summary_en": done.SummaryEN, "revision": strings.TrimSpace(revision.Output), "dirty": strings.TrimSpace(dirty.Output), "integrated": true}
 		report["revision"] = output["revision"]
 		trigger = "integrated"
 	default:
@@ -300,7 +301,7 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 	}
 	report["state"] = state
 	if state == "COMPLETED" || state == "BLOCKED" {
-		d.record(ctx, s, run, state, output)
+		report["memory"] = d.record(ctx, s, run, state, output)
 		report["ceremony"] = state
 		report["instruction"] = "The ceremony is over and the session is back in normal mode. Tell the user the outcome in their language."
 		return accept(report, nil), nil
@@ -326,14 +327,15 @@ func (d *CeremonyDriver) claim(ctx context.Context, run *domain.CeremonyRun) err
 	return nil
 }
 
-// record writes the outcome to the session's KMP about. Memory is best effort:
-// MADE already holds the durable record.
-func (d *CeremonyDriver) record(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output map[string]any) {
+// record writes the outcome to the session's KMP about and says what happened.
+// Memory is best effort: MADE already holds the durable record. KMP requires
+// English summaries, so only console text and the model's summary_en go in.
+func (d *CeremonyDriver) record(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output map[string]any) string {
 	if d.Memory == nil {
-		return
+		return "not recorded: KMP is not connected"
 	}
 	summary := fmt.Sprintf("%s %s ended %s at step %s.", run.Definition, run.Version, state, run.Step)
-	if text, ok := output["report"].(string); ok && text != "" {
+	if text, ok := output["summary_en"].(string); ok && text != "" {
 		summary += " " + bounded(text, 1500)
 	}
 	evidence := fmt.Sprintf("MADE instance %s", run.Instance)
@@ -344,7 +346,10 @@ func (d *CeremonyDriver) record(ctx context.Context, s domain.Session, run domai
 		evidence += "; revision " + revision
 	}
 	labels := map[string][]string{"ceremony": {run.Definition}, "step": {run.Step}, "ws": {string(s.Export().Workspace)}}
-	_ = d.Memory.Record(ctx, run.About, labels, run.Instance, summary, evidence)
+	if err := d.Memory.Record(ctx, run.About, labels, run.Instance, summary, evidence); err != nil {
+		return "not recorded: " + bounded(err.Error(), 300)
+	}
+	return "recorded in " + run.About
 }
 
 func addEvidence(output, report map[string]any, command domain.CheckCommand, result CheckResult) {

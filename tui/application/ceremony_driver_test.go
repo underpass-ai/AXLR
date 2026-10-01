@@ -132,7 +132,7 @@ func TestDebugCeremonyRunsEndToEndOnConsoleChecks(t *testing.T) {
 	if r := step(t, d, &s, `{"summary":"use split()"}`); r["next_step"] != "integrate" {
 		t.Fatalf("repair: %v", r)
 	}
-	if r := step(t, d, &s, `{"report":"fixed"}`); r["ceremony"] != "COMPLETED" {
+	if r := step(t, d, &s, `{"report":"arreglado","summary_en":"Fixed word splitting."}`); r["ceremony"] != "COMPLETED" {
 		t.Fatalf("integrate: %v", r)
 	}
 	if _, live := s.Ceremony(); live || s.Mode() != domain.ModeNormal {
