@@ -18,6 +18,7 @@ func send(t *testing.T, m AppModel, draft string) AppModel {
 func TestModeCommandsSwitchPersistAndShowABadge(t *testing.T) {
 	m := sized()
 	defer m.Close()
+	m.deps.Store = submissionStore{}
 	m = send(t, m, "/escritor")
 	if m.deps.Session.Mode() != domain.ModeWriter || m.Composer.Input.Value() != "" || m.Status.Error != "" {
 		t.Fatalf("alias did not switch: %q %q", m.deps.Session.Mode(), m.Status.Error)
