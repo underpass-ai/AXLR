@@ -317,6 +317,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands},
 		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
 		ModelPreference:   preferences,
+		ModelFavorites:    settingsStore.ModelFavorites(),
 		UIPreferenceStore: uiStore,
 		UIPreferences:     uiPreferences,
 		ApprovalSettings:  approvalSettings,

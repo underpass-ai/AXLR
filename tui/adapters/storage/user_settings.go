@@ -20,16 +20,20 @@ import (
 
 const maxUserSettingsBytes = 64 << 10
 
+const maxFavoriteModels = 50
+
 // UserSettings is the editable, user-facing configuration in settings.json.
 // An empty model means that the console opens without a selected model.
 type UserSettings struct {
-	Model        string                     `json:"model"`
-	Language     string                     `json:"language"`
-	Theme        string                     `json:"theme"`
-	Icons        string                     `json:"icons"`
-	ReduceMotion bool                       `json:"reduce_motion"`
-	Approvals    *ApprovalPreferences       `json:"approvals,omitempty"`
-	Extra        map[string]json.RawMessage `json:"-"`
+	Model        string               `json:"model"`
+	Language     string               `json:"language"`
+	Theme        string               `json:"theme"`
+	Icons        string               `json:"icons"`
+	ReduceMotion bool                 `json:"reduce_motion"`
+	Approvals    *ApprovalPreferences `json:"approvals,omitempty"`
+	// FavoriteModels are listed first in /model.
+	FavoriteModels []string                   `json:"favorite_models,omitempty"`
+	Extra          map[string]json.RawMessage `json:"-"`
 }
 
 type ApprovalPreferences struct {
@@ -92,7 +96,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -130,6 +134,14 @@ func (s UserSettings) Validate() error {
 	if s.Model != "" {
 		if _, err := root.NewModelID(s.Model); err != nil {
 			return errors.New("invalid settings model")
+		}
+	}
+	if len(s.FavoriteModels) > maxFavoriteModels {
+		return errors.New("settings.json lists too many favorite models")
+	}
+	for _, id := range s.FavoriteModels {
+		if _, err := root.NewModelID(id); err != nil {
+			return errors.New("invalid favorite model in settings.json")
 		}
 	}
 	if s.Language != "en" && s.Language != "es" {
@@ -341,4 +353,49 @@ func (p settingsUIPreference) Save(ctx context.Context, ui domain.UIPreferences)
 		s.Icons = string(ui.Icons)
 		s.ReduceMotion = ui.ReduceMotion
 	})
+}
+
+type settingsModelFavorites struct{ store *UserSettingsStore }
+
+var _ application.ModelFavoritesPort = settingsModelFavorites{}
+
+func (s *UserSettingsStore) ModelFavorites() application.ModelFavoritesPort {
+	return settingsModelFavorites{store: s}
+}
+
+func (p settingsModelFavorites) Load(ctx context.Context) ([]root.ModelID, error) {
+	s, err := p.store.Load(ctx)
+	return modelIDs(s.FavoriteModels), err
+}
+
+func (p settingsModelFavorites) Toggle(ctx context.Context, model root.ModelID) ([]root.ModelID, error) {
+	if _, err := root.NewModelID(string(model)); err != nil {
+		return nil, err
+	}
+	var result []string
+	err := p.store.update(ctx, func(s *UserSettings) {
+		next := make([]string, 0, len(s.FavoriteModels)+1)
+		removed := false
+		for _, id := range s.FavoriteModels {
+			if id == string(model) {
+				removed = true
+				continue
+			}
+			next = append(next, id)
+		}
+		if !removed && len(next) < maxFavoriteModels {
+			next = append(next, string(model))
+		}
+		s.FavoriteModels = next
+		result = next
+	})
+	return modelIDs(result), err
+}
+
+func modelIDs(ids []string) []root.ModelID {
+	out := make([]root.ModelID, len(ids))
+	for i, id := range ids {
+		out[i] = root.ModelID(id)
+	}
+	return out
 }
