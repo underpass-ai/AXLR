@@ -33,7 +33,12 @@ type ModelPicker struct {
 	pageSize  int
 	loading   bool
 	errText   string
+	// current is the session's model: marked in the list and selected when
+	// the catalogue arrives.
+	current string
 }
+
+func (p *ModelPicker) SetCurrent(id string) { p.current = id }
 
 func NewModelPicker() ModelPicker {
 	input := textinput.New()
@@ -75,12 +80,14 @@ func (p *ModelPicker) SetModels(models []domain.AvailableModel) {
 	p.loading = false
 	p.errText = ""
 	p.filter()
+	want := p.current
 	if ok {
-		for i, index := range p.visible {
-			if p.models[index].ID == selected.ID {
-				p.selected = i
-				break
-			}
+		want = string(selected.ID)
+	}
+	for i, index := range p.visible {
+		if string(p.models[index].ID) == want {
+			p.selected = i
+			break
 		}
 	}
 	p.ensureVisible()
@@ -94,7 +101,9 @@ func (p ModelPicker) SelectedModel() (domain.AvailableModel, bool) {
 }
 
 func (p *ModelPicker) filter() {
-	query := strings.ToLower(strings.TrimSpace(p.Input.Value()))
+	// Every word must match, so "anthropic opus" narrows without cycling
+	// providers one at a time.
+	terms := strings.Fields(strings.ToLower(p.Input.Value()))
 	p.visible = p.visible[:0]
 	for i, model := range p.models {
 		id := singleLine(string(model.ID))
@@ -103,7 +112,15 @@ func (p *ModelPicker) filter() {
 		if p.provider > 0 && p.provider < len(p.providers) && provider != p.providers[p.provider] {
 			continue
 		}
-		if query == "" || strings.Contains(strings.ToLower(name), query) || strings.Contains(strings.ToLower(id), query) || strings.Contains(strings.ToLower(provider), query) {
+		haystack := strings.ToLower(name + " " + id)
+		matches := true
+		for _, term := range terms {
+			if !strings.Contains(haystack, term) {
+				matches = false
+				break
+			}
+		}
+		if matches {
 			p.visible = append(p.visible, i)
 		}
 	}
@@ -245,14 +262,21 @@ func (p *ModelPicker) View(zones *zone.Manager, prefix string, width, height int
 			if i == p.selected {
 				marker = "› "
 			}
-			label := ansi.Truncate(marker+singleLine(string(model.Name)), listWidth, "…")
+			name := singleLine(string(model.Name))
+			if string(model.ID) == p.current {
+				name += p.Theme.Accent("  " + p.Theme.T("models.current"))
+			}
+			label := ansi.Truncate(marker+name, listWidth, "…")
 			if i == p.selected {
 				label = p.Theme.Selected(label)
 			}
 			left = append(left, zones.Mark(fmt.Sprintf("%smodel-%d", prefix, i), label))
 			meta := "  " + singleLine(string(model.ID))
 			if model.Context.Tokens() > 0 {
-				meta += p.Theme.Tf("models.contextShort", model.Context.Tokens())
+				meta += p.Theme.Tf("models.contextShort", formatContext(model.Context.Tokens()))
+			}
+			if in, out := shortRate(model.PromptRate.Display()), shortRate(model.CompletionRate.Display()); in != "" && out != "" {
+				meta += " · " + in + "/" + out
 			}
 			left = append(left, p.Theme.Muted(ansi.Truncate(meta, listWidth, "…")))
 		}
@@ -297,4 +321,20 @@ func (p ModelPicker) detail(width int) string {
 	}
 	lines = append(lines, p.Theme.T("models.toolsYes"), "", p.Theme.Accent(p.Theme.T("models.setDefault")))
 	return strings.Join(lines, "\n")
+}
+
+// formatContext shortens a context window: 131k, 1M.
+func formatContext(tokens int) string {
+	if tokens >= 1_000_000 && tokens%1_000_000 < 100_000 {
+		return fmt.Sprintf("%dM", tokens/1_000_000)
+	}
+	if tokens >= 1000 {
+		return fmt.Sprintf("%dk", (tokens+500)/1000)
+	}
+	return fmt.Sprint(tokens)
+}
+
+// shortRate keeps the dollar figure of a per-million rate ("$3 / 1M tokens").
+func shortRate(display string) string {
+	return strings.TrimSpace(strings.SplitN(display, " /", 2)[0])
 }

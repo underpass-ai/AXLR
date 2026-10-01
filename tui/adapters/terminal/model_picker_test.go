@@ -3,6 +3,7 @@ package terminal
 import (
 	"errors"
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 	"time"
@@ -195,5 +196,49 @@ func TestModelPickerFitsEveryPositiveNarrowWidth(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestModelPickerOpensOnTheCurrentModelAndMarksIt(t *testing.T) {
+	z := zone.New()
+	defer z.Close()
+	p := NewModelPicker()
+	p.SetCurrent(string(pickerModels()[len(pickerModels())-1].ID))
+	p.SetLoading(true)
+	p.SetModels(pickerModels())
+	selected, ok := p.SelectedModel()
+	if !ok || string(selected.ID) != p.current {
+		t.Fatalf("opened on %s; want the current model %s", selected.ID, p.current)
+	}
+	if view := ansi.Strip(p.View(z, "m-", 100, 30)); !strings.Contains(view, "current") {
+		t.Fatalf("current model not marked:\n%s", view)
+	}
+}
+
+func TestModelPickerMatchesEveryWord(t *testing.T) {
+	z := zone.New()
+	defer z.Close()
+	p := NewModelPicker()
+	p.SetModels([]domain.AvailableModel{
+		{ID: "anthropic/claude-opus-4.5", Name: "Anthropic: Claude Opus 4.5"},
+		{ID: "anthropic/claude-haiku-4.5", Name: "Anthropic: Claude Haiku 4.5"},
+		{ID: "openai/gpt-opus", Name: "OpenAI: Opus"},
+	})
+	for _, r := range "anthropic opus" {
+		p, _ = pickerKey(p, z, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	if len(p.visible) != 1 || p.models[p.visible[0]].ID != "anthropic/claude-opus-4.5" {
+		t.Fatalf("visible = %v", p.visible)
+	}
+}
+
+func TestModelPickerCompactsContextAndRates(t *testing.T) {
+	for tokens, want := range map[int]string{512: "512", 131072: "131k", 262144: "262k", 1_000_000: "1M", 1_048_576: "1M"} {
+		if got := formatContext(tokens); got != want {
+			t.Fatalf("formatContext(%d) = %q; want %q", tokens, got, want)
+		}
+	}
+	if got := shortRate("$0.60 / 1M tokens"); got != "$0.60" {
+		t.Fatalf("shortRate = %q", got)
 	}
 }
