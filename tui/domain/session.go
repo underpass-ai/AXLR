@@ -66,6 +66,30 @@ func (s *Session) ChangeModel(model axlr.ModelID) error {
 	s.state.Model = model
 	return nil
 }
+
+func (s Session) Mode() WorkMode {
+	if s.state.Mode == "" {
+		return ModeNormal
+	}
+	return s.state.Mode
+}
+
+// SetMode changes how the next turn works. A turn in progress keeps the mode
+// it started with.
+func (s *Session) SetMode(mode WorkMode) error {
+	if err := mode.Validate(); err != nil {
+		return err
+	}
+	if s.Status() != StatusIdle && s.Status() != StatusComplete && s.Status() != StatusInterrupted {
+		return errors.New("cannot change mode while a turn is active")
+	}
+	if len(s.Pending()) != 0 {
+		return errors.New("pending calls must be resolved before changing mode")
+	}
+	s.state.Mode = mode
+	return nil
+}
+
 func (s *Session) BeginTurn(prompt axlr.Text, tools []AvailableTool) error {
 	if s.Status() != StatusIdle && s.Status() != StatusComplete && s.Status() != StatusInterrupted {
 		return errors.New("cannot begin turn in current state")

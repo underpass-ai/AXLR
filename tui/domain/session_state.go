@@ -30,6 +30,9 @@ type SessionState struct {
 	// Sessions saved before times were recorded have fewer entries; a zero
 	// time means unknown.
 	MessageTimes []time.Time
+	// Mode is the session's work mode; empty reads as ModeNormal. It is kept
+	// outside the snapshot so the snapshot format does not change.
+	Mode WorkMode
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -54,6 +57,11 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	}
 	if _, err = axlr.NewText(string(state.Draft)); err != nil {
 		return Session{}, err
+	}
+	if state.Mode != "" {
+		if err = state.Mode.Validate(); err != nil {
+			return Session{}, err
+		}
 	}
 	previous := 0
 	for _, archived := range state.ArchivedDrafts {
