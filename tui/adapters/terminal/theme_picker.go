@@ -27,6 +27,7 @@ func NewThemePicker(p domain.UIPreferences, locales ...Locale) ThemePicker {
 		themeChoice{domain.ThemeAurora, Translate(locale, "theme.name.aurora"), Translate(locale, "theme.auroraDescription")},
 		themeChoice{domain.ThemePaper, Translate(locale, "theme.name.paper"), Translate(locale, "theme.paperDescription")},
 		themeChoice{domain.ThemePhosphor, Translate(locale, "theme.name.phosphor"), Translate(locale, "theme.phosphorDescription")},
+		themeChoice{domain.ThemeEditorial, Translate(locale, "theme.name.editorial"), Translate(locale, "theme.editorialDescription")},
 	}
 	l := list.New(items, list.NewDefaultDelegate(), 36, 16)
 	l.SetShowTitle(false)
@@ -117,6 +118,23 @@ func (p *ThemePicker) View(theme Theme, width, height int) string {
 		theme.rowText(transcriptRowMemory).Render(theme.rowLabel(theme.Icon("memory")+" ", toneAccent, transcriptRowMemory) + theme.T("theme.sampleMemory")),
 		"",
 		theme.Muted(theme.Tf("theme.iconsMotion", icon, motion)),
+	}
+	if theme.editorial() {
+		speaker := func(name string, tone rowTone) string {
+			return theme.rowText(transcriptRowSpeaker).Render(theme.rowLabel(name, tone, transcriptRowSpeaker))
+		}
+		preview = []string{
+			preview[0],
+			"",
+			speaker(theme.T("editorial.you"), toneNone),
+			theme.rowText(transcriptRowUser).Render(theme.T("theme.sampleUser")),
+			"",
+			speaker("AXLR", toneAccent),
+			theme.rowText(transcriptRowMemory).Render(theme.rowLabel(theme.Icon("memory")+" ", toneAccent, transcriptRowMemory) + theme.Tf("editorial.used", theme.T("theme.sampleMemory"))),
+			theme.rowText(transcriptRowAssistant).Render(theme.T("theme.sampleAssistant")),
+			"",
+			theme.Muted(theme.Tf("theme.iconsMotion", icon, motion)),
+		}
 	}
 	var body string
 	if width >= 80 {

@@ -34,6 +34,11 @@ func (t Theme) rowText(kind transcriptRowKind) lipgloss.Style {
 	p := t.palette()
 	switch kind {
 	case transcriptRowUser:
+		if t.editorial() {
+			return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text))
+		}
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text)).Bold(true)
+	case transcriptRowSpeaker:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text)).Bold(true)
 	case transcriptRowAssistant, transcriptRowGap:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text))
@@ -51,7 +56,7 @@ func (t Theme) rowLabel(label string, tone rowTone, kind transcriptRowKind) stri
 	p := t.palette()
 	colour := map[rowTone]string{toneAccent: p.Accent, toneGood: p.Good, toneWarning: p.Warning, toneError: p.DiffRemoved}[tone]
 	restore := p.Muted
-	if kind == transcriptRowUser || kind == transcriptRowAssistant {
+	if kind == transcriptRowUser || kind == transcriptRowAssistant || kind == transcriptRowSpeaker {
 		restore = p.Text
 	}
 	glyph := strings.TrimRight(label, " ")
