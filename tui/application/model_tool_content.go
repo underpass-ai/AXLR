@@ -56,6 +56,16 @@ func projectToolContent(raw string, index, limit int) (string, error) {
 	}
 	minimum, _ := json.Marshal(bounded)
 	if contentJSONBytes(string(minimum)) > limit-256 {
+		// Control-named fields inside record collections are data. Dropping them
+		// is explicit and the exact original stays retrievable through retrieval.
+		delete(bounded, "protocol_controls")
+		if controls := envelopeProtocolControls(original); controls != nil {
+			bounded["protocol_controls"] = controls
+		}
+		bounded["record_controls_omitted"] = true
+		minimum, _ = json.Marshal(bounded)
+	}
+	if contentJSONBytes(string(minimum)) > limit-256 {
 		return "", fmt.Errorf("active protocol controls cannot be clipped: %w", ErrContextBudgetExceeded)
 	}
 	available := limit - contentJSONBytes(string(minimum)) - 512
@@ -200,7 +210,14 @@ func nonTextMetadata(value any) []any {
 
 // protocolControls preserves nested paths, including bound arguments on returned
 // continuation actions. Free prose is omitted; control state is never shortened.
-func protocolControls(value any) any {
+func protocolControls(value any) any { return collectProtocolControls(value, true) }
+
+// envelopeProtocolControls skips record collections such as a server's tool
+// catalogue, whose schemas reuse control names like status or scope as data.
+// MCP content blocks remain reachable; control-valued keys are kept whole.
+func envelopeProtocolControls(value any) any { return collectProtocolControls(value, false) }
+
+func collectProtocolControls(value any, records bool) any {
 	switch object := value.(type) {
 	case map[string]any:
 		out := map[string]any{}
@@ -217,13 +234,16 @@ func protocolControls(value any) any {
 			case "text":
 				if text, ok := nested.(string); ok {
 					if parsed, err := decodeContextJSON([]byte(text)); err == nil {
-						if controls := protocolControls(parsed); controls != nil {
+						if controls := collectProtocolControls(parsed, records); controls != nil {
 							out["text_controls"] = controls
 						}
 					}
 				}
 			default:
-				if controls := protocolControls(nested); controls != nil {
+				if _, collection := nested.([]any); collection && !records && key != "content" {
+					continue
+				}
+				if controls := collectProtocolControls(nested, records); controls != nil {
 					out[key] = controls
 				}
 			}
@@ -234,7 +254,7 @@ func protocolControls(value any) any {
 	case []any:
 		out := []any{}
 		for _, nested := range object {
-			if controls := protocolControls(nested); controls != nil {
+			if controls := collectProtocolControls(nested, records); controls != nil {
 				out = append(out, controls)
 			}
 		}

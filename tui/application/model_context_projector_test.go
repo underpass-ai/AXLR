@@ -206,6 +206,29 @@ func TestProjectionKeepsBinaryAndEmbeddedResourceMetadataDuringClipping(t *testi
 	}
 }
 
+func TestProjectionClipsCatalogueWhoseRecordsReuseControlNames(t *testing.T) {
+	tools := make([]any, 0, 400)
+	for i := 0; i < 400; i++ {
+		tools = append(tools, map[string]any{"name": fmt.Sprintf("tool_%d", i), "inputSchema": map[string]any{"properties": map[string]any{
+			"status": map[string]any{"type": "string", "description": "Lifecycle status of the record."},
+			"scope":  map[string]any{"kind": "global"},
+		}}})
+	}
+	catalogue, _ := json.Marshal(map[string]any{"server": "made", "tools": tools})
+	raw, _ := json.Marshal(map[string]any{"protocol_version": 1, "status": "completed", "output": map[string]any{
+		"content": []any{map[string]any{"type": "text", "text": string(catalogue)}},
+	}})
+	projected, err := projectToolContent(string(raw), 26, 16384)
+	if err != nil || !json.Valid([]byte(projected)) {
+		t.Fatalf("catalogue result aborted the turn: %v", err)
+	}
+	for _, expected := range []string{`"record_controls_omitted":true`, `"message_index":26`, `"status":"completed"`} {
+		if !strings.Contains(projected, expected) {
+			t.Fatalf("missing %q in %s", expected, projected[:200])
+		}
+	}
+}
+
 func TestProjectionRefusesToSilentlyTruncateOversizedProtocolControls(t *testing.T) {
 	raw, _ := json.Marshal(map[string]any{"context_id": strings.Repeat("identity", 10000)})
 	_, err := projectToolContent(string(raw), 42, 16384)

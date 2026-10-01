@@ -29,7 +29,7 @@ Read [execution.md](references/execution.md) before the first engine execution, 
 
 ## Work through MADE
 
-Discover the actual tools and schemas. In AXLR, `axlr_tools` resolves the exact registered name/schema and `axlr_call_tool` invokes it. Use `made_discover_capabilities` and `made_get_help` with `audience: agent` once per connected engine. A catalogue row is not a connection.
+Discover the actual tools and schemas. In AXLR, `axlr_tools` resolves the exact registered name/schema and `axlr_call_tool` invokes it. Resolve only the schemas the selected workflow uses. Do not call `made_discover_capabilities` or `made_get_help`: they return the whole engine catalogue and manual (hundreds of KB), which does not fit the turn. A catalogue row is not a connection.
 
 List/get the selected published definition and compare its version and digest with the packaged catalogue. If absent, validate the complete YAML and publish the exact definition only when installation/publication is authorized. A conflict is not permission to overwrite an immutable version. Start only the selected published version with real inputs, stable instance identity and actual participant bindings. Do not publish the whole catalogue or start a system for every task.
 
