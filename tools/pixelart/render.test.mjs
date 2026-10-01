@@ -47,6 +47,28 @@ test("source glyphs preserve terminal columns, per-letter ink and transparent co
       brandColors[logo.id],
     );
     const bars = scene.shapes.slice(-4);
+    for (const bar of bars) {
+      assert.equal(
+        bar.points[0][0],
+        bar.points[1][0],
+        "left ends are straight",
+      );
+      assert.equal(
+        bar.points[2][0],
+        bar.points[3][0],
+        "right ends are straight",
+      );
+      assert.equal(
+        bar.points[0][1],
+        bar.points[3][1],
+        "bottom edges are horizontal",
+      );
+      assert.equal(
+        bar.points[1][1],
+        bar.points[2][1],
+        "top edges are horizontal",
+      );
+    }
     const xs = bars.flatMap((bar) => bar.points.map(([x]) => x));
     const ys = bars.flatMap((bar) => bar.points.map(([, y]) => y));
     assert.ok(

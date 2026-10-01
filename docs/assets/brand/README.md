@@ -6,7 +6,7 @@
 | MADE | [SVG](made-spectrum.svg) | [PNG](made-spectrum.png) | 936 × 374 |
 | AXLR | [SVG](axlr-spectrum.svg) | [PNG](axlr-spectrum.png) | 1600 × 593 |
 
-All exports have transparent backgrounds and four slanted Spectrum bars stacked vertically to form a square. The block sits below the wordmark, aligned with its right edge, with transparent gaps between the bars. Each product uses its own palette, in the following top-to-bottom order for the bars and left-to-right order for MADE and AXLR's letters:
+All exports have transparent backgrounds and four horizontal Spectrum bars stacked vertically to form a square. The bars have equal widths and straight ends, with uniform transparent gaps. The block sits below the wordmark, aligned with its right edge. Each product uses its own palette, in the following top-to-bottom order for the bars and left-to-right order for MADE and AXLR's letters:
 
 | Product | Copper | Gold | Brown | Sand |
 | --- | --- | --- | --- | --- |

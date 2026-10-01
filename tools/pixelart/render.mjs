@@ -65,12 +65,12 @@ const BARS = [
     [139, 40],
   ],
 ];
-// Four slanted stripes, 13 units high with 4-unit gaps, occupy a 64 × 64 square.
+// Four straight stripes, 13 units high with 4-unit gaps, occupy a 64 × 64 square.
 const SQUARE_BARS = Array.from({ length: 4 }, (_, i) => [
   [0, i * 17 + 13],
-  [13, i * 17],
+  [0, i * 17],
   [64, i * 17],
-  [51, i * 17 + 13],
+  [64, i * 17 + 13],
 ]);
 // Legacy manifests without explicit bar colors keep the original Spectrum ink.
 const DEFAULT_BAR_COLORS = ["red", "yellow", "green", "cyan"];

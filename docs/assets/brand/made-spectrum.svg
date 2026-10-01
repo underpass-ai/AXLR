@@ -341,9 +341,9 @@
     <rect x="864" y="254" width="18" height="4" fill="#BFA27A"/>
     <rect x="870" y="232" width="4" height="18" fill="#BFA27A"/>
     <rect x="864" y="246" width="10" height="4" fill="#BFA27A"/>
-    <polygon points="818,298 831,285 882,285 869,298" fill="#B6633A"/>
-    <polygon points="818,315 831,302 882,302 869,315" fill="#D98545"/>
-    <polygon points="818,332 831,319 882,319 869,332" fill="#5A3E2B"/>
-    <polygon points="818,349 831,336 882,336 869,349" fill="#BFA27A"/>
+    <polygon points="818,298 818,285 882,285 882,298" fill="#B6633A"/>
+    <polygon points="818,315 818,302 882,302 882,315" fill="#D98545"/>
+    <polygon points="818,332 818,319 882,319 882,332" fill="#5A3E2B"/>
+    <polygon points="818,349 818,336 882,336 882,349" fill="#BFA27A"/>
   </g>
 </svg>
