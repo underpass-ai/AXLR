@@ -69,6 +69,51 @@ func TestWriterModeLetsDocumentsThrough(t *testing.T) {
 	}
 }
 
+func TestWriterModeRejectsNonDocumentWritesWithAModelVisibleReason(t *testing.T) {
+	s, store := pendingCall(t, domain.ModeWriter, "local_write", `{"path":"wc.py","content":"x"}`)
+	if err := rejectUnknown(context.Background(), &s, store, ignoreEvent, nil); err != nil {
+		t.Fatal(err)
+	}
+	activity := s.Export().Activity
+	outcome := activity[len(activity)-1].Outcome
+	if outcome == nil || !outcome.IsError || !strings.HasPrefix(string(outcome.Content), "denied by writer mode: ") {
+		t.Fatalf("non-document write was not refused by mode: %+v", outcome)
+	}
+}
+
+func TestWriterModeRejectsPathTraversalOutOfDocs(t *testing.T) {
+	s, store := pendingCall(t, domain.ModeWriter, "local_write", `{"path":"docs/../wc.py","content":"x"}`)
+	if err := rejectUnknown(context.Background(), &s, store, ignoreEvent, nil); err != nil {
+		t.Fatal(err)
+	}
+	activity := s.Export().Activity
+	outcome := activity[len(activity)-1].Outcome
+	if outcome == nil || !outcome.IsError || !strings.HasPrefix(string(outcome.Content), "denied by writer mode: ") {
+		t.Fatalf("path traversal out of docs/ was not refused by mode: %+v", outcome)
+	}
+}
+
+func TestHumanApprovalOfAModeDeniedCallIsStillRejected(t *testing.T) {
+	s, store := pendingCall(t, domain.ModeReview, "local_write", `{"path":"wc.py","content":"x"}`)
+	u := ResolveToolUseCase{
+		Store: store,
+		Tools: executionFunc(func(context.Context, domain.ToolIdentity, root.JSONValue) (domain.ToolOutcome, error) {
+			t.Fatal("mode-denied call executed despite human approval")
+			return domain.ToolOutcome{}, nil
+		}),
+		Continue: ContinueTurnUseCase{Store: store, Models: streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+			return assistant("done"), nil
+		})},
+	}
+	if err := u.Execute(context.Background(), &s, "call-1", domain.DecisionApprove, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	outcome := s.Export().Activity[0].Outcome
+	if outcome == nil || !outcome.IsError || !strings.HasPrefix(string(outcome.Content), "denied by review mode: ") {
+		t.Fatalf("human approval bypassed mode denial: %+v", outcome)
+	}
+}
+
 func TestModesKeepExecUnderHumanApprovalEvenWithAutonomy(t *testing.T) {
 	exec, _ := domain.NewLocalToolIdentity("exec")
 	args, _ := root.NewJSONObject([]byte(`{"program":"ls"}`))

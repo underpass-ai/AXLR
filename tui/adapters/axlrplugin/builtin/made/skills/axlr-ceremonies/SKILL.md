@@ -1,6 +1,6 @@
 ---
 name: axlr-ceremonies
-description: Choose and execute AXLR's default MADE workflow for changes, feature delivery, debugging, reviews, research, publication, and work handoffs. Use when AXLR begins substantive work or transfers an ongoing task; keep simple answers lightweight.
+description: Run AXLR's MADE workflows only when the user explicitly asks for a MADE ceremony; ordinary changes, reviews and research need none.
 ---
 
 # AXLR ceremonies
