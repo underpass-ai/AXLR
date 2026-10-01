@@ -183,6 +183,15 @@ func TestAppModelResizePreservesEditorAndScroll(t *testing.T) {
 		t.Fatal("resize lost state")
 	}
 }
+func TestAppModelResizeKeepsTheLatestTurnInView(t *testing.T) {
+	m := sized()
+	m.Transcript.SetContent(strings.Repeat("palabra ", 2000))
+	m.Transcript.Viewport.GotoBottom()
+	m = update(m, tea.WindowSizeMsg{Width: 50, Height: 20})
+	if !m.Transcript.Viewport.AtBottom() {
+		t.Fatalf("narrower rewrap left the view at offset %d of %d lines", m.Transcript.Viewport.YOffset(), m.Transcript.VisualLineCount())
+	}
+}
 func TestAppModelSanitizationAndMonochrome(t *testing.T) {
 	m := sized()
 	m = update(m, application.Event{Kind: application.EventTextDelta, Text: "safe\x1b[2J\x1b]52;c;secret\a\x00\x08text"})

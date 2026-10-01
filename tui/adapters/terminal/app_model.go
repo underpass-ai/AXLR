@@ -183,17 +183,22 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Plugins.Resize(v.Width, v.Height-2)
 		m.Changes.Resize(v.Width, v.Height-1)
 		m.InstalledPlugins.Resize(v.Width, v.Height-2)
-		offset := m.Transcript.Viewport.YOffset()
-		m.Transcript.Viewport.SetWidth(max(1, m.Layout.TranscriptWidth-2*m.Transcript.Gutter))
+		offset, bottom := m.Transcript.Viewport.YOffset(), m.Transcript.Viewport.AtBottom()
+		m.Transcript.SetWidth(max(1, m.Layout.TranscriptWidth-2*m.Transcript.Gutter))
 		m.Transcript.Viewport.SetHeight(m.Layout.BodyHeight)
-		m.Transcript.Viewport.SetYOffset(offset)
+		if bottom {
+			// Rewrapping changes the line count; keep the latest turn in view.
+			m.Transcript.Viewport.GotoBottom()
+		} else {
+			m.Transcript.Viewport.SetYOffset(offset)
+		}
 		m.Composer.Input.SetWidth(max(1, v.Width))
 		m.resizeComposer()
 		m.SearchBox.Input.SetWidth(max(1, v.Width-18))
 		m.SearchBox.Input.SetCursor(m.SearchBox.Input.Position())
 		m.sizeApproval()
 		infoWidth, infoHeight := OverlayBodySize(v.Width, v.Height-1)
-		m.Info.Viewport.SetWidth(infoWidth)
+		m.Info.SetWidth(infoWidth)
 		m.Info.Viewport.SetHeight(infoHeight)
 		m.Transcript.ApplyTheme(m.Theme)
 		return m, nil

@@ -110,7 +110,7 @@ func TestTranscriptInterleavesRowsAndScrollsWhenTheyExceedTerminal(t *testing.T)
 	transcript.Viewport.SetWidth(30)
 	transcript.Viewport.SetHeight(3)
 	transcript.SetSession(s.Export(), "", Theme{})
-	content := transcript.Viewport.GetContent()
+	content := transcript.Text()
 	for _, item := range []string{"user: first question", "interrupted draft: first partial answer", "user: second question", "assistant: second answer"} {
 		if !strings.Contains(content, item) {
 			t.Fatalf("missing row %q in %q", item, content)
