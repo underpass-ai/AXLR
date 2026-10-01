@@ -128,6 +128,9 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 	if draft != "" {
 		t.appendRow(transcriptRow{Text: draft, Kind: transcriptRowAssistant, Markdown: true})
 	}
+	if theme.editorial() {
+		t.rows = editorialRows(t.rows, theme)
+	}
 	t.renderRows()
 	t.ApplyTheme(theme)
 }

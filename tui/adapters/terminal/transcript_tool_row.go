@@ -32,22 +32,29 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 		kind = transcriptRowMemory
 	}
 	glyph, tone := theme.Icon("waiting"), toneWarning
+	facts := &toolFacts{Label: label, State: toolRunning}
 	var details []string
 	switch {
 	case record != nil && record.Decision == domain.DecisionDeny:
 		glyph, tone = theme.Icon("failed"), toneError
+		facts.State = toolDenied
 		details = append(details, theme.T("transcript.toolDenied"))
 	case result != nil:
 		glyph, tone = theme.Icon("done"), toneGood
+		facts.State = toolDone
 		head := string(result.Content[:min(len(result.Content), toolRowHeadBytes)])
 		if record != nil && record.Outcome != nil && record.Outcome.IsError || strings.Contains(head, `"status":"failed"`) {
 			glyph, tone = theme.Icon("failed"), toneError
+			facts.State = toolFailed
 		}
+		facts.Bytes = len(result.Content)
 		details = append(details, formatBytes(len(result.Content)))
 		if duration, ok := durationMS(head); ok {
+			facts.DurationMS, facts.HasTime = duration, true
 			details = append(details, formatDuration(duration))
 		}
 	case record != nil && record.Decision == "":
+		facts.State = toolAwaiting
 		details = append(details, theme.T("transcript.toolAwaiting"))
 	default:
 		details = append(details, theme.T("transcript.toolRunning"))
@@ -63,7 +70,7 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 		text += "  " + args
 	}
 	text += " · " + strings.Join(details, " · ")
-	return transcriptRow{Label: glyph + " ", LabelTone: tone, Text: text, Kind: kind, Indent: true}
+	return transcriptRow{Label: glyph + " ", LabelTone: tone, Text: text, Kind: kind, Indent: true, Tool: facts}
 }
 
 // toolArgumentSummary lists the call's top-level scalar values in argument

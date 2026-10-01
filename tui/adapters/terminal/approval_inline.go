@@ -49,6 +49,9 @@ func (m AppModel) approvalCard() string {
 	line := func(s string) string {
 		return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(s, width, "…"))
 	}
+	if m.Theme.editorial() {
+		return m.approvalSheet(details, hints)
+	}
 	return strings.Join([]string{rule, line(title), details.View(), line(" " + strings.Join(actions, "   "))}, "\n")
 }
 
@@ -69,4 +72,32 @@ func (m AppModel) mainTranscript() string {
 
 func (m AppModel) inlineApproval() bool {
 	return m.approvalFocus() && m.knownPending()
+}
+
+// approvalSheet is the Editorial card: a raised sheet instead of a warning
+// rule, titled with what AXLR wants to do. Same rows, same keys.
+func (m AppModel) approvalSheet(details Transcript, hints []footerHint) string {
+	width := max(1, m.Layout.Width)
+	sheet := lipgloss.NewStyle().Width(width)
+	if !m.Theme.Monochrome {
+		p := m.Theme.palette()
+		sheet = sheet.Background(lipgloss.Color(p.Surface)).Foreground(lipgloss.Color(p.Text))
+	}
+	row := func(s string) string { return sheet.Render(ansi.Truncate(s, width, "…")) }
+	title := "  " + m.Theme.Tf("editorial.approvalTitle", m.Approval.Target)
+	if m.Approval.Details.VisualLineCount() > m.approvalDetailRows() {
+		title += "  " + m.Theme.T("approval.scroll")
+	}
+	rows := []string{row(""), sheet.Bold(true).Render(ansi.Truncate(title, width, "…"))}
+	for _, l := range strings.Split(details.View(), "\n") {
+		rows = append(rows, row(ansi.Strip(l)))
+	}
+	// Plain text keeps the sheet's background across the row; the zone marks
+	// keep each action clickable.
+	var actions []string
+	for _, h := range hints {
+		actions = append(actions, m.zones.Mark(m.prefix+h.zone, h.key+" "+h.label))
+	}
+	rows = append(rows, row("  "+strings.Join(actions, "   ")))
+	return strings.Join(rows, "\n")
 }

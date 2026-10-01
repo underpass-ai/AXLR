@@ -8,6 +8,8 @@ const (
 	transcriptRowAssistant
 	transcriptRowMemory
 	transcriptRowGap
+	// transcriptRowSpeaker names who speaks next in the Editorial layout.
+	transcriptRowSpeaker
 )
 
 // transcriptRow is one conversation entry. The viewport wraps it to the
@@ -23,7 +25,28 @@ type transcriptRow struct {
 	LabelTone rowTone
 	Markdown  bool
 	Indent    bool
+	// Tool describes a tool row so the Editorial layout can summarise runs.
+	Tool *toolFacts
 }
+
+// toolFacts is what a tool row shows, kept structured for summaries.
+type toolFacts struct {
+	Label      string
+	State      toolState
+	Bytes      int
+	DurationMS int64
+	HasTime    bool
+}
+
+type toolState uint8
+
+const (
+	toolDone toolState = iota
+	toolFailed
+	toolDenied
+	toolAwaiting
+	toolRunning
+)
 
 // rowTone names a palette role for a row's leading glyph.
 type rowTone uint8
