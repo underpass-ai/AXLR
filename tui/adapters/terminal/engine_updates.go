@@ -23,7 +23,7 @@ func (m AppModel) updateEngines() (AppModel, tea.Cmd) {
 	m.overlay = "updates"
 	m.Info = NewTranscript()
 	width, height := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
-	m.Info.Viewport.SetWidth(width)
+	m.Info.SetWidth(width)
 	m.Info.Viewport.SetHeight(height)
 	m.Info.SetContent(m.Theme.T("update.loading"))
 	m.Info.Viewport.GotoTop()

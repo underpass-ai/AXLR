@@ -17,19 +17,63 @@ type Transcript struct {
 	rowKinds   map[int]transcriptRowKind
 	visualRows []transcriptRowKind
 	theme      Theme
+	// raw holds unwrapped lines; reflow wraps them at word boundaries to the
+	// viewport width. The viewport's own soft wrap cuts mid-word and re-slices
+	// every line from its start on each render, which stalls on large results.
+	raw       string
+	wrapWidth int
 }
 
 func NewTranscript() Transcript {
-	v := viewport.New()
-	v.SoftWrap = true
-	return Transcript{Viewport: v}
+	return Transcript{Viewport: viewport.New()}
+}
+
+// SetWidth resizes the viewport and rewraps the content when the width changes.
+func (t *Transcript) SetWidth(width int) {
+	t.Viewport.SetWidth(width)
+	if width != t.wrapWidth {
+		t.reflow()
+	}
 }
 func (t *Transcript) SetContent(s string) {
-	bottom := t.Viewport.AtBottom()
-	t.Viewport.SetContent(Sanitize(s))
 	t.rows = nil
 	t.rowKinds = nil
-	t.visualRows = nil
+	t.raw = Sanitize(s)
+	t.reflow()
+}
+
+// Text is the unwrapped transcript content.
+func (t Transcript) Text() string {
+	return t.raw
+}
+
+// VisualLineCount is the number of wrapped lines the viewport scrolls over.
+func (t Transcript) VisualLineCount() int {
+	if t.Viewport.GetContent() == "" {
+		return 0
+	}
+	return len(t.visualRows)
+}
+func (t *Transcript) reflow() {
+	width := t.Viewport.Width()
+	t.wrapWidth = width
+	t.visualRows = t.visualRows[:0]
+	var b strings.Builder
+	for index, line := range strings.Split(t.raw, "\n") {
+		if index > 0 {
+			b.WriteByte('\n')
+		}
+		wrapped := line
+		if width > 0 && ansi.StringWidth(line) > width {
+			wrapped = ansi.Wrap(line, width, "")
+		}
+		for range strings.Count(wrapped, "\n") + 1 {
+			t.visualRows = append(t.visualRows, t.rowKinds[index])
+		}
+		b.WriteString(wrapped)
+	}
+	bottom := t.Viewport.AtBottom()
+	t.Viewport.SetContent(b.String())
 	if bottom {
 		t.Viewport.GotoBottom()
 	}
@@ -123,24 +167,14 @@ func (t *Transcript) renderRows() {
 		line += strings.Count(clean, "\n") + 1
 		b.WriteString(clean)
 	}
-	bottom := t.Viewport.AtBottom()
-	t.Viewport.SetContent(b.String())
 	t.rowKinds = kinds
-	if bottom {
-		t.Viewport.GotoBottom()
-	}
+	t.raw = b.String()
+	t.reflow()
 }
 func (t *Transcript) ApplyTheme(theme Theme) {
 	t.theme = theme
 	t.Viewport.StyleLineFunc = nil
-	t.visualRows = t.visualRows[:0]
-	width := max(1, t.Viewport.Width())
-	for index, line := range strings.Split(t.Viewport.GetContent(), "\n") {
-		count := max(1, (ansi.StringWidth(line)+width-1)/width)
-		for range count {
-			t.visualRows = append(t.visualRows, t.rowKinds[index])
-		}
-	}
+	t.reflow()
 }
 func (t Transcript) View() string {
 	view := t.Viewport.View()

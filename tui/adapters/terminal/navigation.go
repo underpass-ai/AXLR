@@ -59,7 +59,7 @@ func (m *AppModel) syncApproval() {
 }
 func (m *AppModel) sizeApproval() {
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
-	m.Approval.Details.Viewport.SetWidth(w)
+	m.Approval.Details.SetWidth(w)
 	m.Approval.Details.Viewport.SetHeight(h)
 }
 
@@ -640,14 +640,14 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if intent == "info" {
 			m.Info = NewTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
-			m.Info.Viewport.SetWidth(w)
+			m.Info.SetWidth(w)
 			m.Info.Viewport.SetHeight(h)
 			m.Info.SetContent(infoContentLocale(m.Header.State, m.Theme.Locale))
 			m.Info.Viewport.GotoTop()
 		} else if intent == "approvals" {
 			m.Info = NewTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
-			m.Info.Viewport.SetWidth(w)
+			m.Info.SetWidth(w)
 			m.Info.Viewport.SetHeight(h)
 			m.Info.SetContent(approvalContent(m.deps.ApprovalSettings, m.Theme.Locale))
 			m.Info.Viewport.GotoTop()
@@ -699,16 +699,9 @@ func (m *AppModel) showHit() {
 		prefix.ArchivedDrafts = prefix.ArchivedDrafts[:archived]
 	}
 	rendered := NewTranscript()
+	rendered.SetWidth(m.Transcript.Viewport.Width())
 	rendered.SetSession(prefix, "", Theme{Monochrome: true})
-	before := rendered.Viewport.GetContent()
-	lines := 0
-	if before != "" {
-		for _, line := range strings.Split(before, "\n") {
-			width := max(1, m.Transcript.Viewport.Width())
-			lines += max(1, (ansi.StringWidth(line)+width-1)/width)
-		}
-	}
-	m.Transcript.Viewport.SetYOffset(lines)
+	m.Transcript.Viewport.SetYOffset(rendered.VisualLineCount())
 }
 func (m AppModel) overlayView(base string) string {
 	status := m.statusView()
