@@ -17,6 +17,8 @@ const (
 	ModelSelectIntent ControlIntent = "model-select"
 	ModelRetryIntent  ControlIntent = "model-retry"
 	ModelCloseIntent  ControlIntent = "model-close"
+	// ModelFavoriteIntent asks the root to pin or unpin the selected model.
+	ModelFavoriteIntent ControlIntent = "model-favorite"
 )
 
 // ModelPicker owns local search and display state. Catalog loading and selection
@@ -36,6 +38,27 @@ type ModelPicker struct {
 	// current is the session's model: marked in the list and selected when
 	// the catalogue arrives.
 	current string
+	// favorites are listed first and marked with a star.
+	favorites map[string]bool
+}
+
+// SetFavorites lists the given models first, keeping the selected model.
+func (p *ModelPicker) SetFavorites(ids []string) {
+	selected, ok := p.SelectedModel()
+	p.favorites = make(map[string]bool, len(ids))
+	for _, id := range ids {
+		p.favorites[id] = true
+	}
+	p.filter()
+	if ok {
+		for i, index := range p.visible {
+			if p.models[index].ID == selected.ID {
+				p.selected = i
+				break
+			}
+		}
+	}
+	p.ensureVisible()
 }
 
 func (p *ModelPicker) SetCurrent(id string) { p.current = id }
@@ -124,6 +147,18 @@ func (p *ModelPicker) filter() {
 			p.visible = append(p.visible, i)
 		}
 	}
+	// Favorites first, then the current model, so both open in view.
+	rank := func(i int) int {
+		id := string(p.models[i].ID)
+		switch {
+		case p.favorites[id]:
+			return 0
+		case id == p.current:
+			return 1
+		}
+		return 2
+	}
+	sort.SliceStable(p.visible, func(a, b int) bool { return rank(p.visible[a]) < rank(p.visible[b]) })
 	if len(p.visible) == 0 {
 		p.selected = 0
 		p.window = 0
@@ -170,6 +205,11 @@ func (p ModelPicker) Update(msg tea.Msg, zones *zone.Manager, prefix string) (Mo
 			if p.errText != "" || (!p.loading && len(p.models) == 0) {
 				return p, ModelRetryIntent, nil
 			}
+		case "ctrl+s":
+			if _, ok := p.SelectedModel(); ok {
+				return p, ModelFavoriteIntent, nil
+			}
+			return p, "", nil
 		case "tab":
 			if len(p.providers) > 1 {
 				p.provider = (p.provider + 1) % len(p.providers)
@@ -263,6 +303,9 @@ func (p *ModelPicker) View(zones *zone.Manager, prefix string, width, height int
 				marker = "› "
 			}
 			name := singleLine(string(model.Name))
+			if p.favorites[string(model.ID)] {
+				name = p.Theme.Icon("favorite") + " " + name
+			}
 			if string(model.ID) == p.current {
 				name += p.Theme.Accent("  " + p.Theme.T("models.current"))
 			}
