@@ -290,3 +290,19 @@ func skipWithoutPOSIXLaunchers(t *testing.T) {
 		t.Skip("engine packages ship POSIX launchers")
 	}
 }
+
+func TestOfficialPackagesExistOnlyForPOSIXTargets(t *testing.T) {
+	for target, want := range map[[2]string]string{
+		{"linux", "amd64"}:   "linux-x86_64",
+		{"linux", "arm64"}:   "linux-arm64",
+		{"darwin", "arm64"}:  "macos-arm64",
+		{"darwin", "amd64"}:  "",
+		{"windows", "amd64"}: "",
+		{"windows", "arm64"}: "",
+	} {
+		got, ok := officialPlatform(target[0], target[1])
+		if got != want || ok != (want != "") {
+			t.Fatalf("officialPlatform(%s/%s) = %q, %v", target[0], target[1], got, ok)
+		}
+	}
+}

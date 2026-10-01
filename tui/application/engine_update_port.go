@@ -1,6 +1,12 @@
 package application
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+// ErrEngineUpdatePlatform reports a host with no official MADE/KMP package.
+var ErrEngineUpdatePlatform = errors.New("no official MADE or KMP package for this platform")
 
 // EngineUpdatePort updates the explicitly configured local MADE/KMP packages.
 // Running MCP processes keep their current executable until AXLR restarts.
