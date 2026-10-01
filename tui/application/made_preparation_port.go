@@ -15,4 +15,6 @@ type MADEPreparation struct {
 	GrantID         string
 	RestartRequired bool
 	Detail          string
+	// Published lists the ceremony definitions this preparation published.
+	Published []string
 }

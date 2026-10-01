@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/underpass-ai/AXLR/mcpclient"
+	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 )
 
@@ -20,9 +21,10 @@ type recordedCall struct {
 }
 
 type fakeEngine struct {
-	calls    []recordedCall
-	existing bool
-	refuse   *refusal
+	calls     []recordedCall
+	existing  bool
+	refuse    *refusal
+	published map[string]bool
 }
 
 func (f *fakeEngine) call(_ context.Context, s mcpclient.Server, tool string, arguments map[string]any) (map[string]any, error) {
@@ -32,6 +34,25 @@ func (f *fakeEngine) call(_ context.Context, s mcpclient.Server, tool string, ar
 			return nil, f.refuse
 		}
 		return map[string]any{"existing": f.existing, "version": 4.0}, nil
+	}
+	switch tool {
+	case "made_get_ceremony_definition":
+		for _, d := range ceremonyhost.Definitions() {
+			if d.Name == arguments["ceremony"] && f.published[d.Name] {
+				return map[string]any{"digest": d.Digest}, nil
+			}
+		}
+		return nil, &refusal{Code: "not_found", Message: "definition not found"}
+	case "made_publish_ceremony_definition":
+		if f.published == nil {
+			f.published = map[string]bool{}
+		}
+		for _, d := range ceremonyhost.Definitions() {
+			if text, _ := d.YAML(); text == arguments["definition_yaml"] {
+				f.published[d.Name] = true
+			}
+		}
+		return map[string]any{"outcome": "published"}, nil
 	}
 	return map[string]any{"definitions": []any{}}, nil
 }
@@ -138,5 +159,41 @@ func TestPreparationReportsAConflictingGrant(t *testing.T) {
 	_, run := prepare(t, madeConfig(t, embeddedLauncher, map[string]string{hostIdentityKey: "axlr-work-1"}), engine)
 	if got, err := run(); err != nil || !strings.HasPrefix(got, "conflict|") || len(engine.calls) != 1 {
 		t.Fatalf("%s %v", got, err)
+	}
+}
+
+func TestPreparationPublishesCeremoniesThroughAShortLivedGrant(t *testing.T) {
+	engine := &fakeEngine{}
+	_, run := prepare(t, madeConfig(t, embeddedLauncher, map[string]string{hostIdentityKey: "axlr-work-1"}), engine)
+	if _, err := run(); err != nil {
+		t.Fatal(err)
+	}
+	var order []string
+	for _, c := range engine.calls {
+		order = append(order, c.tool)
+		admin := !slices.ContainsFunc(c.env, func(e string) bool { return strings.HasPrefix(e, hostIdentityKey+"=") })
+		switch c.tool {
+		case "made_publish_ceremony_definition":
+			if admin {
+				t.Fatal("published as the trusted host instead of the work identity")
+			}
+		case "made_revoke_authorization_grant":
+			if !admin || c.args["reason"] == "" {
+				t.Fatalf("revoke not done by the trusted host with a reason: %+v", c.args)
+			}
+		}
+	}
+	joined := strings.Join(order, ",")
+	if strings.Count(joined, "made_publish_ceremony_definition") != 2 || !strings.HasSuffix(joined, "made_revoke_authorization_grant") {
+		t.Fatalf("unexpected sequence: %s", joined)
+	}
+	engine.calls = nil
+	if _, err := run(); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range engine.calls {
+		if c.tool == "made_publish_ceremony_definition" || c.tool == "made_revoke_authorization_grant" {
+			t.Fatalf("second preparation republished: %s", c.tool)
+		}
 	}
 }

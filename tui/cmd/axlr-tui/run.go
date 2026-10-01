@@ -22,6 +22,7 @@ import (
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
+	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	"github.com/underpass-ai/AXLR/tui/adapters/engineupdate"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
@@ -312,8 +313,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog}
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, Ceremonies: ceremonyDriver(registrations, runner)}
 	app := terminal.New(terminal.Dependencies{
 		Context:           ctx,
 		Diagnostics:       trace,
@@ -407,4 +408,21 @@ func environmentName(s string) bool {
 		}
 	}
 	return true
+}
+
+// ceremonyDriver drives /debug and /delivery when MADE is connected. KMP is
+// optional: without it ceremonies run without memory.
+func ceremonyDriver(registrations []plugins.Registration, tools application.ToolExecutionPort) *application.CeremonyDriver {
+	connected := map[string]bool{}
+	for _, registration := range registrations {
+		connected[registration.Manifest.ID.String()] = true
+	}
+	if !connected["made"] {
+		return nil
+	}
+	driver := &application.CeremonyDriver{Engine: ceremonyhost.Engine{Tools: tools}, Checks: ceremonyhost.Checks{Tools: tools}}
+	if connected["kmp"] {
+		driver.Memory = ceremonyhost.Memory{Tools: tools}
+	}
+	return driver
 }

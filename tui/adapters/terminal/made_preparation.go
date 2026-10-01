@@ -63,6 +63,9 @@ func madePreparationContent(result application.MADEPreparation, err error, theme
 	default:
 		b.WriteString(theme.Tf("madeSetup.unsupported", result.Detail))
 	}
+	if len(result.Published) > 0 {
+		b.WriteString("\n\n" + theme.Tf("madeSetup.published", strings.Join(result.Published, ", ")))
+	}
 	if result.RestartRequired {
 		b.WriteString("\n\n" + theme.T("madeSetup.restart"))
 	}

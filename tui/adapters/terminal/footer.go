@@ -79,7 +79,11 @@ func (m AppModel) footerStatus() string {
 		parts = append(parts, m.Theme.T("status."+string(state)))
 	}
 	if mode := m.Header.State.Mode; mode != "" && mode != domain.ModeNormal {
-		parts = append(parts, m.Theme.T("mode."+string(mode)))
+		badge := m.Theme.T("mode." + string(mode))
+		if run := m.Header.State.Ceremony; run != nil {
+			badge = m.Theme.Tf("ceremony.badge", badge, run.Step, run.Iteration)
+		}
+		parts = append(parts, badge)
 	}
 	if status.Autonomous {
 		parts = append(parts, m.Theme.T("status.autonomous"))
