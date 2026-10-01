@@ -110,7 +110,7 @@ func stepDoneNeedsApproval(s domain.Session, arguments root.JSONValue) bool {
 	}
 	run, live := s.Ceremony()
 	if !live {
-		return true
+		return false // the driver refuses it without running anything
 	}
 	switch run.Step {
 	case "reproduce", "brief", "repair", "build":
