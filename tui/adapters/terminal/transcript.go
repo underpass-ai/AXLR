@@ -15,6 +15,7 @@ type Transcript struct {
 	Gutter     int
 	rows       []transcriptRow
 	rowKinds   map[int]transcriptRowKind
+	indents    map[int]int
 	visualRows []transcriptRowKind
 	theme      Theme
 	// raw holds unwrapped lines; reflow wraps them at word boundaries to the
@@ -38,6 +39,7 @@ func (t *Transcript) SetWidth(width int) {
 func (t *Transcript) SetContent(s string) {
 	t.rows = nil
 	t.rowKinds = nil
+	t.indents = nil
 	t.raw = Sanitize(s)
 	t.reflow()
 }
@@ -64,8 +66,13 @@ func (t *Transcript) reflow() {
 			b.WriteByte('\n')
 		}
 		wrapped := line
-		if width > 0 && ansi.StringWidth(line) > width {
+		if lineWidth := ansi.StringWidth(line); width > 0 && lineWidth > width {
 			wrapped = ansi.Wrap(line, width, "")
+			if indent := t.indents[index]; indent > 0 && indent < width {
+				pad := strings.Repeat(" ", indent)
+				body := ansi.Wrap(ansi.Cut(line, indent, lineWidth), width-indent, "")
+				wrapped = ansi.Cut(line, 0, indent) + strings.ReplaceAll(body, "\n", "\n"+pad)
+			}
 		}
 		for range strings.Count(wrapped, "\n") + 1 {
 			t.visualRows = append(t.visualRows, t.rowKinds[index])
@@ -82,62 +89,38 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 	t.theme = theme
 	t.rows = t.rows[:0]
 	archived := 0
+	results := make(map[string]*root.Message)
+	for i := range s.Messages {
+		if s.Messages[i].Role == root.RoleTool {
+			results[string(s.Messages[i].ToolCallID)] = &s.Messages[i]
+		}
+	}
+	records := make(map[string]*domain.PendingTool, len(s.Activity))
+	for i := range s.Activity {
+		records[string(s.Activity[i].Call.ID)] = &s.Activity[i]
+	}
 	for index, m := range s.Messages {
-		kind := transcriptRowPlain
-		if m.Role == root.RoleUser {
-			kind = transcriptRowUser
-		} else if m.Role == root.RoleAssistant {
-			kind = transcriptRowAssistant
-		}
-		text := theme.T("role."+string(m.Role)) + ": " + string(m.Content)
-		row := transcriptRow{Text: text, Kind: kind}
-		if m.Role == root.RoleAssistant {
-			row = transcriptRow{Label: theme.T("role."+string(m.Role)) + ": ", Text: string(m.Content), Kind: kind, Markdown: true}
-		}
-		if m.Role == root.RoleTool {
-			call := root.ToolCall{}
-			for _, record := range s.Activity {
-				if record.Call.ID == m.ToolCallID {
-					call = record.Call
-					break
-				}
-			}
-			label, memory := toolCallPresentation(s, call)
-			row.Text = theme.T("transcript.toolResult") + label + " · " + toolResultSummaryLocale(string(m.Content), theme.Locale)
-			if memory {
-				row.Kind = transcriptRowMemory
-				row.Text = theme.T("transcript.memoryResult") + label + " · " + toolResultSummaryLocale(string(m.Content), theme.Locale)
-			}
-		}
-		if m.Content != "" || m.Role != root.RoleAssistant {
-			row.GapBefore = len(t.rows) > 0
-			t.rows = append(t.rows, row)
+		switch {
+		case m.Role == root.RoleUser:
+			t.appendRow(transcriptRow{Label: theme.Icon("user") + " ", LabelTone: toneAccent, Text: string(m.Content), Kind: transcriptRowUser, Indent: true})
+		case m.Role == root.RoleAssistant && m.Content != "":
+			t.appendRow(transcriptRow{Text: string(m.Content), Kind: transcriptRowAssistant, Markdown: true})
+		case m.Role != root.RoleAssistant && m.Role != root.RoleTool:
+			t.appendRow(transcriptRow{Text: theme.T("role."+string(m.Role)) + ": " + string(m.Content), Kind: transcriptRowPlain})
 		}
 		for _, c := range m.ToolCalls {
-			label, memory := toolCallPresentation(s, c)
-			kind := transcriptRowPlain
-			prefix := theme.T("transcript.toolRequest")
-			if memory {
-				kind = transcriptRowMemory
-				prefix = theme.T("transcript.memoryRequest")
-			}
-			t.rows = append(t.rows, transcriptRow{Text: prefix + label + " " + toolSummaryLocale(string(c.Arguments.Bytes()), theme.Locale), Kind: kind, GapBefore: len(t.rows) > 0})
-			for _, a := range s.Activity {
-				if a.Call.ID == c.ID {
-					t.rows = append(t.rows, transcriptRow{Text: theme.T("transcript.decision") + theme.T("decision."+string(a.Decision)), Kind: kind})
-				}
-			}
+			t.appendRow(toolRow(s, c, records[string(c.ID)], results[string(c.ID)], theme))
 		}
 		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
-			t.rows = append(t.rows, transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0, Markdown: true})
+			t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, Markdown: true})
 			archived++
 		}
 	}
 	if s.Draft != "" {
-		t.rows = append(t.rows, transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.Draft), Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0, Markdown: true})
+		t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.Draft), Kind: transcriptRowAssistant, Markdown: true})
 	}
 	if draft != "" {
-		t.rows = append(t.rows, transcriptRow{Label: theme.T("transcript.assistant"), Text: draft, Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0, Markdown: true})
+		t.appendRow(transcriptRow{Text: draft, Kind: transcriptRowAssistant, Markdown: true})
 	}
 	t.renderRows()
 	t.ApplyTheme(theme)
@@ -147,14 +130,24 @@ func (t *Transcript) AppendUnsent(prompts []string) {
 		return
 	}
 	for _, prompt := range prompts {
-		t.rows = append(t.rows, transcriptRow{Text: t.theme.T("transcript.notSent") + prompt, Kind: transcriptRowUser, GapBefore: len(t.rows) > 0})
+		t.appendRow(transcriptRow{Label: t.theme.Icon("user") + " ", LabelTone: toneWarning, Text: t.theme.T("transcript.notSent") + prompt, Kind: transcriptRowUser, Indent: true})
 	}
 	t.renderRows()
 	t.ApplyTheme(t.theme)
 }
+
+// appendRow separates conversation turns with a blank line but keeps
+// consecutive tool rows together.
+func (t *Transcript) appendRow(row transcriptRow) {
+	if len(t.rows) > 0 {
+		row.GapBefore = !(row.Kind.isTool() && t.rows[len(t.rows)-1].Kind.isTool())
+	}
+	t.rows = append(t.rows, row)
+}
 func (t *Transcript) renderRows() {
 	var b strings.Builder
 	kinds := make(map[int]transcriptRowKind)
+	indents := make(map[int]int)
 	line := 0
 	for index, row := range t.rows {
 		if index > 0 {
@@ -169,14 +162,22 @@ func (t *Transcript) renderRows() {
 		if row.Markdown {
 			clean = renderMarkdown(clean, t.theme)
 		}
-		clean = Sanitize(row.Label) + clean
+		label := Sanitize(row.Label)
+		indent := 0
+		if row.Indent {
+			indent = ansi.StringWidth(label)
+			clean = strings.ReplaceAll(clean, "\n", "\n"+strings.Repeat(" ", indent))
+		}
+		clean = t.theme.rowLabel(label, row.LabelTone, row.Kind) + clean
 		for i := range strings.Count(clean, "\n") + 1 {
 			kinds[line+i] = row.Kind
+			indents[line+i] = indent
 		}
 		line += strings.Count(clean, "\n") + 1
 		b.WriteString(clean)
 	}
 	t.rowKinds = kinds
+	t.indents = indents
 	t.raw = b.String()
 	t.reflow()
 }
@@ -205,18 +206,7 @@ func (t Transcript) View() string {
 			lines[i] = lipgloss.NewStyle().Width(outerWidth).Render(line)
 			continue
 		}
-		switch t.visualRows[index] {
-		case transcriptRowUser:
-			lines[i] = t.theme.UserRow().Width(outerWidth).Render(line)
-		case transcriptRowAssistant:
-			lines[i] = t.theme.AssistantRow().Width(outerWidth).Render(line)
-		case transcriptRowMemory:
-			lines[i] = t.theme.MemoryRow().Width(outerWidth).Render(line)
-		case transcriptRowGap:
-			lines[i] = lipgloss.NewStyle().Width(outerWidth).Render(line)
-		default:
-			lines[i] = t.theme.ToolRow().Width(outerWidth).Render(line)
-		}
+		lines[i] = t.theme.rowText(t.visualRows[index]).Width(outerWidth).Render(line)
 	}
 	return strings.Join(lines, "\n")
 }

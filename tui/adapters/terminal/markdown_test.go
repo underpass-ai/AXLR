@@ -59,18 +59,18 @@ func TestRenderMarkdownLeavesUnclosedMarkersLiteral(t *testing.T) {
 	}
 }
 
-// Inline styles must not reset the row band: the assistant background has to
-// reach the end of the line.
-func TestMarkdownStylesKeepTheRowBackground(t *testing.T) {
+// Inline styles must hand the line back to the row's text colour, never to
+// the terminal default, and must not reset the row style before its end.
+func TestMarkdownStylesRestoreTheRowForeground(t *testing.T) {
 	theme := Theme{ID: domain.ThemeInk}
 	line := renderMarkdown("pre **bold** `code` tail", theme)
-	row := theme.AssistantRow().Width(60).Render(line)
-	tail := row[strings.Index(row, "tail"):]
-	if strings.Contains(row[:strings.Index(row, "tail")], "\x1b[0m") || strings.Contains(row[:strings.Index(row, "tail")], "\x1b[m") {
-		t.Fatalf("inline style reset the band before the tail: %q", row)
+	row := theme.rowText(transcriptRowAssistant).Width(60).Render(line)
+	before := row[:strings.Index(row, "tail")]
+	if strings.Contains(before, "\x1b[0m") || strings.Contains(before, "\x1b[m") || strings.Contains(before, "\x1b[39m") {
+		t.Fatalf("inline style reset the row before the tail: %q", row)
 	}
-	if !strings.Contains(row, "48;2;27;32;48") || strings.TrimSpace(ansi.Strip(tail)) != "tail" {
-		t.Fatalf("band missing: %q", row)
+	if !strings.Contains(before, sgrForeground(theme.palette().Text)) {
+		t.Fatalf("row foreground not restored after code: %q", row)
 	}
 }
 
@@ -89,10 +89,10 @@ func TestTranscriptRendersAssistantMarkdownButNotToolRows(t *testing.T) {
 	transcript.SetWidth(60)
 	transcript.SetSession(s.Export(), "", Theme{Monochrome: true})
 	text := transcript.Text()
-	if !strings.Contains(text, "assistant: Title\nbold answer") {
+	if !strings.Contains(text, "\n\nTitle\nbold answer") {
 		t.Fatalf("assistant markdown not rendered: %q", text)
 	}
-	if !strings.Contains(text, "user: **literal** question") {
+	if !strings.Contains(text, "> **literal** question") {
 		t.Fatalf("user text should stay verbatim: %q", text)
 	}
 }

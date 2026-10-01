@@ -295,9 +295,9 @@ func TestAppModelOptimisticPromptKeepsPreviousInterruptedRowInOrder(t *testing.T
 	m = update(m, ControlIntent("send"))
 	defer m.cancel()
 	content := m.Transcript.Viewport.GetContent()
-	first := strings.Index(content, "user: first prompt")
+	first := strings.Index(content, "> first prompt")
 	partial := strings.Index(content, "interrupted draft: first partial answer")
-	second := strings.Index(content, "user: second prompt")
+	second := strings.Index(content, "> second prompt")
 	if first < 0 || partial <= first || second <= partial {
 		t.Fatalf("optimistic rows are out of order: %q", content)
 	}

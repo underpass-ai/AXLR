@@ -1,6 +1,8 @@
 package terminal
 
 import (
+	"strings"
+
 	"charm.land/lipgloss/v2"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -23,36 +25,37 @@ func (t Theme) palette() ThemePalette {
 	return themePalettes[domain.ThemeInk]
 }
 
-func (t Theme) AssistantRow() lipgloss.Style {
+// rowText is the foreground of a transcript row. Rows carry no background:
+// whitespace and a leading glyph separate turns.
+func (t Theme) rowText(kind transcriptRowKind) lipgloss.Style {
 	if t.Monochrome {
 		return lipgloss.NewStyle()
 	}
 	p := t.palette()
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text)).Background(lipgloss.Color(p.Surface))
+	switch kind {
+	case transcriptRowUser:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text)).Bold(true)
+	case transcriptRowAssistant, transcriptRowGap:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text))
+	default:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Muted))
+	}
 }
 
-func (t Theme) UserRow() lipgloss.Style {
-	if t.Monochrome {
-		return lipgloss.NewStyle()
+// rowLabel colours a row's leading glyph and restores the row's foreground
+// before the trailing space, so a hanging-indent cut never splits the codes.
+func (t Theme) rowLabel(label string, tone rowTone, kind transcriptRowKind) string {
+	if t.Monochrome || tone == toneNone || label == "" {
+		return label
 	}
 	p := t.palette()
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text)).Background(lipgloss.Color(p.User))
-}
-
-func (t Theme) MemoryRow() lipgloss.Style {
-	if t.Monochrome {
-		return lipgloss.NewStyle()
+	colour := map[rowTone]string{toneAccent: p.Accent, toneGood: p.Good, toneWarning: p.Warning, toneError: p.DiffRemoved}[tone]
+	restore := p.Muted
+	if kind == transcriptRowUser || kind == transcriptRowAssistant {
+		restore = p.Text
 	}
-	p := t.palette()
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text)).Background(lipgloss.Color(p.Memory))
-}
-
-func (t Theme) ToolRow() lipgloss.Style {
-	if t.Monochrome {
-		return lipgloss.NewStyle()
-	}
-	p := t.palette()
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Muted)).Background(lipgloss.Color(p.Raised))
+	glyph := strings.TrimRight(label, " ")
+	return sgrForeground(colour) + glyph + sgrForeground(restore) + label[len(glyph):]
 }
 
 func (t Theme) Heading(s string) string {
@@ -103,6 +106,12 @@ func (t Theme) Icon(kind string) string {
 			return "[WAIT]"
 		case "error":
 			return "[ERR]"
+		case "user":
+			return ">"
+		case "done":
+			return "+"
+		case "failed":
+			return "x"
 		}
 	}
 	if t.Icons == domain.IconsNerd {
@@ -115,6 +124,12 @@ func (t Theme) Icon(kind string) string {
 			return "󰏤"
 		case "error":
 			return "󰅙"
+		case "user":
+			return ""
+		case "done":
+			return "󰄬"
+		case "failed":
+			return "󰅙"
 		}
 	}
 	switch kind {
@@ -126,6 +141,12 @@ func (t Theme) Icon(kind string) string {
 		return "◌"
 	case "error":
 		return "!"
+	case "user":
+		return "›"
+	case "done":
+		return "✓"
+	case "failed":
+		return "✗"
 	}
 	return "•"
 }

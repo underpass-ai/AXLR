@@ -1,0 +1,140 @@
+package terminal
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+
+	"github.com/charmbracelet/x/ansi"
+	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/domain"
+)
+
+// toolRowHeadBytes bounds how much of a saved result the transcript inspects.
+// Results can be hundreds of kilobytes and rows render on every snapshot.
+const toolRowHeadBytes = 1024
+
+const toolRowArgumentWidth = 48
+
+// toolRow condenses one call, its decision and its result into a single line:
+// status glyph, tool, a short argument summary, then size, duration and any
+// human decision. Automatic approvals are not shown.
+func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTool, result *root.Message, theme Theme) transcriptRow {
+	label, memory := toolCallPresentation(s, call)
+	kind := transcriptRowPlain
+	if memory {
+		kind = transcriptRowMemory
+	}
+	glyph, tone := theme.Icon("waiting"), toneWarning
+	var details []string
+	switch {
+	case record != nil && record.Decision == domain.DecisionDeny:
+		glyph, tone = theme.Icon("failed"), toneError
+		details = append(details, theme.T("transcript.toolDenied"))
+	case result != nil:
+		glyph, tone = theme.Icon("done"), toneGood
+		head := string(result.Content[:min(len(result.Content), toolRowHeadBytes)])
+		if record != nil && record.Outcome != nil && record.Outcome.IsError || strings.Contains(head, `"status":"failed"`) {
+			glyph, tone = theme.Icon("failed"), toneError
+		}
+		details = append(details, formatBytes(len(result.Content)))
+		if duration, ok := durationMS(head); ok {
+			details = append(details, formatDuration(duration))
+		}
+	case record != nil && record.Decision == "":
+		details = append(details, theme.T("transcript.toolAwaiting"))
+	default:
+		details = append(details, theme.T("transcript.toolRunning"))
+	}
+	if memory && tone == toneGood {
+		glyph, tone = theme.Icon("memory"), toneAccent
+	}
+	if record != nil && record.Decision == domain.DecisionApprove {
+		details = append(details, theme.T("transcript.toolApproved"))
+	}
+	text := label
+	if args := toolArgumentSummary(call); args != "" {
+		text += "  " + args
+	}
+	text += " · " + strings.Join(details, " · ")
+	return transcriptRow{Label: glyph + " ", LabelTone: tone, Text: text, Kind: kind, Indent: true}
+}
+
+// toolArgumentSummary lists the call's top-level scalar values in argument
+// order ("README.md", "project:AXLR"); nested objects are left to Info.
+func toolArgumentSummary(call root.ToolCall) string {
+	raw := call.Arguments.Bytes()
+	if call.Name == application.HostCallToolName && len(raw) <= toolRowHeadBytes {
+		// The wrapper's name is already the row's label; summarise what it passes on.
+		var wrapper struct {
+			Arguments json.RawMessage `json:"arguments"`
+		}
+		if json.Unmarshal(raw, &wrapper) == nil {
+			raw = wrapper.Arguments
+		}
+	}
+	if len(raw) > toolRowHeadBytes {
+		return ansi.Truncate(singleLine(string(raw[:toolRowHeadBytes])), toolRowArgumentWidth, "…")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return ""
+	}
+	var values []string
+	for decoder.More() {
+		key, err := decoder.Token()
+		if err != nil {
+			return ""
+		}
+		var value any
+		if err := decoder.Decode(&value); err != nil {
+			return ""
+		}
+		switch v := value.(type) {
+		case string:
+			if v != "" {
+				values = append(values, v)
+			}
+		case json.Number, bool:
+			values = append(values, fmt.Sprintf("%v=%v", key, v))
+		}
+	}
+	return ansi.Truncate(singleLine(strings.Join(values, " ")), toolRowArgumentWidth, "…")
+}
+
+func durationMS(head string) (int64, bool) {
+	const key = `"duration_ms":`
+	at := strings.Index(head, key)
+	if at < 0 {
+		return 0, false
+	}
+	digits := head[at+len(key):]
+	end := 0
+	for end < len(digits) && digits[end] >= '0' && digits[end] <= '9' {
+		end++
+	}
+	value, err := strconv.ParseInt(digits[:end], 10, 64)
+	return value, err == nil
+}
+
+func formatBytes(n int) string {
+	switch {
+	case n < 1024:
+		return fmt.Sprintf("%d\u00a0B", n)
+	case n < 1024*1024:
+		return fmt.Sprintf("%.1f\u00a0KB", float64(n)/1024)
+	default:
+		return fmt.Sprintf("%.1f\u00a0MB", float64(n)/(1024*1024))
+	}
+}
+
+func formatDuration(ms int64) string {
+	if ms < 1000 {
+		return fmt.Sprintf("%d\u00a0ms", ms)
+	}
+	return fmt.Sprintf("%.1f\u00a0s", float64(ms)/1000)
+}

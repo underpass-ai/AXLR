@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -179,8 +180,8 @@ func TestSpanishSurfacesAndStoredContent(t *testing.T) {
 	tr.Viewport.SetWidth(80)
 	tr.Viewport.SetHeight(8)
 	tr.SetSession(state, "", m.Theme)
-	if !strings.Contains(tr.Viewport.GetContent(), "usuario: Exact user text · no translation") {
-		t.Fatal("transcript labels or original user content changed")
+	if !strings.Contains(ansi.Strip(tr.Viewport.GetContent()), m.Theme.Icon("user")+" Exact user text · no translation") {
+		t.Fatalf("transcript labels or original user content changed: %q", tr.Viewport.GetContent())
 	}
 }
 

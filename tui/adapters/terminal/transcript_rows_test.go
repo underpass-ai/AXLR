@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 
@@ -27,8 +28,8 @@ func TestTranscriptAssistantRowsFillWidthAndGrowWithText(t *testing.T) {
 	if transcript.Viewport.StyleLineFunc != nil {
 		t.Fatal("styling before viewport wrap risks adding visual rows")
 	}
-	if !strings.Contains(transcript.View(), "48;2;27;32;48") {
-		t.Fatal("assistant rows have no background")
+	if strings.Contains(transcript.View(), "48;2;") || !strings.Contains(transcript.View(), "38;2;232;237;247") {
+		t.Fatal("assistant rows should use the text colour without a background band")
 	}
 }
 
@@ -84,7 +85,7 @@ func TestTranscriptUnsentPromptKeepsAssistantRowColor(t *testing.T) {
 	transcript.SetSession(domain.SessionState{Messages: []root.Message{{Role: root.RoleAssistant, Content: "saved answer"}}}, "", Theme{})
 	transcript.AppendUnsent([]string{"retry me"})
 	lines := strings.Split(transcript.View(), "\n")
-	if !strings.Contains(lines[0], "48;2;27;32;48") || strings.Contains(lines[1], "48;2;") || !strings.Contains(lines[2], "48;2;32;60;72") || !strings.Contains(strings.Join(lines, "\n"), "Not sent: retry me") {
+	if !strings.Contains(ansi.Strip(lines[0]), "saved answer") || strings.TrimSpace(ansi.Strip(lines[1])) != "" || !strings.Contains(ansi.Strip(lines[2]), "› Not sent: retry me") || !strings.Contains(lines[2], sgrForeground(Theme{}.palette().Warning)+"›") {
 		t.Fatalf("assistant color or unsent prompt lost: %q", transcript.View())
 	}
 }
@@ -110,13 +111,13 @@ func TestTranscriptInterleavesRowsAndScrollsWhenTheyExceedTerminal(t *testing.T)
 	transcript.Viewport.SetWidth(30)
 	transcript.Viewport.SetHeight(3)
 	transcript.SetSession(s.Export(), "", Theme{})
-	content := transcript.Text()
-	for _, item := range []string{"user: first question", "interrupted draft: first partial answer", "user: second question", "assistant: second answer"} {
+	content := ansi.Strip(transcript.Text())
+	for _, item := range []string{"› first question", "interrupted draft: first partial answer", "› second question", "\n\nsecond answer"} {
 		if !strings.Contains(content, item) {
 			t.Fatalf("missing row %q in %q", item, content)
 		}
 	}
-	if strings.Index(content, "user: first") > strings.Index(content, "interrupted draft") || strings.Index(content, "interrupted draft") > strings.Index(content, "user: second") || strings.Index(content, "user: second") > strings.Index(content, "assistant: second") {
+	if strings.Index(content, "› first") > strings.Index(content, "interrupted draft") || strings.Index(content, "interrupted draft") > strings.Index(content, "› second") || strings.Index(content, "› second") > strings.Index(content, "second answer") {
 		t.Fatalf("rows not in conversation order: %q", content)
 	}
 	if transcript.Viewport.TotalLineCount() <= 3 || lipgloss.Height(transcript.View()) != 3 {
