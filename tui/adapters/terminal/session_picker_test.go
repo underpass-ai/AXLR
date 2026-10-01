@@ -63,3 +63,38 @@ func TestSessionPickerViewShowsTitleAgeGroupAndState(t *testing.T) {
 		t.Fatalf("view shows ids or the workspace in this-workspace scope:\n%s", view)
 	}
 }
+
+func TestSessionPickerRenamesArchivesAndCyclesScopes(t *testing.T) {
+	p := pickerFixture(time.Now())
+	p.Labels = map[domain.SessionID]domain.SessionLabel{"old": {Title: "Contrato revisado"}}
+	if title := p.Title(p.Visible()[1]); title != "Contrato revisado" {
+		t.Fatalf("label title not used: %q", title)
+	}
+	if p.Key("f2", "") != "" || !p.Renaming || p.RenameText != "¿qué ceremonias tienes?" {
+		t.Fatalf("F2 did not start renaming: %+v", p)
+	}
+	p.Key("backspace", "")
+	p.Key("!", "!")
+	if p.RenameText != "¿qué ceremonias tienes!" {
+		t.Fatalf("rename text = %q", p.RenameText)
+	}
+	if p.Key("enter", "") != SessionRenameIntent || p.Renaming {
+		t.Fatal("Enter did not ask to save the title")
+	}
+	if p.Key("ctrl+x", "") != SessionArchiveIntent {
+		t.Fatal("Ctrl+X did not ask to archive")
+	}
+	p.Labels["new"] = domain.SessionLabel{Archived: true}
+	if got := ids(p.Visible()); got != "old" {
+		t.Fatalf("archived session still listed: %s", got)
+	}
+	p.Key("tab", "")
+	p.Key("tab", "")
+	if !p.ArchivedView || ids(p.Visible()) != "new" {
+		t.Fatalf("archived view = %v %s", p.ArchivedView, ids(p.Visible()))
+	}
+	p.Key("tab", "")
+	if p.ArchivedView || p.AllWorkspaces {
+		t.Fatal("Tab did not return to this workspace")
+	}
+}

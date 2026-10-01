@@ -268,6 +268,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	defer store.Close()
 	loggedStore := diagnostics.SessionStore{Next: store, Trace: trace}
+	sessionLabels, err := storage.NewSessionLabelStore(filepath.Join(stateBase, "axlr", "session-labels.json"))
+	if err != nil {
+		return fail(err)
+	}
 	var session *domain.Session
 	var newID domain.SessionID
 	if *sessionFlag != "" {
@@ -317,6 +321,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands},
 		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
 		ModelPreference:   preferences,
+		SessionLabels:     sessionLabels,
 		ModelFavorites:    settingsStore.ModelFavorites(),
 		UIPreferenceStore: uiStore,
 		UIPreferences:     uiPreferences,
