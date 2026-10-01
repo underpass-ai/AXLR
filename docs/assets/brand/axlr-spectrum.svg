@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="552" viewBox="0 0 1600 552" role="img" aria-labelledby="axlr-title axlr-desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="593" viewBox="0 0 1600 593" role="img" aria-labelledby="axlr-title axlr-desc">
   <title id="axlr-title">AXLR</title>
   <desc id="axlr-desc">AXLR pixel wordmark with Spectrum bars. Transparent background.</desc>
   <g shape-rendering="crispEdges">
@@ -306,9 +306,9 @@
     <rect x="1473.125" y="415.188889" width="33.65625" height="7.488889" fill="#C9B08C"/>
     <rect x="1484.34375" y="374" width="7.479167" height="33.7" fill="#C9B08C"/>
     <rect x="1473.125" y="400.211111" width="18.697917" height="7.488889" fill="#C9B08C"/>
-    <polygon points="1230,517 1291.2,449 1343.9,449 1282.7,517" fill="#B85C38"/>
-    <polygon points="1291.2,517 1352.4,449 1405.1,449 1343.9,517" fill="#D97B2D"/>
-    <polygon points="1352.4,517 1413.6,449 1466.3,449 1405.1,517" fill="#6B4A2E"/>
-    <polygon points="1413.6,517 1474.8,449 1527.5,449 1466.3,517" fill="#C9B08C"/>
+    <polygon points="1397.98125,471.1 1420.08125,449 1506.78125,449 1484.68125,471.1" fill="#B85C38"/>
+    <polygon points="1397.98125,500 1420.08125,477.9 1506.78125,477.9 1484.68125,500" fill="#D97B2D"/>
+    <polygon points="1397.98125,528.9 1420.08125,506.8 1506.78125,506.8 1484.68125,528.9" fill="#6B4A2E"/>
+    <polygon points="1397.98125,557.8 1420.08125,535.7 1506.78125,535.7 1484.68125,557.8" fill="#C9B08C"/>
   </g>
 </svg>
