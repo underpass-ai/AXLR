@@ -33,6 +33,9 @@ type SessionState struct {
 	// Mode is the session's work mode; empty reads as ModeNormal. It is kept
 	// outside the snapshot so the snapshot format does not change.
 	Mode WorkMode
+	// Ceremony is the live console-driven ceremony, if any. Like Mode, it is
+	// kept outside the snapshot.
+	Ceremony *CeremonyRun
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -60,6 +63,11 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	}
 	if state.Mode != "" {
 		if err = state.Mode.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
+	if state.Ceremony != nil {
+		if err = state.Ceremony.Validate(); err != nil {
 			return Session{}, err
 		}
 	}
@@ -152,6 +160,10 @@ func cloneState(state SessionState) SessionState {
 	state.Activity = append([]PendingTool(nil), state.Activity...)
 	state.ArchivedDrafts = append([]ArchivedDraft(nil), state.ArchivedDrafts...)
 	state.MessageTimes = append([]time.Time(nil), state.MessageTimes...)
+	if state.Ceremony != nil {
+		run := state.Ceremony.clone()
+		state.Ceremony = &run
+	}
 	if len(state.MessageTimes) > len(state.Messages) {
 		state.MessageTimes = state.MessageTimes[:len(state.Messages)]
 	}

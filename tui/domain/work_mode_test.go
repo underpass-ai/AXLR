@@ -30,7 +30,7 @@ func TestParseWorkModeAcceptsOnlyKnownModes(t *testing.T) {
 			t.Fatalf("%s: %v", raw, err)
 		}
 	}
-	for _, raw := range []string{"", "Writer", "debug", "review "} {
+	for _, raw := range []string{"", "Writer", "loud", "review "} {
 		if _, err := ParseWorkMode(raw); err == nil {
 			t.Fatalf("accepted %q", raw)
 		}

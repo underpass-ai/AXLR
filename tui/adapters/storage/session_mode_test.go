@@ -57,3 +57,37 @@ func TestUnreadableModeSidecarLoadsAsNormal(t *testing.T) {
 		t.Fatalf("%v %q", err, loaded.Mode())
 	}
 }
+
+func TestCeremonyRunIsKeptBesideTheSnapshot(t *testing.T) {
+	store, dir := openStore(t)
+	const id = "00112233445566778899aabbccddeeff"
+	s, err := domain.NewSession(id, domain.Workspace(t.TempDir()), "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetMode(domain.ModeDebug); err != nil {
+		t.Fatal(err)
+	}
+	run := domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "axlr-x", Step: "repair", Iteration: 2, Fence: "fence-9", About: "ws:" + id, Check: domain.CheckCommand{Program: "python3", Args: []string{"-m", "unittest"}}}
+	if err := s.SetCeremony(run); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := loaded.Ceremony()
+	if !ok || got.Step != "repair" || got.Iteration != 2 || got.Fence != "fence-9" || !got.Check.Equal(run.Check) || got.About != run.About {
+		t.Fatalf("run not restored: %+v", got)
+	}
+	loaded.FinishCeremony()
+	if err := store.Save(context.Background(), loaded); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, id+".ceremony")); !os.IsNotExist(err) {
+		t.Fatal("finished ceremony left a sidecar behind")
+	}
+}

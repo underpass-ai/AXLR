@@ -28,7 +28,7 @@ func TestSessionModeDefaultsToNormalAndSurvivesRestore(t *testing.T) {
 		t.Fatalf("%v %q", err, restored.Mode())
 	}
 	state := s.Export()
-	state.Mode = "debug"
+	state.Mode = "loud"
 	if _, err := RestoreSession(state); err == nil {
 		t.Fatal("restored an unknown mode")
 	}
