@@ -16,6 +16,7 @@ type Dependencies struct {
 	Models            application.ListModelsUseCase
 	ModelPreference   application.ModelPreferencePort
 	SessionLabels     application.SessionLabelsPort
+	ModelFavorites    application.ModelFavoritesPort
 	UIPreferenceStore application.UIPreferencePort
 	UIPreferences     domain.UIPreferences
 	ApprovalSettings  application.ApprovalSettingsPort

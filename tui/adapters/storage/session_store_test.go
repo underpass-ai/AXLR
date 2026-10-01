@@ -231,3 +231,23 @@ func TestSessionStoreDefaultDirectory(t *testing.T) {
 		t.Fatal(e)
 	}
 }
+
+func TestSessionStoreCloseDiscardsOnlyEmptySessions(t *testing.T) {
+	store, dir := openStore(t)
+	empty := fixture(t)
+	used, err := domain.NewSession("1123456789abcdef0123456789abcdef", empty.Export().Workspace, "test/model")
+	must(t, err)
+	must(t, used.BeginTurn("keep me", nil))
+	must(t, store.Save(context.Background(), empty))
+	must(t, store.Save(context.Background(), used))
+	must(t, store.Close())
+	for id, kept := range map[domain.SessionID]bool{empty.Export().ID: false, used.Export().ID: true} {
+		_, err := os.Stat(filepath.Join(dir, string(id)+".json"))
+		if kept != (err == nil) {
+			t.Fatalf("%s kept=%v, stat err=%v", id, kept, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, string(empty.Export().ID)+".lock")); !os.IsNotExist(err) {
+		t.Fatalf("empty session's lock left behind: %v", err)
+	}
+}

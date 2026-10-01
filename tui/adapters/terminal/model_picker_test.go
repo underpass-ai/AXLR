@@ -242,3 +242,36 @@ func TestModelPickerCompactsContextAndRates(t *testing.T) {
 		t.Fatalf("shortRate = %q", got)
 	}
 }
+
+func TestModelPickerListsFavoritesFirstAndMarksThem(t *testing.T) {
+	z := zone.New()
+	defer z.Close()
+	p := NewModelPicker()
+	p.SetModels(pickerModels())
+	p.SetFavorites([]string{"google/gamma"})
+	if first := p.models[p.visible[0]].ID; first != "google/gamma" {
+		t.Fatalf("first = %s", first)
+	}
+	if view := ansi.Strip(p.View(z, "m-", 100, 30)); !strings.Contains(view, "★ Gamma") {
+		t.Fatalf("favorite not marked:\n%s", view)
+	}
+	if _, intent := pickerKey(p, z, tea.KeyPressMsg{Code: 's', Mod: tea.ModCtrl}); intent != ModelFavoriteIntent {
+		t.Fatalf("ctrl+s intent = %q", intent)
+	}
+}
+
+func TestModelPickerOpensWithFavoritesAndTheCurrentModelInView(t *testing.T) {
+	z := zone.New()
+	defer z.Close()
+	p := NewModelPicker()
+	p.SetCurrent("google/gamma")
+	p.SetFavorites([]string{"anthropic/beta"})
+	p.SetModels(pickerModels())
+	var order []string
+	for _, i := range p.visible {
+		order = append(order, string(p.models[i].ID))
+	}
+	if strings.Join(order, ",") != "anthropic/beta,google/gamma,openai/alpha" || p.selected != 1 {
+		t.Fatalf("order %v, selected %d", order, p.selected)
+	}
+}

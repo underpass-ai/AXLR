@@ -322,6 +322,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
 		ModelPreference:   preferences,
 		SessionLabels:     sessionLabels,
+		ModelFavorites:    settingsStore.ModelFavorites(),
 		UIPreferenceStore: uiStore,
 		UIPreferences:     uiPreferences,
 		ApprovalSettings:  approvalSettings,

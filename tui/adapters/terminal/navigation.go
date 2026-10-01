@@ -469,6 +469,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.Models = NewModelPicker()
 			m.Models.Theme = m.Theme
 			m.Models.SetCurrent(string(m.Header.State.Model))
+			if m.deps.ModelFavorites != nil {
+				if ids, err := m.deps.ModelFavorites.Load(m.lifetime.ctx); err == nil {
+					m.Models.SetFavorites(modelIDStrings(ids))
+				}
+			}
 			m.Models.Input.Prompt = m.Theme.T("common.searchPrompt")
 		}
 		m.Models.pageSize = max(1, m.Layout.Height-7)
@@ -491,6 +496,19 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			return msg
 		}, true
+	case ModelFavoriteIntent:
+		selected, ok := m.Models.SelectedModel()
+		if !ok || m.deps.ModelFavorites == nil {
+			return m, nil, true
+		}
+		ids, err := m.deps.ModelFavorites.Toggle(m.lifetime.ctx, selected.ID)
+		if err != nil {
+			m.Status.Error = err.Error()
+			return m, nil, true
+		}
+		m.Status.Error = ""
+		m.Models.SetFavorites(modelIDStrings(ids))
+		return m, nil, true
 	case ModelSelectIntent:
 		if m.Busy || m.overlay != "models" {
 			return m, nil, true
@@ -789,4 +807,12 @@ func fitOverlay(body string, width, height int) string {
 		lines[i] = ansi.Truncate(line, max(1, width), "…")
 	}
 	return strings.Join(lines, "\n")
+}
+
+func modelIDStrings(ids []root.ModelID) []string {
+	out := make([]string, len(ids))
+	for i, id := range ids {
+		out[i] = string(id)
+	}
+	return out
 }
