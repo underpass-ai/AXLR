@@ -28,6 +28,7 @@ The console is a separate Go module in [`tui/`](tui/README.md). It can start wit
 | Install, launch and send a first prompt | [Getting started](docs/getting-started.md) |
 | Use models, controls, sessions and diagnostics | [Console guide](docs/console.md) |
 | Connect KMP or MADE | [KMP runbook](docs/runbooks/kmp.md), [MADE runbook](docs/runbooks/made.md) |
+| Choose a working ceremony or hand off a task | [Default ceremonies](docs/ceremonies.md) |
 | Connect an MCP server or install a package | [Plugins and MCP](docs/plugins.md) |
 | Call AXLR from a process through JSON | [Worker contract](docs/worker.md) |
 | Review the planned HTTP API, Helm and release CI | [Service specification](docs/specs/axlr-service-api.md), [implementation plan](docs/plans/axlr-service-helm-release.md) |

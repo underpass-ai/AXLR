@@ -1,0 +1,148 @@
+version: '1.0'
+name: axlr_debug
+description: Repair a failure from a reproducible observation and a tested causal explanation, with at most three repair attempts.
+inputs:
+  required:
+  - failure_brief
+  - workspace
+  - expected_behavior
+  optional:
+  - memory_scope
+  - execution_profile
+outputs:
+  repair_report:
+    type: object
+states:
+- id: REPRODUCE_FAILURE
+  initial: true
+- id: ISOLATE_CAUSE
+- id: REPAIR_LOOP
+  repeat:
+    max_iterations: 3
+    until:
+      step: prove_repair
+      output_field: repaired
+      equals: true
+- id: INTEGRATE_REPAIR
+- id: COMPLETED
+  terminal: true
+transitions:
+- from: REPRODUCE_FAILURE
+  to: ISOLATE_CAUSE
+  trigger: reproduce_failure_completed
+  guards:
+  - exit_reproduce_failure_1
+  - reproduce_failure_completed
+- from: ISOLATE_CAUSE
+  to: REPAIR_LOOP
+  trigger: isolate_cause_completed
+  guards:
+  - exit_isolate_cause_1
+  - isolate_cause_completed
+- from: REPAIR_LOOP
+  to: INTEGRATE_REPAIR
+  trigger: repair_loop_completed
+  guards:
+  - repair_loop_prove_repair_completed
+  - repair_loop_repair_cause_completed
+  - accepted_axlr_debug
+- from: INTEGRATE_REPAIR
+  to: COMPLETED
+  trigger: integrate_repair_completed
+  guards:
+  - exit_integrate_repair_1
+  - integrate_repair_completed
+steps:
+- id: reproduce_failure
+  state: REPRODUCE_FAILURE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Inspect actual logs, errors, affected revision and expected behavior. Produce a minimal reproduction or a deterministic evidence-backed failure trace. Do not edit before recording a baseline. Output reproduction, baseline_ref, expected, observed, evidence and reproduced=true only when the failure is observed; otherwise false and a concrete missing observation.
+    see_prior: false
+- id: isolate_cause
+  state: ISOLATE_CAUSE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: List plausible causes, run the smallest discriminating probes and identify the first causal breach. Separate observations from inference. Output root_cause, probe_results, evidence, proposed_fix and diagnosed=true only when the explanation is supported. If the cause remains uncertain, keep diagnosed=false; avoid speculative edits.
+    see_prior: true
+- id: repair_cause
+  state: REPAIR_LOOP
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Apply the smallest fix for the supported cause. Use previous verification feedback on later attempts. Output candidate_ref, diff_ref and rationale.
+    see_prior: true
+  timeout_seconds: 1800
+- id: prove_repair
+  state: REPAIR_LOOP
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Run the recorded reproduction against the fix and demonstrate the expected behavior. Add a regression check when it protects meaningful behavior; run affected repository checks. Output repaired=true only when the original failure is gone and required checks pass for candidate_ref; otherwise false. Include commands, statuses, revision and evidence.
+    see_prior: true
+  timeout_seconds: 1800
+- id: integrate_repair
+  state: INTEGRATE_REPAIR
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Verify final revision matches the proven repair. Deliver the change and explain the cause, evidence, validation and limits. Record durable outcome only when memory is opted in. Output repair_report and integrated=true only for the proven fix.
+    see_prior: true
+  timeout_seconds: 600
+guards:
+  exit_integrate_repair_1:
+    type: automated
+    check: output_field:integrate_repair:integrated=true
+  exit_isolate_cause_1:
+    type: automated
+    check: output_field:isolate_cause:diagnosed=true
+  exit_reproduce_failure_1:
+    type: automated
+    check: output_field:reproduce_failure:reproduced=true
+  integrate_repair_completed:
+    type: automated
+    check: step_status:integrate_repair:COMPLETED
+  isolate_cause_completed:
+    type: automated
+    check: step_status:isolate_cause:COMPLETED
+  repair_loop_prove_repair_completed:
+    type: automated
+    check: step_status:prove_repair:COMPLETED
+  repair_loop_repair_cause_completed:
+    type: automated
+    check: step_status:repair_cause:COMPLETED
+  reproduce_failure_completed:
+    type: automated
+    check: step_status:reproduce_failure:COMPLETED
+  accepted_axlr_debug:
+    type: automated
+    check: output_field:prove_repair:repaired=true
+roles:
+- id: DIAGNOSTICIAN
+  allowed_actions:
+  - isolate_cause
+  - isolate_cause_completed
+  - reproduce_failure
+  - reproduce_failure_completed
+- id: IMPLEMENTER
+  allowed_actions:
+  - repair_cause
+  - repair_loop_completed
+- id: VERIFIER
+  allowed_actions:
+  - prove_repair
+- id: INTEGRATOR
+  allowed_actions:
+  - integrate_repair
+  - integrate_repair_completed
+timeouts:
+  step_default: 900
+retry_policies:
+  default:
+    max_attempts: 1
+    backoff_seconds: 1
+max_parallel: 1
+max_transitions: 40
+max_bounces: 3

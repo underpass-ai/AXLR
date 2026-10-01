@@ -1,0 +1,102 @@
+version: '1.0'
+name: axlr_review
+description: Review an exact artifact without mutating it and return prioritized, attributable findings.
+inputs:
+  required:
+  - artifact_ref
+  - workspace
+  - review_criteria
+  optional:
+  - memory_scope
+  - execution_profile
+outputs:
+  review_report:
+    type: object
+states:
+- id: ESTABLISH_REVIEW
+  initial: true
+- id: INSPECT_ARTIFACT
+- id: REPORT_REVIEW
+- id: COMPLETED
+  terminal: true
+transitions:
+- from: ESTABLISH_REVIEW
+  to: INSPECT_ARTIFACT
+  trigger: establish_review_completed
+  guards:
+  - establish_review_completed
+  - exit_establish_review_1
+- from: INSPECT_ARTIFACT
+  to: REPORT_REVIEW
+  trigger: inspect_artifact_completed
+  guards:
+  - exit_inspect_artifact_1
+  - inspect_artifact_completed
+- from: REPORT_REVIEW
+  to: COMPLETED
+  trigger: report_review_completed
+  guards:
+  - exit_report_review_1
+  - report_review_completed
+steps:
+- id: establish_review
+  state: ESTABLISH_REVIEW
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Resolve the exact artifact or diff, baseline, intended behavior and criteria. Check review independence if required by the task. Output resolved_ref, baseline_ref, review_scope and ready=true only when the material is accessible. Review is read-only; fixes require a separately authorized delivery or change.
+    see_prior: false
+  timeout_seconds: 300
+- id: inspect_artifact
+  state: INSPECT_ARTIFACT
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Inspect changes and relevant callers, contracts and tests. Run read-only checks where useful. Every finding needs location, concrete failure scenario, impact and evidence. Distinguish blockers, nonblocking suggestions and uncertainties. Output findings, checks, inspected_ref and evaluated=true only after the declared scope is examined.
+    see_prior: true
+  timeout_seconds: 1800
+- id: report_review
+  state: REPORT_REVIEW
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Return findings in priority order, review coverage, checks and limitations. A review with findings is a completed review, not an accepted delivery. Output review_report, recommendation=accept or revise or insufficient_evidence, and reported=true only for an attributable report.
+    see_prior: true
+  timeout_seconds: 300
+guards:
+  establish_review_completed:
+    type: automated
+    check: step_status:establish_review:COMPLETED
+  exit_establish_review_1:
+    type: automated
+    check: output_field:establish_review:ready=true
+  exit_inspect_artifact_1:
+    type: automated
+    check: output_field:inspect_artifact:evaluated=true
+  exit_report_review_1:
+    type: automated
+    check: output_field:report_review:reported=true
+  inspect_artifact_completed:
+    type: automated
+    check: step_status:inspect_artifact:COMPLETED
+  report_review_completed:
+    type: automated
+    check: step_status:report_review:COMPLETED
+roles:
+- id: REVIEWER
+  allowed_actions:
+  - establish_review
+  - establish_review_completed
+  - inspect_artifact
+  - inspect_artifact_completed
+  - report_review
+  - report_review_completed
+timeouts:
+  step_default: 900
+retry_policies:
+  default:
+    max_attempts: 1
+    backoff_seconds: 1
+max_parallel: 1
+max_transitions: 40
+max_bounces: 3
