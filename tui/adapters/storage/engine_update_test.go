@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 
 	"github.com/underpass-ai/AXLR/plugins"
@@ -57,7 +58,7 @@ func TestEngineActivationPreservesPolicyEnvironmentAndOldManifest(t *testing.T) 
 		t.Fatal("stale target accepted")
 	}
 	info, err := os.Stat(after.Plugins[0].Manifest)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatal("new manifest is not private")
 	}
 }
@@ -69,7 +70,7 @@ func TestEngineUpdateSkipsRemoteAndCustomArguments(t *testing.T) {
 	} {
 		store := MCPConfigStore{Path: configuredPlugin(t)}
 		c, _ := readMCPConfig(store.Path)
-		if err := os.WriteFile(c.Plugins[0].Manifest, []byte(body), 0600); err != nil {
+		if err := os.WriteFile(c.Plugins[0].Manifest, portableManifest([]byte(body)), 0600); err != nil {
 			t.Fatal(err)
 		}
 		targets, err := store.EngineTargets(context.Background())
@@ -87,10 +88,11 @@ func TestEngineUpdateRefusesCanceledAndInvalidConfiguration(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 	targets, _ := store.EngineTargets(context.Background())
-	if err := store.ActivateEngine(ctx, targets[0], "/new/launcher"); !errors.Is(err, context.Canceled) {
+	launcher := filepath.Join(t.TempDir(), "launcher")
+	if err := store.ActivateEngine(ctx, targets[0], launcher); !errors.Is(err, context.Canceled) {
 		t.Fatalf("%v", err)
 	}
-	if err := store.ActivateEngine(context.Background(), application.EngineUpdateTarget{Engine: "other"}, "/new/launcher"); err == nil {
+	if err := store.ActivateEngine(context.Background(), application.EngineUpdateTarget{Engine: "other"}, launcher); err == nil {
 		t.Fatal("unknown engine accepted")
 	}
 	if err := store.ActivateEngine(context.Background(), targets[0], "relative"); err == nil {

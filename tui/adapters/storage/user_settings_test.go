@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -39,7 +40,7 @@ func TestUserSettingsCanBeEditedAndSelectorsPreserveOtherSettings(t *testing.T) 
 		t.Fatalf("saved = %+v, %v", loaded, err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("settings mode = %v, %v", info, err)
 	}
 	data, err := os.ReadFile(path)
@@ -106,6 +107,9 @@ func TestUserSettingsRejectSymlinkAndWorldWritableFile(t *testing.T) {
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		return // permission bits are synthetic there; ACLs govern access
 	}
 	if err := os.WriteFile(path, []byte(`{}`), 0666); err != nil {
 		t.Fatal(err)

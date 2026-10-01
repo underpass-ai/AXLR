@@ -54,3 +54,6 @@ func lockBusy(err error) bool {
 // Windows does not permit FlushFileBuffers on directory handles. File content
 // is synced before rename; the rename itself uses the platform's atomic move.
 func syncDirectoryFile(_ *os.File) error { return nil }
+
+// Windows reports synthetic permission bits; access is governed by ACLs.
+func writableByOthers(os.FileInfo) bool { return false }

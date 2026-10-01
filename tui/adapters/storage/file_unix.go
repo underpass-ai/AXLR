@@ -25,3 +25,5 @@ func lockBusy(err error) bool {
 }
 
 func syncDirectoryFile(file *os.File) error { return file.Sync() }
+
+func writableByOthers(info os.FileInfo) bool { return info.Mode().Perm()&0022 != 0 }
