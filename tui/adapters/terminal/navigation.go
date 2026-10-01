@@ -745,15 +745,7 @@ func (m AppModel) overlayView(base string) string {
 	if body != "" {
 		return fitOverlay(body, m.Layout.Width, m.Layout.Height-1) + "\n" + status
 	}
-	// Keep the original editor geometry while making navigation discoverable.
-	nav := m.zones.Mark(m.prefix+"palette", "["+m.Theme.T("nav.actions")+"]") + " " + m.zones.Mark(m.prefix+"help", "["+m.Theme.T("nav.help")+"]")
-	if count := len(m.Changes.records); count > 0 {
-		nav += " " + m.zones.Mark(m.prefix+"changes", "["+m.Theme.Tf("nav.changes", count)+"]")
-	}
-	if m.Header.State.Status == domain.StatusInterrupted || m.Header.State.Status == domain.StatusStreaming {
-		nav += " " + m.zones.Mark(m.prefix+"continue", "["+m.Theme.T("nav.continue")+"]")
-	}
-	return strings.Replace(base, status, m.Theme.overlayLine(nav, m.Layout.Width, false)+"\n"+status, 1)
+	return base
 }
 
 func fitOverlay(body string, width, height int) string {

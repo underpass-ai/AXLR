@@ -117,7 +117,7 @@ func TestNavigationRestoreRequiresExplicitContinue(t *testing.T) {
 	if m.Init() != nil || m.Busy {
 		t.Fatal("load executed")
 	}
-	if !strings.Contains(m.View().Content, "Continue") {
+	if !strings.Contains(m.View().Content, "ctrl+r continue") {
 		t.Fatal("no explicit continuation")
 	}
 	n, cmd := m.Update(ControlIntent("continue"))

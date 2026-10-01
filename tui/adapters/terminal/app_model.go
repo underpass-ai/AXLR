@@ -22,13 +22,13 @@ type AppModel struct {
 	Header              Header
 	Transcript          Transcript
 	Composer            Composer
-	Activity            ToolActivity
+	tokens              int
 	Status              StatusBar
 	Layout              Layout
 	Theme               Theme
 	UIPreferences       domain.UIPreferences
 	ThemePicker         ThemePicker
-	Busy, ActivityTab   bool
+	Busy                bool
 	Approval            ApprovalDialog
 	SearchBox           SearchBox
 	Palette             ActionPalette
@@ -99,7 +99,6 @@ func New(deps Dependencies) AppModel {
 	m.Changes = NewChangeViewer()
 	m.Changes.Theme = m.Theme
 	m.Composer.Input.Placeholder = m.Theme.T("composer.placeholder")
-	m.Activity.Locale = m.Theme.Locale
 	m.Transcript.Gutter = 2
 	m.Models.Theme = m.Theme
 	m.Models.Input.Prompt = m.Theme.T("common.searchPrompt")
@@ -110,10 +109,6 @@ func New(deps Dependencies) AppModel {
 		m.Header.State = deps.Session.Export()
 	}
 	m.resetPromptHistory()
-	m.Activity.SetSession(m.Header.State)
-	for _, record := range m.Header.State.Activity {
-		m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
-	}
 	if m.Header.State.ID == "" {
 		m.Header.State.Workspace = deps.Workspace
 	}
@@ -253,7 +248,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Kind == application.EventState {
 			m.Status.State = v.State
 		}
-		m.Activity.Apply(v)
+		if v.Usage != nil {
+			m.tokens = v.Usage.TotalTokens
+		}
 		if m.events != nil {
 			cmd := m.waitingCommand(readOperation(m.events))
 			return m, cmd
@@ -338,15 +335,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if oldID != m.Header.State.ID {
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
-			m.Activity = ToolActivity{Locale: m.Theme.Locale}
-			m.Activity.SetSession(m.Header.State)
+			m.tokens = 0
 			m.unsentPrompts = nil
 			m.resetPromptHistory()
 			m.draft = ""
 			m.draftOperationID = 0
-			for _, record := range m.Header.State.Activity {
-				m.Activity.Apply(application.Event{Kind: application.EventToolActivity, Tool: record})
-			}
 		}
 		if m.submittedPrompt != "" && v.Err != nil {
 			messages := m.Header.State.Messages
@@ -519,12 +512,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cancel()
 			}
 			return m, nil
-		case "activity":
-			m.ActivityTab = true
-			return m, nil
-		case "transcript":
-			m.ActivityTab = false
-			return m, nil
 		}
 	case tea.KeyPressMsg:
 		switch v.String() {
@@ -546,9 +533,6 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.zones.Close()
 			return m, tea.Quit
-		case "tab":
-			m.ActivityTab = !m.ActivityTab
-			return m, nil
 		case "pgup":
 			m.Transcript.Viewport.PageUp()
 			return m, nil
@@ -558,7 +542,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.MouseClickMsg:
 		if v.Button == tea.MouseLeft {
-			for _, id := range []string{"send", "cancel", "activity", "transcript"} {
+			for _, id := range []string{"send", "cancel"} {
 				if m.zones.Get(m.prefix + id).InBounds(v) {
 					return m.Update(ControlIntent(id))
 				}
@@ -586,18 +570,7 @@ func (m AppModel) View() tea.View {
 	if m.Layout.TooSmall || m.Layout.Width == 0 {
 		content = ansi.Truncate(m.Theme.T("app.resize"), max(1, m.Layout.Width), "")
 	} else {
-		body := m.Transcript.View()
-
-		if m.ActivityTab {
-			body = m.Activity.View(m.Layout.Width, m.Layout.BodyHeight)
-		}
-		tabs := m.Activity.Tabs(m.Theme, m.zones, m.prefix, m.Layout.Width, m.ActivityTab)
-		if m.memoryActive {
-			tabs = m.Theme.overlayLine(m.Theme.Accent(m.Theme.T("app.memoryRunning")), m.Layout.Width, false)
-		}
-		body = lipgloss.JoinVertical(lipgloss.Left, tabs, body)
-		controls := ansi.Truncate(m.Composer.Controls(m.zones, m.prefix), m.Layout.Width, "…")
-		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, m.Composer.View(), m.Theme.overlayLine(controls, m.Layout.Width, false), m.statusView())
+		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), m.Transcript.View(), m.Composer.View(m.Layout.Width), m.footerView())
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 {
 		content = m.overlayView(content)
@@ -615,7 +588,8 @@ func (m AppModel) View() tea.View {
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && !m.approvalFocus() && m.overlay == "" {
 		view.Cursor = m.Composer.Input.Cursor()
 		if view.Cursor != nil {
-			view.Cursor.Y += 3 + m.Layout.BodyHeight
+			// Header and the rule above the composer.
+			view.Cursor.Y += 2 + m.Layout.BodyHeight
 		}
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && m.overlay == "models" && !m.approvalFocus() {
@@ -676,7 +650,6 @@ func (m AppModel) View() tea.View {
 // Failed submissions remain display state, never valid model history.
 func (m *AppModel) refreshTranscript() {
 	m.Changes.SetSession(m.Header.State)
-	m.Activity.SetSession(m.Header.State)
 	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
