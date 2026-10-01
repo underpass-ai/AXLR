@@ -281,3 +281,22 @@ func TestACommandThatNeverRanDoesNotReproduceOrRepair(t *testing.T) {
 		t.Fatalf("a check that never ran counted as passing: %v", r)
 	}
 }
+
+func TestADeliveryBriefNeedsACheckThatRuns(t *testing.T) {
+	engine := &fakeEngine{}
+	d := &CeremonyDriver{Engine: engine, Checks: &fakeChecks{exits: []int{-1, 1}}}
+	s := turnSession(t)
+	if err := s.SetMode(domain.ModeDelivery); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.Begin(context.Background(), &s, "add --top"); err != nil {
+		t.Fatal(err)
+	}
+	brief := `{"criteria":"--top N limits output","scope":"wc.py","check_command":{"program":"python","args":["-m","unittest"]}}`
+	if result, _ := d.StepDone(context.Background(), s, mustObject(t, brief)); result.Accepted {
+		t.Fatal("a baseline that never ran was accepted")
+	}
+	if r := step(t, d, &s, brief); r["next_step"] != "build" {
+		t.Fatalf("a failing baseline should still open the build: %v", r)
+	}
+}

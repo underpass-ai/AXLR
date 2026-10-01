@@ -243,6 +243,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if err != nil {
 			return StepResult{}, err
 		}
+		if !result.Ran {
+			return refuse("the check command did not run (" + result.Output + "); give program and args separately, with a program that exists"), nil
+		}
 		output = map[string]any{"criteria": done.Criteria, "scope": done.Scope, "ready": true}
 		addEvidence(output, report, command, result)
 		trigger = "briefed"
