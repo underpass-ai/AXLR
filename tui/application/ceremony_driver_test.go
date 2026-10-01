@@ -212,6 +212,14 @@ func TestOnlyANewCheckCommandNeedsTheUser(t *testing.T) {
 	if !approvesInSession(nil, s, stepDone, mustObject(t, `{"root_cause":"a","evidence":"b","proposed_fix":"c"}`)) {
 		t.Fatal("a step without a command waited for the user")
 	}
+	if !approvesInSession(nil, s, stepDone, mustObject(t, `{"root_cause":"a","evidence":"b","proposed_fix":"c","check_command":{"program":"sh"}}`)) {
+		t.Fatal("diagnose, which runs no command, asked to approve one")
+	}
+	run, _ := s.Ceremony()
+	run.Step = "repair"
+	if err := s.SetCeremony(run); err != nil {
+		t.Fatal(err)
+	}
 	if !approvesInSession(nil, s, stepDone, mustObject(t, `{"summary":"x","check_command":{"program":"python3","args":["-m","unittest"]}}`)) {
 		t.Fatal("the approved command needed approval again")
 	}

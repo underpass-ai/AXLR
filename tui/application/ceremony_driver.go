@@ -109,7 +109,14 @@ func stepDoneNeedsApproval(s domain.Session, arguments root.JSONValue) bool {
 		return false
 	}
 	run, live := s.Ceremony()
-	return !live || !proposed.Equal(run.Check)
+	if !live {
+		return true
+	}
+	switch run.Step {
+	case "reproduce", "brief", "repair", "build":
+		return !proposed.Equal(run.Check)
+	}
+	return false // steps that run no command ignore it
 }
 
 // Begin starts the ceremony the session's mode names, before the turn that
