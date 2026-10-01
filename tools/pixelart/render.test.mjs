@@ -18,6 +18,12 @@ const manifest = JSON.parse(
   readFileSync(new URL("logos.json", import.meta.url), "utf8"),
 );
 const copy = () => structuredClone(manifest);
+const brandColors = {
+  kmp: ["#C96B2C", "#D89A3D", "#7A5230", "#D8C3A5"],
+  made: ["#B6633A", "#D98545", "#5A3E2B", "#BFA27A"],
+  axlr: ["#B85C38", "#D97B2D", "#6B4A2E", "#C9B08C"],
+};
+const rgba = (hex) => [...Buffer.from(hex.slice(1), "hex"), 255];
 
 test("source glyphs preserve terminal columns, per-letter ink and transparent counters", () => {
   validateManifest(manifest);
@@ -27,10 +33,10 @@ test("source glyphs preserve terminal columns, per-letter ink and transparent co
     const pixel = (x, y) =>
       Array.from(pixels.subarray((y * width + x) * 4, (y * width + x) * 4 + 4));
     assert.deepEqual(pixel(0, 0), [0, 0, 0, 0]);
-    const redSample = { kmp: [45, 21], made: [49, 53], axlr: [128, 38] }[
+    const copperSample = { kmp: [45, 21], made: [49, 53], axlr: [128, 38] }[
       logo.id
     ];
-    assert.deepEqual(pixel(...redSample), [240, 68, 69, 255]);
+    assert.deepEqual(pixel(...copperSample), rgba(brandColors[logo.id][0]));
     assert.deepEqual(pixel(logo.width - 1, logo.height - 1), [0, 0, 0, 0]);
     assert.equal(
       scene.shapes.filter((shape) => shape.type === "polygon").length,
@@ -38,7 +44,12 @@ test("source glyphs preserve terminal columns, per-letter ink and transparent co
     );
     assert.deepEqual(
       scene.shapes.slice(-4).map((shape) => shape.color),
-      ["#f04445", "#ffda36", "#32cd76", "#42d4ed"],
+      brandColors[logo.id],
+    );
+    assert.deepEqual(
+      [...new Set(scene.shapes.map((shape) => shape.color))],
+      brandColors[logo.id],
+      "lettering and bars use only the four product colors in order",
     );
     for (let i = 3; i < pixels.length; i += 4)
       assert.ok(pixels[i] === 0 || pixels[i] === 255);
@@ -51,9 +62,9 @@ test("source glyphs preserve terminal columns, per-letter ink and transparent co
     (shape) =>
       shape.type === "rect" && shape.y === 37 && shape.width === 44.875,
   );
-  assert.equal(blocks.filter((shape) => shape.color === "#ffda36").length, 4);
-  assert.equal(blocks.find((shape) => shape.color === "#32cd76").x, 800);
-  assert.equal(blocks.find((shape) => shape.color === "#42d4ed").x, 1159);
+  assert.equal(blocks.filter((shape) => shape.color === "#D97B2D").length, 4);
+  assert.equal(blocks.find((shape) => shape.color === "#6B4A2E").x, 800);
+  assert.equal(blocks.find((shape) => shape.color === "#C9B08C").x, 1159);
   const made = buildScene(
     manifest,
     manifest.logos.find((logo) => logo.id === "made"),
@@ -63,6 +74,24 @@ test("source glyphs preserve terminal columns, per-letter ink and transparent co
     pixels[(140 * width + 590) * 4 + 3],
     0,
     "D's counter stays transparent",
+  );
+});
+
+test("older manifests retain default Spectrum colors when no bar ink is specified", () => {
+  const legacy = copy();
+  Object.assign(legacy.palette, {
+    red: "#f04445",
+    yellow: "#ffda36",
+    green: "#32cd76",
+    cyan: "#42d4ed",
+  });
+  delete legacy.logos[0].spectrum.colors;
+  validateManifest(legacy);
+  assert.deepEqual(
+    buildScene(legacy, legacy.logos[0])
+      .shapes.slice(-4)
+      .map((shape) => shape.color),
+    ["#f04445", "#ffda36", "#32cd76", "#42d4ed"],
   );
 });
 
@@ -127,6 +156,9 @@ test("bad definitions fail before rendering or allocating image buffers", () => 
     [(m) => (m.logos[1].ink.runs[0].columns = 1000000), /column run/],
     [(m) => (m.logos[0].origin[0] = 700), /outside/],
     [(m) => (m.logos[0].spectrum.scale = 100), /outside/],
+    [(m) => (m.logos[0].spectrum.colors[0] = "missing"), /Spectrum/],
+    [(m) => m.logos[0].spectrum.colors.pop(), /Spectrum/],
+    [(m) => (m.logos[0].spectrum.colors = "kmp-copper"), /Spectrum/],
   ];
   for (const [mutate, expected] of cases) {
     const value = copy();
