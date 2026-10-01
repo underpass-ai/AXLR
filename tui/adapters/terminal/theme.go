@@ -106,8 +106,10 @@ func (t Theme) Icon(kind string) string {
 			return "[WAIT]"
 		case "error":
 			return "[ERR]"
-		case "user":
+		case "user", "prompt":
 			return ">"
+		case "brand":
+			return ">>"
 		case "done":
 			return "+"
 		case "failed":
@@ -124,7 +126,7 @@ func (t Theme) Icon(kind string) string {
 			return "󰏤"
 		case "error":
 			return "󰅙"
-		case "user":
+		case "user", "prompt":
 			return ""
 		case "done":
 			return "󰄬"
@@ -143,6 +145,10 @@ func (t Theme) Icon(kind string) string {
 		return "!"
 	case "user":
 		return "›"
+	case "prompt":
+		return "❯"
+	case "brand":
+		return "››"
 	case "done":
 		return "✓"
 	case "failed":

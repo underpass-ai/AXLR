@@ -143,7 +143,7 @@ func TestSpanishSurfacesAndStoredContent(t *testing.T) {
 	m := New(Dependencies{Locale: Spanish, Monochrome: true})
 	defer m.zones.Close()
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	if m.Composer.Input.Placeholder != "Escribe un mensaje…" || !strings.Contains(m.View().Content, "Estado: inactivo") {
+	if m.Composer.Input.Placeholder != "Escribe un mensaje…" || !strings.Contains(m.View().Content, "enter enviar") || !strings.Contains(m.View().Content, "inactivo") {
 		t.Fatal("main screen is not localized")
 	}
 	m = update(m, ControlIntent("info"))

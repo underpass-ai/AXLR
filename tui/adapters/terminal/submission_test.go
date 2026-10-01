@@ -90,10 +90,10 @@ func TestAppModelRestoresActivityPresentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	m := New(Dependencies{Session: &restored})
+	m := update(New(Dependencies{Session: &restored, Monochrome: true}), tea.WindowSizeMsg{Width: 70, Height: 20})
 	defer m.zones.Close()
-	got := m.Activity.View(70, 10)
-	if !strings.Contains(got, "read: deny denied by user") {
-		t.Fatalf("restored activity missing: %q", got)
+	got := m.Transcript.Text()
+	if !strings.Contains(got, "x read") || !strings.Contains(got, "denied") {
+		t.Fatalf("restored denied call missing: %q", got)
 	}
 }

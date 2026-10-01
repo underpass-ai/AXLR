@@ -202,26 +202,23 @@ func TestAppModelSanitizationAndMonochrome(t *testing.T) {
 }
 func TestAppModelVisibleControlsKeyboardMouseParity(t *testing.T) {
 	m := update(sized(), tea.WindowSizeMsg{Width: 70, Height: 20})
-	m = update(m, tea.KeyPressMsg{Code: tea.KeyTab})
-	if !m.ActivityTab {
-		t.Fatal("tab did not select activity")
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "help" {
+		t.Fatal("F1 did not open help")
 	}
-	m = update(m, ControlIntent("transcript"))
-	if m.ActivityTab {
-		t.Fatal("control did not select transcript")
-	}
+	m = update(m, ControlIntent("close"))
 	m.View()
-	z := m.zones.Get(m.prefix + "activity")
+	z := m.zones.Get(m.prefix + "help")
 	for deadline := time.Now().Add(time.Second); z == nil && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
-		z = m.zones.Get(m.prefix + "activity")
+		z = m.zones.Get(m.prefix + "help")
 	}
 	if z == nil {
-		t.Fatal("activity has no clickable zone")
+		t.Fatal("the help hint has no clickable zone")
 	}
 	m = update(m, tea.MouseClickMsg{X: z.StartX, Y: z.StartY, Button: tea.MouseLeft})
-	if !m.ActivityTab {
-		t.Fatal("mouse did not select activity")
+	if m.overlay != "help" {
+		t.Fatal("clicking the help hint did not open help")
 	}
 }
 
@@ -326,8 +323,11 @@ func TestAppModelChildSendIntent(t *testing.T) {
 func TestAppModelMonochromeHasVisibleEditorCursor(t *testing.T) {
 	m := sized()
 	v := m.View()
-	if v.Cursor == nil || v.Cursor.Y < 24 || v.Cursor.Y > 26 {
-		t.Fatal("editor cursor missing or misplaced")
+	if v.Cursor == nil {
+		t.Fatal("editor cursor missing")
+	}
+	if lines := strings.Split(v.Content, "\n"); v.Cursor.Y >= len(lines) || !strings.HasPrefix(lines[v.Cursor.Y], "> ") {
+		t.Fatalf("editor cursor misplaced at row %d", v.Cursor.Y)
 	}
 	m = update(m, tea.WindowSizeMsg{Width: 40, Height: 10})
 	if m.View().Cursor != nil {

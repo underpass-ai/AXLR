@@ -1,10 +1,11 @@
 package terminal
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
-	zone "github.com/lrstanley/bubblezone/v2"
 )
 
 type Composer struct {
@@ -21,7 +22,7 @@ func NewComposer(mono bool, locales ...Locale) Composer {
 	a.SetVirtualCursor(false)
 	a.ShowLineNumbers = false
 	a.Placeholder = Translate(locale, "composer.placeholder")
-	a.Prompt = "  "
+	a.SetPromptFunc(2, func(textarea.PromptInfo) string { return "  " })
 	a.DynamicHeight = true
 	a.MinHeight = 2
 	a.MaxHeight = 8
@@ -39,12 +40,21 @@ func (c Composer) Update(msg tea.Msg) (Composer, tea.Cmd) {
 	c.Input, cmd = c.Input.Update(msg)
 	return c, cmd
 }
-func (c Composer) View() string {
-	header := c.Theme.T("composer.title")
-	if c.Input.Value() != "" {
-		header += " · " + c.Theme.T("composer.draft")
+
+// View draws a rule above the input and marks its first line with the prompt
+// glyph; continuation lines align under the text.
+func (c Composer) View(width int) string {
+	glyph := c.Theme.Icon("prompt")
+	if !c.Theme.Monochrome {
+		glyph = c.Theme.Accent(glyph)
 	}
-	return c.Theme.Panel(c.Theme.Accent("  "+header)+"\n"+c.Input.View(), c.Input.Width())
+	c.Input.SetPromptFunc(2, func(info textarea.PromptInfo) string {
+		if info.LineNumber == 0 {
+			return glyph + " "
+		}
+		return "  "
+	})
+	return c.Theme.Muted(strings.Repeat("─", max(1, width))) + "\n" + c.Input.View()
 }
 
 func (c Composer) Intent(msg tea.Msg) ControlIntent {
@@ -52,7 +62,4 @@ func (c Composer) Intent(msg tea.Msg) ControlIntent {
 		return "send"
 	}
 	return ""
-}
-func (c Composer) Controls(z *zone.Manager, prefix string) string {
-	return z.Mark(prefix+"send", c.Theme.Accent("[ "+c.Theme.T("composer.send")+" ]")) + c.Theme.Muted("  "+c.Theme.T("composer.newline")+"  ") + z.Mark(prefix+"cancel", "[ "+c.Theme.T("common.cancel")+" ]")
 }
