@@ -1,0 +1,40 @@
+package ceremonyhost
+
+import (
+	"embed"
+	"fmt"
+)
+
+//go:embed definitions/*.yaml
+var definitionFiles embed.FS
+
+// Definition is one console-driven ceremony definition AXLR ships and pins.
+type Definition struct {
+	Name, Version string
+	// Digest is MADE's semantic digest of the published definition. A YAML
+	// change must update it, or the pin test fails.
+	Digest string
+}
+
+var definitions = []Definition{
+	{Name: "axlr_debug", Version: "2.0", Digest: "345f57fdab6165ad65e3847ee8336206161c433eac053dd1afdb17bc496c14c3"},
+	{Name: "axlr_delivery", Version: "2.0", Digest: "257e2dd1bc461f5d799ce6c40e888f882b39f833510c98a3d03ccaaeafee88a2"},
+}
+
+// Definitions lists the pinned definitions.
+func Definitions() []Definition { return append([]Definition(nil), definitions...) }
+
+// YAML is the exact definition text published by the /mcp → P action.
+func (d Definition) YAML() (string, error) {
+	data, err := definitionFiles.ReadFile(fmt.Sprintf("definitions/%s-%s.yaml", d.Name, d.Version))
+	return string(data), err
+}
+
+func pinned(name, version string) (Definition, bool) {
+	for _, d := range definitions {
+		if d.Name == name && d.Version == version {
+			return d, true
+		}
+	}
+	return Definition{}, false
+}
