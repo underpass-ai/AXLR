@@ -34,10 +34,13 @@ type CeremonyRun struct {
 	About string
 	// Memory is the bounded wake text captured when the ceremony began.
 	Memory string
+	// BudgetBase is the turn's call count when the last step was accepted;
+	// the per-turn call limit counts from it, so each step gets a full budget.
+	BudgetBase int
 }
 
 func (r CeremonyRun) Validate() error {
-	if r.Definition == "" || r.Version == "" || r.Instance == "" || r.Step == "" || r.Iteration < 1 {
+	if r.Definition == "" || r.Version == "" || r.Instance == "" || r.Step == "" || r.Iteration < 1 || r.BudgetBase < 0 {
 		return errors.New("ceremony run needs definition, version, instance, step and iteration")
 	}
 	return nil

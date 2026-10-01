@@ -28,5 +28,10 @@ func (s *Session) FinishCeremony() {
 }
 
 // RestartTurnBudget gives each accepted ceremony step its own tool-call
-// budget; MADE's repeat limits bound the ceremony as a whole.
-func (s *Session) RestartTurnBudget() { s.state.TurnCallCount = 0 }
+// budget; MADE's repeat limits bound the ceremony as a whole. The turn's call
+// count itself is derived from the transcript and never rewritten.
+func (s *Session) RestartTurnBudget() {
+	if s.state.Ceremony != nil {
+		s.state.Ceremony.BudgetBase = s.state.TurnCallCount
+	}
+}

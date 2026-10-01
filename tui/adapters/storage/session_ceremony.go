@@ -28,6 +28,7 @@ type sessionCeremony struct {
 	Args       []string `json:"check_args,omitempty"`
 	About      string   `json:"about,omitempty"`
 	Memory     string   `json:"memory,omitempty"`
+	BudgetBase int      `json:"budget_base,omitempty"`
 }
 
 func (s *SessionStore) ceremonyPath(id domain.SessionID) string {
@@ -52,7 +53,7 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 	if decoder.Decode(&record) != nil || record.Version != sessionCeremonyVersion {
 		return nil
 	}
-	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory}
+	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase}
 	if run.Validate() != nil {
 		return nil
 	}
@@ -66,7 +67,7 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 		}
 		return nil
 	}
-	data, err := json.Marshal(sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory})
+	data, err := json.Marshal(sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase})
 	if err != nil {
 		return err
 	}

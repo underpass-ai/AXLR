@@ -235,8 +235,11 @@ func TestAcceptedStepUpdatesTheSessionAndRestartsTheBudget(t *testing.T) {
 	if !live || run.Step != "diagnose" || !run.Check.Equal(domain.CheckCommand{Program: "python3", Args: []string{"-m", "unittest"}}) {
 		t.Fatalf("session run not advanced: %+v", run)
 	}
-	if s.Export().TurnCallCount != 0 {
-		t.Fatalf("budget not restarted: %d", s.Export().TurnCallCount)
+	if run.BudgetBase != s.Export().TurnCallCount || s.Export().TurnCallCount == 0 {
+		t.Fatalf("budget not restarted: base %d count %d", run.BudgetBase, s.Export().TurnCallCount)
+	}
+	if _, err := domain.RestoreSession(s.Export()); err != nil {
+		t.Fatalf("a session with a restarted budget no longer restores: %v", err)
 	}
 	var saved bool
 	for _, state := range store.states {

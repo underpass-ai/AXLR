@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"fmt"
 	"testing"
 
 	axlr "github.com/underpass-ai/AXLR/domain"
@@ -74,5 +75,46 @@ func TestCeremonyModesLimitNoLocalTool(t *testing.T) {
 	}
 	if _, err := NewHostToolIdentity(HostOperationStepDone); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestCeremonyStepsGetAFreshCallBudgetThatSurvivesRestore(t *testing.T) {
+	s := idleSession(t)
+	tool := AvailableTool{Definition: axlr.ToolDefinition{Name: "local_read", Description: "x"}, Identity: ToolIdentity{Kind: ToolKindLocal, LocalOperation: "read"}}
+	tool.Definition.Parameters, _ = axlr.NewJSONObject([]byte(`{"type":"object"}`))
+	if err := s.BeginTurn(axlr.Text("depura"), []AvailableTool{tool}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCeremony(debugRun()); err != nil {
+		t.Fatal(err)
+	}
+	args, _ := axlr.NewJSONObject([]byte(`{}`))
+	call := func(n int) {
+		calls := make([]axlr.ToolCall, n)
+		for i := range calls {
+			calls[i] = axlr.ToolCall{ID: axlr.ToolCallID(fmt.Sprintf("c%d-%d", s.Export().TurnCallCount, i)), Name: "local_read", Arguments: args}
+		}
+		if err := s.CompleteAssistant(axlr.CompletionResult{Message: axlr.Message{Role: axlr.RoleAssistant, ToolCalls: calls}}); err != nil {
+			t.Fatal(err)
+		}
+		for _, c := range calls {
+			if err := s.RecordToolOutcome(c.ID, DecisionAutoApprove, ToolOutcome{Content: "ok"}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	call(30)
+	s.RestartTurnBudget()
+	call(30)
+	if s.Export().TurnCallCount != 60 {
+		t.Fatalf("count %d", s.Export().TurnCallCount)
+	}
+	restored, err := RestoreSession(s.Export())
+	if err != nil {
+		t.Fatalf("a long ceremony turn no longer restores: %v", err)
+	}
+	run, _ := restored.Ceremony()
+	if run.BudgetBase != 30 {
+		t.Fatalf("base %d", run.BudgetBase)
 	}
 }
