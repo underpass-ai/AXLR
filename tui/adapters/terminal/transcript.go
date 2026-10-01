@@ -90,6 +90,10 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			kind = transcriptRowAssistant
 		}
 		text := theme.T("role."+string(m.Role)) + ": " + string(m.Content)
+		row := transcriptRow{Text: text, Kind: kind}
+		if m.Role == root.RoleAssistant {
+			row = transcriptRow{Label: theme.T("role."+string(m.Role)) + ": ", Text: string(m.Content), Kind: kind, Markdown: true}
+		}
 		if m.Role == root.RoleTool {
 			call := root.ToolCall{}
 			for _, record := range s.Activity {
@@ -99,14 +103,15 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 				}
 			}
 			label, memory := toolCallPresentation(s, call)
-			text = theme.T("transcript.toolResult") + label + " · " + toolResultSummaryLocale(string(m.Content), theme.Locale)
+			row.Text = theme.T("transcript.toolResult") + label + " · " + toolResultSummaryLocale(string(m.Content), theme.Locale)
 			if memory {
-				kind = transcriptRowMemory
-				text = theme.T("transcript.memoryResult") + label + " · " + toolResultSummaryLocale(string(m.Content), theme.Locale)
+				row.Kind = transcriptRowMemory
+				row.Text = theme.T("transcript.memoryResult") + label + " · " + toolResultSummaryLocale(string(m.Content), theme.Locale)
 			}
 		}
 		if m.Content != "" || m.Role != root.RoleAssistant {
-			t.rows = append(t.rows, transcriptRow{Text: text, Kind: kind, GapBefore: len(t.rows) > 0})
+			row.GapBefore = len(t.rows) > 0
+			t.rows = append(t.rows, row)
 		}
 		for _, c := range m.ToolCalls {
 			label, memory := toolCallPresentation(s, c)
@@ -124,15 +129,15 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			}
 		}
 		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
-			t.rows = append(t.rows, transcriptRow{Text: theme.T("transcript.interruptedDraft") + string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0})
+			t.rows = append(t.rows, transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0, Markdown: true})
 			archived++
 		}
 	}
 	if s.Draft != "" {
-		t.rows = append(t.rows, transcriptRow{Text: theme.T("transcript.interruptedDraft") + string(s.Draft), Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0})
+		t.rows = append(t.rows, transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.Draft), Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0, Markdown: true})
 	}
 	if draft != "" {
-		t.rows = append(t.rows, transcriptRow{Text: theme.T("transcript.assistant") + draft, Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0})
+		t.rows = append(t.rows, transcriptRow{Label: theme.T("transcript.assistant"), Text: draft, Kind: transcriptRowAssistant, GapBefore: len(t.rows) > 0, Markdown: true})
 	}
 	t.renderRows()
 	t.ApplyTheme(theme)
@@ -161,6 +166,10 @@ func (t *Transcript) renderRows() {
 			}
 		}
 		clean := Sanitize(row.Text)
+		if row.Markdown {
+			clean = renderMarkdown(clean, t.theme)
+		}
+		clean = Sanitize(row.Label) + clean
 		for i := range strings.Count(clean, "\n") + 1 {
 			kinds[line+i] = row.Kind
 		}
@@ -174,6 +183,11 @@ func (t *Transcript) renderRows() {
 func (t *Transcript) ApplyTheme(theme Theme) {
 	t.theme = theme
 	t.Viewport.StyleLineFunc = nil
+	if len(t.rows) > 0 {
+		// Markdown colours come from the theme, so rows render again.
+		t.renderRows()
+		return
+	}
 	t.reflow()
 }
 func (t Transcript) View() string {

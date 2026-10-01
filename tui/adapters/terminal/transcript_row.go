@@ -16,4 +16,7 @@ type transcriptRow struct {
 	Text      string
 	Kind      transcriptRowKind
 	GapBefore bool
+	// Label precedes Text verbatim; Markdown renders Text as model markdown.
+	Label    string
+	Markdown bool
 }
