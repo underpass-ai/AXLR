@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -107,6 +108,7 @@ func updater(t *testing.T, cfg *config) (*Updater, map[string][]byte) {
 }
 
 func TestUpdateInstallsVerifiedPackagesAndKeepsPreviousExecutables(t *testing.T) {
+	skipWithoutPOSIXLaunchers(t)
 	cfg := &config{targets: []application.EngineUpdateTarget{{Engine: "made", Command: "/missing/made"}, {Engine: "kmp", Command: "/missing/kmp"}}}
 	u, _ := updater(t, cfg)
 	results, err := u.Update(context.Background())
@@ -150,6 +152,7 @@ func TestUpdateInstallsVerifiedPackagesAndKeepsPreviousExecutables(t *testing.T)
 }
 
 func TestChecksumFailureCannotActivateAndOtherEngineStillUpdates(t *testing.T) {
+	skipWithoutPOSIXLaunchers(t)
 	cfg := &config{targets: []application.EngineUpdateTarget{{Engine: "made", Command: "/missing/made"}, {Engine: "kmp", Command: "/missing/kmp"}}}
 	u, responses := updater(t, cfg)
 	for address := range responses {
@@ -276,5 +279,14 @@ func TestVersionProbesAndDownloadBounds(t *testing.T) {
 	n, err := output.Write(bytes.Repeat([]byte("x"), 8000))
 	if err != nil || n != 8000 || output.Len() != 4096 {
 		t.Fatal("unbounded process output")
+	}
+}
+
+// Engine packages ship POSIX launchers: the updater runs bin/<engine>-mcp
+// --version and requires an executable scripts/run-embedded-mcp.sh.
+func skipWithoutPOSIXLaunchers(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("engine packages ship POSIX launchers")
 	}
 }

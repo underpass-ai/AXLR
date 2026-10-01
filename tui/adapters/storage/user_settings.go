@@ -296,7 +296,7 @@ func (s *UserSettingsStore) update(ctx context.Context, change func(*UserSetting
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return syncDirectoryFile(dir)
 }
 
 type settingsModelPreference struct{ store *UserSettingsStore }
