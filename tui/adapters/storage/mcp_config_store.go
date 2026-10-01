@@ -62,6 +62,59 @@ func (s *MCPConfigStore) SaveApproval(ctx context.Context, id root.PluginID, mod
 	return s.write(ctx, config)
 }
 
+// SetPluginEnvironment persists one literal environment value of a configured
+// plugin. A key that is resolved from the host environment is never replaced.
+func (s *MCPConfigStore) SetPluginEnvironment(ctx context.Context, id root.PluginID, key, value string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if _, err := root.NewPluginID(id.String()); err != nil {
+		return err
+	}
+	if !mcpEnvironmentName.MatchString(key) || key == "OPENROUTER_API_KEY" || value == "" || strings.ContainsRune(value, 0) {
+		return errors.New("invalid MCP environment value")
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	release, err := acquireMCPConfigLock(ctx, s.Path)
+	if err != nil {
+		return err
+	}
+	defer release()
+	config, err := readMCPConfig(s.Path)
+	if err != nil {
+		return err
+	}
+	found := false
+	for i, selected := range config.Plugins {
+		manifest, err := plugins.LoadManifest(selected.Manifest)
+		if err != nil {
+			return errors.New("cannot validate configured plugin")
+		}
+		if manifest.ID != id {
+			continue
+		}
+		if found {
+			return errors.New("duplicate MCP plugin ID")
+		}
+		if _, resolved := selected.EnvFrom[key]; resolved {
+			return errors.New("MCP environment key is resolved from the host environment")
+		}
+		if config.Plugins[i].Env == nil {
+			config.Plugins[i].Env = map[string]string{}
+		}
+		if _, exists := config.Plugins[i].Env[key]; !exists && len(selected.Env)+len(selected.EnvFrom) >= 64 {
+			return errors.New("too many MCP environment entries")
+		}
+		config.Plugins[i].Env[key] = value
+		found = true
+	}
+	if !found {
+		return errors.New("plugin is not in the persistent MCP configuration")
+	}
+	return s.write(ctx, config)
+}
+
 // AddManifest installs a third-party stdio MCP server from an AXLR manifest.
 // Its initial policy is manual; existing KMP/MADE entries are preserved.
 func (s *MCPConfigStore) AddManifest(ctx context.Context, path string) error {

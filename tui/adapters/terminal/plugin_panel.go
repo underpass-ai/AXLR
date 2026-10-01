@@ -226,6 +226,11 @@ func (p *PluginPanel) Update(msg tea.Msg, mode ControlIntent) ControlIntent {
 			return ""
 		case "r":
 			return "plugins-refresh"
+		case "p":
+			if mode == "mcp" && p.Selected < len(p.Items) && p.Items[p.Selected].Profile.ID == "made" {
+				return "made-prepare"
+			}
+			return ""
 		case "i":
 			p.installing = true
 			p.InstallInput.Reset()
@@ -330,6 +335,9 @@ func (p PluginPanel) View(mode ControlIntent, w, h int) string {
 	footer := p.Theme.T("plugins.mcpFooter")
 	if mode == "mcp" {
 		footer = p.Theme.T("plugins.footer")
+		if p.Selected < len(p.Items) && p.Items[p.Selected].Profile.ID == "made" {
+			footer = p.Theme.T("plugins.madeFooter")
+		}
 	}
 	if p.confirming && p.Selected < len(p.Items) {
 		item := p.Items[p.Selected]

@@ -213,7 +213,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "plugins":
 					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
-				case "info", "approvals", "updates":
+				case "info", "approvals", "updates", "made-setup":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
 					if k.String() == "enter" && !m.Picker.Renaming {
@@ -306,6 +306,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	switch intent {
 	case "updates":
 		next, cmd := m.updateEngines()
+		return next, cmd, true
+	case "made-prepare":
+		next, cmd := m.prepareMADE()
 		return next, cmd, true
 	case "changes":
 		m.Changes.Open(m.Header.State)
@@ -774,8 +777,11 @@ func (m AppModel) overlayView(base string) string {
 		body = m.Palette.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
 	case "help":
 		body = m.Help.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
-	case "info", "approvals", "updates":
+	case "info", "approvals", "updates", "made-setup":
 		title, subtitle := m.Theme.T("info.title"), m.Theme.T("info.subtitle")
+		if m.overlay == "made-setup" {
+			title, subtitle = m.Theme.T("madeSetup.title"), m.Theme.T("madeSetup.subtitle")
+		}
 		if m.overlay == "approvals" {
 			title, subtitle = m.Theme.T("approvals.title"), m.Theme.T("approvals.subtitle")
 		}
