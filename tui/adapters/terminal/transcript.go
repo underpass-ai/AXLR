@@ -24,6 +24,8 @@ type Transcript struct {
 	// every line from its start on each render, which stalls on large results.
 	raw       string
 	wrapWidth int
+	// Highlight marks every case-insensitive occurrence in the visible rows.
+	Highlight string
 }
 
 func NewTranscript() Transcript {
@@ -235,6 +237,11 @@ func (t Transcript) View() string {
 		}
 		lines[i] = t.theme.rowText(t.visualRows[index]).Width(outerWidth).Render(line)
 	}
+	if t.Highlight != "" {
+		for i := range lines {
+			lines[i] = highlightMatches(lines[i], t.Highlight, t.theme)
+		}
+	}
 	return strings.Join(lines, "\n")
 }
 
@@ -252,4 +259,30 @@ func formatClock(at, now time.Time) string {
 		return local.Format("15:04")
 	}
 	return local.Format("2006-01-02 15:04")
+}
+
+// highlightMatches styles every case-insensitive occurrence of query in a
+// rendered line, measuring positions in cells as lipgloss ranges expect.
+func highlightMatches(line, query string, theme Theme) string {
+	needle := []rune(query)
+	if len(needle) == 0 {
+		return line
+	}
+	style := lipgloss.NewStyle().Reverse(true)
+	if !theme.Monochrome {
+		p := theme.palette()
+		style = lipgloss.NewStyle().Background(lipgloss.Color(p.Warning)).Foreground(lipgloss.Color(p.Background)).Bold(true)
+	}
+	runes := []rune(ansi.Strip(line))
+	var ranges []lipgloss.Range
+	for i := 0; i+len(needle) <= len(runes); {
+		if !strings.EqualFold(string(runes[i:i+len(needle)]), query) {
+			i++
+			continue
+		}
+		start := ansi.StringWidth(string(runes[:i]))
+		ranges = append(ranges, lipgloss.NewRange(start, start+ansi.StringWidth(string(runes[i:i+len(needle)])), style))
+		i += len(needle)
+	}
+	return lipgloss.StyleRanges(line, ranges...)
 }
