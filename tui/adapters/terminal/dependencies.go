@@ -12,6 +12,7 @@ type Dependencies struct {
 	Diagnostics       application.DiagnosticPort
 	Plugins           application.PluginManagementPort
 	InstalledPlugins  application.InstalledPluginPort
+	EngineUpdates     application.EngineUpdatePort
 	Models            application.ListModelsUseCase
 	ModelPreference   application.ModelPreferencePort
 	UIPreferenceStore application.UIPreferencePort

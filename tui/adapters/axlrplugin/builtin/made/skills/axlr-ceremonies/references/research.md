@@ -1,0 +1,15 @@
+# Design evidence
+
+Reviewed 1 October 2026. These are AXLR defaults derived from published patterns and AXLR's actual host capabilities. The sources do not establish a universally best set of ceremonies, and the seven definitions are our design choices.
+
+| Primary source | Relevant evidence | AXLR choice |
+|:--|:--|:--|
+| [Anthropic, Building effective agents](https://www.anthropic.com/engineering/building-effective-agents), 19 December 2024 | Simple composition, routing, evaluator/optimizer feedback, environmental evidence and bounded stopping conditions | Select the smallest workflow; cap delivery and repair at three iterations. Use explicit criteria, not an open-ended debate. |
+| [OpenAI, Harness engineering](https://openai.com/index/harness-engineering/), 11 February 2026 | Repository knowledge as a navigable source of truth; observable application behavior and mechanical validation | Package a short skill with focused references; retain exact revisions, actual checks and UI evidence. |
+| [Microsoft Research, AgentRx](https://www.microsoft.com/en-us/research/blog/systematic-debugging-for-ai-agents-introducing-the-agentrx-framework/) | Guarded checks against actual traces and evidence-backed localization of the first causal failure | Reproduce and isolate before repair; distinguish observation, inference and unsupported claims. |
+| [MADE authoring guide at v0.9.1](https://github.com/underpass-ai/made/blob/v0.9.1/docs/authoring/README.md) and [integrator example](https://github.com/underpass-ai/made/blob/v0.9.1/docs/authoring/examples/integrator-delivery.yaml) | Structured design, output guards, state repeats, explicit roles and genuine human guards | Native designer-generated YAML, reviewed amendments, host callbacks and a separate publication boundary. |
+| [MADE runtime guide at v0.9.1](https://github.com/underpass-ai/made/blob/v0.9.1/docs/runtime/README.md) | Fenced claim/work/complete, durable recovery and host handoff contracts | A receiver must acknowledge the exact checkpoint; transfer must have an attributable receipt. |
+
+Handoff uses explicit sender, receiver and integrator stages because its goal is a confirmed ownership transfer. A dynamic routing chain that lets the sender declare the work resolved would allow it to finish without receiver acceptance. Routine work has no new human approval gate; publication gates the exact reviewed artifact before its external action. Roles do not create host agents, and default review is honestly labeled self-review unless a distinct reviewer exists.
+
+All seven drafts were created through `made_design_ceremony` on the checksummed MADE 0.9.1 embedded engine. The publication draft was amended to put the human gate before execution and readback; delivery/debug gained explicit success-field exit guards. The final exact YAML is the validation/publication input. The validation store is isolated from user runtime stores; no real task, recipient, deployment or publication is executed by catalogue validation.

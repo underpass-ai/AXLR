@@ -22,6 +22,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
+	"github.com/underpass-ai/AXLR/tui/adapters/engineupdate"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
@@ -165,6 +166,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		profiles = append(profiles, domain.PluginProfile{ID: registration.Manifest.ID, Name: root.Text(registration.Manifest.ID), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
 	}
 	registrations = append(persisted.Registrations, registrations...)
+	activeEngineCommands := map[string]string{}
+	for _, registration := range registrations {
+		activeEngineCommands[registration.Manifest.ID.String()] = registration.Manifest.Command
+	}
 	manager, err := plugins.NewManager(registrations)
 	if err != nil {
 		return fail(err)
@@ -266,6 +271,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Diagnostics:       trace,
 		Plugins:           pluginManager,
 		InstalledPlugins:  axlrCatalog,
+		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands},
 		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
 		ModelPreference:   preferences,
 		UIPreferenceStore: uiStore,

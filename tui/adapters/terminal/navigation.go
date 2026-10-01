@@ -204,7 +204,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "plugins":
 					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
-				case "info", "approvals":
+				case "info", "approvals", "updates":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
 					switch k.String() {
@@ -256,7 +256,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"changes", "mcp", "plugins", "approve", "always-allow", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
+		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
 		if m.overlay == "sessions" {
 			for i := range m.Picker.Items {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
@@ -297,6 +297,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, nil, true
 	}
 	switch intent {
+	case "updates":
+		next, cmd := m.updateEngines()
+		return next, cmd, true
 	case "changes":
 		m.Changes.SetSession(m.Header.State)
 		m.Changes.selected, m.Changes.window = 0, 0
@@ -732,10 +735,13 @@ func (m AppModel) overlayView(base string) string {
 		body = m.Palette.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
 	case "help":
 		body = m.Help.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
-	case "info", "approvals":
+	case "info", "approvals", "updates":
 		title, subtitle := m.Theme.T("info.title"), m.Theme.T("info.subtitle")
 		if m.overlay == "approvals" {
 			title, subtitle = m.Theme.T("approvals.title"), m.Theme.T("approvals.subtitle")
+		}
+		if m.overlay == "updates" {
+			title, subtitle = m.Theme.T("update.title"), m.Theme.T("update.subtitle")
 		}
 		body = m.Theme.Overlay(title, subtitle, m.Info.View(), m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
 	case "sessions":

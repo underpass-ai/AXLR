@@ -4,6 +4,8 @@ MADE governs AXLR's orchestration layer: ceremony definitions, claims, state tra
 
 This runbook uses a directly managed embedded `made-mcp` stdio process. Follow the [MADE local engine guide](https://github.com/underpass-ai/made/blob/main/docs/embedded/README.md) for release-matched binaries, authorization and store lifecycle. Use one MADE registration per AXLR host.
 
+AXLR bundles a routing skill and seven [default ceremonies](../ceremonies.md), including accountable handoff. They are readable before connection, and do not automatically publish into this store. After connecting, request catalogue installation to validate and publish the exact pinned definitions. Keep guard-approval and grant-administration capabilities separate from the work-agent principal; see the permission boundary in that guide.
+
 ## Install and connect
 
 1. Install the release-matched `made-mcp` binary for your platform and verify `made-mcp --version`. The published release checked on 1 October 2026 is [0.9.1](https://github.com/underpass-ai/made/releases/tag/v0.9.1), also available through `cargo install made-mcp --version 0.9.1 --locked`. The upstream local guide describes the 0.9.0 setup contract; use the matching 0.9.1 binary and its checksummed release assets. Recheck the release instructions when upgrading.

@@ -11,6 +11,33 @@ AXLR adopts the Codex plugin package format and standard MCP transports. A plugi
 
 KMP and MADE appear as built-in catalogue entries. Those entries identify AXLR's intended memory and orchestration engines; they do not install an engine binary or prove that its MCP server is connected. Check `/mcp` for the live state. Use the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks to connect, verify or remove them.
 
+The MADE entry includes the embedded `axlr-ceremonies` skill and seven [default working procedures](ceremonies.md). The console agent reads them through `axlr_skill` without copying a package. They guide workflow selection by default; engine connection, definition publication and real execution remain separate operations.
+
+## Update MADE and KMP
+
+Run `/update`, or choose **Update engines** in the action palette. AXLR checks
+the latest stable releases from the official `underpass-ai/made` and
+`underpass-ai/kmp` repositories. It verifies each package's SHA-256, plugin
+version and engine version before changing that engine's persistent connection.
+The panel reports each result separately; one engine's failure does not prevent
+the other from updating.
+
+Only explicitly configured local servers named `made` and `kmp` with no custom
+arguments are updated. Remote, command-line-only and unconfigured connections
+are skipped. Supported release packages are Linux x86_64/arm64 and macOS arm64.
+Finish or cancel any active agent task before updating.
+
+Verified packages live under `$XDG_DATA_HOME/axlr/engines` or
+`$HOME/.local/share/axlr/engines`. AXLR saves a new private manifest reference
+under its MCP configuration directory and keeps the previous package and
+manifest. Explicit environments, selected stores, cursor keys, approval modes,
+tool allowlists and other servers are preserved. The command installs no
+ceremony definitions and performs no store migration or authorization bootstrap.
+
+Restart AXLR after an update: existing MCP registrations keep their current
+executables for the running session. Packages installed in Codex, Claude or
+Hermes have their own update lifecycle; `/update` manages AXLR's copies.
+
 ## Codex plugin compatibility
 
 | Codex package component | AXLR behavior |

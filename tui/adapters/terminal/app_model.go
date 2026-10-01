@@ -308,6 +308,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.InstalledPlugins.Resize(m.Layout.Width, m.Layout.Height-2)
 		}
+		if v.EngineUpdates != nil {
+			m.Info.SetContent(engineUpdateContent(*v.EngineUpdates, v.Err, m.Theme))
+			m.Info.Viewport.GotoTop()
+		}
 		if v.Models != nil {
 			if v.Err != nil {
 				m.Models.SetError(v.Err)
@@ -400,6 +404,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch v {
 		case "send":
 			command := strings.TrimSpace(m.Composer.Input.Value())
+			if command == "/update" {
+				changed, cmd := m.updateEngines()
+				if cmd != nil {
+					changed.Composer.Input.Reset()
+				}
+				return changed, cmd
+			}
 			if command == "/approvals" {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("approvals"))
