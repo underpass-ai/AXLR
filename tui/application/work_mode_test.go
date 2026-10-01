@@ -168,3 +168,21 @@ func mustObject(t *testing.T, raw string) root.JSONValue {
 	}
 	return value
 }
+
+func TestModeDenialForbidsWorkingAroundIt(t *testing.T) {
+	text := ModeDenial{Mode: domain.ModeWriter, Reason: "writer mode writes only documents"}.Error()
+	for _, want := range []string{"denied by writer mode: ", "local_exec", "/normal"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("denial lacks %q: %s", want, text)
+		}
+	}
+	for _, mode := range []domain.WorkMode{domain.ModeReview, domain.ModeWriter, domain.ModeResearch} {
+		s := turnSession(t)
+		if err := s.SetMode(mode); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(modelHostGuidance(&s).Content), "Never use local_exec to create or change files") {
+			t.Fatalf("%s guidance allows working around the mode", mode)
+		}
+	}
+}
