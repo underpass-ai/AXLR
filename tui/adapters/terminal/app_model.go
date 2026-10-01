@@ -570,7 +570,11 @@ func (m AppModel) View() tea.View {
 	if m.Layout.TooSmall || m.Layout.Width == 0 {
 		content = ansi.Truncate(m.Theme.T("app.resize"), max(1, m.Layout.Width), "")
 	} else {
-		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), m.Transcript.View(), m.Composer.View(m.Layout.Width), m.footerView())
+		composer := m.Composer.View(m.Layout.Width)
+		if m.inlineApproval() {
+			composer = m.approvalCard()
+		}
+		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), m.mainTranscript(), composer, m.footerView())
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 {
 		content = m.overlayView(content)

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,8 @@ import (
 const toolRowHeadBytes = 1024
 
 const toolRowArgumentWidth = 48
+
+var shortStringField = regexp.MustCompile(`"\w+":"([^"\\]{1,80})"`)
 
 // toolRow condenses one call, its decision and its result into a single line:
 // status glyph, tool, a short argument summary, then size, duration and any
@@ -77,7 +80,13 @@ func toolArgumentSummary(call root.ToolCall) string {
 		}
 	}
 	if len(raw) > toolRowHeadBytes {
-		return ansi.Truncate(singleLine(string(raw[:toolRowHeadBytes])), toolRowArgumentWidth, "…")
+		// Large arguments (a file's content) are not decoded; short string
+		// fields at their head (a path) still identify the call.
+		var values []string
+		for _, match := range shortStringField.FindAllStringSubmatch(string(raw[:toolRowHeadBytes]), -1) {
+			values = append(values, match[1])
+		}
+		return ansi.Truncate(singleLine(strings.Join(values, " ")), toolRowArgumentWidth, "…")
 	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
