@@ -17,7 +17,7 @@ go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
 /tmp/axlr-tui --root "$PWD"
 ```
 
-Supply `OPENROUTER_API_KEY` through your normal environment or secret manager before launching. In the console, choose a model with `/model` and send a prompt. Use `F1` for controls, `/mcp` for AXLR's server connections, and `/plugin` for AXLR-managed packages.
+Supply `OPENROUTER_API_KEY` through your normal environment or secret manager before launching. In the console, choose a model with `/model` and send a prompt. Use `F1` for controls, `/mcp` for AXLR's server connections, `/plugin` for AXLR-managed packages, and `/update` to update the connected local MADE and KMP engines.
 
 The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker.
 

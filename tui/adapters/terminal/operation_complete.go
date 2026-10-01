@@ -16,4 +16,5 @@ type operationComplete struct {
 	Plugins          *[]domain.PluginState
 	InstalledPlugins *[]application.InstalledPlugin
 	PluginApproval   *domain.PluginProfile
+	EngineUpdates    *[]application.EngineUpdateResult
 }
