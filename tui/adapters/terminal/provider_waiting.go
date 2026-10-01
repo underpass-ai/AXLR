@@ -42,6 +42,9 @@ func (m *AppModel) waitingCommand(next tea.Cmd) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 func (m AppModel) statusView() string {
+	if m.Status.Error != "" {
+		return m.errorRow()
+	}
 	status := m.Status
 	status.Waiting = m.providerWaiting
 	status.Executing = m.toolExecuting

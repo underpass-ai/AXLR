@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -51,6 +52,9 @@ func TestSessionStoreRoundTripListPermissionsAndNoAPIKey(t *testing.T) {
 	must(t, e)
 	if len(list) != 1 || list[0].ID != s.Export().ID || list[0].Workspace != s.Export().Workspace || list[0].Model != "test/model" || list[0].Status != domain.StatusInterrupted {
 		t.Fatalf("bad list: %+v", list)
+	}
+	if list[0].Title != "hello" || list[0].MessageCount != len(s.Export().Messages) || list[0].MessageCount == 0 || time.Since(list[0].UpdatedAt) > time.Minute {
+		t.Fatalf("list lacks title, message count or save time: %+v", list[0])
 	}
 	for _, p := range []string{dir, filepath.Join(dir, string(s.Export().ID)+".json"), filepath.Join(dir, string(s.Export().ID)+".lock")} {
 		info, e := os.Stat(p)

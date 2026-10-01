@@ -199,13 +199,21 @@ func TestNavigationSwitchRejectsDifferentWorkspace(t *testing.T) {
 	s := navSession(t)
 	m := navModel(t, &s)
 	other, _ := domain.NewSession("1123456789abcdef0123456789abcdef", domain.Workspace(string(testWorkspace())+"-other"), "model")
+	other.BeginTurn("elsewhere", nil)
 	m.deps.Store.Save(context.Background(), other)
 	n, c := m.Update(ControlIntent("sessions"))
 	m = drain(t, n.(AppModel), c)
+	if len(m.Picker.Visible()) != 0 {
+		t.Fatal("another workspace's session is listed by default")
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyTab})
+	if current, ok := m.Picker.Current(); !ok || current.ID != other.Export().ID {
+		t.Fatal("Tab did not show every workspace")
+	}
 	n, c = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m = drain(t, n.(AppModel), c)
-	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "differs from active workspace") {
-		t.Fatal("workspace compatibility not enforced")
+	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "axlr-tui --root "+string(testWorkspace())+"-other") {
+		t.Fatalf("workspace compatibility not enforced or not explained: %q", m.Status.Error)
 	}
 }
 func TestNavigationSearchDuplicateMessageTargets(t *testing.T) {

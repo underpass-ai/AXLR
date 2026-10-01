@@ -18,11 +18,7 @@ type footerHint struct{ zone, key, label string }
 func (m AppModel) footerView() string {
 	width := max(1, m.Layout.Width)
 	if m.Status.Error != "" {
-		text := " " + m.Theme.Icon("error") + " " + singleLine(m.Status.Error)
-		if !m.Theme.Monochrome {
-			text = lipgloss.NewStyle().Foreground(lipgloss.Color(m.Theme.palette().Warning)).Render(text)
-		}
-		return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(text, width, "…"))
+		return m.errorRow()
 	}
 	// Hints are in priority order; the narrowest terminals keep the first.
 	hints := []footerHint{{"send", "enter", m.Theme.T("footer.send")}}
@@ -132,4 +128,14 @@ func formatTokens(n int) string {
 	default:
 		return fmt.Sprintf("%.1fM", float64(n)/1_000_000)
 	}
+}
+
+// errorRow gives an error the whole row, in the footer and under overlays.
+func (m AppModel) errorRow() string {
+	width := max(1, m.Layout.Width)
+	text := " " + m.Theme.Icon("error") + " " + singleLine(m.Status.Error)
+	if !m.Theme.Monochrome {
+		text = lipgloss.NewStyle().Foreground(lipgloss.Color(m.Theme.palette().Warning)).Render(text)
+	}
+	return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(text, width, "…"))
 }

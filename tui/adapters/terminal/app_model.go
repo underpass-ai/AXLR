@@ -329,7 +329,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if v.Sessions != nil {
-			m.Picker = SessionPicker{Items: *v.Sessions}
+			m.Picker = NewSessionPicker(*v.Sessions, m.Header.State.Workspace)
 			m.overlay = "sessions"
 		}
 		if oldID != m.Header.State.ID {
