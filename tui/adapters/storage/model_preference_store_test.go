@@ -36,11 +36,11 @@ func TestModelPreferenceStoreRoundTripAndPermissions(t *testing.T) {
 		t.Fatal("preference contains credentials")
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || !testMode(info, 0600) {
 		t.Fatalf("preference permissions: %v %v", info, err)
 	}
 	info, err = os.Stat(base)
-	if err != nil || info.Mode().Perm() != 0700 {
+	if err != nil || !testMode(info, 0700) {
 		t.Fatalf("directory permissions: %v %v", info, err)
 	}
 }

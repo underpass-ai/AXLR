@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -21,11 +20,12 @@ import (
 // SessionStore owns exclusive writer locks for sessions it saves or loads.
 // List reads atomic snapshots without claiming sessions. Close releases all locks.
 type SessionStore struct {
-	mu      sync.Mutex
-	dir     string
-	locks   map[domain.SessionID]*sessionLock
-	closed  bool
-	replace func(string, string) error
+	mu             sync.Mutex
+	dir            string
+	locks          map[domain.SessionID]*sessionLock
+	closed         bool
+	preserveActive bool
+	replace        func(string, string) error
 }
 
 var _ application.SessionStorePort = (*SessionStore)(nil)
@@ -56,6 +56,17 @@ func New(stateDir string) (*SessionStore, error) {
 		return nil, e
 	}
 	return &SessionStore{dir: stateDir, locks: make(map[domain.SessionID]*sessionLock), replace: os.Rename}, nil
+}
+
+// NewService preserves active states on ordinary reads. The service performs
+// recovery once at startup, then keeps live turn status visible to clients.
+func NewService(stateDir string) (*SessionStore, error) {
+	store, err := New(stateDir)
+	if err != nil {
+		return nil, err
+	}
+	store.preserveActive = true
+	return store, nil
 }
 func (s *SessionStore) check(ctx context.Context) error {
 	if e := ctx.Err(); e != nil {
@@ -124,7 +135,7 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 		return e
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return syncDirectoryFile(dir)
 }
 func (s *SessionStore) Load(ctx context.Context, id domain.SessionID) (domain.Session, error) {
 	s.mu.Lock()
@@ -138,7 +149,7 @@ func (s *SessionStore) Load(ctx context.Context, id domain.SessionID) (domain.Se
 	return s.read(id)
 }
 func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
-	file, e := os.OpenFile(filepath.Join(s.dir, string(id)+".json"), os.O_RDONLY|syscall.O_NOFOLLOW, 0)
+	file, e := openNoFollow(filepath.Join(s.dir, string(id)+".json"), os.O_RDONLY, 0)
 	if e != nil {
 		return domain.Session{}, e
 	}
@@ -169,7 +180,7 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	if record.ID != string(id) {
 		return domain.Session{}, errors.New("snapshot ID does not match filename")
 	}
-	return restore(record)
+	return restoreSnapshot(record, s.preserveActive)
 }
 
 // List is deterministic by session ID; malformed snapshots surface as errors.

@@ -3,6 +3,7 @@ package diagnostics
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -41,7 +42,7 @@ func TestOpenDefaultPrivateUniqueTraces(t *testing.T) {
 			}
 			for path, mode := range map[string]os.FileMode{first: 0o600, filepath.Dir(first): 0o700, filepath.Dir(filepath.Dir(first)): 0o700} {
 				info, err := os.Stat(path)
-				if err != nil || info.Mode().Perm() != mode {
+				if err != nil || !testMode(info, mode) {
 					t.Fatalf("permissions %s: %v %v", path, info, err)
 				}
 			}
@@ -52,6 +53,9 @@ func TestOpenDefaultPrivateUniqueTraces(t *testing.T) {
 func TestOpenDefaultRejectsUnsafeDirectoriesAndMissingEnvironment(t *testing.T) {
 	for _, kind := range []string{"nil", "missing", "relative", "base-symlink", "nested-symlink", "file", "public-root", "public-logs"} {
 		t.Run(kind, func(t *testing.T) {
+			if runtime.GOOS == "windows" && (kind == "public-root" || kind == "public-logs") {
+				t.Skip("POSIX mode bits do not express Windows ACLs")
+			}
 			base := t.TempDir()
 			if err := os.Chmod(base, 0o700); err != nil {
 				t.Fatal(err)

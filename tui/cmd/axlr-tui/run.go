@@ -16,6 +16,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/underpass-ai/AXLR/adapters/openrouter"
 	rootApp "github.com/underpass-ai/AXLR/application"
+	"github.com/underpass-ai/AXLR/buildinfo"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
@@ -31,6 +32,10 @@ import (
 )
 
 func run(ctx context.Context, args []string, getenv func(string) string, launch func(tea.Model) error, stderr io.Writer) int {
+	if len(args) == 1 && args[0] == "--version" {
+		fmt.Fprintln(stderr, buildinfo.Version)
+		return 0
+	}
 	key := getenv("OPENROUTER_API_KEY")
 	var trace application.DiagnosticPort
 	fail := func(err error) int {

@@ -1,14 +1,27 @@
 package plugins
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func writeManifest(t *testing.T, body string) string {
 	t.Helper()
+	if runtime.GOOS == "windows" {
+		command, err := filepath.Abs(os.Args[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(command)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body = strings.ReplaceAll(body, `"/bin/echo"`, string(encoded))
+	}
 	path := filepath.Join(t.TempDir(), "plugin.json")
 	if err := os.WriteFile(path, []byte(body), 0600); err != nil {
 		t.Fatal(err)

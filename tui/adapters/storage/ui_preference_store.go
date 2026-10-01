@@ -138,5 +138,5 @@ func (s *UIPreferenceStore) Save(ctx context.Context, p domain.UIPreferences) er
 		return err
 	}
 	defer dir.Close()
-	return dir.Sync()
+	return syncDirectoryFile(dir)
 }

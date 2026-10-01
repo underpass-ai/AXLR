@@ -24,8 +24,11 @@ func NewSession(id SessionID, workspace Workspace, model axlr.ModelID) (Session,
 	}
 	return Session{state: SessionState{ID: id, Workspace: workspace, Model: model, Status: StatusIdle}}, nil
 }
-func (s Session) Status() SessionStatus         { return s.state.Status }
-func (s Session) Export() SessionState          { return cloneState(s.state) }
+func (s Session) Status() SessionStatus { return s.state.Status }
+func (s Session) Export() SessionState  { return cloneState(s.state) }
+func (s *Session) SetServiceMetadata(owner string, revision uint64, operationID string) {
+	s.state.Owner, s.state.Revision, s.state.OperationID = owner, revision, operationID
+}
 func (s Session) Messages() []axlr.Message      { return s.Export().Messages }
 func (s Session) ToolSnapshot() []AvailableTool { return s.Export().ToolSnapshot }
 func (s Session) Pending() []PendingTool {

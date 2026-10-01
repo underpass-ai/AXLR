@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -22,7 +23,7 @@ func must(t *testing.T, e error) {
 }
 func fixture(t *testing.T) domain.Session {
 	t.Helper()
-	s, e := domain.NewSession("0123456789abcdef0123456789abcdef", "/workspace", "test/model")
+	s, e := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "test/model")
 	must(t, e)
 	return s
 }
@@ -48,7 +49,7 @@ func TestSessionStoreRoundTripListPermissionsAndNoAPIKey(t *testing.T) {
 	}
 	list, e := store.List(context.Background())
 	must(t, e)
-	if len(list) != 1 || list[0].ID != s.Export().ID || list[0].Workspace != "/workspace" || list[0].Model != "test/model" || list[0].Status != domain.StatusInterrupted {
+	if len(list) != 1 || list[0].ID != s.Export().ID || list[0].Workspace != s.Export().Workspace || list[0].Model != "test/model" || list[0].Status != domain.StatusInterrupted {
 		t.Fatalf("bad list: %+v", list)
 	}
 	for _, p := range []string{dir, filepath.Join(dir, string(s.Export().ID)+".json"), filepath.Join(dir, string(s.Export().ID)+".lock")} {
@@ -58,7 +59,7 @@ func TestSessionStoreRoundTripListPermissionsAndNoAPIKey(t *testing.T) {
 		if info.IsDir() {
 			want = 0700
 		}
-		if info.Mode().Perm() != want {
+		if runtime.GOOS != "windows" && info.Mode().Perm() != want {
 			t.Fatalf("permissions %s: %o", p, info.Mode().Perm())
 		}
 	}
@@ -81,13 +82,39 @@ func TestSessionStoreRestoresChangedModelFromVersionOneSnapshot(t *testing.T) {
 	must(t, err)
 	var record map[string]any
 	must(t, json.Unmarshal(raw, &record))
-	if record["version"] != float64(1) {
+	if record["version"] != float64(2) {
 		t.Fatalf("snapshot version changed: %v", record["version"])
 	}
 	got, err := store.Load(context.Background(), s.Export().ID)
 	must(t, err)
 	if got.Export().Model != "next/model" || !reflect.DeepEqual(got.Messages(), before) {
 		t.Fatalf("restored model or transcript changed: %+v", got.Export())
+	}
+}
+func TestSessionStoreReadsVersionOneAndPreservesServiceMetadata(t *testing.T) {
+	store, dir := openStore(t)
+	s := fixture(t)
+	must(t, store.Save(context.Background(), s))
+	path := filepath.Join(dir, string(s.Export().ID)+".json")
+	raw, err := os.ReadFile(path)
+	must(t, err)
+	var record map[string]any
+	must(t, json.Unmarshal(raw, &record))
+	record["version"] = 1
+	legacy, err := json.Marshal(record)
+	must(t, err)
+	must(t, os.WriteFile(path, legacy, 0600))
+	loaded, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	if loaded.Export().Owner != "" || loaded.Export().Revision != 0 {
+		t.Fatalf("legacy metadata not empty: %+v", loaded.Export())
+	}
+	loaded.SetServiceMetadata("alice", 7, "operation-1")
+	must(t, store.Save(context.Background(), loaded))
+	got, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	if got.Export().Owner != "alice" || got.Export().Revision != 7 || got.Export().OperationID != "operation-1" {
+		t.Fatalf("service metadata lost: %+v", got.Export())
 	}
 }
 func TestSessionStorePreservesInterruptedAnswersInConversationOrder(t *testing.T) {
@@ -180,7 +207,7 @@ func TestSessionStoreLockAndClose(t *testing.T) {
 	if e = second.Save(context.Background(), s); e == nil {
 		t.Fatal("second writer accepted")
 	}
-	other, e := domain.NewSession("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "/workspace", "test/model")
+	other, e := domain.NewSession("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", domain.Workspace(t.TempDir()), "test/model")
 	must(t, e)
 	must(t, second.Save(context.Background(), other))
 	must(t, store.Close())

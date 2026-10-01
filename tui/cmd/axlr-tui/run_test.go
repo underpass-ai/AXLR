@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,19 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
+func canonicalWorkspace(t *testing.T, path string) string {
+	t.Helper()
+	resolved, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolved
+}
+
 func TestTUIExecutorResolvesCommandsWithoutForwardingCredentials(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario; native process execution is covered by runtime tests")
+	}
 	env := map[string]string{"PATH": "/usr/bin:/bin", "OPENROUTER_API_KEY": "private-key"}
 	executor, err := runtime.New(runtime.Config{Root: t.TempDir(), Env: localRuntimeEnvironment(func(name string) string { return env[name] })})
 	if err != nil {
@@ -119,7 +132,7 @@ func TestRunCreatesConfiguredSessionAndReleasesLock(t *testing.T) {
 	code := run(context.Background(), []string{"--root", workspace, "--model", "test/model"}, func(k string) string { return env[k] }, func(m tea.Model) error {
 		state := m.(terminal.AppModel).Header.State
 		id = state.ID
-		if state.Workspace != domain.Workspace(workspace) || state.Model != "test/model" || len(id) != 32 {
+		if state.Workspace != domain.Workspace(canonicalWorkspace(t, workspace)) || state.Model != "test/model" || len(id) != 32 {
 			t.Fatalf("%+v", state)
 		}
 		return nil
@@ -179,7 +192,7 @@ func TestRunResumeRequiresExplicitContinuationAndUsesConfiguredAgent(t *testing.
 	workspace := t.TempDir()
 	ctx := context.Background()
 	store, _ := storage.New(filepath.Join(env["XDG_STATE_HOME"], "axlr", "sessions"))
-	s, _ := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(workspace), "test/model")
+	s, _ := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(canonicalWorkspace(t, workspace)), "test/model")
 	if err := s.BeginTurn(root.Text("resume me"), nil); err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +242,7 @@ func TestRunPluginEnvironmentIsExplicit(t *testing.T) {
 	workspace := t.TempDir()
 	log := filepath.Join(workspace, "environment")
 	manifest := filepath.Join(workspace, "plugin.json")
-	data, _ := json.Marshal(map[string]any{"manifest_version": 1, "id": "probe", "command": "/bin/sh", "args": []string{"-c", "/usr/bin/env > \"$OUTPUT\""}, "allow_tools": []string{"probe"}})
+	data, _ := json.Marshal(map[string]any{"manifest_version": 1, "id": "probe", "command": os.Args[0], "args": []string{"-test.run=^TestPluginEnvironmentHelper$"}, "allow_tools": []string{"probe"}})
 	os.WriteFile(manifest, data, 0600)
 	env["LOG"] = log
 	var out bytes.Buffer
@@ -253,6 +266,17 @@ func TestRunPluginEnvironmentIsExplicit(t *testing.T) {
 	if !bytes.Contains(got, []byte("SELECTED=selected")) || bytes.Contains(got, []byte("UNSELECTED_SECRET")) || bytes.Contains(got, []byte("OPENROUTER_API_KEY")) {
 		t.Fatalf("unsafe env %s", got)
 	}
+}
+
+func TestPluginEnvironmentHelper(t *testing.T) {
+	path := os.Getenv("OUTPUT")
+	if path == "" {
+		return
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(os.Environ(), "\n")), 0600); err != nil {
+		os.Exit(2)
+	}
+	os.Exit(0)
 }
 func TestRunCancellationAndLaunchFailure(t *testing.T) {
 	for _, cancelled := range []bool{true, false} {

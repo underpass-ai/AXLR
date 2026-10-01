@@ -3,6 +3,8 @@ package terminal
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -13,9 +15,13 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
+func testWorkspace() domain.Workspace {
+	return domain.Workspace(filepath.VolumeName(os.TempDir()) + string(filepath.Separator) + "axlr-test")
+}
+
 func update(m AppModel, msg tea.Msg) AppModel { n, _ := m.Update(msg); return n.(AppModel) }
 func sized() AppModel {
-	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
 	if err != nil {
 		panic(err)
 	}
@@ -84,7 +90,7 @@ func TestAppModelDoesNotMatchDraftAgainstOldAnswerAndClearsOnSessionSwitch(t *te
 	if m.draft != "same answer" {
 		t.Fatal("old assistant answer matched current unpersisted draft")
 	}
-	other, err := domain.NewSession("fedcba9876543210fedcba9876543210", "/tmp", "model")
+	other, err := domain.NewSession("fedcba9876543210fedcba9876543210", testWorkspace(), "model")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,7 +217,7 @@ func TestAppModelVisibleControlsKeyboardMouseParity(t *testing.T) {
 }
 
 func TestAppModelOperationPublishesOnlyOnCompletion(t *testing.T) {
-	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +271,7 @@ func TestAppModelSendShowsPromptWhileStreaming(t *testing.T) {
 }
 
 func TestAppModelOptimisticPromptKeepsPreviousInterruptedRowInOrder(t *testing.T) {
-	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
 	if err != nil {
 		t.Fatal(err)
 	}

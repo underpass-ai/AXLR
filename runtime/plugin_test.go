@@ -30,7 +30,7 @@ func pluginRequest(tool, args string) dto.Request {
 
 func TestPluginListProducesTypedOutput(t *testing.T) {
 	schema, _ := domain.NewJSONValue([]byte(`{"type":"object"}`))
-	e, err := New(Config{Root: t.TempDir(), Plugins: pluginPortStub{listResult: []domain.PluginTool{{Ref: domain.PluginRef{PluginID: "search", ToolName: "find"}, Description: "Find", InputSchema: schema}}}})
+	e, err := newTestExecutor(t, Config{Root: t.TempDir(), Plugins: pluginPortStub{listResult: []domain.PluginTool{{Ref: domain.PluginRef{PluginID: "search", ToolName: "find"}, Description: "Find", InputSchema: schema}}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestPluginListProducesTypedOutput(t *testing.T) {
 
 func TestPluginCallRetainsToolLevelError(t *testing.T) {
 	block, _ := domain.NewJSONValue([]byte(`{"type":"text","text":"failed"}`))
-	e, err := New(Config{Root: t.TempDir(), Plugins: pluginPortStub{callResult: domain.PluginResult{Content: []domain.JSONValue{block}, IsError: true}}})
+	e, err := newTestExecutor(t, Config{Root: t.TempDir(), Plugins: pluginPortStub{callResult: domain.PluginResult{Content: []domain.JSONValue{block}, IsError: true}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestPluginFailuresKeepTheirStatus(t *testing.T) {
 		"timeout":   {context.DeadlineExceeded, "timed_out"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			e, err := New(Config{Root: t.TempDir(), Plugins: pluginPortStub{err: input.err}})
+			e, err := newTestExecutor(t, Config{Root: t.TempDir(), Plugins: pluginPortStub{err: input.err}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -100,7 +100,7 @@ func TestPluginFailuresKeepTheirStatus(t *testing.T) {
 }
 
 func TestLocalReadNeverTouchesPluginPort(t *testing.T) {
-	e, err := New(Config{Root: t.TempDir(), Plugins: pluginPortStub{err: errors.New("plugin touched")}})
+	e, err := newTestExecutor(t, Config{Root: t.TempDir(), Plugins: pluginPortStub{err: errors.New("plugin touched")}})
 	if err != nil {
 		t.Fatal(err)
 	}

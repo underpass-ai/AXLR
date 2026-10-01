@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sync"
-	"syscall"
 )
 
 // PayloadRecorder saves redacted bodies only, never authorization headers.
@@ -34,7 +33,7 @@ func NewPayloadRecorder(directory string, secrets ...string) (*PayloadRecorder, 
 	if err != nil {
 		return nil, err
 	}
-	if !info.IsDir() || info.Mode().Perm()&0077 != 0 {
+	if !privatePayloadDirectory(info) {
 		return nil, errors.New("payload directory must be a private directory")
 	}
 	return &PayloadRecorder{directory: directory, secrets: append([]string(nil), secrets...)}, nil
@@ -80,11 +79,10 @@ func (p *PayloadRecorder) save(id uint64, kind string, body []byte, responseExte
 		extension = responseExtension
 	}
 	path := filepath.Join(p.directory, fmt.Sprintf("%06d-%s.%s", id, kind, extension))
-	fd, err := syscall.Open(path, syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
+	file, err := openDiagnosticFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
 		return err
 	}
-	file := os.NewFile(uintptr(fd), path)
 	_, writeErr := file.Write(body)
 	closeErr := file.Close()
 	if err := errors.Join(writeErr, closeErr); err != nil {

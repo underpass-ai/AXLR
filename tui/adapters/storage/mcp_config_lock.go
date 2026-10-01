@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"syscall"
 	"time"
 )
 
@@ -18,7 +17,7 @@ func acquireMCPConfigLock(ctx context.Context, path string) (func(), error) {
 	if !filepath.IsAbs(path) {
 		return nil, errors.New("MCP config path must be absolute")
 	}
-	file, err := os.OpenFile(path+".lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)
+	file, err := openNoFollow(path+".lock", os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -28,7 +27,7 @@ func acquireMCPConfigLock(ctx context.Context, path string) (func(), error) {
 		release()
 		return nil, err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if !privateRegular(info) {
 		release()
 		return nil, errors.New("MCP config lock must be a private regular file")
 	}
@@ -37,11 +36,11 @@ func acquireMCPConfigLock(ctx context.Context, path string) (func(), error) {
 			release()
 			return nil, err
 		}
-		err := syscall.Flock(int(file.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		err := tryLock(file)
 		if err == nil {
 			return release, nil
 		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+		if !lockBusy(err) {
 			release()
 			return nil, err
 		}

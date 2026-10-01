@@ -3,12 +3,16 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"runtime"
 	"testing"
 
 	"github.com/underpass-ai/AXLR/dto"
 )
 
 func TestWorkerEmitsOnlyOneJSONResponse(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
 	var stdout, stderr bytes.Buffer
 	code := run([]string{"--root", t.TempDir(), "--profile", "trusted-local"}, bytes.NewBufferString(`{"protocol_version":1,"request_id":"x","tool":"exec","arguments":{"program":"/bin/sh","args":["-c","printf child-output"]}}`), &stdout, &stderr)
 	if code != 0 {
@@ -42,6 +46,9 @@ func TestWorkerRejectsInvalidRequestWithExitTwo(t *testing.T) {
 }
 
 func TestWorkerAcceptsExplicitChildEnvironment(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
 	var stdout, stderr bytes.Buffer
 	code := run([]string{"--root", t.TempDir(), "--profile", "trusted-local", "--env", "AXLR_FLAG=visible"}, bytes.NewBufferString(`{"protocol_version":1,"request_id":"x","tool":"exec","arguments":{"program":"/bin/sh","args":["-c","printf %s \"$AXLR_FLAG\""]}}`), &stdout, &stderr)
 	if code != 0 {

@@ -13,7 +13,7 @@ AXLR has three entry points. Start with the console if you want to work interact
 - [Architecture and boundaries](architecture.md) explains which component owns execution, model calls, policy and persistence.
 - [Plugins and MCP](plugins.md) explains Codex package compatibility, AXLR-managed installation, active MCP connections and both standard transports.
 - [KMP runbook](runbooks/kmp.md) and [MADE runbook](runbooks/made.md) cover connection, verification and removal of each engine.
-- [Release plan](releasing.md) describes the proposed cross-platform packages and checksums; tagged release CI is not implemented yet.
+- [Release process](releasing.md) describes the tagged build, native test matrix, packages and checksums.
 - [Brand assets](brand.md) contains the logo, palette and usage guidance.
 
 ## Development record
@@ -22,6 +22,6 @@ The documents under [`plans/`](plans/), [`superpowers/specs/`](superpowers/specs
 
 [Documentation audit](documentation-audit.md) records the gaps this reorganization addressed.
 
-## Planned service
+## Service and deployment
 
-The current worker is a one-request process API. The [service API specification](specs/axlr-service-api.md) and [implementation plan](plans/axlr-service-helm-release.md) define a future HTTP API with mTLS, agent sessions, tool execution, remote KMP/MADE and a Helm chart. These documents are plans, not a claim that `axlr-serve` or its chart exists today.
+The worker remains a one-request process API. [`axlr-serve`](api.md) implements HTTP `/v1` with mTLS, sessions, SSE and tool calls. The [Helm chart](helm.md) connects to existing KMP and MADE engines. The [service specification](specs/axlr-service-api.md) and [implementation plan](plans/axlr-service-helm-release.md) record the contract and acceptance work; they do not imply that a tagged release has been published.

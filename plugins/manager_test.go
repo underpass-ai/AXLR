@@ -370,7 +370,7 @@ func TestHangingPluginHelper(t *testing.T) {
 
 func TestManagerListServerIsolatesFailuresAndHonorsLifecycle(t *testing.T) {
 	good := pluginRegistration(t, "good", []domain.PluginToolName{"echo"})
-	bad, err := NewRegistration(Manifest{ID: "bad", Command: "/nonexistent-axlr-mcp", AllowTools: []domain.PluginToolName{"echo"}}, nil)
+	bad, err := NewRegistration(Manifest{ID: "bad", Command: filepath.Join(t.TempDir(), "nonexistent-axlr-mcp"), AllowTools: []domain.PluginToolName{"echo"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

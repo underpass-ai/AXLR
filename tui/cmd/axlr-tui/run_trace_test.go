@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -133,11 +134,16 @@ func TestRunDefaultTraceFailureRedactsKeyAndDoesNotFallBackToHostEnvironment(t *
 
 func TestRunAcceptsRelativeExplicitTraceWithPayloadCapture(t *testing.T) {
 	env := cliEnv(t)
-	path := filepath.Join(t.TempDir(), "relative-trace.jsonl")
 	cwd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
 	}
+	dir, err := os.MkdirTemp(cwd, ".axlr-relative-trace-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(dir) })
+	path := filepath.Join(dir, "relative-trace.jsonl")
 	relative, err := filepath.Rel(cwd, path)
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +191,7 @@ func TestRunReusedTraceGetsUniquePayloadDirectoryPerLaunch(t *testing.T) {
 	}
 	for _, dir := range dirs {
 		info, err := os.Stat(dir)
-		if err != nil || !info.IsDir() || info.Mode().Perm() != 0o700 {
+		if err != nil || !info.IsDir() || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o700) {
 			t.Fatalf("directory=%v err=%v", info, err)
 		}
 		files, err := os.ReadDir(dir)

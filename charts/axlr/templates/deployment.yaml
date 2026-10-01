@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "axlr.name" . }}
+  labels:
+    {{- include "axlr.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: axlr
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "axlr.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "axlr.name" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: axlr
+          image: {{ .Values.image.repository }}@{{ .Values.image.digest }}
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: https
+              containerPort: 8443
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["/usr/local/bin/axlr-serve", "--probe=livez"]
+          readinessProbe:
+            exec:
+              command: ["/usr/local/bin/axlr-serve", "--probe=readyz"]
+          volumeMounts:
+            - {name: workspace, mountPath: {{ .Values.workspace.mountPath | quote }}}
+            - {name: state, mountPath: /state}
+            - {name: config, mountPath: /etc/axlr, readOnly: true}
+            - {name: api-tls, mountPath: /secrets/api, readOnly: true}
+            - {name: client-ca, mountPath: /secrets/client-ca, readOnly: true}
+            - {name: principals, mountPath: /secrets/principals, readOnly: true}
+            - {name: model, mountPath: /secrets/model, readOnly: true}
+            - {name: kmp-tls, mountPath: /secrets/kmp, readOnly: true}
+            - {name: made-tls, mountPath: /secrets/made, readOnly: true}
+            - {name: temp, mountPath: /tmp}
+      volumes:
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: {{ required "workspace.existingClaim is required" .Values.workspace.existingClaim }}
+        - name: state
+          persistentVolumeClaim:
+            claimName: {{ ternary .Values.state.existingClaim (include "axlr.name" .) (ne .Values.state.existingClaim "") }}
+        - name: config
+          configMap:
+            name: {{ include "axlr.name" . }}
+        - name: api-tls
+          secret:
+            secretName: {{ required "api.serverTLS.existingSecret is required" .Values.api.serverTLS.existingSecret }}
+        - name: client-ca
+          secret:
+            secretName: {{ required "api.clientCA.existingSecret is required" .Values.api.clientCA.existingSecret }}
+        - name: principals
+          secret:
+            secretName: {{ required "api.principals.existingSecret is required" .Values.api.principals.existingSecret }}
+        - name: model
+          secret:
+            secretName: {{ required "model.apiKey.existingSecret is required" .Values.model.apiKey.existingSecret }}
+        - name: kmp-tls
+          secret:
+            secretName: {{ required "kmp.tls.existingSecret is required" .Values.kmp.tls.existingSecret }}
+        - name: made-tls
+          secret:
+            secretName: {{ required "made.tls.existingSecret is required" .Values.made.tls.existingSecret }}
+        - name: temp
+          emptyDir:
+            sizeLimit: 64Mi

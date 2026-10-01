@@ -13,6 +13,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 )
@@ -50,13 +51,21 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 	}
 	defer e.Close()
 	runner := ToolRunner{Executor: e}
-	for _, tc := range []struct{ op, args, want string }{
+	operations := []struct{ op, args, want string }{
 		{"write", `{"path":"file","content":"hello","mode":"create"}`, "written_bytes"},
 		{"read", `{"path":"file"}`, "hello"},
 		{"edit", `{"path":"file","old_text":"hello","new_text":"bye"}`, "written_bytes"},
 		{"read", `{"path":"file"}`, "bye"},
 		{"exec", `{"program":"/bin/echo","args":["worked"]}`, "worked"},
-	} {
+	}
+	if goruntime.GOOS == "windows" {
+		arguments, err := json.Marshal(map[string]any{"program": os.Args[0], "args": []string{"-test.run=^TestExecEchoHelper$", "--", "axlr-echo-helper"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		operations[4].args = string(arguments)
+	}
+	for _, tc := range operations {
 		id, _ := domain.NewLocalToolIdentity(tc.op)
 		out, err := runner.Execute(context.Background(), id, jsonValue(t, tc.args))
 		if err != nil || out.IsError || !strings.Contains(string(out.Content), tc.want) {
@@ -76,6 +85,15 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 	out, err = runner.Execute(ctx, id, jsonValue(t, `{"path":"file"}`))
 	if err != nil || !out.IsError || !out.Uncertain {
 		t.Fatalf("%+v %v", out, err)
+	}
+}
+
+func TestExecEchoHelper(t *testing.T) {
+	for _, arg := range os.Args {
+		if arg == "axlr-echo-helper" {
+			fmt.Print("worked")
+			os.Exit(0)
+		}
 	}
 }
 func TestToolRunnerMCPErrorIdentityAndDisappearance(t *testing.T) {
@@ -201,7 +219,7 @@ func TestToolRunnerLostMCPReplyPausesPersistedTurn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "model")
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "model")
 	if err != nil {
 		t.Fatal(err)
 	}

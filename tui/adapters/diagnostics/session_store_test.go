@@ -18,7 +18,7 @@ func TestSessionStoreSpansCoverAllOperationsAndFailures(t *testing.T) {
 	defer next.Close()
 	trace := &traceEvents{}
 	store := SessionStore{Next: next, Trace: trace}
-	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/tmp", "test/model")
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "test/model")
 	if err != nil {
 		t.Fatal(err)
 	}

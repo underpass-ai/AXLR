@@ -1,19 +1,28 @@
 package storage
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 )
 
+func portableManifest(body []byte) []byte {
+	if runtime.GOOS != "windows" {
+		return body
+	}
+	command, _ := json.Marshal(os.Args[0])
+	return bytes.ReplaceAll(body, []byte(`"/bin/echo"`), command)
+}
+
 func TestLoadMCPConfigRegistersPersistentPluginWithSelectedEnvironment(t *testing.T) {
 	dir := t.TempDir()
 	manifest := filepath.Join(dir, "kmp-manifest.json")
-	if err := os.WriteFile(manifest, []byte(`{"manifest_version":1,"id":"kmp","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+	if err := os.WriteFile(manifest, portableManifest([]byte(`{"manifest_version":1,"id":"kmp","command":"/bin/echo","args":[],"allow_tools":["*"]}`)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	config := filepath.Join(dir, "mcp.json")
@@ -41,7 +50,7 @@ func TestLoadMCPConfigRegistersPersistentPluginWithSelectedEnvironment(t *testin
 func TestLoadMCPConfigRejectsUnsafeOrInvalidFile(t *testing.T) {
 	dir := t.TempDir()
 	manifest := filepath.Join(dir, "m.json")
-	if err := os.WriteFile(manifest, []byte(`{"manifest_version":1,"id":"plugin","command":"/bin/echo","args":[],"allow_tools":["read"]}`), 0600); err != nil {
+	if err := os.WriteFile(manifest, portableManifest([]byte(`{"manifest_version":1,"id":"plugin","command":"/bin/echo","args":[],"allow_tools":["read"]}`)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	valid, _ := json.Marshal(map[string]any{"version": 1, "plugins": []any{map[string]any{"manifest": manifest}}})
@@ -67,8 +76,10 @@ func TestLoadMCPConfigRejectsUnsafeOrInvalidFile(t *testing.T) {
 	if err := os.Chmod(config, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := LoadMCPConfig(config, func(string) string { return "" }); err == nil {
-		t.Fatal("public config accepted")
+	if runtime.GOOS != "windows" {
+		if _, err := LoadMCPConfig(config, func(string) string { return "" }); err == nil {
+			t.Fatal("public config accepted")
+		}
 	}
 	if err := os.Remove(config); err != nil {
 		t.Fatal(err)
@@ -82,8 +93,11 @@ func TestLoadMCPConfigRejectsUnsafeOrInvalidFile(t *testing.T) {
 }
 
 func TestLoadMCPConfigRejectsFIFOWithoutBlocking(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX FIFO")
+	}
 	path := filepath.Join(t.TempDir(), "mcp.json")
-	if err := syscall.Mkfifo(path, 0600); err != nil {
+	if err := makeFIFO(path); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)

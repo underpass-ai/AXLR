@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -157,6 +158,9 @@ func TestWorkerProcess(t *testing.T) {
 }
 
 func TestWorkerSignalCancelsPluginCall(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no SIGTERM")
+	}
 	manifest := workerManifest(t, []string{"wait"})
 	callLog := filepath.Join(t.TempDir(), "calls")
 	cmd := exec.Command(os.Args[0], "-test.run=^TestWorkerProcess$")

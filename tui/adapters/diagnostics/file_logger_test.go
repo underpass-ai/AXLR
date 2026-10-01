@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
-	"syscall"
 	"testing"
 	"time"
 
@@ -35,7 +35,7 @@ func TestFileLoggerWritesPrivateJSONLWithOnlyTypedMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
+	if got := info.Mode().Perm(); runtime.GOOS != "windows" && got != 0o600 {
 		t.Fatalf("mode = %o; want 600", got)
 	}
 	data, err := os.ReadFile(path)
@@ -60,8 +60,11 @@ func TestFileLoggerWritesPrivateJSONLWithOnlyTypedMetadata(t *testing.T) {
 }
 
 func TestFileLoggerRejectsFIFOWithoutBlocking(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no POSIX FIFO")
+	}
 	path := filepath.Join(t.TempDir(), "trace.fifo")
-	if err := syscall.Mkfifo(path, 0o600); err != nil {
+	if err := makeFIFO(path); err != nil {
 		t.Fatal(err)
 	}
 	done := make(chan error, 1)

@@ -13,6 +13,9 @@ import (
 // TurnCallCount counts calls since the last user message; Draft is never model history.
 type SessionState struct {
 	ID             SessionID
+	Owner          string
+	Revision       uint64
+	OperationID    string
 	Workspace      Workspace
 	Model          axlr.ModelID
 	Status         SessionStatus
@@ -27,6 +30,16 @@ type SessionState struct {
 // RestoreSession validates transcript and activity together without executing work.
 // Active states reopen interrupted and require an explicit user action.
 func RestoreSession(state SessionState) (Session, error) {
+	return restoreSession(state, true)
+}
+
+// RestoreSessionActive validates a live service snapshot without treating the
+// in-process writer as a crashed turn. Startup recovery calls PauseTurn itself.
+func RestoreSessionActive(state SessionState) (Session, error) {
+	return restoreSession(state, false)
+}
+
+func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	s, err := NewSession(state.ID, state.Workspace, state.Model)
 	if err != nil {
 		return Session{}, err
@@ -112,7 +125,7 @@ func RestoreSession(state SessionState) (Session, error) {
 		return Session{}, errors.New("draft requires interrupted stream")
 	}
 	s.state = cloneState(state)
-	if state.Status == StatusStreaming || state.Status == StatusApproval {
+	if interruptActive && (state.Status == StatusStreaming || state.Status == StatusApproval) {
 		s.state.Status = StatusInterrupted
 	}
 	return s, nil

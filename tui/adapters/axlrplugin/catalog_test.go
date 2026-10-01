@@ -2,8 +2,10 @@ package axlrplugin
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -83,6 +85,13 @@ func TestCodexPluginSourceAndPathSafety(t *testing.T) {
 }
 func mustWrite(t *testing.T, path, content string) {
 	t.Helper()
+	if runtime.GOOS == "windows" && strings.Contains(content, `"command":"/bin/echo"`) {
+		command, err := json.Marshal(os.Args[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		content = strings.ReplaceAll(content, `"command":"/bin/echo"`, `"command":`+string(command))
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +119,11 @@ func TestCodexMCPFileAndEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), filepath.Join(rootDir, "run.sh")) {
+	var manifest struct {
+		Command string   `json:"command"`
+		Args    []string `json:"args"`
+	}
+	if err := json.Unmarshal(data, &manifest); err != nil || filepath.Clean(manifest.Command) != filepath.Join(rootDir, "run.sh") || len(manifest.Args) != 1 || filepath.Clean(manifest.Args[0]) != filepath.Join(rootDir, "config.json") {
 		t.Fatalf("root token not expanded: %s", data)
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"sync"
 	"syscall"
 
@@ -206,6 +207,10 @@ func (c *Client) Close() error {
 		if err := session.Close(); err != nil {
 			var exit *exec.ExitError
 			if errors.As(err, &exit) {
+				if runtime.GOOS == "windows" && exit.ExitCode() == 1 {
+					// Closing a stdio transport terminates the Windows child.
+					continue
+				}
 				if status, ok := exit.Sys().(syscall.WaitStatus); ok && (status.Signal() == syscall.SIGTERM || status.Signal() == syscall.SIGKILL) {
 					continue
 				}

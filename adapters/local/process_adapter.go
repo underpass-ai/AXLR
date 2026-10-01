@@ -8,7 +8,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/underpass-ai/AXLR/domain"
@@ -40,24 +39,14 @@ func (a *ProcessAdapter) Run(ctx context.Context, c domain.ExecCommand) (domain.
 	capture := &capture{budget: int(c.OutputLimit)}
 	cmd.Stdout = streamWriter{c: capture}
 	cmd.Stderr = streamWriter{c: capture, stderr: true}
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	configureProcess(cmd)
 	cmd.WaitDelay = time.Second
-	cmd.Cancel = func() error {
-		if cmd.Process == nil {
-			return os.ErrProcessDone
-		}
-		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-		if errors.Is(err, syscall.ESRCH) {
-			return os.ErrProcessDone
-		}
-		return err
-	}
 	if err := cmd.Start(); err != nil {
 		return domain.ExecResult{}, domain.Fail("start_failed", err.Error())
 	}
 	err = cmd.Wait()
 	if errors.Is(err, exec.ErrWaitDelay) {
-		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		_ = killProcessTree(cmd)
 	}
 	if ctx.Err() != nil {
 		return domain.ExecResult{}, &domain.Fault{Status: "cancelled", Code: "cancelled", Message: "process cancelled; prior effects may remain"}
@@ -108,18 +97,19 @@ func (a *ProcessAdapter) resolveProgram(program, cwd string) (string, error) {
 	}
 	pathValue := ""
 	for _, v := range a.Env {
-		if strings.HasPrefix(v, "PATH=") {
-			pathValue = strings.TrimPrefix(v, "PATH=")
+		if pathEnvironment(v) {
+			pathValue = v[len("PATH="):]
 		}
 	}
 	for _, dir := range filepath.SplitList(pathValue) {
 		if !filepath.IsAbs(dir) {
 			continue
 		}
-		candidate := filepath.Join(dir, program)
-		info, err := os.Stat(candidate)
-		if err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0111 != 0 {
-			return candidate, nil
+		for _, candidate := range programCandidates(filepath.Join(dir, program)) {
+			info, err := os.Stat(candidate)
+			if err == nil && executableFile(candidate, info) {
+				return candidate, nil
+			}
 		}
 	}
 	return "", domain.Fail("start_failed", fmt.Sprintf("program %q not found in configured PATH", program))

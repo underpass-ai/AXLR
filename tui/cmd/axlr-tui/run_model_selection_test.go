@@ -44,7 +44,7 @@ func TestRunModelSelectionBareAndCatalog(t *testing.T) {
 			code := run(context.Background(), args, func(k string) string { return env[k] }, func(m tea.Model) error {
 				resized, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 				a := resized.(terminal.AppModel)
-				if calls != 0 || string(a.Header.State.Workspace) != workspace {
+				if calls != 0 || string(a.Header.State.Workspace) != canonicalWorkspace(t, workspace) {
 					t.Fatalf("startup: %+v calls=%d", a.Header.State, calls)
 				}
 				if mode == "direct" {

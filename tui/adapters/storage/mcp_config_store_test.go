@@ -8,6 +8,7 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ func configuredPlugin(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	manifest := filepath.Join(dir, "kmp.json")
-	if err := os.WriteFile(manifest, []byte(`{"manifest_version":1,"id":"kmp","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+	if err := os.WriteFile(manifest, portableManifest([]byte(`{"manifest_version":1,"id":"kmp","command":"/bin/echo","args":[],"allow_tools":["*"]}`)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := json.Marshal(map[string]any{"version": 1, "plugins": []any{map[string]any{"manifest": manifest, "name": "KMP", "description": "Graph memory", "purpose": "memory", "env": map[string]string{"TOKEN": "preserve-value"}, "env_from": map[string]string{"HOME": "HOME"}}}})
@@ -72,7 +73,7 @@ func TestMCPConfigStorePersistsPolicyAndPreservesEnvironment(t *testing.T) {
 		t.Fatalf("config fields lost")
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || !testMode(info, 0600) {
 		t.Fatalf("mode: %v %v", info, err)
 	}
 	loaded, err := LoadMCPConfiguration(path, func(string) string { return "" })
@@ -119,7 +120,7 @@ func TestMCPInstallPreservesDefaultsAndLoadsHTTP(t *testing.T) {
 func TestInstallLocalMCPIntoNewConfiguration(t *testing.T) {
 	root := t.TempDir()
 	manifestPath := filepath.Join(root, "third-party.json")
-	if err := os.WriteFile(manifestPath, []byte(`{"manifest_version":1,"id":"thirdparty","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+	if err := os.WriteFile(manifestPath, portableManifest([]byte(`{"manifest_version":1,"id":"thirdparty","command":"/bin/echo","args":[],"allow_tools":["*"]}`)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(root, "config", "mcp.json")
@@ -132,7 +133,7 @@ func TestInstallLocalMCPIntoNewConfiguration(t *testing.T) {
 		t.Fatalf("installed config: %+v %v", loaded, err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || !testMode(info, 0600) {
 		t.Fatalf("unsafe config mode: %v %v", info, err)
 	}
 }
@@ -155,8 +156,10 @@ func TestMCPConfigStoreRejectsInvalidAndCancelledChange(t *testing.T) {
 	if err := os.Chmod(path, 0644); err != nil {
 		t.Fatal(err)
 	}
-	if store.SaveApproval(context.Background(), "kmp", domain.ApprovalAuto) == nil {
-		t.Fatal("unsafe file accepted")
+	if runtime.GOOS != "windows" {
+		if store.SaveApproval(context.Background(), "kmp", domain.ApprovalAuto) == nil {
+			t.Fatal("unsafe file accepted")
+		}
 	}
 }
 func TestMCPConfigurationRejectsInvalidProfilesAndDuplicateIDs(t *testing.T) {
@@ -250,7 +253,7 @@ func TestMCPConfigStoreConcurrentInstancesPreserveBothPolicies(t *testing.T) {
 		t.Fatal(err)
 	}
 	otherManifest := filepath.Join(filepath.Dir(path), "made.json")
-	if err := os.WriteFile(otherManifest, []byte(`{"manifest_version":1,"id":"made","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+	if err := os.WriteFile(otherManifest, portableManifest([]byte(`{"manifest_version":1,"id":"made","command":"/bin/echo","args":[],"allow_tools":["*"]}`)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	other := config.Plugins[0]
@@ -288,7 +291,7 @@ func TestMCPConfigStoreConcurrentInstancesPreserveBothPolicies(t *testing.T) {
 		}
 	}
 	info, err := os.Stat(path + ".lock")
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || !testMode(info, 0600) {
 		t.Fatal("lock is not private")
 	}
 }
@@ -319,6 +322,9 @@ func TestMCPConfigStoreLockWaitCanBeCancelled(t *testing.T) {
 func TestMCPConfigLockRejectsSymlinkAndPublicFile(t *testing.T) {
 	for _, kind := range []string{"symlink", "public"} {
 		t.Run(kind, func(t *testing.T) {
+			if runtime.GOOS == "windows" && kind == "public" {
+				t.Skip("POSIX mode bits do not express Windows ACLs")
+			}
 			path := configuredPlugin(t)
 			if kind == "symlink" {
 				if err := os.Symlink(path, path+".lock"); err != nil {
@@ -340,7 +346,7 @@ func TestMCPConfigLockRejectsSymlinkAndPublicFile(t *testing.T) {
 func TestMCPConfigStorePackageEnvironment(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mcp.json")
 	manifest := filepath.Join(t.TempDir(), "server.json")
-	if err := os.WriteFile(manifest, []byte(`{"manifest_version":1,"id":"example-worker","command":"/bin/echo","args":[],"allow_tools":["*"]}`), 0600); err != nil {
+	if err := os.WriteFile(manifest, portableManifest([]byte(`{"manifest_version":1,"id":"example-worker","command":"/bin/echo","args":[],"allow_tools":["*"]}`)), 0600); err != nil {
 		t.Fatal(err)
 	}
 	store := MCPConfigStore{Path: path}

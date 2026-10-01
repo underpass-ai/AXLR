@@ -31,7 +31,7 @@ func TestUIPreferenceStoreRoundTripAndPrivateFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0600 {
+	if !testMode(info, 0600) {
 		t.Fatalf("file mode = %v", info.Mode())
 	}
 }
