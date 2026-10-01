@@ -131,6 +131,9 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	if e = s.replace(file.Name(), filepath.Join(s.dir, record.ID+".json")); e != nil {
 		return e
 	}
+	if e = s.writeTimes(session.Export().ID, session.Export().MessageTimes); e != nil {
+		return e
+	}
 	dir, e := os.Open(s.dir)
 	if e != nil {
 		return e
@@ -181,7 +184,7 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	if record.ID != string(id) {
 		return domain.Session{}, errors.New("snapshot ID does not match filename")
 	}
-	return restoreSnapshot(record, s.preserveActive)
+	return restoreSnapshot(record, s.preserveActive, s.readTimes(id))
 }
 
 // List is deterministic by session ID; malformed snapshots surface as errors.
@@ -246,6 +249,7 @@ func (s *SessionStore) Close() error {
 		}
 		errs = append(errs, lock.close())
 		if empty {
+			_ = os.Remove(s.timesPath(id))
 			_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))
 		}
 	}

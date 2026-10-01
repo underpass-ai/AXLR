@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
@@ -105,17 +106,24 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 	for i := range s.Activity {
 		records[string(s.Activity[i].Call.ID)] = &s.Activity[i]
 	}
+	clock := transcriptNow()
 	for index, m := range s.Messages {
+		var at time.Time
+		if index < len(s.MessageTimes) {
+			at = s.MessageTimes[index]
+		}
 		switch {
 		case m.Role == root.RoleUser:
-			t.appendRow(transcriptRow{Label: theme.Icon("user") + " ", LabelTone: toneAccent, Text: string(m.Content), Kind: transcriptRowUser, Indent: true})
+			t.appendRow(transcriptRow{Label: theme.Icon("user") + " ", LabelTone: toneAccent, Text: string(m.Content), Kind: transcriptRowUser, Indent: true, At: at, Aside: formatClock(at, clock)})
 		case m.Role == root.RoleAssistant && m.Content != "":
-			t.appendRow(transcriptRow{Text: string(m.Content), Kind: transcriptRowAssistant, Markdown: true})
+			t.appendRow(transcriptRow{Text: string(m.Content), Kind: transcriptRowAssistant, Markdown: true, At: at})
 		case m.Role != root.RoleAssistant && m.Role != root.RoleTool:
 			t.appendRow(transcriptRow{Text: theme.T("role."+string(m.Role)) + ": " + string(m.Content), Kind: transcriptRowPlain})
 		}
 		for _, c := range m.ToolCalls {
-			t.appendRow(toolRow(s, c, records[string(c.ID)], results[string(c.ID)], theme))
+			row := toolRow(s, c, records[string(c.ID)], results[string(c.ID)], theme)
+			row.At = at
+			t.appendRow(row)
 		}
 		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
 			t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, Markdown: true})
@@ -129,7 +137,7 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 		t.appendRow(transcriptRow{Text: draft, Kind: transcriptRowAssistant, Markdown: true})
 	}
 	if theme.editorial() {
-		t.rows = editorialRows(t.rows, theme)
+		t.rows = editorialRows(t.rows, theme, clock)
 	}
 	t.renderRows()
 	t.ApplyTheme(theme)
@@ -178,6 +186,16 @@ func (t *Transcript) renderRows() {
 			clean = strings.ReplaceAll(clean, "\n", "\n"+strings.Repeat(" ", indent))
 		}
 		clean = t.theme.rowLabel(label, row.LabelTone, row.Kind) + clean
+		if width := t.Viewport.Width(); row.Aside != "" && width > 0 {
+			first, rest, _ := strings.Cut(clean, "\n")
+			if gap := width - ansi.StringWidth(first) - ansi.StringWidth(row.Aside); gap >= 2 {
+				first += strings.Repeat(" ", gap) + t.theme.Muted(row.Aside)
+				if rest != "" || strings.Contains(clean, "\n") {
+					first += "\n" + rest
+				}
+				clean = first
+			}
+		}
 		for i := range strings.Count(clean, "\n") + 1 {
 			kinds[line+i] = row.Kind
 			indents[line+i] = indent
@@ -218,4 +236,20 @@ func (t Transcript) View() string {
 		lines[i] = t.theme.rowText(t.visualRows[index]).Width(outerWidth).Render(line)
 	}
 	return strings.Join(lines, "\n")
+}
+
+// transcriptNow is the clock that turns message times into labels.
+var transcriptNow = time.Now
+
+// formatClock is "15:04" for today and "2006-01-02 15:04" otherwise, in
+// local time; unknown times give no label.
+func formatClock(at, now time.Time) string {
+	if at.IsZero() {
+		return ""
+	}
+	local, today := at.Local(), now.Local()
+	if y, m, d := local.Date(); y == today.Year() && m == today.Month() && d == today.Day() {
+		return local.Format("15:04")
+	}
+	return local.Format("2006-01-02 15:04")
 }

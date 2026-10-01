@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"slices"
+	"time"
 
 	axlr "github.com/underpass-ai/AXLR/domain"
 )
@@ -25,6 +26,10 @@ type SessionState struct {
 	ArchivedDrafts []ArchivedDraft
 	Draft          axlr.Text
 	TurnCallCount  int
+	// MessageTimes[i] is when Messages[i] was added, in UTC to the second.
+	// Sessions saved before times were recorded have fewer entries; a zero
+	// time means unknown.
+	MessageTimes []time.Time
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -138,6 +143,10 @@ func cloneState(state SessionState) SessionState {
 	state.ToolSnapshot = append([]AvailableTool(nil), state.ToolSnapshot...)
 	state.Activity = append([]PendingTool(nil), state.Activity...)
 	state.ArchivedDrafts = append([]ArchivedDraft(nil), state.ArchivedDrafts...)
+	state.MessageTimes = append([]time.Time(nil), state.MessageTimes...)
+	if len(state.MessageTimes) > len(state.Messages) {
+		state.MessageTimes = state.MessageTimes[:len(state.Messages)]
+	}
 	for i := range state.Activity {
 		if state.Activity[i].Outcome != nil {
 			outcome := cloneOutcome(*state.Activity[i].Outcome)

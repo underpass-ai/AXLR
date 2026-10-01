@@ -3,6 +3,7 @@ package terminal
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -11,26 +12,28 @@ import (
 // speaker label opens every turn, prompts lose their marker, and a finished
 // run of tool calls becomes one summary line. Runs with a call still waiting
 // or running stay one line per call so their live state remains visible.
-func editorialRows(rows []transcriptRow, theme Theme) []transcriptRow {
+func editorialRows(rows []transcriptRow, theme Theme, now time.Time) []transcriptRow {
 	var out []transcriptRow
 	speaker := ""
 	add := func(row transcriptRow, gap bool) {
 		row.GapBefore = gap && len(out) > 0
 		out = append(out, row)
 	}
+	var turnAt time.Time
 	open := func(name string, tone rowTone) {
 		if speaker != name {
-			add(transcriptRow{Label: name, LabelTone: tone, Kind: transcriptRowSpeaker}, true)
+			add(transcriptRow{Label: name, LabelTone: tone, Kind: transcriptRowSpeaker, Aside: formatClock(turnAt, now)}, true)
 			speaker = name
 		}
 	}
 	for i := 0; i < len(rows); i++ {
 		row := rows[i]
+		turnAt = row.At
 		afterSpeaker := len(out) > 0 && out[len(out)-1].Kind == transcriptRowSpeaker
 		switch {
 		case row.Kind == transcriptRowUser:
 			open(theme.T("editorial.you"), toneNone)
-			row.Label, row.Indent = "", false
+			row.Label, row.Indent, row.Aside = "", false, ""
 			// Consecutive prompts stay separate under one label.
 			add(row, out[len(out)-1].Kind != transcriptRowSpeaker)
 		case row.Kind.isTool() && row.Tool != nil:

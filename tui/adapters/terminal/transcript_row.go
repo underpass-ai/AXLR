@@ -1,5 +1,7 @@
 package terminal
 
+import "time"
+
 type transcriptRowKind uint8
 
 const (
@@ -27,6 +29,10 @@ type transcriptRow struct {
 	Indent    bool
 	// Tool describes a tool row so the Editorial layout can summarise runs.
 	Tool *toolFacts
+	// At is when the row's message was added (zero when unknown); Aside is
+	// shown right-aligned on the row's first line when it fits.
+	At    time.Time
+	Aside string
 }
 
 // toolFacts is what a tool row shows, kept structured for summaries.
