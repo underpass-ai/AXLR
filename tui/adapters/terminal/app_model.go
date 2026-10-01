@@ -613,9 +613,11 @@ func (m AppModel) View() tea.View {
 	if m.Layout.TooSmall || m.Layout.Width == 0 {
 		content = ansi.Truncate(m.Theme.T("app.resize"), max(1, m.Layout.Width), "")
 	} else {
-		composer := m.Composer.View(m.Layout.Width)
+		composer, footer := m.Composer.View(m.Layout.Width), m.footerView()
 		if m.inlineApproval() {
 			composer = m.approvalCard()
+		} else if m.overlay == "search" {
+			composer, footer = m.searchArea(), m.searchFooter()
 		}
 		body := m.mainTranscript()
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
@@ -623,7 +625,7 @@ func (m AppModel) View() tea.View {
 			menu := m.slashMenu(suggestions[:min(len(suggestions), len(lines))])
 			body = strings.Join(append(lines[:len(lines)-len(menu)], menu...), "\n")
 		}
-		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, composer, m.footerView())
+		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, composer, footer)
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 {
 		content = m.overlayView(content)
@@ -689,7 +691,8 @@ func (m AppModel) View() tea.View {
 	if !m.Layout.TooSmall && m.overlay == "search" && !m.approvalFocus() {
 		view.Cursor = m.SearchBox.Input.Cursor()
 		if view.Cursor != nil {
-			view.Cursor.Y += m.Layout.BodyHeight
+			// Header, conversation and the rule above the search row.
+			view.Cursor.Y += 2 + m.Layout.BodyHeight
 		}
 	}
 	view.AltScreen = true

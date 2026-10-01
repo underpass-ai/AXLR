@@ -2,8 +2,6 @@ package terminal
 
 import (
 	"charm.land/bubbles/v2/textinput"
-	"fmt"
-	zone "github.com/lrstanley/bubblezone/v2"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -24,11 +22,4 @@ func NewSearchBox(locales ...Locale) SearchBox {
 	i.SetVirtualCursor(false)
 	i.Focus()
 	return SearchBox{Input: i, Locale: locale}
-}
-func (s SearchBox) View(z *zone.Manager, p string) string {
-	n := 0
-	if len(s.Hits) > 0 {
-		n = s.Selected + 1
-	}
-	return s.Input.View() + fmt.Sprintf(" %d/%d", n, len(s.Hits)) + "\n" + z.Mark(p+"previous", "["+Translate(s.Locale, "search.previous")+"]") + " " + z.Mark(p+"next", "["+Translate(s.Locale, "search.next")+"]") + " " + z.Mark(p+"close", "["+Translate(s.Locale, "common.close")+"]")
 }
