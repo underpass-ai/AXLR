@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -106,6 +107,9 @@ func TestUserSettingsRejectSymlinkAndWorldWritableFile(t *testing.T) {
 	}
 	if err := os.Remove(path); err != nil {
 		t.Fatal(err)
+	}
+	if runtime.GOOS == "windows" {
+		return // permission bits are synthetic there; ACLs govern access
 	}
 	if err := os.WriteFile(path, []byte(`{}`), 0666); err != nil {
 		t.Fatal(err)

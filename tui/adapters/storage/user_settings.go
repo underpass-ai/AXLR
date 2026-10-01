@@ -10,7 +10,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -179,7 +178,7 @@ func (s *UserSettingsStore) Load(ctx context.Context) (UserSettings, error) {
 }
 
 func (s *UserSettingsStore) read() (UserSettings, error) {
-	file, err := os.OpenFile(s.Path, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	file, err := openNoFollow(s.Path, os.O_RDONLY, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return s.Initial, nil
 	}
@@ -191,7 +190,7 @@ func (s *UserSettingsStore) read() (UserSettings, error) {
 	if err != nil {
 		return UserSettings{}, err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 || info.Size() > maxUserSettingsBytes {
+	if !info.Mode().IsRegular() || writableByOthers(info) || info.Size() > maxUserSettingsBytes {
 		return UserSettings{}, errors.New("settings.json must be a regular, non-writable-by-others file of at most 64 KiB")
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxUserSettingsBytes+1))
@@ -221,7 +220,7 @@ func (s *UserSettingsStore) update(ctx context.Context, change func(*UserSetting
 	if err := os.MkdirAll(filepath.Dir(s.Path), 0700); err != nil {
 		return err
 	}
-	lock, err := os.OpenFile(s.Path+".lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0600)
+	lock, err := openNoFollow(s.Path+".lock", os.O_CREATE|os.O_RDWR, 0600)
 	if err != nil {
 		return err
 	}
@@ -230,18 +229,18 @@ func (s *UserSettingsStore) update(ctx context.Context, change func(*UserSetting
 	if err != nil {
 		return err
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 {
+	if !privateRegular(info) {
 		return errors.New("settings lock must be a private regular file")
 	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB)
+		err := tryLock(lock)
 		if err == nil {
 			break
 		}
-		if !errors.Is(err, syscall.EWOULDBLOCK) && !errors.Is(err, syscall.EAGAIN) {
+		if !lockBusy(err) {
 			return err
 		}
 		timer := time.NewTimer(25 * time.Millisecond)
@@ -252,7 +251,6 @@ func (s *UserSettingsStore) update(ctx context.Context, change func(*UserSetting
 		case <-timer.C:
 		}
 	}
-	defer syscall.Flock(int(lock.Fd()), syscall.LOCK_UN)
 	settings, err := s.read()
 	if err != nil {
 		return err

@@ -55,10 +55,16 @@ func TestToolRunnerCapturesActualLocalWritesAndEdits(t *testing.T) {
 	if out.Change != nil {
 		t.Fatal("no-op edit was presented as a change")
 	}
+	// The test binary with no tests selected exits 0 on every platform.
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	execInput, _ := json.Marshal(dto.ExecArgs{Program: self, Args: []string{"-test.run=^$"}})
 	for _, op := range []string{"read", "exec"} {
 		input := `{"path":"sample.go"}`
 		if op == "exec" {
-			input = `{"program":"/bin/true"}`
+			input = string(execInput)
 		}
 		if out := run(op, input); out.Change != nil {
 			t.Fatalf("%s invented change evidence", op)
