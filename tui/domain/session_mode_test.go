@@ -59,3 +59,17 @@ func TestSessionModeCarriesIntoTheNextTurn(t *testing.T) {
 		t.Fatalf("turn dropped the mode: %q", s.Mode())
 	}
 }
+
+func TestChangeModelMessageDuringStreamingTurn(t *testing.T) {
+	s := idleSession(t)
+	if err := s.BeginTurn(axlr.Text("hola"), nil); err != nil {
+		t.Fatal(err)
+	}
+	err := s.ChangeModel("other/model")
+	if err == nil {
+		t.Fatal("ChangeModel should reject during streaming turn")
+	}
+	if err.Error() != "cannot change model while turn is active" {
+		t.Fatalf("wrong ChangeModel message: %q", err.Error())
+	}
+}

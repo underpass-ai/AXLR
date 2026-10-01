@@ -58,7 +58,7 @@ func (s Session) Pending() []PendingTool {
 // The change parameter is used in error messages (e.g., "model" or "mode").
 func (s Session) requireBetweenTurns(change string) error {
 	if s.Status() != StatusIdle && s.Status() != StatusComplete && s.Status() != StatusInterrupted {
-		return errors.New("cannot change " + change + " while a turn is active")
+		return errors.New("cannot change " + change + " while turn is active")
 	}
 	if len(s.Pending()) != 0 {
 		return errors.New("pending calls must be resolved before changing " + change)
