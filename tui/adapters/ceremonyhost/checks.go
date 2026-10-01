@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	checkTimeoutMS = 600000
+	checkTimeoutMS = 300000 // the runtime's hard limit (runtime/config.go)
 	checkOutput    = 16 << 10
 	checkTail      = 4 << 10
 )
