@@ -15,6 +15,7 @@ type Dependencies struct {
 	EngineUpdates     application.EngineUpdatePort
 	Models            application.ListModelsUseCase
 	ModelPreference   application.ModelPreferencePort
+	SessionLabels     application.SessionLabelsPort
 	UIPreferenceStore application.UIPreferencePort
 	UIPreferences     domain.UIPreferences
 	ApprovalSettings  application.ApprovalSettingsPort

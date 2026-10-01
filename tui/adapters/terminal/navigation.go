@@ -191,6 +191,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 		} else if m.overlay != "" {
 			if k.String() == "esc" {
+				if m.overlay == "sessions" && m.Picker.Renaming {
+					m.Picker.Key(k.String(), k.Text)
+					return m, nil, true
+				}
 				if m.overlay == "mcp" && (m.Plugins.searching || m.Plugins.confirming || m.Plugins.installing) {
 					m.Plugins.Update(k, m.overlay)
 					return m, nil, true
@@ -212,11 +216,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "info", "approvals", "updates":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
-					if k.String() == "enter" {
+					if k.String() == "enter" && !m.Picker.Renaming {
 						intent = "open-session"
 						hasIntent = true
-					} else {
-						m.Picker.Key(k.String(), k.Text)
+					} else if picked := m.Picker.Key(k.String(), k.Text); picked != "" {
+						intent = picked
+						hasIntent = true
 					}
 				case "search":
 					switch k.String() {
@@ -613,6 +618,28 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			return done
 		}, true
+	case SessionRenameIntent, SessionArchiveIntent:
+		current, ok := m.Picker.Current()
+		if !ok || m.deps.SessionLabels == nil {
+			return m, nil, true
+		}
+		label := m.Picker.Labels[current.ID]
+		if intent == SessionRenameIntent {
+			label.Title = root.Text(strings.TrimSpace(m.Picker.RenameText))
+		} else {
+			label.Archived = !label.Archived
+		}
+		if err := m.deps.SessionLabels.Set(m.lifetime.ctx, current.ID, label); err != nil {
+			m.Status.Error = err.Error()
+			return m, nil, true
+		}
+		m.Status.Error = ""
+		if m.Picker.Labels == nil {
+			m.Picker.Labels = map[domain.SessionID]domain.SessionLabel{}
+		}
+		m.Picker.Labels[current.ID] = label
+		m.Picker.Selected = min(m.Picker.Selected, max(0, len(m.Picker.Visible())-1))
+		return m, nil, true
 	case "open-session":
 		selected, ok := m.Picker.Current()
 		if m.Busy || !ok {
