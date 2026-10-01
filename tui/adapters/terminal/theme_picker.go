@@ -110,11 +110,11 @@ func (p *ThemePicker) View(theme Theme, width, height int) string {
 	preview := []string{
 		theme.Heading(theme.Tf("theme.preview", theme.T("theme.name."+string(p.Preview.Theme)))),
 		"",
-		theme.UserRow().Render(" " + theme.T("theme.sampleUser") + " "),
+		theme.rowText(transcriptRowUser).Render(theme.rowLabel(theme.Icon("user")+" ", toneAccent, transcriptRowUser) + theme.T("theme.sampleUser")),
 		"",
-		theme.AssistantRow().Render(" " + theme.T("theme.sampleAssistant") + " "),
+		theme.rowText(transcriptRowAssistant).Render(theme.T("theme.sampleAssistant")),
 		"",
-		theme.MemoryRow().Render(" " + theme.Icon("memory") + " " + theme.T("theme.sampleMemory") + " "),
+		theme.rowText(transcriptRowMemory).Render(theme.rowLabel(theme.Icon("memory")+" ", toneAccent, transcriptRowMemory) + theme.T("theme.sampleMemory")),
 		"",
 		theme.Muted(theme.Tf("theme.iconsMotion", icon, motion)),
 	}

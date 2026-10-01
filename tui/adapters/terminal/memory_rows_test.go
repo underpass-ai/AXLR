@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 
@@ -19,15 +20,18 @@ func TestMemoryRowsAreCompactDistinctAndChronological(t *testing.T) {
 	tr.Viewport.SetWidth(100)
 	tr.Viewport.SetHeight(30)
 	tr.SetSession(state, "", Theme{})
-	text := tr.Viewport.GetContent()
-	if len(text) > 1000 || !strings.Contains(text, "memory request: kmp / kmp_wake") || !strings.Contains(text, "full result saved") || strings.Contains(text, "mcp_alias") {
-		t.Fatal("tool rows are not bounded and identifiable")
+	text := ansi.Strip(tr.Viewport.GetContent())
+	if len(text) > 1000 || !strings.Contains(text, "◇ kmp / kmp_wake") || !strings.Contains(text, "156.2\u00a0KB") || strings.Contains(text, "mcp_alias") {
+		t.Fatalf("tool rows are not bounded and identifiable: %q", text)
 	}
-	if strings.Index(text, "user: remember") >= strings.Index(text, "memory request:") || strings.Index(text, "memory result:") >= strings.Index(text, "assistant: recovered") {
+	if strings.Count(text, "kmp_wake") != 1 {
+		t.Fatalf("call, decision and result are not one row: %q", text)
+	}
+	if strings.Index(text, "› remember") >= strings.Index(text, "◇ kmp / kmp_wake") || strings.Index(text, "◇ kmp / kmp_wake") >= strings.Index(text, "recovered") {
 		t.Fatal("conversation order is wrong")
 	}
-	if !strings.Contains(tr.View(), "48;2;52;43;77") {
-		t.Fatal("memory row has no distinct background")
+	if !strings.Contains(tr.View(), sgrForeground(Theme{}.palette().Accent)+"◇") {
+		t.Fatal("memory row has no distinct marker")
 	}
 	if state.Messages[2].Content != root.Text(strings.Repeat("memory evidence ", 10000)) {
 		t.Fatal("rendering changed saved memory evidence")
@@ -41,7 +45,7 @@ func TestSnapshotUpdatesDuringAutomaticToolsClearCompletedDraft(t *testing.T) {
 	m.operationID = 1
 	state := memoryState()
 	m = update(m, application.Event{Kind: application.EventSession, Snapshot: &state})
-	if m.draft != "" || !strings.Contains(m.Transcript.Viewport.GetContent(), "memory result:") {
+	if m.draft != "" || !strings.Contains(m.Transcript.Viewport.GetContent(), "kmp / kmp_wake") {
 		t.Fatal("persisted snapshot not visible between automatic calls")
 	}
 	m = update(m, application.Event{Kind: application.EventToolExecutionStarted, Memory: true})
@@ -75,12 +79,12 @@ func TestHistoricalHashedToolsKeepMemoryPresentationWithNativeSnapshot(t *testin
 	tr.Viewport.SetWidth(100)
 	tr.Viewport.SetHeight(30)
 	tr.SetSession(state, "", Theme{})
-	text := tr.Viewport.GetContent()
-	if strings.Contains(text, string(oldAlias)) || !strings.Contains(text, "memory request: kmp / kmp_wake") || !strings.Contains(text, "memory result: kmp / kmp_wake") {
+	text := ansi.Strip(tr.Viewport.GetContent())
+	if strings.Contains(text, string(oldAlias)) || !strings.Contains(text, "◇ kmp / kmp_wake") {
 		t.Fatal("historical tools lost their identity when snapshot switched to native names")
 	}
-	if !strings.Contains(tr.View(), "48;2;52;43;77") {
-		t.Fatal("historical memory rows lost their background")
+	if !strings.Contains(tr.View(), sgrForeground(Theme{}.palette().Accent)+"◇") {
+		t.Fatal("historical memory rows lost their marker")
 	}
 	m := sized()
 	defer m.zones.Close()

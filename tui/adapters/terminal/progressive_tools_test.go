@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 
@@ -26,7 +27,8 @@ func TestWrappedMemoryRowsAndApprovalShowActualPlugin(t *testing.T) {
 		t.Fatal("generic host wrapper hid the effect target", m.Approval.Target)
 	}
 	m.Transcript.SetSession(state, "", m.Theme)
-	if !strings.Contains(m.Transcript.Viewport.GetContent(), "memory request: kmp / kmp_ask") {
-		t.Fatal("wrapped memory did not retain memory styling")
+	text := ansi.Strip(m.Transcript.Viewport.GetContent())
+	if !strings.Contains(text, "kmp / kmp_ask") || !strings.Contains(text, "waiting for approval") || m.Transcript.rows[len(m.Transcript.rows)-1].Kind != transcriptRowMemory {
+		t.Fatalf("wrapped memory did not retain memory styling: %q", text)
 	}
 }

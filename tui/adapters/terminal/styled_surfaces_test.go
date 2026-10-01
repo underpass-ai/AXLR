@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 
@@ -51,10 +52,10 @@ func TestTranscriptAddsAirWithoutChangingSavedMessages(t *testing.T) {
 	tr.Viewport.SetWidth(46)
 	tr.Viewport.SetHeight(6)
 	tr.SetSession(state, "", Theme{ID: domain.ThemeInk})
-	if !strings.Contains(tr.Viewport.GetContent(), "question\n\nassistant: answer") {
+	if !strings.Contains(ansi.Strip(tr.Viewport.GetContent()), "question\n\nanswer") {
 		t.Fatal("conversation groups lack spacing")
 	}
-	if !strings.Contains(tr.View(), "  user: question") || lipgloss.Width(tr.View()) != 50 {
+	if !strings.Contains(ansi.Strip(tr.View()), "  › question") || lipgloss.Width(tr.View()) != 50 {
 		t.Fatalf("transcript gutter or width lost: %q (%d)", tr.View(), lipgloss.Width(tr.View()))
 	}
 	if state.Messages[0].Content != "question" || state.Messages[1].Content != "answer" {
