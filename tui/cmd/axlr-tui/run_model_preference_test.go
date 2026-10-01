@@ -11,6 +11,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 func TestRunUsesLastSelectedModelUnlessOverridden(t *testing.T) {
@@ -58,6 +59,22 @@ func TestRunUsesLastSelectedModelUnlessOverridden(t *testing.T) {
 			}
 		})
 	}
+	// Only sessions with a message survive the console closing.
+	sessions, err := storage.New(filepath.Join(env["XDG_STATE_HOME"], "axlr", "sessions"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := domain.NewSession(domain.SessionID(sessionID), domain.Workspace(canonicalWorkspace(t, workspace)), "provider/explicit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := saved.BeginTurn("kept", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := sessions.Save(context.Background(), saved); err != nil {
+		t.Fatal(err)
+	}
+	sessions.Close()
 	var output bytes.Buffer
 	code := run(context.Background(), []string{"--root", workspace, "--session", sessionID}, getenv, func(m tea.Model) error {
 		if got := m.(terminal.AppModel).Header.State.Model; got != "provider/explicit" {

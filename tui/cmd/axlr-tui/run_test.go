@@ -124,7 +124,7 @@ func TestRunLanguageFlagOverridesEnvironment(t *testing.T) {
 		})
 	}
 }
-func TestRunCreatesConfiguredSessionAndReleasesLock(t *testing.T) {
+func TestRunDiscardsAnEmptySessionAndReleasesItsLock(t *testing.T) {
 	env := cliEnv(t)
 	workspace := t.TempDir()
 	var id domain.SessionID
@@ -140,15 +140,29 @@ func TestRunCreatesConfiguredSessionAndReleasesLock(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("%d %s", code, &out)
 	}
-	store, err := storage.New(filepath.Join(env["XDG_STATE_HOME"], "axlr", "sessions"))
+	dir := filepath.Join(env["XDG_STATE_HOME"], "axlr", "sessions")
+	for _, name := range []string{string(id) + ".json", string(id) + ".lock"} {
+		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
+			t.Fatalf("empty session left %s behind: %v", name, err)
+		}
+	}
+	// The lock is released: a new store can save under the same ID.
+	store, err := storage.New(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	if _, err = store.Load(context.Background(), id); err != nil {
+	reused, err := domain.NewSession(id, domain.Workspace(canonicalWorkspace(t, workspace)), "test/model")
+	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := os.ReadFile(filepath.Join(env["XDG_STATE_HOME"], "axlr", "sessions", string(id)+".json"))
+	if err := reused.BeginTurn("hello", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), reused); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, string(id)+".json"))
 	if err != nil || bytes.Contains(data, []byte(env["OPENROUTER_API_KEY"])) {
 		t.Fatalf("snapshot error: %v", err)
 	}

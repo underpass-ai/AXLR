@@ -234,8 +234,29 @@ func (s *SessionStore) Close() error {
 	}
 	s.closed = true
 	var errs []error
-	for _, lock := range s.locks {
+	for id, lock := range s.locks {
+		// A session that never received a message is discarded while its lock
+		// is still held, so every launch does not leave an empty session.
+		empty := s.isEmpty(id)
+		if empty {
+			if err := os.Remove(filepath.Join(s.dir, string(id)+".json")); err != nil && !errors.Is(err, os.ErrNotExist) {
+				errs = append(errs, err)
+				empty = false
+			}
+		}
 		errs = append(errs, lock.close())
+		if empty {
+			_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))
+		}
 	}
 	return errors.Join(errs...)
+}
+
+func (s *SessionStore) isEmpty(id domain.SessionID) bool {
+	session, err := s.read(id)
+	if err != nil {
+		return false
+	}
+	state := session.Export()
+	return len(state.Messages) == 0 && state.Draft == "" && len(state.Activity) == 0 && len(state.ArchivedDrafts) == 0
 }
