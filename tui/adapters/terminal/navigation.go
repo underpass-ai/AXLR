@@ -466,6 +466,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if intent == "models" {
 			m.Models = NewModelPicker()
 			m.Models.Theme = m.Theme
+			m.Models.SetCurrent(string(m.Header.State.Model))
 			m.Models.Input.Prompt = m.Theme.T("common.searchPrompt")
 		}
 		m.Models.pageSize = max(1, m.Layout.Height-7)
