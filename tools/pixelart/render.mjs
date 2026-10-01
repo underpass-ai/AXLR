@@ -65,7 +65,8 @@ const BARS = [
     [139, 40],
   ],
 ];
-const BAR_COLORS = ["red", "yellow", "green", "cyan"];
+// Legacy manifests without explicit bar colors keep the original Spectrum ink.
+const DEFAULT_BAR_COLORS = ["red", "yellow", "green", "cyan"];
 const number = (value) => Number(value.toFixed(6)).toString();
 const escapeXML = (value) =>
   value.replace(
@@ -191,8 +192,12 @@ export function validateManifest(manifest) {
         `${logo.id}: invalid Spectrum scale`,
       );
       requireValue(
-        BAR_COLORS.every((c) => Object.hasOwn(manifest.palette, c)),
-        `${logo.id}: missing Spectrum color`,
+        Array.isArray(logo.spectrum.colors ?? DEFAULT_BAR_COLORS) &&
+          (logo.spectrum.colors ?? DEFAULT_BAR_COLORS).length === BARS.length &&
+          (logo.spectrum.colors ?? DEFAULT_BAR_COLORS).every((c) =>
+            Object.hasOwn(manifest.palette, c),
+          ),
+        `${logo.id}: Spectrum needs four known palette colors`,
       );
     }
     // Compile once during validation to reject clipped drawings before export.
@@ -240,7 +245,8 @@ export function buildScene(manifest, logo) {
     BARS.forEach((points, i) =>
       shapes.push({
         type: "polygon",
-        color: manifest.palette[BAR_COLORS[i]],
+        color:
+          manifest.palette[(logo.spectrum.colors ?? DEFAULT_BAR_COLORS)[i]],
         points: points.map(([x, y]) => [
           logo.spectrum.origin[0] + x * logo.spectrum.scale,
           logo.spectrum.origin[1] + y * logo.spectrum.scale,

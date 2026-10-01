@@ -1,12 +1,18 @@
 {
   "version": 1,
   "palette": {
-    "red": "#f04445",
-    "orange": "#f88f3e",
-    "yellow": "#ffda36",
-    "green": "#32cd76",
-    "turquoise": "#3ad1b2",
-    "cyan": "#42d4ed"
+    "kmp-copper": "#C96B2C",
+    "kmp-gold": "#D89A3D",
+    "kmp-brown": "#7A5230",
+    "kmp-sand": "#D8C3A5",
+    "made-copper": "#B6633A",
+    "made-gold": "#D98545",
+    "made-brown": "#5A3E2B",
+    "made-sand": "#BFA27A",
+    "axlr-copper": "#B85C38",
+    "axlr-gold": "#D97B2D",
+    "axlr-brown": "#6B4A2E",
+    "axlr-sand": "#C9B08C"
   },
   "logos": [
     {
@@ -25,9 +31,20 @@
         " ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝"
       ],
       "ink": {
-        "rows": ["red", "orange", "yellow", "green", "turquoise", "cyan"]
+        "rows": [
+          "kmp-copper",
+          "kmp-copper",
+          "kmp-gold",
+          "kmp-brown",
+          "kmp-sand",
+          "kmp-sand"
+        ]
       },
-      "spectrum": { "origin": [540, 246], "scale": 0.8 }
+      "spectrum": {
+        "origin": [540, 246],
+        "scale": 0.8,
+        "colors": ["kmp-copper", "kmp-gold", "kmp-brown", "kmp-sand"]
+      }
     },
     {
       "id": "made",
@@ -46,13 +63,17 @@
       ],
       "ink": {
         "runs": [
-          { "columns": 11, "color": "red" },
-          { "columns": 8, "color": "yellow" },
-          { "columns": 8, "color": "green" },
-          { "columns": 8, "color": "cyan" }
+          { "columns": 11, "color": "made-copper" },
+          { "columns": 8, "color": "made-gold" },
+          { "columns": 8, "color": "made-brown" },
+          { "columns": 8, "color": "made-sand" }
         ]
       },
-      "spectrum": { "origin": [674, 285], "scale": 1 }
+      "spectrum": {
+        "origin": [674, 285],
+        "scale": 1,
+        "colors": ["made-copper", "made-gold", "made-brown", "made-sand"]
+      }
     },
     {
       "id": "axlr",
@@ -71,13 +92,17 @@
       ],
       "ink": {
         "runs": [
-          { "columns": 8, "color": "red" },
-          { "columns": 8, "color": "yellow" },
-          { "columns": 8, "color": "green" },
-          { "columns": 8, "color": "cyan" }
+          { "columns": 8, "color": "axlr-copper" },
+          { "columns": 8, "color": "axlr-gold" },
+          { "columns": 8, "color": "axlr-brown" },
+          { "columns": 8, "color": "axlr-sand" }
         ]
       },
-      "spectrum": { "origin": [1230, 449], "scale": 1.7 }
+      "spectrum": {
+        "origin": [1230, 449],
+        "scale": 1.7,
+        "colors": ["axlr-copper", "axlr-gold", "axlr-brown", "axlr-sand"]
+      }
     }
   ]
 }

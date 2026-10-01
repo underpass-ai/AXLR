@@ -22,7 +22,9 @@ node tools/pixelart/cli.mjs --out /absolute/site/public/brands
 
 ## Edit a logo
 
-[`logos.json`](logos.json) is the source of truth. Each definition has a canvas, origin, cell size, terminal-art rows, ink rules and optional Spectrum placement. The palette and four Spectrum bar shapes are shared by all three logos. Row ink gives KMP its existing sweep; column runs assign the four letter colors in MADE and AXLR. Spaces count as columns. Use only `█`, `╔`, `╗`, `╚`, `╝`, `║`, `═` and space; the renderer expands them into explicit rectangles, independently of installed fonts.
+[`logos.json`](logos.json) is the source of truth. Each definition has a canvas, origin, cell size, terminal-art rows, ink rules and optional Spectrum placement. Each product has its own four-color palette; all three share the diagonal bar geometry. Row ink gives KMP its existing sweep, using copper twice, gold once, brown once and sand twice. Column runs assign the four colors in order to MADE and AXLR's letters. Spaces count as columns. Use only `█`, `╔`, `╗`, `╚`, `╝`, `║`, `═` and space; the renderer expands them into explicit rectangles, independently of installed fonts.
+
+`spectrum.colors` specifies exactly four palette keys, in left-to-right bar order. Those keys can differ between logos without changing their geometry. Older manifests that omit this field use `red`, `yellow`, `green` and `cyan`, which must exist in their palette. The current product palettes are listed in the [asset pack](../../docs/assets/brand/README.md).
 
 KMP's rows and geometry match its current public SVG and CLI mark. MADE's rows and geometry match its distinct current public SVG, with secondary text removed. AXLR's rows reconstruct the supplied raster's letters, cell proportions and stepped outlines as vector shapes. The original raster stays in `docs/assets/axlr-wordmark.png` as a visual reference. Exports intentionally have solid pixel edges and transparent gaps; no dark matte or embedded bitmap is included.
 
