@@ -60,7 +60,7 @@ The model cannot set a guard field. The console writes the model's fields and it
 | | `host_tool_use_case.go` + `host_tool_definitions.go`: `axlr_step_done` | Receives the step result; the agent loop then asks the driver for the next instruction |
 | | `continue_turn_use_case.go` | Appends the current step instruction as a short system message after the transcript |
 | `tui/adapters` | `madeceremony/engine.go` | `CeremonyEnginePort` over the plugin manager (`made_*` calls, strict DTO mapping, fences kept) |
-| | `madeceremony/definitions/axlr_debug-2.0.yaml`, `axlr_delivery-2.0.yaml` | Embedded definitions; published on first use with the existing install grant path |
+| | `madeceremony/definitions/axlr_debug-2.0.yaml`, `axlr_delivery-2.0.yaml` | Embedded definitions; published only by the `/mcp` → P action |
 | | `checkrun/runner.go` | `CheckRunnerPort` over the existing local exec runtime |
 | | `kmpmemory/memory.go` | `MemoryPort` over the plugin manager (`kmp_wake`, `kmp_write_memory`) |
 | | `storage/session_ceremony.go` | `<id>.ceremony` sidecar (same reason as `<id>.mode`) |
