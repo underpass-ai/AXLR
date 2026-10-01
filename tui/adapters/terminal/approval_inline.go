@@ -58,6 +58,11 @@ func (m AppModel) approvalCard() string {
 // mainTranscript is the conversation sized to the rows the composer or the
 // approval card leave free.
 func (m AppModel) mainTranscript() string {
+	if m.overlay == "search" {
+		t := m.Transcript
+		t.Highlight = strings.TrimSpace(m.SearchBox.Input.Value())
+		return t.View()
+	}
 	if !m.inlineApproval() {
 		return m.Transcript.View()
 	}

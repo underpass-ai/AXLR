@@ -29,3 +29,13 @@ func TestSearchKeepsTheHeaderAndFooterAndReplacesTheComposer(t *testing.T) {
 		t.Fatalf("cursor not on the search row")
 	}
 }
+
+func TestSearchHighlightsEveryMatchInTheConversation(t *testing.T) {
+	line := highlightMatches("  Hay 18 Ceremonias; ceremonias más", "ceremonias", Theme{Monochrome: true})
+	if strings.Count(line, "\x1b[7m") != 2 || ansi.Strip(line) != "  Hay 18 Ceremonias; ceremonias más" {
+		t.Fatalf("highlighted line = %q", line)
+	}
+	if highlightMatches("nada", "ceremonias", Theme{Monochrome: true}) != "nada" {
+		t.Fatal("a line without matches changed")
+	}
+}
