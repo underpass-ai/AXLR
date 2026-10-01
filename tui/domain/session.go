@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"time"
 
 	axlr "github.com/underpass-ai/AXLR/domain"
 )
@@ -11,6 +12,18 @@ type Session struct{ state SessionState }
 const MaxTurnToolCalls = 32
 
 var ErrToolCallLimit = errors.New("turn tool-call limit reached")
+
+// now is the session clock; tests replace it.
+var now = time.Now
+
+// stampLast records when the last message was added, padding unknown times
+// for messages from sessions saved before times were kept.
+func stampLast(state *SessionState) {
+	for len(state.MessageTimes) < len(state.Messages)-1 {
+		state.MessageTimes = append(state.MessageTimes, time.Time{})
+	}
+	state.MessageTimes = append(state.MessageTimes[:len(state.Messages)-1], now().UTC().Truncate(time.Second))
+}
 
 func NewSession(id SessionID, workspace Workspace, model axlr.ModelID) (Session, error) {
 	if _, err := NewSessionID(string(id)); err != nil {
@@ -72,6 +85,7 @@ func (s *Session) BeginTurn(prompt axlr.Text, tools []AvailableTool) error {
 		next.ArchivedDrafts = append(next.ArchivedDrafts, ArchivedDraft{AfterMessage: len(next.Messages), Content: next.Draft})
 	}
 	next.Messages = append(next.Messages, message)
+	stampLast(&next)
 	next.ToolSnapshot = append([]AvailableTool(nil), tools...)
 	next.Status = StatusStreaming
 	next.Draft = ""
@@ -109,6 +123,7 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 	next := s.Export()
 	message.ToolCalls = append([]axlr.ToolCall(nil), message.ToolCalls...)
 	next.Messages = append(next.Messages, message)
+	stampLast(&next)
 	next.TurnCallCount += len(message.ToolCalls)
 	next.Status = StatusComplete
 	for _, call := range message.ToolCalls {
@@ -150,6 +165,7 @@ func (s *Session) RecordToolOutcome(id axlr.ToolCallID, decision ToolDecision, o
 		}
 	}
 	next.Messages = append(next.Messages, axlr.Message{Role: axlr.RoleTool, ToolCallID: id, Content: outcome.Content})
+	stampLast(&next)
 	if len(pending) == 1 {
 		next.Status = StatusStreaming
 	}

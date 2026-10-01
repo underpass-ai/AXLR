@@ -251,3 +251,26 @@ func TestSessionStoreCloseDiscardsOnlyEmptySessions(t *testing.T) {
 		t.Fatalf("empty session's lock left behind: %v", err)
 	}
 }
+
+func TestSessionStoreKeepsMessageTimesBesideTheSnapshot(t *testing.T) {
+	store, dir := openStore(t)
+	s := fixture(t)
+	must(t, s.BeginTurn("hello", nil))
+	must(t, store.Save(context.Background(), s))
+	raw, err := os.ReadFile(filepath.Join(dir, string(s.Export().ID)+".json"))
+	must(t, err)
+	if strings.Contains(string(raw), "time") {
+		t.Fatal("snapshot format changed")
+	}
+	got, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	if !reflect.DeepEqual(got.Export().MessageTimes, s.Export().MessageTimes) || len(got.Export().MessageTimes) != 1 {
+		t.Fatalf("times = %v, want %v", got.Export().MessageTimes, s.Export().MessageTimes)
+	}
+	must(t, os.Remove(filepath.Join(dir, string(s.Export().ID)+".times")))
+	got, err = store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	if len(got.Export().MessageTimes) != 0 || len(got.Export().Messages) != 1 {
+		t.Fatal("a session without times did not load")
+	}
+}

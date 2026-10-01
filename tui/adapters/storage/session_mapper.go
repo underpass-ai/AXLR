@@ -2,6 +2,7 @@ package storage
 
 import (
 	"errors"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -49,10 +50,10 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 	return d, nil
 }
 func restore(d dto.SessionSnapshot) (domain.Session, error) {
-	return restoreSnapshot(d, false)
+	return restoreSnapshot(d, false, nil)
 }
 
-func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool) (domain.Session, error) {
+func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Time) (domain.Session, error) {
 	if d.Version != 1 && d.Version != snapshotVersion {
 		return domain.Session{}, errors.New("unsupported session snapshot version")
 	}
@@ -93,7 +94,9 @@ func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool) (domain.Session
 		s.Activity = append(s.Activity, record)
 	}
 	if preserveActive {
+		s.MessageTimes = times
 		return domain.RestoreSessionActive(s)
 	}
+	s.MessageTimes = times
 	return domain.RestoreSession(s)
 }
