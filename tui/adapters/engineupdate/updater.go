@@ -55,6 +55,9 @@ func (u *Updater) Update(ctx context.Context) ([]application.EngineUpdateResult,
 	if u.Configuration == nil || !filepath.IsAbs(u.Root) {
 		return nil, errors.New("engine updater is not configured")
 	}
+	if _, ok := u.packagePlatform(); !ok {
+		return nil, application.ErrEngineUpdatePlatform
+	}
 	targets, err := u.Configuration.EngineTargets(ctx)
 	if err != nil {
 		return nil, err
@@ -87,18 +90,9 @@ func (u *Updater) Update(ctx context.Context) ([]application.EngineUpdateResult,
 
 func (u *Updater) update(ctx context.Context, target application.EngineUpdateTarget) (application.EngineUpdateResult, error) {
 	r := application.EngineUpdateResult{Engine: target.Engine}
-	platform := u.platform
-	if platform == "" {
-		switch runtime.GOOS + "/" + runtime.GOARCH {
-		case "linux/amd64":
-			platform = "linux-x86_64"
-		case "linux/arm64":
-			platform = "linux-arm64"
-		case "darwin/arm64":
-			platform = "macos-arm64"
-		default:
-			return r, errors.New("no official package for this platform")
-		}
+	platform, ok := u.packagePlatform()
+	if !ok {
+		return r, application.ErrEngineUpdatePlatform
 	}
 	r.PreviousVersion = installedVersion(ctx, target)
 	base := u.apiBase
@@ -398,4 +392,25 @@ func sameTree(source, destination string) error {
 		}
 		return nil
 	})
+}
+
+// packagePlatform names the official MADE/KMP package for this host. Packages
+// ship POSIX launchers and exist only for these targets.
+func (u *Updater) packagePlatform() (string, bool) {
+	if u.platform != "" {
+		return u.platform, true
+	}
+	return officialPlatform(runtime.GOOS, runtime.GOARCH)
+}
+
+func officialPlatform(goos, goarch string) (string, bool) {
+	switch goos + "/" + goarch {
+	case "linux/amd64":
+		return "linux-x86_64", true
+	case "linux/arm64":
+		return "linux-arm64", true
+	case "darwin/arm64":
+		return "macos-arm64", true
+	}
+	return "", false
 }

@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -65,6 +66,9 @@ func engineUpdateContent(results []application.EngineUpdateResult, err error, th
 		}
 		b.WriteString("\n\n")
 		restart = restart || result.RestartRequired
+	}
+	if errors.Is(err, application.ErrEngineUpdatePlatform) {
+		return theme.T("update.unsupportedPlatform")
 	}
 	if err != nil {
 		fmt.Fprintf(&b, "%s\n\n", err)
