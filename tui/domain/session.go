@@ -53,15 +53,24 @@ func (s Session) Pending() []PendingTool {
 	}
 	return pending
 }
+
+// requireBetweenTurns verifies that a session change can only happen between turns.
+// The change parameter is used in error messages (e.g., "model" or "mode").
+func (s Session) requireBetweenTurns(change string) error {
+	if s.Status() != StatusIdle && s.Status() != StatusComplete && s.Status() != StatusInterrupted {
+		return errors.New("cannot change " + change + " while a turn is active")
+	}
+	if len(s.Pending()) != 0 {
+		return errors.New("pending calls must be resolved before changing " + change)
+	}
+	return nil
+}
 func (s *Session) ChangeModel(model axlr.ModelID) error {
 	if _, err := axlr.NewModelID(string(model)); err != nil {
 		return err
 	}
-	if s.Status() != StatusIdle && s.Status() != StatusComplete && s.Status() != StatusInterrupted {
-		return errors.New("cannot change model while turn is active")
-	}
-	if len(s.Pending()) != 0 {
-		return errors.New("pending calls must be resolved before changing model")
+	if err := s.requireBetweenTurns("model"); err != nil {
+		return err
 	}
 	s.state.Model = model
 	return nil
@@ -80,11 +89,8 @@ func (s *Session) SetMode(mode WorkMode) error {
 	if err := mode.Validate(); err != nil {
 		return err
 	}
-	if s.Status() != StatusIdle && s.Status() != StatusComplete && s.Status() != StatusInterrupted {
-		return errors.New("cannot change mode while a turn is active")
-	}
-	if len(s.Pending()) != 0 {
-		return errors.New("pending calls must be resolved before changing mode")
+	if err := s.requireBetweenTurns("mode"); err != nil {
+		return err
 	}
 	s.state.Mode = mode
 	return nil
