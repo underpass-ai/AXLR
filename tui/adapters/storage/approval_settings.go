@@ -29,6 +29,7 @@ type ApprovalSettings struct {
 	path     string
 	fallback application.ToolApprovalPolicyPort
 	data     approvalSettingsFile
+	settings *UserSettingsStore
 }
 
 var _ application.ApprovalSettingsPort = (*ApprovalSettings)(nil)
@@ -63,6 +64,24 @@ func NewApprovalSettings(path string, fallback application.ToolApprovalPolicyPor
 		}
 	}
 	return s, nil
+}
+
+// NewApprovalSettingsInUserSettings uses settings.json for new changes and
+// reads approvals.json only when the new file has no approvals section.
+func NewApprovalSettingsInUserSettings(store *UserSettingsStore, legacyPath string, fallback application.ToolApprovalPolicyPort) (*ApprovalSettings, error) {
+	user, err := store.Load(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if user.Approvals != nil {
+		return &ApprovalSettings{path: legacyPath, fallback: fallback, settings: store, data: approvalSettingsFile{Version: 1, Autonomous: user.Approvals.Autonomous, Allowed: append([]domain.ToolIdentity(nil), user.Approvals.Allowed...)}}, nil
+	}
+	legacy, err := NewApprovalSettings(legacyPath, fallback)
+	if err != nil {
+		return nil, err
+	}
+	legacy.settings = store
+	return legacy, nil
 }
 
 func (s *ApprovalSettings) Autonomous() bool {
@@ -110,6 +129,29 @@ func (s *ApprovalSettings) Allow(ctx context.Context, id domain.ToolIdentity) er
 	}
 	next := s.data
 	next.Allowed = append(append([]domain.ToolIdentity(nil), s.data.Allowed...), id)
+	if s.settings != nil {
+		err := s.settings.update(ctx, func(user *UserSettings) {
+			current := ApprovalPreferences{Autonomous: s.data.Autonomous, Allowed: append([]domain.ToolIdentity(nil), s.data.Allowed...)}
+			if user.Approvals != nil {
+				current = *user.Approvals
+				current.Allowed = append([]domain.ToolIdentity(nil), current.Allowed...)
+			}
+			for _, existing := range current.Allowed {
+				if existing == id {
+					next = approvalSettingsFile{Version: 1, Autonomous: current.Autonomous, Allowed: current.Allowed}
+					return
+				}
+			}
+			current.Allowed = append(current.Allowed, id)
+			user.Approvals = &current
+			next = approvalSettingsFile{Version: 1, Autonomous: current.Autonomous, Allowed: current.Allowed}
+		})
+		if err != nil {
+			return err
+		}
+		s.data = next
+		return nil
+	}
 	if err := s.save(ctx, next); err != nil {
 		return err
 	}
@@ -125,6 +167,23 @@ func (s *ApprovalSettings) SetAutonomous(ctx context.Context, enabled bool) erro
 	}
 	next := s.data
 	next.Autonomous = enabled
+	if s.settings != nil {
+		err := s.settings.update(ctx, func(user *UserSettings) {
+			current := ApprovalPreferences{Autonomous: s.data.Autonomous, Allowed: append([]domain.ToolIdentity(nil), s.data.Allowed...)}
+			if user.Approvals != nil {
+				current = *user.Approvals
+				current.Allowed = append([]domain.ToolIdentity(nil), current.Allowed...)
+			}
+			current.Autonomous = enabled
+			user.Approvals = &current
+			next = approvalSettingsFile{Version: 1, Autonomous: current.Autonomous, Allowed: current.Allowed}
+		})
+		if err != nil {
+			return err
+		}
+		s.data = next
+		return nil
+	}
 	if err := s.save(ctx, next); err != nil {
 		return err
 	}

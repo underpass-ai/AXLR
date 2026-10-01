@@ -27,6 +27,8 @@ Provide `OPENROUTER_API_KEY` through your shell's environment or secret manager,
 
 Without a saved model, the console waits for you to choose one; startup alone does not send a model request or create a session. Type `/model`, choose a tool-capable text model, then send a prompt. Your account must have access to the selected OpenRouter model.
 
+You can edit model, language and appearance in `$XDG_CONFIG_HOME/axlr/settings.json` (or `$HOME/.config/axlr/settings.json`). See the [settings format](console.md#edit-settings-as-json). The console reads changes on its next launch.
+
 Useful launch options:
 
 | Option | Effect |
