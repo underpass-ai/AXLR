@@ -25,7 +25,7 @@ func TestChangePreviewLineNumbersCountsAndMissingNewline(t *testing.T) {
 	if p.Added != 3 || p.Removed != 2 {
 		t.Fatalf("wrong line counts +%d -%d", p.Added, p.Removed)
 	}
-	text := p.render(Theme{Monochrome: true})
+	text := p.render(Theme{Monochrome: true}, false)
 	for _, want := range []string{"   1    1   same", "   2      - old", "        2 + new", "        3 + extra", "No newline at end of file"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("missing %q in %q", want, text)
@@ -86,7 +86,7 @@ func TestChangesNavigateResizeAndKeepSnapshotInsteadOfLiveFiles(t *testing.T) {
 		t.Fatal("recorded before/after missing")
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
-	if m.Changes.records[m.Changes.selected].ID != "first" {
+	if selectedChangePath(m.Changes) != "new.go" {
 		t.Fatal("file selection did not move")
 	}
 	m = update(m, tea.WindowSizeMsg{Width: 50, Height: 15})
@@ -95,13 +95,13 @@ func TestChangesNavigateResizeAndKeepSnapshotInsteadOfLiveFiles(t *testing.T) {
 		t.Fatal("narrow terminal did not switch to diff")
 	}
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	if m.Changes.records[m.Changes.selected].ID != "first" {
+	if selectedChangePath(m.Changes) != "new.go" {
 		t.Fatal("resize lost selected change")
 	}
 	next := changeState()
 	next.Activity = append(next.Activity, domain.PendingTool{Call: root.ToolCall{ID: "third"}, Decision: domain.DecisionApprove, Outcome: &domain.ToolOutcome{Change: &domain.FileChange{Path: "other", Created: true, After: "other\n"}}})
 	m = update(m, application.Event{Kind: application.EventSession, Snapshot: &next})
-	if m.Changes.records[m.Changes.selected].ID != "first" || len(m.Changes.records) != 3 {
+	if selectedChangePath(m.Changes) != "new.go" || len(m.Changes.records) != 3 {
 		t.Fatal("new published changes stole review selection")
 	}
 	next.ID = "fedcba9876543210fedcba9876543210"
@@ -215,4 +215,8 @@ func TestChangeReviewExplainsUnavailableAndEmptyPreviews(t *testing.T) {
 			}
 		}
 	}
+}
+
+func selectedChangePath(v ChangeViewer) root.RelativePath {
+	return v.files[v.rows[v.selected].File].Path
 }

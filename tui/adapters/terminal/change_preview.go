@@ -14,6 +14,8 @@ type changeLine struct {
 	Text      string
 	Heading   bool
 	NoNewline bool
+	// OldCount and NewCount size a heading's hunk on each side.
+	OldCount, NewCount int
 }
 
 type changePreview struct {
@@ -33,7 +35,16 @@ func previewChange(c domain.FileChange) changePreview {
 	var preview changePreview
 	for _, hunk := range diff.Hunks {
 		old, next := hunk.FromLine, hunk.ToLine
-		preview.Lines = append(preview.Lines, changeLine{Heading: true, Old: old, New: next})
+		heading := changeLine{Heading: true, Old: old, New: next}
+		for _, line := range hunk.Lines {
+			if line.Kind != udiff.Insert {
+				heading.OldCount++
+			}
+			if line.Kind != udiff.Delete {
+				heading.NewCount++
+			}
+		}
+		preview.Lines = append(preview.Lines, heading)
 		for _, line := range hunk.Lines {
 			row := changeLine{Kind: line.Kind, Text: strings.TrimSuffix(line.Content, "\n")}
 			switch line.Kind {
@@ -59,11 +70,13 @@ func previewChange(c domain.FileChange) changePreview {
 	return preview
 }
 
-func (p changePreview) render(theme Theme) string {
+// render draws the diff. A new file gets one "new file" heading; other
+// hunks name the lines they cover in the resulting file.
+func (p changePreview) render(theme Theme, newFile bool) string {
 	var lines []string
 	for _, row := range p.Lines {
 		if row.Heading {
-			lines = append(lines, theme.reviewLine(theme.Tf("changes.hunk", row.Old, row.New), theme.palette().Accent))
+			lines = append(lines, theme.reviewLine(hunkHeading(row, newFile, theme), theme.palette().Accent))
 			continue
 		}
 		if row.NoNewline {
@@ -92,4 +105,17 @@ func (p changePreview) render(theme Theme) string {
 		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func hunkHeading(h changeLine, newFile bool, theme Theme) string {
+	switch {
+	case newFile:
+		return theme.T("changes.hunkNew")
+	case h.NewCount == 0:
+		return theme.Tf("changes.hunkRemoved", h.Old, h.Old+h.OldCount-1)
+	case h.NewCount == 1:
+		return theme.Tf("changes.hunkLine", h.New)
+	default:
+		return theme.Tf("changes.hunkLines", h.New, h.New+h.NewCount-1)
+	}
 }
