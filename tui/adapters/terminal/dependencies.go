@@ -13,6 +13,7 @@ type Dependencies struct {
 	Plugins           application.PluginManagementPort
 	InstalledPlugins  application.InstalledPluginPort
 	EngineUpdates     application.EngineUpdatePort
+	MADEPreparation   application.MADEPreparationPort
 	Models            application.ListModelsUseCase
 	ModelPreference   application.ModelPreferencePort
 	SessionLabels     application.SessionLabelsPort

@@ -17,4 +17,5 @@ type operationComplete struct {
 	InstalledPlugins *[]application.InstalledPlugin
 	PluginApproval   *domain.PluginProfile
 	EngineUpdates    *[]application.EngineUpdateResult
+	MADEPreparation  *application.MADEPreparation
 }

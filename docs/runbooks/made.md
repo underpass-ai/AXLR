@@ -54,7 +54,9 @@ Bootstrap creates the administrative owner; it does not grant every ceremony act
 
 `AXLR_MADE_CURSOR_HMAC_KEY` must be present in the AXLR host environment when it starts. `env` and `env_from` form the complete environment of the child process. The placeholder IDs and paths above must match the authorization bootstrap. AXLR rejects duplicate server IDs; do not also register MADE from a package.
 
-5. Restart AXLR, open `/mcp` and verify the `made` tools. Ask for `made_discover_capabilities`, then `made_get_help` with `audience: "agent"` or `"user"`. Keep manual approval until you have reviewed the exact tools and grants. A discovered MADE step handler still requires real host execution capability in AXLR; discovering it does not perform the step.
+5. Restart AXLR, open `/mcp` and verify the `made` tools. Keep manual approval until you have reviewed the exact tools and grants. A discovered MADE step handler still requires real host execution capability in AXLR; discovering it does not perform the step.
+
+6. Give AXLR its own work identity. With the embedded launcher, select the MADE row in `/mcp` and press `P` (prepare for AXLR). AXLR starts MADE once as the store's trusted host and issues grant `axlr-default-work-v1` to a work identity that can run, inspect and resume published ceremonies but cannot approve human guards, publish definitions or change grants. If the MADE entry had no `MADE_AUTH_TRUSTED_HOST_ID`, AXLR was acting as the trusted host itself: preparation writes an `axlr-work-…` identity to the entry and asks you to restart. Running it again is harmless. With a remote (gRPC) engine or an entry that names an explicit trusted host, as in the example above, AXLR changes nothing; issue the same grant as that operator.
 
 ## Disconnect MADE from AXLR
 

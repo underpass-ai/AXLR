@@ -24,6 +24,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	"github.com/underpass-ai/AXLR/tui/adapters/engineupdate"
+	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
@@ -319,6 +320,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Plugins:           pluginManager,
 		InstalledPlugins:  axlrCatalog,
 		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands},
+		MADEPreparation:   &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore},
 		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
 		ModelPreference:   preferences,
 		SessionLabels:     sessionLabels,
