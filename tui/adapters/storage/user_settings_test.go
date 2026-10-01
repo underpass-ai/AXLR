@@ -40,7 +40,7 @@ func TestUserSettingsCanBeEditedAndSelectorsPreserveOtherSettings(t *testing.T) 
 		t.Fatalf("saved = %+v, %v", loaded, err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("settings mode = %v, %v", info, err)
 	}
 	data, err := os.ReadFile(path)
