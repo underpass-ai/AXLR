@@ -76,25 +76,5 @@ func (s *SessionStore) writeTimes(id domain.SessionID, times []time.Time) error 
 	if err != nil {
 		return err
 	}
-	file, err := os.CreateTemp(s.dir, ".times-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(file.Name())
-	if err := file.Chmod(0600); err != nil {
-		file.Close()
-		return err
-	}
-	if _, err := file.Write(data); err != nil {
-		file.Close()
-		return err
-	}
-	if err := file.Sync(); err != nil {
-		file.Close()
-		return err
-	}
-	if err := file.Close(); err != nil {
-		return err
-	}
-	return s.replace(file.Name(), s.timesPath(id))
+	return s.writeSidecar(".times-*", s.timesPath(id), data)
 }
