@@ -21,7 +21,7 @@ func TestModelHostGuidanceBoundsManifestAndKeepsDiscovery(t *testing.T) {
 	if len(guidance.Content) > 13*1024 || !strings.Contains(string(guidance.Content), "omitted") || !strings.Contains(string(guidance.Content), "axlr_tools query/offset") {
 		t.Fatal("unbounded or undiscoverable plugin manifest")
 	}
-	if len(ModelTools(s.ToolSnapshot())) != 4 {
+	if len(ModelTools(s.ToolSnapshot())) != 5 {
 		t.Fatal("plugin definitions leaked")
 	}
 }

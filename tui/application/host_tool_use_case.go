@@ -32,6 +32,8 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		result, err = hostHistory(session.Messages(), arguments)
 	case domain.HostOperationSkill:
 		result, err = u.readSkill(ctx, arguments)
+	case domain.HostOperationStepDone:
+		err = errors.New("ceremony steps are handled by the ceremony driver")
 	default:
 		err = errors.New("invocation bridge must resolve and approve its exact plugin target")
 	}

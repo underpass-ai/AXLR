@@ -70,7 +70,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny {
 		return rejectUnknown(ctx, s, u.Store, emit, u.Diagnostics)
 	}
-	if decision == domain.DecisionAutoApprove && !approvesInMode(u.Approval, s.Mode(), tool.Identity, toolArgs) {
+	if decision == domain.DecisionAutoApprove && !approvesInSession(u.Approval, *s, tool.Identity, toolArgs) {
 		return errors.New("tool is not configured for automatic approval")
 	}
 	if tool.Identity.Kind == domain.ToolKindPlugin && decision != domain.DecisionDeny {
@@ -127,7 +127,12 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		}
 		var outcome domain.ToolOutcome
 		var runErr error
-		if tool.Identity.Kind == domain.ToolKindHost {
+		var step *StepResult
+		if tool.Identity.Kind == domain.ToolKindHost && tool.Identity.LocalOperation == domain.HostOperationStepDone {
+			var result StepResult
+			result, runErr = u.Continue.Ceremonies.StepDone(ctx, *s, toolArgs)
+			outcome, step = result.Outcome, &result
+		} else if tool.Identity.Kind == domain.ToolKindHost {
 			hostCtx, hostSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolExecution, DiagnosticEvent{Bytes: len(toolArgs.Bytes())})
 			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills}).Execute(hostCtx, *s, tool.Identity, toolArgs)
 			class := DiagnosticErrorNone
@@ -151,6 +156,14 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		next = *s
 		if err := next.FinishToolExecution(id, outcome); err != nil {
 			return errors.Join(runErr, err)
+		}
+		if runErr == nil && step != nil && step.Accepted {
+			if step.Run == nil {
+				next.FinishCeremony()
+			} else if err := next.SetCeremony(*step.Run); err != nil {
+				return err
+			}
+			next.RestartTurnBudget()
 		}
 		if runErr != nil {
 			if ctx.Err() != nil {

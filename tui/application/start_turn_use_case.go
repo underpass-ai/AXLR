@@ -39,6 +39,13 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 		return err
 	}
 	next := *session
+	if _, live := next.Ceremony(); next.Mode().StartsCeremony() && !live {
+		// The ceremony starts before the turn so its first step instruction
+		// reaches the model's first request.
+		if err := u.Continue.Ceremonies.Begin(ctx, &next, prompt); err != nil {
+			return err
+		}
+	}
 	if err := next.BeginTurn(prompt, tools); err != nil {
 		return err
 	}
