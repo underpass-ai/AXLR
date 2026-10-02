@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"fmt"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"strings"
 	"time"
 
@@ -82,6 +83,9 @@ func (m AppModel) footerStatus() string {
 		badge := m.Theme.T("mode." + string(mode))
 		if run := m.Header.State.Ceremony; run != nil {
 			badge = m.Theme.Tf("ceremony.badge", badge, run.Step, run.Iteration)
+			if run.AwaitingPerson() {
+				badge = m.Theme.Tf("incident.badgeAwaiting", m.Theme.T("mode."+string(mode)))
+			}
 		}
 		parts = append(parts, badge)
 	}
@@ -110,6 +114,9 @@ func (m AppModel) statusActivity(status StatusBar) string {
 		name := status.ToolName
 		if name == "" {
 			name = m.Theme.T("common.tool")
+		}
+		if run := m.Header.State.Ceremony; run != nil && run.Step == "revise" && name == string(application.HostStepDoneName) {
+			return indicator + " " + m.Theme.Tf("incident.reviewing", int(time.Since(m.toolStarted).Seconds()))
 		}
 		return indicator + " " + m.Theme.Tf("status.executing", name, int(time.Since(m.toolStarted).Seconds()))
 	case status.Waiting:

@@ -8,7 +8,7 @@ import (
 // slashModes maps a mode command to the mode it selects.
 var slashModes = map[string]domain.WorkMode{
 	"/normal": domain.ModeNormal, "/review": domain.ModeReview, "/writer": domain.ModeWriter, "/research": domain.ModeResearch,
-	"/debug": domain.ModeDebug, "/delivery": domain.ModeDelivery,
+	"/debug": domain.ModeDebug, "/delivery": domain.ModeDelivery, "/incident": domain.ModeIncident,
 }
 
 // switchMode changes how the next turn works and saves it with the session.
