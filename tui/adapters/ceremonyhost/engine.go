@@ -69,6 +69,34 @@ func (e Engine) Complete(ctx context.Context, instance, step, fence string, outp
 	return err
 }
 
+func (e Engine) Inspect(ctx context.Context, instance string) (application.CeremonyView, error) {
+	current, err := e.made(ctx, "made_get_ceremony_instance", map[string]any{"ceremony_id": instance})
+	if err != nil {
+		return application.CeremonyView{}, err
+	}
+	view := application.CeremonyView{}
+	view.State, _ = current["current_state"].(string)
+	if view.State == "" {
+		return application.CeremonyView{}, errors.New("MADE returned no current state")
+	}
+	transitions, _ := current["transitions"].([]any)
+	for _, raw := range transitions {
+		transition, _ := raw.(map[string]any)
+		if enabled, _ := transition["enabled"].(bool); enabled {
+			if trigger, _ := transition["trigger"].(string); trigger != "" {
+				view.Enabled = append(view.Enabled, trigger)
+			}
+		}
+	}
+	claimable, _ := current["claimable_step_ids"].([]any)
+	for _, raw := range claimable {
+		if step, _ := raw.(string); step != "" {
+			view.Claimable = append(view.Claimable, step)
+		}
+	}
+	return view, nil
+}
+
 func (e Engine) Transition(ctx context.Context, instance, trigger string) (string, error) {
 	if _, err := e.made(ctx, "made_apply_ceremony_transition", map[string]any{"ceremony_id": instance, "trigger": trigger, "actor_kind": actorKind}); err != nil {
 		return "", err

@@ -22,6 +22,17 @@ type CeremonyEnginePort interface {
 	Complete(ctx context.Context, instance, step, fence string, output map[string]any) error
 	// Transition applies a trigger and returns the instance's new state.
 	Transition(ctx context.Context, instance, trigger string) (state string, err error)
+	// Inspect reads where the instance is, to reconcile an interrupted advance.
+	Inspect(ctx context.Context, instance string) (CeremonyView, error)
+}
+
+// CeremonyView is the part of a MADE instance the driver reconciles from.
+type CeremonyView struct {
+	State string
+	// Enabled lists the triggers MADE would accept now.
+	Enabled []string
+	// Claimable lists the steps that can be claimed now.
+	Claimable []string
 }
 
 // CheckRunnerPort runs one command in the workspace with a time limit and no

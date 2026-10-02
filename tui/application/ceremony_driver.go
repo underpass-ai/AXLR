@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -295,20 +296,30 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		return refuse("unknown ceremony step " + run.Step), nil
 	}
 	if err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, output); err != nil {
-		return StepResult{}, fmt.Errorf("complete %s: %w", run.Step, err)
+		return d.reconcile(ctx, s, run, output, report, fmt.Errorf("complete %s: %w", run.Step, err))
 	}
 	if repeat {
 		run.Iteration++
 		if err := d.claim(ctx, &run); err != nil {
-			return StepResult{}, err
+			return d.reconcile(ctx, s, run, output, report, err)
 		}
 		report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]
 		return accept(report, &run), nil
 	}
 	state, err := d.Engine.Transition(ctx, run.Instance, trigger)
 	if err != nil {
-		return StepResult{}, fmt.Errorf("transition %s: %w", trigger, err)
+		return d.reconcile(ctx, s, run, output, report, fmt.Errorf("transition %s: %w", trigger, err))
 	}
+	result, err := d.enter(ctx, s, run, state, output, report)
+	if err != nil {
+		return d.reconcile(ctx, s, run, output, report, err)
+	}
+	return result, nil
+}
+
+// enter moves the run into state: it closes a terminal ceremony or claims the
+// state's step.
+func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output, report map[string]any) (StepResult, error) {
 	report["state"] = state
 	if state == "COMPLETED" || state == "BLOCKED" {
 		report["memory"] = d.record(ctx, s, run, state, output)
@@ -323,6 +334,46 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 	run.Step, run.Iteration = next, 1
 	if err := d.claim(ctx, &run); err != nil {
 		return StepResult{}, err
+	}
+	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]
+	return accept(report, &run), nil
+}
+
+// reconcile recovers from an advance that was interrupted after MADE may
+// already have recorded part of it: a completion whose answer was lost, a
+// completed step whose transition never ran, or a session resumed on a step
+// MADE has left. It reads the instance and continues from what MADE says,
+// using get_ceremony_instance's own enabled flags rather than re-deriving
+// guards. When nothing explains the failure it returns the original error.
+func (d *CeremonyDriver) reconcile(ctx context.Context, s domain.Session, run domain.CeremonyRun, output, report map[string]any, cause error) (StepResult, error) {
+	view, err := d.Engine.Inspect(ctx, run.Instance)
+	if err != nil {
+		return StepResult{}, errors.Join(cause, fmt.Errorf("inspect %s: %w", run.Instance, err))
+	}
+	report["reconciled"] = cause.Error()
+	switch {
+	case view.State == "COMPLETED" || view.State == "BLOCKED":
+		return d.enter(ctx, s, run, view.State, output, report)
+	case len(view.Enabled) == 1:
+		state, err := d.Engine.Transition(ctx, run.Instance, view.Enabled[0])
+		if err != nil {
+			return StepResult{}, errors.Join(cause, fmt.Errorf("transition %s: %w", view.Enabled[0], err))
+		}
+		return d.enter(ctx, s, run, state, output, report)
+	case len(view.Enabled) > 1:
+		return StepResult{}, errors.Join(cause, fmt.Errorf("MADE has several enabled transitions (%s); resolve the instance by hand", strings.Join(view.Enabled, ", ")))
+	}
+	step, ok := stateSteps[view.State]
+	if !ok || !slices.Contains(view.Claimable, step) {
+		return StepResult{}, cause
+	}
+	if step == run.Step {
+		run.Iteration++ // the completion landed and its repeat condition was false
+	} else {
+		run.Step, run.Iteration = step, 1
+	}
+	if err := d.claim(ctx, &run); err != nil {
+		return StepResult{}, errors.Join(cause, err)
 	}
 	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]
 	return accept(report, &run), nil

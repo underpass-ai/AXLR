@@ -13,10 +13,13 @@ import (
 )
 
 type fakeEngine struct {
-	ready     error
-	state     string
-	calls     []string
-	completed []map[string]any
+	ready           error
+	state           string
+	calls           []string
+	completed       []map[string]any
+	failCompletes   int
+	failTransitions int
+	view            CeremonyView
 }
 
 var fakeTransitions = map[string]string{
@@ -38,14 +41,26 @@ func (f *fakeEngine) Complete(_ context.Context, _, step, fence string, output m
 	if fence != "fence-"+step {
 		return errors.New("stale fence")
 	}
+	if f.failCompletes > 0 {
+		f.failCompletes--
+		return errors.New("step is not in progress")
+	}
 	f.calls = append(f.calls, "complete "+step)
 	f.completed = append(f.completed, output)
 	return nil
 }
 func (f *fakeEngine) Transition(_ context.Context, _, trigger string) (string, error) {
 	f.calls = append(f.calls, "transition "+trigger)
+	if f.failTransitions > 0 {
+		f.failTransitions--
+		return "", errors.New("connection reset")
+	}
 	f.state = fakeTransitions[trigger]
 	return f.state, nil
+}
+func (f *fakeEngine) Inspect(context.Context, string) (CeremonyView, error) {
+	f.calls = append(f.calls, "inspect")
+	return f.view, nil
 }
 
 type fakeChecks struct {
@@ -298,5 +313,48 @@ func TestADeliveryBriefNeedsACheckThatRuns(t *testing.T) {
 	}
 	if r := step(t, d, &s, brief); r["next_step"] != "build" {
 		t.Fatalf("a failing baseline should still open the build: %v", r)
+	}
+}
+
+func TestAFailedTransitionIsReconciledFromMADE(t *testing.T) {
+	engine := &fakeEngine{failTransitions: 1, view: CeremonyView{State: "REPRODUCE", Enabled: []string{"reproduced"}}}
+	d := &CeremonyDriver{Engine: engine, Checks: &fakeChecks{exits: []int{1}}}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "x"); err != nil {
+		t.Fatal(err)
+	}
+	r := step(t, d, &s, reproduceArgs)
+	if r["next_step"] != "diagnose" || r["reconciled"] == nil {
+		t.Fatalf("not reconciled: %v", r)
+	}
+	if got := strings.Join(engine.calls[len(engine.calls)-4:], ","); got != "transition reproduced,inspect,transition reproduced,claim diagnose 1" {
+		t.Fatalf("unexpected recovery: %s", got)
+	}
+}
+
+func TestAResumedSessionCatchesUpWithMADE(t *testing.T) {
+	engine := &fakeEngine{failCompletes: 1, view: CeremonyView{State: "DIAGNOSE", Claimable: []string{"diagnose"}}}
+	d := &CeremonyDriver{Engine: engine, Checks: &fakeChecks{exits: []int{1}}}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if r := step(t, d, &s, reproduceArgs); r["next_step"] != "diagnose" {
+		t.Fatalf("session did not catch up: %v", r)
+	}
+	if run, _ := s.Ceremony(); run.Step != "diagnose" || run.Iteration != 1 || run.Fence != "fence-diagnose" {
+		t.Fatalf("run not re-synced: %+v", run)
+	}
+}
+
+func TestAFailureMADECannotExplainIsReported(t *testing.T) {
+	engine := &fakeEngine{failCompletes: 1, view: CeremonyView{State: "REPRODUCE"}}
+	d := &CeremonyDriver{Engine: engine, Checks: &fakeChecks{exits: []int{1}}}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "x"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.StepDone(context.Background(), s, mustObject(t, reproduceArgs)); err == nil || !strings.Contains(err.Error(), "not in progress") {
+		t.Fatalf("original failure hidden: %v", err)
 	}
 }
