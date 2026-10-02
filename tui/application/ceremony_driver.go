@@ -385,7 +385,13 @@ func (d *CeremonyDriver) claim(ctx context.Context, run *domain.CeremonyRun) err
 		return fmt.Errorf("claim %s: %w", run.Step, err)
 	}
 	run.Fence = fence
+	run.Reminded = false
 	return nil
+}
+
+// stepReminder is the console's message when a turn ended with the step open.
+func stepReminder(run domain.CeremonyRun) root.Text {
+	return root.Text(fmt.Sprintf("[AXLR] The %s step of ceremony %s is still open. If its work is done, hand it back now with axlr_step_done. %s", run.Step, run.Definition, stepInstructions[run.Step]))
 }
 
 // record writes the outcome to the session's KMP about and says what happened.

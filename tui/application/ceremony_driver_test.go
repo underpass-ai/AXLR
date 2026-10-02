@@ -377,3 +377,36 @@ func TestRepairKeepsTheCheckApprovedInReproduce(t *testing.T) {
 		t.Fatalf("approved check replaced: %+v", run.Check)
 	}
 }
+
+func TestAnOpenStepGetsOneVisibleReminder(t *testing.T) {
+	s := debugSession(t)
+	if err := s.BeginTurn("arregla", localSnapshot(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "build", Iteration: 1, Fence: "f"}); err != nil {
+		t.Fatal(err)
+	}
+	store := &memoryStore{}
+	generations := 0
+	model := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		generations++
+		return assistant("all tests pass"), nil
+	})
+	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: store, Models: model}}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if generations != 2 {
+		t.Fatalf("expected one reminder and two generations, got %d", generations)
+	}
+	reminders := 0
+	for _, m := range s.Messages() {
+		if m.Role == root.RoleUser && strings.HasPrefix(string(m.Content), "[AXLR] The build step") {
+			reminders++
+		}
+	}
+	run, _ := s.Ceremony()
+	if reminders != 1 || !run.Reminded {
+		t.Fatalf("reminders %d reminded %v", reminders, run.Reminded)
+	}
+}
