@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -513,5 +514,32 @@ func TestTheReturnReasonLastsUntilAReviewAccepts(t *testing.T) {
 	step(t, r.driver, &r.session, reviseArgs) // accepted
 	if r.reviewer.requests[2].ReturnReason != "falta impacto" || r.run(t).Incident.ReturnReason != "" {
 		t.Fatalf("reason: %+v %+v", r.reviewer.requests[2], r.run(t).Incident)
+	}
+}
+
+func TestTheDecisionStartsAVisibleTurnAndAFailedOneKeepsWhatLanded(t *testing.T) {
+	r := newIncidentRig(t, true)
+	r.toReview(t)
+	step(t, r.driver, &r.session, reviseArgs)
+	store := &memoryStore{}
+	var asked []root.CompletionRequest
+	model := streamFunc(func(_ context.Context, request root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		asked = append(asked, request)
+		return assistant("publicado"), nil
+	})
+	u := StartTurnUseCase{Catalog: &catalogStub{}, Store: store, Continue: ContinueTurnUseCase{Models: model, Store: store, Ceremonies: r.driver}}
+	r.approver.fails = 1
+	if err := u.Decide(context.Background(), &r.session, true, "", ignoreEvent); err == nil {
+		t.Fatal("failed grant not reported")
+	}
+	if run := r.run(t); run.Incident.Decided != "approve" || !run.AwaitingPerson() || len(asked) != 0 {
+		t.Fatalf("after failure: %+v asked=%d", run.Incident, len(asked))
+	}
+	if err := u.Decide(context.Background(), &r.session, true, "", ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	messages := r.session.Messages()
+	if len(asked) == 0 || !strings.HasPrefix(string(messages[0].Content), "[AXLR] The person approved the postmortem") {
+		t.Fatalf("no visible decision turn: %v", messages)
 	}
 }

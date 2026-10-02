@@ -56,6 +56,7 @@ type AppModel struct {
 	draftOperationID    uint64
 	Help                HelpOverlay
 	Info                Transcript
+	IncidentCard        IncidentCard
 	overlay             ControlIntent
 	draft               string
 	submittedPrompt     string
@@ -198,6 +199,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Info.SetWidth(infoWidth)
 		m.Info.Viewport.SetHeight(infoHeight)
 		m.Transcript.ApplyTheme(m.Theme)
+		m = m.autoOpenIncidentCard()
 		return m, nil
 	case application.Event:
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticEventConsumed, Chunks: 1, Bytes: len(v.Text)})
@@ -386,6 +388,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.refreshTranscript()
 		m.syncApproval()
+		if m.steerPrompt == "" && !m.inlineApproval() {
+			m = m.autoOpenIncidentCard()
+		}
 		if m.steerPrompt != "" {
 			prompt := root.Text(m.steerPrompt)
 			m.steerPrompt = ""
@@ -443,6 +448,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/changes" || command == "/diff" {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("changes"))
+			}
+			if command == "/incident" {
+				if _, awaiting := m.incidentRun(); awaiting {
+					m.Composer.Input.Reset()
+					return m.openIncidentCard(), nil
+				}
 			}
 			if mode, ok := slashModes[command]; ok {
 				return m.switchMode(mode)
