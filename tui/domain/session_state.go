@@ -33,6 +33,9 @@ type SessionState struct {
 	// Mode is the session's work mode; empty reads as ModeNormal. It is kept
 	// outside the snapshot so the snapshot format does not change.
 	Mode WorkMode
+	// Ceremony is the live console-driven ceremony, if any. Like Mode, it is
+	// kept outside the snapshot.
+	Ceremony *CeremonyRun
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -63,6 +66,11 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 			return Session{}, err
 		}
 	}
+	if state.Ceremony != nil {
+		if err = state.Ceremony.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
 	previous := 0
 	for _, archived := range state.ArchivedDrafts {
 		if archived.AfterMessage <= previous || archived.AfterMessage >= len(state.Messages) || archived.Content == "" || state.Messages[archived.AfterMessage].Role != axlr.RoleUser {
@@ -79,6 +87,7 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 		return Session{}, errors.New("invalid session status")
 	}
 	activityIndex := 0
+	s.replaying = true
 	for _, message := range state.Messages {
 		if err = message.Validate(); err != nil {
 			return Session{}, err
@@ -109,6 +118,7 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 			return Session{}, err
 		}
 	}
+	s.replaying = false
 	if s.state.TurnCallCount != state.TurnCallCount || !slices.EqualFunc(s.state.Activity, state.Activity, sameActivity) {
 		return Session{}, errors.New("inconsistent tool activity or turn count")
 	}
@@ -152,6 +162,10 @@ func cloneState(state SessionState) SessionState {
 	state.Activity = append([]PendingTool(nil), state.Activity...)
 	state.ArchivedDrafts = append([]ArchivedDraft(nil), state.ArchivedDrafts...)
 	state.MessageTimes = append([]time.Time(nil), state.MessageTimes...)
+	if state.Ceremony != nil {
+		run := state.Ceremony.clone()
+		state.Ceremony = &run
+	}
 	if len(state.MessageTimes) > len(state.Messages) {
 		state.MessageTimes = state.MessageTimes[:len(state.Messages)]
 	}

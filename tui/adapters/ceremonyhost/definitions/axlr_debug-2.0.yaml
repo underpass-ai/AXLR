@@ -1,0 +1,159 @@
+version: '2.0'
+name: axlr_debug
+description: Repair a failure the console can reproduce. The console runs the approved check command, which must fail before the repair and pass after it; at most three attempts per phase, then BLOCKED.
+inputs:
+  required:
+  - failure_brief
+  - workspace
+  optional:
+  - memory_about
+outputs:
+  repair_report:
+    type: object
+states:
+- id: REPRODUCE
+  initial: true
+- id: DIAGNOSE
+- id: REPAIR
+- id: INTEGRATE
+- id: COMPLETED
+  terminal: true
+- id: BLOCKED
+  terminal: true
+transitions:
+- from: REPRODUCE
+  to: DIAGNOSE
+  trigger: reproduced
+  guards:
+  - reproduce_completed
+  - failure_reproduced
+- from: REPRODUCE
+  to: BLOCKED
+  trigger: not_reproducible
+  guards:
+  - reproduce_completed
+  - declared_not_reproducible
+- from: REPRODUCE
+  to: BLOCKED
+  trigger: reproduce_exhausted
+  guards:
+  - reproduce_exhausted
+- from: DIAGNOSE
+  to: REPAIR
+  trigger: diagnosed
+  guards:
+  - diagnose_completed
+  - cause_diagnosed
+- from: REPAIR
+  to: INTEGRATE
+  trigger: repaired
+  guards:
+  - repair_completed
+  - check_passes
+- from: REPAIR
+  to: BLOCKED
+  trigger: repair_exhausted
+  guards:
+  - repair_exhausted
+- from: INTEGRATE
+  to: COMPLETED
+  trigger: integrated
+  guards:
+  - integrate_completed
+  - revision_recorded
+steps:
+- id: reproduce
+  state: REPRODUCE
+  handler: host_callback
+  repeat:
+    max_iterations: 3
+    until:
+      output_field: settled
+      equals: true
+  config:
+    num_agents: 1
+    prompt: Find a command that shows the failure in this workspace. The console runs it and records reproduced=true only when it exits non-zero. Return check_command, expected and observed; return reproducible=false with the reason when no command can show the failure. The console sets settled=true once the failure is reproduced or declared not reproducible.
+    see_prior: true
+- id: diagnose
+  state: DIAGNOSE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Identify the first causal breach with the smallest discriminating probes. Separate observation from inference. Return root_cause, evidence and proposed_fix; the console records diagnosed=true when all three are present.
+    see_prior: true
+- id: repair
+  state: REPAIR
+  handler: host_callback
+  repeat:
+    max_iterations: 3
+    until:
+      output_field: repaired
+      equals: true
+  config:
+    num_agents: 1
+    prompt: Apply the smallest fix for the diagnosed cause and add a regression check when it protects meaningful behaviour. Return summary. The console reruns the approved check command and records repaired=true only when it exits zero.
+    see_prior: true
+- id: integrate
+  state: INTEGRATE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Explain cause, fix, evidence and limits for the user. Return report. The console records the revision and dirty files and sets integrated=true.
+    see_prior: true
+guards:
+  reproduce_completed:
+    type: automated
+    check: step_status:reproduce:COMPLETED
+  failure_reproduced:
+    type: automated
+    check: output_field:reproduce:reproduced=true
+  declared_not_reproducible:
+    type: automated
+    check: output_field:reproduce:reproducible=false
+  reproduce_exhausted:
+    type: automated
+    check: step_repeat_exhausted:reproduce
+  diagnose_completed:
+    type: automated
+    check: step_status:diagnose:COMPLETED
+  cause_diagnosed:
+    type: automated
+    check: output_field:diagnose:diagnosed=true
+  repair_completed:
+    type: automated
+    check: step_status:repair:COMPLETED
+  check_passes:
+    type: automated
+    check: output_field:repair:repaired=true
+  repair_exhausted:
+    type: automated
+    check: step_repeat_exhausted:repair
+  integrate_completed:
+    type: automated
+    check: step_status:integrate:COMPLETED
+  revision_recorded:
+    type: automated
+    check: output_field:integrate:integrated=true
+roles:
+- id: AXLR
+  allowed_actions:
+  - reproduce
+  - reproduced
+  - not_reproducible
+  - reproduce_exhausted
+  - diagnose
+  - diagnosed
+  - repair
+  - repaired
+  - repair_exhausted
+  - integrate
+  - integrated
+timeouts:
+  step_default: 3600
+retry_policies:
+  default:
+    max_attempts: 1
+    backoff_seconds: 1
+max_parallel: 1
+max_transitions: 20
+max_bounces: 3

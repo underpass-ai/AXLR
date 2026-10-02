@@ -24,7 +24,7 @@ var documentExtensions = map[string]bool{".md": true, ".mdx": true, ".txt": true
 // Judge applies the mode to a resolved call. Plugin and host tools are not
 // workspace changes and stay under their own approval policy.
 func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict, string) {
-	if m == "" || m == ModeNormal || id.Kind != ToolKindLocal {
+	if m == "" || m == ModeNormal || m.StartsCeremony() || id.Kind != ToolKindLocal {
 		return VerdictAllow, ""
 	}
 	switch id.LocalOperation {

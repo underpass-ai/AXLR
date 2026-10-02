@@ -50,10 +50,10 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 	return d, nil
 }
 func restore(d dto.SessionSnapshot) (domain.Session, error) {
-	return restoreSnapshot(d, false, nil, "")
+	return restoreSnapshot(d, false, nil, "", nil)
 }
 
-func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Time, mode domain.WorkMode) (domain.Session, error) {
+func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Time, mode domain.WorkMode, ceremony *domain.CeremonyRun) (domain.Session, error) {
 	if d.Version != 1 && d.Version != snapshotVersion {
 		return domain.Session{}, errors.New("unsupported session snapshot version")
 	}
@@ -96,9 +96,11 @@ func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Ti
 	if preserveActive {
 		s.MessageTimes = times
 		s.Mode = mode
+		s.Ceremony = ceremony
 		return domain.RestoreSessionActive(s)
 	}
 	s.MessageTimes = times
 	s.Mode = mode
+	s.Ceremony = ceremony
 	return domain.RestoreSession(s)
 }

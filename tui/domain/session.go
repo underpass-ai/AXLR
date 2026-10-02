@@ -7,7 +7,12 @@ import (
 	axlr "github.com/underpass-ai/AXLR/domain"
 )
 
-type Session struct{ state SessionState }
+type Session struct {
+	state SessionState
+	// replaying is true while restore rebuilds a saved transcript: the
+	// per-turn call limit guards live turns, not history that already ran.
+	replaying bool
+}
 
 const MaxTurnToolCalls = 32
 
@@ -120,6 +125,9 @@ func (s *Session) BeginTurn(prompt axlr.Text, tools []AvailableTool) error {
 	next.Status = StatusStreaming
 	next.Draft = ""
 	next.TurnCallCount = 0
+	if next.Ceremony != nil {
+		next.Ceremony.BudgetBase = 0
+	}
 	s.state = next
 	return nil
 }
@@ -144,7 +152,11 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 		}
 		ids[call.ID] = true
 	}
-	if len(message.ToolCalls)+s.state.TurnCallCount > MaxTurnToolCalls {
+	base := 0
+	if s.state.Ceremony != nil {
+		base = s.state.Ceremony.BudgetBase
+	}
+	if !s.replaying && len(message.ToolCalls)+s.state.TurnCallCount-base > MaxTurnToolCalls {
 		next := s.Export()
 		next.Status = StatusInterrupted
 		s.state = next

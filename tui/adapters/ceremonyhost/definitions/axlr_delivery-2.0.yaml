@@ -1,0 +1,113 @@
+version: '2.0'
+name: axlr_delivery
+description: Deliver a change whose acceptance is a check command the console runs. The brief fixes criteria and the command; each build round must make it pass; at most three rounds, then BLOCKED.
+inputs:
+  required:
+  - task_brief
+  - workspace
+  optional:
+  - memory_about
+outputs:
+  delivery_report:
+    type: object
+states:
+- id: BRIEF
+  initial: true
+- id: BUILD
+- id: INTEGRATE
+- id: COMPLETED
+  terminal: true
+- id: BLOCKED
+  terminal: true
+transitions:
+- from: BRIEF
+  to: BUILD
+  trigger: briefed
+  guards:
+  - brief_completed
+  - brief_ready
+- from: BUILD
+  to: INTEGRATE
+  trigger: verified
+  guards:
+  - build_completed
+  - check_passes
+- from: BUILD
+  to: BLOCKED
+  trigger: build_exhausted
+  guards:
+  - build_exhausted
+- from: INTEGRATE
+  to: COMPLETED
+  trigger: integrated
+  guards:
+  - integrate_completed
+  - revision_recorded
+steps:
+- id: brief
+  state: BRIEF
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Read the repository and settle the change. Return criteria (observable behaviour), scope and check_command, the command whose zero exit proves the criteria. The console runs it once as a baseline and records ready=true when all three are present.
+    see_prior: true
+- id: build
+  state: BUILD
+  handler: host_callback
+  repeat:
+    max_iterations: 3
+    until:
+      output_field: verified
+      equals: true
+  config:
+    num_agents: 1
+    prompt: Implement the smallest change that meets the criteria; in later rounds address the previous check output without growing scope. Return summary. The console runs the approved check command and records verified=true only when it exits zero.
+    see_prior: true
+- id: integrate
+  state: INTEGRATE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Report what changed, the evidence and the limits for the user. Return report. The console records the revision and dirty files and sets integrated=true.
+    see_prior: true
+guards:
+  brief_completed:
+    type: automated
+    check: step_status:brief:COMPLETED
+  brief_ready:
+    type: automated
+    check: output_field:brief:ready=true
+  build_completed:
+    type: automated
+    check: step_status:build:COMPLETED
+  check_passes:
+    type: automated
+    check: output_field:build:verified=true
+  build_exhausted:
+    type: automated
+    check: step_repeat_exhausted:build
+  integrate_completed:
+    type: automated
+    check: step_status:integrate:COMPLETED
+  revision_recorded:
+    type: automated
+    check: output_field:integrate:integrated=true
+roles:
+- id: AXLR
+  allowed_actions:
+  - brief
+  - briefed
+  - build
+  - verified
+  - build_exhausted
+  - integrate
+  - integrated
+timeouts:
+  step_default: 3600
+retry_policies:
+  default:
+    max_attempts: 1
+    backoff_seconds: 1
+max_parallel: 1
+max_transitions: 20
+max_bounces: 3

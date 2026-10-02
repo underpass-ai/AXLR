@@ -137,6 +137,9 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	if e = s.writeMode(session.Export().ID, session.Mode()); e != nil {
 		return e
 	}
+	if e = s.writeCeremony(session.Export().ID, session.Export().Ceremony); e != nil {
+		return e
+	}
 	dir, e := os.Open(s.dir)
 	if e != nil {
 		return e
@@ -187,7 +190,7 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	if record.ID != string(id) {
 		return domain.Session{}, errors.New("snapshot ID does not match filename")
 	}
-	return restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id))
+	return restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id), s.readCeremony(id))
 }
 
 // List is deterministic by session ID; malformed snapshots surface as errors.
@@ -254,6 +257,7 @@ func (s *SessionStore) Close() error {
 		if empty {
 			_ = os.Remove(s.timesPath(id))
 			_ = os.Remove(s.modePath(id))
+			_ = os.Remove(s.ceremonyPath(id))
 			_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))
 		}
 	}

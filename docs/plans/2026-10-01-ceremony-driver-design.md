@@ -1,6 +1,6 @@
 # Ceremony Driver Design
 
-Status: design with decisions taken; next step is the task-level plan after the spikes.
+Status: implemented on `feat/ceremony-driver` (2 Oct 2026). The section "As built" records where the implementation differs from the design below.
 Builds on: [work modes](2026-10-01-work-modes.md), which must merge first.
 Spec: ceremony review https://claude.ai/artifact/ScnDk7CV34Lt5e1iCUjNeH and Tirso's decisions of 1 Oct 2026 (the host drives MADE; only delivery and debug remain as ceremonies, as 2.0; `/resume` replaces handoff).
 
@@ -92,3 +92,17 @@ A turn limit hit mid-step is harmless: the instance and claim survive, and Ctrl+
 
 1. **Check command: approved once per ceremony.** When the step that proposes `check_command` ends, the approval card shows the exact command. The console then re-runs exactly that string each round without asking. A different command needs a new approval. The approved command is stored in the `<id>.ceremony` sidecar with the instance.
 2. **KMP about: `ws:<session_id>`.** Each AXLR session that runs a ceremony has its own about, `ws:` followed by the 32-hex session id. Tirso, as KMP's author, set this convention, so it is not an about the console infers. The console wakes it on entry (an empty wake on a new about is expected) and writes the outcome to it. KMP's multidimensional labels carry the rest, on every record: `{"ceremony":["axlr_debug"],"step":["repair"],"ws":["<workspace path>"]}`. Spike: confirm the first `kmp_write_memory` on a new about creates it, and that reusing `ws` as both prefix and label key is fine.
+
+## As built (2 Oct 2026)
+
+- **Packages.** The adapters live in `tui/adapters/ceremonyhost`:
+  - `Engine` (MADE), `Checks` (local exec) and `Memory` (KMP) all go through the existing tool executor, as the work identity.
+  - The embedded `definitions/axlr_{debug,delivery}-2.0.yaml` files are pinned by MADE digest; `TestPinnedDigestsMatchTheShippedYAML` fails when a YAML changes without its pin. It runs when `made-mcp` is on PATH.
+- **`reproduce`'s repeat stops on `settled`, not on `reproduced`.** While a step repeat is unsatisfied, MADE refuses every transition out of the state, `not_reproducible` included. The console sets `settled=true` when the failure is reproduced or declared not reproducible.
+- **Approval rides on `axlr_step_done`.** No new approval surface. A `step_done` that proposes a check command not yet approved shows the normal approval card, labelled "ceremony check command". Any other `step_done` is console bookkeeping and auto-approves, like `axlr_tools`. Only steps that run the command (`reproduce`, `brief`, `repair`, `build`) can ask.
+- **The check command is `{program, args}`, run without a shell.** Timeout is 300 000 ms (the runtime's hard limit) and output is capped at 16 KiB, of which the last 4 KiB reach MADE and the model. A command that never runs is refused in `reproduce` and `brief`, and counts as a failure in `repair` and `build`.
+- **Call budget.** `TurnCallCount` is derived from the transcript, so it is never rewritten. Instead, `CeremonyRun.BudgetBase` marks where the last accepted step left the count, and the 32-call limit counts from there. Restoring a saved session no longer applies the live limit to history.
+- **Memory.** KMP refuses non-English summaries, so `integrate` asks for `summary_en` alongside the user-language `report`. The `step_done` result says "recorded in ws:<id>" or why not.
+- **Publication.** `/mcp` → P publishes 2.0 through a five-minute install grant given to the work identity and revoked with a reason.
+- **Lease.** A claim lasts 1 h. Probed: completing after the lease expired still works while no one else claimed the step.
+- **Resume.** Reopening the session (`-session <id>` or the picker) shows the live step in the footer. The next message continues with the stored fence. Verified to `COMPLETED`.

@@ -13,6 +13,16 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 	return policy != nil && policy.AutoApproves(id)
 }
 
+// approvesInSession adds the session's ceremony to approvesInMode: a step
+// result that proposes a new check command waits for the user; any other step
+// result is the console's own bookkeeping.
+func approvesInSession(policy ToolApprovalPolicyPort, s domain.Session, id domain.ToolIdentity, arguments root.JSONValue) bool {
+	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationStepDone {
+		return !stepDoneNeedsApproval(s, arguments)
+	}
+	return approvesInMode(policy, s.Mode(), id, arguments)
+}
+
 // approvesInMode adds the work mode: a call the mode puts under the user's
 // decision is never approved automatically, autonomy included.
 func approvesInMode(policy ToolApprovalPolicyPort, mode domain.WorkMode, id domain.ToolIdentity, arguments root.JSONValue) bool {

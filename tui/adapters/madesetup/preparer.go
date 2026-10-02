@@ -9,10 +9,12 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/mcpclient"
 	"github.com/underpass-ai/AXLR/plugins"
+	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 )
@@ -38,6 +40,7 @@ type Preparer struct {
 	Getenv     func(string) string
 	Store      EnvironmentStore
 	Call       ToolCaller
+	Now        func() time.Time
 }
 
 var _ application.MADEPreparationPort = (*Preparer)(nil)
@@ -104,10 +107,71 @@ func (p *Preparer) Prepare(ctx context.Context) (application.MADEPreparation, er
 		}
 		result.RestartRequired = true
 	}
-	if _, err := p.call(ctx, server(made, append(without(made.Env, hostIdentityKey), hostIdentityKey+"="+work)), "made_list_ceremony_definitions", map[string]any{}); err != nil {
+	worker := server(made, append(without(made.Env, hostIdentityKey), hostIdentityKey+"="+work))
+	if _, err := p.call(ctx, worker, "made_list_ceremony_definitions", map[string]any{}); err != nil {
 		return result, fmt.Errorf("work identity cannot read definitions after the grant: %w", err)
 	}
-	return result, nil
+	published, err := p.publishCeremonies(ctx, admin, worker, work)
+	result.Published = published
+	return result, err
+}
+
+// publishCeremonies publishes the console-driven definitions the store lacks.
+// The work identity gets a five-minute install grant for the publication and
+// loses it immediately after; it never keeps publication rights.
+func (p *Preparer) publishCeremonies(ctx context.Context, admin, worker mcpclient.Server, work string) ([]string, error) {
+	var missing []ceremonyhost.Definition
+	for _, definition := range ceremonyhost.Definitions() {
+		found, err := p.call(ctx, worker, "made_get_ceremony_definition", map[string]any{"ceremony": definition.Name, "version": definition.Version})
+		if err == nil {
+			if digest, _ := found["digest"].(string); digest != definition.Digest {
+				return nil, fmt.Errorf("%s %s is already published with different content", definition.Name, definition.Version)
+			}
+			continue
+		}
+		var refused *refusal
+		if !errors.As(err, &refused) || (refused.Code != "not_found" && !strings.Contains(refused.Message, "not found")) {
+			return nil, err
+		}
+		missing = append(missing, definition)
+	}
+	if len(missing) == 0 {
+		return nil, nil
+	}
+	now := p.now().UTC()
+	grant := fmt.Sprintf("axlr-ceremony-install-%d", now.Unix())
+	if _, err := p.call(ctx, admin, "made_issue_authorization_grant", map[string]any{
+		"grant_id": grant, "grantee_id": work, "scope": map[string]any{"kind": "global"},
+		"valid_from": "2000-01-01T00:00:00Z", "valid_until": now.Add(5 * time.Minute).Format(time.RFC3339), "delegation_depth": 0,
+		"actions": []string{"validate_ceremony_draft", "publish_ceremony_definition"},
+	}); err != nil {
+		return nil, fmt.Errorf("issue the install grant: %w", err)
+	}
+	var published []string
+	var publishErr error
+	for _, definition := range missing {
+		text, err := definition.YAML()
+		if err == nil {
+			_, err = p.call(ctx, worker, "made_publish_ceremony_definition", map[string]any{"definition_yaml": text})
+		}
+		if err != nil {
+			publishErr = fmt.Errorf("publish %s %s: %w", definition.Name, definition.Version, err)
+			break
+		}
+		published = append(published, definition.Name+" "+definition.Version)
+	}
+	_, revokeErr := p.call(ctx, admin, "made_revoke_authorization_grant", map[string]any{"grant_id": grant, "reason": "AXLR ceremony definitions installed"})
+	if revokeErr != nil {
+		revokeErr = fmt.Errorf("revoke install grant %s (it expires in five minutes): %w", grant, revokeErr)
+	}
+	return published, errors.Join(publishErr, revokeErr)
+}
+
+func (p *Preparer) now() time.Time {
+	if p.Now != nil {
+		return p.Now()
+	}
+	return time.Now()
 }
 
 func (p *Preparer) call(ctx context.Context, s mcpclient.Server, tool string, arguments map[string]any) (map[string]any, error) {
