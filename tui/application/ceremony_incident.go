@@ -236,7 +236,7 @@ func (d *CeremonyDriver) revise(ctx context.Context, s domain.Session, run domai
 	if len(draft) > maxIncidentDraft {
 		return refuse(fmt.Sprintf("the draft exceeds %d KiB; tighten it", maxIncidentDraft>>10)), nil
 	}
-	verdict, result, err := d.askReviewer(ctx, &run, draft)
+	verdict, result, err := d.askReviewer(ctx, s, &run, draft)
 	if err != nil {
 		return StepResult{}, err
 	}
@@ -268,7 +268,7 @@ func (d *CeremonyDriver) reviewDraft(ctx context.Context, s domain.Session, run 
 	if !found || digestOf(draft) != i.DraftDigest {
 		return StepResult{}, fmt.Errorf("%s changed after it was handed in; MADE holds the reviewed draft", i.DraftPath)
 	}
-	verdict, result, err := d.askReviewer(ctx, &run, draft)
+	verdict, result, err := d.askReviewer(ctx, s, &run, draft)
 	if err != nil {
 		return StepResult{}, err
 	}
@@ -280,9 +280,9 @@ func (d *CeremonyDriver) reviewDraft(ctx context.Context, s domain.Session, run 
 
 // askReviewer returns a verdict, or the refusal to give the model, or an
 // error when the context was cancelled.
-func (d *CeremonyDriver) askReviewer(ctx context.Context, run *domain.CeremonyRun, draft []byte) (ReviewVerdict, *StepResult, error) {
+func (d *CeremonyDriver) askReviewer(ctx context.Context, s domain.Session, run *domain.CeremonyRun, draft []byte) (ReviewVerdict, *StepResult, error) {
 	i := run.Incident
-	verdict, err := d.Reviewer.Review(ctx, ReviewRequest{Rubric: incidentReviewRubric, Draft: string(draft), ReturnReason: i.ReturnReason})
+	verdict, err := d.Reviewer.Review(ctx, ReviewRequest{SessionModel: string(s.Export().Model), Rubric: incidentReviewRubric, Draft: string(draft), ReturnReason: i.ReturnReason})
 	if ctx.Err() != nil {
 		return ReviewVerdict{}, nil, ctx.Err()
 	}
