@@ -31,7 +31,11 @@ Spike results (disposable store), all as expected:
 - approval refused until the guard is granted;
 - return, re-review and a fresh approval;
 - two returns, then approval;
-- exhaustion after a return → `BLOCKED`.
+- exhaustion after a return → `BLOCKED`;
+- G: guard granted, then `present` completed with `return` → both `approved` and `returned` enabled;
+- H: `present` completed with `approve` and no guard → nothing enabled; after the guard → only `approved`.
+
+G and H fix the order of `a` (below).
 
 Pinned digest: `f81e9aa53f7d77c72086ac3baec1a4037df1d0fa3d24e62270e5b62fabe6f6df`.
 
@@ -44,18 +48,29 @@ Pinned digest: `f81e9aa53f7d77c72086ac3baec1a4037df1d0fa3d24e62270e5b62fabe6f6df
 | `analysis` | model `{root_cause, contributing_factors[], went_well[], went_badly[], actions:[{title, kind, owner, due, verification}]}` | `kind` is corrective or preventive; every action has an owner, a future ISO date and a verification |
 | `revise` | model writes `docs/incidents/<slug>.draft.md`, returns `{draft_path}` | reads the bytes and digest into the `revise` output, then runs `review` itself |
 | `review` | **console**: reviewer generation, tool `review_verdict{accepted, findings[]}` | an unparseable verdict gets one retry, then the `step_done` is refused without touching MADE; output carries `review_mode: independent_context` and `reviewer_model` |
-| `present` | **console**, on the person's keypress | `a`: the approver identity grants `person_approves`, the work identity completes `present{decision: approve, draft_digest}`, applies `approved`, writes the approved bytes to `docs/incidents/<date>-<slug>.md`, claims `publish`. `d` + reason: completes `present{decision: return, reason}`, applies `returned`, claims `revise` with the reason |
+| `present` | **console**, on the person's keypress | `a`: the work identity completes `present{decision: approve, draft_digest}`, then the approver identity grants `person_approves`, then the console applies `approved`, writes the approved bytes to `docs/incidents/<date>-<slug>.md`, claims `publish`. `d` + reason: completes `present{decision: return, reason}`, applies `returned`, claims `revise` with the reason |
 | `publish` | model `{report, summary_en}` | the file holds the approved digest; KMP record with the incident labels; `published=true` |
 
 The engine cannot verify production facts. The guarantees are structural checks, a fresh-context review and the human gate.
+
+## Ordering, failure and resume
+
+- **`a`: complete `present`, then grant the guard, then apply.** If the guard fails, `present` is completed and nothing is approved, so the person can retry (spike H). Granting first would leave an approval in the instance that a later `d` cannot erase (spike G).
+- **`review` is claimed only once the verdict is in hand.** The sequence is: complete `revise` → run the reviewer → claim `review` → complete it at once → either the state repeat or `reviewed`. If the reviewer is cancelled (Esc, network), `review` stays unclaimed, and `reconcile` runs it again.
+- **`present` is claimed with a lease of seven days**, since the person may answer hours later.
+- **Console steps (`review`, `present`) never reach the model.** When `reconcile` lands on `review`, the console runs the reviewer. When it lands on `present`, it sets `Awaiting` and opens the card.
+- **REVIEW repeats as a state, not a step.** A rejection claims `revise` at the next state iteration. The reviewer's findings and any return reason live in the run (sidecar), so a resume still passes them to `revise`.
+- **While `Awaiting`, `axlr_step_done` is refused and hidden.** On load the card opens automatically, and `/incident` reopens it. A keypress starts a host turn with the existing step reminder.
+- **Reviewer failures are bounded.** After two consecutive failures the footer says so, instead of letting the model retry until the turn budget runs out.
+- **`Begin` creates `docs/incidents/`.** `draft_path` must be under it and end in `.draft.md`. Evidence paths are checked with a `local_read` of `max_bytes: 1` through the executor; `application` never reads the filesystem.
 
 ## Layer map
 
 | Layer | Change |
 |:--|:--|
-| domain | `ModeIncident` (`Judge` → Allow, `StartsCeremony`). `CeremonyRun` gains `Awaiting` ("" or `approval`), `DraftDigest`, `ReturnReason`, `Returns`. These persist in the `.ceremony` sidecar, which is read leniently. |
+| domain | `ModeIncident` (`Judge` → Allow, `StartsCeremony`). `CeremonyRun` gains `Awaiting` ("" or `approval`), `DraftPath`, `DraftDigest`, `Findings`, `ReturnReason`, `Returns`, `ReviewFailures`. These persist in the `.ceremony` sidecar, which is read leniently. |
 | application | `ceremonySpecs` and `stateSteps` gain the incident; `stepDone` adds the triage/timeline/analysis fields and `draft_path`, still strict-decoded. **`CeremonyReviewerPort`** `Review(ctx, draft, reason) (Verdict, error)`. **`ApproverPort`** `ApproveGuard(ctx, instance, guard) error`. The driver gains `Approve(ctx, s)` and `Return(ctx, s, reason)` for the keypresses (no tool reaches them), and `remindOpenStep` stays silent while `Awaiting`. The step reminder is reused for the turn after a keypress. |
-| adapters | `ceremonyhost`: the reviewer over `ModelStreamPort` with the review tool only; the approver that spawns the MADE command as `<work identity>-approver` (the P pattern); the third embedded YAML with its pinned digest. `madesetup`: P issues the approver grant (`approve_ceremony_guard`, `get_ceremony_instance`) and publishes `axlr_incident`. `storage`: `reviewer_model` in `UserSettings`, preserving unknown keys. |
+| adapters | `ceremonyhost`: the reviewer over `ModelStreamPort` with the review tool only; the third embedded YAML with its pinned digest. `madesetup`: the approver adapter (it owns identities and the spawn pattern) acting as `<work identity>-approver`; P issues the approver grant (`approve_ceremony_guard`, `get_ceremony_instance`) and publishes `axlr_incident`. `storage`: `reviewer_model` in `UserSettings`, preserving unknown keys. |
 | terminal | `/incident` + `/incidente`; footer `incidente · <step>`, `incidente · revisando…` and `incidente · aprobación pendiente`. The **approval card is not the tool card**: an Info overlay rendering the draft Markdown, with instance and digest, and `a aprobar · d devolver · esc`. `a` acts as the approver identity. `d` asks for a reason. |
 
 ## Limits to state in the PR
@@ -64,4 +79,5 @@ The engine cannot verify production facts. The guarantees are structural checks,
 - Host-initiated MADE, KMP and approver calls bypass the plugin approval policy, as before.
 - `present` can wait hours for the person. Completing after the lease expires works while nobody else claims the step (probed on 1 Oct).
 - Human-guard approvals persist for the instance in MADE 0.9.1. The design does not depend on it; whether to raise it in MADE is Tirso's call.
+- The reviewer's verdict is one model generation and can be wrong both ways. The human gate is the control.
 - P must be pressed again after reinstalling: it adds the approver grant and the third definition.
