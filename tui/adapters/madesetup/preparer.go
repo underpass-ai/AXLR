@@ -118,6 +118,7 @@ func (p *Preparer) Prepare(ctx context.Context) (application.MADEPreparation, er
 	if existing, _ := approved["existing"].(bool); !existing {
 		result.Status = "granted"
 	}
+	result.ApproverIdentity = approverIdentity(work)
 	if configured == "" {
 		if err := p.Store.SetPluginEnvironment(ctx, made.Manifest.ID, hostIdentityKey, work); err != nil {
 			return result, err

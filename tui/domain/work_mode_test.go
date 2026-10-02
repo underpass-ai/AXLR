@@ -86,3 +86,17 @@ func TestOnlyReviewHidesWriteTools(t *testing.T) {
 		t.Fatal("unexpected write-tool visibility")
 	}
 }
+
+func TestIncidentModeKeepsUnapprovedDraftsOutOfMemory(t *testing.T) {
+	write := ToolIdentity{Kind: ToolKindPlugin, Plugin: axlr.PluginRef{PluginID: "kmp", ToolName: "kmp_write_memory"}}
+	if verdict, reason := ModeIncident.Judge(write, axlr.JSONValue{}); verdict != VerdictDeny || reason == "" {
+		t.Fatalf("incident mode let the model write memory: %v", verdict)
+	}
+	wake := ToolIdentity{Kind: ToolKindPlugin, Plugin: axlr.PluginRef{PluginID: "kmp", ToolName: "kmp_wake"}}
+	if verdict, _ := ModeIncident.Judge(wake, axlr.JSONValue{}); verdict != VerdictAllow {
+		t.Fatal("incident mode refused reading memory")
+	}
+	if verdict, _ := ModeDebug.Judge(write, axlr.JSONValue{}); verdict != VerdictAllow {
+		t.Fatal("the rule leaked into debug mode")
+	}
+}
