@@ -27,6 +27,8 @@ const (
 	incidentReviewLimit = 2 // REVIEW's max_iterations
 	maxFindings         = 12
 	maxFindingBytes     = 600
+	// maxFindingsBytes keeps the findings well inside the session sidecar.
+	maxFindingsBytes = 4 << 10
 )
 
 var incidentSlug = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
@@ -54,6 +56,7 @@ const incidentReviewRubric = `You review a production incident postmortem. Accep
 4. Observation and inference are kept apart; the root cause is supported, not guessed.
 5. Contributing factors and what went well or badly are present.
 6. Every action has an owner, a due date and how it will be verified, and the actions address the root cause and the contributing factors.
+7. When the person returned the draft with a reason, that reason is addressed.
 Findings must be specific and actionable. Do not rewrite the document.`
 
 type incidentDone struct {
@@ -311,8 +314,10 @@ func (d *CeremonyDriver) recordReview(ctx context.Context, s domain.Session, run
 	if err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, output); err != nil {
 		return d.reconcile(ctx, s, run, output, report, fmt.Errorf("complete review: %w", err))
 	}
-	i.Findings, i.ReturnReason = nil, ""
+	i.Findings = nil
 	if verdict.Accepted {
+		// The person's reason stays until a review accepts the draft.
+		i.ReturnReason = ""
 		state, err := d.Engine.Transition(ctx, run.Instance, "reviewed")
 		if err != nil {
 			return d.reconcile(ctx, s, run, output, report, fmt.Errorf("transition reviewed: %w", err))
@@ -341,10 +346,14 @@ func (d *CeremonyDriver) recordReview(ctx context.Context, s domain.Session, run
 
 func boundedFindings(findings []string) []string {
 	out := make([]string, 0, min(len(findings), maxFindings))
+	total := 0
 	for _, finding := range findings {
-		if finding = strings.TrimSpace(finding); finding != "" && len(out) < maxFindings {
-			out = append(out, bounded(finding, maxFindingBytes))
+		finding = bounded(strings.TrimSpace(finding), maxFindingBytes)
+		if finding == "" || len(out) == maxFindings || total+len(finding) > maxFindingsBytes {
+			continue
 		}
+		total += len(finding)
+		out = append(out, finding)
 	}
 	return out
 }
@@ -395,10 +404,14 @@ func (d *CeremonyDriver) Approve(ctx context.Context, s domain.Session) (StepRes
 	}
 	keep := func(err error) (StepResult, error) { return StepResult{Run: &run}, err }
 	if i.Decided == "" {
-		if err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, map[string]any{"decision": "approve", "draft_digest": i.DraftDigest}); err != nil {
-			return StepResult{}, fmt.Errorf("complete present: %w", err)
+		decided, err := d.completePresent(ctx, run, map[string]any{"decision": "approve", "draft_digest": i.DraftDigest})
+		if err != nil {
+			return StepResult{}, err
 		}
-		i.Decided = "approve"
+		i.Decided = decided
+		if decided != "approve" {
+			return keep(errors.New("MADE already recorded a return; press d to send the draft back"))
+		}
 	}
 	if !i.Granted {
 		if err := d.Approver.ApproveGuard(ctx, run.Instance, "person_approves"); err != nil {
@@ -464,8 +477,13 @@ func (d *CeremonyDriver) Return(ctx context.Context, s domain.Session, reason st
 	}
 	reason = bounded(reason, 2000)
 	if i.Decided == "" {
-		if err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, map[string]any{"decision": "return", "reason": reason, "draft_digest": i.DraftDigest}); err != nil {
-			return StepResult{}, fmt.Errorf("complete present: %w", err)
+		decided, err := d.completePresent(ctx, run, map[string]any{"decision": "return", "reason": reason, "draft_digest": i.DraftDigest})
+		if err != nil {
+			return StepResult{}, err
+		}
+		if decided != "return" {
+			i.Decided = decided
+			return StepResult{Run: &run}, errors.New("MADE already recorded the approval; press a to finish it")
 		}
 		// Counted now: the next REVIEW visit's claim keys depend on it.
 		i.Decided, i.Returns, i.ReturnReason = "return", i.Returns+1, reason
@@ -474,6 +492,26 @@ func (d *CeremonyDriver) Return(ctx context.Context, s domain.Session, reason st
 	before := copyRun(run)
 	i.Awaiting, i.Decided, i.Findings = "", "", nil
 	return d.leaveApproval(ctx, s, run, before, "returned", report)
+}
+
+// completePresent records the person's decision. When the completion fails it
+// asks MADE whether an earlier one already landed, and returns that decision,
+// so a lost answer does not leave both keys failing forever.
+func (d *CeremonyDriver) completePresent(ctx context.Context, run domain.CeremonyRun, output map[string]any) (string, error) {
+	err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, output)
+	if err == nil {
+		return output["decision"].(string), nil
+	}
+	view, inspectErr := d.Engine.Inspect(ctx, run.Instance)
+	if inspectErr != nil {
+		return "", errors.Join(fmt.Errorf("complete present: %w", err), inspectErr)
+	}
+	if landed, ok := view.Completed["present"]; ok && view.State == "APPROVAL" {
+		if decision, _ := landed["decision"].(string); decision == "approve" || decision == "return" {
+			return decision, nil
+		}
+	}
+	return "", fmt.Errorf("complete present: %w", err)
 }
 
 func (d *CeremonyDriver) awaiting(s domain.Session) (domain.CeremonyRun, *domain.IncidentRun, error) {

@@ -35,6 +35,10 @@ Spike results (disposable store), all as expected:
 - G: guard granted, then `present` completed with `return` → both `approved` and `returned` enabled;
 - H: `present` completed with `approve` and no guard → nothing enabled; after the guard → only `approved`.
 
+- I: `get_ceremony_instance` lists each step's status and output for each state visit. A `present` completion whose answer was lost can therefore be found; the console reads the decision that landed.
+- J: after `returned`, the REVIEW repeat starts again. A single rejection in the new visit offers `revise`, not `review_exhausted`.
+- K: a `revise` output carrying a 64 KiB draft is accepted.
+
 G and H fix the order of `a` (below).
 
 Pinned digest: `f81e9aa53f7d77c72086ac3baec1a4037df1d0fa3d24e62270e5b62fabe6f6df`.
@@ -56,11 +60,13 @@ The engine cannot verify production facts. The guarantees are structural checks,
 ## Ordering, failure and resume
 
 - **`a`: complete `present`, then grant the guard, then apply.** If the guard fails, `present` is completed and nothing is approved, so the person can retry (spike H). Granting first would leave an approval in the instance that a later `d` cannot erase (spike G).
-- **`review` is claimed only once the verdict is in hand.** The sequence is: complete `revise` → run the reviewer → claim `review` → complete it at once → either the state repeat or `reviewed`. If the reviewer is cancelled (Esc, network), `review` stays unclaimed, and `reconcile` runs it again.
+- **The reviewer runs before MADE is touched.** The sequence is: read the draft → run the reviewer → complete `revise` → claim `review` → complete it at once → either the state repeat or `reviewed`. If the reviewer fails or is cancelled (Esc, network), MADE never saw the draft, and the model sends the same `draft_path` again. If `revise` landed but `review` did not, `reconcile` finds `review` claimable and runs the reviewer again from the stored path and digest.
 - **`present` is claimed with a lease of seven days**, since the person may answer hours later.
 - **Console steps (`review`, `present`) never reach the model.** When `reconcile` lands on `review`, the console runs the reviewer. When it lands on `present`, it sets `Awaiting` and opens the card.
 - **REVIEW repeats as a state, not a step.** A rejection claims `revise` at the next state iteration. The reviewer's findings and any return reason live in the run (sidecar), so a resume still passes them to `revise`.
 - **While `Awaiting`, `axlr_step_done` is refused and hidden.** On load the card opens automatically, and `/incident` reopens it. A keypress starts a host turn with the existing step reminder.
+- **A lost completion of `present` is recovered.** If `Complete` fails, the console inspects the instance. When `present` is completed in this visit, it continues from the decision recorded there (spike I).
+- **The person's reason lasts until a review accepts.** Each later revise instruction and each review sees it, and the rubric asks the reviewer to check it was addressed.
 - **Reviewer failures are bounded.** After two consecutive failures the footer says so, instead of letting the model retry until the turn budget runs out.
 - **`Begin` creates `docs/incidents/`.** `draft_path` must be under it and end in `.draft.md`. Evidence paths are checked with a `local_read` of `max_bytes: 1` through the executor; `application` never reads the filesystem.
 
@@ -68,7 +74,7 @@ The engine cannot verify production facts. The guarantees are structural checks,
 
 | Layer | Change |
 |:--|:--|
-| domain | `ModeIncident` (`Judge` → Allow, `StartsCeremony`). `CeremonyRun` gains `Awaiting` ("" or `approval`), `DraftPath`, `DraftDigest`, `Findings`, `ReturnReason`, `Returns`, `ReviewFailures`. These persist in the `.ceremony` sidecar, which is read leniently. |
+| domain | `ModeIncident` (`Judge` → Allow, `StartsCeremony`). `CeremonyRun` gains `Awaiting` ("" or `approval`), `DraftPath`, `DraftDigest`, `Findings`, `ReturnReason`, `Returns`, `ReviewFailures`. These persist in the `.ceremony` sidecar, which is read leniently. The findings are capped at 4 KiB and the sidecar at 32 KiB. |
 | application | `ceremonySpecs` and `stateSteps` gain the incident; `stepDone` adds the triage/timeline/analysis fields and `draft_path`, still strict-decoded. **`CeremonyReviewerPort`** `Review(ctx, draft, reason) (Verdict, error)`. **`ApproverPort`** `ApproveGuard(ctx, instance, guard) error`. The driver gains `Approve(ctx, s)` and `Return(ctx, s, reason)` for the keypresses (no tool reaches them), and `remindOpenStep` stays silent while `Awaiting`. The step reminder is reused for the turn after a keypress. |
 | adapters | `ceremonyhost`: the reviewer over `ModelStreamPort` with the review tool only; the third embedded YAML with its pinned digest. `madesetup`: the approver adapter (it owns identities and the spawn pattern) acting as `<work identity>-approver`; P issues the approver grant (`approve_ceremony_guard`, `get_ceremony_instance`) and publishes `axlr_incident`. `storage`: `reviewer_model` in `UserSettings`, preserving unknown keys. |
 | terminal | `/incident` + `/incidente`; footer `incidente · <step>`, `incidente · revisando…` and `incidente · aprobación pendiente`. The **approval card is not the tool card**: an Info overlay rendering the draft Markdown, with instance and digest, and `a aprobar · d devolver · esc`. `a` acts as the approver identity. `d` asks for a reason. |

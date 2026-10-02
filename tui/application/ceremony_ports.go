@@ -35,6 +35,9 @@ type CeremonyView struct {
 	Enabled []string
 	// Claimable lists the steps that can be claimed now.
 	Claimable []string
+	// Completed holds the outputs of the steps completed in this visit of
+	// the current state, so a completion whose answer was lost is found.
+	Completed map[string]map[string]any
 }
 
 // CheckRunnerPort runs one command in the workspace with a time limit and no

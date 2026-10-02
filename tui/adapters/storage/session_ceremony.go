@@ -12,7 +12,10 @@ import (
 )
 
 const sessionCeremonyVersion = 1
-const maxSessionCeremonyBytes = 16 << 10
+
+// maxSessionCeremonyBytes leaves room for the incident's findings and reason;
+// a larger file is ignored, which would drop the pointer to the instance.
+const maxSessionCeremonyBytes = 32 << 10
 
 // sessionCeremony is the live ceremony kept in <id>.ceremony, beside the
 // snapshot for the same reason as <id>.mode.

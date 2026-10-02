@@ -61,7 +61,8 @@ func (e *incidentEngine) Complete(_ context.Context, _, step, _ string, output m
 	if step == "review" && output["accepted"] != true {
 		e.rejections++
 	}
-	return nil
+	// The completion landed but its answer was lost.
+	return e.fail("answer " + step)
 }
 func (e *incidentEngine) enabled() []string {
 	done := func(step string) bool { return e.outputs[step] != nil }
@@ -107,7 +108,10 @@ func (e *incidentEngine) Transition(_ context.Context, _, trigger string) (strin
 	return e.state, nil
 }
 func (e *incidentEngine) Inspect(context.Context, string) (CeremonyView, error) {
-	view := CeremonyView{State: e.state, Enabled: e.enabled()}
+	view := CeremonyView{State: e.state, Enabled: e.enabled(), Completed: map[string]map[string]any{}}
+	for step, output := range e.outputs {
+		view.Completed[step] = output
+	}
 	if e.state == "REVIEW" && e.rejections > 0 && e.rejections < 2 && e.outputs["review"]["accepted"] != true {
 		view.Claimable = []string{"revise"}
 	}
@@ -478,5 +482,36 @@ func TestAResumeRunsTheReviewThatNeverRan(t *testing.T) {
 	result, err := r.driver.reconcile(context.Background(), r.session, run, nil, map[string]any{}, errors.New("claim review: lost"))
 	if err != nil || result.Run == nil || result.Run.Step != "present" {
 		t.Fatalf("resume did not review: %+v %v", result, err)
+	}
+}
+
+func TestALostPresentCompletionIsFoundInMADE(t *testing.T) {
+	r := newIncidentRig(t, true)
+	r.toReview(t)
+	step(t, r.driver, &r.session, reviseArgs)
+	r.engine.failNext["answer present"] = 1
+	if err := r.apply(r.driver.Return(context.Background(), r.session, "falta impacto")); err != nil {
+		t.Fatal(err)
+	}
+	if run := r.run(t); run.Step != "revise" || run.Incident.Returns != 1 {
+		t.Fatalf("lost completion was not recovered: %+v", run.Incident)
+	}
+}
+
+func TestTheReturnReasonLastsUntilAReviewAccepts(t *testing.T) {
+	r := newIncidentRig(t, true, false, true)
+	r.toReview(t)
+	step(t, r.driver, &r.session, reviseArgs)
+	if err := r.apply(r.driver.Return(context.Background(), r.session, "falta impacto")); err != nil {
+		t.Fatal(err)
+	}
+	step(t, r.driver, &r.session, reviseArgs) // rejected
+	run := r.run(t)
+	if !strings.Contains(Instruction(run), "falta impacto") || !strings.Contains(Instruction(run), "blames") {
+		t.Fatalf("round 2 lost the reason or the findings: %s", Instruction(run))
+	}
+	step(t, r.driver, &r.session, reviseArgs) // accepted
+	if r.reviewer.requests[2].ReturnReason != "falta impacto" || r.run(t).Incident.ReturnReason != "" {
+		t.Fatalf("reason: %+v %+v", r.reviewer.requests[2], r.run(t).Incident)
 	}
 }
