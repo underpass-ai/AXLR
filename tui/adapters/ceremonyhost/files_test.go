@@ -17,6 +17,8 @@ func TestFilesKeepTheWorkspaceBoundaryAndRoundTripLargeDrafts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Windows cannot remove the temporary root while the executor holds it.
+	t.Cleanup(func() { _ = executor.Close() })
 	files := Files{Tools: axlr.ToolRunner{Executor: executor}}
 	ctx := context.Background()
 	if err := files.MakeDir(ctx, "docs/incidents"); err != nil {
