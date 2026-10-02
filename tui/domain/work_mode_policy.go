@@ -29,6 +29,16 @@ func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict,
 	}
 	switch id.LocalOperation {
 	case "exec":
+		// The host cannot see what a command does, so a human approves each
+		// one. Code piped through stdin hides below the approval card's fold,
+		// which a model used on 2 Oct 2026 to rewrite a file in writer mode;
+		// restricted modes therefore refuse it outright.
+		var command struct {
+			Stdin string `json:"stdin"`
+		}
+		if json.Unmarshal(arguments.Bytes(), &command) == nil && command.Stdin != "" {
+			return VerdictDeny, string(m) + " mode refuses commands that read stdin; put the command in args where the user can review it"
+		}
 		return VerdictAsk, ""
 	case "write", "edit":
 		if m == ModeReview {

@@ -66,6 +66,9 @@ func TestModesJudgeWorkspaceChanges(t *testing.T) {
 		{ModeResearch, write, readme, VerdictAllow},
 		{ModeResearch, edit, code, VerdictDeny},
 		{ModeResearch, exec, jsonArgs(t, `{}`), VerdictAsk},
+		{ModeWriter, exec, jsonArgs(t, `{"program":"python3","args":["-"],"stdin":"open('wc.py','w')"}`), VerdictDeny},
+		{ModeReview, exec, jsonArgs(t, `{"program":"sh","stdin":"rm -rf x"}`), VerdictDeny},
+		{ModeNormal, exec, jsonArgs(t, `{"program":"python3","stdin":"print(1)"}`), VerdictAllow},
 	}
 	for _, c := range cases {
 		got, why := c.mode.Judge(c.id, c.args)
