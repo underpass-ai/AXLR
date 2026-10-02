@@ -106,3 +106,13 @@ A turn limit hit mid-step is harmless: the instance and claim survive, and Ctrl+
 - **Publication.** `/mcp` → P publishes 2.0 through a five-minute install grant given to the work identity and revoked with a reason.
 - **Lease.** A claim lasts 1 h. Probed: completing after the lease expired still works while no one else claimed the step.
 - **Resume.** Reopening the session (`-session <id>` or the picker) shows the live step in the footer. The next message continues with the stored fence. Verified to `COMPLETED`.
+
+### Fixes from the full re-verification (2 Oct 2026)
+
+These were found by rerunning every scenario with the installed `7e0a6c4` console, a fresh default-layout store, and `glm-5.3-flash`:
+
+- **The check is fixed after `reproduce` or `brief`.** A `check_command` sent in `repair` or `build` is ignored and asks nothing. The bug it fixes: a garbled resend replaced the approved check, asked for approval, failed with a SyntaxError, and burned a repair attempt.
+- **Memory is woken as prose.** At 2 KiB, KMP shortened the core text to "…", so the wake injected only envelope. The adapter now asks for 12 000 bytes and keeps `current_state`, `open_loops` and `next_actions` without refs.
+- **The call budget survives `FinishCeremony`.** Before, the closing answer of a long ceremony turn hit the 32-call limit, because the restarted budget was dropped with the run. `FinishedBudgetBase` keeps it for the rest of the turn.
+- **The `.ceremony` sidecar is read leniently.** It is a pointer to a durable MADE instance. A console that does not know a newer field must still find the instance; the version still guards the shape.
+- **Open-step reminder.** When a turn ends with a ceremony step open (seen repeatedly: work done, never handed back; or a question to the user in place of `reproducible=false`), the console starts one visible turn: `[AXLR] The <step> step … is still open`. It reminds once per claimed step. While a step is open, the turn does not end on a question: the model has to hand the step back, and it can still advise the user.
