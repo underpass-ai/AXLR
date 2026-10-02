@@ -48,8 +48,10 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 	if err != nil || len(data) > maxSessionCeremonyBytes {
 		return nil
 	}
+	// Lenient on purpose: this file is a pointer to a durable MADE instance,
+	// so a console that does not know a newer field still finds the instance
+	// instead of silently losing it. The version still guards the shape.
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
 	var record sessionCeremony
 	if decoder.Decode(&record) != nil || record.Version != sessionCeremonyVersion {
 		return nil

@@ -68,7 +68,7 @@ func TestCeremonyRunIsKeptBesideTheSnapshot(t *testing.T) {
 	if err := s.SetMode(domain.ModeDebug); err != nil {
 		t.Fatal(err)
 	}
-	run := domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "axlr-x", Step: "repair", Iteration: 2, Fence: "fence-9", About: "ws:" + id, Check: domain.CheckCommand{Program: "python3", Args: []string{"-m", "unittest"}}}
+	run := domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "axlr-x", Step: "repair", Iteration: 2, Fence: "fence-9", About: "ws:" + id, Check: domain.CheckCommand{Program: "python3", Args: []string{"-m", "unittest"}}, BudgetBase: 7, Reminded: true}
 	if err := s.SetCeremony(run); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestCeremonyRunIsKeptBesideTheSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, ok := loaded.Ceremony()
-	if !ok || got.Step != "repair" || got.Iteration != 2 || got.Fence != "fence-9" || !got.Check.Equal(run.Check) || got.About != run.About {
+	if !ok || got.Step != "repair" || got.Iteration != 2 || got.Fence != "fence-9" || !got.Check.Equal(run.Check) || got.About != run.About || got.BudgetBase != 7 || !got.Reminded {
 		t.Fatalf("run not restored: %+v", got)
 	}
 	loaded.FinishCeremony()
@@ -89,5 +89,25 @@ func TestCeremonyRunIsKeptBesideTheSnapshot(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, id+".ceremony")); !os.IsNotExist(err) {
 		t.Fatal("finished ceremony left a sidecar behind")
+	}
+}
+
+func TestACeremonySidecarWithANewerFieldStillLoads(t *testing.T) {
+	store, dir := openStore(t)
+	const id = "0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f"
+	s, _ := domain.NewSession(id, domain.Workspace(t.TempDir()), "test/model")
+	if err := store.Save(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	record := `{"version":1,"definition":"axlr_debug","release":"2.0","instance":"axlr-y","step":"diagnose","iteration":1,"fence":"f","from_a_newer_console":true}`
+	if err := os.WriteFile(filepath.Join(dir, id+".ceremony"), []byte(record), 0600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run, ok := loaded.Ceremony(); !ok || run.Instance != "axlr-y" {
+		t.Fatal("an unknown field made the live ceremony disappear")
 	}
 }

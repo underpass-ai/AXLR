@@ -336,10 +336,15 @@ func TestAResumedSessionCatchesUpWithMADE(t *testing.T) {
 	if err := d.Begin(context.Background(), &s, "x"); err != nil {
 		t.Fatal(err)
 	}
+	reminded, _ := s.Ceremony()
+	reminded.Reminded = true
+	if err := s.SetCeremony(reminded); err != nil {
+		t.Fatal(err)
+	}
 	if r := step(t, d, &s, reproduceArgs); r["next_step"] != "diagnose" {
 		t.Fatalf("session did not catch up: %v", r)
 	}
-	if run, _ := s.Ceremony(); run.Step != "diagnose" || run.Iteration != 1 || run.Fence != "fence-diagnose" {
+	if run, _ := s.Ceremony(); run.Step != "diagnose" || run.Iteration != 1 || run.Fence != "fence-diagnose" || run.Reminded {
 		t.Fatalf("run not re-synced: %+v", run)
 	}
 }
