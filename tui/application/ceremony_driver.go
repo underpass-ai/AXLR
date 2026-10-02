@@ -37,7 +37,7 @@ var stateSteps = map[string]string{
 // stepInstructions is what the model is asked to do in each step and what
 // it must hand back through axlr_step_done.
 var stepInstructions = map[string]string{
-	"reproduce": "Find a command that shows the reported failure in this workspace. Call axlr_step_done with check_command {program, args} (no shell), expected and observed. The console runs the command: it must exit non-zero to count as reproduced. If no command can show the failure, call axlr_step_done with reproducible=false and explain why in observed.",
+	"reproduce": "Find a command that shows the reported failure in this workspace. Call axlr_step_done with check_command {program, args} (no shell), expected and observed. The console runs the command: it must exit non-zero to count as reproduced. If no command can show the failure, call axlr_step_done with reproducible=false and explain why in observed, instead of ending your turn with the step open; the console then closes the ceremony as BLOCKED and you can still advise the user.",
 	"diagnose":  "Identify the first causal breach with the smallest discriminating probes; separate observation from inference. Do not edit yet. Call axlr_step_done with root_cause, evidence and proposed_fix.",
 	"repair":    "Apply the smallest fix for the diagnosed cause and add a regression test when it protects real behaviour. Call axlr_step_done with summary only. The console reruns the check command approved in reproduce, which is fixed for the rest of the ceremony; it must exit zero.",
 	"brief":     "Read the repository and settle the change. Call axlr_step_done with criteria (observable behaviour), scope and check_command {program, args} (no shell) whose zero exit proves the criteria. The console runs it once as a baseline.",
@@ -86,7 +86,7 @@ func decodeStepDone(arguments root.JSONValue) (stepDone, error) {
 	decoder := json.NewDecoder(bytes.NewReader(arguments.Bytes()))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&done); err != nil {
-		return stepDone{}, fmt.Errorf("axlr_step_done arguments: %w", err)
+		return stepDone{}, fmt.Errorf("axlr_step_done arguments: %w; send only the fields the current step asks for", err)
 	}
 	return done, nil
 }
