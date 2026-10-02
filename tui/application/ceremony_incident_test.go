@@ -270,6 +270,9 @@ func TestIncidentRunsToPublicationThroughAReviewRoundAndThePerson(t *testing.T) 
 		t.Fatalf("rejected review should send the draft back: %v", report)
 	}
 	run := r.run(t)
+	if !strings.Contains(Instruction(run), "expected_sha256 "+run.Incident.DraftDigest) {
+		t.Fatalf("second round does not say how to replace the draft: %s", Instruction(run))
+	}
 	if run.Iteration != 2 || !strings.Contains(Instruction(run), "blames the on-call engineer") {
 		t.Fatalf("second round lacks the findings: %d %s", run.Iteration, Instruction(run))
 	}

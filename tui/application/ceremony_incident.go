@@ -97,6 +97,11 @@ func incidentInstruction(run domain.CeremonyRun) string {
 	if i.Slug != "" {
 		text += " Draft path: " + incidentDir + "/" + i.Slug + ".draft.md."
 	}
+	if i.DraftDigest != "" {
+		// Seen on 2 Oct 2026: rewriting the whole draft twice in one turn,
+		// once failing for the missing precondition, overran the context.
+		text += " The draft already exists: change it with local_edit where you can; to rewrite it whole use local_write with mode replace and expected_sha256 " + i.DraftDigest + "."
+	}
 	if len(i.Findings) > 0 {
 		text += " The reviewer rejected the last draft; address every finding: " + strings.Join(i.Findings, " | ")
 	}
