@@ -157,13 +157,19 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		if err := next.FinishToolExecution(id, outcome); err != nil {
 			return errors.Join(runErr, err)
 		}
-		if runErr == nil && step != nil && step.Accepted {
-			if step.Run == nil {
+		if runErr == nil && step != nil {
+			switch {
+			case step.Accepted && step.Run == nil:
 				next.FinishCeremony()
-			} else if err := next.SetCeremony(*step.Run); err != nil {
-				return err
+			case step.Run != nil:
+				// A refusal can still carry state, such as a reviewer failure.
+				if err := next.SetCeremony(*step.Run); err != nil {
+					return err
+				}
 			}
-			next.RestartTurnBudget()
+			if step.Accepted {
+				next.RestartTurnBudget()
+			}
 		}
 		if runErr != nil {
 			if ctx.Err() != nil {

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -18,7 +19,8 @@ type CeremonyEnginePort interface {
 	// is published.
 	Ready(ctx context.Context, definition, version string) error
 	Start(ctx context.Context, definition, version, instance string, inputs map[string]string) error
-	Claim(ctx context.Context, instance, step, key string) (fence string, err error)
+	// Claim takes the step with a lease; zero means the engine's default.
+	Claim(ctx context.Context, instance, step, key string, lease time.Duration) (fence string, err error)
 	Complete(ctx context.Context, instance, step, fence string, output map[string]any) error
 	// Transition applies a trigger and returns the instance's new state.
 	Transition(ctx context.Context, instance, trigger string) (state string, err error)
@@ -55,4 +57,40 @@ type MemoryPort interface {
 	// Wake returns bounded context for the about, or "" when it has none yet.
 	Wake(ctx context.Context, about string) (string, error)
 	Record(ctx context.Context, about string, labels map[string][]string, id, summary, evidence string) error
+}
+
+// WorkspaceFilesPort reads and writes workspace files for the console through
+// the same runtime as the model's tools, so the workspace boundary holds.
+type WorkspaceFilesPort interface {
+	// Read returns at most maxBytes; found is false when the file is missing.
+	Read(ctx context.Context, path string, maxBytes int) (content []byte, found bool, err error)
+	// Write creates or replaces the file.
+	Write(ctx context.Context, path string, content []byte) error
+	MakeDir(ctx context.Context, path string) error
+}
+
+// CeremonyReviewerPort judges a draft in a fresh context: no transcript and
+// no tools other than the verdict.
+type CeremonyReviewerPort interface {
+	Review(ctx context.Context, request ReviewRequest) (ReviewVerdict, error)
+}
+
+type ReviewRequest struct {
+	Rubric string
+	Draft  string
+	// ReturnReason is the person's reason when the draft came back to review.
+	ReturnReason string
+}
+
+type ReviewVerdict struct {
+	Accepted bool
+	Findings []string
+	// Model is the model that judged, for the record.
+	Model string
+}
+
+// ApproverPort grants a human guard as the person's approver identity, which
+// the work identity cannot do.
+type ApproverPort interface {
+	ApproveGuard(ctx context.Context, instance, guard string) error
 }

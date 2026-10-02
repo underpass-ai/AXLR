@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 )
@@ -52,8 +53,12 @@ func (e Engine) Start(ctx context.Context, definition, version, instance string,
 	return err
 }
 
-func (e Engine) Claim(ctx context.Context, instance, step, key string) (string, error) {
-	claim, err := e.made(ctx, "made_claim_ceremony_step", map[string]any{"ceremony_id": instance, "step_id": step, "actor_kind": actorKind, "lease_owner_id": actorID, "idempotency_key": key, "lease_ttl_ms": claimLease})
+func (e Engine) Claim(ctx context.Context, instance, step, key string, lease time.Duration) (string, error) {
+	ttl := int64(claimLease)
+	if lease > 0 {
+		ttl = lease.Milliseconds()
+	}
+	claim, err := e.made(ctx, "made_claim_ceremony_step", map[string]any{"ceremony_id": instance, "step_id": step, "actor_kind": actorKind, "lease_owner_id": actorID, "idempotency_key": key, "lease_ttl_ms": ttl})
 	if err != nil {
 		return "", err
 	}

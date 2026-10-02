@@ -15,6 +15,9 @@ const (
 	// limit no tool, because the ceremony's checks decide success.
 	ModeDebug    WorkMode = "debug"
 	ModeDelivery WorkMode = "delivery"
+	// ModeIncident reviews a production incident through a MADE ceremony
+	// with a fresh-context reviewer and a person's approval.
+	ModeIncident WorkMode = "incident"
 )
 
 func ParseWorkMode(raw string) (WorkMode, error) {
@@ -24,11 +27,13 @@ func ParseWorkMode(raw string) (WorkMode, error) {
 
 func (m WorkMode) Validate() error {
 	switch m {
-	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery:
+	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident:
 		return nil
 	}
 	return errors.New("unknown work mode")
 }
 
 // StartsCeremony reports modes whose first prompt starts a MADE ceremony.
-func (m WorkMode) StartsCeremony() bool { return m == ModeDebug || m == ModeDelivery }
+func (m WorkMode) StartsCeremony() bool {
+	return m == ModeDebug || m == ModeDelivery || m == ModeIncident
+}
