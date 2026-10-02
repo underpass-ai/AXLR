@@ -23,6 +23,9 @@ func (s *Session) SetCeremony(run CeremonyRun) error {
 // the session to normal mode, even inside the turn that finished it: MADE,
 // not the user, decided the ceremony is over.
 func (s *Session) FinishCeremony() {
+	if s.state.Ceremony != nil {
+		s.state.FinishedBudgetBase = s.state.Ceremony.BudgetBase
+	}
 	s.state.Ceremony = nil
 	s.state.Mode = ModeNormal
 }

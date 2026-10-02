@@ -128,6 +128,7 @@ func (s *Session) BeginTurn(prompt axlr.Text, tools []AvailableTool) error {
 	if next.Ceremony != nil {
 		next.Ceremony.BudgetBase = 0
 	}
+	next.FinishedBudgetBase = 0
 	s.state = next
 	return nil
 }
@@ -152,9 +153,9 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 		}
 		ids[call.ID] = true
 	}
-	base := 0
+	base := s.state.FinishedBudgetBase
 	if s.state.Ceremony != nil {
-		base = s.state.Ceremony.BudgetBase
+		base = max(base, s.state.Ceremony.BudgetBase)
 	}
 	if !s.replaying && len(message.ToolCalls)+s.state.TurnCallCount-base > MaxTurnToolCalls {
 		next := s.Export()

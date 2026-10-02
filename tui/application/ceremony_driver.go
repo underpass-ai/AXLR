@@ -37,11 +37,11 @@ var stateSteps = map[string]string{
 // stepInstructions is what the model is asked to do in each step and what
 // it must hand back through axlr_step_done.
 var stepInstructions = map[string]string{
-	"reproduce": "Find a command that shows the reported failure in this workspace. Call axlr_step_done with check_command {program, args} (no shell), expected and observed. The console runs the command: it must exit non-zero to count as reproduced. If no command can show the failure, call axlr_step_done with reproducible=false and explain why in observed.",
+	"reproduce": "Find a command that shows the reported failure in this workspace. Call axlr_step_done with check_command {program, args} (no shell), expected and observed. The console runs the command: it must exit non-zero to count as reproduced. If no command can show the failure, call axlr_step_done with reproducible=false and explain why in observed, instead of ending your turn with the step open; the console then closes the ceremony as BLOCKED and you can still advise the user.",
 	"diagnose":  "Identify the first causal breach with the smallest discriminating probes; separate observation from inference. Do not edit yet. Call axlr_step_done with root_cause, evidence and proposed_fix.",
-	"repair":    "Apply the smallest fix for the diagnosed cause and add a regression test when it protects real behaviour. Call axlr_step_done with summary. The console reruns the approved check command; it must exit zero.",
+	"repair":    "Apply the smallest fix for the diagnosed cause and add a regression test when it protects real behaviour. Call axlr_step_done with summary only. The console reruns the check command approved in reproduce, which is fixed for the rest of the ceremony; it must exit zero.",
 	"brief":     "Read the repository and settle the change. Call axlr_step_done with criteria (observable behaviour), scope and check_command {program, args} (no shell) whose zero exit proves the criteria. The console runs it once as a baseline.",
-	"build":     "Implement the smallest change that meets the criteria; in later rounds fix what the previous check output shows, without growing scope. Call axlr_step_done with summary. The console reruns the approved check command; it must exit zero.",
+	"build":     "Implement the smallest change that meets the criteria; in later rounds fix what the previous check output shows, without growing scope. Call axlr_step_done with summary only. The console reruns the check command approved in brief, which is fixed for the rest of the ceremony; it must exit zero.",
 	"integrate": "Write the report for the user in their language: what changed, the evidence and the limits. Call axlr_step_done with report and summary_en, two or three plain English sentences for project memory. The console records the revision and stores summary_en in KMP.",
 }
 
@@ -86,7 +86,7 @@ func decodeStepDone(arguments root.JSONValue) (stepDone, error) {
 	decoder := json.NewDecoder(bytes.NewReader(arguments.Bytes()))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&done); err != nil {
-		return stepDone{}, fmt.Errorf("axlr_step_done arguments: %w", err)
+		return stepDone{}, fmt.Errorf("axlr_step_done arguments: %w; send only the fields the current step asks for", err)
 	}
 	return done, nil
 }
@@ -114,7 +114,7 @@ func stepDoneNeedsApproval(s domain.Session, arguments root.JSONValue) bool {
 		return false // the driver refuses it without running anything
 	}
 	switch run.Step {
-	case "reproduce", "brief", "repair", "build":
+	case "reproduce", "brief":
 		return !proposed.Equal(run.Check)
 	}
 	return false // steps that run no command ignore it
@@ -254,11 +254,11 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if done.Summary == "" {
 			return refuse(run.Step + " needs summary"), nil
 		}
-		if command, ok := done.command(); ok {
-			run.Check = command
-		}
+		// The acceptance check is fixed when reproduce or brief approves it:
+		// a command sent now is ignored, so the loop cannot move its own goal
+		// and a garbled resend cannot burn an attempt.
 		if run.Check.IsZero() {
-			return refuse("no approved check command; propose one in check_command"), nil
+			return refuse("this ceremony has no approved check command"), nil
 		}
 		result, err := d.Checks.Run(ctx, run.Check)
 		if err != nil {
@@ -385,7 +385,13 @@ func (d *CeremonyDriver) claim(ctx context.Context, run *domain.CeremonyRun) err
 		return fmt.Errorf("claim %s: %w", run.Step, err)
 	}
 	run.Fence = fence
+	run.Reminded = false
 	return nil
+}
+
+// stepReminder is the console's message when a turn ended with the step open.
+func stepReminder(run domain.CeremonyRun) root.Text {
+	return root.Text(fmt.Sprintf("[AXLR] The %s step of ceremony %s is still open. If its work is done, hand it back now with axlr_step_done. %s", run.Step, run.Definition, stepInstructions[run.Step]))
 }
 
 // record writes the outcome to the session's KMP about and says what happened.

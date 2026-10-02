@@ -118,3 +118,37 @@ func TestCeremonyStepsGetAFreshCallBudgetThatSurvivesRestore(t *testing.T) {
 		t.Fatalf("base %d", run.BudgetBase)
 	}
 }
+
+func TestTheAnswerAfterALongCeremonyIsNotCountedAgainstItsSteps(t *testing.T) {
+	s := idleSession(t)
+	tool := AvailableTool{Definition: axlr.ToolDefinition{Name: "local_read", Description: "x"}, Identity: ToolIdentity{Kind: ToolKindLocal, LocalOperation: "read"}}
+	tool.Definition.Parameters, _ = axlr.NewJSONObject([]byte(`{"type":"object"}`))
+	if err := s.BeginTurn(axlr.Text("depura"), []AvailableTool{tool}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCeremony(debugRun()); err != nil {
+		t.Fatal(err)
+	}
+	args, _ := axlr.NewJSONObject([]byte(`{}`))
+	calls := make([]axlr.ToolCall, 30)
+	for i := range calls {
+		calls[i] = axlr.ToolCall{ID: axlr.ToolCallID(fmt.Sprintf("c%d", i)), Name: "local_read", Arguments: args}
+	}
+	if err := s.CompleteAssistant(axlr.CompletionResult{Message: axlr.Message{Role: axlr.RoleAssistant, ToolCalls: calls}}); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range calls {
+		if err := s.RecordToolOutcome(c.ID, DecisionAutoApprove, ToolOutcome{Content: "ok"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s.RestartTurnBudget()
+	s.FinishCeremony()
+	five := calls[:5]
+	for i := range five {
+		five[i].ID = axlr.ToolCallID(fmt.Sprintf("d%d", i))
+	}
+	if err := s.CompleteAssistant(axlr.CompletionResult{Message: axlr.Message{Role: axlr.RoleAssistant, ToolCalls: five}}); err != nil {
+		t.Fatalf("the turn after the ceremony hit the limit: %v", err)
+	}
+}

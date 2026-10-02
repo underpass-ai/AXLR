@@ -235,11 +235,8 @@ func TestOnlyANewCheckCommandNeedsTheUser(t *testing.T) {
 	if err := s.SetCeremony(run); err != nil {
 		t.Fatal(err)
 	}
-	if !approvesInSession(nil, s, stepDone, mustObject(t, `{"summary":"x","check_command":{"program":"python3","args":["-m","unittest"]}}`)) {
-		t.Fatal("the approved command needed approval again")
-	}
-	if approvesInSession(nil, s, stepDone, mustObject(t, `{"summary":"x","check_command":{"program":"sh","args":["-c","true"]}}`)) {
-		t.Fatal("a different command was approved automatically")
+	if !approvesInSession(nil, s, stepDone, mustObject(t, `{"summary":"x","check_command":{"program":"sh","args":["-c","true"]}}`)) {
+		t.Fatal("repair asked to approve a command it will ignore")
 	}
 }
 
@@ -339,10 +336,15 @@ func TestAResumedSessionCatchesUpWithMADE(t *testing.T) {
 	if err := d.Begin(context.Background(), &s, "x"); err != nil {
 		t.Fatal(err)
 	}
+	reminded, _ := s.Ceremony()
+	reminded.Reminded = true
+	if err := s.SetCeremony(reminded); err != nil {
+		t.Fatal(err)
+	}
 	if r := step(t, d, &s, reproduceArgs); r["next_step"] != "diagnose" {
 		t.Fatalf("session did not catch up: %v", r)
 	}
-	if run, _ := s.Ceremony(); run.Step != "diagnose" || run.Iteration != 1 || run.Fence != "fence-diagnose" {
+	if run, _ := s.Ceremony(); run.Step != "diagnose" || run.Iteration != 1 || run.Fence != "fence-diagnose" || run.Reminded {
 		t.Fatalf("run not re-synced: %+v", run)
 	}
 }
@@ -356,5 +358,60 @@ func TestAFailureMADECannotExplainIsReported(t *testing.T) {
 	}
 	if _, err := d.StepDone(context.Background(), s, mustObject(t, reproduceArgs)); err == nil || !strings.Contains(err.Error(), "not in progress") {
 		t.Fatalf("original failure hidden: %v", err)
+	}
+}
+
+func TestRepairKeepsTheCheckApprovedInReproduce(t *testing.T) {
+	checks := &fakeChecks{exits: []int{1, 0}}
+	d := &CeremonyDriver{Engine: &fakeEngine{}, Checks: checks}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "x"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, reproduceArgs)
+	step(t, d, &s, `{"root_cause":"a","evidence":"b","proposed_fix":"c"}`)
+	r := step(t, d, &s, `{"summary":"fixed","check_command":{"program":"true"}}`)
+	if r["next_step"] != "integrate" {
+		t.Fatalf("repair: %v", r)
+	}
+	last := checks.runs[len(checks.runs)-1]
+	if last.Program != "python3" || strings.Join(last.Args, " ") != "-m unittest" {
+		t.Fatalf("repair ran the model's new command instead of the approved one: %+v", last)
+	}
+	if run, _ := s.Ceremony(); run.Check.Program != "python3" {
+		t.Fatalf("approved check replaced: %+v", run.Check)
+	}
+}
+
+func TestAnOpenStepGetsOneVisibleReminder(t *testing.T) {
+	s := debugSession(t)
+	if err := s.BeginTurn("arregla", localSnapshot(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "build", Iteration: 1, Fence: "f"}); err != nil {
+		t.Fatal(err)
+	}
+	store := &memoryStore{}
+	generations := 0
+	model := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		generations++
+		return assistant("all tests pass"), nil
+	})
+	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: store, Models: model}}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if generations != 2 {
+		t.Fatalf("expected one reminder and two generations, got %d", generations)
+	}
+	reminders := 0
+	for _, m := range s.Messages() {
+		if m.Role == root.RoleUser && strings.HasPrefix(string(m.Content), "[AXLR] The build step") {
+			reminders++
+		}
+	}
+	run, _ := s.Ceremony()
+	if reminders != 1 || !run.Reminded {
+		t.Fatalf("reminders %d reminded %v", reminders, run.Reminded)
 	}
 }

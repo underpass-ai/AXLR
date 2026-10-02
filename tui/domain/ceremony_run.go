@@ -37,6 +37,9 @@ type CeremonyRun struct {
 	// BudgetBase is the turn's call count when the last step was accepted;
 	// the per-turn call limit counts from it, so each step gets a full budget.
 	BudgetBase int
+	// Reminded is true once the console reminded the model that this step
+	// is still open; it reminds once per claimed step.
+	Reminded bool
 }
 
 func (r CeremonyRun) Validate() error {

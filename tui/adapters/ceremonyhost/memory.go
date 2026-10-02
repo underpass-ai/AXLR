@@ -2,14 +2,15 @@ package ceremonyhost
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"strings"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
-const wakeBytes = 2048
+// wakeBytes is the packet budget. Below it KMP shortens the core prose to
+// "…" (seen with 2 KiB on 2 Oct 2026); the driver keeps only the prose.
+const wakeBytes = 12000
 
 // Memory is application.MemoryPort over the connected KMP plugin.
 type Memory struct{ Tools application.ToolExecutionPort }
@@ -25,8 +26,27 @@ func (m Memory) Wake(ctx context.Context, about string) (string, error) {
 		}
 		return "", err
 	}
-	encoded, err := json.Marshal(packet)
-	return string(encoded), err
+	return wakeProse(packet), nil
+}
+
+// wakeProse keeps what a model can use from a wake packet: the current
+// state, open loops and next actions, without refs, budgets or cursors.
+func wakeProse(packet map[string]any) string {
+	wake, _ := packet["wake"].(map[string]any)
+	var lines []string
+	for _, section := range []string{"current_state", "open_loops", "next_actions"} {
+		items, _ := wake[section].([]any)
+		for _, item := range items {
+			text, _ := item.(string)
+			if _, prose, found := strings.Cut(text, "): "); found {
+				text = prose // drop the "<ref> (<kind>)" prefix
+			}
+			if text = strings.TrimSpace(text); text != "" && text != "…" {
+				lines = append(lines, "- "+text)
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Memory) Record(ctx context.Context, about string, labels map[string][]string, id, summary, evidence string) error {
