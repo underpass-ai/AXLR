@@ -235,11 +235,8 @@ func TestOnlyANewCheckCommandNeedsTheUser(t *testing.T) {
 	if err := s.SetCeremony(run); err != nil {
 		t.Fatal(err)
 	}
-	if !approvesInSession(nil, s, stepDone, mustObject(t, `{"summary":"x","check_command":{"program":"python3","args":["-m","unittest"]}}`)) {
-		t.Fatal("the approved command needed approval again")
-	}
-	if approvesInSession(nil, s, stepDone, mustObject(t, `{"summary":"x","check_command":{"program":"sh","args":["-c","true"]}}`)) {
-		t.Fatal("a different command was approved automatically")
+	if !approvesInSession(nil, s, stepDone, mustObject(t, `{"summary":"x","check_command":{"program":"sh","args":["-c","true"]}}`)) {
+		t.Fatal("repair asked to approve a command it will ignore")
 	}
 }
 
@@ -356,5 +353,27 @@ func TestAFailureMADECannotExplainIsReported(t *testing.T) {
 	}
 	if _, err := d.StepDone(context.Background(), s, mustObject(t, reproduceArgs)); err == nil || !strings.Contains(err.Error(), "not in progress") {
 		t.Fatalf("original failure hidden: %v", err)
+	}
+}
+
+func TestRepairKeepsTheCheckApprovedInReproduce(t *testing.T) {
+	checks := &fakeChecks{exits: []int{1, 0}}
+	d := &CeremonyDriver{Engine: &fakeEngine{}, Checks: checks}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "x"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, reproduceArgs)
+	step(t, d, &s, `{"root_cause":"a","evidence":"b","proposed_fix":"c"}`)
+	r := step(t, d, &s, `{"summary":"fixed","check_command":{"program":"true"}}`)
+	if r["next_step"] != "integrate" {
+		t.Fatalf("repair: %v", r)
+	}
+	last := checks.runs[len(checks.runs)-1]
+	if last.Program != "python3" || strings.Join(last.Args, " ") != "-m unittest" {
+		t.Fatalf("repair ran the model's new command instead of the approved one: %+v", last)
+	}
+	if run, _ := s.Ceremony(); run.Check.Program != "python3" {
+		t.Fatalf("approved check replaced: %+v", run.Check)
 	}
 }
