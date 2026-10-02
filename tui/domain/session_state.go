@@ -36,6 +36,10 @@ type SessionState struct {
 	// Ceremony is the live console-driven ceremony, if any. Like Mode, it is
 	// kept outside the snapshot.
 	Ceremony *CeremonyRun
+	// FinishedBudgetBase keeps the call budget a ceremony restarted after
+	// the ceremony closes mid-turn, so the closing answer is not counted
+	// against calls the steps already paid for. It lives for one turn.
+	FinishedBudgetBase int
 }
 
 // RestoreSession validates transcript and activity together without executing work.
