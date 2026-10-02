@@ -56,6 +56,10 @@ func (m *AppModel) syncApproval() {
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme.Locale)
+		if warning := m.hiddenInputWarning(p); warning != "" {
+			m.Approval.Details.SetContent(warning + "\n\n" + m.Approval.Details.Text())
+			m.Approval.Details.Viewport.GotoTop()
+		}
 	}
 
 	m.sizeApproval()
@@ -180,6 +184,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			if intent == ControlIntent(domain.DecisionAutoApprove) {
 				intent = "always-allow"
+			}
+			if (intent == "always-allow" || intent == "autonomy-on") && m.modeAsksForEachCall(m.Approval.Pending) {
+				intent = "" // not offered: the mode keeps this call under approval
 			}
 			if k.String() == "esc" || k.String() == "ctrl+c" {
 				intent = "cancel"

@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"slices"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -41,6 +42,10 @@ func (m AppModel) approvalCard() string {
 		{"deny", "d", m.Theme.T("approval.hintDeny")},
 		{"autonomy-on", "f", m.Theme.T("approval.hintAutonomy")},
 		{"cancel", "esc", m.Theme.T("footer.cancel")},
+	}
+	if m.modeAsksForEachCall(m.Approval.Pending) {
+		// The mode decides; neither a saved rule nor autonomy would apply.
+		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "always-allow" || h.zone == "autonomy-on" })
 	}
 	var actions []string
 	for _, h := range hints {
