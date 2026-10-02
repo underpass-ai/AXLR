@@ -15,6 +15,12 @@ func hostHistory(messages []root.Message, arguments root.JSONValue) (any, error)
 	if err != nil || index < 0 || index >= len(messages) {
 		return nil, errors.New("message_index is outside the persisted session")
 	}
+	// History recovers what an earlier turn left out of context. Re-reading a
+	// result of the turn in progress refills the context its excerpt saved:
+	// seen on 2 Oct 2026, paging a 63 KB catalogue back aborted the turn.
+	if messages[index].Role == root.RoleTool && index > lastUserMessage(messages) {
+		return nil, errors.New("message_index is a result of the current turn; its excerpt is already in your context. Repeat the original call with a narrower query, filter or page instead")
+	}
 	offset, err := hostInteger(args, "offset_bytes", 0)
 	if err != nil || offset < 0 {
 		return nil, errors.New("offset_bytes must be a nonnegative integer")
@@ -58,4 +64,13 @@ func hostHistory(messages []root.Message, arguments root.JSONValue) (any, error)
 
 func hostUTF8Boundary(data []byte, offset int) bool {
 	return offset == len(data) || offset == 0 || data[offset]&0xc0 != 0x80
+}
+
+func lastUserMessage(messages []root.Message) int {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == root.RoleUser {
+			return i
+		}
+	}
+	return -1
 }

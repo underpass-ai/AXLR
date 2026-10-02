@@ -12,6 +12,25 @@ import (
 // A clipped result is a valid JSON object with explicit original provenance; its
 // excerpt is a string, never a fragment represented as if it were valid data.
 func projectToolContent(raw string, index, limit int) (string, error) {
+	return projectToolContentIn(raw, index, limit, excerptHistorical)
+}
+
+// excerptPlace says where a clipped result sits, which decides how the model
+// can get the rest of it.
+type excerptPlace int
+
+const (
+	// excerptHistorical is a closed turn: axlr_history returns the original.
+	excerptHistorical excerptPlace = iota
+	// excerptCurrentTurn is the turn in progress: re-reading it through
+	// axlr_history would refill the very context it was clipped to save.
+	excerptCurrentTurn
+	// excerptCompacted is the turn in progress shrunk further because the
+	// turn alone no longer fits the context budget.
+	excerptCompacted
+)
+
+func projectToolContentIn(raw string, index, limit int, place excerptPlace) (string, error) {
 	original, decodeErr := decodeContextJSON([]byte(raw))
 	if decodeErr != nil {
 		if contentJSONBytes(raw) <= limit-256 {
@@ -47,6 +66,12 @@ func projectToolContent(raw string, index, limit int) (string, error) {
 		"kind": "axlr_tool_result_excerpt", "lossy": true,
 		"message_index": index, "original_bytes": len(raw),
 		"retrieval": fmt.Sprintf("axlr_history({message_index: %d, offset_bytes: 0}); continue with next_offset_bytes for the exact original result.", index),
+	}
+	switch place {
+	case excerptCurrentTurn:
+		bounded["retrieval"] = "This result belongs to the current turn and axlr_history will not re-read it. If you need more of it, repeat the original call with a narrower query, filter or page."
+	case excerptCompacted:
+		bounded["retrieval"] = "This turn no longer fits the model context, so its earlier results were shortened. Answer with what you have, or ask the user before gathering more."
 	}
 	if controls := protocolControls(original); controls != nil {
 		bounded["protocol_controls"] = controls

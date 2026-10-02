@@ -30,7 +30,31 @@ func NewDefaultModelContextProjector() ModelContextProjector {
 	return projector
 }
 
+// Project fits the conversation into the budget. Earlier turns are dropped
+// whole; when the turn in progress alone does not fit, its tool results are
+// shortened step by step rather than failing the turn.
 func (p ModelContextProjector) Project(original []root.Message) (domain.ContextProjection, error) {
+	projection, err := p.project(original, p.budget.ToolResultBytes(), excerptCurrentTurn)
+	if !errors.Is(err, ErrContextBudgetExceeded) {
+		return projection, err
+	}
+	for _, limit := range []int{8 << 10, 4 << 10, 2 << 10, 1 << 10} {
+		if limit >= p.budget.ToolResultBytes() {
+			continue
+		}
+		compacted, compactErr := p.project(original, limit, excerptCompacted)
+		if compactErr == nil {
+			compacted.TurnCompacted = true
+			return compacted, nil
+		}
+		if !errors.Is(compactErr, ErrContextBudgetExceeded) {
+			return compacted, compactErr
+		}
+	}
+	return projection, err
+}
+
+func (p ModelContextProjector) project(original []root.Message, turnLimit int, turnPlace excerptPlace) (domain.ContextProjection, error) {
 	if err := p.budget.Validate(); err != nil {
 		return domain.ContextProjection{}, err
 	}
@@ -61,11 +85,15 @@ func (p ModelContextProjector) Project(original []root.Message) (domain.ContextP
 		projected[i].ToolCalls = append([]root.ToolCall(nil), message.ToolCalls...)
 		if message.Role == root.RoleTool {
 			limit := p.budget.ToolResultBytes()
+			place := excerptHistorical
+			if len(starts) > 0 && i > starts[len(starts)-1] {
+				limit, place = turnLimit, turnPlace
+			}
 			exactSchema := names[message.ToolCallID] == "axlr_tools"
 			if exactSchema {
-				limit = 32 * 1024 // Exact discovery schemas must remain executable.
+				limit, place = 32*1024, excerptHistorical // Exact discovery schemas must remain executable.
 			}
-			content, err := projectToolContent(string(message.Content), i, limit)
+			content, err := projectToolContentIn(string(message.Content), i, limit, place)
 			if err == nil && exactSchema {
 				value, _ := decodeContextJSON([]byte(content))
 				object, _ := value.(map[string]any)
