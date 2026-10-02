@@ -23,11 +23,15 @@ var slashCommands = []slashCommand{
 	{"/autonomy on", "slash.autonomyOn"},
 	{"/autonomy off", "slash.autonomyOff"},
 	{"/update", "slash.update"},
+	{"/normal", "slash.normal"},
+	{"/review", "slash.review"},
+	{"/writer", "slash.writer"},
+	{"/research", "slash.research"},
 	{"/exit", "slash.exit"},
 }
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research"}
 
 const slashSuggestionLimit = 6
 

@@ -72,7 +72,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 		guidance.Content = root.Text(string(guidance.Content) + pluginText)
 	}
-	req := root.CompletionRequest{Model: session.Export().Model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: ModelTools(snapshot)}
+	req := root.CompletionRequest{Model: session.Export().Model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: ModeTools(session.Mode(), snapshot)}
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticContextProjected, SpanID: CurrentDiagnosticSpan(contextCtx), Messages: len(req.Messages), Tools: len(req.Tools), OriginalMessages: projection.OriginalMessages, DroppedMessages: projection.DroppedMessages, OriginalBytes: projection.OriginalBytes, ProjectedBytes: projection.ProjectedBytes, ContextCutIndex: projection.CutIndex})
 	}

@@ -67,7 +67,10 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	if !known || resolveErr != nil {
 		return rejectUnknown(ctx, s, u.Store, emit, u.Diagnostics)
 	}
-	if decision == domain.DecisionAutoApprove && !automaticallyApproves(u.Approval, tool.Identity) {
+	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny {
+		return rejectUnknown(ctx, s, u.Store, emit, u.Diagnostics)
+	}
+	if decision == domain.DecisionAutoApprove && !approvesInMode(u.Approval, s.Mode(), tool.Identity, toolArgs) {
 		return errors.New("tool is not configured for automatic approval")
 	}
 	if tool.Identity.Kind == domain.ToolKindPlugin && decision != domain.DecisionDeny {

@@ -27,6 +27,10 @@ func rejectUnknownCall(ctx context.Context, s *domain.Session, store SessionStor
 	reason := fmt.Sprintf("unknown tool %q rejected", p.Call.Name)
 	if len(invalid) > 0 && invalid[0] != nil {
 		reason = "invalid tool invocation rejected: " + invalid[0].Error()
+		var denial ModeDenial
+		if errors.As(invalid[0], &denial) {
+			reason = denial.Error()
+		}
 		if len(reason) > 1024 {
 			reason = reason[:1024]
 		}

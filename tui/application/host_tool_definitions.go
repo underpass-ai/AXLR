@@ -48,3 +48,19 @@ func ModelTools(snapshot []domain.AvailableTool) []root.ToolDefinition {
 	sort.Slice(tools, func(i, j int) bool { return tools[i].Name < tools[j].Name })
 	return tools
 }
+
+// ModeTools is the model's tool surface under a work mode. Hidden tools are
+// also refused by the mode if a model calls them from memory.
+func ModeTools(mode domain.WorkMode, snapshot []domain.AvailableTool) []root.ToolDefinition {
+	tools := ModelTools(snapshot)
+	if !mode.HidesWriteTools() {
+		return tools
+	}
+	out := tools[:0:0]
+	for _, tool := range tools {
+		if tool.Name != "local_write" && tool.Name != "local_edit" {
+			out = append(out, tool)
+		}
+	}
+	return out
+}

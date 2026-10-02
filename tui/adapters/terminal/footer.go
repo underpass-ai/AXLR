@@ -78,6 +78,9 @@ func (m AppModel) footerStatus() string {
 		}
 		parts = append(parts, m.Theme.T("status."+string(state)))
 	}
+	if mode := m.Header.State.Mode; mode != "" && mode != domain.ModeNormal {
+		parts = append(parts, m.Theme.T("mode."+string(mode)))
+	}
 	if status.Autonomous {
 		parts = append(parts, m.Theme.T("status.autonomous"))
 	}
