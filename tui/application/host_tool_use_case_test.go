@@ -62,7 +62,7 @@ func TestHostDiscoveryListsStableSummariesAndExactSchema(t *testing.T) {
 		t.Fatalf("%s", out.Content)
 	}
 	out = hostExecute(t, s, domain.HostOperationTools, `{"name":"alpha"}`)
-	if out.IsError || !strings.Contains(string(out.Content), `"parameters":{"type":"object"`) || !strings.Contains(string(out.Content), `"plugin":"kmp"`) {
+	if out.IsError || !strings.Contains(string(out.Content), `"parameters":{`) || !strings.Contains(string(out.Content), `"type":"object"`) || !strings.Contains(string(out.Content), `"plugin":"kmp"`) {
 		t.Fatalf("%s", out.Content)
 	}
 	out = hostExecute(t, s, domain.HostOperationTools, `{"query":"no such capability"}`)
@@ -86,8 +86,41 @@ func TestHostDiscoveryRejectsInvalidRangesAndSchemaWithoutTruncation(t *testing.
 	schema, _ := json.Marshal(map[string]any{"type": "object", "description": strings.Repeat("z", MaxHostResultBytes)})
 	huge.Definition.Parameters = hostJSON(t, string(schema))
 	s = hostSession(t, "reply", huge)
-	if out := hostExecute(t, s, domain.HostOperationTools, `{"name":"huge"}`); !out.IsError || !strings.Contains(string(out.Content), "exceeds") {
-		t.Fatalf("schema silently cut: %s", out.Content)
+	out := hostExecute(t, s, domain.HostOperationTools, `{"name":"huge"}`)
+	if out.IsError || !strings.Contains(string(out.Content), `"outline"`) || !strings.Contains(string(out.Content), `"hint"`) || strings.Contains(string(out.Content), `"parameters"`) || len(out.Content) > MaxHostResultBytes {
+		t.Fatalf("oversized schema was not outlined: %.300s", out.Content)
+	}
+	if out := hostExecute(t, s, domain.HostOperationTools, `{"name":"huge","path":"/description"}`); !out.IsError || !strings.Contains(string(out.Content), "exceeds") {
+		t.Fatalf("oversized leaf silently cut: %.300s", out.Content)
+	}
+	for _, args := range []string{`{"path":"/type"}`, `{"name":"huge","path":"type"}`, `{"name":"huge","path":"/missing"}`, `{"name":"huge","path":3}`} {
+		if out := hostExecute(t, s, domain.HostOperationTools, args); !out.IsError {
+			t.Fatalf("accepted %s", args)
+		}
+	}
+}
+
+func TestHostDiscoveryStripsAnnotationsAndSelectsPaths(t *testing.T) {
+	tool := hostPlugin(t, "design", "made", "made_design_ceremony")
+	schema, _ := json.Marshal(map[string]any{
+		"type":                   "object",
+		"x-made-pattern-catalog": strings.Repeat("catalogue ", 8000),
+		"x-made-shape":           "one of two shapes",
+		"properties": map[string]any{
+			"x-literal": map[string]any{"type": "string"},
+			"stages":    map[string]any{"type": "array", "items": map[string]any{"type": "object", "x-made-shape": "a stage", "properties": map[string]any{"id": map[string]any{"type": "string"}}}},
+		},
+	})
+	tool.Definition.Parameters = hostJSON(t, string(schema))
+	s := hostSession(t, "reply", tool)
+	out := hostExecute(t, s, domain.HostOperationTools, `{"name":"design"}`)
+	content := string(out.Content)
+	if out.IsError || strings.Contains(content, "catalogue") || strings.Contains(content, `"x-made-shape":`) || !strings.Contains(content, `"x-literal"`) || !strings.Contains(content, `"annotations_omitted":["x-made-pattern-catalog","x-made-shape"]`) {
+		t.Fatalf("annotations not stripped or property lost: %.400s", content)
+	}
+	out = hostExecute(t, s, domain.HostOperationTools, `{"name":"design","path":"/properties/stages/items"}`)
+	if out.IsError || !strings.Contains(string(out.Content), `"path":"/properties/stages/items"`) || !strings.Contains(string(out.Content), `"id":{"type":"string"}`) {
+		t.Fatalf("path did not select the subschema: %s", out.Content)
 	}
 }
 
