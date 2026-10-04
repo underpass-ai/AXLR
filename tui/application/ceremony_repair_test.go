@@ -413,6 +413,35 @@ func TestRepairResumeReentersTheWatchFromMADE(t *testing.T) {
 	}
 }
 
+func TestRepairResumeReusesALiveWatchClaim(t *testing.T) {
+	forge := &fakeForge{statuses: []PullRequestStatus{{State: "OPEN", MergeState: "CLEAN", Passed: 3}}}
+	d, engine, _, _, s := repairDriver(t, forge, 1, 0)
+	d.RepairPolicy.AutoMerge = true
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, reproduceArgs)
+	step(t, d, &s, `{"root_cause":"c","evidence":"e","proposed_fix":"f"}`)
+	// The console died inside the watch: MADE still holds our claim, and
+	// refuses another one, so the fence it reports is the one to finish with.
+	engine.view = CeremonyView{State: "WATCH", Live: map[string]string{"watch": "fence-watch"}, Outputs: map[string]map[string]any{"propose": {"pull_request": float64(7)}}}
+	before := len(engine.calls)
+	result, ok, err := d.Resume(context.Background(), s)
+	if err != nil || !ok {
+		t.Fatalf("resume: ok=%v err=%v", ok, err)
+	}
+	var report map[string]any
+	_ = json.Unmarshal([]byte(result.Outcome.Content), &report)
+	if report["ceremony"] != "COMPLETED" || report["reused_claim"] != "watch" || !forge.merged {
+		t.Fatalf("resume result: %v", report)
+	}
+	for _, call := range engine.calls[before:] {
+		if strings.HasPrefix(call, "claim watch") {
+			t.Fatalf("the watch must not be claimed again: %v", engine.calls[before:])
+		}
+	}
+}
+
 func TestRepairModeRefusesModelMemoryWrites(t *testing.T) {
 	id, err := domain.NewPluginToolIdentity(root.PluginRef{PluginID: "kmp", ToolName: "kmp_write_memory"})
 	if err != nil {

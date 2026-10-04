@@ -480,6 +480,17 @@ func (d *CeremonyDriver) reconcile(ctx context.Context, s domain.Session, run do
 	if ok && view.State == "REVIEW" && !slices.Contains(view.Claimable, step) && slices.Contains(view.Claimable, "review") {
 		step = "review" // the draft was handed in; its review never ran
 	}
+	if ok && repairConsoleSteps[step] && run.Repair != nil {
+		if fence := view.Live[step]; fence != "" {
+			// Our own claim is still live: finish the console step with it.
+			run.Step, run.Iteration = step, 1
+			result, err := d.repairStepWith(ctx, s, run, report, fence)
+			if err != nil {
+				return StepResult{}, errors.Join(cause, err)
+			}
+			return result, nil
+		}
+	}
 	if !ok || !slices.Contains(view.Claimable, step) {
 		return StepResult{}, cause
 	}

@@ -212,6 +212,12 @@ func repairLabels(s domain.Session, run domain.CeremonyRun) map[string][]string 
 // chains into the next console step until the model is needed again, the
 // person is needed, or the ceremony ends.
 func (d *CeremonyDriver) repairStep(ctx context.Context, s domain.Session, run domain.CeremonyRun, report map[string]any) (StepResult, error) {
+	return d.repairStepWith(ctx, s, run, report, "")
+}
+
+// repairStepWith runs the console step; a nonempty fence is a live claim of
+// ours recovered from MADE, so the step is not claimed again.
+func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, run domain.CeremonyRun, report map[string]any, fence string) (StepResult, error) {
 	if run.Repair == nil || d.Forge == nil {
 		return StepResult{}, errors.New("the repair ceremony has no forge")
 	}
@@ -223,7 +229,10 @@ func (d *CeremonyDriver) repairStep(ctx context.Context, s domain.Session, run d
 	case run.Step == "decide" && !d.RepairPolicy.AutoMerge:
 		lease = presentLease // the person may answer days later
 	}
-	if err := d.claimFor(ctx, &run, lease); err != nil {
+	if fence != "" {
+		run.Fence, run.Reminded = fence, false
+		report["reused_claim"] = run.Step
+	} else if err := d.claimFor(ctx, &run, lease); err != nil {
 		return StepResult{}, err
 	}
 	var output map[string]any
@@ -504,11 +513,12 @@ func (d *CeremonyDriver) Resume(ctx context.Context, s domain.Session) (StepResu
 	if !ok || !repairConsoleSteps[step] {
 		return StepResult{}, false, nil // a model step: the ordinary path reconciles it
 	}
-	if !slices.Contains(view.Claimable, step) && step != "watch" {
+	fence := view.Live[step]
+	if fence == "" && !slices.Contains(view.Claimable, step) {
 		return StepResult{}, false, nil
 	}
 	run.Step, run.Iteration = step, 1
-	result, err := d.repairStep(ctx, s, run, report)
+	result, err := d.repairStepWith(ctx, s, run, report, fence)
 	return result, true, err
 }
 
