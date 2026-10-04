@@ -159,6 +159,9 @@ func TestDebugCeremonyRunsEndToEndOnConsoleChecks(t *testing.T) {
 	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
 		t.Fatal(err)
 	}
+	if len(memory.intents) != 1 || memory.intents[0] != "hola sale 1" {
+		t.Fatalf("the user's request must focus the recall: %v", memory.intents)
+	}
 	if run, _ := s.Ceremony(); run.Step != "reproduce" || run.About != "ws:"+string(s.Export().ID) {
 		t.Fatalf("begin: %+v", run)
 	}

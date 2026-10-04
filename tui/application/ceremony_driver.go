@@ -163,7 +163,9 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 	}
 	memory := ""
 	if d.Memory != nil && s.Mode() != domain.ModeRepair {
-		if text, err := d.Memory.Wake(ctx, about); err == nil {
+		// The user's request is the intent: a store with Jev configured keeps
+		// the evidence relevant to it instead of the about's whole history.
+		if text, _, err := d.Memory.WakeFocused(ctx, about, string(prompt)); err == nil {
 			if len(text) > maxCeremonyMemoryBytes {
 				prefix := "Partial KMP recall: console context shortened; recover the full about with kmp_wake before relying on omitted evidence.\n"
 				memory = prefix + bounded(text, maxCeremonyMemoryBytes-len(prefix))
