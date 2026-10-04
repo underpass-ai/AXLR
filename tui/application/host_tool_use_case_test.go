@@ -93,7 +93,7 @@ func TestHostDiscoveryRejectsInvalidRangesAndSchemaWithoutTruncation(t *testing.
 
 func TestHostHistoryRecoversUnicodeMessageByBoundedPages(t *testing.T) {
 	s := hostSession(t, strings.Repeat("historia 😊\n", 3000))
-	expected, _ := json.Marshal(s.Messages()[1])
+	expected := []byte(s.Messages()[1].Content)
 	var recovered strings.Builder
 	offset := 0
 	for {
@@ -136,8 +136,8 @@ func TestHostHistoryRejectsBadRangesAndBoundsEscapedPayload(t *testing.T) {
 			t.Fatalf("accepted %s", args)
 		}
 	}
-	data, _ := json.Marshal(s.Messages()[1])
-	start := strings.Index(string(data), "😊")
+	data := string(s.Messages()[1].Content)
+	start := strings.Index(data, "😊")
 	for _, test := range []map[string]int{{"message_index": 1, "offset_bytes": start + 1}, {"message_index": 1, "offset_bytes": start, "limit_bytes": 1}} {
 		args, _ := json.Marshal(test)
 		if out := hostExecute(t, s, domain.HostOperationHistory, string(args)); !out.IsError {
@@ -148,6 +148,28 @@ func TestHostHistoryRejectsBadRangesAndBoundsEscapedPayload(t *testing.T) {
 	out := hostExecute(t, s, domain.HostOperationHistory, `{"message_index":1,"limit_bytes":16384}`)
 	if out.IsError || contentJSONBytes(string(out.Content)) > MaxHistoryReadBytes-256 {
 		t.Fatal("escaped page exceeded model result cap")
+	}
+}
+
+func TestHostHistoryPagesToolContentWithoutReescaping(t *testing.T) {
+	result := `{"status":"completed","output":{"text":"` + strings.Repeat("x", 4000) + `"}}`
+	messages := []root.Message{
+		{Role: root.RoleUser, Content: "read"},
+		{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "call_read", Name: "local_read", Arguments: hostJSON(t, `{"path":"a"}`)}}},
+		{Role: root.RoleTool, ToolCallID: "call_read", Content: root.Text(result)},
+		{Role: root.RoleUser, Content: "next"},
+	}
+	page, err := hostHistory(messages, hostJSON(t, `{"message_index":2,"limit_bytes":16384}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := page.(map[string]any)
+	if fields["text"] != result || fields["has_more"] != false || fields["total_bytes"] != len(result) || fields["tool_call_id"] != root.ToolCallID("call_read") {
+		t.Fatalf("tool content was not returned verbatim in one page: %+v", fields)
+	}
+	page, err = hostHistory(messages, hostJSON(t, `{"message_index":1}`))
+	if err != nil || page.(map[string]any)["tool_calls"] == nil {
+		t.Fatalf("assistant tool calls missing: %v %+v", err, page)
 	}
 }
 
