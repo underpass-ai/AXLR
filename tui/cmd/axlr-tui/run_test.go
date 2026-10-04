@@ -49,6 +49,33 @@ func TestTUIExecutorResolvesCommandsWithoutForwardingCredentials(t *testing.T) {
 	}
 }
 
+func TestTUIExecutorUsesHostHome(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario; native process execution is covered by runtime tests")
+	}
+	home := t.TempDir()
+	env := map[string]string{"PATH": "/usr/bin:/bin", "HOME": home}
+	executor, err := runtime.New(runtime.Config{Root: t.TempDir(), Env: localRuntimeEnvironment(func(name string) string { return env[name] })})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer executor.Close()
+	result := executor.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "home-test", Tool: "exec", Arguments: json.RawMessage(`{"program":"sh","args":["-c","printf %s \"$HOME\""]}`)})
+	output, ok := result.Output.(dto.ExecOutput)
+	if result.Status != "completed" || !ok || output.Stdout != home {
+		t.Fatalf("exec did not receive the host HOME: %+v", result)
+	}
+}
+
+func TestLocalRuntimeEnvironmentSkipsRelativeHome(t *testing.T) {
+	env := map[string]string{"PATH": "/usr/bin", "HOME": "relative/home"}
+	for _, value := range localRuntimeEnvironment(func(name string) string { return env[name] }) {
+		if strings.HasPrefix(value, "HOME=") {
+			t.Fatalf("relative HOME forwarded: %q", value)
+		}
+	}
+}
+
 func cliEnv(t *testing.T) map[string]string {
 	t.Helper()
 	state, home := t.TempDir(), t.TempDir()
