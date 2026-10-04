@@ -164,7 +164,7 @@ func TestWakeFocusedPassesTheIntentAndReturnsRefs(t *testing.T) {
 			"current_state": []any{"project:x:entry:decision:a (decision): one", "project:x:entry:decision:a (decision): repeated", "no ref here"},
 			"open_loops":    []any{"project:x:entry:observation:b (observation): two"},
 		}}
-		encoded, _ := json.Marshal(packet)
+		encoded, _ := json.Marshal(map[string]any{"output": map[string]any{"structured_content": packet}})
 		return domain.ToolOutcome{Content: root.Text(encoded)}, nil
 	})}
 	text, refs, err := m.WakeFocused(context.Background(), "project:x", "the failure")
@@ -188,7 +188,7 @@ func TestRecordLinkedSendsLinksAndReturnsTheStoredRef(t *testing.T) {
 		if err := json.Unmarshal(args.Bytes(), &request); err != nil {
 			t.Fatal(err)
 		}
-		return domain.ToolOutcome{Content: `{"accepted":true,"local_refs":{"c1":"project:x:entry:error_path:c1-deadbeef"}}`}, nil
+		return domain.ToolOutcome{Content: `{"output":{"structured_content":{"accepted":true,"local_refs":{"c1":"project:x:entry:error_path:c1-deadbeef"}}}}`}, nil
 	})}
 	ref, err := m.RecordLinked(context.Background(), "project:x", map[string][]string{"ceremony": {"axlr_repair"}}, application.MemoryRecord{ID: "c1", Kind: "error_path", Summary: "s", Evidence: "e", Links: []application.MemoryLink{{Ref: "project:x:entry:decision:a", Rel: "restates", Why: "same", Evidence: "probe"}}})
 	if err != nil || ref != "project:x:entry:error_path:c1-deadbeef" {
