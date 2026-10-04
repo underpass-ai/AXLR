@@ -23,9 +23,10 @@ func normalizeToolSchema(schema *jsonschema.Schema, value any, bounds map[float6
 		return errors.New("schema nodes must be objects or booleans")
 	}
 	for key := range schema.Extra {
-		// MADE's pattern catalogue is an annotation used by the agent guide,
-		// not an argument assertion. Other custom keywords are unsupported.
-		if key != "x-made-pattern-catalog" {
+		// x-* keywords are vendor annotations (MADE's pattern catalogue and
+		// x-made-shape explain the schema), never argument assertions. Other
+		// custom keywords are unsupported.
+		if !strings.HasPrefix(key, "x-") {
 			return fmt.Errorf("unsupported schema keyword %q", key)
 		}
 	}
