@@ -1,11 +1,13 @@
 ---
 name: axlr-ceremonies
-description: Run AXLR's MADE workflows only when the user explicitly asks for a MADE ceremony; ordinary changes, reviews and research need none.
+description: Run explicitly requested AXLR MADE workflows or resume an existing instance; console debug/delivery/incident modes are driven by the host through axlr_step_done.
 ---
 
 # AXLR ceremonies
 
-Choose the smallest workflow that fits the user's task. These are AXLR's default working procedures; user instructions and existing authorization remain authoritative. Plain answers and one-step read-only lookups need no ceremony. Announce the selected workflow briefly, then do the work.
+Use a ceremony when the user requests one or an existing instance needs resuming. Ordinary changes, reviews and research proceed directly. The catalogue supplies procedures for explicitly requested ceremonies; user instructions and existing authorization remain authoritative. Announce the selected workflow briefly, then do the work.
+
+If `/debug`, `/delivery` or `/incident` has an active console-driven instance, follow its current instruction and use `axlr_step_done`. The host owns claims, fences, checks and transitions. Do not call `made_*` tools for that instance or start a duplicate. The driver pins `axlr_debug` and `axlr_delivery` at `2.0`, and `axlr_incident` at `1.0`; the agent-driven catalogue below contains seven separate `1.0` definitions. Preparation with `/mcp` → `P` installs only the three driver definitions. Incident approval belongs to the person's console card; the model cannot approve or publish the draft itself.
 
 ## Route the task
 
@@ -31,7 +33,7 @@ Read [execution.md](references/execution.md) before the first engine execution, 
 
 Discover the actual tools and schemas. In AXLR, `axlr_tools` resolves the exact registered name/schema and `axlr_call_tool` invokes it. Resolve only the schemas the selected workflow uses. Do not call `made_discover_capabilities` or `made_get_help`: they return the whole engine catalogue and manual (hundreds of KB), which does not fit the turn. A catalogue row is not a connection.
 
-List/get the selected published definition and compare its version and digest with the packaged catalogue. If absent, validate the complete YAML and publish the exact definition only when installation/publication is authorized. A conflict is not permission to overwrite an immutable version. Start only the selected published version with real inputs, stable instance identity and actual participant bindings. Do not publish the whole catalogue or start a system for every task.
+List/get the selected published definition and compare its version and digest with the packaged catalogue. If absent, a request to run that ceremony authorizes installing its exact packaged definition in the selected store unless the user restricts setup. Validate the complete YAML and publish only that version, subject to the actual engine grants and tool approval policy. A conflict is not permission to overwrite an immutable version. Start only the selected published version with real inputs, stable instance identity and actual participant bindings. Do not publish the whole catalogue or start a system for every task.
 
 Claim the returned next step, retain its fence, perform the actual host work, and complete with structured output and evidence. Refresh the instance and apply only enabled transitions. A claim or no-op handler proves no work. Boolean success fields must follow the step's stated criteria; failure, missing evidence and unavailable checks do not become success.
 

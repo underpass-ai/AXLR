@@ -315,13 +315,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	validator := axlr.NewToolArgumentValidator()
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
 	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}
-	ceremonies := ceremonyDriver(registrations, runner)
+	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
 	if ceremonies != nil {
 		ceremonies.Files = ceremonyhost.Files{Tools: runner}
 		ceremonies.Reviewer = ceremonyhost.Reviewer{Models: models, Model: settings.ReviewerModel}
 		ceremonies.Approver = &madesetup.Approver{ConfigPath: configPath, Getenv: getenv}
 	}
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, Ceremonies: ceremonies}
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
 	app := terminal.New(terminal.Dependencies{
 		Context:           ctx,
 		Diagnostics:       trace,
@@ -419,7 +419,7 @@ func environmentName(s string) bool {
 
 // ceremonyDriver drives /debug, /delivery and /incident when MADE is connected. KMP is
 // optional: without it ceremonies run without memory.
-func ceremonyDriver(registrations []plugins.Registration, tools application.ToolExecutionPort) *application.CeremonyDriver {
+func ceremonyDriver(registrations []plugins.Registration, tools application.ToolExecutionPort, labels application.SessionLabelsPort) *application.CeremonyDriver {
 	connected := map[string]bool{}
 	for _, registration := range registrations {
 		connected[registration.Manifest.ID.String()] = true
@@ -427,7 +427,7 @@ func ceremonyDriver(registrations []plugins.Registration, tools application.Tool
 	if !connected["made"] {
 		return nil
 	}
-	driver := &application.CeremonyDriver{Engine: ceremonyhost.Engine{Tools: tools}, Checks: ceremonyhost.Checks{Tools: tools}}
+	driver := &application.CeremonyDriver{Engine: ceremonyhost.Engine{Tools: tools}, Checks: ceremonyhost.Checks{Tools: tools}, Labels: labels}
 	if connected["kmp"] {
 		driver.Memory = ceremonyhost.Memory{Tools: tools}
 	}

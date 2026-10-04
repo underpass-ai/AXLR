@@ -178,13 +178,16 @@ func (f *fakeApprover) ApproveGuard(_ context.Context, _, guard string) error {
 }
 
 type labelMemory struct {
-	labels  map[string][]string
-	summary string
+	labels   map[string][]string
+	summary  string
+	about    string
+	evidence string
 }
 
 func (m *labelMemory) Wake(context.Context, string) (string, error) { return "", nil }
-func (m *labelMemory) Record(_ context.Context, _ string, labels map[string][]string, _, summary, _ string) error {
+func (m *labelMemory) Record(_ context.Context, about string, labels map[string][]string, _, summary, evidence string) error {
 	m.labels, m.summary = labels, summary
+	m.about, m.evidence = about, evidence
 	return nil
 }
 
@@ -265,6 +268,10 @@ func (r *incidentRig) apply(result StepResult, err error) error {
 
 func TestIncidentRunsToPublicationThroughAReviewRoundAndThePerson(t *testing.T) {
 	r := newIncidentRig(t, false, true)
+	// Session startup can establish a project scope after the first claim.
+	r.driver.Labels = &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{
+		r.session.Export().ID: {About: "project:AXLR"},
+	}}
 	r.toReview(t)
 	if report := step(t, r.driver, &r.session, reviseArgs); report["next_step"] != "revise" {
 		t.Fatalf("rejected review should send the draft back: %v", report)
@@ -304,6 +311,9 @@ func TestIncidentRunsToPublicationThroughAReviewRoundAndThePerson(t *testing.T) 
 		if got := r.memory.labels[key]; len(got) != 1 || got[0] != want {
 			t.Fatalf("label %s = %v", key, got)
 		}
+	}
+	if r.memory.about != "project:AXLR" || !strings.Contains(r.memory.evidence, "postmortem docs/incidents/2026-10-02-checkout-500s.md sha256 "+run.Incident.DraftDigest) {
+		t.Fatalf("lost project scope or approved evidence: %+v", r.memory)
 	}
 	if review := r.engine.outputs["review"]; review["review_mode"] != "independent_context" || review["reviewer_model"] != "reviewer-model" {
 		t.Fatalf("review output %v", review)

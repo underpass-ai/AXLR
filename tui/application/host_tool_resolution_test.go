@@ -91,7 +91,7 @@ func TestHostDefinitionsRemainStableAndExcludePluginSchemas(t *testing.T) {
 	if !bytes.Equal(before, after) {
 		t.Fatal("plugin refresh broke fixed model schema bytes")
 	}
-	if len(ModelTools(snapshot)) != 6 || len(ModelTools(turnTools())) != 1 {
+	if len(ModelTools(snapshot)) != 7 || len(ModelTools(turnTools())) != 1 {
 		t.Fatal("fixed/legacy model projection")
 	}
 	definitions := HostTools()

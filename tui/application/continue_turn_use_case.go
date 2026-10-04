@@ -18,6 +18,7 @@ type ContinueTurnUseCase struct {
 	Diagnostics    DiagnosticPort
 	PluginGuidance func(context.Context) (string, error)
 	PluginSkills   PluginSkillPort
+	SessionLabels  SessionLabelsPort
 	// Ceremonies drives MADE for the debug and delivery modes; nil without MADE.
 	Ceremonies *CeremonyDriver
 }
@@ -66,6 +67,14 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	snapshot := session.ToolSnapshot()
 	guidance := modelHostGuidance(session)
+	if u.SessionLabels != nil {
+		text, err := sessionContextGuidance(ctx, *session, u.SessionLabels)
+		if err != nil {
+			contextSpan.End(DiagnosticErrorInvalidState)
+			return interrupt(err)
+		}
+		guidance.Content += root.Text(text)
+	}
 	if u.PluginGuidance != nil {
 		pluginText, err := u.PluginGuidance(ctx)
 		if err != nil {

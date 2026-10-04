@@ -12,27 +12,40 @@ import (
 
 const builtinCeremonySkill = "axlr-ceremonies"
 const builtinCeremonyRoot = "builtin/made/skills/" + builtinCeremonySkill + "/"
+const builtinSessionSkill = "axlr-session"
+const builtinSessionRoot = "builtin/axlr/skills/" + builtinSessionSkill + "/"
 
 // Built-in guidance is available without a copied package or a live MCP engine.
 // Definitions are read-only resources; loading them never publishes or starts work.
 //
-//go:embed builtin/made/skills/axlr-ceremonies
+//go:embed builtin/made/skills/axlr-ceremonies builtin/axlr/skills/axlr-session
 var builtinResources embed.FS
 
 func builtinSkillIndex() (string, error) {
-	data, err := builtinResources.ReadFile(builtinCeremonyRoot + "SKILL.md")
-	if err != nil {
-		return "", err
+	var index strings.Builder
+	for _, entry := range []struct{ plugin, skill, root string }{{"axlr", builtinSessionSkill, builtinSessionRoot}, {"made", builtinCeremonySkill, builtinCeremonyRoot}} {
+		data, err := builtinResources.ReadFile(entry.root + "SKILL.md")
+		if err != nil {
+			return "", err
+		}
+		index.WriteString("\n- " + entry.plugin + ":" + entry.skill + ": " + skillDescription(data))
 	}
-	return "\n- made:" + builtinCeremonySkill + ": " + skillDescription(data), nil
+	return index.String(), nil
 }
 
-func readBuiltinSkill(skill, resource string) ([]byte, error) {
-	if skill != builtinCeremonySkill || !fs.ValidPath(resource) ||
+func readBuiltinSkill(plugin, skill, resource string) ([]byte, error) {
+	root := ""
+	if plugin == "made" && skill == builtinCeremonySkill {
+		root = builtinCeremonyRoot
+	}
+	if plugin == "axlr" && skill == builtinSessionSkill {
+		root = builtinSessionRoot
+	}
+	if root == "" || !fs.ValidPath(resource) ||
 		(resource != "SKILL.md" && resource != "agents/openai.yaml" && !strings.HasPrefix(resource, "references/")) {
 		return nil, errors.New("built-in skill resource is unavailable")
 	}
-	return builtinResources.ReadFile(builtinCeremonyRoot + resource)
+	return builtinResources.ReadFile(root + resource)
 }
 
 func skillPage(plugin, skill, resource string, data []byte, offset, limit int) (application.SkillPage, error) {

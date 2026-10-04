@@ -11,6 +11,7 @@ const (
 	HostCallToolName    root.ToolName = "axlr_call_tool"
 	HostHistoryName     root.ToolName = "axlr_history"
 	HostSkillName       root.ToolName = "axlr_skill"
+	HostSessionName     root.ToolName = "axlr_session"
 	HostStepDoneName    root.ToolName = "axlr_step_done"
 	MaxHostResultBytes                = 32 * 1024
 	MaxHistoryReadBytes               = 16 * 1024
@@ -23,6 +24,7 @@ func HostTools() []domain.AvailableTool {
 		name                           root.ToolName
 		operation, description, schema string
 	}{
+		{HostSessionName, domain.HostOperationSession, "Read the current session's ID, workspace, user prompt count, title and exact KMP about. Optional title/about fill only missing fields and preserve user titles and archive flags. Set a concise title after the second user prompt. This is session bookkeeping; it does not write KMP memory.", `{"type":"object","properties":{"title":{"type":"string","minLength":1,"maxLength":120},"about":{"type":"string","minLength":1,"maxLength":256}},"additionalProperties":false}`},
 		{HostCallToolName, domain.HostOperationCallTool, "Call a registered plugin tool by the exact name returned by axlr_tools. The real plugin's approval policy applies. Local and host tools cannot be called through this bridge.", `{"type":"object","properties":{"name":{"type":"string","minLength":1},"arguments":{"type":"object"}},"required":["name","arguments"],"additionalProperties":false}`},
 		{HostHistoryName, domain.HostOperationHistory, "Recover a full persisted session message as paged JSON. message_index is zero-based; offset_bytes and limit_bytes page its UTF-8 JSON bytes. Use next_offset_bytes to continue. Maximum page is 16384 bytes.", `{"type":"object","properties":{"message_index":{"type":"integer","minimum":0},"offset_bytes":{"type":"integer","minimum":0},"limit_bytes":{"type":"integer","minimum":1,"maximum":16384}},"required":["message_index"],"additionalProperties":false}`},
 		{HostToolsName, domain.HostOperationTools, "Search registered plugin tools with query, or get one exact tool's full schema with name. An empty query lists compact summaries; limit defaults to 8, maximum 20. Use offset with next_offset for more matches. Discovery has no plugin effects.", `{"type":"object","properties":{"query":{"type":"string"},"name":{"type":"string","minLength":1},"limit":{"type":"integer","minimum":1,"maximum":20},"offset":{"type":"integer","minimum":0}},"additionalProperties":false}`},

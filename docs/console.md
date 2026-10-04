@@ -13,7 +13,7 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Enter` / `Shift+Enter` | Send / insert a newline |
 | `/model` | Choose a model |
 | `/normal`, `/review`, `/writer`, `/research` | Choose direct work and its local tool policy |
-| `/debug`, `/delivery` | Select a console-driven MADE procedure for the next prompt |
+| `/debug`, `/delivery`, `/incident` | Select a console-driven MADE procedure for the next prompt; `/incident` also opens a pending approval card |
 | `/update` | Update explicitly configured local KMP and MADE engines |
 | `/mcp` | Inspect connected MCP servers, tools and approvals |
 | `/approvals` | Show saved always-allow tools and autonomy mode |
@@ -44,10 +44,11 @@ Select a mode with its slash command between turns, after choosing a model. The 
 | `/research` | Recover memory, read primary sources and produce a supported decision | Same document write policy as writer; every exec needs approval |
 | `/debug` | Reproduce, diagnose, repair and integrate | All local tools; console drives MADE `axlr_debug` 2.0 |
 | `/delivery` | Brief, build/check and integrate | All local tools; console drives MADE `axlr_delivery` 2.0 |
+| `/incident` | Blameless postmortem with review and person's approval | All local tools; model KMP outcome writes refused; console drives MADE `axlr_incident` 1.0 |
 
 `review`, `writer` and `research` refuse any local exec with nonempty `stdin`, including when full autonomy is enabled. Arguments remain visible for per-call review. These restrictions apply to AXLR's local tools: MCP calls retain their own approval policy and may have external side effects. An approved process is not sandboxed by the mode.
 
-Direct modes do not start ceremonies. For debug/delivery, [prepare MADE](runbooks/made.md#prepare-the-driven-ceremonies), select the mode, then send the task. AXLR starts and claims the pinned definition; the model performs the work and hands results to `axlr_step_done`. A new check command is approved once, then reused unchanged for repair/build verification. On `COMPLETED` or `BLOCKED`, the session returns to normal mode. Missing MADE or definitions prevents this start; there is no silent substitute ceremony. [Ceremonies](ceremonies.md) describes the two execution paths and recovery limits.
+Direct modes do not start ceremonies. For debug/delivery/incident, [prepare MADE](runbooks/made.md#prepare-the-driven-ceremonies), select the mode, then send the task. AXLR starts and claims the pinned definition; the model performs the work and hands results to `axlr_step_done`. A new debug/delivery check command is approved once, then reused unchanged for repair/build verification. Incident drafts receive a fresh-context review, then the person's approval through the `/incident` card. On `COMPLETED` or `BLOCKED`, the session returns to normal mode. Missing MADE or definitions prevents this start; there is no silent substitute ceremony. [Ceremonies](ceremonies.md) describes the two execution paths and recovery limits.
 
 The local process environment contains only a sanitized absolute `PATH`. Other shell variables, provider credentials and `HOME` are not inherited by console exec/check commands. A check that works in your login shell may therefore need explicit paths or a workspace script with documented prerequisites.
 
@@ -97,7 +98,7 @@ The private session store retains the full transcript. Model requests receive a 
 
 When the active turn alone exceeds the budget, AXLR progressively reduces its tool-result excerpts to 8, 4, 2 and then 1 KiB. It asks the model to finish from the evidence already gathered. The current prompt and tool arguments are not silently shortened; context that still cannot fit produces an explicit error. Full saved results remain intact. `axlr_history` can recover earlier-turn messages, but refuses tool results from the current turn to avoid a rereading loop.
 
-The model normally sees four local tools plus `axlr_tools` (exact plugin schema discovery), `axlr_call_tool` (registered plugin invocation), `axlr_history` (paged saved messages) and `axlr_skill` (paged skill resources). Review mode hides local write/edit; an active driven ceremony adds `axlr_step_done`. Plugin arguments are validated against the discovered schema before execution. Read only the required schema and follow resource page cursors. [Context policy research](research/2026-09-30-context-policy.md) records the original design; [the audit](documentation-audit.md) covers the later active-turn compaction change.
+The model normally sees four local tools plus `axlr_tools` (exact plugin schema discovery), `axlr_call_tool` (registered plugin invocation), `axlr_history` (paged saved messages), `axlr_skill` (paged skill resources) and `axlr_session` (current-session title and exact memory scope). Session bookkeeping fills missing fields without replacing manual titles and runs without a separate approval; plugin calls retain their configured policy. Review mode hides local write/edit; an active driven ceremony adds `axlr_step_done`. Plugin arguments are validated against the discovered schema before execution. Read only the required schema and follow resource page cursors. [Context policy research](research/2026-09-30-context-policy.md) records the original design; [the audit](documentation-audit.md) covers the later active-turn compaction change.
 
 ## Saved sessions and recovery
 

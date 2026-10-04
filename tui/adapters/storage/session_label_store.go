@@ -26,6 +26,7 @@ type sessionLabelsRecord struct {
 type sessionLabelEntry struct {
 	Title    string `json:"title,omitempty"`
 	Archived bool   `json:"archived,omitempty"`
+	About    string `json:"about,omitempty"`
 }
 
 // SessionLabelStore keeps session titles and archive flags in one file next
@@ -59,42 +60,65 @@ func (s *SessionLabelStore) Load(ctx context.Context) (map[domain.SessionID]doma
 	}
 	labels := make(map[domain.SessionID]domain.SessionLabel, len(record.Labels))
 	for id, entry := range record.Labels {
-		labels[domain.SessionID(id)] = domain.SessionLabel{Title: root.Text(entry.Title), Archived: entry.Archived}
+		labels[domain.SessionID(id)] = domain.SessionLabel{Title: root.Text(entry.Title), Archived: entry.Archived, About: entry.About}
 	}
 	return labels, nil
 }
 
 func (s *SessionLabelStore) Set(ctx context.Context, id domain.SessionID, label domain.SessionLabel) error {
+	_, err := s.update(ctx, id, label, false)
+	return err
+}
+
+func (s *SessionLabelStore) Initialize(ctx context.Context, id domain.SessionID, label domain.SessionLabel) (domain.SessionLabel, error) {
+	return s.update(ctx, id, label, true)
+}
+
+func (s *SessionLabelStore) update(ctx context.Context, id domain.SessionID, label domain.SessionLabel, initialize bool) (domain.SessionLabel, error) {
 	if _, err := domain.NewSessionID(string(id)); err != nil {
-		return err
+		return domain.SessionLabel{}, err
 	}
 	if err := label.Validate(); err != nil {
-		return err
+		return domain.SessionLabel{}, err
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	release, err := acquireMCPConfigLock(ctx, s.path)
 	if err != nil {
-		return err
+		return domain.SessionLabel{}, err
 	}
 	defer release()
 	record, err := s.read()
 	if err != nil {
-		return err
+		return domain.SessionLabel{}, err
+	}
+	if initialize {
+		entry := record.Labels[string(id)]
+		if entry.Title != "" {
+			label.Title = root.Text(entry.Title)
+		}
+		if entry.About != "" {
+			label.About = entry.About
+		}
+		label.Archived = entry.Archived
+	} else if label.About == "" {
+		// Picker edits may carry metadata loaded before the agent selected
+		// its about. Renaming/archiving must not erase that newer binding.
+		label.About = record.Labels[string(id)].About
 	}
 	if label == (domain.SessionLabel{}) {
 		delete(record.Labels, string(id))
 	} else {
-		record.Labels[string(id)] = sessionLabelEntry{Title: string(label.Title), Archived: label.Archived}
+		record.Labels[string(id)] = sessionLabelEntry{Title: string(label.Title), Archived: label.Archived, About: label.About}
 	}
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
-		return err
+		return domain.SessionLabel{}, err
 	}
 	if len(data) > maxSessionLabelsBytes {
-		return errors.New("session labels file is full")
+		return domain.SessionLabel{}, errors.New("session labels file is full")
 	}
-	return s.write(ctx, data)
+	return label, s.write(ctx, data)
 }
 
 func (s *SessionLabelStore) read() (sessionLabelsRecord, error) {

@@ -21,6 +21,7 @@ const (
 	HostOperationCallTool = "call_tool"
 	HostOperationHistory  = "history"
 	HostOperationSkill    = "skill"
+	HostOperationSession  = "session"
 	// HostOperationStepDone hands the current ceremony step's result to the
 	// console, which checks it and advances MADE.
 	HostOperationStepDone = "step_done"
@@ -45,7 +46,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationStepDone:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone:
 			return nil
 		}
 	case ToolKindLocal:
