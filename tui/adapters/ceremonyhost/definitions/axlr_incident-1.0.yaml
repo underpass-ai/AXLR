@@ -1,0 +1,141 @@
+version: '1.0'
+name: axlr_incident
+description: Review a production incident without blame. The agent reconstructs triage, timeline and analysis with evidence; a reviewer in a fresh context checks the draft up to twice; a person approves the postmortem before the console publishes it and records it in project memory.
+inputs:
+  required:
+  - incident_brief
+  - workspace
+  optional:
+  - memory_about
+outputs:
+  postmortem:
+    type: object
+states:
+- id: TRIAGE
+  initial: true
+- id: TIMELINE
+- id: ANALYSIS
+- id: REVIEW
+  repeat:
+    max_iterations: 2
+    until:
+      step: review
+      output_field: accepted
+      equals: true
+- id: APPROVAL
+- id: PUBLISH
+- id: COMPLETED
+  terminal: true
+- id: BLOCKED
+  terminal: true
+transitions:
+- from: TRIAGE
+  to: TIMELINE
+  trigger: triaged
+  guards: [triage_completed, triage_ready]
+- from: TIMELINE
+  to: ANALYSIS
+  trigger: timelined
+  guards: [timeline_completed, timeline_ready]
+- from: ANALYSIS
+  to: REVIEW
+  trigger: analyzed
+  guards: [analysis_completed, analysis_ready]
+- from: REVIEW
+  to: APPROVAL
+  trigger: reviewed
+  guards: [revise_completed, review_completed, review_accepted]
+- from: REVIEW
+  to: BLOCKED
+  trigger: review_exhausted
+  guards: [review_exhausted]
+- from: APPROVAL
+  to: PUBLISH
+  trigger: approved
+  guards: [present_completed, person_approves]
+- from: APPROVAL
+  to: REVIEW
+  trigger: returned
+  guards: [present_completed, return_requested]
+- from: PUBLISH
+  to: COMPLETED
+  trigger: published
+  guards: [publish_completed, publish_ready]
+steps:
+- id: triage
+  state: TRIAGE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: State what happened, who was affected, for how long and how it was detected, with the evidence sources. The console records triaged=true when summary, impact, severity and detection are present.
+    see_prior: true
+- id: timeline
+  state: TIMELINE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Reconstruct the timeline from evidence. Every entry needs an RFC3339 time, an event and an evidence reference. The console checks order and that workspace evidence exists before recording timeline_ok=true.
+    see_prior: true
+- id: analysis
+  state: ANALYSIS
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Explain the root cause and contributing factors without blame, separating observation from inference; say what went well and badly; propose corrective and preventive actions, each with owner, due date and how it is verified. The console checks every action before recording analyzed=true.
+    see_prior: true
+- id: revise
+  state: REVIEW
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Write the complete postmortem in Markdown; in later rounds address the reviewer's findings or the person's reason for returning it. The console then asks a reviewer in a fresh context.
+    see_prior: true
+- id: review
+  state: REVIEW
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console's reviewer, in a fresh context with no tools, judges the draft against a blameless postmortem rubric and records accepted and findings.
+    see_prior: true
+- id: present
+  state: APPROVAL
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console shows the person the exact draft and its digest and completes this step only on the person's keypress, recording decision approve or return with the reason. Approval also needs the human guard, granted through a separate approver identity.
+    see_prior: true
+- id: publish
+  state: PUBLISH
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console writes the approved bytes to the postmortem file. Report to the user and give summary_en for project memory; the console records published=true when the file holds the approved digest.
+    see_prior: true
+guards:
+  triage_completed: {type: automated, check: 'step_status:triage:COMPLETED'}
+  triage_ready: {type: automated, check: 'output_field:triage:triaged=true'}
+  timeline_completed: {type: automated, check: 'step_status:timeline:COMPLETED'}
+  timeline_ready: {type: automated, check: 'output_field:timeline:timeline_ok=true'}
+  analysis_completed: {type: automated, check: 'step_status:analysis:COMPLETED'}
+  analysis_ready: {type: automated, check: 'output_field:analysis:analyzed=true'}
+  revise_completed: {type: automated, check: 'step_status:revise:COMPLETED'}
+  review_completed: {type: automated, check: 'step_status:review:COMPLETED'}
+  review_accepted: {type: automated, check: 'output_field:review:accepted=true'}
+  review_exhausted: {type: automated, check: 'state_repeat_exhausted:REVIEW'}
+  present_completed: {type: automated, check: 'step_status:present:COMPLETED'}
+  person_approves: {type: human, check: manual_approval}
+  return_requested: {type: automated, check: 'output_field:present:decision="return"'}
+  publish_completed: {type: automated, check: 'step_status:publish:COMPLETED'}
+  publish_ready: {type: automated, check: 'output_field:publish:published=true'}
+roles:
+- id: AXLR
+  allowed_actions: [triage, triaged, timeline, timelined, analysis, analyzed, revise, review, reviewed, review_exhausted, present, publish, published]
+- id: HUMAN_APPROVER
+  allowed_actions: [approved, returned]
+timeouts:
+  step_default: 3600
+retry_policies:
+  default: {max_attempts: 1, backoff_seconds: 1}
+max_parallel: 1
+max_transitions: 30
+max_bounces: 3

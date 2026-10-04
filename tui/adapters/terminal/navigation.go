@@ -200,6 +200,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				return m, nil, true
 			}
 		} else if m.overlay != "" {
+			if m.overlay == "incident" && (k.String() != "esc" || m.IncidentCard.Reasoning) {
+				next, cmd := m.incidentKey(k)
+				return next, cmd, true
+			}
 			if k.String() == "esc" {
 				if m.overlay == "sessions" && m.Picker.Renaming {
 					m.Picker.Key(k.String(), k.Text)
@@ -799,6 +803,9 @@ func (m AppModel) overlayView(base string) string {
 			title, subtitle = m.Theme.T("update.title"), m.Theme.T("update.subtitle")
 		}
 		body = m.Theme.Overlay(title, subtitle, m.Info.View(), m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
+	case "incident":
+		title, subtitle, content := m.incidentCardView()
+		body = m.Theme.Overlay(title, subtitle, content, m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
 	case "sessions":
 		body = m.Picker.View(m.Theme, m.zones, m.prefix, m.Layout.Height-1, m.Layout.Width)
 	case "search":

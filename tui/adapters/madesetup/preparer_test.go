@@ -95,7 +95,7 @@ func TestPreparationGrantsTheConfiguredWorkIdentityAsTheTrustedHost(t *testing.T
 	if err != nil || got != "granted|made-local-host-abc-axlr-work|" {
 		t.Fatalf("%s %v", got, err)
 	}
-	issue, verify := engine.calls[0], engine.calls[1]
+	issue, approver, verify := engine.calls[0], engine.calls[1], engine.calls[2]
 	if slices.ContainsFunc(issue.env, func(e string) bool { return strings.HasPrefix(e, hostIdentityKey+"=") }) {
 		t.Fatal("grant issued under the work identity instead of the trusted host")
 	}
@@ -106,6 +106,12 @@ func TestPreparationGrantsTheConfiguredWorkIdentityAsTheTrustedHost(t *testing.T
 		if slices.Contains([]string{"approve_ceremony_guard", "issue_authorization_grant", "revoke_authorization_grant", "publish_ceremony_definition", "validate_ceremony_draft"}, action) {
 			t.Fatalf("work grant includes privileged action %s", action)
 		}
+	}
+	if approver.args["grant_id"] != ApproverGrantID || approver.args["grantee_id"] != "made-local-host-abc-axlr-work-approver" || !slices.Equal(approver.args["actions"].([]string), []string{"approve_ceremony_guard", "get_ceremony_instance"}) {
+		t.Fatalf("approver grant: %v", approver.args)
+	}
+	if slices.ContainsFunc(approver.env, func(e string) bool { return strings.HasPrefix(e, hostIdentityKey+"=") }) {
+		t.Fatal("approver grant issued under the work identity instead of the trusted host")
 	}
 	if verify.tool != "made_list_ceremony_definitions" || !slices.Contains(verify.env, hostIdentityKey+"=made-local-host-abc-axlr-work") {
 		t.Fatalf("readback did not run as the work identity: %+v", verify)
@@ -184,7 +190,7 @@ func TestPreparationPublishesCeremoniesThroughAShortLivedGrant(t *testing.T) {
 		}
 	}
 	joined := strings.Join(order, ",")
-	if strings.Count(joined, "made_publish_ceremony_definition") != 2 || !strings.HasSuffix(joined, "made_revoke_authorization_grant") {
+	if strings.Count(joined, "made_publish_ceremony_definition") != 3 || !strings.HasSuffix(joined, "made_revoke_authorization_grant") {
 		t.Fatalf("unexpected sequence: %s", joined)
 	}
 	engine.calls = nil
@@ -195,5 +201,23 @@ func TestPreparationPublishesCeremoniesThroughAShortLivedGrant(t *testing.T) {
 		if c.tool == "made_publish_ceremony_definition" || c.tool == "made_revoke_authorization_grant" {
 			t.Fatalf("second preparation republished: %s", c.tool)
 		}
+	}
+}
+
+func TestTheApproverActsAsItsOwnIdentity(t *testing.T) {
+	path := madeConfig(t, embeddedLauncher, map[string]string{hostIdentityKey: "axlr-work-1"})
+	var got recordedCall
+	a := &Approver{ConfigPath: path, Getenv: func(string) string { return "" }, Call: func(_ context.Context, s mcpclient.Server, tool string, arguments map[string]any) (map[string]any, error) {
+		got = recordedCall{tool, s.Env, arguments}
+		return map[string]any{}, nil
+	}}
+	if err := a.ApproveGuard(context.Background(), "axlr-i", "person_approves"); err != nil {
+		t.Fatal(err)
+	}
+	if got.tool != "made_approve_ceremony_guard" || !slices.Contains(got.env, hostIdentityKey+"=axlr-work-1-approver") || slices.Contains(got.env, hostIdentityKey+"=axlr-work-1") {
+		t.Fatalf("approval not made as the approver: %+v", got)
+	}
+	if got.args["guard_name"] != "person_approves" || got.args["role_id"] != "HUMAN_APPROVER" {
+		t.Fatalf("%v", got.args)
 	}
 }
