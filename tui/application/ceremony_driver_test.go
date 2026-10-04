@@ -111,14 +111,14 @@ func (f *fakeMemory) Record(_ context.Context, about string, labels map[string][
 	f.about, f.summary = about, summary+" labels="+strings.Join(labels["ceremony"], ",")
 	return nil
 }
-func (f *fakeMemory) RecordLinked(_ context.Context, about string, labels map[string][]string, record MemoryRecord) error {
+func (f *fakeMemory) RecordLinked(_ context.Context, about string, labels map[string][]string, record MemoryRecord) (string, error) {
 	if f.fail != nil {
-		return f.fail
+		return "", f.fail
 	}
 	f.about, f.summary = about, record.Summary
 	f.records = append(f.records, record)
 	f.labels = append(f.labels, labels)
-	return nil
+	return about + ":entry:" + record.Kind + ":" + record.ID, nil
 }
 
 func debugSession(t *testing.T) domain.Session {

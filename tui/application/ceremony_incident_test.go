@@ -188,8 +188,8 @@ func (m *labelMemory) Wake(context.Context, string) (string, error) { return "",
 func (m *labelMemory) WakeFocused(context.Context, string, string) (string, []string, error) {
 	return "", nil, nil
 }
-func (m *labelMemory) RecordLinked(ctx context.Context, about string, labels map[string][]string, r MemoryRecord) error {
-	return m.Record(ctx, about, labels, r.ID, r.Summary, r.Evidence)
+func (m *labelMemory) RecordLinked(ctx context.Context, about string, labels map[string][]string, r MemoryRecord) (string, error) {
+	return "", m.Record(ctx, about, labels, r.ID, r.Summary, r.Evidence)
 }
 func (m *labelMemory) Record(_ context.Context, about string, labels map[string][]string, _, summary, evidence string) error {
 	m.labels, m.summary = labels, summary

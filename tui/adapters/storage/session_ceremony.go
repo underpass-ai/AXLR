@@ -42,6 +42,8 @@ type sessionRepair struct {
 	Base          string   `json:"base,omitempty"`
 	Branch        string   `json:"branch,omitempty"`
 	Slug          string   `json:"slug,omitempty"`
+	Title         string   `json:"title,omitempty"`
+	CauseRef      string   `json:"cause_ref,omitempty"`
 	PullRequest   int      `json:"pull_request,omitempty"`
 	URL           string   `json:"url,omitempty"`
 	HeadSHA       string   `json:"head_sha,omitempty"`
@@ -103,7 +105,7 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 		run.Incident = &domain.IncidentRun{Slug: i.Slug, Service: i.Service, Severity: i.Severity, DraftPath: i.DraftPath, DraftDigest: i.DraftDigest, Findings: i.Findings, ReturnReason: i.ReturnReason, Returns: i.Returns, ReviewFailures: i.ReviewFailures, Awaiting: i.Awaiting, Decided: i.Decided, Granted: i.Granted, Published: i.Published}
 	}
 	if r := record.Repair; r != nil {
-		run.Repair = &domain.RepairRun{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Slug: r.Slug, PullRequest: r.PullRequest, URL: r.URL, HeadSHA: r.HeadSHA, Rounds: r.Rounds, Feedback: r.Feedback, Cause: r.Cause, Fix: r.Fix, Summary: r.Summary, WakeRefs: r.WakeRefs, Awaiting: r.Awaiting, Decided: r.Decided, Granted: r.Granted, MergeSHA: r.MergeSHA, CauseRecorded: r.CauseRecorded}
+		run.Repair = &domain.RepairRun{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Slug: r.Slug, Title: r.Title, CauseRef: r.CauseRef, PullRequest: r.PullRequest, URL: r.URL, HeadSHA: r.HeadSHA, Rounds: r.Rounds, Feedback: r.Feedback, Cause: r.Cause, Fix: r.Fix, Summary: r.Summary, WakeRefs: r.WakeRefs, Awaiting: r.Awaiting, Decided: r.Decided, Granted: r.Granted, MergeSHA: r.MergeSHA, CauseRecorded: r.CauseRecorded}
 	}
 	if run.Validate() != nil {
 		return nil
@@ -123,7 +125,7 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 		record.Incident = &sessionIncident{Slug: i.Slug, Service: i.Service, Severity: i.Severity, DraftPath: i.DraftPath, DraftDigest: i.DraftDigest, Findings: i.Findings, ReturnReason: i.ReturnReason, Returns: i.Returns, ReviewFailures: i.ReviewFailures, Awaiting: i.Awaiting, Decided: i.Decided, Granted: i.Granted, Published: i.Published}
 	}
 	if r := run.Repair; r != nil {
-		record.Repair = &sessionRepair{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Slug: r.Slug, PullRequest: r.PullRequest, URL: r.URL, HeadSHA: r.HeadSHA, Rounds: r.Rounds, Feedback: r.Feedback, Cause: r.Cause, Fix: r.Fix, Summary: r.Summary, WakeRefs: r.WakeRefs, Awaiting: r.Awaiting, Decided: r.Decided, Granted: r.Granted, MergeSHA: r.MergeSHA, CauseRecorded: r.CauseRecorded}
+		record.Repair = &sessionRepair{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Slug: r.Slug, Title: r.Title, CauseRef: r.CauseRef, PullRequest: r.PullRequest, URL: r.URL, HeadSHA: r.HeadSHA, Rounds: r.Rounds, Feedback: r.Feedback, Cause: r.Cause, Fix: r.Fix, Summary: r.Summary, WakeRefs: r.WakeRefs, Awaiting: r.Awaiting, Decided: r.Decided, Granted: r.Granted, MergeSHA: r.MergeSHA, CauseRecorded: r.CauseRecorded}
 	}
 	data, err := json.Marshal(record)
 	if err != nil {

@@ -86,6 +86,8 @@ type RepairRun struct {
 	// Repository is owner/name; Base its default branch; Branch the repair
 	// branch the console pushes; Slug names both the branch and the memory.
 	Repository, Base, Branch, Slug string
+	// Title is the pull request title, from the brief's first line.
+	Title string
 	// PullRequest is zero until propose opened one; URL and HeadSHA follow.
 	PullRequest  int
 	URL, HeadSHA string
@@ -106,8 +108,10 @@ type RepairRun struct {
 	Granted bool
 	// MergeSHA is the merge commit once merged.
 	MergeSHA string
-	// CauseRecorded is true once the diagnosis reached memory.
+	// CauseRecorded is true once the diagnosis reached memory; CauseRef is
+	// the ref KMP gave it, which the outcome links to.
 	CauseRecorded bool
+	CauseRef      string
 }
 
 // MaxRepairRounds is how many red check rounds go back to repair. MADE's

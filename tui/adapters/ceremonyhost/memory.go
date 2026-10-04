@@ -97,16 +97,17 @@ func wakeProse(packet map[string]any) string {
 }
 
 func (m Memory) Record(ctx context.Context, about string, labels map[string][]string, id, summary, evidence string) error {
-	return m.RecordLinked(ctx, about, labels, application.MemoryRecord{ID: id, Kind: "observation", Summary: summary, Evidence: evidence})
+	_, err := m.RecordLinked(ctx, about, labels, application.MemoryRecord{ID: id, Kind: "observation", Summary: summary, Evidence: evidence})
+	return err
 }
 
 // RecordLinked writes one memory; each link carries the model's why and the
 // console's evidence. KMP validates the stored endpoint of every ref.
-func (m Memory) RecordLinked(ctx context.Context, about string, labels map[string][]string, record application.MemoryRecord) error {
+func (m Memory) RecordLinked(ctx context.Context, about string, labels map[string][]string, record application.MemoryRecord) (string, error) {
+	// summary_en is deliberately not sent: strict KMP refuses an English
+	// summary that drops an identifier the summary carries (seen 5 Oct 2026),
+	// and the console cannot promise that for model-written text.
 	memory := map[string]any{"id": record.ID, "kind": record.Kind, "summary": record.Summary, "evidence": record.Evidence}
-	if record.SummaryEN != "" {
-		memory["summary_en"] = record.SummaryEN
-	}
 	if len(record.Links) > 0 {
 		var links []any
 		for _, link := range record.Links {
@@ -120,13 +121,15 @@ func (m Memory) RecordLinked(ctx context.Context, about string, labels map[strin
 	}
 	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", map[string]any{"about": about, "actor": "axlr", "idempotency_key": "axlr:ceremony-outcome:" + record.ID, "labels": labels, "memories": []any{memory}})
 	if err != nil {
-		return err
+		return "", err
 	}
 	if accepted, _ := result["accepted"].(bool); accepted {
-		return nil
+		refs, _ := result["local_refs"].(map[string]any)
+		ref, _ := refs[record.ID].(string)
+		return ref, nil
 	}
 	if status, _ := result["status"].(string); status == "needs_review" {
-		return errors.New("KMP outcome needs writer review; inspect the returned context before resuming")
+		return "", errors.New("KMP outcome needs writer review; inspect the returned context before resuming")
 	}
-	return errors.New("KMP did not accept the ceremony outcome")
+	return "", errors.New("KMP did not accept the ceremony outcome")
 }

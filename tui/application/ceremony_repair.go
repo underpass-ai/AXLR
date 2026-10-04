@@ -118,7 +118,11 @@ func (d *CeremonyDriver) beginRepair(ctx context.Context, s *domain.Session, run
 	if about == "" {
 		about = "project:" + strings.ToLower(marker.Repository[strings.LastIndex(marker.Repository, "/")+1:])
 	}
-	repair := &domain.RepairRun{Repository: marker.Repository, Base: marker.Base, Slug: marker.Slug, Branch: "repair/" + marker.Slug}
+	title, _, _ := strings.Cut(strings.TrimSpace(marker.Brief), "\n")
+	repair := &domain.RepairRun{Repository: marker.Repository, Base: marker.Base, Slug: marker.Slug, Branch: "repair/" + marker.Slug, Title: bounded("Repair: "+strings.TrimSpace(title), 72)}
+	if repair.Title == "Repair: " {
+		repair.Title = bounded("Repair: "+strings.ReplaceAll(marker.Slug, "-", " "), 72)
+	}
 	run.About = about
 	run.Repair = repair
 	if d.Memory != nil {
@@ -158,15 +162,16 @@ func (d *CeremonyDriver) recordCause(ctx context.Context, s domain.Session, run 
 		report["links_refused"] = refused
 	}
 	record := MemoryRecord{ID: run.Instance + "-cause", Kind: "error_path",
-		Summary:   fmt.Sprintf("Cause of %q in %s: %s Proposed fix: %s", bounded(r.Slug, 80), r.Repository, r.Cause, r.Fix),
-		SummaryEN: bounded(done.RootCause, 600), Evidence: bounded(done.Evidence, 1500) + fmt.Sprintf(" (MADE instance %s)", run.Instance), Links: links}
+		Summary:  fmt.Sprintf("Cause of %q in %s: %s Proposed fix: %s", bounded(r.Slug, 80), r.Repository, r.Cause, r.Fix),
+		Evidence: bounded(done.Evidence, 1500) + fmt.Sprintf(" (MADE instance %s)", run.Instance), Links: links}
 	labels := repairLabels(s, *run)
 	labels["step"] = []string{"diagnose"}
-	if err := d.Memory.RecordLinked(ctx, run.About, labels, record); err != nil {
+	ref, err := d.Memory.RecordLinked(ctx, run.About, labels, record)
+	if err != nil {
 		report["memory"] = "cause not recorded: " + bounded(err.Error(), 300)
 		return
 	}
-	r.CauseRecorded = true
+	r.CauseRecorded, r.CauseRef = true, ref
 	report["memory"] = fmt.Sprintf("cause recorded in %s with %d links", run.About, len(links))
 }
 
@@ -202,7 +207,7 @@ func (d *CeremonyDriver) repairStep(ctx context.Context, s domain.Session, run d
 	switch run.Step {
 	case "propose":
 		pr, err := d.Forge.Propose(ctx, RepairProposal{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Number: r.PullRequest,
-			Title: bounded("Repair: "+strings.ReplaceAll(r.Slug, "-", " "), 72), Body: repairBody(run), Trailer: fmt.Sprintf("Repaired-by: AXLR %s %s %s", run.Definition, run.Version, run.Instance)})
+			Title: r.Title, Body: repairBody(run), Trailer: fmt.Sprintf("Repaired-by: AXLR %s %s %s", run.Definition, run.Version, run.Instance)})
 		if err != nil {
 			if ctx.Err() != nil {
 				return StepResult{}, err

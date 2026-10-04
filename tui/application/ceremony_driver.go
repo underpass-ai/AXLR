@@ -618,15 +618,18 @@ func (d *CeremonyDriver) recordRepair(ctx context.Context, s domain.Session, run
 		evidence += "; check " + run.Check.Program + " " + strings.Join(run.Check.Args, " ")
 	}
 	var links []MemoryLink
-	if r.CauseRecorded {
-		links = append(links, MemoryLink{Ref: run.About + ":entry:error_path:" + run.Instance + "-cause", Rel: "follows", Why: "the repair applied the fix proposed for this diagnosed cause", Evidence: evidence})
+	if r.CauseRef != "" {
+		links = append(links, MemoryLink{Ref: r.CauseRef, Rel: "follows", Why: "the repair applied the fix proposed for this diagnosed cause", Evidence: evidence})
 	}
-	record := MemoryRecord{ID: run.Instance + "-outcome", Kind: kind, Summary: summary, SummaryEN: bounded(summary, 600), Evidence: evidence, Links: links}
-	if err := d.Memory.RecordLinked(ctx, run.About, repairLabels(s, run), record); err != nil {
-		// The link's ref is a guess at KMP's naming; retry without it.
-		record.Links = nil
-		if err := d.Memory.RecordLinked(ctx, run.About, repairLabels(s, run), record); err != nil {
+	record := MemoryRecord{ID: run.Instance + "-outcome", Kind: kind, Summary: summary, Evidence: evidence, Links: links}
+	if _, err := d.Memory.RecordLinked(ctx, run.About, repairLabels(s, run), record); err != nil {
+		if len(record.Links) == 0 {
 			return "not recorded: " + bounded(err.Error(), 300)
+		}
+		// Keep the fact even when KMP doubts the link.
+		record.Links = nil
+		if _, retry := d.Memory.RecordLinked(ctx, run.About, repairLabels(s, run), record); retry != nil {
+			return "not recorded: " + bounded(retry.Error(), 300)
 		}
 		return "recorded in " + run.About + " (cause link refused: " + bounded(err.Error(), 200) + ")"
 	}

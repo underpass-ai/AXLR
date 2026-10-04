@@ -66,8 +66,9 @@ type MemoryPort interface {
 	// it also returns the refs the recall exposed, which links may name.
 	WakeFocused(ctx context.Context, about, intent string) (text string, refs []string, err error)
 	Record(ctx context.Context, about string, labels map[string][]string, id, summary, evidence string) error
-	// RecordLinked writes one memory with its relations to existing refs.
-	RecordLinked(ctx context.Context, about string, labels map[string][]string, record MemoryRecord) error
+	// RecordLinked writes one memory with its relations to existing refs and
+	// returns the stored ref, so later memories can link to it exactly.
+	RecordLinked(ctx context.Context, about string, labels map[string][]string, record MemoryRecord) (ref string, err error)
 }
 
 // WorkspaceFilesPort reads and writes workspace files for the console through
@@ -166,6 +167,6 @@ type MemoryLink struct {
 
 // MemoryRecord is one memory with its links, written by the console.
 type MemoryRecord struct {
-	ID, Kind, Summary, SummaryEN, Evidence string
-	Links                                  []MemoryLink
+	ID, Kind, Summary, Evidence string
+	Links                       []MemoryLink
 }

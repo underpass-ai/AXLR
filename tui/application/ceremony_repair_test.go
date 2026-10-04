@@ -170,6 +170,12 @@ func TestRepairRunsToAutomaticMergeAndRecordsCauseAndOutcome(t *testing.T) {
 	if outcome.Kind != "success_path" || !strings.Contains(outcome.Summary, "pull request #7") || !strings.Contains(outcome.Summary, "merge123") {
 		t.Fatalf("outcome: %+v", outcome)
 	}
+	if len(outcome.Links) != 1 || outcome.Links[0].Ref != "project:axlr-repair-lab:entry:error_path:"+memory.records[0].ID || outcome.Links[0].Rel != "follows" {
+		t.Fatalf("outcome link: %+v", outcome.Links)
+	}
+	if forge.proposals[0].Title != "Repair: hola sale 1" {
+		t.Fatalf("title: %q", forge.proposals[0].Title)
+	}
 	if labels := memory.labels[len(memory.labels)-1]; labels["pull_request"][0] != "7" || labels["repair"][0] != "20261005-0200-hola-sale-1" {
 		t.Fatalf("labels: %v", labels)
 	}

@@ -12,6 +12,12 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
+// CommitAuthor and CommitEmail sign the console's repair commits.
+const (
+	CommitAuthor = "AXLR"
+	CommitEmail  = "axlr@underpass.ai"
+)
+
 // Forge is application.ForgePort over git and the GitHub CLI, run through the
 // console's exec runtime in the clone: the same restricted environment and
 // workspace boundary as the model's commands, and no shell.
@@ -50,7 +56,9 @@ func (f Forge) Propose(ctx context.Context, p application.RepairProposal) (appli
 	if p.Trailer != "" {
 		message += "\n" + p.Trailer + "\n"
 	}
-	if _, err := f.run(ctx, "git", "commit", "-q", "-m", message); err != nil {
+	// The console is the author: a fresh clone has no identity of its own
+	// and a person's name on a machine-made commit would mislead.
+	if _, err := f.run(ctx, "git", "-c", "user.name="+CommitAuthor, "-c", "user.email="+CommitEmail, "-c", "commit.gpgsign=false", "commit", "-q", "-m", message); err != nil {
 		return application.PullRequest{}, err
 	}
 	if _, err := f.run(ctx, "git", "push", "-q", "-u", "origin", p.Branch); err != nil {
