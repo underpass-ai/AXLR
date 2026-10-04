@@ -17,11 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - name: Validate bundled ceremonies with checksummed MADE 0.9.1
+      - name: Validate the console-driven definitions and their pins with checksummed MADE 0.10.0
         run: |
           ceremony_test_dir=$(mktemp -d)
-          ceremony_asset=made-mcp-v0.9.1-x86_64-unknown-linux-gnu
-          ceremony_release=https://github.com/underpass-ai/made/releases/download/v0.9.1
+          ceremony_asset=made-mcp-v0.10.0-x86_64-unknown-linux-gnu
+          ceremony_release=https://github.com/underpass-ai/made/releases/download/v0.10.0
           curl -fsSL "$ceremony_release/$ceremony_asset" -o "$ceremony_test_dir/$ceremony_asset"
           curl -fsSL "$ceremony_release/$ceremony_asset.sha256" -o "$ceremony_test_dir/$ceremony_asset.sha256"
           (
@@ -29,7 +29,7 @@ jobs:
             sha256sum -c "$ceremony_asset.sha256"
           )
           chmod +x "$ceremony_test_dir/$ceremony_asset"
-          python3 tools/ceremonies/check.py --made-bin "$ceremony_test_dir/$ceremony_asset"
+          python3 tools/ceremonies/check_pins.py --made-bin "$ceremony_test_dir/$ceremony_asset"
   brand:
     runs-on: ubuntu-latest
     steps:
