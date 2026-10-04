@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -109,5 +110,29 @@ func TestACeremonySidecarWithANewerFieldStillLoads(t *testing.T) {
 	}
 	if run, ok := loaded.Ceremony(); !ok || run.Instance != "axlr-y" {
 		t.Fatal("an unknown field made the live ceremony disappear")
+	}
+}
+
+func TestIncidentStateSurvivesAResume(t *testing.T) {
+	store, _ := openStore(t)
+	const id = "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+	s, _ := domain.NewSession(id, domain.Workspace(t.TempDir()), "test/model")
+	if err := s.SetMode(domain.ModeIncident); err != nil {
+		t.Fatal(err)
+	}
+	incident := domain.IncidentRun{Slug: "checkout-500s", Service: "checkout", Severity: "sev2", DraftPath: "docs/incidents/checkout-500s.draft.md", DraftDigest: "ab", Findings: []string{"no owner"}, ReturnReason: "falta", Returns: 1, ReviewFailures: 1, Awaiting: domain.AwaitingApproval, Decided: "approve", Granted: true, Published: "docs/incidents/2026-10-02-checkout-500s.md"}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_incident", Version: "1.0", Instance: "axlr-i", Step: "present", Iteration: 1, Fence: "f", Incident: &incident}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, ok := loaded.Ceremony()
+	if !ok || run.Incident == nil || !reflect.DeepEqual(*run.Incident, incident) || !run.AwaitingPerson() {
+		t.Fatalf("incident not restored: %+v", run.Incident)
 	}
 }

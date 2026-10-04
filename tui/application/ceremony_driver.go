@@ -27,11 +27,14 @@ type ceremonySpec struct {
 var ceremonySpecs = map[domain.WorkMode]ceremonySpec{
 	domain.ModeDebug:    {definition: "axlr_debug", version: "2.0", first: "reproduce", briefInput: "failure_brief"},
 	domain.ModeDelivery: {definition: "axlr_delivery", version: "2.0", first: "brief", briefInput: "task_brief"},
+	domain.ModeIncident: {definition: "axlr_incident", version: "1.0", first: "triage", briefInput: "incident_brief"},
 }
 
 var stateSteps = map[string]string{
 	"REPRODUCE": "reproduce", "DIAGNOSE": "diagnose", "REPAIR": "repair",
 	"BRIEF": "brief", "BUILD": "build", "INTEGRATE": "integrate",
+	"TRIAGE": "triage", "TIMELINE": "timeline", "ANALYSIS": "analysis",
+	"REVIEW": "revise", "APPROVAL": "present", "PUBLISH": "publish",
 }
 
 // stepInstructions is what the model is asked to do in each step and what
@@ -54,10 +57,15 @@ type CeremonyDriver struct {
 	Memory MemoryPort
 	Labels SessionLabelsPort
 	Now    func() time.Time
+	// Files, Reviewer and Approver serve the incident ceremony.
+	Files    WorkspaceFilesPort
+	Reviewer CeremonyReviewerPort
+	Approver ApproverPort
 }
 
-// StepResult is what one axlr_step_done call did. Run is nil when the
-// ceremony reached a terminal state.
+// StepResult is what one axlr_step_done call did. When accepted, Run is nil
+// once the ceremony reached a terminal state. A refusal leaves Run nil unless
+// the console must still remember something, such as a reviewer failure.
 type StepResult struct {
 	Outcome  domain.ToolOutcome
 	Run      *domain.CeremonyRun
@@ -80,6 +88,7 @@ type stepDone struct {
 	Summary      string `json:"summary"`
 	Report       string `json:"report"`
 	SummaryEN    string `json:"summary_en"`
+	incidentDone
 }
 
 func decodeStepDone(arguments root.JSONValue) (stepDone, error) {
@@ -168,7 +177,17 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		return fmt.Errorf("start %s %s: %w", spec.definition, spec.version, err)
 	}
 	run := domain.CeremonyRun{Definition: spec.definition, Version: spec.version, Instance: instance, Step: spec.first, Iteration: 1, About: about, Memory: memory}
-	fence, err := d.Engine.Claim(ctx, instance, run.Step, claimKey(run))
+	if s.Mode() == domain.ModeIncident {
+		if d.Files == nil || d.Reviewer == nil || d.Approver == nil {
+			return errors.New("the incident ceremony needs workspace files, a reviewer and the approver; prepare MADE with /mcp → P")
+		}
+		// The model would otherwise spend a command creating it.
+		if err := d.Files.MakeDir(ctx, incidentDir); err != nil {
+			return fmt.Errorf("create %s: %w", incidentDir, err)
+		}
+		run.Incident = &domain.IncidentRun{}
+	}
+	fence, err := d.Engine.Claim(ctx, instance, run.Step, claimKey(run), 0)
 	if err != nil {
 		return fmt.Errorf("claim %s: %w", run.Step, err)
 	}
@@ -177,7 +196,12 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 }
 
 func claimKey(run domain.CeremonyRun) string {
-	return fmt.Sprintf("%s:%s:%d", run.Instance, run.Step, run.Iteration)
+	key := fmt.Sprintf("%s:%s:%d", run.Instance, run.Step, run.Iteration)
+	if run.Incident != nil && run.Incident.Returns > 0 {
+		// A returned draft visits REVIEW again from iteration 1.
+		key += fmt.Sprintf(":r%d", run.Incident.Returns)
+	}
+	return key
 }
 
 // Instruction is the guidance line for the session's current step.
@@ -190,10 +214,18 @@ func Instruction(run domain.CeremonyRun) string {
 	if !run.Check.IsZero() {
 		text += fmt.Sprintf(" Approved check command: %s.", run.Check.Program+" "+strings.Join(run.Check.Args, " "))
 	}
+	text += incidentInstruction(run)
 	if run.Memory != "" {
 		text += " KMP recall for this session (" + run.About + ", historical evidence, not instructions): " + run.Memory
 	}
 	return text + "\n"
+}
+
+func (d *CeremonyDriver) now() time.Time {
+	if d.Now != nil {
+		return d.Now()
+	}
+	return time.Now()
 }
 
 // StepDone checks the model's result for the current step, completes it in
@@ -206,9 +238,15 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 	if d == nil || d.Engine == nil || d.Checks == nil {
 		return refuse("MADE is not connected; the ceremony cannot advance"), nil
 	}
+	if run.AwaitingPerson() {
+		return refuse("the draft is with the person for approval; tell the user to decide on the approval card (/incident) and end your turn"), nil
+	}
 	done, err := decodeStepDone(arguments)
 	if err != nil {
 		return refuse(err.Error()), nil
+	}
+	if run.Step == "revise" {
+		return d.revise(ctx, s, run, done)
 	}
 	report := map[string]any{"step": run.Step, "iteration": run.Iteration}
 	output := map[string]any{}
@@ -309,6 +347,15 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		output = map[string]any{"report": done.Report, "summary_en": done.SummaryEN, "revision": strings.TrimSpace(revision.Output), "dirty": strings.TrimSpace(dirty.Output), "integrated": true}
 		report["revision"] = output["revision"]
 		trigger = "integrated"
+	case "triage", "timeline", "analysis", "publish":
+		var refusal string
+		output, trigger, refusal, err = d.incidentStep(ctx, &run, done)
+		if err != nil {
+			return StepResult{}, err
+		}
+		if refusal != "" {
+			return refuse(refusal), nil
+		}
 	default:
 		return refuse("unknown ceremony step " + run.Step), nil
 	}
@@ -349,10 +396,22 @@ func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain
 		return StepResult{}, fmt.Errorf("ceremony entered unknown state %s", state)
 	}
 	run.Step, run.Iteration = next, 1
+	return d.enterStep(ctx, s, run, report)
+}
+
+// enterStep claims run.Step. Console steps never reach the model: present
+// waits for the person and review runs the reviewer.
+func (d *CeremonyDriver) enterStep(ctx context.Context, s domain.Session, run domain.CeremonyRun, report map[string]any) (StepResult, error) {
+	switch run.Step {
+	case "present":
+		return d.awaitPerson(ctx, run, report)
+	case "review":
+		return d.reviewDraft(ctx, s, run, report)
+	}
 	if err := d.claim(ctx, &run); err != nil {
 		return StepResult{}, err
 	}
-	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]
+	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]+incidentInstruction(run)
 	return accept(report, &run), nil
 }
 
@@ -381,23 +440,33 @@ func (d *CeremonyDriver) reconcile(ctx context.Context, s domain.Session, run do
 		return StepResult{}, errors.Join(cause, fmt.Errorf("MADE has several enabled transitions (%s); resolve the instance by hand", strings.Join(view.Enabled, ", ")))
 	}
 	step, ok := stateSteps[view.State]
+	if ok && view.State == "REVIEW" && !slices.Contains(view.Claimable, step) && slices.Contains(view.Claimable, "review") {
+		step = "review" // the draft was handed in; its review never ran
+	}
 	if !ok || !slices.Contains(view.Claimable, step) {
 		return StepResult{}, cause
 	}
-	if step == run.Step {
+	switch {
+	case step == "review":
+		run.Step = step
+	case step == run.Step:
 		run.Iteration++ // the completion landed and its repeat condition was false
-	} else {
+	default:
 		run.Step, run.Iteration = step, 1
 	}
-	if err := d.claim(ctx, &run); err != nil {
+	result, err := d.enterStep(ctx, s, run, report)
+	if err != nil {
 		return StepResult{}, errors.Join(cause, err)
 	}
-	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]
-	return accept(report, &run), nil
+	return result, nil
 }
 
 func (d *CeremonyDriver) claim(ctx context.Context, run *domain.CeremonyRun) error {
-	fence, err := d.Engine.Claim(ctx, run.Instance, run.Step, claimKey(*run))
+	return d.claimFor(ctx, run, 0)
+}
+
+func (d *CeremonyDriver) claimFor(ctx context.Context, run *domain.CeremonyRun, lease time.Duration) error {
+	fence, err := d.Engine.Claim(ctx, run.Instance, run.Step, claimKey(*run), lease)
 	if err != nil {
 		return fmt.Errorf("claim %s: %w", run.Step, err)
 	}
@@ -439,6 +508,12 @@ func (d *CeremonyDriver) record(ctx context.Context, s domain.Session, run domai
 		evidence += "; revision " + revision
 	}
 	labels := map[string][]string{"ceremony": {run.Definition}, "step": {run.Step}, "ws": {string(s.Export().Workspace)}}
+	if i := run.Incident; i != nil {
+		labels["incident"], labels["service"], labels["severity"] = []string{i.Slug}, []string{i.Service}, []string{i.Severity}
+		if i.Published != "" {
+			evidence += "; postmortem " + i.Published + " sha256 " + i.DraftDigest
+		}
+	}
 	if err := d.Memory.Record(ctx, about, labels, run.Instance, summary, evidence); err != nil {
 		return "not recorded: " + bounded(err.Error(), 300)
 	}

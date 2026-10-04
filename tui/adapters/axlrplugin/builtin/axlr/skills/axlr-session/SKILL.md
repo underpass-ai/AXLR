@@ -71,3 +71,6 @@ Its initial recall may use `ws:<session_id>` before the project binding is
 known. Selecting the project later does not rewrite that initial recall or
 MADE's original inputs; the host checks the saved scope again for the terminal
 outcome write. Keep initial recall provenance and final storage scope distinct.
+In `/incident`, the console records the approved outcome; the model cannot
+write it through `kmp_write_memory`. If a new about needs its first durable
+fact, defer that write and comparison until the approved outcome exists.

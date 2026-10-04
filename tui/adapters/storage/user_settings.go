@@ -32,8 +32,11 @@ type UserSettings struct {
 	ReduceMotion bool                 `json:"reduce_motion"`
 	Approvals    *ApprovalPreferences `json:"approvals,omitempty"`
 	// FavoriteModels are listed first in /model.
-	FavoriteModels []string                   `json:"favorite_models,omitempty"`
-	Extra          map[string]json.RawMessage `json:"-"`
+	FavoriteModels []string `json:"favorite_models,omitempty"`
+	// ReviewerModel judges incident postmortems in a fresh context; empty
+	// means the session model.
+	ReviewerModel string                     `json:"reviewer_model,omitempty"`
+	Extra         map[string]json.RawMessage `json:"-"`
 }
 
 type ApprovalPreferences struct {
@@ -96,7 +99,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -134,6 +137,11 @@ func (s UserSettings) Validate() error {
 	if s.Model != "" {
 		if _, err := root.NewModelID(s.Model); err != nil {
 			return errors.New("invalid settings model")
+		}
+	}
+	if s.ReviewerModel != "" {
+		if _, err := root.NewModelID(s.ReviewerModel); err != nil {
+			return errors.New("invalid reviewer_model in settings.json")
 		}
 	}
 	if len(s.FavoriteModels) > maxFavoriteModels {

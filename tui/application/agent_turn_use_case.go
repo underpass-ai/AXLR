@@ -101,7 +101,7 @@ func emitSession(s *domain.Session, emit func(Event) error) error {
 // reminder is a visible message, not hidden guidance.
 func remindOpenStep(ctx context.Context, s *domain.Session, store SessionStorePort, emit func(Event) error) (bool, error) {
 	run, live := s.Ceremony()
-	if !live || run.Reminded || s.Status() != domain.StatusComplete {
+	if !live || run.Reminded || run.AwaitingPerson() || s.Status() != domain.StatusComplete {
 		return false, nil
 	}
 	run.Reminded = true

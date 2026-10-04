@@ -20,6 +20,7 @@ type fakeEngine struct {
 	failCompletes   int
 	failTransitions int
 	view            CeremonyView
+	leases          []time.Duration
 }
 
 var fakeTransitions = map[string]string{
@@ -33,7 +34,8 @@ func (f *fakeEngine) Start(_ context.Context, definition, version, instance stri
 	f.calls = append(f.calls, "start "+definition+" "+version+" about="+inputs["memory_about"])
 	return nil
 }
-func (f *fakeEngine) Claim(_ context.Context, _, step, key string) (string, error) {
+func (f *fakeEngine) Claim(_ context.Context, _, step, key string, lease time.Duration) (string, error) {
+	f.leases = append(f.leases, lease)
 	f.calls = append(f.calls, "claim "+step+" "+key[strings.LastIndex(key, ":")+1:])
 	return "fence-" + step, nil
 }

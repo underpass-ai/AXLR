@@ -1,21 +1,28 @@
 # Ceremonies
 
-AXLR runs ordinary work directly. The console starts a MADE ceremony when the user selects `/debug` or `/delivery`; the model uses the embedded ceremony skill when the user explicitly requests another tracked procedure. These paths ship different definitions and must not be mixed within an active instance.
+AXLR runs ordinary work directly. The console starts a MADE ceremony when the user selects `/debug`, `/delivery` or `/incident`; the model uses the embedded ceremony skill when the user explicitly requests another tracked procedure. These paths ship different definitions and must not be mixed within an active instance.
 
-## Console-driven ceremonies: version 2.0
+## Console-driven ceremonies
 
 | Mode | Definition | Sequence and acceptance |
 |:--|:--|:--|
 | `/debug` | `axlr_debug` 2.0 | Reproduce with a nonzero command exit → diagnose → repair until the same command exits zero → integrate |
 | `/delivery` | `axlr_delivery` 2.0 | Brief with criteria, scope and baseline command → build until that command exits zero → integrate |
+| `/incident` | `axlr_incident` 1.0 | Triage → evidence timeline → analysis and actions → draft and fresh-context review → person's approval → postmortem publication |
 
-The [MADE runbook](runbooks/made.md#prepare-the-driven-ceremonies) prepares the work identity and publishes the two pinned definitions. Selecting a mode does not start an instance; the next prompt does. AXLR checks the published semantic digest, starts the instance and claims its first step. Missing or conflicting definitions stop the start.
+The [MADE runbook](runbooks/made.md#prepare-the-driven-ceremonies) prepares the work identity and publishes the three pinned definitions. Selecting a mode does not start an instance; the next prompt does. AXLR checks the published semantic digest, starts the instance and claims its first step. Missing or conflicting definitions stop the start.
 
 The model does real work with AXLR tools and returns the current step's fields through `axlr_step_done`. AXLR runs the check itself, records its output in MADE, applies an enabled transition and claims the next step. The model must not also drive that instance through direct `made_*` calls.
 
 A proposed check is `{program, args}` with no implicit shell. The first command, or a changed reproduction command, needs user approval even in full autonomy. Once reproduce/brief is accepted, repair/build always reruns the saved command: a replacement supplied by the model is ignored. Each invocation has a five-minute timeout, 16 KiB output capture and a 4 KiB evidence tail. The local process receives the console's restricted environment described in [work modes](console.md#work-modes).
 
 Debug reproduction and repair, and delivery build, allow at most three iterations per phase. A failure to reproduce can also be declared explicitly. Exhaustion or declared non-reproducibility leads to `BLOCKED`; successful integration leads to `COMPLETED`. Both clear the active ceremony and return the session to normal. Integration records the report, `git rev-parse HEAD` and dirty-file output; it does not commit, merge or publish. A zero check exit proves only what that command actually checks, and integration does not require a clean Git tree.
+
+### Incident review and approval
+
+`/incident` reconstructs a blameless postmortem from workspace evidence. Timeline entries need ordered RFC3339 timestamps and evidence; actions need an owner, a future due date and verification. The model writes `docs/incidents/<slug>.draft.md`. A reviewer in a fresh context checks the draft, with at most two review rounds. This is a separate model context, not proof of an independent human reviewer.
+
+The console then presents the exact reviewed draft for the person's decision. Open `/incident`: `a` approves the displayed bytes; `d` returns them with a reason, up to twice. The approval guard uses a separate approver identity. The model cannot approve the draft through `axlr_step_done`. Approved bytes are written unchanged to `docs/incidents/<date>-<slug>.md`; publication verifies their digest before completion. Reviewer or approval failures remain pending for recovery.
 
 ### Memory and recovery
 
@@ -45,9 +52,9 @@ Read the skill through `axlr_skill` without installing a package:
 
 Then read `references/catalog.json`, the selected `references/axlr_<procedure>.yaml` and the relevant execution/handoff guide. Follow all byte-page cursors. Resources live in the [embedded skill directory](../tui/adapters/axlrplugin/builtin/made/skills/axlr-ceremonies/SKILL.md). The catalogue pins version 1.0, file SHA-256 and MADE semantic digest; a formatting hash is not the semantic definition identity.
 
-These definitions were validated with MADE 0.9.1. Before execution, discover the live tools and verify compatible output-field guards, bounded repeats and timeouts. Publish absent definitions only when that setup is authorized, and compare existing immutable versions. Installing the catalogue starts no task. Use the selected 1.0 version explicitly; never substitute it for a driver expecting 2.0.
+These definitions were validated with MADE 0.9.1. Before execution, discover the live tools and verify compatible output-field guards, bounded repeats and timeouts. Publish absent definitions only when that setup is authorized, and compare existing immutable versions. Installing the catalogue starts no task. Use the selected catalogue version explicitly; never substitute it for a console driver's pinned definition.
 
-The skill-guided path uses claim → actual host work → structured completion → enabled transition. The model supplies the evidence; unlike the console driver, this path does not automatically run a fixed acceptance command. Failed delivery/debug loops preserve their failed state after three unsuccessful rounds. If the engine or grants are unavailable, authorized reversible work can continue locally, explicitly untracked. That fallback does not apply automatically to a selected `/debug` or `/delivery` mode.
+The skill-guided path uses claim → actual host work → structured completion → enabled transition. The model supplies the evidence; unlike the console driver, this path does not automatically run a fixed acceptance command. Failed delivery/debug loops preserve their failed state after three unsuccessful rounds. If the engine or grants are unavailable, authorized reversible work can continue locally, explicitly untracked. That fallback does not apply automatically to a selected console-driven mode.
 
 Roles describe responsibilities and do not spawn agents. One worker can serve sequential roles, but its review is self-review. Independent review requires a distinct reviewer. Keep guard approval and grant administration off the work principal: MADE 0.9.1 records caller-declared actor/role provenance, so a privileged caller can approve a human guard regardless of its role label. A role name alone does not enforce separation.
 
@@ -68,7 +75,7 @@ worker normally requires a checkpoint/resume instead of ownership transfer.
 
 ## Source and validation
 
-The [driver](../tui/application/ceremony_driver.go), [2.0 pins](../tui/adapters/ceremonyhost/definitions.go) and [preparer](../tui/adapters/madesetup/preparer.go) define console behavior. Run the module checks without invoking a model or touching a live ceremony store:
+The [driver](../tui/application/ceremony_driver.go), [definition pins](../tui/adapters/ceremonyhost/definitions.go) and [preparer](../tui/adapters/madesetup/preparer.go) define console behavior. Run the module checks without invoking a model or touching a live ceremony store:
 
 ```bash
 GOWORK=off go -C tui test ./application ./adapters/ceremonyhost ./adapters/madesetup
@@ -80,4 +87,4 @@ To validate the 1.0 catalogue against an installed compatible MADE binary in a d
 python3 tools/ceremonies/check.py --made-bin /absolute/path/to/made-mcp
 ```
 
-This checks synthetic success/failure, repeat exhaustion, receiver acceptance and publication boundaries; it performs no external publication or real handoff. `--write-catalog` refreshes 1.0 file pins/digests after a reviewed revision, not the driver's 2.0 pins. Bump immutable published versions when their content changes. The [research notes](../tui/adapters/axlrplugin/builtin/made/skills/axlr-ceremonies/references/research.md) preserve the original catalogue design.
+This checks synthetic success/failure, repeat exhaustion, receiver acceptance and publication boundaries; it performs no external publication or real handoff. `--write-catalog` refreshes catalogue file pins/digests after a reviewed revision, not the driver's pins. Bump immutable published versions when their content changes. The [research notes](../tui/adapters/axlrplugin/builtin/made/skills/axlr-ceremonies/references/research.md) preserve the original catalogue design.

@@ -6,7 +6,7 @@ Use AXLR as the working entry point. KMP supplies prior evidence and durable dec
 
 1. Build and launch with the [getting-started guide](../getting-started.md); select a tool-capable OpenRouter model.
 2. Connect [KMP](kmp.md) to the intended store and verify a known memory. Choose a stable project scope for cross-session work.
-3. Connect and [prepare MADE](made.md#prepare-the-driven-ceremonies), using a work identity and the exact 2.0 definitions. Restart if preparation changed the identity.
+3. Connect and [prepare MADE](made.md#prepare-the-driven-ceremonies), using a work identity and the exact pinned driver definitions. Restart if preparation changed the identity.
 4. Inspect `/mcp` and `/approvals`. Decide which exact tools or servers may run automatically. A catalogue entry, connection and authorization are separate facts.
 
 ## Start the task
@@ -25,6 +25,7 @@ Choose the mode before sending the prompt:
 | Evidence and recommendations | `/research` | Memory first when connected; document writes only |
 | Repair a reproducible failure | `/debug` | Prepared MADE `axlr_debug` 2.0 |
 | Deliver a change against a fixed check | `/delivery` | Prepared MADE `axlr_delivery` 2.0 |
+| Reconstruct and approve a postmortem | `/incident` | Prepared MADE `axlr_incident` 1.0 and console approver |
 
 Modes can change only between turns without pending calls. Review/writer/research require approval for every local process and refuse nonempty process stdin; MCP policy is separate. Ordinary work does not need a ceremony simply because KMP and MADE are connected.
 
@@ -37,6 +38,8 @@ With KMP connected, the startup workflow requests recovery and one relevant comp
 For direct work, AXLR discovers only the needed external tool schemas, executes authorized operations and checks the resulting artifact. Recover existing KMP decisions before replacing them with new conclusions. Read a matching installed skill through `axlr_skill`; a skill is guidance, not authority.
 
 For debug/delivery, AXLR starts the procedure on the next prompt. The model submits a concrete check command to `axlr_step_done`; inspect its program, arguments and meaning before approving. In debug it must first reproduce the failure with a nonzero exit. In delivery it establishes a baseline. Repair/build must then pass that saved command. A command that always exits zero is not meaningful acceptance evidence.
+
+For incident work, the console checks the timeline and actions, requests a draft review in a fresh model context, and waits for the person's decision on the exact draft through `/incident`. Only approved bytes become the published postmortem. See [incident review and approval](../ceremonies.md#incident-review-and-approval).
 
 The console drives claims and transitions. Do not have the model also invoke MADE transitions for the same instance. A new prompt during execution steers work; it does not erase an already executed effect or restart the ceremony with new criteria. If scope or acceptance must change, reconcile the existing instance deliberately before starting another.
 

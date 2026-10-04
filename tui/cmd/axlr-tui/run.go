@@ -314,7 +314,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonyDriver(registrations, runner, sessionLabels)}
+	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}
+	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
+	if ceremonies != nil {
+		ceremonies.Files = ceremonyhost.Files{Tools: runner}
+		ceremonies.Reviewer = ceremonyhost.Reviewer{Models: models, Model: settings.ReviewerModel}
+		ceremonies.Approver = &madesetup.Approver{ConfigPath: configPath, Getenv: getenv}
+	}
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
 	app := terminal.New(terminal.Dependencies{
 		Context:           ctx,
 		Diagnostics:       trace,
@@ -410,7 +417,7 @@ func environmentName(s string) bool {
 	return true
 }
 
-// ceremonyDriver drives /debug and /delivery when MADE is connected. KMP is
+// ceremonyDriver drives /debug, /delivery and /incident when MADE is connected. KMP is
 // optional: without it ceremonies run without memory.
 func ceremonyDriver(registrations []plugins.Registration, tools application.ToolExecutionPort, labels application.SessionLabelsPort) *application.CeremonyDriver {
 	connected := map[string]bool{}

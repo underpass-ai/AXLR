@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 )
@@ -52,8 +53,12 @@ func (e Engine) Start(ctx context.Context, definition, version, instance string,
 	return err
 }
 
-func (e Engine) Claim(ctx context.Context, instance, step, key string) (string, error) {
-	claim, err := e.made(ctx, "made_claim_ceremony_step", map[string]any{"ceremony_id": instance, "step_id": step, "actor_kind": actorKind, "lease_owner_id": actorID, "idempotency_key": key, "lease_ttl_ms": claimLease})
+func (e Engine) Claim(ctx context.Context, instance, step, key string, lease time.Duration) (string, error) {
+	ttl := int64(claimLease)
+	if lease > 0 {
+		ttl = lease.Milliseconds()
+	}
+	claim, err := e.made(ctx, "made_claim_ceremony_step", map[string]any{"ceremony_id": instance, "step_id": step, "actor_kind": actorKind, "lease_owner_id": actorID, "idempotency_key": key, "lease_ttl_ms": ttl})
 	if err != nil {
 		return "", err
 	}
@@ -87,6 +92,26 @@ func (e Engine) Inspect(ctx context.Context, instance string) (application.Cerem
 				view.Enabled = append(view.Enabled, trigger)
 			}
 		}
+	}
+	visit, _ := current["current_state_visit"].(float64)
+	steps, _ := current["steps"].([]any)
+	for _, raw := range steps {
+		step, _ := raw.(map[string]any)
+		id, _ := step["step_id"].(string)
+		state, _ := step["state_id"].(string)
+		status, _ := step["status"].(string)
+		stepVisit, _ := step["state_visit"].(float64)
+		if id == "" || state != view.State || stepVisit != visit || status != "completed" {
+			continue
+		}
+		if view.Completed == nil {
+			view.Completed = map[string]map[string]any{}
+		}
+		output, _ := step["output"].(map[string]any)
+		if output == nil {
+			output = map[string]any{}
+		}
+		view.Completed[id] = output
 	}
 	claimable, _ := current["claimable_step_ids"].([]any)
 	for _, raw := range claimable {

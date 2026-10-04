@@ -19,7 +19,7 @@ GOWORK=off go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
 
 Supply `OPENROUTER_API_KEY` through your normal environment or secret manager before launching. In the console, choose a model with `/model` and send a prompt. Use `F1` for controls, `/mcp` for AXLR's server connections, `/plugin` for AXLR-managed packages, and `/update` to update the connected local MADE and KMP engines.
 
-The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker. New sessions use `/normal`; `/review`, `/writer` and `/research` tailor local tool policy, while `/debug` and `/delivery` run prepared MADE procedures. Follow the [agent workflow](docs/runbooks/agent-workflow.md) to put AXLR, KMP and MADE to work together.
+The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker. New sessions use `/normal`; `/review`, `/writer` and `/research` tailor local tool policy, while `/debug`, `/delivery` and `/incident` run prepared MADE procedures. Follow the [agent workflow](docs/runbooks/agent-workflow.md) to put AXLR, KMP and MADE to work together.
 
 After the second user prompt clarifies the task, the built-in session skill guides the agent to set a concise title while preserving manual titles. With KMP connected, it recovers the exact project scope and checks for relevant connections between abouts; proposed relations require supporting evidence before they are recorded.
 

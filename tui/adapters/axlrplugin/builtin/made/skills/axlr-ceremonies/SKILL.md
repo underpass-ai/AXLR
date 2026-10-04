@@ -1,13 +1,13 @@
 ---
 name: axlr-ceremonies
-description: Run explicitly requested AXLR MADE workflows or resume an existing instance; console debug/delivery modes are driven by the host through axlr_step_done.
+description: Run explicitly requested AXLR MADE workflows or resume an existing instance; console debug/delivery/incident modes are driven by the host through axlr_step_done.
 ---
 
 # AXLR ceremonies
 
 Use a ceremony when the user requests one or an existing instance needs resuming. Ordinary changes, reviews and research proceed directly. The catalogue supplies procedures for explicitly requested ceremonies; user instructions and existing authorization remain authoritative. Announce the selected workflow briefly, then do the work.
 
-If `/debug` or `/delivery` has an active console-driven instance, follow its current instruction and use `axlr_step_done`. The host owns claims, fences, checks and transitions. Do not call `made_*` tools for that instance or start a duplicate. Those driver definitions are version `2.0`; the agent-driven catalogue below contains seven separate `1.0` definitions. Preparation with `/mcp` → `P` installs only the two driver definitions.
+If `/debug`, `/delivery` or `/incident` has an active console-driven instance, follow its current instruction and use `axlr_step_done`. The host owns claims, fences, checks and transitions. Do not call `made_*` tools for that instance or start a duplicate. The driver pins `axlr_debug` and `axlr_delivery` at `2.0`, and `axlr_incident` at `1.0`; the agent-driven catalogue below contains seven separate `1.0` definitions. Preparation with `/mcp` → `P` installs only the three driver definitions. Incident approval belongs to the person's console card; the model cannot approve or publish the draft itself.
 
 ## Route the task
 
