@@ -91,14 +91,14 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 			}
 			exactSchema := names[message.ToolCallID] == "axlr_tools"
 			if exactSchema {
-				limit, place = 32*1024, excerptHistorical // Exact discovery schemas must remain executable.
+				limit, place = MaxHostResultBytes, excerptHistorical // Exact discovery schemas must remain executable.
 			}
 			content, err := projectToolContentIn(string(message.Content), i, limit, place)
 			if err == nil && exactSchema {
 				value, _ := decodeContextJSON([]byte(content))
 				object, _ := value.(map[string]any)
 				if object["kind"] == "axlr_tool_result_excerpt" {
-					err = fmt.Errorf("exact tool schema exceeds 32 KiB: %w", ErrContextBudgetExceeded)
+					err = fmt.Errorf("exact tool schema exceeds %d KiB: %w", MaxHostResultBytes>>10, ErrContextBudgetExceeded)
 				}
 			}
 			if err != nil {

@@ -94,7 +94,7 @@ Existing `model-preference.json` and `ui-preference.json` files under the state 
 
 ## Model context
 
-The private session store retains the full transcript. Model requests receive a bounded projection: a 96 KiB message-history ceiling, a 64 KiB low watermark, normally at most 16 KiB per tool result, and an 8 KiB extractive checkpoint. These are byte limits, not the model's advertised token window. Exact tool-discovery schemas are retained up to 32 KiB.
+The private session store retains the full transcript. Model requests receive a bounded projection: a 256 KiB message-history ceiling, a 192 KiB low watermark, normally at most 32 KiB per tool result, and a 16 KiB extractive checkpoint. These are byte limits, not the model's advertised token window. Host results such as exact tool-discovery schemas are retained up to 64 KiB, and `axlr_history` pages hold up to 32 KiB.
 
 When the active turn alone exceeds the budget, AXLR progressively reduces its tool-result excerpts to 8, 4, 2 and then 1 KiB. It asks the model to finish from the evidence already gathered. The current prompt and tool arguments are not silently shortened; context that still cannot fit produces an explicit error. Full saved results remain intact. `axlr_history` can recover earlier-turn messages, but refuses tool results from the current turn to avoid a rereading loop.
 

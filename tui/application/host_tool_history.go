@@ -27,7 +27,7 @@ func hostHistory(messages []root.Message, arguments root.JSONValue) (any, error)
 	}
 	limit, err := hostInteger(args, "limit_bytes", 4096)
 	if err != nil || limit < 1 || limit > MaxHistoryReadBytes {
-		return nil, errors.New("limit_bytes must be between 1 and 16384")
+		return nil, errors.New("limit_bytes must be between 1 and 32768")
 	}
 	data, err := json.Marshal(messages[index])
 	if err != nil {
