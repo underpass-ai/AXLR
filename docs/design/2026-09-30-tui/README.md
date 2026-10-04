@@ -1,5 +1,7 @@
 # AXLR TUI · propuesta visual e interacción
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../../index.md) and its audited revision.
+
 30 de septiembre de 2026. Alcance: diseño y prototipos revisables; no cambia la TUI productiva. Checkout observado: `codex/tui-mcp-controls` en `af03e7eb`.
 
 ## Evidencia de la interfaz actual

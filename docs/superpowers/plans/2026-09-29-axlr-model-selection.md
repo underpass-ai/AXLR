@@ -1,5 +1,7 @@
 # AXLR Model Selection Implementation Plan
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../../index.md) and its audited revision.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Let users choose tool-capable OpenRouter models through `/model`, change the current session's model safely, and start `axlr-tui` without flags.

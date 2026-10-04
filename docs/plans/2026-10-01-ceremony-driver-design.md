@@ -1,5 +1,7 @@
 # Ceremony Driver Design
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../index.md) and its audited revision.
+
 Status: implemented on `feat/ceremony-driver` (2 Oct 2026). The section "As built" records where the implementation differs from the design below.
 Builds on: [work modes](2026-10-01-work-modes.md), which must merge first.
 Spec: ceremony review https://claude.ai/artifact/ScnDk7CV34Lt5e1iCUjNeH and Tirso's decisions of 1 Oct 2026 (the host drives MADE; only delivery and debug remain as ceremonies, as 2.0; `/resume` replaces handoff).

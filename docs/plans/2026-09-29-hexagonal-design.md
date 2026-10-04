@@ -1,5 +1,7 @@
 # AXLR: diseño hexagonal de la primera entrega
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../index.md) and its audited revision.
+
 ## Intención
 
 AXLR es el nuevo núcleo de ejecución propio de Underpass, reescrito de forma selectiva a partir de nuestro `underpass-runtime`. Expone una biblioteca Go y un worker JSON de una solicitud para `read`, `write`, `edit` y `exec` en Linux local confiable. El host proporciona el workspace, entorno y límites. El worker no decide permisos ni mantiene estado de negocio.

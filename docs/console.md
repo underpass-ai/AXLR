@@ -12,9 +12,12 @@ The model picker filters to text models that support tools. Tab changes provider
 |:--|:--|
 | `Enter` / `Shift+Enter` | Send / insert a newline |
 | `/model` | Choose a model |
+| `/normal`, `/review`, `/writer`, `/research` | Choose direct work and its local tool policy |
+| `/debug`, `/delivery` | Select a console-driven MADE procedure for the next prompt |
+| `/update` | Update explicitly configured local KMP and MADE engines |
 | `/mcp` | Inspect connected MCP servers, tools and approvals |
 | `/approvals` | Show saved always-allow tools and autonomy mode |
-| `/autonomy on` / `/autonomy off` | Automatically approve all known tools, or restore normal policy |
+| `/autonomy on` / `/autonomy off` | Automatically approve permitted known tools, or restore normal policy |
 | `/plugin` | Browse packages installed in AXLR and available sources |
 | `/theme` | Preview and save appearance |
 | `/changes` / `/diff` / `Ctrl+D` | Review this session's file changes |
@@ -27,7 +30,26 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Esc` | Close an overlay or cancel the active turn |
 | `Ctrl+C` | Cancel active work; quit when idle |
 
-The interface supports mouse controls where the terminal supplies them. In an approval dialog, inspect the exact target and arguments with arrows, PgUp/PgDn or the wheel; `A` approves once, `L` executes this call and always allows the exact tool identity on future calls, `F` activates full autonomy and executes this call, and `D` denies. `/approvals` lists saved choices. The autonomy switch approves every known local or registered tool without a dialog; it persists until turned off. Unknown tool names cannot be approved. A turn is limited to 32 tool calls. Cancellation does not reverse an effect that already happened.
+The interface supports mouse controls where the terminal supplies them. In an approval dialog, inspect the exact target and arguments with arrows, PgUp/PgDn or the wheel; `A` approves once and `D` denies. When offered, `L` executes this call and always allows the exact tool identity on future calls, `F` activates full autonomy and executes this call. `/approvals` lists saved choices. The autonomy switch approves known tools that the work mode permits; it persists until turned off. Restricted modes still require a decision for every local `exec`, and a new ceremony check command always needs approval. Their dialogs offer only decisions that apply to that call. Unknown tool names cannot be approved. An ordinary turn is limited to 32 tool calls; driven ceremonies reset the allowance as a step advances. Cancellation does not reverse an effect that already happened.
+
+## Work modes
+
+Select a mode with its slash command between turns, after choosing a model. The mode is saved with the session and applies to subsequent work; switching while busy or with pending calls is refused. `normal` is the default for a new session.
+
+| Command | Purpose | Local tool policy |
+|:--|:--|:--|
+| `/normal` | General agentic work | All four local tools, under saved approval policy |
+| `/review` | Findings with locations, failure scenarios and evidence | Read; write/edit hidden and refused; every exec needs approval |
+| `/writer` | Brief, outline, draft, critique and at most two revisions | Write/edit only `.md`, `.mdx`, `.txt`, `.rst` or paths under `docs/`; every exec needs approval |
+| `/research` | Recover memory, read primary sources and produce a supported decision | Same document write policy as writer; every exec needs approval |
+| `/debug` | Reproduce, diagnose, repair and integrate | All local tools; console drives MADE `axlr_debug` 2.0 |
+| `/delivery` | Brief, build/check and integrate | All local tools; console drives MADE `axlr_delivery` 2.0 |
+
+`review`, `writer` and `research` refuse any local exec with nonempty `stdin`, including when full autonomy is enabled. Arguments remain visible for per-call review. These restrictions apply to AXLR's local tools: MCP calls retain their own approval policy and may have external side effects. An approved process is not sandboxed by the mode.
+
+Direct modes do not start ceremonies. For debug/delivery, [prepare MADE](runbooks/made.md#prepare-the-driven-ceremonies), select the mode, then send the task. AXLR starts and claims the pinned definition; the model performs the work and hands results to `axlr_step_done`. A new check command is approved once, then reused unchanged for repair/build verification. On `COMPLETED` or `BLOCKED`, the session returns to normal mode. Missing MADE or definitions prevents this start; there is no silent substitute ceremony. [Ceremonies](ceremonies.md) describes the two execution paths and recovery limits.
+
+The local process environment contains only a sanitized absolute `PATH`. Other shell variables, provider credentials and `HOME` are not inherited by console exec/check commands. A check that works in your login shell may therefore need explicit paths or a workspace script with documented prerequisites.
 
 ## Review file changes
 
@@ -69,9 +91,11 @@ Existing `model-preference.json` and `ui-preference.json` files under the state 
 
 ## Model context
 
-The private session store retains the full transcript. Model requests receive a bounded projection of it: a 96 KiB history ceiling, 64 KiB low watermark, at most 16 KiB per tool result and an 8 KiB extractive checkpoint. The checkpoint quotes historical inputs and marks omissions. The current prompt and tool arguments are never silently shortened; an oversized active turn produces an error.
+The private session store retains the full transcript. Model requests receive a bounded projection: a 96 KiB message-history ceiling, a 64 KiB low watermark, normally at most 16 KiB per tool result, and an 8 KiB extractive checkpoint. These are byte limits, not the model's advertised token window. Exact tool-discovery schemas are retained up to 32 KiB.
 
-The model initially sees four local tools and three host controls: `axlr_tools` for discovering exact plugin schemas, `axlr_call_tool` for a registered plugin target and `axlr_history` for paged access to saved messages. AXLR validates plugin arguments against the discovered schema before execution. [Context policy research](research/2026-09-30-context-policy.md) explains the measured tradeoffs.
+When the active turn alone exceeds the budget, AXLR progressively reduces its tool-result excerpts to 8, 4, 2 and then 1 KiB. It asks the model to finish from the evidence already gathered. The current prompt and tool arguments are not silently shortened; context that still cannot fit produces an explicit error. Full saved results remain intact. `axlr_history` can recover earlier-turn messages, but refuses tool results from the current turn to avoid a rereading loop.
+
+The model normally sees four local tools plus `axlr_tools` (exact plugin schema discovery), `axlr_call_tool` (registered plugin invocation), `axlr_history` (paged saved messages) and `axlr_skill` (paged skill resources). Review mode hides local write/edit; an active driven ceremony adds `axlr_step_done`. Plugin arguments are validated against the discovered schema before execution. Read only the required schema and follow resource page cursors. [Context policy research](research/2026-09-30-context-policy.md) records the original design; [the audit](documentation-audit.md) covers the later active-turn compaction change.
 
 ## Saved sessions and recovery
 

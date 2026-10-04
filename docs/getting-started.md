@@ -1,6 +1,6 @@
 # Getting started
 
-AXLR is built from source today. You need a full checkout, Go 1.26, Linux, a terminal at least 50 × 15 cells, and an OpenRouter API key for the interactive console. The JSON worker and local library tests do not need a model account.
+This guide builds AXLR from a full checkout with Go 1.26. You need a terminal at least 50 × 15 cells and an OpenRouter API key for the interactive console. The commands below use a POSIX shell; the release workflow also targets macOS and Windows on amd64 and arm64. On Windows, use native executable paths and PowerShell environment syntax, and supply an absolute `HOME` or the required XDG directories. The JSON worker and local library tests do not need a model account.
 
 ## 1. Build
 
@@ -15,7 +15,7 @@ GOWORK=off CGO_ENABLED=0 go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-t
 
 The root and `tui/` directories are separate Go modules. The checked-in workspace and TUI replace directive let the console build from this repository.
 
-AXLR can start without KMP or MADE, but its intended product layers are KMP-governed memory and MADE-governed orchestration. Connect them with the [KMP runbook](runbooks/kmp.md) and [MADE runbook](runbooks/made.md), then confirm both in `/mcp`. Their built-in `/plugin` catalogue entries do not establish a connection.
+AXLR is the default execution entry point in the [product stack](product.md). Connect [KMP](runbooks/kmp.md) for memory and [MADE](runbooks/made.md) for tracked procedures, then confirm both in `/mcp`. Their built-in `/plugin` catalogue entries do not establish a connection. The console can start without either engine; `/debug` and `/delivery` require prepared MADE definitions.
 
 ## 2. Start a console
 
@@ -39,7 +39,7 @@ Useful launch options:
 | `--session ID` | Restore a saved session in the same workspace |
 | `--trace-payloads=false` | Keep timing diagnostics without saved HTTP bodies |
 
-Press `F1` for keyboard help. `Ctrl+P` opens the action palette. AXLR asks before tool calls by default; saved per-tool choices, a server's automatic policy or full autonomy can approve them automatically. `/approvals` shows the saved choices. Review the target and arguments shown in the approval dialog.
+Press `F1` for keyboard help. `Ctrl+P` opens the action palette. AXLR asks before tool calls by default; saved per-tool choices, a server's automatic policy or full autonomy can approve them automatically. `/approvals` shows the saved choices. Review the target and arguments shown in the approval dialog. New sessions start in `/normal`. Use `/writer` for documentation, `/review` for findings, or `/research` for evidence gathering. For a checked implementation or repair, follow the [agent workflow](runbooks/agent-workflow.md) and choose `/delivery` or `/debug` after preparing MADE.
 
 ## 3. Try the one-request worker
 

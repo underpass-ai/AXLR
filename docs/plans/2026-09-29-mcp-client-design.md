@@ -1,5 +1,7 @@
 # AXLR MCP client design
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../index.md) and its audited revision.
+
 AXLR consumes external MCP tools through an optional Go module. AXLR remains Underpass's own runtime, selectively rewritten from `underpass-runtime`. The existing `read`, `write`, `edit` and `exec` executor and worker retain their own contract and are not published as MCP tools.
 
 ## Boundary

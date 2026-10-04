@@ -1,5 +1,7 @@
 # AXLR model selection design
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../../index.md) and its audited revision.
+
 **Date:** 2026-09-29
 
 **Status:** Proposed for user review

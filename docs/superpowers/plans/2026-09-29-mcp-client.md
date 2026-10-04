@@ -1,5 +1,7 @@
 # MCP Client Implementation Plan
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../../index.md) and its audited revision.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Let AXLR consume tools exposed by external MCP servers, without serving AXLR's local tools over MCP.

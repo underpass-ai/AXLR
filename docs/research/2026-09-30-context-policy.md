@@ -1,5 +1,7 @@
 # Context management research and AXLR policy
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../index.md) and its audited revision.
+
 Reviewed on 2026-09-30 against primary source snapshots. This is an engineering comparison, not a latency benchmark of the three products. AXLR implements its own policy and stays on its Go runtime and Bubble Tea presentation.
 
 ## Observed bottleneck

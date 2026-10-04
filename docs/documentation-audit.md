@@ -1,4 +1,71 @@
-# Documentation audit — 30 September 2026
+# Documentation audit — 4 October 2026
+
+## Baseline and scope
+
+Audited `main` and freshly fetched `origin/main` at `559a1b8ceaeaf9cd091c05b2f9db0236083c271b`, starting with a clean worktree. This pass covers README, current guides, engine runbooks, the public OpenAPI description, packaging/deployment claims and the separation of historical designs from operating instructions. Corrections change documentation and the OpenAPI description; runtime behavior and published ceremony definitions are unchanged.
+
+The product direction is explicit: AXLR is Underpass's default agentic execution engine, supported by KMP memory and MADE procedures, with an open extension route through supported MCP tools and OpenAI/Codex plugin components. “Default” names its product responsibility, not automatic approval, mandatory ceremonies or feature parity across hosts.
+
+KMP recovery was attempted before repository analysis. The connected store did not contain the AXLR project scope, and its guide was unavailable; diagnostics identified an unrelated saved store selection. No AXLR memory was written there and no global store selection was changed. Findings below are derived from the checked-out source and checks, not attributed to unavailable memory.
+
+## Findings and corrections
+
+| Finding in the previous current guides | Source evidence in the audited revision | Correction |
+|:--|:--|:--|
+| Product intent did not clearly define the default execution entry point or distinguish host capabilities | [Console wiring](../tui/cmd/axlr-tui/run.go), [service wiring](../tui/cmd/axlr-serve/run.go), [worker](../cmd/axlr/worker.go) | Added [product contract](product.md), capability matrix and [daily workflow](runbooks/agent-workflow.md) |
+| Index claimed three entry points while service code existed | `tui/cmd/axlr-serve`, `tui/service` | Rebuilt [index](index.md) around use, operations and four integration paths |
+| Console omitted six work modes and understated restrictions under autonomy | [Work-mode policy](../tui/domain/work_mode_policy.go), [approval policy](../tui/application/automatic_tool_policy.go), [mode tests](../tui/application/work_mode_test.go) | Documented modes, document-only writes, per-exec approval and stdin refusal |
+| Ceremonies were described as automatic for substantive work | [Host guidance](../tui/application/model_context.go), [embedded skill](../tui/adapters/axlrplugin/builtin/made/skills/axlr-ceremonies/SKILL.md) | Ordinary work stays direct; modes or explicit requests start procedures |
+| Seven 1.0 skill definitions obscured the two host-driven 2.0 definitions | [Driver](../tui/application/ceremony_driver.go), [pins](../tui/adapters/ceremonyhost/definitions.go) | Split [ceremony guide](ceremonies.md) by execution path, version and acceptance mechanism |
+| MADE preparation omitted publishing 2.0 and its temporary grant | [Preparer](../tui/adapters/madesetup/preparer.go), [preparer tests](../tui/adapters/madesetup/preparer_test.go) | Rewrote [MADE runbook](runbooks/made.md): launcher vs binary/remote, permanent work grant, temporary install grant, digest conflicts and readback |
+| The direct-binary MADE example used the operator identity for routine work | [Permanent work actions](../tui/adapters/madesetup/work_grant.go) and preparer route checks | Separate operator bootstrap/publication from the configured work principal |
+| Automatic memory scope and failures were not explained | [Memory adapter](../tui/adapters/ceremonyhost/memory.go), `CeremonyDriver.Begin` / `record` | Documented session scope `ws:<session-id>`, best-effort behavior and explicit stable project-memory workflow |
+| The context guide said oversized active turns immediately failed and listed only three host controls | [Projector](../tui/application/model_context_projector.go), [budget tests](../tui/application/turn_budget_test.go), [host controls](../tui/application/host_tool_definitions.go) | Documented progressive result compaction, current-turn history refusal, skills and conditional step completion |
+| Plugin guide said new approval choices were stored in legacy `approvals.json` | [Console configuration](../tui/cmd/axlr-tui/run.go), [settings](../tui/adapters/storage/user_settings.go) | Corrected to `settings.json` with the legacy fallback and custom MCP-path distinction |
+| Compatibility lacked exact package-ID and host-feature boundaries | [Package importer](../tui/adapters/axlrplugin/manifest.go), [catalogue](../tui/adapters/axlrplugin/catalog.go), [MCP client](../mcpclient/client.go) | Component matrix, package-generated IDs, environment expansion, unsupported root-only manifests/auth/UI, [extension qualification](runbooks/extensions.md) |
+| Service reuse could be read as console feature parity | [Service composition](../tui/cmd/axlr-serve/run.go), [strict config](../tui/service/config.go) | Explicitly documented KMP/MADE-only configuration and absent package, mode and ceremony-driver wiring |
+| Service guide lacked a standalone configuration and probe limitations | [Config](../tui/service/config.go), [probe flags](../tui/cmd/axlr-serve/run.go), [readiness](../tui/service/remote_engines.go) | Added full placeholder config, fixed port 8081 for native probes and precise readiness meaning |
+| OpenAPI advertised a 410 event response that the handler never returns | [Event handler](../tui/service/http_sessions.go), [event journal](../tui/service/persistence.go) | Corrected to 400 for invalid/ahead cursors and documented query precedence; no invented retention recovery |
+| Recovery/update/backup lacked end-to-end procedures | [Updater](../tui/adapters/engineupdate/updater.go), [session storage](../tui/adapters/storage/session_store.go), [service recovery](../tui/service/recovery.go) | Added [maintenance/recovery](runbooks/recovery.md) and [service operations](runbooks/service.md) |
+| Linux-only wording and source-only assertions were stronger than repository evidence | [Six-platform release workflow](../.github/workflows/release.yml), native OS adapters | Documented release targets and POSIX example syntax without claiming a successful published release |
+| Historical designs could be mistaken for current instructions | Plans still contain earlier loop, ceremony, API and platform assumptions | Added historical status pointers and [documentation maintenance](runbooks/documentation.md) |
+
+OpenAI's [packaging guide](https://developers.openai.com/plugins/build/plugins) was checked for the distinction between root plugin manifests and the Codex compatibility manifest. AXLR compatibility claims are bounded by its importer, not by another host's advertised capabilities. Upstream KMP/MADE setup links were checked; engine upgrades still require release-matched instructions.
+
+## Validation
+
+All checks below passed on the local Linux ARM64 host:
+
+| Check | Result |
+|:--|:--|
+| `GOWORK=off go test ./...` and `GOWORK=off go -C tui test ./...` | Both complete suites passed; the available MADE 0.9.1 binary also allowed the 2.0 definition-pin test to run |
+| `go vet` with `GOWORK=off` in both modules | Passed |
+| Build `axlr`, `axlr-tui`, `axlr-serve`; inspect CLI help and versions | All three built; documented flags checked |
+| Worker read of README | `completed`, with bounded output and no workspace mutation |
+| Complete Go examples in library and MCP client guides | Both compiled |
+| Markdown links, local assets/fragments and JSON fences | 53 pages, 287 local references and 13 complete current JSON examples passed |
+| `helm lint` and `helm template` with `values.example.yaml` | Passed; rendered service JSON and the API guide's JSON both accepted by `service.LoadConfig` |
+| OpenAPI 3.1 validation with `openapi-spec-validator` 0.7.2 | Passed after correcting SSE cursor documentation |
+| `tools/ceremonies/check.py` with MADE 0.9.1 | All seven 1.0 definitions publishable; synthetic success, failed checks, loop bounds, receiver acceptance and human-publication boundary passed in disposable stores |
+| `git diff --check` | Passed |
+
+No paid model call, live deployment, external publication or write to an existing KMP/MADE store was performed. The scratch builds and validators were removed after verification. External documentation checks covered the linked OpenAI packaging and KMP/MADE setup references; this was not a crawl of every historical external URL.
+
+## Implementation limits made explicit
+
+These are current product limits, not documentation features left to implement in this change:
+
+- The service has no generic external-plugin setting, skill installation, mode endpoint or wired console ceremony driver.
+- The package importer supports the Codex compatibility manifest and skills/MCP declarations, not every OpenAI plugin component or authentication flow.
+- Ceremony memory is best effort and session-scoped; stable project scope, complete evidence recovery and decision relationships require explicit KMP calls.
+- Console mode restrictions do not sandbox approved processes or classify remote MCP side effects. Driver/setup bookkeeping relies on engine grants as well as the selected workflow.
+- Tests and source manifests do not prove a live deployment, paid model behavior, native execution on every platform or published release availability.
+
+## Earlier audits
+
+The entries below preserve the facts and corrections reported at the time. In particular, service/release work described as planned in September has since been implemented in source; use the current findings above for present behavior.
+
+### 30 September 2026
 
 This audit began against AXLR at `8faf100` and was reconciled with `08f617a`, which replaced the Codex-owned `/plugin` flow with AXLR-owned package installation. KMP and MADE provided structural references: a clear promise, a quick start, a route table and separate guides for detailed contracts. AXLR's current claims were checked against its own code.
 
@@ -18,7 +85,7 @@ This audit began against AXLR at `8faf100` and was reconciled with `08f617a`, wh
 
 Historical design notes remain available as records of decisions. Current behavior should be checked in the [current guides](index.md) and, for exact schemas and limits, in the running binary and source.
 
-## Review — 1 October 2026
+### 1 October 2026
 
 | Finding | Evidence | Correction |
 |:--|:--|:--|
