@@ -30,7 +30,7 @@ type CeremonyRun struct {
 	// Check is the command the user approved for this instance; zero until a
 	// step proposes one.
 	Check CheckCommand
-	// About is the KMP anchor for this session's ceremonies (ws:<session id>).
+	// About is the exact scope used for initial recall and original MADE inputs.
 	About string
 	// Memory is the bounded wake text captured when the ceremony began.
 	Memory string

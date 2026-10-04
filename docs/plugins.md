@@ -9,7 +9,7 @@ AXLR shows two related inventories:
 
 AXLR extends its execution engine through MCP tools and the supported components of OpenAI/Codex plugin packages. Compatibility depends on the manifest, transport, authentication and host capabilities listed below. AXLR owns its copy of the package and its MCP approval policy; installation in one host does not install it in the other.
 
-KMP and MADE appear as built-in catalogue entries. Those entries identify AXLR's intended memory and orchestration engines; they do not install an engine binary or prove that its MCP server is connected. Check `/mcp` for the live state. Use the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks to connect, verify or remove them.
+AXLR, KMP and MADE appear as built-in catalogue entries. AXLR supplies the embedded `axlr-session` skill for session titles and project continuity. KMP and MADE identify the intended memory and orchestration engines; their rows do not install an engine binary or prove that its MCP server is connected. Check `/mcp` for the live state. Use the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks to connect, verify or remove them.
 
 The MADE entry includes the embedded `axlr-ceremonies` skill and seven 1.0 procedures for explicit requests. The console reads them through `axlr_skill` without copying a package. Separately, `/debug` and `/delivery` use the two 2.0 definitions prepared through `/mcp` → `P`. [Ceremonies](ceremonies.md) explains the distinction; engine connection, definition publication and real execution are separate operations.
 

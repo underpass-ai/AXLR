@@ -73,7 +73,9 @@ This writes guide data to the selected store. Restart AXLR with the same selecti
 4. Record decisions, constraints and outcomes with their evidence, rather than copying the conversation. Supply one stable idempotency key per logical write and review any `needs_review` continuation before resuming it. Link decisions with justified relations when the evidence supports them.
 5. Verify the write receipt and retrieve the recorded result. Retain the project scope for the next session.
 
-The console's debug/delivery driver has a narrower automatic path: it wakes `ws:<session-id>` and attempts a terminal outcome write with ceremony, step and workspace labels. It does not map sessions to a canonical `project:<name>`, preserve every wake page or automatically record all decisions. KMP wake errors are ignored by that driver; failed outcome writes are reported without undoing MADE progress. Use explicit project-memory calls when continuity across sessions matters.
+The console's `axlr:axlr-session` skill recovers the exact project scope, stores it with `axlr_session`, defines a missing title after the second user prompt and requests one relevant inter-about comparison. Titles and abouts remain separate; a comparison proposal is not a declared relation. See the [agent workflow](agent-workflow.md#start-the-task).
+
+The debug/delivery driver uses that saved about, falling back to `ws:<session-id>`, and attempts a terminal observation with ceremony, step and workspace labels and a stable idempotency key. It retains reference-bearing bounded wake context and exposes pending continuation, but does not automatically exhaust every wake page or record all decisions. Wake errors are disclosed; failed or review-pending outcome writes are reported without undoing MADE progress. Inspect and finish relevant memory work through explicit project-memory calls.
 
 ## Disconnect KMP from AXLR
 

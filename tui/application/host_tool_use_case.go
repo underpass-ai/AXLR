@@ -9,9 +9,12 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// HostToolUseCase provides read-only discovery and session recovery. Invocation
+// HostToolUseCase provides discovery, session recovery and session bookkeeping. Invocation
 // wrappers are resolved separately and always use the target plugin's policy.
-type HostToolUseCase struct{ Skills PluginSkillPort }
+type HostToolUseCase struct {
+	Skills PluginSkillPort
+	Labels SessionLabelsPort
+}
 
 func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, identity domain.ToolIdentity, arguments root.JSONValue) (domain.ToolOutcome, error) {
 	if err := ctx.Err(); err != nil {
@@ -32,6 +35,8 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		result, err = hostHistory(session.Messages(), arguments)
 	case domain.HostOperationSkill:
 		result, err = u.readSkill(ctx, arguments)
+	case domain.HostOperationSession:
+		result, err = u.sessionContext(ctx, session, arguments)
 	case domain.HostOperationStepDone:
 		err = errors.New("ceremony steps are handled by the ceremony driver")
 	default:

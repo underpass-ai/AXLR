@@ -44,7 +44,7 @@ func TestCodexMarketplaceInstallsOnlyIntoAXLR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(available) != 3 || available[2].ID != "sample" || available[2].Installed {
+	if len(available) != 4 || available[3].ID != "sample" || available[3].Installed {
 		t.Fatalf("available: %#v", available)
 	}
 	if err := catalog.Install(ctx, "sample"); err != nil {
@@ -54,7 +54,7 @@ func TestCodexMarketplaceInstallsOnlyIntoAXLR(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(installed) != 3 || !installed[2].Installed {
+	if len(installed) != 4 || !installed[3].Installed {
 		t.Fatalf("installed: %#v", installed)
 	}
 	if len(mcp.paths) != 1 || !strings.HasPrefix(mcp.paths[0], filepath.Join(axlr, "plugins", "installed")) {

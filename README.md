@@ -21,6 +21,8 @@ Supply `OPENROUTER_API_KEY` through your normal environment or secret manager be
 
 The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker. New sessions use `/normal`; `/review`, `/writer` and `/research` tailor local tool policy, while `/debug` and `/delivery` run prepared MADE procedures. Follow the [agent workflow](docs/runbooks/agent-workflow.md) to put AXLR, KMP and MADE to work together.
 
+After the second user prompt clarifies the task, the built-in session skill guides the agent to set a concise title while preserving manual titles. With KMP connected, it recovers the exact project scope and checks for relevant connections between abouts; proposed relations require supporting evidence before they are recorded.
+
 ## Choose a path
 
 | You want to… | Read |

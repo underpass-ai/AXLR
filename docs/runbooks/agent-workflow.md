@@ -28,6 +28,10 @@ Choose the mode before sending the prompt:
 
 Modes can change only between turns without pending calls. Review/writer/research require approval for every local process and refuse nonempty process stdin; MCP policy is separate. Ordinary work does not need a ceremony simply because KMP and MADE are connected.
 
+The built-in `axlr:axlr-session` skill establishes session context. The first prompt remains the display fallback; after the second user prompt, the agent defines a concise title in your language through `axlr_session`. Existing manual titles are preserved. The tool also stores the exact KMP about separately from the title, so `project:AXLR` keeps its spelling and can be reused on resume. This is model-guided bookkeeping; it does not start a MADE ceremony.
+
+With KMP connected, the startup workflow requests recovery and one relevant comparison through `kmp_relate` once the task is clear, subject to your scope restrictions and plugin approval policy. It prefers a named set of abouts; an explicit `all_abouts` selection can discover candidates when none are known. Comparisons return proposals. Only inspected, evidence-backed identity links are declared, with the proposal context and a reviewed KMP write. A new absent about waits for a real durable fact before comparison; unavailable or partial recall remains explicit.
+
 ## Execute and verify
 
 For direct work, AXLR discovers only the needed external tool schemas, executes authorized operations and checks the resulting artifact. Recover existing KMP decisions before replacing them with new conclusions. Read a matching installed skill through `axlr_skill`; a skill is guidance, not authority.
@@ -40,7 +44,7 @@ The console drives claims and transitions. Do not have the model also invoke MAD
 
 The handback should identify the changed artifacts, check and outcome, unresolved limits, and the revision/worktree inspected. `/changes` records local write/edit previews; use the actual workspace diff as well when processes or MCP tools changed files.
 
-In a driven ceremony, verify `COMPLETED` or `BLOCKED` and the return to normal mode. Check the KMP write outcome separately. Its automatic `ws:<session-id>` record is session-scoped; explicitly save reusable decisions with rationale and evidence under the stable project scope when appropriate. Do not turn a failed memory write into a claim of durable recall.
+In a driven ceremony, verify `COMPLETED` or `BLOCKED` and the return to normal mode. Check the KMP write outcome separately. The driver uses the session's selected project about, with `ws:<session-id>` as fallback. It records a terminal observation with a stable idempotency key, and does not automatically acknowledge a KMP request for writer review. Save other reusable decisions with rationale and evidence under the stable project scope when appropriate. Do not turn a failed memory write into a claim of durable recall.
 
 For transfer, use the [handoff contract](../ceremonies.md#handoff-contract): record exact state and evidence and obtain a real receiver's acceptance. For interruption or ambiguous effects, follow [recovery](recovery.md).
 

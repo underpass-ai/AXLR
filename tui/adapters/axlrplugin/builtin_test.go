@@ -85,6 +85,45 @@ func TestBuiltinSkillCannotReadOtherFilesOrBeShadowed(t *testing.T) {
 	}
 }
 
+func TestSessionSkillPagesWithoutEngineOrPackageAndCannotBeShadowed(t *testing.T) {
+	catalog := Catalog{Root: t.TempDir()}
+	ctx := context.Background()
+	guidance, err := catalog.Guidance(ctx)
+	if err != nil || !strings.Contains(guidance, "axlr:axlr-session") {
+		t.Fatalf("session skill undiscoverable: %s %v", guidance, err)
+	}
+	mustWrite(t, filepath.Join(catalog.Root, "plugins", "installed", "axlr", "skills", builtinSessionSkill, "SKILL.md"), "shadowed")
+	for _, resource := range []string{"SKILL.md", "references/interabouts.md"} {
+		var got strings.Builder
+		for offset := 0; ; {
+			page, err := catalog.ReadSkill(ctx, "axlr", builtinSessionSkill, resource, offset, 137)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got.WriteString(page.Text)
+			if !page.HasMore {
+				break
+			}
+			if page.NextOffsetBytes <= offset {
+				t.Fatal("paging stalled")
+			}
+			offset = page.NextOffsetBytes
+		}
+		want, err := builtinResources.ReadFile(builtinSessionRoot + resource)
+		if err != nil || got.String() != string(want) {
+			t.Fatalf("session skill page lost data: %s %v", resource, err)
+		}
+	}
+	for _, entry := range []struct{ skill, path string }{{builtinCeremonySkill, "SKILL.md"}, {builtinSessionSkill, "../SKILL.md"}, {builtinSessionSkill, "references/catalog.json"}} {
+		if _, err := catalog.ReadSkill(ctx, "axlr", entry.skill, entry.path, 0, 4096); err == nil {
+			t.Fatalf("escaped session skill: %+v", entry)
+		}
+	}
+	if err := catalog.Install(ctx, "axlr"); err == nil {
+		t.Fatal("built-in namespace accepted package installation")
+	}
+}
+
 func readAllSkill(t *testing.T, catalog *Catalog, resource string) string {
 	t.Helper()
 	var text strings.Builder
