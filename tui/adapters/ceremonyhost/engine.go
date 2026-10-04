@@ -101,15 +101,22 @@ func (e Engine) Inspect(ctx context.Context, instance string) (application.Cerem
 		state, _ := step["state_id"].(string)
 		status, _ := step["status"].(string)
 		stepVisit, _ := step["state_visit"].(float64)
-		if id == "" || state != view.State || stepVisit != visit || status != "completed" {
+		if id == "" || status != "completed" {
 			continue
-		}
-		if view.Completed == nil {
-			view.Completed = map[string]map[string]any{}
 		}
 		output, _ := step["output"].(map[string]any)
 		if output == nil {
 			output = map[string]any{}
+		}
+		if view.Outputs == nil {
+			view.Outputs = map[string]map[string]any{}
+		}
+		view.Outputs[id] = output // steps are listed in order, so the latest visit wins
+		if state != view.State || stepVisit != visit {
+			continue
+		}
+		if view.Completed == nil {
+			view.Completed = map[string]map[string]any{}
 		}
 		view.Completed[id] = output
 	}
@@ -117,6 +124,25 @@ func (e Engine) Inspect(ctx context.Context, instance string) (application.Cerem
 	for _, raw := range claimable {
 		if step, _ := raw.(string); step != "" {
 			view.Claimable = append(view.Claimable, step)
+		}
+	}
+	// A live claim of ours survives a crash; its fence is the only way to
+	// finish that step before the lease ends (recovery path
+	// complete_with_original_fence).
+	if resume, err := e.made(ctx, "made_inspect_ceremony_resume", map[string]any{"ceremony_id": instance}); err == nil {
+		claims, _ := resume["claims"].([]any)
+		for _, raw := range claims {
+			claim, _ := raw.(map[string]any)
+			step, _ := claim["step_id"].(string)
+			fence, _ := claim["claim_fence"].(string)
+			phase, _ := claim["phase"].(string)
+			owner, _ := claim["owner"].(string)
+			if step != "" && fence != "" && phase == "live" && owner == actorID {
+				if view.Live == nil {
+					view.Live = map[string]string{}
+				}
+				view.Live[step] = fence
+			}
 		}
 	}
 	return view, nil

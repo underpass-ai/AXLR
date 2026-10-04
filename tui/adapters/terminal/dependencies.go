@@ -33,4 +33,7 @@ type Dependencies struct {
 	Store             application.SessionStorePort
 	Session           *domain.Session
 	Monochrome        bool
+	// InitialDraft fills the composer at launch, such as the repair brief;
+	// the person still presses Enter.
+	InitialDraft string
 }

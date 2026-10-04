@@ -18,6 +18,10 @@ const (
 	// ModeIncident reviews a production incident through a MADE ceremony
 	// with a fresh-context reviewer and a person's approval.
 	ModeIncident WorkMode = "incident"
+	// ModeRepair repairs the configured repository in a disposable clone
+	// through a MADE ceremony: the console opens, watches and merges the
+	// pull request itself.
+	ModeRepair WorkMode = "repair"
 )
 
 func ParseWorkMode(raw string) (WorkMode, error) {
@@ -27,7 +31,7 @@ func ParseWorkMode(raw string) (WorkMode, error) {
 
 func (m WorkMode) Validate() error {
 	switch m {
-	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident:
+	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident, ModeRepair:
 		return nil
 	}
 	return errors.New("unknown work mode")
@@ -35,5 +39,5 @@ func (m WorkMode) Validate() error {
 
 // StartsCeremony reports modes whose first prompt starts a MADE ceremony.
 func (m WorkMode) StartsCeremony() bool {
-	return m == ModeDebug || m == ModeDelivery || m == ModeIncident
+	return m == ModeDebug || m == ModeDelivery || m == ModeIncident || m == ModeRepair
 }

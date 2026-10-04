@@ -1,0 +1,189 @@
+version: '1.0'
+name: axlr_repair
+description: Repair AXLR itself in a disposable clone. The console reproduces the failure with the approved check command, the agent diagnoses and repairs it, and the console opens the pull request, watches its checks, merges it when they are green and the merge is approved or automatic, and records the repair in project memory; at most three attempts per phase and two check rounds, then BLOCKED.
+inputs:
+  required:
+  - failure_brief
+  - workspace
+  - repository
+  optional:
+  - memory_about
+  - issue
+outputs:
+  repair_report:
+    type: object
+states:
+- id: REPRODUCE
+  initial: true
+- id: DIAGNOSE
+- id: REPAIR
+- id: PROPOSE
+- id: WATCH
+- id: DECIDE
+- id: MERGE
+- id: COMPLETED
+  terminal: true
+- id: BLOCKED
+  terminal: true
+transitions:
+- from: REPRODUCE
+  to: DIAGNOSE
+  trigger: reproduced
+  guards: [reproduce_completed, failure_reproduced]
+- from: REPRODUCE
+  to: BLOCKED
+  trigger: not_reproducible
+  guards: [reproduce_completed, declared_not_reproducible]
+- from: REPRODUCE
+  to: BLOCKED
+  trigger: reproduce_exhausted
+  guards: [reproduce_exhausted]
+- from: DIAGNOSE
+  to: REPAIR
+  trigger: diagnosed
+  guards: [diagnose_completed, cause_diagnosed]
+- from: REPAIR
+  to: PROPOSE
+  trigger: repaired
+  guards: [repair_completed, check_passes]
+- from: REPAIR
+  to: BLOCKED
+  trigger: repair_exhausted
+  guards: [repair_exhausted]
+- from: PROPOSE
+  to: WATCH
+  trigger: proposed
+  guards: [propose_completed, pull_request_open]
+- from: PROPOSE
+  to: BLOCKED
+  trigger: propose_failed
+  guards: [propose_completed, pull_request_failed]
+- from: WATCH
+  to: DECIDE
+  trigger: checks_passed
+  guards: [watch_completed, checks_green]
+- from: WATCH
+  to: REPAIR
+  trigger: checks_failed
+  guards: [watch_completed, checks_red]
+- from: WATCH
+  to: BLOCKED
+  trigger: watch_blocked
+  guards: [watch_completed, checks_blocked]
+- from: DECIDE
+  to: MERGE
+  trigger: merge_automatic
+  guards: [decide_completed, automatic_merge]
+- from: DECIDE
+  to: MERGE
+  trigger: merge_approved
+  guards: [decide_completed, person_requested_merge, person_approves]
+- from: DECIDE
+  to: BLOCKED
+  trigger: merge_declined
+  guards: [decide_completed, person_declined]
+- from: MERGE
+  to: COMPLETED
+  trigger: merged
+  guards: [merge_completed, pull_request_merged]
+- from: MERGE
+  to: BLOCKED
+  trigger: merge_failed
+  guards: [merge_completed, pull_request_not_merged]
+steps:
+- id: reproduce
+  state: REPRODUCE
+  handler: host_callback
+  repeat:
+    max_iterations: 3
+    until:
+      output_field: settled
+      equals: true
+  config:
+    num_agents: 1
+    prompt: Find a command that shows the failure in this clone. The console runs it and records reproduced=true only when it exits non-zero. Return check_command, expected and observed; return reproducible=false with the reason when no command can show the failure. The console sets settled=true once the failure is reproduced or declared not reproducible.
+    see_prior: true
+- id: diagnose
+  state: DIAGNOSE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: Identify the first causal breach with the smallest discriminating probes. Separate observation from inference. Return root_cause, evidence, proposed_fix and optionally connect_to, project memory refs from the recall with the relation and why; the console records diagnosed=true when the first three are present and writes the cause to project memory.
+    see_prior: true
+- id: repair
+  state: REPAIR
+  handler: host_callback
+  repeat:
+    max_iterations: 3
+    until:
+      output_field: repaired
+      equals: true
+  config:
+    num_agents: 1
+    prompt: Apply the smallest fix for the diagnosed cause and add a regression check when it protects meaningful behaviour; after a red check round fix what the CI output shows without growing scope. Return summary and summary_en. The console reruns the approved check command and records repaired=true only when it exits zero.
+    see_prior: true
+- id: propose
+  state: PROPOSE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console commits the clone's changes on the repair branch, pushes it and opens or updates the pull request with the cause, the fix and the evidence. It records pull_request, url, head_sha and proposed=true, or proposed=false with the error.
+    see_prior: true
+- id: watch
+  state: WATCH
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console polls the pull request's checks and merge state, bringing the branch up to date with the base when it falls behind. It records verdict green when every check passed, red with the failing checks when one failed and a repair round remains, and blocked when the rounds are exhausted, the checks stall past the deadline or the pull request was closed outside the ceremony.
+    see_prior: true
+- id: decide
+  state: DECIDE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console records decision automatic when the repair settings allow merging green pull requests without a person; otherwise it shows the person the pull request and records approve or decline on their keypress. Approval also needs the human guard, granted through the separate approver identity.
+    see_prior: true
+- id: merge
+  state: MERGE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console squash-merges the pull request, deletes the repair branch and records merged=true with merge_sha, or merged=false with the error. It then writes the repair outcome to project memory.
+    see_prior: true
+guards:
+  reproduce_completed: {type: automated, check: 'step_status:reproduce:COMPLETED'}
+  failure_reproduced: {type: automated, check: 'output_field:reproduce:reproduced=true'}
+  declared_not_reproducible: {type: automated, check: 'output_field:reproduce:reproducible=false'}
+  reproduce_exhausted: {type: automated, check: 'step_repeat_exhausted:reproduce'}
+  diagnose_completed: {type: automated, check: 'step_status:diagnose:COMPLETED'}
+  cause_diagnosed: {type: automated, check: 'output_field:diagnose:diagnosed=true'}
+  repair_completed: {type: automated, check: 'step_status:repair:COMPLETED'}
+  check_passes: {type: automated, check: 'output_field:repair:repaired=true'}
+  repair_exhausted: {type: automated, check: 'step_repeat_exhausted:repair'}
+  propose_completed: {type: automated, check: 'step_status:propose:COMPLETED'}
+  pull_request_open: {type: automated, check: 'output_field:propose:proposed=true'}
+  pull_request_failed: {type: automated, check: 'output_field:propose:proposed=false'}
+  watch_completed: {type: automated, check: 'step_status:watch:COMPLETED'}
+  checks_green: {type: automated, check: 'output_field:watch:verdict="green"'}
+  checks_red: {type: automated, check: 'output_field:watch:verdict="red"'}
+  checks_blocked: {type: automated, check: 'output_field:watch:verdict="blocked"'}
+  decide_completed: {type: automated, check: 'step_status:decide:COMPLETED'}
+  automatic_merge: {type: automated, check: 'output_field:decide:decision="automatic"'}
+  person_requested_merge: {type: automated, check: 'output_field:decide:decision="approve"'}
+  person_declined: {type: automated, check: 'output_field:decide:decision="decline"'}
+  person_approves: {type: human, check: manual_approval}
+  merge_completed: {type: automated, check: 'step_status:merge:COMPLETED'}
+  pull_request_merged: {type: automated, check: 'output_field:merge:merged=true'}
+  pull_request_not_merged: {type: automated, check: 'output_field:merge:merged=false'}
+roles:
+- id: AXLR
+  allowed_actions: [reproduce, reproduced, not_reproducible, reproduce_exhausted, diagnose, diagnosed, repair, repaired, repair_exhausted, propose, proposed, propose_failed, watch, checks_passed, checks_failed, watch_blocked, decide, merge_automatic, merge_declined, merge, merged, merge_failed]
+- id: HUMAN_APPROVER
+  allowed_actions: [merge_approved]
+timeouts:
+  step_default: 3600
+retry_policies:
+  default: {max_attempts: 1, backoff_seconds: 1}
+max_parallel: 1
+max_transitions: 40
+max_bounces: 4

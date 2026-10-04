@@ -34,6 +34,30 @@ type sessionCeremony struct {
 	BudgetBase int              `json:"budget_base,omitempty"`
 	Reminded   bool             `json:"reminded,omitempty"`
 	Incident   *sessionIncident `json:"incident,omitempty"`
+	Repair     *sessionRepair   `json:"repair,omitempty"`
+}
+
+type sessionRepair struct {
+	Repository    string   `json:"repository,omitempty"`
+	Base          string   `json:"base,omitempty"`
+	Branch        string   `json:"branch,omitempty"`
+	Slug          string   `json:"slug,omitempty"`
+	Title         string   `json:"title,omitempty"`
+	CauseRef      string   `json:"cause_ref,omitempty"`
+	PullRequest   int      `json:"pull_request,omitempty"`
+	URL           string   `json:"url,omitempty"`
+	HeadSHA       string   `json:"head_sha,omitempty"`
+	Rounds        int      `json:"rounds,omitempty"`
+	Feedback      string   `json:"feedback,omitempty"`
+	Cause         string   `json:"cause,omitempty"`
+	Fix           string   `json:"fix,omitempty"`
+	Summary       string   `json:"summary,omitempty"`
+	WakeRefs      []string `json:"wake_refs,omitempty"`
+	Awaiting      string   `json:"awaiting,omitempty"`
+	Decided       string   `json:"decided,omitempty"`
+	Granted       bool     `json:"granted,omitempty"`
+	MergeSHA      string   `json:"merge_sha,omitempty"`
+	CauseRecorded bool     `json:"cause_recorded,omitempty"`
 }
 
 type sessionIncident struct {
@@ -80,6 +104,9 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 	if i := record.Incident; i != nil {
 		run.Incident = &domain.IncidentRun{Slug: i.Slug, Service: i.Service, Severity: i.Severity, DraftPath: i.DraftPath, DraftDigest: i.DraftDigest, Findings: i.Findings, ReturnReason: i.ReturnReason, Returns: i.Returns, ReviewFailures: i.ReviewFailures, Awaiting: i.Awaiting, Decided: i.Decided, Granted: i.Granted, Published: i.Published}
 	}
+	if r := record.Repair; r != nil {
+		run.Repair = &domain.RepairRun{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Slug: r.Slug, Title: r.Title, CauseRef: r.CauseRef, PullRequest: r.PullRequest, URL: r.URL, HeadSHA: r.HeadSHA, Rounds: r.Rounds, Feedback: r.Feedback, Cause: r.Cause, Fix: r.Fix, Summary: r.Summary, WakeRefs: r.WakeRefs, Awaiting: r.Awaiting, Decided: r.Decided, Granted: r.Granted, MergeSHA: r.MergeSHA, CauseRecorded: r.CauseRecorded}
+	}
 	if run.Validate() != nil {
 		return nil
 	}
@@ -96,6 +123,9 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded}
 	if i := run.Incident; i != nil {
 		record.Incident = &sessionIncident{Slug: i.Slug, Service: i.Service, Severity: i.Severity, DraftPath: i.DraftPath, DraftDigest: i.DraftDigest, Findings: i.Findings, ReturnReason: i.ReturnReason, Returns: i.Returns, ReviewFailures: i.ReviewFailures, Awaiting: i.Awaiting, Decided: i.Decided, Granted: i.Granted, Published: i.Published}
+	}
+	if r := run.Repair; r != nil {
+		record.Repair = &sessionRepair{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Slug: r.Slug, Title: r.Title, CauseRef: r.CauseRef, PullRequest: r.PullRequest, URL: r.URL, HeadSHA: r.HeadSHA, Rounds: r.Rounds, Feedback: r.Feedback, Cause: r.Cause, Fix: r.Fix, Summary: r.Summary, WakeRefs: r.WakeRefs, Awaiting: r.Awaiting, Decided: r.Decided, Granted: r.Granted, MergeSHA: r.MergeSHA, CauseRecorded: r.CauseRecorded}
 	}
 	data, err := json.Marshal(record)
 	if err != nil {

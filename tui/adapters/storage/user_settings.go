@@ -35,8 +35,42 @@ type UserSettings struct {
 	FavoriteModels []string `json:"favorite_models,omitempty"`
 	// ReviewerModel judges incident postmortems in a fresh context; empty
 	// means the session model.
-	ReviewerModel string                     `json:"reviewer_model,omitempty"`
-	Extra         map[string]json.RawMessage `json:"-"`
+	ReviewerModel string `json:"reviewer_model,omitempty"`
+	// Repair configures the /repair ceremony: which repository the console
+	// may repair, where it clones it and whether green pull requests merge
+	// without the person.
+	Repair *RepairSettings            `json:"repair,omitempty"`
+	Extra  map[string]json.RawMessage `json:"-"`
+}
+
+// RepairSettings is the repair section of settings.json. Repository is
+// owner/name; an empty Directory means <data>/axlr/repairs; WatchMinutes
+// bounds one check round (default 45); About is the KMP project about
+// (default project:<name>).
+type RepairSettings struct {
+	Repository   string `json:"repository"`
+	Directory    string `json:"directory,omitempty"`
+	AutoMerge    bool   `json:"auto_merge"`
+	WatchMinutes int    `json:"watch_minutes,omitempty"`
+	About        string `json:"about,omitempty"`
+}
+
+// DefaultRepairRepository is what /repair repairs when settings.json is silent.
+const DefaultRepairRepository = "underpass-ai/AXLR"
+
+// RepairConfiguration is the effective repair section with defaults applied.
+func (s UserSettings) RepairConfiguration() RepairSettings {
+	r := RepairSettings{Repository: DefaultRepairRepository, WatchMinutes: 45}
+	if s.Repair != nil {
+		if s.Repair.Repository != "" {
+			r.Repository = s.Repair.Repository
+		}
+		r.Directory, r.AutoMerge, r.About = s.Repair.Directory, s.Repair.AutoMerge, s.Repair.About
+		if s.Repair.WatchMinutes > 0 {
+			r.WatchMinutes = s.Repair.WatchMinutes
+		}
+	}
+	return r
 }
 
 type ApprovalPreferences struct {
@@ -99,7 +133,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -142,6 +176,17 @@ func (s UserSettings) Validate() error {
 	if s.ReviewerModel != "" {
 		if _, err := root.NewModelID(s.ReviewerModel); err != nil {
 			return errors.New("invalid reviewer_model in settings.json")
+		}
+	}
+	if r := s.Repair; r != nil {
+		if r.Repository != "" && !repositoryName(r.Repository) {
+			return errors.New("settings repair.repository must be owner/name")
+		}
+		if r.Directory != "" && !filepath.IsAbs(r.Directory) {
+			return errors.New("settings repair.directory must be an absolute path")
+		}
+		if r.WatchMinutes < 0 || r.WatchMinutes > 720 {
+			return errors.New("settings repair.watch_minutes must be between 1 and 720")
 		}
 	}
 	if len(s.FavoriteModels) > maxFavoriteModels {
@@ -406,4 +451,20 @@ func modelIDs(ids []string) []root.ModelID {
 		out[i] = root.ModelID(id)
 	}
 	return out
+}
+
+// repositoryName accepts owner/name with the characters GitHub allows.
+func repositoryName(raw string) bool {
+	owner, name, ok := strings.Cut(raw, "/")
+	if !ok || owner == "" || name == "" || strings.Contains(name, "/") {
+		return false
+	}
+	for _, part := range []string{owner, name} {
+		for _, r := range part {
+			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
+				return false
+			}
+		}
+	}
+	return true
 }

@@ -13,7 +13,7 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Enter` / `Shift+Enter` | Send / insert a newline |
 | `/model` | Choose a model |
 | `/normal`, `/review`, `/writer`, `/research` | Choose direct work and its local tool policy |
-| `/debug`, `/delivery`, `/incident` | Select a console-driven MADE procedure for the next prompt; `/incident` also opens a pending approval card |
+| `/debug`, `/delivery`, `/incident`, `/repair` | Select a console-driven MADE procedure for the next prompt; `/incident` and `/repair` also open a pending approval card |
 | `/update` | Update explicitly configured local KMP and MADE engines |
 | `/mcp` | Inspect connected MCP servers, tools and approvals |
 | `/approvals` | Show saved always-allow tools and autonomy mode |
@@ -45,6 +45,7 @@ Select a mode with its slash command between turns, after choosing a model. The 
 | `/debug` | Reproduce, diagnose, repair and integrate | All local tools; console drives MADE `axlr_debug` 2.0 |
 | `/delivery` | Brief, build/check and integrate | All local tools; console drives MADE `axlr_delivery` 2.0 |
 | `/incident` | Blameless postmortem with review and person's approval | All local tools; model KMP outcome writes refused; console drives MADE `axlr_incident` 1.0 |
+| `/repair` | Repair the configured repository in a fresh clone; the console opens, watches and merges the pull request | All local tools; model KMP writes refused; console drives MADE `axlr_repair` 1.0; start it with `axlr-tui --repair "<brief or #issue>"` |
 
 `review`, `writer` and `research` refuse any local exec with nonempty `stdin`, including when full autonomy is enabled. Arguments remain visible for per-call review. These restrictions apply to AXLR's local tools: MCP calls retain their own approval policy and may have external side effects. An approved process is not sandboxed by the mode.
 
@@ -84,11 +85,18 @@ The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/
   "approvals": {
     "autonomous": false,
     "allowed": []
+  },
+  "repair": {
+    "repository": "underpass-ai/AXLR",
+    "directory": "/absolute/repairs",
+    "auto_merge": false,
+    "watch_minutes": 45,
+    "about": "project:axlr"
   }
 }
 ```
 
-All keys are optional. `model` may be empty to choose a model in the console. `language` accepts `en` or `es`; `theme` accepts `auto`, `ink`, `aurora`, `paper`, `phosphor` or `editorial`; `icons` accepts `safe`, `nerd-mono` or `ascii`. In `approvals`, `autonomous` enables automatic approval for every known tool; `allowed` contains exact tool identities saved by the approval dialog. Edits take effect on the next launch. `--model` overrides the JSON model for one launch; `--lang` overrides `AXLR_LANG`, which overrides the JSON language. Selecting `/model`, saving `/theme`, or changing `/autonomy` or always-allow choices updates the corresponding JSON keys while retaining other settings, including keys from newer AXLR versions. The console writes the file with owner-only permissions and rejects invalid JSON without replacing it.
+All keys are optional. `repair` configures `/repair`: `repository` is the `owner/name` the console may repair (default `underpass-ai/AXLR`), `directory` where it clones (default `<data>/axlr/repairs`), `auto_merge` whether green pull requests merge without the person (default `false`), `watch_minutes` how long one check round may take (default 45) and `about` the KMP project scope (default `project:<name>`). See [ceremonies](ceremonies.md#self-repair-the-console-drives-the-pull-request). `model` may be empty to choose a model in the console. `language` accepts `en` or `es`; `theme` accepts `auto`, `ink`, `aurora`, `paper`, `phosphor` or `editorial`; `icons` accepts `safe`, `nerd-mono` or `ascii`. In `approvals`, `autonomous` enables automatic approval for every known tool; `allowed` contains exact tool identities saved by the approval dialog. Edits take effect on the next launch. `--model` overrides the JSON model for one launch; `--lang` overrides `AXLR_LANG`, which overrides the JSON language. Selecting `/model`, saving `/theme`, or changing `/autonomy` or always-allow choices updates the corresponding JSON keys while retaining other settings, including keys from newer AXLR versions. The console writes the file with owner-only permissions and rejects invalid JSON without replacing it.
 
 Existing `model-preference.json` and `ui-preference.json` files under the state directory are read until `settings.json` exists. Existing `approvals.json` choices are read until `settings.json` has an `approvals` section. The next related change writes those values into `settings.json`; the old files are left in place. MCP server connections and their own approval policies remain in the separate `$XDG_CONFIG_HOME/axlr/mcp.json` file.
 

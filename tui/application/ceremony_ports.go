@@ -38,6 +38,13 @@ type CeremonyView struct {
 	// Completed holds the outputs of the steps completed in this visit of
 	// the current state, so a completion whose answer was lost is found.
 	Completed map[string]map[string]any
+	// Outputs holds the latest completed output of every step, so a resumed
+	// console step finds what an earlier one recorded.
+	Outputs map[string]map[string]any
+	// Live maps a step with an unexpired claim of the console's own to its
+	// fence: MADE refuses a second claim while the lease runs, so the
+	// console completes with the original fence instead.
+	Live map[string]string
 }
 
 // CheckRunnerPort runs one command in the workspace with a time limit and no
@@ -59,7 +66,13 @@ type CheckResult struct {
 type MemoryPort interface {
 	// Wake returns bounded context for the about, or "" when it has none yet.
 	Wake(ctx context.Context, about string) (string, error)
+	// WakeFocused is Wake with an intent the store may focus the recall on;
+	// it also returns the refs the recall exposed, which links may name.
+	WakeFocused(ctx context.Context, about, intent string) (text string, refs []string, err error)
 	Record(ctx context.Context, about string, labels map[string][]string, id, summary, evidence string) error
+	// RecordLinked writes one memory with its relations to existing refs and
+	// returns the stored ref, so later memories can link to it exactly.
+	RecordLinked(ctx context.Context, about string, labels map[string][]string, record MemoryRecord) (ref string, err error)
 }
 
 // WorkspaceFilesPort reads and writes workspace files for the console through
@@ -98,4 +111,66 @@ type ReviewVerdict struct {
 // the work identity cannot do.
 type ApproverPort interface {
 	ApproveGuard(ctx context.Context, instance, guard string) error
+}
+
+// ForgePort is the Git hosting side of the repair ceremony as the driver sees
+// it: branches, pull requests, checks and merges, never the model.
+type ForgePort interface {
+	// Propose commits the clone's changes on the branch, pushes it and opens
+	// the pull request; with Number set it pushes to the open one instead.
+	Propose(ctx context.Context, proposal RepairProposal) (PullRequest, error)
+	// Status reads the pull request's checks and merge state.
+	Status(ctx context.Context, repository string, number int) (PullRequestStatus, error)
+	// UpdateBranch merges the base into the pull request branch on the forge.
+	UpdateBranch(ctx context.Context, repository string, number int) error
+	// Merge squash-merges the pull request, deletes its branch and returns
+	// the merge commit.
+	Merge(ctx context.Context, repository string, number int) (string, error)
+}
+
+type RepairProposal struct {
+	Repository, Base, Branch string
+	Title, Body, Trailer     string
+	// Number is the open pull request on a later round, zero on the first.
+	Number int
+}
+
+type PullRequest struct {
+	Number       int
+	URL, HeadSHA string
+}
+
+// PullRequestStatus is what the forge reports about an open pull request.
+type PullRequestStatus struct {
+	// State is OPEN, MERGED or CLOSED.
+	State string
+	// MergeState is the forge's merge state: CLEAN, BEHIND, BLOCKED, DIRTY,
+	// UNSTABLE, HAS_HOOKS or UNKNOWN.
+	MergeState string
+	HeadSHA    string
+	// Pending, Passed and Failed count the head commit's checks; Failed names
+	// each failing check with its conclusion.
+	Pending, Passed int
+	Failed          []string
+}
+
+// RepairPolicy is what settings.json decides about the repair ceremony.
+type RepairPolicy struct {
+	// AutoMerge lets the console merge a green pull request without the
+	// person; otherwise the merge waits on the approval card.
+	AutoMerge bool
+	// WatchDeadline bounds one check round; Poll spaces the status reads.
+	WatchDeadline, Poll time.Duration
+}
+
+// MemoryLink is a relation the model proposes from a new memory to a ref the
+// recall exposed; the console refuses refs the recall did not show.
+type MemoryLink struct {
+	Ref, Rel, Why, Evidence string
+}
+
+// MemoryRecord is one memory with its links, written by the console.
+type MemoryRecord struct {
+	ID, Kind, Summary, Evidence string
+	Links                       []MemoryLink
 }

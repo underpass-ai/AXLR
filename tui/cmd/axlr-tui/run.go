@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/underpass-ai/AXLR/adapters/openrouter"
@@ -63,6 +64,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	tracePayloads := flags.Bool("trace-payloads", true, "capture redacted request/response bodies in a private per-run directory")
 	sessionFlag := flags.String("session", "", "saved session ID")
 	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
+	repairFlag := flags.String("repair", "", "start a repair of the configured repository in a fresh clone: a failure brief or #issue")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
 	flags.Func("plugin-env-from", "ID:KEY=HOST_ENV_VAR; repeatable", func(v string) error { selections = append(selections, v); return nil })
@@ -164,6 +166,26 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	locale, err := terminal.ParseLocale(language)
 	if err != nil {
 		return fail(err)
+	}
+	dataBase := getenv("XDG_DATA_HOME")
+	if !filepath.IsAbs(dataBase) {
+		home := getenv("HOME")
+		if !filepath.IsAbs(home) {
+			return fail(errors.New("absolute HOME or XDG_DATA_HOME is required for AXLR plugins"))
+		}
+		dataBase = filepath.Join(home, ".local", "share")
+	}
+	repairConfiguration := settings.RepairConfiguration()
+	initialDraft := ""
+	if *repairFlag != "" {
+		if *sessionFlag != "" {
+			return fail(errors.New("--repair starts a new session; it cannot be combined with --session"))
+		}
+		clone, brief, err := prepareRepairClone(ctx, repairConfiguration, filepath.Join(dataBase, "axlr", "repairs"), *repairFlag, localRuntimeEnvironment(getenv), stderr)
+		if err != nil {
+			return fail(err)
+		}
+		*workspaceFlag, initialDraft = clone, brief
 	}
 	workspacePath, err := filepath.Abs(*workspaceFlag)
 	if err != nil {
@@ -300,16 +322,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			if createErr != nil {
 				return fail(createErr)
 			}
+			if *repairFlag != "" {
+				if err := created.SetMode(domain.ModeRepair); err != nil {
+					return fail(err)
+				}
+				if err := loggedStore.Save(ctx, created); err != nil {
+					return fail(err)
+				}
+			}
 			session = &created
+		} else if *repairFlag != "" {
+			return fail(errors.New("--repair needs a model: pass --model or choose one in settings.json"))
 		}
-	}
-	dataBase := getenv("XDG_DATA_HOME")
-	if !filepath.IsAbs(dataBase) {
-		home := getenv("HOME")
-		if !filepath.IsAbs(home) {
-			return fail(errors.New("absolute HOME or XDG_DATA_HOME is required for AXLR plugins"))
-		}
-		dataBase = filepath.Join(home, ".local", "share")
 	}
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
@@ -320,6 +344,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ceremonies.Files = ceremonyhost.Files{Tools: runner}
 		ceremonies.Reviewer = ceremonyhost.Reviewer{Models: models, Model: settings.ReviewerModel}
 		ceremonies.Approver = &madesetup.Approver{ConfigPath: configPath, Getenv: getenv}
+		ceremonies.Forge = ceremonyhost.Forge{Checks: ceremonyhost.Checks{Tools: runner}}
+		ceremonies.RepairPolicy = application.RepairPolicy{AutoMerge: repairConfiguration.AutoMerge, WatchDeadline: time.Duration(repairConfiguration.WatchMinutes) * time.Minute}
 	}
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
 	app := terminal.New(terminal.Dependencies{
@@ -348,6 +374,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Store:             loggedStore,
 		Session:           session,
 		Monochrome:        getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
+		InitialDraft:      initialDraft,
 	})
 	defer app.Close()
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
