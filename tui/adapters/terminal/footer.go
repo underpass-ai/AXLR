@@ -103,6 +103,14 @@ func (m AppModel) footerStatus() string {
 }
 
 func (m AppModel) statusActivity(status StatusBar) string {
+	activity := m.activityLabel(status)
+	if activity != "" && m.steerPrompt != "" {
+		activity += " · " + m.Theme.T("status.queued")
+	}
+	return activity
+}
+
+func (m AppModel) activityLabel(status StatusBar) string {
 	indicator := m.Theme.Icon("waiting")
 	if !m.UIPreferences.ReduceMotion {
 		indicator = m.activitySpinner.View()

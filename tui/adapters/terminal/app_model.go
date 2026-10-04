@@ -394,6 +394,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.steerPrompt != "" {
 			prompt := root.Text(m.steerPrompt)
 			m.steerPrompt = ""
+			m.refreshTranscript()
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
 			start := m.deps.Start
@@ -509,9 +510,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.steerPrompt += "\n\n" + message
 				}
 				m.Composer.Input.Reset()
-				if !m.toolExecuting && m.Header.State.Status != domain.StatusApproval && (m.providerWaiting || m.streamPending || m.draftOperationID == m.operationID) && m.cancel != nil {
-					m.cancel()
-				}
+				m.refreshTranscript()
+				// The queued message waits for the current model step: cancelling a
+				// reasoning model here discards minutes of work on every message.
 				return m, nil
 			}
 			if m.Busy || strings.TrimSpace(m.Composer.Input.Value()) == "" {
@@ -733,4 +734,5 @@ func (m *AppModel) refreshTranscript() {
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
 	}
+	m.Transcript.AppendQueued(m.steerPrompt)
 }

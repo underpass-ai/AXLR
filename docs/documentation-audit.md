@@ -1,5 +1,9 @@
 # Documentation audit — 4 October 2026
 
+## v0.2.2 queued messages no longer cancel the model
+
+A message sent while the model was reasoning cancelled the request and restarted it. With a slow reasoning model (glm-5.3-flash spent 25–120 s per request in the reported session) every new message threw that work away, so the session never answered. The console now queues the message, shows it in the transcript and footer, and delivers it at the next model boundary. The [console guide](console.md) is updated and the chart's `version` and `appVersion` are `0.2.2`.
+
 ## v0.2.1 host HOME for console exec
 
 Console exec/check children now receive the host's `HOME` when it is absolute, alongside the sanitized `PATH`; previously tools such as `git`, `cargo` or `gh` ran without a home and missed their configuration. Other variables and provider credentials are still not inherited. The [console guide](console.md) is updated and the chart's `version` and `appVersion` are `0.2.1`. Regression tests cover forwarding and the rejection of a relative `HOME`.

@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -9,7 +10,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-func TestSteeringInterruptsActiveStreamAndStartsNewUserTurn(t *testing.T) {
+func TestSteeringQueuesWithoutCancellingAndStartsNewUserTurn(t *testing.T) {
 	s := navSession(t)
 	if err := s.BeginTurn("original", nil); err != nil {
 		t.Fatal(err)
@@ -22,13 +23,20 @@ func TestSteeringInterruptsActiveStreamAndStartsNewUserTurn(t *testing.T) {
 	m.deps.Start = application.StartTurnUseCase{Catalog: submissionCatalog{}, Store: m.deps.Store, Continue: continuation}
 	m.Busy = true
 	m.providerWaiting = true
+	m.Status.Phase = domain.ProviderReasoning
 	m.operationID = 1
 	cancelled := false
 	m.cancel = func() { cancelled = true }
 	m.Composer.Input.SetValue("new direction")
 	m = update(m, ControlIntent("send"))
-	if !cancelled || m.steerPrompt != "new direction" || m.Composer.Input.Value() != "" {
-		t.Fatal("steer was not queued and old stream interrupted")
+	if cancelled || m.steerPrompt != "new direction" || m.Composer.Input.Value() != "" {
+		t.Fatal("steer was not queued or the reasoning stream was cancelled")
+	}
+	if view := m.Transcript.View(); !strings.Contains(view, "new direction") || !strings.Contains(view, m.Theme.T("transcript.queued")) {
+		t.Fatalf("queued message is not visible: %q", view)
+	}
+	if footer := m.statusActivity(StatusBar{Waiting: true, Phase: domain.ProviderReasoning}); !strings.Contains(footer, m.Theme.T("status.queued")) {
+		t.Fatalf("footer does not show the queue: %q", footer)
 	}
 	next, cmd := m.Update(operationComplete{ID: 1, Session: s, Err: context.Canceled})
 	m = drain(t, next.(AppModel), cmd)
@@ -38,6 +46,22 @@ func TestSteeringInterruptsActiveStreamAndStartsNewUserTurn(t *testing.T) {
 	}
 	if m.deps.Session.Status() != domain.StatusComplete {
 		t.Fatalf("steered turn status = %s", m.deps.Session.Status())
+	}
+	if strings.Contains(m.Transcript.View(), m.Theme.T("transcript.queued")) {
+		t.Fatal("delivered message still shown as queued")
+	}
+}
+
+func TestQueuedSteerCancelsAtTheNextModelRequest(t *testing.T) {
+	m := sized()
+	m.Busy = true
+	m.toolExecuting = true
+	cancelled := false
+	m.cancel = func() { cancelled = true }
+	m.steerPrompt = "after the tool"
+	m = update(m, application.Event{Kind: application.EventStreamStart})
+	if !cancelled {
+		t.Fatal("queued steer did not stop the next model request")
 	}
 }
 
