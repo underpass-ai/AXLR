@@ -14,6 +14,12 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
+// scaled grows a size written for the original 96 KiB budget so tests keep
+// exercising the same boundaries when the default budget changes.
+func scaled(size int) int {
+	return size * domain.DefaultContextBudget().MaximumBytes() / (96 * 1024)
+}
+
 func contextMessages(turns, size int) []root.Message {
 	messages := []root.Message{{Role: root.RoleSystem, Content: "Trusted stable host instruction"}}
 	for i := 0; i < turns; i++ {
@@ -36,7 +42,7 @@ func contextToolTurn(t testing.TB, name, raw string) []root.Message {
 }
 
 func TestModelContextProjectionLeavesTranscriptIntact(t *testing.T) {
-	original := contextMessages(120, 1600)
+	original := contextMessages(scaled(45), 1600)
 	saved, _ := json.Marshal(original)
 	projector := NewDefaultModelContextProjector()
 	projection, err := projector.Project(original)
@@ -68,7 +74,7 @@ func TestModelContextCutIsStableUntilNextHighWaterAndRestores(t *testing.T) {
 	var previous domain.ContextProjection
 	var sameCut, changedCut bool
 	for turns := 1; turns <= 80; turns++ {
-		original := contextMessages(turns, 3000)
+		original := contextMessages(turns, scaled(1100))
 		projection, err := projector.Project(original)
 		if err != nil {
 			t.Fatal(err)
@@ -100,7 +106,7 @@ func TestModelContextCutIsStableUntilNextHighWaterAndRestores(t *testing.T) {
 }
 
 func TestProjectionRetainsToolPairsAndExactArguments(t *testing.T) {
-	original := contextMessages(120, 1600)
+	original := contextMessages(scaled(45), 1600)
 	turn := contextToolTurn(t, "plugin_kmp_ask", `{"status":"UNKNOWN"}`)
 	original = append(original, turn...)
 	projection, err := NewDefaultModelContextProjector().Project(original)
@@ -246,7 +252,7 @@ func TestProjectionRefusesToSilentlyTruncateOversizedProtocolControls(t *testing
 func TestClosedOversizedProtocolForcesRecoverableWholeTurnCut(t *testing.T) {
 	for _, field := range []string{"error", "scope"} {
 		t.Run(field, func(t *testing.T) {
-			raw, _ := json.Marshal(map[string]any{"context_id": "context-original", field: strings.Repeat("x", 50*1024)})
+			raw, _ := json.Marshal(map[string]any{"context_id": "context-original", field: strings.Repeat("x", 3*domain.DefaultContextBudget().ToolResultBytes())})
 			closed := append(contextToolTurn(t, "legacy_kmp_call", string(raw)), root.Message{Role: root.RoleAssistant, Content: "finished"})
 			if _, err := NewDefaultModelContextProjector().Project(closed); !errors.Is(err, ErrContextBudgetExceeded) {
 				t.Fatalf("active oversized control must fail explicitly: %v", err)
@@ -359,7 +365,7 @@ func TestCurrentDiscoverySchemaIsKeptExactBeyondStandardToolCap(t *testing.T) {
 	if err != nil || strings.Contains(string(projection.Messages[2].Content), "axlr_tool_result_excerpt") || !strings.Contains(string(projection.Messages[2].Content), strings.Repeat("schema ", 3000)) {
 		t.Fatalf("exact schema was clipped: %v", err)
 	}
-	_, err = NewDefaultModelContextProjector().Project(contextToolTurn(t, "axlr_tools", fmt.Sprintf(`{"schema":%q}`, strings.Repeat("s", 70000))))
+	_, err = NewDefaultModelContextProjector().Project(contextToolTurn(t, "axlr_tools", fmt.Sprintf(`{"schema":%q}`, strings.Repeat("s", MaxHostResultBytes+8000))))
 	if !errors.Is(err, ErrContextBudgetExceeded) {
 		t.Fatalf("oversized exact schema did not fail explicitly: %v", err)
 	}
@@ -367,11 +373,11 @@ func TestCurrentDiscoverySchemaIsKeptExactBeyondStandardToolCap(t *testing.T) {
 
 func TestCurrentOversizedPromptAndArgumentsFailExplicitly(t *testing.T) {
 	projector := NewDefaultModelContextProjector()
-	_, err := projector.Project([]root.Message{{Role: root.RoleUser, Content: root.Text(strings.Repeat("p", 300000))}})
+	_, err := projector.Project([]root.Message{{Role: root.RoleUser, Content: root.Text(strings.Repeat("p", scaled(100000)))}})
 	if !errors.Is(err, ErrContextBudgetExceeded) {
 		t.Fatalf("large prompt silently cut: %v", err)
 	}
-	args, _ := root.NewJSONObject([]byte(fmt.Sprintf(`{"exact":%q}`, strings.Repeat("arg", 100000))))
+	args, _ := root.NewJSONObject([]byte(fmt.Sprintf(`{"exact":%q}`, strings.Repeat("arg", scaled(40000)))))
 	_, err = projector.Project([]root.Message{{Role: root.RoleUser, Content: "use tool"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "call_large", Name: "local_read", Arguments: args}}}})
 	if !errors.Is(err, ErrContextBudgetExceeded) {
 		t.Fatalf("large arguments silently cut: %v", err)
@@ -404,7 +410,7 @@ func TestCheckpointPreservesMemoryIdentityAndGuideLookup(t *testing.T) {
 	// Later results mention the spelling context_id in prose without actually
 	// carrying an identity. They must not hide the earlier registered identity.
 	notIdentity := root.Message{Role: root.RoleTool, ToolCallID: "call_other", Content: `{"status":"completed","content":[{"type":"text","text":"reuse context_id from the guide"}]}`}
-	original := append(append(guide, notIdentity), contextMessages(120, 1600)[1:]...)
+	original := append(append(guide, notIdentity), contextMessages(scaled(45), 1600)[1:]...)
 	projection, err := NewDefaultModelContextProjector().Project(original)
 	if err != nil {
 		t.Fatal(err)
@@ -425,7 +431,7 @@ func TestGuideRecoveryUsesPacketShapeNotWriteProseOrOpaqueAlias(t *testing.T) {
 		{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "write-two", Name: "axlr_call_tool", Arguments: args}}},
 		{Role: root.RoleTool, ToolCallID: "write-two", Content: `{"status":"completed","context_id":"context-legacy","receipt":{"note":"kmp_guide was used"}}`},
 	}
-	original := append(append(guide, write...), contextMessages(120, 1600)[1:]...)
+	original := append(append(guide, write...), contextMessages(scaled(45), 1600)[1:]...)
 	projection, err := NewDefaultModelContextProjector().Project(original)
 	if err != nil {
 		t.Fatal(err)
@@ -470,7 +476,7 @@ func TestColdRestoreWithOpaqueGuideToolReproducesProjectionAndIdentity(t *testin
 	if err := session.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "Guide registered."}}); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 45; i++ {
+	for i := 0; i < scaled(45); i++ {
 		if err := session.BeginTurn(root.Text(fmt.Sprintf("short instruction %d", i)), tools); err != nil {
 			t.Fatal(err)
 		}
@@ -516,7 +522,7 @@ func TestClippedHistoryPreservesExactPagingControlFields(t *testing.T) {
 
 func TestCheckpointPrioritizesExactUserConstraintsBeforeAssistantClaims(t *testing.T) {
 	original := []root.Message{{Role: root.RoleUser, Content: root.Text("Keep this constraint exactly: " + strings.Repeat("ñ", 400))}, {Role: root.RoleAssistant, Content: root.Text(strings.Repeat("assistant claim ", 2000))}}
-	for i := 0; i < 12; i++ {
+	for i := 0; i < scaled(12); i++ {
 		original = append(original, root.Message{Role: root.RoleUser, Content: root.Text(fmt.Sprintf("short instruction %d", i))}, root.Message{Role: root.RoleAssistant, Content: root.Text(strings.Repeat("other assistant claims ", 1000))})
 	}
 	projection, err := NewDefaultModelContextProjector().Project(original)
@@ -572,7 +578,7 @@ func TestProjectorRejectsInvalidBudgetAndRetainsSmallTranscripts(t *testing.T) {
 	if err != nil || len(projection.Messages) != 1 {
 		t.Fatal("system-only transcript failed")
 	}
-	_, err = projector.Project([]root.Message{{Role: root.RoleSystem, Content: root.Text(strings.Repeat("x", 300000))}})
+	_, err = projector.Project([]root.Message{{Role: root.RoleSystem, Content: root.Text(strings.Repeat("x", scaled(100000)))}})
 	if !errors.Is(err, ErrContextBudgetExceeded) {
 		t.Fatal("oversized system-only transcript accepted")
 	}

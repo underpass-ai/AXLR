@@ -27,7 +27,7 @@ func bigTurn(t *testing.T, results, size int) []root.Message {
 }
 
 func TestATurnThatOutgrowsTheBudgetIsCompactedNotAborted(t *testing.T) {
-	messages := bigTurn(t, 12, 30000)
+	messages := bigTurn(t, scaled(12), 14000)
 	projection, err := NewDefaultModelContextProjector().Project(messages)
 	if err != nil {
 		t.Fatalf("turn aborted: %v", err)
