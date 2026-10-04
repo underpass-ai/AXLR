@@ -463,6 +463,7 @@ func (d *CeremonyDriver) reconcile(ctx context.Context, s domain.Session, run do
 		return StepResult{}, errors.Join(cause, fmt.Errorf("inspect %s: %w", run.Instance, err))
 	}
 	report["reconciled"] = cause.Error()
+	hydrateRepair(&run, view)
 	switch {
 	case view.State == "COMPLETED" || view.State == "BLOCKED":
 		return d.enter(ctx, s, run, view.State, output, report)

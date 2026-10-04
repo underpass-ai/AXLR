@@ -279,6 +279,44 @@ func TestRepairWaitsForThePersonAndMergesOnApproval(t *testing.T) {
 	}
 }
 
+func TestRepairDecideWaitsForThePersonOnALongLease(t *testing.T) {
+	forge := &fakeForge{statuses: []PullRequestStatus{{State: "OPEN", MergeState: "CLEAN", Passed: 3}}}
+	d, engine, _, _, s := repairDriver(t, forge, 1, 0)
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, reproduceArgs)
+	step(t, d, &s, `{"root_cause":"c","evidence":"e","proposed_fix":"f"}`)
+	step(t, d, &s, `{"summary":"s","summary_en":"e"}`)
+	last := engine.leases[len(engine.leases)-1]
+	if last != presentLease {
+		t.Fatalf("decide lease %v, want %v", last, presentLease)
+	}
+}
+
+func TestRepairReconcileRecoversThePullRequestFromMADE(t *testing.T) {
+	forge := &fakeForge{statuses: []PullRequestStatus{{State: "OPEN", MergeState: "CLEAN", Passed: 3}}}
+	d, engine, _, _, s := repairDriver(t, forge, 1, 0)
+	d.RepairPolicy.AutoMerge = true
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, reproduceArgs)
+	step(t, d, &s, `{"root_cause":"c","evidence":"e","proposed_fix":"f"}`)
+	// The model resends repair after an interrupted watch: MADE refuses the
+	// completion because the instance is in WATCH, where propose already
+	// recorded the pull request.
+	engine.failCompletes = 1
+	engine.view = CeremonyView{State: "WATCH", Claimable: []string{"watch"}, Outputs: map[string]map[string]any{"propose": {"pull_request": float64(7), "url": "u", "head_sha": "h"}}}
+	r := step(t, d, &s, `{"summary":"s","summary_en":"e"}`)
+	if r["ceremony"] != "COMPLETED" || !forge.merged {
+		t.Fatalf("reconciled watch: %v", r)
+	}
+	if len(forge.proposals) != 0 {
+		t.Fatalf("propose must not run again: %+v", forge.proposals)
+	}
+}
+
 func TestRepairDeclineLeavesThePullRequestOpenAndBlocks(t *testing.T) {
 	forge := &fakeForge{statuses: []PullRequestStatus{{State: "OPEN", MergeState: "CLEAN", Passed: 3}}}
 	d, engine, _, memory, s := repairDriver(t, forge, 1, 0)

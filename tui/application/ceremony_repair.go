@@ -217,8 +217,11 @@ func (d *CeremonyDriver) repairStep(ctx context.Context, s domain.Session, run d
 	}
 	r := run.Repair
 	lease := time.Duration(0)
-	if run.Step == "watch" {
+	switch {
+	case run.Step == "watch":
 		lease = d.watchDeadline() + 15*time.Minute
+	case run.Step == "decide" && !d.RepairPolicy.AutoMerge:
+		lease = presentLease // the person may answer days later
 	}
 	if err := d.claimFor(ctx, &run, lease); err != nil {
 		return StepResult{}, err
@@ -484,17 +487,7 @@ func (d *CeremonyDriver) Resume(ctx context.Context, s domain.Session) (StepResu
 		return StepResult{}, false, fmt.Errorf("inspect %s: %w", run.Instance, err)
 	}
 	report := map[string]any{"resumed": run.Step, "state": view.State}
-	if proposed, ok := view.Outputs["propose"]; ok {
-		if number, _ := proposed["pull_request"].(float64); number > 0 {
-			run.Repair.PullRequest = int(number)
-		}
-		if url, _ := proposed["url"].(string); url != "" {
-			run.Repair.URL = url
-		}
-		if sha, _ := proposed["head_sha"].(string); sha != "" {
-			run.Repair.HeadSHA = sha
-		}
-	}
+	hydrateRepair(&run, view)
 	switch {
 	case view.State == "COMPLETED" || view.State == "BLOCKED":
 		result, err := d.enter(ctx, s, run, view.State, view.Outputs[run.Step], report)
@@ -517,6 +510,27 @@ func (d *CeremonyDriver) Resume(ctx context.Context, s domain.Session) (StepResu
 	run.Step, run.Iteration = step, 1
 	result, err := d.repairStep(ctx, s, run, report)
 	return result, true, err
+}
+
+// hydrateRepair takes the pull request MADE recorded at propose, so a console
+// step re-entered after an interruption does not watch pull request 0.
+func hydrateRepair(run *domain.CeremonyRun, view CeremonyView) {
+	if run.Repair == nil {
+		return
+	}
+	proposed, ok := view.Outputs["propose"]
+	if !ok {
+		return
+	}
+	if number, _ := proposed["pull_request"].(float64); number > 0 {
+		run.Repair.PullRequest = int(number)
+	}
+	if url, _ := proposed["url"].(string); url != "" {
+		run.Repair.URL = url
+	}
+	if sha, _ := proposed["head_sha"].(string); sha != "" {
+		run.Repair.HeadSHA = sha
+	}
 }
 
 // CanDecline reports whether the person may still decline the merge.

@@ -32,6 +32,11 @@ func prepareRepairClone(ctx context.Context, settings storage.RepairSettings, re
 	run := func(dir, program string, args ...string) (string, error) {
 		cmd := exec.CommandContext(ctx, program, args...)
 		cmd.Dir, cmd.Env = dir, env
+		// Resolve the program on the restricted PATH, as the console's exec
+		// does, not on the launcher's own environment.
+		if path, err := lookPath(env, program); err == nil {
+			cmd.Path = path
+		}
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return "", fmt.Errorf("%s %s: %w: %s", program, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
@@ -87,6 +92,21 @@ func prepareRepairClone(ctx context.Context, settings storage.RepairSettings, re
 		_ = file.Close()
 	}
 	return clone, brief, nil
+}
+
+// lookPath finds program on the PATH entry of env.
+func lookPath(env []string, program string) (string, error) {
+	for _, entry := range env {
+		if value, ok := strings.CutPrefix(entry, "PATH="); ok {
+			for _, dir := range filepath.SplitList(value) {
+				candidate := filepath.Join(dir, program)
+				if info, err := os.Stat(candidate); err == nil && !info.IsDir() && info.Mode()&0o111 != 0 {
+					return candidate, nil
+				}
+			}
+		}
+	}
+	return "", exec.ErrNotFound
 }
 
 // repairSlug names the clone directory and the branch: a timestamp and the
