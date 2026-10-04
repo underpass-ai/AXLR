@@ -11,7 +11,7 @@ AXLR extends its execution engine through MCP tools and the supported components
 
 AXLR, KMP and MADE appear as built-in catalogue entries. AXLR supplies the embedded `axlr-session` skill for session titles and project continuity. KMP and MADE identify the intended memory and orchestration engines; their rows do not install an engine binary or prove that its MCP server is connected. Check `/mcp` for the live state. Use the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks to connect, verify or remove them.
 
-The MADE entry includes the embedded `axlr-ceremonies` skill and seven 1.0 procedures for explicit requests. The console reads them through `axlr_skill` without copying a package. Separately, `/debug` and `/delivery` use pinned 2.0 definitions and `/incident` uses `axlr_incident` 1.0, prepared through `/mcp` → `P`. [Ceremonies](ceremonies.md) explains the distinction; engine connection, definition publication and real execution are separate operations.
+The MADE entry identifies the ceremony engine. The procedures the console drives (`/debug`, `/delivery`, `/incident`, `/repair`) are pinned definitions published through `/mcp` → `P`, not a skill; the earlier `axlr-ceremonies` 1.0 skill catalogue was retired on 5 Oct 2026 because its protocol cost defeated real models. [Ceremonies](ceremonies.md) describes them; engine connection, definition publication and real execution are separate operations.
 
 ## Update MADE and KMP
 
