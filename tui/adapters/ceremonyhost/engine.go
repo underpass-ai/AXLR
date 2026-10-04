@@ -101,15 +101,22 @@ func (e Engine) Inspect(ctx context.Context, instance string) (application.Cerem
 		state, _ := step["state_id"].(string)
 		status, _ := step["status"].(string)
 		stepVisit, _ := step["state_visit"].(float64)
-		if id == "" || state != view.State || stepVisit != visit || status != "completed" {
+		if id == "" || status != "completed" {
 			continue
-		}
-		if view.Completed == nil {
-			view.Completed = map[string]map[string]any{}
 		}
 		output, _ := step["output"].(map[string]any)
 		if output == nil {
 			output = map[string]any{}
+		}
+		if view.Outputs == nil {
+			view.Outputs = map[string]map[string]any{}
+		}
+		view.Outputs[id] = output // steps are listed in order, so the latest visit wins
+		if state != view.State || stepVisit != visit {
+			continue
+		}
+		if view.Completed == nil {
+			view.Completed = map[string]map[string]any{}
 		}
 		view.Completed[id] = output
 	}

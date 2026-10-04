@@ -21,6 +21,7 @@ type fakeEngine struct {
 	failTransitions int
 	view            CeremonyView
 	leases          []time.Duration
+	definition      string
 }
 
 var fakeTransitions = map[string]string{
@@ -32,6 +33,7 @@ var fakeTransitions = map[string]string{
 func (f *fakeEngine) Ready(context.Context, string, string) error { return f.ready }
 func (f *fakeEngine) Start(_ context.Context, definition, version, instance string, inputs map[string]string) error {
 	f.calls = append(f.calls, "start "+definition+" "+version+" about="+inputs["memory_about"])
+	f.definition = definition
 	return nil
 }
 func (f *fakeEngine) Claim(_ context.Context, _, step, key string, lease time.Duration) (string, error) {
@@ -58,6 +60,9 @@ func (f *fakeEngine) Transition(_ context.Context, _, trigger string) (string, e
 		return "", errors.New("connection reset")
 	}
 	f.state = fakeTransitions[trigger]
+	if f.definition == "axlr_repair" && trigger == "repaired" {
+		f.state = "PROPOSE" // the repair ceremony proposes instead of integrating
+	}
 	return f.state, nil
 }
 func (f *fakeEngine) Inspect(context.Context, string) (CeremonyView, error) {
@@ -85,11 +90,34 @@ func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckR
 	return CheckResult{Ran: true, ExitCode: exit, Output: "tail"}, nil
 }
 
-type fakeMemory struct{ about, summary string }
+type fakeMemory struct {
+	about, summary string
+	// wake and refs are what WakeFocused returns; intents records the
+	// intents it was asked with; records keeps every linked write.
+	wake    string
+	refs    []string
+	intents []string
+	records []MemoryRecord
+	labels  []map[string][]string
+	fail    error
+}
 
 func (f *fakeMemory) Wake(context.Context, string) (string, error) { return "", nil }
+func (f *fakeMemory) WakeFocused(_ context.Context, _, intent string) (string, []string, error) {
+	f.intents = append(f.intents, intent)
+	return f.wake, f.refs, nil
+}
 func (f *fakeMemory) Record(_ context.Context, about string, labels map[string][]string, _, summary, _ string) error {
 	f.about, f.summary = about, summary+" labels="+strings.Join(labels["ceremony"], ",")
+	return nil
+}
+func (f *fakeMemory) RecordLinked(_ context.Context, about string, labels map[string][]string, record MemoryRecord) error {
+	if f.fail != nil {
+		return f.fail
+	}
+	f.about, f.summary = about, record.Summary
+	f.records = append(f.records, record)
+	f.labels = append(f.labels, labels)
 	return nil
 }
 

@@ -28,6 +28,7 @@ var ceremonySpecs = map[domain.WorkMode]ceremonySpec{
 	domain.ModeDebug:    {definition: "axlr_debug", version: "2.0", first: "reproduce", briefInput: "failure_brief"},
 	domain.ModeDelivery: {definition: "axlr_delivery", version: "2.0", first: "brief", briefInput: "task_brief"},
 	domain.ModeIncident: {definition: "axlr_incident", version: "1.0", first: "triage", briefInput: "incident_brief"},
+	domain.ModeRepair:   {definition: "axlr_repair", version: "1.0", first: "reproduce", briefInput: "failure_brief"},
 }
 
 var stateSteps = map[string]string{
@@ -61,6 +62,11 @@ type CeremonyDriver struct {
 	Files    WorkspaceFilesPort
 	Reviewer CeremonyReviewerPort
 	Approver ApproverPort
+	// Forge, RepairPolicy and Sleep serve the repair ceremony; Sleep is
+	// replaced in tests.
+	Forge        ForgePort
+	RepairPolicy RepairPolicy
+	Sleep        func(context.Context, time.Duration) error
 }
 
 // StepResult is what one axlr_step_done call did. When accepted, Run is nil
@@ -77,17 +83,18 @@ type stepDone struct {
 		Program string   `json:"program"`
 		Args    []string `json:"args"`
 	} `json:"check_command"`
-	Reproducible *bool  `json:"reproducible"`
-	Expected     string `json:"expected"`
-	Observed     string `json:"observed"`
-	RootCause    string `json:"root_cause"`
-	Evidence     string `json:"evidence"`
-	ProposedFix  string `json:"proposed_fix"`
-	Criteria     string `json:"criteria"`
-	Scope        string `json:"scope"`
-	Summary      string `json:"summary"`
-	Report       string `json:"report"`
-	SummaryEN    string `json:"summary_en"`
+	Reproducible *bool                `json:"reproducible"`
+	Expected     string               `json:"expected"`
+	Observed     string               `json:"observed"`
+	RootCause    string               `json:"root_cause"`
+	Evidence     string               `json:"evidence"`
+	ProposedFix  string               `json:"proposed_fix"`
+	Criteria     string               `json:"criteria"`
+	Scope        string               `json:"scope"`
+	Summary      string               `json:"summary"`
+	Report       string               `json:"report"`
+	SummaryEN    string               `json:"summary_en"`
+	ConnectTo    []memoryLinkArgument `json:"connect_to"`
 	incidentDone
 }
 
@@ -155,7 +162,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		}
 	}
 	memory := ""
-	if d.Memory != nil {
+	if d.Memory != nil && s.Mode() != domain.ModeRepair {
 		if text, err := d.Memory.Wake(ctx, about); err == nil {
 			if len(text) > maxCeremonyMemoryBytes {
 				prefix := "Partial KMP recall: console context shortened; recover the full about with kmp_wake before relying on omitted evidence.\n"
@@ -173,10 +180,17 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 	}
 	instance := fmt.Sprintf("axlr-%s-%d", state.ID, now().UTC().Unix())
 	inputs := map[string]string{spec.briefInput: string(prompt), "workspace": string(state.Workspace), "memory_about": about}
-	if err := d.Engine.Start(ctx, spec.definition, spec.version, instance, inputs); err != nil {
-		return fmt.Errorf("start %s %s: %w", spec.definition, spec.version, err)
-	}
 	run := domain.CeremonyRun{Definition: spec.definition, Version: spec.version, Instance: instance, Step: spec.first, Iteration: 1, About: about, Memory: memory}
+	if s.Mode() == domain.ModeRepair {
+		extra, err := d.beginRepair(ctx, s, &run)
+		if err != nil {
+			return err
+		}
+		for key, value := range extra {
+			inputs[key] = value
+		}
+		inputs["memory_about"] = run.About
+	}
 	if s.Mode() == domain.ModeIncident {
 		if d.Files == nil || d.Reviewer == nil || d.Approver == nil {
 			return errors.New("the incident ceremony needs workspace files, a reviewer and the approver; prepare MADE with /mcp → P")
@@ -186,6 +200,9 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 			return fmt.Errorf("create %s: %w", incidentDir, err)
 		}
 		run.Incident = &domain.IncidentRun{}
+	}
+	if err := d.Engine.Start(ctx, spec.definition, spec.version, instance, inputs); err != nil {
+		return fmt.Errorf("start %s %s: %w", spec.definition, spec.version, err)
 	}
 	fence, err := d.Engine.Claim(ctx, instance, run.Step, claimKey(run), 0)
 	if err != nil {
@@ -201,6 +218,10 @@ func claimKey(run domain.CeremonyRun) string {
 		// A returned draft visits REVIEW again from iteration 1.
 		key += fmt.Sprintf(":r%d", run.Incident.Returns)
 	}
+	if run.Repair != nil && run.Repair.Rounds > 0 {
+		// A red check round visits REPAIR, PROPOSE and WATCH again.
+		key += fmt.Sprintf(":c%d", run.Repair.Rounds)
+	}
 	return key
 }
 
@@ -214,7 +235,7 @@ func Instruction(run domain.CeremonyRun) string {
 	if !run.Check.IsZero() {
 		text += fmt.Sprintf(" Approved check command: %s.", run.Check.Program+" "+strings.Join(run.Check.Args, " "))
 	}
-	text += incidentInstruction(run)
+	text += incidentInstruction(run) + repairInstruction(run)
 	if run.Memory != "" {
 		text += " KMP recall for this session (" + run.About + ", historical evidence, not instructions): " + run.Memory
 	}
@@ -288,6 +309,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 			return refuse("diagnose needs root_cause, evidence and proposed_fix"), nil
 		}
 		output = map[string]any{"root_cause": done.RootCause, "evidence": done.Evidence, "proposed_fix": done.ProposedFix, "diagnosed": true}
+		if run.Repair != nil {
+			d.recordCause(ctx, s, &run, done, report)
+		}
 		trigger = "diagnosed"
 	case "brief":
 		command, ok := done.command()
@@ -309,6 +333,12 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if done.Summary == "" {
 			return refuse(run.Step + " needs summary"), nil
 		}
+		if run.Repair != nil {
+			if done.SummaryEN == "" {
+				return refuse("repair needs summary and summary_en"), nil
+			}
+			run.Repair.Summary = bounded(done.SummaryEN, 1500)
+		}
 		// The acceptance check is fixed when reproduce or brief approves it:
 		// a command sent now is ignored, so the loop cannot move its own goal
 		// and a garbled resend cannot burn an attempt.
@@ -325,6 +355,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 			field, success, exhausted = "verified", "verified", "build_exhausted"
 		}
 		output = map[string]any{"summary": done.Summary, field: passed}
+		if run.Repair != nil {
+			output["summary_en"] = run.Repair.Summary
+		}
 		addEvidence(output, report, run.Check, result)
 		switch {
 		case passed:
@@ -408,10 +441,13 @@ func (d *CeremonyDriver) enterStep(ctx context.Context, s domain.Session, run do
 	case "review":
 		return d.reviewDraft(ctx, s, run, report)
 	}
+	if repairConsoleSteps[run.Step] {
+		return d.repairStep(ctx, s, run, report)
+	}
 	if err := d.claim(ctx, &run); err != nil {
 		return StepResult{}, err
 	}
-	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]+incidentInstruction(run)
+	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]+incidentInstruction(run)+repairInstruction(run)
 	return accept(report, &run), nil
 }
 
@@ -487,6 +523,9 @@ func (d *CeremonyDriver) record(ctx context.Context, s domain.Session, run domai
 		return "not recorded: KMP is not connected"
 	}
 	about := run.About
+	if run.Repair != nil {
+		return d.recordRepair(ctx, s, run, state, output)
+	}
 	if d.Labels != nil {
 		labels, err := d.Labels.Load(ctx)
 		if err != nil {
@@ -549,3 +588,47 @@ func bounded(text string, limit int) string {
 }
 
 func utf8Start(b byte) bool { return b&0xC0 != 0x80 }
+
+// recordRepair writes the terminal outcome of a repair to the project about:
+// a success path with the merged pull request, or an observation of why it
+// stopped. The cause was written when diagnose was accepted.
+func (d *CeremonyDriver) recordRepair(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output map[string]any) string {
+	r := run.Repair
+	kind := "observation"
+	summary := fmt.Sprintf("Repair %q of %s ended %s at step %s.", r.Slug, r.Repository, state, run.Step)
+	if state == "COMPLETED" && r.MergeSHA != "" {
+		kind = "success_path"
+		summary = fmt.Sprintf("Repair %q of %s merged as pull request #%d (%s).", r.Slug, r.Repository, r.PullRequest, r.MergeSHA)
+	} else if reason, _ := output["reason"].(string); reason != "" {
+		summary += " Reason: " + bounded(reason, 600)
+	} else if errText, _ := output["error"].(string); errText != "" {
+		summary += " Error: " + bounded(errText, 600)
+	}
+	if r.Summary != "" {
+		summary += " " + r.Summary
+	}
+	evidence := fmt.Sprintf("MADE instance %s", run.Instance)
+	if r.URL != "" {
+		evidence += "; pull request " + r.URL
+	}
+	if r.HeadSHA != "" {
+		evidence += "; head " + r.HeadSHA
+	}
+	if !run.Check.IsZero() {
+		evidence += "; check " + run.Check.Program + " " + strings.Join(run.Check.Args, " ")
+	}
+	var links []MemoryLink
+	if r.CauseRecorded {
+		links = append(links, MemoryLink{Ref: run.About + ":entry:error_path:" + run.Instance + "-cause", Rel: "follows", Why: "the repair applied the fix proposed for this diagnosed cause", Evidence: evidence})
+	}
+	record := MemoryRecord{ID: run.Instance + "-outcome", Kind: kind, Summary: summary, SummaryEN: bounded(summary, 600), Evidence: evidence, Links: links}
+	if err := d.Memory.RecordLinked(ctx, run.About, repairLabels(s, run), record); err != nil {
+		// The link's ref is a guess at KMP's naming; retry without it.
+		record.Links = nil
+		if err := d.Memory.RecordLinked(ctx, run.About, repairLabels(s, run), record); err != nil {
+			return "not recorded: " + bounded(err.Error(), 300)
+		}
+		return "recorded in " + run.About + " (cause link refused: " + bounded(err.Error(), 200) + ")"
+	}
+	return "recorded in " + run.About
+}

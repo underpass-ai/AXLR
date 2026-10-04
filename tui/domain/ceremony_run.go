@@ -42,12 +42,14 @@ type CeremonyRun struct {
 	Reminded bool
 	// Incident is the incident ceremony's state; nil for other ceremonies.
 	Incident *IncidentRun
+	// Repair is the repair ceremony's state; nil for other ceremonies.
+	Repair *RepairRun
 }
 
 // AwaitingPerson is true while the console waits for the person's decision:
 // the model has no step to hand back.
 func (r CeremonyRun) AwaitingPerson() bool {
-	return r.Incident != nil && r.Incident.Awaiting != ""
+	return r.Incident != nil && r.Incident.Awaiting != "" || r.Repair != nil && r.Repair.Awaiting != ""
 }
 
 // Awaiting values: the console waits for the person, not the model.
@@ -78,6 +80,40 @@ type IncidentRun struct {
 	Published string
 }
 
+// RepairRun is what the repair ceremony carries between steps and across a
+// resume. The console owns it; MADE and the forge hold the durable record.
+type RepairRun struct {
+	// Repository is owner/name; Base its default branch; Branch the repair
+	// branch the console pushes; Slug names both the branch and the memory.
+	Repository, Base, Branch, Slug string
+	// PullRequest is zero until propose opened one; URL and HeadSHA follow.
+	PullRequest  int
+	URL, HeadSHA string
+	// Rounds counts the check rounds that came back red.
+	Rounds int
+	// Feedback is the last red round's failing checks, for the next repair.
+	Feedback string
+	// Cause is the accepted diagnosis, kept for the pull request body.
+	Cause, Fix, Summary string
+	// WakeRefs are the memory refs the recall exposed; connect_to may only
+	// name these.
+	WakeRefs []string
+	// Awaiting is AwaitingApproval while the merge waits for the person.
+	Awaiting string
+	// Decided is the decide output MADE recorded ("approve", "decline" or
+	// "automatic"); Granted is true once the approver granted the guard.
+	Decided string
+	Granted bool
+	// MergeSHA is the merge commit once merged.
+	MergeSHA string
+	// CauseRecorded is true once the diagnosis reached memory.
+	CauseRecorded bool
+}
+
+// MaxRepairRounds is how many red check rounds go back to repair. MADE's
+// max_bounces of 4 is only the backstop.
+const MaxRepairRounds = 2
+
 // MaxIncidentReturns is how often the person can send a draft back. MADE's
 // max_bounces of 3 is only the backstop.
 const MaxIncidentReturns = 2
@@ -95,6 +131,11 @@ func (r CeremonyRun) clone() CeremonyRun {
 		incident := *r.Incident
 		incident.Findings = append([]string(nil), incident.Findings...)
 		r.Incident = &incident
+	}
+	if r.Repair != nil {
+		repair := *r.Repair
+		repair.WakeRefs = append([]string(nil), repair.WakeRefs...)
+		r.Repair = &repair
 	}
 	return r
 }

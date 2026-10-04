@@ -120,6 +120,9 @@ func New(deps Dependencies) AppModel {
 	if deps.ApprovalSettings != nil {
 		m.Status.Autonomous = deps.ApprovalSettings.Autonomous()
 	}
+	if deps.InitialDraft != "" {
+		m.Composer.Input.SetValue(deps.InitialDraft)
+	}
 	m.refreshTranscript()
 	m.syncApproval()
 	return m
@@ -450,7 +453,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("changes"))
 			}
-			if command == "/incident" {
+			if command == "/incident" || command == "/repair" {
 				if _, awaiting := m.incidentRun(); awaiting {
 					m.Composer.Input.Reset()
 					return m.openIncidentCard(), nil

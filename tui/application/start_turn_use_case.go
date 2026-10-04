@@ -39,6 +39,25 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 		return err
 	}
 	next := *session
+	if u.Continue.Ceremonies != nil {
+		// A console step interrupted earlier (a cancelled watch, a crash
+		// after propose) continues before the model is asked anything.
+		resumed, ok, err := u.Continue.Ceremonies.Resume(ctx, next)
+		if err != nil {
+			return err
+		}
+		if ok {
+			switch {
+			case resumed.Accepted && resumed.Run == nil:
+				next.FinishCeremony()
+			case resumed.Run != nil:
+				if err := next.SetCeremony(*resumed.Run); err != nil {
+					return err
+				}
+			}
+			prompt = root.Text(string(prompt) + "\n\n[AXLR] Ceremony console step resumed before this turn: " + string(resumed.Outcome.Content))
+		}
+	}
 	if _, live := next.Ceremony(); next.Mode().StartsCeremony() && !live {
 		// The ceremony starts before the turn so its first step instruction
 		// reaches the model's first request.

@@ -43,11 +43,21 @@ func (m AppModel) openIncidentCard() AppModel {
 		m.Status.Error = m.Theme.T("incident.unavailable")
 		return m
 	}
-	draft, intact, err := driver.Draft(m.lifetime.ctx, *m.deps.Session)
 	m.Info = NewTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(max(1, h-2))
+	if run.Repair != nil {
+		// The merge card: nothing to read from the workspace, the pull
+		// request is the artifact.
+		m.Info.SetContent(repairCardContent(run, m.Theme))
+		m.Info.Viewport.GotoTop()
+		m.IncidentCard = IncidentCard{Intact: true, CanReturn: application.CanReturn(run), shownFence: run.Fence}
+		m.overlay = "incident"
+		m.Status.Error = ""
+		return m
+	}
+	draft, intact, err := driver.Draft(m.lifetime.ctx, *m.deps.Session)
 	m.Info.SetContent(incidentCardContent(run, draft, intact, err, m.Theme))
 	m.Info.Viewport.GotoTop()
 	m.IncidentCard = IncidentCard{Intact: err == nil && intact, CanReturn: application.CanReturn(run), shownFence: run.Fence}
@@ -85,6 +95,27 @@ func incidentCardContent(run domain.CeremonyRun, draft string, intact bool, err 
 	return strings.Join(lines, "\n") + "\n\n" + draft
 }
 
+func repairCardContent(run domain.CeremonyRun, theme Theme) string {
+	r := run.Repair
+	lines := []string{
+		theme.Tf("incident.cardInstance", run.Instance),
+		theme.Tf("repair.cardPullRequest", r.PullRequest, r.URL),
+		theme.Tf("repair.cardHead", shortDigest(r.HeadSHA), r.Branch),
+		"",
+		theme.T("repair.cardBody"),
+	}
+	if r.Decided == "approve" {
+		lines = append(lines, theme.T("repair.cardResume"))
+	}
+	if r.Cause != "" {
+		lines = append(lines, "", r.Cause)
+	}
+	if r.Summary != "" {
+		lines = append(lines, "", r.Summary)
+	}
+	return strings.Join(lines, "\n")
+}
+
 func shortDigest(digest string) string {
 	if len(digest) > 12 {
 		return digest[:12]
@@ -102,7 +133,7 @@ func (m AppModel) incidentKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		case "enter":
 			reason := strings.TrimSpace(m.IncidentCard.Reason.Value())
 			if reason == "" {
-				m.Status.Error = m.Theme.T("incident.reasonRequired")
+				m.Status.Error = m.Theme.T(m.cardKey("reasonRequired"))
 				return m, nil
 			}
 			return m.decideIncident(false, reason)
@@ -124,7 +155,7 @@ func (m AppModel) incidentKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 			return m, nil
 		}
 		input := textinput.New()
-		input.Prompt = m.Theme.T("incident.reasonPrompt")
+		input.Prompt = m.Theme.T(m.cardKey("reasonPrompt"))
 		input.CharLimit = 2000
 		input.SetWidth(max(1, m.Layout.Width-len(input.Prompt)-6))
 		input.Focus()
@@ -153,14 +184,22 @@ func (m AppModel) decideIncident(approve bool, reason string) (AppModel, tea.Cmd
 }
 
 func (m AppModel) incidentCardView() (string, string, string) {
-	subtitle := m.Theme.T("incident.hintsApprove")
+	subtitle := m.Theme.T(m.cardKey("hintsApprove"))
 	if m.IncidentCard.CanReturn {
-		subtitle = m.Theme.T("incident.hints")
+		subtitle = m.Theme.T(m.cardKey("hints"))
 	}
 	body := m.Info.View()
 	if m.IncidentCard.Reasoning {
 		body += "\n\n" + m.IncidentCard.Reason.View()
-		subtitle = m.Theme.T("incident.reasonHints")
+		subtitle = m.Theme.T(m.cardKey("reasonHints"))
 	}
-	return m.Theme.T("incident.title"), subtitle, body
+	return m.Theme.T(m.cardKey("title")), subtitle, body
+}
+
+// cardKey picks the incident or repair wording for the shared card.
+func (m AppModel) cardKey(suffix string) string {
+	if run, awaiting := m.incidentRun(); awaiting && run.Repair != nil {
+		return "repair." + suffix
+	}
+	return "incident." + suffix
 }

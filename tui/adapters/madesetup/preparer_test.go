@@ -190,7 +190,7 @@ func TestPreparationPublishesCeremoniesThroughAShortLivedGrant(t *testing.T) {
 		}
 	}
 	joined := strings.Join(order, ",")
-	if strings.Count(joined, "made_publish_ceremony_definition") != 3 || !strings.HasSuffix(joined, "made_revoke_authorization_grant") {
+	if strings.Count(joined, "made_publish_ceremony_definition") != len(ceremonyhost.Definitions()) || !strings.HasSuffix(joined, "made_revoke_authorization_grant") {
 		t.Fatalf("unexpected sequence: %s", joined)
 	}
 	engine.calls = nil

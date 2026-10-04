@@ -397,6 +397,9 @@ func (d *CeremonyDriver) Approve(ctx context.Context, s domain.Session) (StepRes
 	if err != nil {
 		return StepResult{}, err
 	}
+	if run.Repair != nil {
+		return d.approveMerge(ctx, s, run)
+	}
 	if i.Decided == "return" {
 		return StepResult{}, errors.New("MADE already recorded a return; press d to send the draft back")
 	}
@@ -409,7 +412,7 @@ func (d *CeremonyDriver) Approve(ctx context.Context, s domain.Session) (StepRes
 	}
 	keep := func(err error) (StepResult, error) { return StepResult{Run: &run}, err }
 	if i.Decided == "" {
-		decided, err := d.completePresent(ctx, run, map[string]any{"decision": "approve", "draft_digest": i.DraftDigest})
+		decided, err := d.completeDecision(ctx, run, "APPROVAL", map[string]any{"decision": "approve", "draft_digest": i.DraftDigest})
 		if err != nil {
 			return StepResult{}, err
 		}
@@ -461,6 +464,11 @@ func copyRun(run domain.CeremonyRun) domain.CeremonyRun {
 		incident.Findings = slices.Clone(incident.Findings)
 		run.Incident = &incident
 	}
+	if run.Repair != nil {
+		repair := *run.Repair
+		repair.WakeRefs = slices.Clone(repair.WakeRefs)
+		run.Repair = &repair
+	}
 	return run
 }
 
@@ -470,6 +478,9 @@ func (d *CeremonyDriver) Return(ctx context.Context, s domain.Session, reason st
 	run, i, err := d.awaiting(s)
 	if err != nil {
 		return StepResult{}, err
+	}
+	if run.Repair != nil {
+		return d.declineMerge(ctx, s, run, reason)
 	}
 	reason = strings.TrimSpace(reason)
 	switch {
@@ -482,7 +493,7 @@ func (d *CeremonyDriver) Return(ctx context.Context, s domain.Session, reason st
 	}
 	reason = bounded(reason, 2000)
 	if i.Decided == "" {
-		decided, err := d.completePresent(ctx, run, map[string]any{"decision": "return", "reason": reason, "draft_digest": i.DraftDigest})
+		decided, err := d.completeDecision(ctx, run, "APPROVAL", map[string]any{"decision": "return", "reason": reason, "draft_digest": i.DraftDigest})
 		if err != nil {
 			return StepResult{}, err
 		}
@@ -499,38 +510,43 @@ func (d *CeremonyDriver) Return(ctx context.Context, s domain.Session, reason st
 	return d.leaveApproval(ctx, s, run, before, "returned", report)
 }
 
-// completePresent records the person's decision. When the completion fails it
-// asks MADE whether an earlier one already landed, and returns that decision,
-// so a lost answer does not leave both keys failing forever.
-func (d *CeremonyDriver) completePresent(ctx context.Context, run domain.CeremonyRun, output map[string]any) (string, error) {
+// completeDecision records the person's decision on the current step. When
+// the completion fails it asks MADE whether an earlier one already landed in
+// this state, and returns that decision, so a lost answer does not leave both
+// keys failing forever.
+func (d *CeremonyDriver) completeDecision(ctx context.Context, run domain.CeremonyRun, state string, output map[string]any) (string, error) {
 	err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, output)
 	if err == nil {
 		return output["decision"].(string), nil
 	}
 	view, inspectErr := d.Engine.Inspect(ctx, run.Instance)
 	if inspectErr != nil {
-		return "", errors.Join(fmt.Errorf("complete present: %w", err), inspectErr)
+		return "", errors.Join(fmt.Errorf("complete %s: %w", run.Step, err), inspectErr)
 	}
-	if landed, ok := view.Completed["present"]; ok && view.State == "APPROVAL" {
-		if decision, _ := landed["decision"].(string); decision == "approve" || decision == "return" {
+	if landed, ok := view.Completed[run.Step]; ok && view.State == state {
+		if decision, _ := landed["decision"].(string); decision != "" {
 			return decision, nil
 		}
 	}
-	return "", fmt.Errorf("complete present: %w", err)
+	return "", fmt.Errorf("complete %s: %w", run.Step, err)
 }
 
 func (d *CeremonyDriver) awaiting(s domain.Session) (domain.CeremonyRun, *domain.IncidentRun, error) {
 	run, live := s.Ceremony()
 	if !live || !run.AwaitingPerson() {
-		return domain.CeremonyRun{}, nil, errors.New("no draft is waiting for approval")
+		return domain.CeremonyRun{}, nil, errors.New("nothing is waiting for approval")
 	}
-	if d == nil || d.Engine == nil || d.Files == nil || d.Approver == nil {
+	if d == nil || d.Engine == nil || d.Approver == nil || (run.Incident != nil && d.Files == nil) {
 		return domain.CeremonyRun{}, nil, errors.New("MADE is not connected; the decision cannot be recorded")
 	}
 	return run, run.Incident, nil
 }
 
-// CanReturn reports whether the person may still send the draft back.
+// CanReturn reports whether the person may still send the draft back, or
+// decline the merge.
 func CanReturn(run domain.CeremonyRun) bool {
+	if run.Repair != nil {
+		return CanDecline(run)
+	}
 	return run.Incident != nil && run.Incident.Decided != "approve" && (run.Incident.Returns < domain.MaxIncidentReturns || run.Incident.Decided == "return")
 }
