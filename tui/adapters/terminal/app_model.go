@@ -98,7 +98,7 @@ func New(deps Dependencies) AppModel {
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
 	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix()}
-	m.Composer.Theme = m.Theme
+	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()
 	m.Changes.Theme = m.Theme
 	m.Composer.Input.Placeholder = m.Theme.T("composer.placeholder")

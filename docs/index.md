@@ -1,27 +1,41 @@
 # AXLR documentation
 
-AXLR has three entry points. Start with the console if you want to work interactively; use the JSON worker if a host needs one local operation per process; use the Go library if the host owns the agent loop.
+AXLR is Underpass's default engine for agentic execution, supported by KMP memory and MADE procedures and extended through compatible MCP servers and OpenAI/Codex plugin packages. Start with the [product contract](product.md) for responsibilities and the exact capabilities of each interface.
 
-| Entry point | First page | Deeper reference |
-|:--|:--|:--|
-| Interactive console | [Getting started](getting-started.md) | [Console](console.md), [plugins and MCP](plugins.md), [troubleshooting](troubleshooting.md) |
-| JSON worker | [Worker contract](worker.md) | [Architecture](architecture.md) |
-| Go library | [Go library](library.md) | [MCP client](../mcpclient/README.md), [architecture](architecture.md) |
+## Start and use
 
-## Concepts
+| Task | Guide |
+|:--|:--|
+| Build and launch the console | [Getting started](getting-started.md) |
+| Use models, work modes, approvals, sessions and diagnostics | [Console](console.md) |
+| Understand driven and explicitly requested procedures | [Ceremonies](ceremonies.md) |
+| Install packages or connect MCP tools | [Plugins and MCP](plugins.md) |
+| Resolve a visible failure | [Troubleshooting](troubleshooting.md) |
 
-- [Architecture and boundaries](architecture.md) explains which component owns execution, model calls, policy and persistence.
-- [Plugins and MCP](plugins.md) explains Codex package compatibility, AXLR-managed installation, active MCP connections and both standard transports.
-- [KMP runbook](runbooks/kmp.md) and [MADE runbook](runbooks/made.md) cover connection, verification and removal of each engine.
-- [Release process](releasing.md) describes the tagged build, native test matrix, packages and checksums.
-- [Brand assets](brand.md) contains the logo, palette and usage guidance.
+## Operational runbooks
 
-## Development record
+| Outcome | Runbook |
+|:--|:--|
+| Take a task from context recovery to verified delivery | [Agent workflow](runbooks/agent-workflow.md) |
+| Connect, verify and disconnect memory | [KMP](runbooks/kmp.md) |
+| Prepare identity, definitions and tracked execution | [MADE](runbooks/made.md) |
+| Qualify, install and remove an extension | [Extensions](runbooks/extensions.md) |
+| Update engines or recover interrupted work and backups | [Recovery and maintenance](runbooks/recovery.md) |
+| Check service health and reconcile API operations | [Service operations](runbooks/service.md) |
+| Keep documentation aligned with a code revision | [Documentation maintenance](runbooks/documentation.md) |
 
-The documents under [`plans/`](plans/), [`superpowers/specs/`](superpowers/specs/) and [`superpowers/plans/`](superpowers/plans/) are dated design and implementation records. [TUI design studies](design/2026-09-30-tui/README.md), [research](research/2026-09-30-context-policy.md), [diagnostics](diagnostics/2026-09-30-tui-mcp.md) and [provenance](provenance.md) capture the evidence behind decisions. They may describe an earlier implementation stage; the guides above describe the current interface.
+## Integration and deployment
 
-[Documentation audit](documentation-audit.md) records the gaps this reorganization addressed.
+| Interface | Contract |
+|:--|:--|
+| HTTP service | [Service API](api.md), [OpenAPI v1](../api/openapi/axlr-v1.yaml) |
+| Kubernetes | [Helm deployment](helm.md) |
+| One-request process | [JSON worker](worker.md) |
+| Go host | [Library](library.md), [MCP client](../mcpclient/README.md) |
+| Implementation and distribution | [Architecture](architecture.md), [releasing](releasing.md) |
 
-## Service and deployment
+## Documentation status and design record
 
-The worker remains a one-request process API. [`axlr-serve`](api.md) implements HTTP `/v1` with mTLS, sessions, SSE and tool calls. The [Helm chart](helm.md) connects to existing KMP and MADE engines. The [service specification](specs/axlr-service-api.md) and [implementation plan](plans/axlr-service-helm-release.md) record the contract and acceptance work; they do not imply that a tagged release has been published.
+The current guides were reconciled with `main` at `559a1b8` on 4 October 2026. The [audit](documentation-audit.md) records source evidence, corrections, validation and remaining product limits. [Brand](brand.md) documents the visual assets.
+
+Documents under [plans](plans/), [design studies](design/2026-09-30-tui/README.md), [superpowers specs](superpowers/specs/) and [superpowers plans](superpowers/plans/) preserve dated design and implementation work. The [service design](specs/axlr-service-api.md), [context research](research/2026-09-30-context-policy.md), [diagnostics](diagnostics/2026-09-30-tui-mcp.md) and [provenance](provenance.md) explain decisions; they are not installation or current API references. Use the current guides above for operations.

@@ -1,5 +1,7 @@
 # AXLR OpenRouter model client: design
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../../index.md) and its audited revision.
+
 ## Purpose and approved scope
 
 AXLR needs a Go library client that can request a model completion through OpenRouter and return either assistant text, tool-call requests, or both. This is part of Underpass's own AXLR runtime. The host owns the conversation, chooses the model, provides the API key, decides whether to execute a requested tool, and supplies tool results in a later completion request.

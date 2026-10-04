@@ -1,5 +1,7 @@
 # AXLR minimal runtime implementation
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../index.md) and its audited revision.
+
 Source: our `underpass-ai/underpass-runtime` at commit `c16098cc7e863468f244963d5874544f8ce12f61` and `underpass-runtime-minimal-plan.zip`, treated as a design proposal. AXLR is a focused rewrite of our execution layer in a new repository. It does not promise compatibility with the old service API.
 
 The architecture and quality requirements added during implementation are fixed in [2026-09-29-hexagonal-design.md](2026-09-29-hexagonal-design.md): hexagonal layers, value objects, one principal Go type per file, at least 80% aggregate test coverage, and minimal CI.

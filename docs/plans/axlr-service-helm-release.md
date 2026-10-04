@@ -1,5 +1,7 @@
 # Plan de implementación: API de AXLR, Helm y releases
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../index.md) and its audited revision.
+
 Estado: **implementado en código, pendiente de release candidata y pruebas con KMP/MADE remotos**. Fecha del plan: 30-09-2026; revisión: 01-10-2026. Especificación: [API de servicio](../specs/axlr-service-api.md). El repositorio contiene `axlr` (worker JSON de una petición), `axlr-tui` (consola local) y `axlr-serve` (API HTTP mTLS). Este documento conserva el contrato y la lista de aceptación; la [guía de releases](../releasing.md) describe la publicación.
 
 ## 0. Contrato de producto y decisiones cerradas

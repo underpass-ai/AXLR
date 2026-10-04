@@ -1,5 +1,7 @@
 # AXLR agent console: design
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../../index.md) and its audited revision.
+
 ## Intent and scope
 
 AXLR needs a capable terminal console for an agent working in a local workspace. The console must support a real OpenRouter conversation, incremental output, AXLR's local tools and explicitly registered MCP tools, deliberate approval of every tool call, and sessions that can be resumed. It should remain usable with a keyboard alone while offering mouse controls. This is Underpass's own AXLR runtime and interface.

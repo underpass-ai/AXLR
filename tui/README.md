@@ -18,11 +18,12 @@ Supply `OPENROUTER_API_KEY` through the host environment before launch. Type `/m
 
 | Task | Guide |
 |:--|:--|
+| Product responsibilities and daily workflow | [Product contract](../docs/product.md), [agent workflow](../docs/runbooks/agent-workflow.md) |
 | First launch and prerequisites | [Getting started](../docs/getting-started.md) |
-| Models, controls, sessions, themes and diagnostics | [Console](../docs/console.md) |
+| Models, work modes, approvals, sessions and diagnostics | [Console](../docs/console.md) |
 | AXLR packages, MCP registration and approval | [Plugins and MCP](../docs/plugins.md) |
 | KMP memory and MADE orchestration | [KMP runbook](../docs/runbooks/kmp.md), [MADE runbook](../docs/runbooks/made.md) |
 | Startup or session problems | [Troubleshooting](../docs/troubleshooting.md) |
 | Package responsibilities and execution boundary | [Architecture](../docs/architecture.md) |
 
-The console targets trusted-local Linux and uses your account's OS authority. It is not a sandbox. Private sessions and diagnostics can contain conversation content; [the console guide](../docs/console.md#diagnostics-and-privacy) explains their storage and capture controls.
+The console uses your account's OS authority. The release matrix targets Linux, macOS and Windows on amd64 and arm64; the commands above use a POSIX shell. It is not a sandbox. Private sessions and diagnostics can contain conversation content; [the console guide](../docs/console.md#diagnostics-and-privacy) explains their storage and capture controls.

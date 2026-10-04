@@ -4,6 +4,12 @@ KMP is AXLR's governed, durable memory layer. AXLR executes the agent turn and c
 
 This runbook uses a directly managed local `kmp-mcp` stdio process. See the [KMP embedded guide](https://github.com/underpass-ai/kmp/blob/main/docs/embedded/README.md) for engine releases, store selection, doctor output and upstream lifecycle details. Use one KMP registration per AXLR host.
 
+## Preconditions and exit criteria
+
+Use an engine supported by your platform and store format; the service distribution currently locks KMP 0.24.0 in [engines.lock.json](../../distribution/engines.lock.json). Record the binary version, absolute store path and owning account before connecting. A package version, a running process and the selected store are separate checks.
+
+Success means AXLR discovers the intended `kmp` registration, can retrieve its guide and can recover a known memory from the intended store. A new project may legitimately have no memories. A successful connection alone does not prove that you selected the right data.
+
 ## Install and connect
 
 1. Install a release-matched `kmp-mcp` binary using the upstream KMP instructions. If no published asset exists for your platform, KMP documents `cargo install kmp-mcp --locked`. Record its **absolute** executable path and check `kmp-mcp --version` and `kmp-mcp doctor`.
@@ -46,9 +52,32 @@ AXLR_KMP_DATA_DIR=/absolute/path/to/memory \
 
 The worker also accepts `--plugin` for a one-request MCP call; supply the same store through `--plugin-env`. Its process lifetime ends after that response.
 
+## Verify guide and store selection
+
+Run inspection with the same binary, backend and explicit store environment used by the registration. A saved global selection can point at an unrelated project, and `--root` controls AXLR's workspace rather than overriding KMP's store. Pin `KMP_MCP_DATA_DIR` before discovery; do not write until the selected path and a known memory agree.
+
+If `kmp_guide` reports missing guide nodes, stop the AXLR connection and any writer for that embedded store, then synchronize the assets from the matching installed KMP plugin:
+
+```bash
+KMP_MCP_BACKEND=embedded KMP_MCP_DATA_DIR=/absolute/path/to/memory \
+  /absolute/path/to/kmp-mcp guide sync --plugin-root /absolute/path/to/matching-kmp-plugin
+```
+
+This writes guide data to the selected store. Restart AXLR with the same selection and retry `kmp_guide` and the known-memory read. Do not repair a missing guide by silently switching to another store. Upstream tool feedback is authoritative for a different engine version or backend.
+
+## Use memory in a task
+
+1. Discover the exact live schemas through `axlr_tools`, then invoke them through `axlr_call_tool`.
+2. Start or reuse KMP's guide identity and context. Wake the task's known stable project scope before re-deriving context; keep returned identities and finish relevant pages.
+3. Ask targeted questions, inspect cited evidence and distinguish an evidence-backed answer from `UNKNOWN`. A missing project scope in a confirmed store can be a first-use condition; a protocol or store error is not `UNKNOWN`.
+4. Record decisions, constraints and outcomes with their evidence, rather than copying the conversation. Supply one stable idempotency key per logical write and review any `needs_review` continuation before resuming it. Link decisions with justified relations when the evidence supports them.
+5. Verify the write receipt and retrieve the recorded result. Retain the project scope for the next session.
+
+The console's debug/delivery driver has a narrower automatic path: it wakes `ws:<session-id>` and attempts a terminal outcome write with ceremony, step and workspace labels. It does not map sessions to a canonical `project:<name>`, preserve every wake page or automatically record all decisions. KMP wake errors are ignored by that driver; failed outcome writes are reported without undoing MADE progress. Use explicit project-memory calls when continuity across sessions matters.
+
 ## Disconnect KMP from AXLR
 
-1. Finish or interrupt active turns and stop the AXLR console. Note the current store path from `kmp-mcp info`; disconnecting must not delete it.
+1. Finish or interrupt active turns and stop the AXLR console. Note the current store path from `kmp-mcp info` with the registration’s exact environment; disconnecting must not delete it.
 2. Back up AXLR's private MCP configuration (`$XDG_CONFIG_HOME/axlr/mcp.json`, or `$HOME/.config/axlr/mcp.json`). Remove only the `plugins` array entry whose manifest is your KMP manifest. Preserve the other registrations, version, file ownership and mode `0600`. Also remove any one-launch `--plugin` flag or duplicate package registration that points to KMP.
 3. Restart AXLR and confirm `/mcp` no longer lists `kmp`. The built-in `/plugin` catalogue row can remain: it does not represent a live server. Existing AXLR session transcripts remain, but new KMP memory calls are unavailable.
 4. If you also intend to remove the engine from the machine, follow the upstream KMP uninstall procedure for **the installation method you used** after checking other hosts. Preserve or export the memory store separately. Removing the AXLR registration alone leaves the binary and all memory intact.
@@ -56,3 +85,5 @@ The worker also accepts `--plugin` for a one-request MCP call; supply the same s
 ## Recovery
 
 If `/mcp` reports KMP unavailable, compare the manifest's absolute command, executable permission, selected store and `kmp-mcp doctor` output. An `UNKNOWN` answer from `kmp_ask` is a valid evidence result; it does not mean the server failed. If a store is locked or fails a format check, keep its bytes, stop other writers and follow KMP's recovery guide rather than selecting an empty replacement.
+
+For engine updates and a restore rehearsal, follow [recovery and maintenance](recovery.md). Disconnecting or updating AXLR does not authorize an upstream store migration.

@@ -1,5 +1,7 @@
 # AXLR service API and Helm deployment
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../index.md) and its audited revision.
+
 ## Intent
 
 AXLR originated as a simpler execution layer extracted from `underpass-runtime`, with Pi as a conceptual reference for a compact local tool surface. It is an agentic runtime: AXLR owns the model loop, sessions, tool execution and approval boundary; KMP governs durable memory; MADE governs orchestration. The first service API must let a client run agent turns and tools without a terminal. The same agent behavior should be available through the TUI and service.

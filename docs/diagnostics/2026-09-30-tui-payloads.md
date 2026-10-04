@@ -1,5 +1,7 @@
 # TUI timings and payload capture — 2026-09-30
 
+> **Historical record.** This page preserves its original design or investigation context. For current behavior and operating instructions, use the [current documentation](../index.md) and its audited revision.
+
 ## Existing-session audit
 
 The running process had started without `--trace-file`. Its saved session contained 92 messages, 18 user turns and 31 tool results with execution timestamps. User submission, model request, first-text and response-completion timestamps were not saved; these cannot be recovered retrospectively.

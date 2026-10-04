@@ -1,37 +1,80 @@
-# Runbook: connect or remove MADE orchestration
+# Runbook: connect and prepare MADE
 
-MADE governs AXLR's orchestration layer: ceremony definitions, claims, state transitions and human decisions. AXLR executes the local work and calls MADE over MCP. The built-in MADE row in `/plugin` does not install the engine or prove connectivity; `/mcp` shows the actual server.
+MADE owns ceremony definitions, claims, state transitions and decision records. AXLR performs the work. Use the exact MCP registration ID `made` for console-driven ceremonies and setup. A built-in `/plugin` row is not proof of connectivity or authorization.
 
-This runbook uses a directly managed embedded `made-mcp` stdio process. Follow the [MADE local engine guide](https://github.com/underpass-ai/made/blob/main/docs/embedded/README.md) for release-matched binaries, authorization and store lifecycle. Use one MADE registration per AXLR host.
+The distribution locks MADE 0.9.1 in [engines.lock.json](../../distribution/engines.lock.json). Use a release-matched binary, plugin assets and the [upstream embedded setup](https://github.com/underpass-ai/made/blob/main/docs/embedded/README.md) for engine installation and store lifecycle. Record the binary version, SQLite path, policy, trusted-host identity and stable cursor key without exposing the key.
 
-AXLR bundles a routing skill and seven [default ceremonies](../ceremonies.md), including accountable handoff. They are readable before connection, and do not automatically publish into this store. After connecting, request catalogue installation to validate and publish the exact pinned definitions. Keep guard-approval and grant-administration capabilities separate from the work-agent principal; see the permission boundary in that guide.
+## Choose the connection route
 
-## Install and connect
+| Route | Setup owner | AXLR preparation |
+|:--|:--|:--|
+| Installed `run-embedded-mcp.sh` launcher | Upstream embedded setup has bootstrapped the intended store and its private configuration | `/mcp` → select `made` → `P` can issue the work grant and publish the two driven definitions |
+| Direct `made-mcp` binary | Operator supplies store, policy, work identity and cursor key | Operator must issue the work grant and publish the exact definitions |
+| Remote engine | Remote operator owns authorization and definitions | `P` reports remote; it does not administer that engine |
 
-1. Install the release-matched `made-mcp` binary for your platform and verify `made-mcp --version`. The published release checked on 1 October 2026 is [0.9.1](https://github.com/underpass-ai/made/releases/tag/v0.9.1), also available through `cargo install made-mcp --version 0.9.1 --locked`. The upstream local guide describes the 0.9.0 setup contract; use the matching 0.9.1 binary and its checksummed release assets. Recheck the release instructions when upgrading.
-2. Choose an absolute SQLite store path and stable, nonempty policy, trusted-host and store IDs. Generate a private 32-byte cursor HMAC key as 64 hexadecimal characters. Keep the key stable across restarts, in a secret manager or environment variable; do not commit it. Bootstrap authorization for the **same store and IDs** with the matching binary:
+AXLR's preparer recognizes the launcher by the executable basename `run-embedded-mcp.sh`. A directly registered binary, even in embedded mode, is not that route. Neither `/update` nor installing a package bootstraps an engine store.
 
-```bash
-made-mcp bootstrap-authorization /absolute/path/to/ceremonies.sqlite3 \
-  --policy-id my-policy \
-  --trusted-host-id my-local-host
-```
+## Register the installed embedded launcher
 
-Bootstrap creates the administrative owner; it does not grant every ceremony action. Issue only the required grants through MADE's authorization API.
-
-3. Save this manifest as a private file at an absolute path, for example `$HOME/.config/axlr/made.json`, replacing the command path:
+After completing upstream setup, save a private AXLR manifest at an absolute path, replacing the launcher path with the one actually installed:
 
 ```json
 {
   "manifest_version": 1,
   "id": "made",
-  "command": "/absolute/path/to/made-mcp",
+  "command": "/absolute/path/to/made-plugin/scripts/run-embedded-mcp.sh",
   "args": [],
   "allow_tools": ["*"]
 }
 ```
 
-4. Add one entry to AXLR's private `$XDG_CONFIG_HOME/axlr/mcp.json` (or `$HOME/.config/axlr/mcp.json`) `plugins` array, preserving existing entries and file mode `0600`. Use `{"version":1,"plugins":[...]}` as the top-level shape if this is the first server:
+Add this entry to the private `mcp.json` `plugins` array, preserving other entries and file mode `0600`. The top-level shape is `{"version":1,"plugins":[...]}`:
+
+```json
+{
+  "manifest": "/absolute/path/to/made.json",
+  "name": "MADE",
+  "purpose": "ceremony",
+  "approval": "manual",
+  "env": {
+    "MADE_MCP_BACKEND": "embedded",
+    "MADE_MCP_STORE_PATH": "/absolute/path/to/ceremonies.sqlite3"
+  },
+  "env_from": {"HOME": "HOME", "PATH": "PATH"}
+}
+```
+
+The launcher needs its matching plugin files, shell utilities and already initialized store configuration. These explicit variables are the child's complete environment; add any required XDG selection from your installation. Initially omitting `MADE_AUTH_TRUSTED_HOST_ID` lets the launcher resolve its trusted host for setup. Complete preparation before giving ordinary work to the agent; after preparation AXLR persists a separate work identity.
+
+Restart AXLR and verify discovery in `/mcp`. Avoid duplicate package-generated registrations: their IDs are normally `<package>-<server>` and are not the driver's `made` identity.
+
+## Prepare the driven ceremonies
+
+When the console has no active turn or pending calls, select MADE in `/mcp` and press `P`:
+
+1. AXLR invokes the embedded launcher with the trusted-host override removed and issues `axlr-default-work-v1` to a work identity. It recognizes existing `axlr-work-…` or `…-axlr-work` identities; a different explicit trusted-host override requires manual operator setup.
+2. If needed, it persists an `axlr-work-…` identity in `mcp.json`. Restart when requested so the running connection uses it.
+3. It verifies the work identity can read definitions and compares the published digests of `axlr_debug` 2.0 and `axlr_delivery` 2.0 with the [shipped pins](../../tui/adapters/ceremonyhost/definitions.go).
+4. It publishes missing definitions with a temporary five-minute install grant, then revokes that grant. Conflicting content under an existing immutable name/version is an error, not an overwrite.
+
+The permanent grant allows running, inspecting and resuming published ceremonies; it excludes guard approval, definition publication and grant administration. Its exact action set lives in [work_grant.go](../../tui/adapters/madesetup/work_grant.go). The setup action itself makes privileged engine calls; a manual MCP policy does not turn those setup calls into individual agent approval dialogs.
+
+Preparation is repeatable for matching identities and definitions. If it partially fails, inspect the displayed error, persisted work identity, published versions and temporary grant before retrying. If revocation failed, the install grant expires after five minutes; report and verify its state rather than assuming it was removed.
+
+`P` installs only the two **2.0** driver definitions. The seven **1.0** skill definitions are installed separately on an explicit request. See [ceremonies](../ceremonies.md).
+
+## Direct binary or remote operator setup
+
+For a directly managed embedded binary, initialize authorization with the matching engine and the intended store:
+
+```bash
+/absolute/path/to/made-mcp bootstrap-authorization /absolute/path/to/ceremonies.sqlite3 \
+  --policy-id my-policy --trusted-host-id my-local-host
+```
+
+Use the trusted operator channel to grant a separate identity such as `my-axlr-work` the exact permanent action set linked above, and to publish the exact 2.0 YAML from [the driver definitions directory](../../tui/adapters/ceremonyhost/definitions/). Compare returned digests. Keep approval and grant administration with the operator.
+
+Use the same AXLR manifest as above with `command` set to the absolute binary. Its configuration entry supplies the work identity:
 
 ```json
 {
@@ -43,7 +86,7 @@ Bootstrap creates the administrative owner; it does not grant every ceremony act
     "MADE_MCP_BACKEND": "embedded",
     "MADE_MCP_STORE_PATH": "/absolute/path/to/ceremonies.sqlite3",
     "MADE_AUTH_POLICY_ID": "my-policy",
-    "MADE_AUTH_TRUSTED_HOST_ID": "my-local-host",
+    "MADE_AUTH_TRUSTED_HOST_ID": "my-axlr-work",
     "MADE_CEREMONY_STORE_ID": "my-local-store"
   },
   "env_from": {
@@ -52,11 +95,17 @@ Bootstrap creates the administrative owner; it does not grant every ceremony act
 }
 ```
 
-`AXLR_MADE_CURSOR_HMAC_KEY` must be present in the AXLR host environment when it starts. `env` and `env_from` form the complete environment of the child process. The placeholder IDs and paths above must match the authorization bootstrap. AXLR rejects duplicate server IDs; do not also register MADE from a package.
+`AXLR_MADE_CURSOR_HMAC_KEY` must be present in AXLR's environment, contain the initialized store's stable key and remain private. Do not generate a new key each launch. Discovery alone does not test the work grant. For remote engines, the operator performs the equivalent grant and definition checks using the remote deployment's identities; the [service configuration](../api.md) uses gRPC mTLS adapters.
 
-5. Restart AXLR, open `/mcp` and verify the `made` tools. Keep manual approval until you have reviewed the exact tools and grants. A discovered MADE step handler still requires real host execution capability in AXLR; discovering it does not perform the step.
+## Verify actual execution
 
-6. Give AXLR its own work identity. With the embedded launcher, select the MADE row in `/mcp` and press `P` (prepare for AXLR). AXLR starts MADE once as the store's trusted host and issues grant `axlr-default-work-v1` to a work identity that can run, inspect and resume published ceremonies but cannot approve human guards, publish definitions or change grants. If the MADE entry had no `MADE_AUTH_TRUSTED_HOST_ID`, AXLR was acting as the trusted host itself: preparation writes an `axlr-work-…` identity to the entry and asks you to restart. Running it again is harmless. With a remote (gRPC) engine or an entry that names an explicit trusted host, as in the example above, AXLR changes nothing; issue the same grant as that operator.
+1. Confirm `made` discovery and work-identity access to both exact 2.0 definitions.
+2. Select `/delivery` and send a small reversible task with a meaningful check. Observe a new instance and the brief step.
+3. Review the proposed command. AXLR executes the baseline and subsequent verification itself; build cannot replace the approved command.
+4. Confirm the terminal state, report, command result and revision/dirty evidence. `COMPLETED` and `BLOCKED` both return the console to normal.
+5. If KMP is connected as `kmp`, inspect the memory outcome. `not recorded` means the ceremony result exists in MADE but its KMP write was not established.
+
+Success is actual work plus an observed check and recorded state, not a role label or successful no-op handler. See the [agent workflow](agent-workflow.md).
 
 ## Disconnect MADE from AXLR
 
@@ -67,4 +116,14 @@ Bootstrap creates the administrative owner; it does not grant every ceremony act
 
 ## Recovery
 
-If discovery fails, check the binary version, absolute store path, exact bootstrap policy and trusted-host IDs, stable cursor key, grants and process diagnostics on stderr. MADE refuses startup with a missing policy or unbootstrapped store; do not point it at a new empty database to hide that failure. Retry a ceremony step only after checking its recorded state, because a timeout cannot prove that the step did not run.
+| Symptom | Action |
+|:--|:--|
+| Discovery fails | Check absolute executable/launcher, explicit environment, store, policy, cursor key and stderr |
+| `P` reports unsupported or remote | Use the operator route; do not remove a deliberate identity to gain privileges |
+| Definition absent | Prepare/publish the exact 2.0 definition; installing only 1.0 does not satisfy the driver |
+| Digest or grant conflict | Compare the stored identity and action/content set; never overwrite an immutable identity |
+| Lost completion/transition response | Inspect the existing instance, active claim/fence and enabled transitions before continuing |
+| Multiple enabled transitions or stale claim | Resolve the state through the authorized MADE operator; do not start a duplicate instance |
+| `BLOCKED` after checks | Preserve failing evidence; revisit the task/check deliberately rather than silently resetting the loop |
+
+The [recovery runbook](recovery.md) covers restart, backups and uncertain effects. Keep the store and key together for restoration; reconnecting an empty database is not recovery.

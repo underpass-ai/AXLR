@@ -1,10 +1,10 @@
 <p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/assets/brand/axlr-emblem-dark.svg"><img src="docs/assets/brand/axlr-emblem-light.svg" width="804" alt="AXLR"></picture></p>
 
-<p align="center"><strong>Run an agent in your workspace. Keep the execution boundary explicit.</strong></p>
+<p align="center"><strong>Execute with AXLR. Remember with KMP. Coordinate with MADE.</strong></p>
 
-AXLR is Underpass's agentic execution runtime. It owns the model loop and local execution. KMP governs durable, evidence-backed memory; MADE governs orchestration through ceremonies and human decisions. Both connect as separate MCP engines. The console streams OpenRouter responses, runs local tools and saves sessions; the Go library and JSON worker expose the execution core to other hosts.
+AXLR is Underpass's default execution engine for agentic work. It owns the model loop, tools, approvals and sessions. KMP supplies durable, evidence-backed memory; MADE supplies tracked procedures and decision records. Connect both engines through MCP, then extend AXLR with other MCP tools and compatible OpenAI/Codex plugin packages. The [product contract](docs/product.md) defines these responsibilities and the capabilities available in each interface.
 
-AXLR runs in a **trusted local** Linux workspace. It is not a sandbox. File tools stay inside the selected root; an executed program and connected MCP servers still run with the authority you give them.
+AXLR operates in a **trusted workspace**. File tools stay inside the selected root; executed programs and connected MCP servers use the authority of their host. The console and JSON worker are not sandboxes. The HTTP service adds mTLS and explicit client roles.
 
 ## Start the console
 
@@ -13,22 +13,23 @@ Build from a full checkout with Go 1.26:
 ```bash
 GOWORK=off go test ./...
 GOWORK=off go -C tui test ./...
-go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
+GOWORK=off go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
 /tmp/axlr-tui --root "$PWD"
 ```
 
 Supply `OPENROUTER_API_KEY` through your normal environment or secret manager before launching. In the console, choose a model with `/model` and send a prompt. Use `F1` for controls, `/mcp` for AXLR's server connections, `/plugin` for AXLR-managed packages, and `/update` to update the connected local MADE and KMP engines.
 
-The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker.
+The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker. New sessions use `/normal`; `/review`, `/writer` and `/research` tailor local tool policy, while `/debug` and `/delivery` run prepared MADE procedures. Follow the [agent workflow](docs/runbooks/agent-workflow.md) to put AXLR, KMP and MADE to work together.
 
 ## Choose a path
 
 | You want to… | Read |
 |:--|:--|
+| Understand AXLR’s product role and current limits | [Product contract](docs/product.md) |
 | Install, launch and send a first prompt | [Getting started](docs/getting-started.md) |
 | Use models, controls, sessions and diagnostics | [Console guide](docs/console.md) |
 | Connect KMP or MADE | [KMP runbook](docs/runbooks/kmp.md), [MADE runbook](docs/runbooks/made.md) |
-| Choose a working ceremony or hand off a task | [Default ceremonies](docs/ceremonies.md) |
+| Choose a work mode, run a ceremony or hand off a task | [Console modes](docs/console.md#work-modes), [ceremonies](docs/ceremonies.md) |
 | Connect an MCP server or install a package | [Plugins and MCP](docs/plugins.md) |
 | Call AXLR from a process through JSON | [Worker contract](docs/worker.md) |
 | Run the HTTP service or deploy AXLR with Helm | [Service API](docs/api.md), [Helm guide](docs/helm.md), [release process](docs/releasing.md) |
@@ -59,6 +60,6 @@ The JSON worker, `cmd/axlr`, accepts exactly one request on stdin and returns on
 
 ## Project status
 
-AXLR is an evolving pre-1.0 project. The repository has two Go modules and tests each independently. The console is a trusted-local application. The worker exposes a one-request process API; `axlr-serve` exposes a source-build HTTP `/v1` API with mTLS. The chart and release workflow are checked in; published release assets require a successful tagged run.
+AXLR is an evolving pre-1.0 project with two Go modules. The console runs interactive tasks; the worker exposes a one-request process API; `axlr-serve` exposes HTTP `/v1` with mTLS. The checked-in release matrix targets Linux, macOS and Windows on amd64 and arm64. The Helm chart and release workflow are implemented; published assets require a successful tagged run. Source-build instructions use POSIX shell syntax. The service currently configures KMP and MADE only and does not expose the console's plugin installation or work-mode controls.
 
 Part of [Underpass AI](https://underpassai.com).
