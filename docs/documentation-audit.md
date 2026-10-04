@@ -1,5 +1,9 @@
 # Documentation audit — 4 October 2026
 
+## v0.2.3 context ceiling and oversized results
+
+Reported from session `e27a6170`: `axlr_tools` could never return `made_design_ceremony` (63 KB schema, 41 KB of it the `x-made-pattern-catalog` annotation), the invocation bridge rejected `x-made-shape`, and `axlr_history` escaped JSON tool results twice, so pages arrived half-size and a 687 KB result needed ~92 reads. Fixes: `x-*` keywords are annotations for validation (#57); `axlr_history` pages message content directly (#59); `axlr_tools` omits `x-*` annotations, outlines a schema that still does not fit and selects parts with a JSON-pointer `path` (#60). At the user's request the projection ceiling rises from 96 KiB to 1 MiB (768 KiB low watermark, 64 KiB per tool result, 16 KiB checkpoint), host results to 64 KiB and history pages to 32 KiB (#58). Limits remain fixed bytes; glm-5.3-flash's window is 1,048,576 tokens. The [console guide](console.md) is updated and the chart's `version` and `appVersion` are `0.2.3`.
+
 ## v0.2.2 queued messages no longer cancel the model
 
 A message sent while the model was reasoning cancelled the request and restarted it. With a slow reasoning model (glm-5.3-flash spent 25–120 s per request in the reported session) every new message threw that work away, so the session never answered. The console now queues the message, shows it in the transcript and footer, and delivers it at the next model boundary. The [console guide](console.md) is updated and the chart's `version` and `appVersion` are `0.2.2`.

@@ -11,7 +11,7 @@ import (
 )
 
 func hostDiscover(snapshot []domain.AvailableTool, arguments root.JSONValue) (any, error) {
-	args, err := decodeHostArguments(arguments, "query", "name", "limit", "offset")
+	args, err := decodeHostArguments(arguments, "query", "name", "path", "limit", "offset")
 	if err != nil {
 		return nil, err
 	}
@@ -25,6 +25,15 @@ func hostDiscover(snapshot []domain.AvailableTool, arguments root.JSONValue) (an
 	offset, err := hostInteger(args, "offset", 0)
 	if err != nil || offset < 0 {
 		return nil, errors.New("offset must be a nonnegative integer")
+	}
+	path := ""
+	if raw, exists := args["path"]; exists {
+		if _, named := args["name"]; !named {
+			return nil, errors.New("path requires name")
+		}
+		if err := json.Unmarshal(raw, &path); err != nil || len(path) > 512 {
+			return nil, errors.New("path must be a JSON pointer string of at most 512 bytes")
+		}
 	}
 	if raw, exists := args["name"]; exists {
 		if _, exists := args["offset"]; exists {
@@ -47,7 +56,12 @@ func hostDiscover(snapshot []domain.AvailableTool, arguments root.JSONValue) (an
 		if _, err := root.NewJSONObject(tool.Definition.Parameters.Bytes()); err != nil {
 			return nil, errors.New("registered tool has no valid object schema")
 		}
-		return map[string]any{"name": tool.Definition.Name, "plugin": tool.Identity.Plugin.PluginID, "tool": tool.Identity.Plugin.ToolName, "description": tool.Definition.Description, "parameters": tool.Definition.Parameters}, nil
+		view, err := toolSchemaView(tool.Definition.Parameters.Bytes(), path)
+		if err != nil {
+			return nil, err
+		}
+		view["name"], view["plugin"], view["tool"], view["description"] = tool.Definition.Name, tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName, tool.Definition.Description
+		return view, nil
 	}
 	query := ""
 	if raw, exists := args["query"]; exists {

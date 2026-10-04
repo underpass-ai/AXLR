@@ -29,10 +29,10 @@ func hostHistory(messages []root.Message, arguments root.JSONValue) (any, error)
 	if err != nil || limit < 1 || limit > MaxHistoryReadBytes {
 		return nil, errors.New("limit_bytes must be between 1 and 32768")
 	}
-	data, err := json.Marshal(messages[index])
-	if err != nil {
-		return nil, err
-	}
+	// Page the message content itself. Re-marshalling the whole message
+	// escaped JSON tool results twice and halved every page.
+	message := messages[index]
+	data := []byte(message.Content)
 	if offset > len(data) || !hostUTF8Boundary(data, offset) {
 		return nil, errors.New("offset_bytes is outside the message or splits a UTF-8 character")
 	}
@@ -43,8 +43,17 @@ func hostHistory(messages []root.Message, arguments root.JSONValue) (any, error)
 	if end == offset && offset < len(data) {
 		return nil, errors.New("limit_bytes is too small for the next UTF-8 character")
 	}
+	withCalls := offset == 0 && len(message.ToolCalls) > 0
 	for {
-		result := map[string]any{"message_index": index, "role": messages[index].Role, "offset_bytes": offset, "next_offset_bytes": end, "total_bytes": len(data), "has_more": end < len(data), "text": string(data[offset:end])}
+		result := map[string]any{"message_index": index, "role": message.Role, "offset_bytes": offset, "next_offset_bytes": end, "total_bytes": len(data), "has_more": end < len(data), "text": string(data[offset:end])}
+		if message.ToolCallID != "" {
+			result["tool_call_id"] = message.ToolCallID
+		}
+		if withCalls {
+			result["tool_calls"] = message.ToolCalls
+		} else if offset == 0 && len(message.ToolCalls) > 0 {
+			result["tool_calls_omitted"] = len(message.ToolCalls)
+		}
 		encoded, err := json.Marshal(result)
 		if err != nil {
 			return nil, err
@@ -52,11 +61,15 @@ func hostHistory(messages []root.Message, arguments root.JSONValue) (any, error)
 		if contentJSONBytes(string(encoded)) <= MaxHistoryReadBytes-256 {
 			return result, nil
 		}
+		if withCalls {
+			withCalls = false
+			continue
+		}
 		end = offset + (end-offset)/2
 		for !hostUTF8Boundary(data, end) {
 			end--
 		}
-		if end == offset {
+		if end == offset && offset < len(data) {
 			return nil, errors.New("history page cannot fit the host result budget")
 		}
 	}

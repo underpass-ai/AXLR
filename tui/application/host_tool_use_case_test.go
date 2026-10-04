@@ -62,7 +62,7 @@ func TestHostDiscoveryListsStableSummariesAndExactSchema(t *testing.T) {
 		t.Fatalf("%s", out.Content)
 	}
 	out = hostExecute(t, s, domain.HostOperationTools, `{"name":"alpha"}`)
-	if out.IsError || !strings.Contains(string(out.Content), `"parameters":{"type":"object"`) || !strings.Contains(string(out.Content), `"plugin":"kmp"`) {
+	if out.IsError || !strings.Contains(string(out.Content), `"parameters":{`) || !strings.Contains(string(out.Content), `"type":"object"`) || !strings.Contains(string(out.Content), `"plugin":"kmp"`) {
 		t.Fatalf("%s", out.Content)
 	}
 	out = hostExecute(t, s, domain.HostOperationTools, `{"query":"no such capability"}`)
@@ -86,14 +86,47 @@ func TestHostDiscoveryRejectsInvalidRangesAndSchemaWithoutTruncation(t *testing.
 	schema, _ := json.Marshal(map[string]any{"type": "object", "description": strings.Repeat("z", MaxHostResultBytes)})
 	huge.Definition.Parameters = hostJSON(t, string(schema))
 	s = hostSession(t, "reply", huge)
-	if out := hostExecute(t, s, domain.HostOperationTools, `{"name":"huge"}`); !out.IsError || !strings.Contains(string(out.Content), "exceeds") {
-		t.Fatalf("schema silently cut: %s", out.Content)
+	out := hostExecute(t, s, domain.HostOperationTools, `{"name":"huge"}`)
+	if out.IsError || !strings.Contains(string(out.Content), `"outline"`) || !strings.Contains(string(out.Content), `"hint"`) || strings.Contains(string(out.Content), `"parameters"`) || len(out.Content) > MaxHostResultBytes {
+		t.Fatalf("oversized schema was not outlined: %.300s", out.Content)
+	}
+	if out := hostExecute(t, s, domain.HostOperationTools, `{"name":"huge","path":"/description"}`); !out.IsError || !strings.Contains(string(out.Content), "exceeds") {
+		t.Fatalf("oversized leaf silently cut: %.300s", out.Content)
+	}
+	for _, args := range []string{`{"path":"/type"}`, `{"name":"huge","path":"type"}`, `{"name":"huge","path":"/missing"}`, `{"name":"huge","path":3}`} {
+		if out := hostExecute(t, s, domain.HostOperationTools, args); !out.IsError {
+			t.Fatalf("accepted %s", args)
+		}
+	}
+}
+
+func TestHostDiscoveryStripsAnnotationsAndSelectsPaths(t *testing.T) {
+	tool := hostPlugin(t, "design", "made", "made_design_ceremony")
+	schema, _ := json.Marshal(map[string]any{
+		"type":                   "object",
+		"x-made-pattern-catalog": strings.Repeat("catalogue ", 8000),
+		"x-made-shape":           "one of two shapes",
+		"properties": map[string]any{
+			"x-literal": map[string]any{"type": "string"},
+			"stages":    map[string]any{"type": "array", "items": map[string]any{"type": "object", "x-made-shape": "a stage", "properties": map[string]any{"id": map[string]any{"type": "string"}}}},
+		},
+	})
+	tool.Definition.Parameters = hostJSON(t, string(schema))
+	s := hostSession(t, "reply", tool)
+	out := hostExecute(t, s, domain.HostOperationTools, `{"name":"design"}`)
+	content := string(out.Content)
+	if out.IsError || strings.Contains(content, "catalogue") || strings.Contains(content, `"x-made-shape":`) || !strings.Contains(content, `"x-literal"`) || !strings.Contains(content, `"annotations_omitted":["x-made-pattern-catalog","x-made-shape"]`) {
+		t.Fatalf("annotations not stripped or property lost: %.400s", content)
+	}
+	out = hostExecute(t, s, domain.HostOperationTools, `{"name":"design","path":"/properties/stages/items"}`)
+	if out.IsError || !strings.Contains(string(out.Content), `"path":"/properties/stages/items"`) || !strings.Contains(string(out.Content), `"id":{"type":"string"}`) {
+		t.Fatalf("path did not select the subschema: %s", out.Content)
 	}
 }
 
 func TestHostHistoryRecoversUnicodeMessageByBoundedPages(t *testing.T) {
 	s := hostSession(t, strings.Repeat("historia 😊\n", 3000))
-	expected, _ := json.Marshal(s.Messages()[1])
+	expected := []byte(s.Messages()[1].Content)
 	var recovered strings.Builder
 	offset := 0
 	for {
@@ -136,8 +169,8 @@ func TestHostHistoryRejectsBadRangesAndBoundsEscapedPayload(t *testing.T) {
 			t.Fatalf("accepted %s", args)
 		}
 	}
-	data, _ := json.Marshal(s.Messages()[1])
-	start := strings.Index(string(data), "😊")
+	data := string(s.Messages()[1].Content)
+	start := strings.Index(data, "😊")
 	for _, test := range []map[string]int{{"message_index": 1, "offset_bytes": start + 1}, {"message_index": 1, "offset_bytes": start, "limit_bytes": 1}} {
 		args, _ := json.Marshal(test)
 		if out := hostExecute(t, s, domain.HostOperationHistory, string(args)); !out.IsError {
@@ -148,6 +181,28 @@ func TestHostHistoryRejectsBadRangesAndBoundsEscapedPayload(t *testing.T) {
 	out := hostExecute(t, s, domain.HostOperationHistory, `{"message_index":1,"limit_bytes":16384}`)
 	if out.IsError || contentJSONBytes(string(out.Content)) > MaxHistoryReadBytes-256 {
 		t.Fatal("escaped page exceeded model result cap")
+	}
+}
+
+func TestHostHistoryPagesToolContentWithoutReescaping(t *testing.T) {
+	result := `{"status":"completed","output":{"text":"` + strings.Repeat("x", 4000) + `"}}`
+	messages := []root.Message{
+		{Role: root.RoleUser, Content: "read"},
+		{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "call_read", Name: "local_read", Arguments: hostJSON(t, `{"path":"a"}`)}}},
+		{Role: root.RoleTool, ToolCallID: "call_read", Content: root.Text(result)},
+		{Role: root.RoleUser, Content: "next"},
+	}
+	page, err := hostHistory(messages, hostJSON(t, `{"message_index":2,"limit_bytes":16384}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := page.(map[string]any)
+	if fields["text"] != result || fields["has_more"] != false || fields["total_bytes"] != len(result) || fields["tool_call_id"] != root.ToolCallID("call_read") {
+		t.Fatalf("tool content was not returned verbatim in one page: %+v", fields)
+	}
+	page, err = hostHistory(messages, hostJSON(t, `{"message_index":1}`))
+	if err != nil || page.(map[string]any)["tool_calls"] == nil {
+		t.Fatalf("assistant tool calls missing: %v %+v", err, page)
 	}
 }
 
