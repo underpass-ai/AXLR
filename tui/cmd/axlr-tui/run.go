@@ -370,7 +370,11 @@ func localRuntimeEnvironment(getenv func(string) string) []string {
 	if len(paths) == 0 {
 		paths = []string{"/usr/local/bin", "/usr/bin", "/bin"}
 	}
-	return []string{"PATH=" + strings.Join(paths, string(os.PathListSeparator))}
+	env := []string{"PATH=" + strings.Join(paths, string(os.PathListSeparator))}
+	if home := getenv("HOME"); filepath.IsAbs(home) {
+		env = append(env, "HOME="+home)
+	}
+	return env
 }
 
 func pluginRegistrations(paths, selections []string, getenv func(string) string) ([]plugins.Registration, error) {

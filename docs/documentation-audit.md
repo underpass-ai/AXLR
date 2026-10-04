@@ -1,5 +1,9 @@
 # Documentation audit — 4 October 2026
 
+## v0.2.1 host HOME for console exec
+
+Console exec/check children now receive the host's `HOME` when it is absolute, alongside the sanitized `PATH`; previously tools such as `git`, `cargo` or `gh` ran without a home and missed their configuration. Other variables and provider credentials are still not inherited. The [console guide](console.md) is updated and the chart's `version` and `appVersion` are `0.2.1`. Regression tests cover forwarding and the rejection of a relative `HOME`.
+
 ## v0.2.0 session context release preparation
 
 Reviewed the session-context implementation at `0743ba6fa923e12fde608d97189ef40ffcdc1eb4`, based on released `main` at `e37ede7888a1389a95ca0194ea5ece028a872914`. The console now embeds `axlr:axlr-session` and exposes `axlr_session` for a missing title after the second user prompt and an exact KMP scope. Manual titles are preserved; stale picker edits retain a later memory binding. The startup skill requests one relevant inter-about comparison, distinguishes proposals from declarations and requires source-backed identity evidence. The MADE skill separates its seven-definition 1.0 catalogue from the pinned host definitions: debug/delivery 2.0 and incident 1.0. The driver uses the selected project scope for terminal observations, adds stable write identity, retains reference-bearing recall and discloses partial recovery, missing known scopes and review-pending writes. The chart's `version` and `appVersion` are `0.2.0`. Release preparation also integrates `main` at `049f506` (PR #49): incident labels and approved-postmortem digest evidence are preserved with the selected session scope; console wiring retains the reviewer, files and separate approver alongside session labels. The skill and current guides describe all three driver pins.
