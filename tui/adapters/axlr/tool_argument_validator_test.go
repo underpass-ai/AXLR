@@ -159,7 +159,7 @@ func TestToolArgumentValidatorRejectsUnsupportedOrMalformedSchemas(t *testing.T)
 
 func TestToolArgumentValidatorAnnotationsAndDuplicateArgumentKeys(t *testing.T) {
 	validator := NewToolArgumentValidator()
-	schema := validationSchema(t, `{"type":"object","x-made-pattern-catalog":{"pattern":"guide only"},"properties":{"about":{"type":"string","format":"uri"}}}`)
+	schema := validationSchema(t, `{"type":"object","x-made-pattern-catalog":{"pattern":"guide only"},"x-made-shape":"one of two shapes","properties":{"about":{"type":"string","format":"uri","x-made-shape":"a URI"}}}`)
 	if err := validator.Validate(schema, jsonValue(t, `{"about":"project:AXLR"}`)); err != nil {
 		t.Fatal("annotation treated as assertion", err)
 	}
