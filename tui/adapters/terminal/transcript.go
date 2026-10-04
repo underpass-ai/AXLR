@@ -155,6 +155,17 @@ func (t *Transcript) AppendUnsent(prompts []string) {
 	t.ApplyTheme(t.theme)
 }
 
+// AppendQueued shows a message sent while AXLR is busy; it is delivered
+// when the current model step ends.
+func (t *Transcript) AppendQueued(prompt string) {
+	if prompt == "" {
+		return
+	}
+	t.appendRow(transcriptRow{Label: t.theme.Icon("user") + " ", LabelTone: toneAccent, Text: t.theme.T("transcript.queued") + prompt, Kind: transcriptRowUser, Indent: true})
+	t.renderRows()
+	t.ApplyTheme(t.theme)
+}
+
 // appendRow separates conversation turns with a blank line but keeps
 // consecutive tool rows together.
 func (t *Transcript) appendRow(row transcriptRow) {
