@@ -1,5 +1,11 @@
 # Documentation audit — 4 October 2026
 
+## v0.1.0 release preparation
+
+Reviewed the composer correction at `58c700177d6c9ad1b29d90515568c74c0ebc9efd`, based on `main` at `e399711dffe730eefa68f0a8b43fb82d52055343`. The textarea retained Bubbles' default dark cursor-line background under light themes. The composer now applies the active palette at startup, during theme preview/cancellation and after terminal background detection. The [console guide](console.md#appearance-and-language) describes the resulting behavior. The chart's `version` and `appVersion` already match the intended first release, `0.1.0`.
+
+Local Linux ARM64 validation passed: both complete Go suites with race detection, both modules' `go vet`, the composer render regression tests, the TUI executable build, release preflight unit tests, OpenAPI validation with `openapi-spec-validator` 0.7.2, and Helm lint/template with `values.example.yaml`. All four KMP/MADE Linux assets were downloaded from their locked release URLs and matched their SHA-256 values. The development preflight accepted the corrected revision. This records preparation; publication and the six-platform native checks are performed by the release workflow. No live model request or KMP/MADE deployment was performed for this change.
+
 ## Baseline and scope
 
 Audited `main` and freshly fetched `origin/main` at `559a1b8ceaeaf9cd091c05b2f9db0236083c271b`, starting with a clean worktree. This pass covers README, current guides, engine runbooks, the public OpenAPI description, packaging/deployment claims and the separation of historical designs from operating instructions. Corrections change documentation and the OpenAPI description; runtime behavior and published ceremony definitions are unchanged.

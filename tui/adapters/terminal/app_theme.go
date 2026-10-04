@@ -5,7 +5,7 @@ import "github.com/underpass-ai/AXLR/tui/domain"
 func (m *AppModel) applyUIPreferences(p domain.UIPreferences) {
 	m.Theme.ID = p.Theme
 	m.Theme.Icons = p.Icons
-	m.Composer.Theme = m.Theme
+	m.Composer.ApplyTheme(m.Theme)
 	m.Composer.Input.Placeholder = m.Theme.T("composer.placeholder")
 	m.Models.Theme = m.Theme
 	m.Changes.Theme = m.Theme
