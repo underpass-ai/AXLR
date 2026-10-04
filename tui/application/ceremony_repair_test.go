@@ -138,7 +138,7 @@ func TestRepairRunsToAutomaticMergeAndRecordsCauseAndOutcome(t *testing.T) {
 	if r["next_step"] != "repair" || r["memory"] != "cause recorded in project:axlr-repair-lab with 1 links" {
 		t.Fatalf("diagnose: %v", r)
 	}
-	if refused, _ := r["links_refused"].([]any); len(refused) != 1 {
+	if refused, _ := r["links_refused"].([]any); len(refused) != 1 || refused[0] != "project:other:entry:x (follows)" {
 		t.Fatalf("refused links: %v", r["links_refused"])
 	}
 	if len(memory.records) != 1 || memory.records[0].Kind != "error_path" || len(memory.records[0].Links) != 1 {

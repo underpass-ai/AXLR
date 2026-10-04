@@ -70,6 +70,16 @@ func repairInstruction(run domain.CeremonyRun) string {
 	return text.String()
 }
 
+// memoryRelations are the relation types KMP accepts; a link with another
+// name is refused here so one invented word does not sink the whole write.
+var memoryRelations = map[string]bool{}
+
+func init() {
+	for _, rel := range strings.Fields("follows answers uses_background depends_on chosen_because triggers authorizes verified_by semantic_delta_from updates_state supports supersedes contradicts satisfies_constraint violates_constraint contributes_to excluded_from checked_against derived_from confirms_selection restates corrects component_of total_of same_event_as same_entity_as qualifies_as matches_requirement contains member_of scoped_to") {
+		memoryRelations[rel] = true
+	}
+}
+
 type memoryLinkArgument struct {
 	Ref      string `json:"ref"`
 	Rel      string `json:"rel"`
@@ -84,8 +94,8 @@ func repairLinks(run domain.CeremonyRun, proposed []memoryLinkArgument) ([]Memor
 	var refused []string
 	for _, link := range proposed {
 		ref, rel, why := strings.TrimSpace(link.Ref), strings.TrimSpace(link.Rel), strings.TrimSpace(link.Why)
-		if ref == "" || rel == "" || why == "" || run.Repair == nil || !slices.Contains(run.Repair.WakeRefs, ref) {
-			refused = append(refused, ref)
+		if ref == "" || !memoryRelations[rel] || why == "" || run.Repair == nil || !slices.Contains(run.Repair.WakeRefs, ref) {
+			refused = append(refused, ref+" ("+rel+")")
 			continue
 		}
 		links = append(links, MemoryLink{Ref: ref, Rel: rel, Why: bounded(why, 600), Evidence: bounded(strings.TrimSpace(link.Evidence), 600)})
@@ -167,12 +177,23 @@ func (d *CeremonyDriver) recordCause(ctx context.Context, s domain.Session, run 
 	labels := repairLabels(s, *run)
 	labels["step"] = []string{"diagnose"}
 	ref, err := d.Memory.RecordLinked(ctx, run.About, labels, record)
+	if err != nil && len(record.Links) > 0 {
+		// Keep the cause even when KMP doubts a link; say which part failed.
+		report["links_refused"] = append(toStrings(report["links_refused"]), "all: "+bounded(err.Error(), 300))
+		record.Links = nil
+		ref, err = d.Memory.RecordLinked(ctx, run.About, labels, record)
+	}
 	if err != nil {
 		report["memory"] = "cause not recorded: " + bounded(err.Error(), 300)
 		return
 	}
 	r.CauseRecorded, r.CauseRef = true, ref
 	report["memory"] = fmt.Sprintf("cause recorded in %s with %d links", run.About, len(links))
+}
+
+func toStrings(value any) []string {
+	out, _ := value.([]string)
+	return out
 }
 
 func repairLabels(s domain.Session, run domain.CeremonyRun) map[string][]string {
