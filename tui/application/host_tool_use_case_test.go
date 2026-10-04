@@ -164,7 +164,7 @@ func TestHostHistoryRecoversUnicodeMessageByBoundedPages(t *testing.T) {
 
 func TestHostHistoryRejectsBadRangesAndBoundsEscapedPayload(t *testing.T) {
 	s := hostSession(t, "😊 reply")
-	for _, args := range []string{`{}`, `{"message_index":-1}`, `{"message_index":9}`, `{"message_index":null}`, `{"message_index":1,"offset_bytes":-1}`, `{"message_index":1,"offset_bytes":999}`, `{"message_index":1,"limit_bytes":0}`, `{"message_index":1,"limit_bytes":16385}`, `{"message_index":1,"limit_bytes":null}`, `{"message_index":1,"limit_bytes":1.2}`, `{"message_index":1,"other":true}`} {
+	for _, args := range []string{`{}`, `{"message_index":-1}`, `{"message_index":9}`, `{"message_index":null}`, `{"message_index":1,"offset_bytes":-1}`, `{"message_index":1,"offset_bytes":999}`, `{"message_index":1,"limit_bytes":0}`, `{"message_index":1,"limit_bytes":32769}`, `{"message_index":1,"limit_bytes":null}`, `{"message_index":1,"limit_bytes":1.2}`, `{"message_index":1,"other":true}`} {
 		if out := hostExecute(t, s, domain.HostOperationHistory, args); !out.IsError {
 			t.Fatalf("accepted %s", args)
 		}

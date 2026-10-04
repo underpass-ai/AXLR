@@ -9,7 +9,7 @@ func TestContextBudgetValidatesAllLimits(t *testing.T) {
 		}
 	}
 	budget := DefaultContextBudget()
-	if budget.MaximumBytes() != 96*1024 || budget.LowWaterBytes() != 64*1024 || budget.ToolResultBytes() != 16*1024 || budget.CheckpointBytes() != 8*1024 || budget.Validate() != nil {
+	if budget.MaximumBytes() != 1024*1024 || budget.LowWaterBytes() != 768*1024 || budget.ToolResultBytes() != 64*1024 || budget.CheckpointBytes() != 16*1024 || budget.Validate() != nil {
 		t.Fatalf("unexpected defaults: %+v", budget)
 	}
 	if (ContextBudget{}).Validate() == nil {

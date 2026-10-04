@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // bigTurn is one user turn whose tool results fit the per-result limit one
@@ -26,12 +27,12 @@ func bigTurn(t *testing.T, results, size int) []root.Message {
 }
 
 func TestATurnThatOutgrowsTheBudgetIsCompactedNotAborted(t *testing.T) {
-	messages := bigTurn(t, 12, 14000)
+	messages := bigTurn(t, scaled(12), 14000)
 	projection, err := NewDefaultModelContextProjector().Project(messages)
 	if err != nil {
 		t.Fatalf("turn aborted: %v", err)
 	}
-	if !projection.TurnCompacted || projection.ProjectedBytes > 96*1024 {
+	if !projection.TurnCompacted || projection.ProjectedBytes > domain.DefaultContextBudget().MaximumBytes() {
 		t.Fatalf("compacted=%v bytes=%d", projection.TurnCompacted, projection.ProjectedBytes)
 	}
 	last := projection.Messages[len(projection.Messages)-1]

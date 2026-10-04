@@ -16,7 +16,7 @@ func NewContextBudget(maximum, lowWater, toolResult, checkpoint int) (ContextBud
 }
 
 func DefaultContextBudget() ContextBudget {
-	budget, _ := NewContextBudget(96*1024, 64*1024, 16*1024, 8*1024)
+	budget, _ := NewContextBudget(1024*1024, 768*1024, 64*1024, 16*1024)
 	return budget
 }
 
