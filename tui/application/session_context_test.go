@@ -75,6 +75,10 @@ func (failedRecall) Wake(context.Context, string) (string, error) {
 	return "", errors.New("guide not installed")
 }
 
+func (failedRecall) WakeFocused(context.Context, string, string) (string, []string, error) {
+	return "", nil, errors.New("guide not installed")
+}
+
 func TestCeremonyUsesSavedProjectAndScopeChosenAfterBegin(t *testing.T) {
 	for _, early := range []bool{true, false} {
 		t.Run(map[bool]string{true: "before-begin", false: "after-begin"}[early], func(t *testing.T) {
