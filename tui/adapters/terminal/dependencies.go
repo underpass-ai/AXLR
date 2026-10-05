@@ -36,4 +36,6 @@ type Dependencies struct {
 	// InitialDraft fills the composer at launch, such as the repair brief;
 	// the person still presses Enter.
 	InitialDraft string
+	// Repairs shows the self-repairs the agent requested; nil without MADE.
+	Repairs RepairPanelPort
 }

@@ -53,6 +53,8 @@ No tool is registered through directory scanning. A manifest must name the MCP t
 
 The console wires package/skill discovery, six work modes, engine setup/update and the MADE ceremony driver. The driver invokes registered `made` and optional `kmp` tools directly through the execution port for its bookkeeping; those calls are not individual model approval dialogs. The user selects the driven procedure and approves its check command. Engine-side grants remain essential.
 
+Self-repair adds a coordinator in `tui/application` (`SelfRepair`) that validates the agent's request against the session transcript, keeps the repair registry and drives a second session in the background. That session gets its own AXLR runtime rooted in the clone (a second `runtime.Executor`, tool runner, forge and ceremony driver, composed in `tui/cmd/axlr-tui`), while the model client, the session store and the MCP manager are shared. The console never changes its own executable; a merged repair is reported to the origin session with the build it still runs.
+
 The HTTP binary reuses turn use cases but wires only the configured remote KMP/MADE adapters, manual tool policy and the model client. It does not wire package skills, mode selection or `CeremonyDriver`. HTTP session creation accepts a model, not a mode or plugin configuration. Readiness performs model-configuration and engine-discovery checks, not a paid model turn or authorization test for every engine operation.
 
 The driver checks exact 2.0 definition digests before start. Its optional KMP integration uses `ws:<session-id>` and best-effort recall/outcome recording. Stable project recall and graph relations are explicit agent work. [Ceremonies](ceremonies.md) separates this driver from the embedded 1.0 skill catalogue.

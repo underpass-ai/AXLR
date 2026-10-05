@@ -25,6 +25,11 @@ const (
 	// HostOperationStepDone hands the current ceremony step's result to the
 	// console, which checks it and advances MADE.
 	HostOperationStepDone = "step_done"
+	// HostOperationRequestRepair asks the console to repair AXLR itself in a
+	// separate session, with evidence the console validates before starting.
+	HostOperationRequestRepair = "request_repair"
+	// HostOperationRepairStatus reads the repairs linked to this session.
+	HostOperationRepairStatus = "repair_status"
 )
 
 func NewLocalToolIdentity(operation string) (ToolIdentity, error) {
@@ -46,7 +51,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus:
 			return nil
 		}
 	case ToolKindLocal:

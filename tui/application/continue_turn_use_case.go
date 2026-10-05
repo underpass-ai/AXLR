@@ -21,6 +21,9 @@ type ContinueTurnUseCase struct {
 	SessionLabels  SessionLabelsPort
 	// Ceremonies drives MADE for the debug and delivery modes; nil without MADE.
 	Ceremonies *CeremonyDriver
+	// SelfRepair serves the model's repair requests; nil hides nothing but
+	// refuses the request with the reason.
+	SelfRepair RepairRequestPort
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {

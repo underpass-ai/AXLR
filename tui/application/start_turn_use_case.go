@@ -14,6 +14,9 @@ type StartTurnUseCase struct {
 	Catalog  ToolCatalogPort
 	Store    SessionStorePort
 	Continue ContinueTurnUseCase
+	// Notices hands the session what its self-repairs left for it; nil
+	// without self-repair.
+	Notices RepairNoticesPort
 }
 
 func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, prompt root.Text, emit func(Event) error) error {
@@ -56,6 +59,17 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 				}
 			}
 			prompt = root.Text(string(prompt) + "\n\n[AXLR] Ceremony console step resumed before this turn: " + string(resumed.Outcome.Content))
+		}
+	}
+	if u.Notices != nil {
+		// A repair that ended while this session worked is reported with the
+		// next prompt, as a visible console note, never as a hidden fact.
+		notices, err := u.Notices.Drain(ctx, next.Export().ID)
+		if err != nil {
+			return err
+		}
+		for _, notice := range notices {
+			prompt = root.Text(string(prompt) + "\n\n" + notice)
 		}
 	}
 	if _, live := next.Ceremony(); next.Mode().StartsCeremony() && !live {

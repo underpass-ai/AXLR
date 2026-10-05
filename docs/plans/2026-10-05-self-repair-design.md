@@ -1,6 +1,6 @@
 # Self-repair (`/repair`) design
 
-Status: design with the night mandate of 4→5 Oct 2026 (Tirso absent; decisions taken with the advisor and listed below). YAML spiked against MADE 0.10.0.
+Status: design with the night mandate of 4→5 Oct 2026 (Tirso absent; decisions taken with the advisor and listed below). YAML spiked against MADE 0.10.0. The "natural v2" below (a repair started from a running console) is implemented as a separate repair session the console drives in the background, requested by the agent with `axlr_request_repair`; see [self-repair from a running session](../ceremonies.md#self-repair-from-a-running-session) for the current behaviour.
 Builds on: [ceremony driver](2026-10-01-ceremony-driver-design.md) and [incident](2026-10-02-incident-ceremony-design.md). The console drives MADE; the model does the work; the console does the Git/GitHub side itself.
 
 ## Goal

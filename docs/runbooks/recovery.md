@@ -11,6 +11,8 @@ AXLR session state, engine state and external effects have different owners. Est
 5. For a driven ceremony, inspect the same MADE instance and its claim/fence, state and enabled transitions. The driver can reconcile some interrupted advances; unresolved claims, multiple enabled transitions or missing state require authorized operator recovery. Do not manually edit session sidecars or start a duplicate instance to bypass a conflict.
 6. Resume only when the current state supports the next action. Verify the resulting artifact, terminal ceremony state and memory receipt separately.
 
+7. For a self-repair the agent requested, open `/repair`. An `interrupted` record is recovered with `r`: the console reloads the repair session, opens a workbench on the same clone and continues from the MADE instance and the pull request already recorded, so nothing is proposed or merged twice. A `blocked` or `failed` record keeps its clone, session and pull request for a hand-made follow-up (`axlr-tui --root <clone> --session <session>`). A `completed` record changed the repository, not the running console.
+
 Switching work mode is not a MADE cancellation command. An active ceremony record can remain attached to the session; resolve it through MADE rather than assuming `/normal` erased it. Context compaction is also not a handoff: earlier evidence remains in session history. Read smaller source pages and recover earlier turns with `axlr_history`; current-turn tool results cannot be reread through that control.
 
 ## Update local KMP and MADE

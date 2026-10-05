@@ -32,6 +32,11 @@ type RepairMarkerFile struct {
 	About      string `json:"about"`
 	Issue      string `json:"issue,omitempty"`
 	Created    string `json:"created"`
+	// Origin is the session that requested the repair from a running
+	// console, empty for a launcher clone; Build the console build that
+	// detected the defect.
+	Origin string `json:"origin_session,omitempty"`
+	Build  string `json:"build,omitempty"`
 }
 
 // repairConsoleSteps never reach the model.
@@ -235,6 +240,7 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 	} else if err := d.claimFor(ctx, &run, lease); err != nil {
 		return StepResult{}, err
 	}
+	d.observe(run, "", report, false, false)
 	var output map[string]any
 	var trigger string
 	switch run.Step {
@@ -420,6 +426,7 @@ func (d *CeremonyDriver) awaitMerge(run domain.CeremonyRun, report map[string]an
 	r := run.Repair
 	r.Awaiting, r.Decided, r.Granted = domain.AwaitingApproval, "", false
 	report["next_step"], report["instruction"] = run.Step, fmt.Sprintf("Pull request #%d (%s) is green and waits for the person's merge decision on the approval card (/repair). Tell the user and end your turn.", r.PullRequest, r.URL)
+	d.observe(run, "DECIDE", report, false, true)
 	return accept(report, &run), nil
 }
 

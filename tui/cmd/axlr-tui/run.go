@@ -28,6 +28,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/engineupdate"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
+	"github.com/underpass-ai/AXLR/tui/adapters/repairclone"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -340,14 +341,54 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
 	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}
 	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
+	repairPolicy := application.RepairPolicy{AutoMerge: repairConfiguration.AutoMerge, WatchDeadline: time.Duration(repairConfiguration.WatchMinutes) * time.Minute}
 	if ceremonies != nil {
 		ceremonies.Files = ceremonyhost.Files{Tools: runner}
 		ceremonies.Reviewer = ceremonyhost.Reviewer{Models: models, Model: settings.ReviewerModel}
 		ceremonies.Approver = &madesetup.Approver{ConfigPath: configPath, Getenv: getenv}
 		ceremonies.Forge = ceremonyhost.Forge{Checks: ceremonyhost.Checks{Tools: runner}}
-		ceremonies.RepairPolicy = application.RepairPolicy{AutoMerge: repairConfiguration.AutoMerge, WatchDeadline: time.Duration(repairConfiguration.WatchMinutes) * time.Minute}
+		ceremonies.RepairPolicy = repairPolicy
+	}
+	// Self-repair: the agent of any session may ask the console to repair
+	// AXLR in a separate session rooted in a fresh clone. The coordinator
+	// exists whenever MADE is connected; without it the host tool refuses
+	// with the reason.
+	var repairs *application.SelfRepair
+	if ceremonies != nil {
+		registry, err := storage.NewRepairRegistry(filepath.Join(stateBase, "axlr", "repairs.json"))
+		if err != nil {
+			return fail(err)
+		}
+		repairsDirectory := repairConfiguration.Directory
+		if repairsDirectory == "" {
+			repairsDirectory = filepath.Join(dataBase, "axlr", "repairs")
+		}
+		var token [8]byte
+		if _, err := rand.Read(token[:]); err != nil {
+			return fail(err)
+		}
+		repairs = &application.SelfRepair{
+			Registry:  registry,
+			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: stderr},
+			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal()},
+			Store:     loggedStore,
+			Engine:    ceremonies.Engine,
+			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts},
+			Build:     buildinfo.Version,
+			RunToken:  hex.EncodeToString(token[:]),
+			Lifetime:  ctx,
+		}
+		if err := repairs.Reconcile(ctx); err != nil {
+			fmt.Fprintln(stderr, "axlr-tui: repair registry:", err)
+		}
+		defer repairs.Close()
 	}
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
+	var notices application.RepairNoticesPort
+	if repairs != nil {
+		continuation.SelfRepair = repairs
+		notices = repairs
+	}
 	app := terminal.New(terminal.Dependencies{
 		Context:           ctx,
 		Diagnostics:       trace,
@@ -367,7 +408,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Change:            application.ChangeSessionModelUseCase{Store: loggedStore},
 		Workspace:         workspace,
 		NewSessionID:      newID,
-		Start:             application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: approvalSettings},
+		Start:             application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: approvalSettings, Notices: notices},
 		Resolve:           application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: approvalSettings, Store: loggedStore, Continue: continuation, Diagnostics: trace},
 		Agent:             application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: approvalSettings},
 		Search:            application.SearchSessionUseCase{},
@@ -375,6 +416,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Session:           session,
 		Monochrome:        getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
 		InitialDraft:      initialDraft,
+		Repairs:           repairPanelPort(repairs),
 	})
 	defer app.Close()
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
@@ -446,6 +488,15 @@ func environmentName(s string) bool {
 		}
 	}
 	return true
+}
+
+// repairPanelPort hides a nil coordinator behind a nil interface, so the
+// console shows no repairs panel without MADE.
+func repairPanelPort(repairs *application.SelfRepair) terminal.RepairPanelPort {
+	if repairs == nil {
+		return nil
+	}
+	return repairs
 }
 
 // ceremonyDriver drives /debug, /delivery and /incident when MADE is connected. KMP is
