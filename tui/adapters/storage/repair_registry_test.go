@@ -44,7 +44,7 @@ func TestRepairRegistryUpsertsAndKeepsUnknownFields(t *testing.T) {
 		t.Fatalf("records: %+v %v", records, err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0o600 {
+	if err != nil || !testMode(info, 0o600) {
 		t.Fatalf("registry must be private: %v %v", info, err)
 	}
 	data, _ := os.ReadFile(path)
