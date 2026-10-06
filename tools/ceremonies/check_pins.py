@@ -3,9 +3,11 @@
 
 Every YAML under tui/adapters/ceremonyhost/definitions/ is validated and
 published into a disposable store; its semantic digest must equal the pin in
-tui/adapters/ceremonyhost/definitions.go, and every pin must have a YAML. Only
-Python's standard library and a compatible made-mcp binary are needed. No user
-store, live ceremony or external publication is touched.
+tui/adapters/ceremonyhost/definitions.go, and every pin must have a YAML. The
+drafts under tools/ceremonies/drafts/ are validated and published the same way
+without a pin: they must be publishable and must not shadow a pinned name and
+version. Only Python's standard library and a compatible made-mcp binary are
+needed. No user store, live ceremony or external publication is touched.
 """
 
 import argparse
@@ -21,6 +23,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 DEFINITIONS = REPO / "tui/adapters/ceremonyhost/definitions"
+DRAFTS = REPO / "tools/ceremonies/drafts"
 PINS = REPO / "tui/adapters/ceremonyhost/definitions.go"
 PIN = re.compile(r'\{Name: "([a-z_]+)", Version: "([0-9.]+)", Digest: "([0-9a-f]{64})"\}')
 
@@ -117,6 +120,21 @@ def main():
             for key in pinned:
                 if key not in seen:
                     failures.append(f"pin {key[0]} {key[1]} has no YAML under {DEFINITIONS}")
+            for path in sorted(DRAFTS.glob("*.yaml")):
+                text = path.read_text()
+                name = re.search(r"^name: (\S+)$", text, re.M).group(1)
+                version = re.search(r"^version: '?([0-9.]+)'?$", text, re.M).group(1)
+                if (name, version) in pinned:
+                    failures.append(f"draft {path.name} shadows the pinned definition {name} {version}")
+                    continue
+                report = engine.call("made_validate_ceremony_draft", {"definition_yaml": text})
+                if not report.get("publishable") or report.get("error_count"):
+                    failures.append(f"draft {path.name}: not publishable: {report}")
+                    continue
+                engine.call("made_publish_ceremony_definition", {"definition_yaml": text})
+                digest = engine.call("made_get_ceremony_definition", dict(ceremony=name, version=version))["digest"]
+                warnings = report.get("warning_count") or 0
+                print(f"{name} {version} {digest} draft, unpinned, {warnings} validator warning(s)")
         finally:
             engine.close()
     for failure in failures:

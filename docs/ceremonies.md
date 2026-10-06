@@ -63,6 +63,10 @@ Until 5 Oct 2026 the console embedded a `made:axlr-ceremonies` skill with seven 
 
 Roles in a definition describe responsibilities and do not spawn agents. Independent review requires a distinct context or person: the incident ceremony uses a fresh-context reviewer and a person's approval, the repair ceremony a person's merge decision. MADE records caller-declared actor/role provenance, so guard approval and grant administration stay off the work identity; a role name alone does not enforce separation.
 
+## Drafts for 27B-class local models
+
+Three further definitions are designed for small local models and are not shipped: `axlr_plan` 1.0 decomposes a brief into atomic, console-verified tasks the person approves; `axlr_task` 1.0 finishes one task in a fresh, precise context, test-first when the plan asks for it; `axlr_sync` 1.0 integrates a wave with the end-to-end check and relays the workers' notes. They live under [`tools/ceremonies/drafts/`](../tools/ceremonies/drafts/README.md); CI validates and walks them against MADE 0.10.0, but no console mode starts them, no pin exists and `P` does not publish them. The [design](plans/2026-10-06-local-27b-ceremonies.md) records the step contracts, the compact profile and the decisions still open; the [research record](research/2026-10-06-local-27b-agents.md) holds the evidence.
+
 ## Source and validation
 
 The [driver](../tui/application/ceremony_driver.go), [definition pins](../tui/adapters/ceremonyhost/definitions.go) and [preparer](../tui/adapters/madesetup/preparer.go) define console behavior. Run the module checks without invoking a model or touching a live ceremony store:
@@ -77,4 +81,4 @@ To validate the shipped definitions and their pins against a compatible MADE bin
 python3 tools/ceremonies/check_pins.py --made-bin /absolute/path/to/made-mcp
 ```
 
-Each YAML is validated and published into the disposable store; its semantic digest must match the pin in `definitions.go`, and every pin must have a YAML. Bump the immutable published version when a definition's content changes.
+Each YAML is validated and published into the disposable store; its semantic digest must match the pin in `definitions.go`, and every pin must have a YAML. The drafts are validated and published the same way without a pin, and `python3 tools/ceremonies/spike_drafts.py --made-bin …` walks their happy and blocked paths. Bump the immutable published version when a definition's content changes.
