@@ -57,6 +57,7 @@ type AppModel struct {
 	Help                HelpOverlay
 	Info                Transcript
 	IncidentCard        IncidentCard
+	RepairPanel         RepairPanel
 	overlay             ControlIntent
 	draft               string
 	submittedPrompt     string
@@ -125,13 +126,17 @@ func New(deps Dependencies) AppModel {
 	}
 	m.refreshTranscript()
 	m.syncApproval()
-	return m
+	return m.loadRepairs()
 }
 func (m AppModel) Init() tea.Cmd {
+	repairs := m.subscribeRepairs()
 	if m.Theme.Monochrome {
-		return nil
+		return repairs
 	}
-	return tea.RequestBackgroundColor
+	if repairs == nil {
+		return tea.RequestBackgroundColor
+	}
+	return tea.Batch(tea.RequestBackgroundColor, repairs)
 }
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionUpdate, application.DiagnosticEvent{OperationID: m.operationID})
@@ -144,6 +149,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Theme.Light = !v.IsDark()
 		m.applyUIPreferences(m.UIPreferences)
 		return m, nil
+	case repairEventMsg:
+		// A repair session changed: reread the registry, redraw the panel,
+		// open it when a decision waits and nothing else is on screen, and
+		// keep listening.
+		m = m.loadRepairs()
+		m = m.refreshRepairPanel()
+		m = m.autoOpenRepairPanel()
+		return m, m.subscribeRepairs()
 	case providerWaitTick:
 		if v.OperationID != m.operationID || !m.Busy {
 			return m, nil
@@ -203,6 +216,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Info.Viewport.SetHeight(infoHeight)
 		m.Transcript.ApplyTheme(m.Theme)
 		m = m.autoOpenIncidentCard()
+		m = m.autoOpenRepairPanel()
 		return m, nil
 	case application.Event:
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticEventConsumed, Chunks: 1, Bytes: len(v.Text)})
@@ -393,6 +407,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncApproval()
 		if m.steerPrompt == "" && !m.inlineApproval() {
 			m = m.autoOpenIncidentCard()
+			m = m.autoOpenRepairPanel()
 		}
 		if m.steerPrompt != "" {
 			prompt := root.Text(m.steerPrompt)
@@ -458,6 +473,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Composer.Input.Reset()
 					return m.openIncidentCard(), nil
 				}
+			}
+			if command == "/repair" && len(m.repairRecords()) > 0 {
+				// Repairs the agent requested from this session, or that wait
+				// for the person, are shown before any mode change.
+				m.Composer.Input.Reset()
+				return m.openRepairPanel(), nil
 			}
 			if mode, ok := slashModes[command]; ok {
 				return m.switchMode(mode)

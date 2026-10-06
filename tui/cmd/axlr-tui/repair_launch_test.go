@@ -17,13 +17,13 @@ import (
 
 func TestRepairSlugKeepsTheBriefsWordsAndTheTimestamp(t *testing.T) {
 	now := time.Date(2026, 10, 5, 1, 2, 0, 0, time.UTC)
-	if got := repairSlug("go test ./... fails: TestWordCount expects 2, gets 3", now); got != "20261005-0102-go-test-fails-testwordcount-expects-2" {
+	if got := application.RepairSlug("go test ./... fails: TestWordCount expects 2, gets 3", now); got != "20261005-0102-go-test-fails-testwordcount-expects-2" {
 		t.Fatalf("slug %q", got)
 	}
-	if got := repairSlug("¿¡!?", now); got != "20261005-0102-failure" {
+	if got := application.RepairSlug("¿¡!?", now); got != "20261005-0102-failure" {
 		t.Fatalf("empty words %q", got)
 	}
-	long := repairSlug(strings.Repeat("palabra ", 20), now)
+	long := application.RepairSlug(strings.Repeat("palabra ", 20), now)
 	if len(long) > len("20261005-0102-")+41 {
 		t.Fatalf("slug too long: %q", long)
 	}

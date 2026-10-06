@@ -67,6 +67,29 @@ type CeremonyDriver struct {
 	Forge        ForgePort
 	RepairPolicy RepairPolicy
 	Sleep        func(context.Context, time.Duration) error
+	// Observer, when set, sees each step change, wait and terminal state;
+	// a host that drives the ceremony without a person reads it.
+	Observer CeremonyObserverPort
+}
+
+// observe tells the observer where the ceremony stands. The report is copied
+// so a later addition to it does not reach the observer unseen.
+func (d *CeremonyDriver) observe(run domain.CeremonyRun, state string, report map[string]any, terminal, awaiting bool) {
+	if d == nil || d.Observer == nil {
+		return
+	}
+	progress := CeremonyProgress{Instance: run.Instance, Definition: run.Definition, Step: run.Step, State: state, Terminal: terminal, Awaiting: awaiting}
+	if report != nil {
+		progress.Report = make(map[string]any, len(report))
+		for key, value := range report {
+			progress.Report[key] = value
+		}
+	}
+	if run.Repair != nil {
+		repair := *run.Repair
+		progress.Repair = &repair
+	}
+	d.Observer.Observe(progress)
 }
 
 // StepResult is what one axlr_step_done call did. When accepted, Run is nil
@@ -403,6 +426,7 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 			return d.reconcile(ctx, s, run, output, report, err)
 		}
 		report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]
+		d.observe(run, "", report, false, false)
 		return accept(report, &run), nil
 	}
 	state, err := d.Engine.Transition(ctx, run.Instance, trigger)
@@ -424,6 +448,7 @@ func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain
 		report["memory"] = d.record(ctx, s, run, state, output)
 		report["ceremony"] = state
 		report["instruction"] = "The ceremony is over and the session is back in normal mode. Tell the user the outcome in their language."
+		d.observe(run, state, report, true, false)
 		return accept(report, nil), nil
 	}
 	next, ok := stateSteps[state]
@@ -450,6 +475,7 @@ func (d *CeremonyDriver) enterStep(ctx context.Context, s domain.Session, run do
 		return StepResult{}, err
 	}
 	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]+incidentInstruction(run)+repairInstruction(run)
+	d.observe(run, "", report, false, false)
 	return accept(report, &run), nil
 }
 

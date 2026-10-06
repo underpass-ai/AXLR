@@ -46,28 +46,45 @@ type UserSettings struct {
 // RepairSettings is the repair section of settings.json. Repository is
 // owner/name; an empty Directory means <data>/axlr/repairs; WatchMinutes
 // bounds one check round (default 45); About is the KMP project about
-// (default project:<name>).
+// (default project:<name>). Autonomous lets a repair session the agent
+// started run local tools in its clone without a card (default true; the
+// check command and the merge keep their approvals); MaxAttempts bounds the
+// repair sessions one failure may start (default 2, at most 5).
 type RepairSettings struct {
 	Repository   string `json:"repository"`
 	Directory    string `json:"directory,omitempty"`
 	AutoMerge    bool   `json:"auto_merge"`
 	WatchMinutes int    `json:"watch_minutes,omitempty"`
 	About        string `json:"about,omitempty"`
+	Autonomous   *bool  `json:"autonomous,omitempty"`
+	MaxAttempts  int    `json:"max_attempts,omitempty"`
 }
+
+// AutonomousLocal reports whether an agent-started repair session runs local
+// tools in its clone without the person's card.
+func (r RepairSettings) AutonomousLocal() bool {
+	return r.Autonomous == nil || *r.Autonomous
+}
+
+// MaxRepairAttempts is the default bound on repair sessions per failure.
+const MaxRepairAttempts = 2
 
 // DefaultRepairRepository is what /repair repairs when settings.json is silent.
 const DefaultRepairRepository = "underpass-ai/AXLR"
 
 // RepairConfiguration is the effective repair section with defaults applied.
 func (s UserSettings) RepairConfiguration() RepairSettings {
-	r := RepairSettings{Repository: DefaultRepairRepository, WatchMinutes: 45}
+	r := RepairSettings{Repository: DefaultRepairRepository, WatchMinutes: 45, MaxAttempts: MaxRepairAttempts}
 	if s.Repair != nil {
 		if s.Repair.Repository != "" {
 			r.Repository = s.Repair.Repository
 		}
-		r.Directory, r.AutoMerge, r.About = s.Repair.Directory, s.Repair.AutoMerge, s.Repair.About
+		r.Directory, r.AutoMerge, r.About, r.Autonomous = s.Repair.Directory, s.Repair.AutoMerge, s.Repair.About, s.Repair.Autonomous
 		if s.Repair.WatchMinutes > 0 {
 			r.WatchMinutes = s.Repair.WatchMinutes
+		}
+		if s.Repair.MaxAttempts > 0 {
+			r.MaxAttempts = s.Repair.MaxAttempts
 		}
 	}
 	return r
@@ -187,6 +204,9 @@ func (s UserSettings) Validate() error {
 		}
 		if r.WatchMinutes < 0 || r.WatchMinutes > 720 {
 			return errors.New("settings repair.watch_minutes must be between 1 and 720")
+		}
+		if r.MaxAttempts < 0 || r.MaxAttempts > 5 {
+			return errors.New("settings repair.max_attempts must be between 1 and 5")
 		}
 	}
 	if len(s.FavoriteModels) > maxFavoriteModels {

@@ -27,7 +27,7 @@ func TestProgressiveAgentDiscoveryDoesNotAuthorizeManualPlugin(t *testing.T) {
 		return nil
 	})
 	models := streamFunc(func(ctx context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
-		if len(req.Tools) != 6 || requestHasTool(req, "memory") || requestHasTool(req, "ceremony") {
+		if len(req.Tools) != 8 || requestHasTool(req, "memory") || requestHasTool(req, "ceremony") {
 			t.Fatal("full plugin schemas leaked into fixed model catalog")
 		}
 		NotifyProviderActivity(ctx, domain.ProviderReasoning)
