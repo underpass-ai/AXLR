@@ -240,6 +240,26 @@ type idempotencyStore struct {
 	dir string
 }
 
+// record reads the durable identity before a plugin replay attempts discovery.
+// It does not authorize replay; Lookup subsequently checks the request digest.
+func (s *idempotencyStore) record(principal, key string) (idempotencyRecord, bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	identity := sha256.Sum256([]byte(principal + "\x00" + key))
+	data, err := os.ReadFile(filepath.Join(s.dir, hex.EncodeToString(identity[:])+".json"))
+	if errors.Is(err, os.ErrNotExist) {
+		return idempotencyRecord{}, false, nil
+	}
+	if err != nil {
+		return idempotencyRecord{}, false, err
+	}
+	var record idempotencyRecord
+	if json.Unmarshal(data, &record) != nil || record.Principal != principal {
+		return idempotencyRecord{}, false, errors.New("invalid idempotency record")
+	}
+	return record, true, nil
+}
+
 func (s *idempotencyStore) Lookup(principal, key, method, path string, body []byte) (string, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

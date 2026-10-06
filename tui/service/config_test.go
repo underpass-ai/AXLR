@@ -97,3 +97,19 @@ func TestPrincipalPolicyRejectsDuplicateAndUnknownRoles(t *testing.T) {
 		t.Fatal("duplicate certificate accepted")
 	}
 }
+
+func TestOptionalGRPCListenerValidation(t *testing.T) {
+	cfg := validConfig(t.TempDir())
+	for _, listener := range []string{"invalid", cfg.APIListen, cfg.ProbeListen} {
+		cfg.GRPCListen = listener
+		if cfg.Validate() == nil {
+			t.Fatalf("accepted invalid/conflicting listener %q", listener)
+		}
+	}
+	for _, listener := range []string{"", "127.0.0.1:9443"} {
+		cfg.GRPCListen = listener
+		if err := cfg.Validate(); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

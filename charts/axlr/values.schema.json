@@ -8,6 +8,7 @@
     "workspace": {"type":"object","required":["existingClaim","mountPath"],"properties":{"existingClaim":{"type":"string","minLength":1},"mountPath":{"type":"string","pattern":"^/[^ ]+"}}},
     "state": {"type":"object","anyOf":[{"properties":{"existingClaim":{"type":"string","minLength":1}}},{"properties":{"volumeClaimTemplate":{"type":"object","required":["size"],"properties":{"size":{"type":"string","minLength":1}}}}}]},
     "api": {"type":"object","required":["serverTLS","clientCA","principals"],"properties":{"serverTLS":{"$ref":"#/definitions/secret"},"clientCA":{"$ref":"#/definitions/secret"},"principals":{"$ref":"#/definitions/secret"}}},
+    "grpc": {"type":"object","required":["enabled","port"],"properties":{"enabled":{"type":"boolean"},"port":{"type":"integer","minimum":1,"maximum":65535}}},
     "model": {"type":"object","required":["apiKey"],"properties":{"apiKey":{"$ref":"#/definitions/secret"}}},
     "kmp": {"$ref":"#/definitions/engine"},
     "made": {"$ref":"#/definitions/engine"},
