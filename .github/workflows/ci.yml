@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - name: Validate the console-driven definitions and their pins with checksummed MADE 0.10.0
+      - name: Validate the console-driven definitions, their pins and the drafts with checksummed MADE 0.10.0
         run: |
           ceremony_test_dir=$(mktemp -d)
           ceremony_asset=made-mcp-v0.10.0-x86_64-unknown-linux-gnu
@@ -30,6 +30,7 @@ jobs:
           )
           chmod +x "$ceremony_test_dir/$ceremony_asset"
           python3 tools/ceremonies/check_pins.py --made-bin "$ceremony_test_dir/$ceremony_asset"
+          python3 tools/ceremonies/spike_drafts.py --made-bin "$ceremony_test_dir/$ceremony_asset"
   brand:
     runs-on: ubuntu-latest
     steps:

@@ -1,0 +1,118 @@
+version: '1.0'
+name: axlr_task
+description: Finish one atomic task of an approved plan in a fresh, precise context. The console starts the task with the plan's context pack and the baseline digests of its files; when the task asks for it the agent first writes the failing test, then makes the unit check pass without leaving the task's scope or changing frozen files; the console records the hand-back for the next sync; at most three rounds per phase, then BLOCKED.
+inputs:
+  required:
+  - plan
+  - task
+  - workspace
+  optional:
+  - memory_about
+outputs:
+  handback:
+    type: object
+states:
+- id: START
+  initial: true
+- id: RED
+- id: GREEN
+- id: HANDBACK
+- id: DONE
+  terminal: true
+- id: BLOCKED
+  terminal: true
+transitions:
+- from: START
+  to: RED
+  trigger: test_first
+  guards: [start_completed, test_first_requested]
+- from: START
+  to: GREEN
+  trigger: test_present
+  guards: [start_completed, test_first_not_requested]
+- from: RED
+  to: GREEN
+  trigger: test_failing
+  guards: [red_completed, test_fails]
+- from: RED
+  to: BLOCKED
+  trigger: untestable
+  guards: [red_completed, declared_untestable]
+- from: RED
+  to: BLOCKED
+  trigger: red_exhausted
+  guards: [red_exhausted]
+- from: GREEN
+  to: HANDBACK
+  trigger: check_passing
+  guards: [green_completed, check_passes]
+- from: GREEN
+  to: BLOCKED
+  trigger: green_exhausted
+  guards: [green_exhausted]
+- from: HANDBACK
+  to: DONE
+  trigger: handed_back
+  guards: [handback_completed, handback_recorded]
+steps:
+- id: start
+  state: START
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console records the digests of the task's scope and protected files, runs the unit check once as the baseline and copies test_first from the plan, recording started=true. No model turn.
+    see_prior: true
+- id: red
+  state: RED
+  handler: host_callback
+  repeat:
+    max_iterations: 3
+    until:
+      output_field: settled
+      equals: true
+  config:
+    num_agents: 1
+    prompt: Write the test that shows the missing behaviour, inside the task's scope. Return test_files and expected; return untestable=true with the reason when the behaviour cannot be tested by the unit check. The console runs the unit check, records red=true only when it exits non-zero and freezes the test files' digests for the green phase; it sets settled=true once the test fails or the task is declared untestable.
+    see_prior: true
+- id: green
+  state: GREEN
+  handler: host_callback
+  repeat:
+    max_iterations: 3
+    until:
+      output_field: green
+      equals: true
+  config:
+    num_agents: 1
+    prompt: Make the unit check pass with the smallest change inside the task's scope; in later rounds address the check output. Return summary, summary_en and optionally notes for other tasks and questions for the person. The console refuses changes to frozen or out-of-scope files, reruns the unit check and records green=true only when it exits zero.
+    see_prior: true
+- id: handback
+  state: HANDBACK
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console records the changed files, the diff summary, the revision, the unit check evidence, the notes and the questions as the task's hand-back, recording done=true. No model turn.
+    see_prior: true
+guards:
+  start_completed: {type: automated, check: 'step_status:start:COMPLETED'}
+  test_first_requested: {type: automated, check: 'output_field:start:test_first=true'}
+  test_first_not_requested: {type: automated, check: 'output_field:start:test_first=false'}
+  red_completed: {type: automated, check: 'step_status:red:COMPLETED'}
+  test_fails: {type: automated, check: 'output_field:red:red=true'}
+  declared_untestable: {type: automated, check: 'output_field:red:untestable=true'}
+  red_exhausted: {type: automated, check: 'step_repeat_exhausted:red'}
+  green_completed: {type: automated, check: 'step_status:green:COMPLETED'}
+  check_passes: {type: automated, check: 'output_field:green:green=true'}
+  green_exhausted: {type: automated, check: 'step_repeat_exhausted:green'}
+  handback_completed: {type: automated, check: 'step_status:handback:COMPLETED'}
+  handback_recorded: {type: automated, check: 'output_field:handback:done=true'}
+roles:
+- id: AXLR
+  allowed_actions: [start, test_first, test_present, red, test_failing, untestable, red_exhausted, green, check_passing, green_exhausted, handback, handed_back]
+timeouts:
+  step_default: 3600
+retry_policies:
+  default: {max_attempts: 1, backoff_seconds: 1}
+max_parallel: 1
+max_transitions: 20
+max_bounces: 3
