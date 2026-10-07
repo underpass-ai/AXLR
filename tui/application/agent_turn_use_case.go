@@ -43,6 +43,12 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 		}
 		if s.Status() != domain.StatusStreaming {
 			reminded, err := remindOpenStep(ctx, s, u.Continue.Store, emit)
+			if err != nil {
+				return err
+			}
+			if !reminded {
+				reminded, err = checkFinalAnswer(ctx, s, u.Continue, emit)
+			}
 			if err != nil || !reminded {
 				return err
 			}

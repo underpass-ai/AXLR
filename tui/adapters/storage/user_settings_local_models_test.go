@@ -78,3 +78,26 @@ func TestUserSettingsRejectInvalidLocalModels(t *testing.T) {
 		}
 	}
 }
+
+func TestUserSettingsJevSection(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(path, []byte(`{"jev":{"tool":true,"final_check":false,"final_threshold":0.6,"timeout_ms":30000}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := NewUserSettingsStore(path, DefaultUserSettings())
+	got, err := store.Load(context.Background())
+	if err != nil || !got.Jev.Enabled() || !got.Jev.Tool || got.Jev.FinalThreshold != 0.6 || got.Jev.TimeoutMS != 30000 {
+		t.Fatalf("jev = %+v, %v", got.Jev, err)
+	}
+	if (&JevSettings{}).Enabled() || (*JevSettings)(nil).Enabled() {
+		t.Fatal("Jev enabled without a switch")
+	}
+	for _, jev := range []string{`{"final_threshold":1}`, `{"final_threshold":-0.1}`, `{"timeout_ms":10}`} {
+		if err := os.WriteFile(path, []byte(`{"jev":`+jev+`}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Load(context.Background()); err == nil {
+			t.Errorf("jev %s accepted", jev)
+		}
+	}
+}

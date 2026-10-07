@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/adapters/openrouter"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
+	"github.com/underpass-ai/AXLR/tui/adapters/typesafe"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -79,6 +82,7 @@ func (s localModelSetup) connect(httpClient *http.Client) (map[root.ModelID]loca
 
 // pluginGetenv resolves host variables for plugins and refuses the model
 // keys: OPENROUTER_API_KEY and every local model's api_key_env.
+// TYPESAFE_API_KEY stays available: KMP reads it for its own Jev features.
 func (s localModelSetup) pluginGetenv(getenv func(string) string, refused *string) func(string) string {
 	return func(name string) string {
 		if s.keyEnvs[name] {
@@ -89,4 +93,17 @@ func (s localModelSetup) pluginGetenv(getenv func(string) string, refused *strin
 		}
 		return getenv(name)
 	}
+}
+
+// jevJudge builds the TypeSafe Jev judge when settings enable it; nil keeps
+// Jev off and sends nothing to TypeSafe.
+func jevJudge(settings *storage.JevSettings, getenv func(string) string) (*application.Judge, error) {
+	if !settings.Enabled() {
+		return nil, nil
+	}
+	client, err := typesafe.New(typesafe.Config{APIKey: getenv("TYPESAFE_API_KEY"), Model: settings.Model, Timeout: time.Duration(settings.TimeoutMS) * time.Millisecond})
+	if err != nil {
+		return nil, fmt.Errorf("jev: %w", err)
+	}
+	return &application.Judge{Port: client, Tool: settings.Tool, FinalCheck: settings.FinalCheck, Threshold: settings.FinalThreshold}, nil
 }

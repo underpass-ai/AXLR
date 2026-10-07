@@ -30,6 +30,9 @@ const (
 	HostOperationRequestRepair = "request_repair"
 	// HostOperationRepairStatus reads the repairs linked to this session.
 	HostOperationRepairStatus = "repair_status"
+	// HostOperationJudge asks TypeSafe Jev, an external judgement model, one
+	// question; offered only when settings enable it.
+	HostOperationJudge = "judge"
 )
 
 func NewLocalToolIdentity(operation string) (ToolIdentity, error) {
@@ -51,7 +54,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationJudge:
 			return nil
 		}
 	case ToolKindLocal:
