@@ -234,8 +234,19 @@ The 1 Oct comparison of a ceremony against direct work was repeated with a local
 | 1 | 3.5 min, verified first round | 3 tasks in 3 waves (all three share `textstat.go`, so the planner chained them) | `wordcount` done in 5.5 min, `linecount` done in 7 min, `charcount` blocked after 20 min in `red` (16 calls spent repeating a `local_edit` whose `old_text` no longer matched) | waves 1 and 2 green | build broken by `charcount`'s half-done edit; acceptance failed | 37 min |
 | 2 (scope restore added) | 13 min, verified first round | same shape | `wordcount-whitespace` blocked after 2.5 min in `red`; the other two skipped | none | `textstat_test.go` restored, `go test` green, nothing implemented | 16 min |
 
+Four more runs the same evening, each after a console-side fix for what the previous one exposed:
+
+| Run | Worker | Fix since the previous run | Outcome | Total |
+|:--|:--|:--|:--|--:|
+| 3 | Gemma 4 | `local_exec` repair: wrapping quotes stripped, a program holding spaces split | first task blocked in `red`: Gemma wrote the test, then fixed the code in the same step, so `red` never failed (×3) | 11 min |
+| 4 | Gemma 4 | `red` may write only test files | 2 of 3 done, syncs green; `charcount` blocked in `green` on arguments sent as one joined string | 21 min |
+| 5 | Gemma 4 | joined arguments split; the repeat refusal shows the call shape | 2 of 4 done (glm planned 4 tasks), syncs green; `add-charcount` spent its budget on mixed wrappers before the hint worked | 16 min |
+| 6 | **Qwen3.8-27B** (llama.cpp, `thinking: false`) | mixed wrappers stripped; `local_models[].thinking` added after a Qwen run with thinking on spent about 4,000 tokens before a single call | **plan done: 3 of 3 tasks, sync green, hidden acceptance test passed** | **13.5 min** |
+
+In run 6, glm put `LineCount` and `CharCount` in new files, so the three scopes were disjoint and one wave held all three tasks. Planning took 3.5 min. The tasks took 3, 1.8 and 3.4 min, each going through `red` and `green` once. Every hand-back left a note for `all`.
+
 **What worked**
-- The planner's proposals verified on the first round both times.
+- The planner's proposals verified on the first round in every run.
 - Plan approval, sequential waves, frozen test digests, the git-status scope check, hand-backs with notes, per-wave syncs and skipping the dependents of a blocked task all behaved as designed.
 - Run 1 exposed a real defect: a blocked task left its partial edit and broke the build for everyone. Since then the runner restores a blocked task's scope files (files the task created are named, not deleted).
 

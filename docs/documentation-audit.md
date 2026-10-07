@@ -38,11 +38,14 @@
   - sync rounds;
   - the runner's wave order, skipping and scope restore;
   - registry and sidecar persistence.
-- Two live end-to-end plans, with numbers in the plan: the first completed two of three tasks and exposed the half-done-edit defect, since fixed; the second blocked in the first task on malformed `local_exec` calls from Gemma 4 on vLLM.
+- Six live end-to-end plans, with numbers in the plan:
+  - Each Gemma 4 run exposed one worker failure that the console now absorbs:
+    - a blocked task's half-done edit (the scope is now restored);
+    - malformed `local_exec` calls (the arguments are now repaired);
+    - code changed during `red` (`red` now writes tests only).
+  - The sixth run used Qwen3.8-27B on llama.cpp with `thinking: false`. It finished 3 of 3 tasks in 13.5 min and passed the hidden acceptance test.
 
 **Not verified**
-- A fully green three-task plan.
-- Qwen3.8-27B as a worker.
 - The frontier-worker arm.
 - A sync that actually needed reconciliation with a live model; the rounds are covered by tests.
 - Resuming an interrupted plan with `r`.
