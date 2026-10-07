@@ -372,6 +372,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
 	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}}
 	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
+	if ceremonies != nil {
+		ceremonies.Compact = compactProfile(settings.CeremonyProfile(), locals.windows)
+	}
 	repairPolicy := application.RepairPolicy{AutoMerge: repairConfiguration.AutoMerge, WatchDeadline: time.Duration(repairConfiguration.WatchMinutes) * time.Minute}
 	if ceremonies != nil {
 		ceremonies.Files = ceremonyhost.Files{Tools: runner}

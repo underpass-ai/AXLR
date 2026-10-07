@@ -29,6 +29,24 @@ func (b ContextBudget) Validate() error {
 	return err
 }
 
+// CompactContextBudget is the small-model profile's budget: an 80 KiB
+// ceiling (about 23K tokens at 3.5 bytes per token, leaving room in a 32K
+// window), a 56 KiB low watermark, 8 KiB per tool result and a 4 KiB
+// checkpoint.
+func CompactContextBudget() ContextBudget {
+	budget, _ := NewContextBudget(80<<10, 56<<10, 8<<10, 4<<10)
+	return budget
+}
+
+// Smaller keeps, limit by limit, the smaller of two budgets.
+func (b ContextBudget) Smaller(other ContextBudget) ContextBudget {
+	smaller, err := NewContextBudget(min(b.maximum, other.maximum), min(b.lowWater, other.lowWater), min(b.toolResult, other.toolResult), min(b.checkpoint, other.checkpoint))
+	if err != nil {
+		return b
+	}
+	return smaller
+}
+
 // Projection for a known context window: the messages may use at most three
 // quarters of the window, leaving the rest for the fixed prefix (guidance and
 // tool schemas) and the reply. Bytes per token is deliberately conservative:

@@ -153,11 +153,12 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 		}
 		ids[call.ID] = true
 	}
-	base := s.state.FinishedBudgetBase
+	base, limit := s.state.FinishedBudgetBase, MaxTurnToolCalls
 	if s.state.Ceremony != nil {
 		base = max(base, s.state.Ceremony.BudgetBase)
+		limit = s.state.Ceremony.StepCallLimit()
 	}
-	if !s.replaying && len(message.ToolCalls)+s.state.TurnCallCount-base > MaxTurnToolCalls {
+	if !s.replaying && len(message.ToolCalls)+s.state.TurnCallCount-base > limit {
 		next := s.Export()
 		next.Status = StatusInterrupted
 		s.state = next

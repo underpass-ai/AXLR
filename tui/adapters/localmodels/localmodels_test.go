@@ -89,3 +89,25 @@ func TestWindowsApplyTheCap(t *testing.T) {
 		t.Fatal("uncapped windows changed")
 	}
 }
+
+type wholeReplyClient struct{ streamed, completed int }
+
+func (c *wholeReplyClient) Complete(context.Context, root.CompletionRequest) (root.CompletionResult, error) {
+	c.completed++
+	return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "whole"}}, nil
+}
+
+func (c *wholeReplyClient) Stream(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+	c.streamed++
+	return root.CompletionResult{}, nil
+}
+
+func TestRouterAsksForWholeRepliesWhenStreamingIsOff(t *testing.T) {
+	client := &wholeReplyClient{}
+	router := Router{Routes: map[root.ModelID]Route{"local/gemma": {Client: client, NoStream: true}}}
+	var text []root.Text
+	result, err := router.Stream(context.Background(), root.CompletionRequest{Model: "local/gemma"}, func(delta root.Text) error { text = append(text, delta); return nil })
+	if err != nil || client.completed != 1 || client.streamed != 0 || len(text) != 1 || text[0] != "whole" || result.Message.Content != "whole" {
+		t.Fatalf("completed=%d streamed=%d text=%v err=%v", client.completed, client.streamed, text, err)
+	}
+}

@@ -9,10 +9,12 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 func writeSettings(t *testing.T, env map[string]string, data string) {
@@ -107,5 +109,20 @@ func TestRunJevNeedsItsKeyOnlyWhenEnabled(t *testing.T) {
 	output.Reset()
 	if code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model"}, func(k string) string { return env[k] }, func(tea.Model) error { return nil }, &output); code != 0 || !strings.Contains(output.String(), "Jev enabled") || strings.Contains(output.String(), "typesafe-never-print") {
 		t.Fatalf("Jev on: code=%d output=%s", code, &output)
+	}
+}
+
+func TestCompactProfileFollowsTheSettingAndTheWindow(t *testing.T) {
+	windows := localmodels.Windows{Local: map[root.ModelID]domain.ContextWindow{"local/small": 32768, "local/large": 262144}}
+	auto := compactProfile("auto", windows)
+	if !auto("local/small") || auto("local/large") || auto("openai/gpt-4o") {
+		t.Fatal("auto profile does not follow the window")
+	}
+	if compactProfile("standard", windows) != nil || !compactProfile("compact", windows)("openai/gpt-4o") {
+		t.Fatal("explicit profiles ignored")
+	}
+	capped := compactProfile("auto", localmodels.Windows{Local: windows.Local, Cap: 65536})
+	if !capped("local/large") {
+		t.Fatal("the global cap does not make a large model compact")
 	}
 }

@@ -70,6 +70,9 @@ type CeremonyDriver struct {
 	// Observer, when set, sees each step change, wait and terminal state;
 	// a host that drives the ceremony without a person reads it.
 	Observer CeremonyObserverPort
+	// Compact decides, when a debug or delivery ceremony begins, whether the
+	// session model gets the compact profile; nil keeps the standard one.
+	Compact func(root.ModelID) bool
 }
 
 // observe tells the observer where the ceremony stands. The report is copied
@@ -141,17 +144,19 @@ func (d stepDone) command() (domain.CheckCommand, bool) {
 // stepDoneNeedsApproval is true when the call proposes a check command the
 // user has not approved for this ceremony: the approval card then shows it.
 func stepDoneNeedsApproval(s domain.Session, arguments root.JSONValue) bool {
-	done, err := decodeStepDone(arguments)
+	run, live := s.Ceremony()
+	if !live {
+		return false // the driver refuses it without running anything
+	}
+	// The same decoding as the driver's, so a command the compact profile
+	// recovers from a string still reaches the approval card.
+	done, _, err := decodeStepDoneFor(run, arguments)
 	if err != nil {
 		return false // malformed calls are refused by the driver, not executed
 	}
 	proposed, ok := done.command()
 	if !ok {
 		return false
-	}
-	run, live := s.Ceremony()
-	if !live {
-		return false // the driver refuses it without running anything
 	}
 	switch run.Step {
 	case "reproduce", "brief":
@@ -184,14 +189,19 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 			about = selected
 		}
 	}
+	compact := CompactCeremony(spec.definition) && d.Compact != nil && d.Compact(state.Model)
+	memoryLimit := maxCeremonyMemoryBytes
+	if compact {
+		memoryLimit = compactMemoryBytes
+	}
 	memory := ""
 	if d.Memory != nil && s.Mode() != domain.ModeRepair {
 		// The user's request is the intent: a store with Jev configured keeps
 		// the evidence relevant to it instead of the about's whole history.
 		if text, _, err := d.Memory.WakeFocused(ctx, about, string(prompt)); err == nil {
-			if len(text) > maxCeremonyMemoryBytes {
+			if len(text) > memoryLimit {
 				prefix := "Partial KMP recall: console context shortened; recover the full about with kmp_wake before relying on omitted evidence.\n"
-				memory = prefix + bounded(text, maxCeremonyMemoryBytes-len(prefix))
+				memory = prefix + bounded(text, memoryLimit-len(prefix))
 			} else {
 				memory = text
 			}
@@ -205,7 +215,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 	}
 	instance := fmt.Sprintf("axlr-%s-%d", state.ID, now().UTC().Unix())
 	inputs := map[string]string{spec.briefInput: string(prompt), "workspace": string(state.Workspace), "memory_about": about}
-	run := domain.CeremonyRun{Definition: spec.definition, Version: spec.version, Instance: instance, Step: spec.first, Iteration: 1, About: about, Memory: memory}
+	run := domain.CeremonyRun{Definition: spec.definition, Version: spec.version, Instance: instance, Step: spec.first, Iteration: 1, About: about, Memory: memory, Compact: compact}
 	if s.Mode() == domain.ModeRepair {
 		extra, err := d.beginRepair(ctx, s, &run)
 		if err != nil {
@@ -287,7 +297,7 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 	if run.AwaitingPerson() {
 		return refuse("the draft is with the person for approval; tell the user to decide on the approval card (/incident) and end your turn"), nil
 	}
-	done, err := decodeStepDone(arguments)
+	done, ignored, err := decodeStepDoneFor(run, arguments)
 	if err != nil {
 		return refuse(err.Error()), nil
 	}
@@ -295,6 +305,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		return d.revise(ctx, s, run, done)
 	}
 	report := map[string]any{"step": run.Step, "iteration": run.Iteration}
+	if len(ignored) > 0 {
+		report["ignored_fields"] = ignored
+	}
 	output := map[string]any{}
 	var trigger string
 	repeat := false
@@ -417,6 +430,10 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 	default:
 		return refuse("unknown ceremony step " + run.Step), nil
 	}
+	if run.Compact {
+		appendLedger(&run, s, output)
+		compactCheckEvidence(report)
+	}
 	if err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, output); err != nil {
 		return d.reconcile(ctx, s, run, output, report, fmt.Errorf("complete %s: %w", run.Step, err))
 	}
@@ -425,7 +442,7 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if err := d.claim(ctx, &run); err != nil {
 			return d.reconcile(ctx, s, run, output, report, err)
 		}
-		report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]
+		report["next_step"], report["instruction"] = run.Step, stepInstruction(run)
 		d.observe(run, "", report, false, false)
 		return accept(report, &run), nil
 	}
@@ -474,9 +491,17 @@ func (d *CeremonyDriver) enterStep(ctx context.Context, s domain.Session, run do
 	if err := d.claim(ctx, &run); err != nil {
 		return StepResult{}, err
 	}
-	report["next_step"], report["instruction"] = run.Step, stepInstructions[run.Step]+incidentInstruction(run)+repairInstruction(run)
+	report["next_step"], report["instruction"] = run.Step, stepInstruction(run)+incidentInstruction(run)+repairInstruction(run)
 	d.observe(run, "", report, false, false)
 	return accept(report, &run), nil
+}
+
+// stepInstruction is the next step's instruction under the run's profile.
+func stepInstruction(run domain.CeremonyRun) string {
+	if step, ok := compactSteps[run.Step]; ok && run.Compact {
+		return step.instruction
+	}
+	return stepInstructions[run.Step]
 }
 
 // reconcile recovers from an advance that was interrupted after MADE may
@@ -553,7 +578,7 @@ func (d *CeremonyDriver) claimFor(ctx context.Context, run *domain.CeremonyRun, 
 
 // stepReminder is the console's message when a turn ended with the step open.
 func stepReminder(run domain.CeremonyRun) root.Text {
-	return root.Text(fmt.Sprintf("[AXLR] The %s step of ceremony %s is still open. If its work is done, hand it back now with axlr_step_done. %s", run.Step, run.Definition, stepInstructions[run.Step]))
+	return root.Text(fmt.Sprintf("[AXLR] The %s step of ceremony %s is still open. If its work is done, hand it back now with axlr_step_done. %s", run.Step, run.Definition, stepInstruction(run)))
 }
 
 // record writes the outcome to the selected project about, or the session
