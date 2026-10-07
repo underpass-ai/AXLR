@@ -28,6 +28,9 @@ type ContinueTurnUseCase struct {
 	// SelfRepair serves the model's repair requests; nil hides nothing but
 	// refuses the request with the reason.
 	SelfRepair RepairRequestPort
+	// Judge enables TypeSafe Jev; nil, the default, offers no axlr_judge and
+	// runs no final check.
+	Judge *Judge
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {
@@ -59,7 +62,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	contextCtx, contextSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionContext, DiagnosticEvent{Messages: len(session.Messages()), Tools: len(session.ToolSnapshot())})
-	if err := session.EnsureHostTools(HostTools()); err != nil {
+	hostTools := HostTools()
+	if u.Judge.offersTool() {
+		hostTools = append(hostTools, JudgeTool())
+	}
+	if err := session.EnsureHostTools(hostTools); err != nil {
 		contextSpan.End(DiagnosticErrorInvalidState)
 		return interrupt(err)
 	}
@@ -95,7 +102,13 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 		guidance.Content = root.Text(string(guidance.Content) + pluginText)
 	}
-	req := root.CompletionRequest{Model: session.Export().Model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: SessionTools(*session, snapshot)}
+	tools := SessionTools(*session, snapshot)
+	if !u.Judge.offersTool() {
+		// A session that once had Jev keeps axlr_judge in its snapshot; it is
+		// absent from the request while Jev is off.
+		tools = withoutTool(tools, HostJudgeName)
+	}
+	req := root.CompletionRequest{Model: session.Export().Model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticContextProjected, SpanID: CurrentDiagnosticSpan(contextCtx), Messages: len(req.Messages), Tools: len(req.Tools), OriginalMessages: projection.OriginalMessages, DroppedMessages: projection.DroppedMessages, OriginalBytes: projection.OriginalBytes, ProjectedBytes: projection.ProjectedBytes, ContextCutIndex: projection.CutIndex})
 	}

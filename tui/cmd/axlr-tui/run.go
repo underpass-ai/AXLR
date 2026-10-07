@@ -163,6 +163,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	fmt.Fprintln(stderr, "axlr-tui: settings:", settingsPath)
 	locals := newLocalModelSetup(settings, getenv)
 	localKeys = locals.secrets
+	judge, err := jevJudge(settings.Jev, getenv)
+	if err != nil {
+		return fail(err)
+	}
+	if judge != nil {
+		localKeys = append(localKeys, strings.TrimSpace(getenv("TYPESAFE_API_KEY")))
+		fmt.Fprintln(stderr, "axlr-tui: Jev enabled: questions and final answers are sent to TypeSafe")
+	}
 	language := settings.Language
 	if fromEnvironment := getenv("AXLR_LANG"); fromEnvironment != "" {
 		language = fromEnvironment
@@ -221,7 +229,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			if createErr != nil {
 				return fail(createErr)
 			}
-			payloads, err = diagnostics.NewPayloadRecorder(payloadDirectory, payloadSecrets(key, locals.secrets)...)
+			payloads, err = diagnostics.NewPayloadRecorder(payloadDirectory, payloadSecrets(key, localKeys)...)
 			if err != nil {
 				_ = os.Remove(payloadDirectory)
 				return fail(err)
@@ -406,7 +414,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		defer repairs.Close()
 	}
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
 	var notices application.RepairNoticesPort
 	if repairs != nil {
 		continuation.SelfRepair = repairs

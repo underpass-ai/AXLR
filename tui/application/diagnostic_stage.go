@@ -41,6 +41,9 @@ const (
 	DiagnosticToolCompleted     DiagnosticStage = "tool_completed"
 	DiagnosticOperationDone     DiagnosticStage = "operation_done"
 	DiagnosticOperationFailed   DiagnosticStage = "operation_failed"
+	// DiagnosticJudgement records one Jev final check: its time and whether
+	// it failed, never the verdict's text.
+	DiagnosticJudgement DiagnosticStage = "judgement"
 )
 
 func (stage DiagnosticStage) Valid() bool {
@@ -58,7 +61,8 @@ func (stage DiagnosticStage) Valid() bool {
 		DiagnosticEventEmitted, DiagnosticEventConsumed,
 		DiagnosticRender, DiagnosticResize,
 		DiagnosticToolRequested, DiagnosticToolApproved, DiagnosticToolRejected,
-		DiagnosticToolCompleted, DiagnosticOperationDone, DiagnosticOperationFailed:
+		DiagnosticToolCompleted, DiagnosticOperationDone, DiagnosticOperationFailed,
+		DiagnosticJudgement:
 		return true
 	default:
 		return false

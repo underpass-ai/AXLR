@@ -46,6 +46,15 @@ Smoke test for a server, which must return `tool_calls` with valid JSON, not tex
 curl -s http://127.0.0.1:8080/v1/chat/completions -H 'content-type: application/json' -d '{"model":"MODEL","messages":[{"role":"user","content":"Read README.md"}],"tools":[{"type":"function","function":{"name":"local_read","description":"Read a workspace file.","parameters":{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}}}]}'
 ```
 
+## Jev
+
+| Symptom | Check | Next action |
+|:--|:--|:--|
+| `jev: TYPESAFE_API_KEY is required for Jev` | `jev.tool` or `jev.final_check` is on | Export the key, or turn both switches off |
+| `axlr_judge` returns `TypeSafe rejected the API key (HTTP 401)` | The key in the console's environment | Replace the key; nothing else changes |
+| An `[AXLR · Jev]` message appears after an answer that was complete | Jev doubted it below `final_threshold` | The model can say why the answer is complete; lower `final_threshold` or turn `final_check` off if it happens often |
+| The model asks `axlr_judge` an "A or B" question and gets only `yes` | It omitted `options` | The tool's description asks for options; a model that ignores it is a model limit, not a Jev one |
+
 ## Inspect the right diagnostics
 
 The console's JSONL trace reports timing and failure classes without prompt content. Its default payload directory includes redacted HTTP bodies and can include conversation content. If you only need timings, launch with `--trace-payloads=false`. Do not paste payload files into an issue without reviewing them.

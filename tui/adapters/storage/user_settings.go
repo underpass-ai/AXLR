@@ -48,9 +48,29 @@ type UserSettings struct {
 	ContextTokens int `json:"context_tokens,omitempty"`
 	// LocalModels are OpenAI-compatible servers, such as llama.cpp or vLLM,
 	// offered in /model next to OpenRouter's catalog.
-	LocalModels []LocalModel               `json:"local_models,omitempty"`
-	Extra       map[string]json.RawMessage `json:"-"`
+	LocalModels []LocalModel `json:"local_models,omitempty"`
+	// Jev enables TypeSafe Jev, an external judgement model; absent or with
+	// both switches off, nothing is sent to TypeSafe.
+	Jev   *JevSettings               `json:"jev,omitempty"`
+	Extra map[string]json.RawMessage `json:"-"`
 }
+
+// JevSettings is the jev section. Tool offers axlr_judge to the model;
+// FinalCheck asks Jev whether a final answer completes the request and
+// returns a doubted answer to the model once; FinalThreshold is the
+// probability below which it does (default 0.5). Model is the pinned Jev
+// version (default jev-1.13.0, as KMP); TimeoutMS bounds one request
+// (default 20000). The key is read from TYPESAFE_API_KEY.
+type JevSettings struct {
+	Tool           bool    `json:"tool"`
+	FinalCheck     bool    `json:"final_check"`
+	FinalThreshold float64 `json:"final_threshold,omitempty"`
+	Model          string  `json:"model,omitempty"`
+	TimeoutMS      int     `json:"timeout_ms,omitempty"`
+}
+
+// Enabled reports whether either switch sends anything to TypeSafe.
+func (j *JevSettings) Enabled() bool { return j != nil && (j.Tool || j.FinalCheck) }
 
 // LocalModel is one entry of local_models. ID is what the session stores and
 // /model shows (a "local/" prefix keeps it apart from OpenRouter ids); URL is
@@ -252,7 +272,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -326,6 +346,14 @@ func (s UserSettings) Validate() error {
 			return fmt.Errorf("settings local_models lists %s twice", local.ID)
 		}
 		localIDs[local.ID] = struct{}{}
+	}
+	if j := s.Jev; j != nil {
+		if j.FinalThreshold < 0 || j.FinalThreshold >= 1 {
+			return errors.New("settings jev.final_threshold must be between 0 and 1")
+		}
+		if j.TimeoutMS != 0 && (j.TimeoutMS < 1000 || j.TimeoutMS > 60000) {
+			return errors.New("settings jev.timeout_ms must be between 1000 and 60000")
+		}
 	}
 	if len(s.FavoriteModels) > maxFavoriteModels {
 		return errors.New("settings.json lists too many favorite models")

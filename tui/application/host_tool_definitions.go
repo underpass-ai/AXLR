@@ -17,8 +17,10 @@ const (
 	// separate session; HostRepairStatusName reads the linked repairs.
 	HostRequestRepairName root.ToolName = "axlr_request_repair"
 	HostRepairStatusName  root.ToolName = "axlr_repair_status"
-	MaxHostResultBytes                  = 64 * 1024
-	MaxHistoryReadBytes                 = 32 * 1024
+	// HostJudgeName asks TypeSafe Jev one question; see JudgeTool.
+	HostJudgeName       root.ToolName = "axlr_judge"
+	MaxHostResultBytes                = 64 * 1024
+	MaxHistoryReadBytes               = 32 * 1024
 )
 
 // HostTools is the small, stable model surface for discovering and calling
@@ -44,6 +46,18 @@ func HostTools() []domain.AvailableTool {
 		tools = append(tools, domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{Name: spec.name, Description: root.Text(spec.description), Parameters: schema}})
 	}
 	return tools
+}
+
+// JudgeTool is axlr_judge, added to a session's host tools only when the
+// console enables Jev, so the default prefix does not grow.
+func JudgeTool() domain.AvailableTool {
+	identity, _ := domain.NewHostToolIdentity(domain.HostOperationJudge)
+	schema, _ := root.NewJSONObject([]byte(`{"type":"object","properties":{"state":{"type":"string","minLength":1,"maxLength":24576},"question":{"type":"string","minLength":1,"maxLength":2000},"options":{"type":"array","minItems":2,"maxItems":16,"uniqueItems":true,"items":{"type":"string","minLength":1,"maxLength":200}}},"required":["state","question"],"additionalProperties":false}`))
+	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
+		Name:        HostJudgeName,
+		Description: "Ask Jev, an independent judgement model, one question at a real fork in your task: which approach or next step to take, or whether a result satisfies the task. Put in state everything it needs (the task, what you found, the candidates and their evidence): Jev does not see this conversation or the files and does nothing. A question between alternatives (which one, A or B) must list them in options, and Jev returns the choice, a probability per option and its confidence; without options the question must be answerable yes or no, and Jev returns only the probability of yes. You still decide. Do not ask it facts your tools can check.",
+		Parameters:  schema,
+	}}
 }
 
 // ModelTools projects authority into the fixed local and host tool surface.

@@ -17,6 +17,8 @@ type HostToolUseCase struct {
 	// Repairs serves axlr_request_repair and axlr_repair_status; nil means
 	// the console does not offer self-repair.
 	Repairs RepairRequestPort
+	// Judge serves axlr_judge; nil means Jev is not enabled.
+	Judge JudgementPort
 }
 
 func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, identity domain.ToolIdentity, arguments root.JSONValue) (domain.ToolOutcome, error) {
@@ -52,6 +54,12 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		} else {
 			result, err = u.Repairs.Status(ctx, session, arguments)
 		}
+	case domain.HostOperationJudge:
+		if u.Judge == nil {
+			err = errors.New("Jev is not enabled in this console")
+			break
+		}
+		result, err = hostJudge(ctx, u.Judge, arguments)
 	default:
 		err = errors.New("invocation bridge must resolve and approve its exact plugin target")
 	}

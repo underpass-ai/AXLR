@@ -90,3 +90,22 @@ func TestLocalModelsReachTheModelPickerWithoutOpenRouter(t *testing.T) {
 		t.Fatalf("picker models = %+v, %v", models, err)
 	}
 }
+
+func TestRunJevNeedsItsKeyOnlyWhenEnabled(t *testing.T) {
+	env := cliEnv(t)
+	writeSettings(t, env, `{"jev":{"tool":false,"final_check":false}}`)
+	var output bytes.Buffer
+	if code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model"}, func(k string) string { return env[k] }, func(tea.Model) error { return nil }, &output); code != 0 || strings.Contains(output.String(), "Jev enabled") {
+		t.Fatalf("Jev off: code=%d output=%s", code, &output)
+	}
+	writeSettings(t, env, `{"jev":{"final_check":true}}`)
+	output.Reset()
+	if code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model"}, func(k string) string { return env[k] }, func(tea.Model) error { return nil }, &output); code == 0 || !strings.Contains(output.String(), "TYPESAFE_API_KEY") {
+		t.Fatalf("Jev on without key: code=%d output=%s", code, &output)
+	}
+	env["TYPESAFE_API_KEY"] = "typesafe-never-print"
+	output.Reset()
+	if code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model"}, func(k string) string { return env[k] }, func(tea.Model) error { return nil }, &output); code != 0 || !strings.Contains(output.String(), "Jev enabled") || strings.Contains(output.String(), "typesafe-never-print") {
+		t.Fatalf("Jev on: code=%d output=%s", code, &output)
+	}
+}
