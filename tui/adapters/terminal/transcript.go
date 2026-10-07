@@ -26,6 +26,8 @@ type Transcript struct {
 	wrapWidth int
 	// Highlight marks every case-insensitive occurrence in the visible rows.
 	Highlight string
+	// Selection is the mouse-made range the view paints; see [Selection].
+	Selection Selection
 }
 
 func NewTranscript() Transcript {
@@ -251,6 +253,16 @@ func (t Transcript) View() string {
 	if t.Highlight != "" {
 		for i := range lines {
 			lines[i] = highlightMatches(lines[i], t.Highlight, t.theme)
+		}
+	}
+	if t.Selection.Set {
+		style := t.theme.selectionStyle()
+		for i := range lines {
+			index := t.Viewport.YOffset() + i
+			width := ansi.StringWidth(ansi.Strip(lines[i])) - t.Gutter
+			if left, right, ok := t.Selection.cellRange(index, width); ok {
+				lines[i] = lipgloss.StyleRanges(lines[i], lipgloss.NewRange(left+t.Gutter, right+t.Gutter, style))
+			}
 		}
 	}
 	return strings.Join(lines, "\n")

@@ -20,6 +20,7 @@ func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, heig
 		theme.Accent(theme.T("help.navigate")),
 		theme.T("help.shortcuts"),
 		theme.T("help.views"),
+		theme.T("help.copy"),
 		theme.T("help.quitFull"),
 		"",
 		theme.Accent(theme.T("help.approvals")),
@@ -37,6 +38,7 @@ func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, heig
 			theme.T("help.commandsUpdate"),
 			theme.T("help.shortcuts"),
 			theme.T("help.views"),
+			theme.T("help.copyShort"),
 			theme.T("help.approveShort"),
 			theme.T("help.quitShort"),
 		}

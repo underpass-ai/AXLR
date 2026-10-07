@@ -18,28 +18,33 @@ import (
 )
 
 type AppModel struct {
-	deps                Dependencies
-	lifetime            *lifecycle
-	Header              Header
-	Transcript          Transcript
-	Composer            Composer
-	tokens              int
-	Status              StatusBar
-	Layout              Layout
-	Theme               Theme
-	UIPreferences       domain.UIPreferences
-	ThemePicker         ThemePicker
-	Busy                bool
-	Approval            ApprovalDialog
-	SearchBox           SearchBox
-	Palette             ActionPalette
-	Picker              SessionPicker
-	Models              ModelPicker
-	Plugins             PluginPanel
-	InstalledPlugins    InstalledPlugins
-	Changes             ChangeViewer
-	memoryActive        bool
-	slashSelected       int
+	deps             Dependencies
+	lifetime         *lifecycle
+	Header           Header
+	Transcript       Transcript
+	Composer         Composer
+	tokens           int
+	Status           StatusBar
+	Layout           Layout
+	Theme            Theme
+	UIPreferences    domain.UIPreferences
+	ThemePicker      ThemePicker
+	Busy             bool
+	Approval         ApprovalDialog
+	SearchBox        SearchBox
+	Palette          ActionPalette
+	Picker           SessionPicker
+	Models           ModelPicker
+	Plugins          PluginPanel
+	InstalledPlugins InstalledPlugins
+	Changes          ChangeViewer
+	memoryActive     bool
+	slashSelected    int
+	// lastClick, lastClickAt and clickCount tell a double or triple click
+	// on the transcript from separate clicks.
+	lastClick           Selection
+	lastClickAt         time.Time
+	clickCount          int
 	providerWaiting     bool
 	providerWaitStarted time.Time
 	waitTickScheduled   bool
@@ -206,6 +211,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Changes.Resize(v.Width, v.Height-1)
 		m.InstalledPlugins.Resize(v.Width, v.Height-2)
 		offset, bottom := m.Transcript.Viewport.YOffset(), m.Transcript.Viewport.AtBottom()
+		m.clearSelection()
 		m.Transcript.SetWidth(max(1, m.Layout.TranscriptWidth-2*m.Transcript.Gutter))
 		m.Transcript.Viewport.SetHeight(m.Layout.BodyHeight)
 		if bottom {
@@ -472,6 +478,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("approvals"))
 			}
+			if command == "/copy" {
+				m.Composer.Input.Reset()
+				return m, m.copyLatest()
+			}
 			if command == "/stop-ceremony" {
 				m.Composer.Input.Reset()
 				return m.stopCeremony()
@@ -598,6 +608,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	case tea.KeyPressMsg:
+		m.Status.Notice = ""
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
 			switch v.String() {
 			case "up":
@@ -624,6 +635,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m.Update(m.Composer.Intent(v))
 		case "esc":
+			if m.Transcript.Selection.Set {
+				m.clearSelection()
+				return m, nil
+			}
 			return m.Update(ControlIntent("cancel"))
 		case "ctrl+c":
 			if m.Busy {
@@ -652,8 +667,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m.Update(ControlIntent("send"))
 				}
 			}
+			// A press on the conversation starts a selection that the
+			// release copies; the terminal keeps Shift+drag for itself.
+			m.beginSelection(v)
 		}
 		return m, nil
+	case tea.MouseMotionMsg:
+		m.extendSelection(v)
+		return m, nil
+	case tea.MouseReleaseMsg:
+		return m, m.endSelection(v)
 	case tea.MouseWheelMsg:
 		var cmd tea.Cmd
 		m.Transcript.Viewport, cmd = m.Transcript.Viewport.Update(v)
@@ -771,6 +794,10 @@ func (m AppModel) View() tea.View {
 
 // Failed submissions remain display state, never valid model history.
 func (m *AppModel) refreshTranscript() {
+	if !m.Transcript.Selection.Active {
+		// New rows move the lines a finished selection pointed at.
+		m.clearSelection()
+	}
 	m.Changes.SetSession(m.Header.State)
 	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {

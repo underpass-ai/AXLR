@@ -29,10 +29,20 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Ctrl+R` | Explicitly continue an interrupted turn |
 | `Tab` | Switch between transcript and activity views |
 | `F1` | Show in-app help |
-| `Esc` | Close an overlay or cancel the active turn |
+| `Esc` | Drop a selection, close an overlay or cancel the active turn |
 | `Ctrl+C` | Cancel active work; quit when idle |
+| Drag over the conversation | Select text and copy it on release; double click takes a word, triple click a row, Shift+click extends |
+| `/copy` (alias `/copiar`) | Copy the last reply as the model wrote it, or the current selection |
 
-The interface supports mouse controls where the terminal supplies them. In an approval dialog, inspect the exact target and arguments with arrows, PgUp/PgDn or the wheel; `A` approves once and `D` denies. When offered, `L` executes this call and always allows the exact tool identity on future calls, `F` activates full autonomy and executes this call. `/approvals` lists saved choices. The autonomy switch approves known tools that the work mode permits; it persists until turned off. Restricted modes still require a decision for every local `exec`, and a new ceremony check command always needs approval. Their dialogs offer only decisions that apply to that call. Unknown tool names cannot be approved. An ordinary turn is limited to 32 tool calls; driven ceremonies reset the allowance as a step advances, and under the [compact profile](ceremonies.md#the-compact-profile-for-small-models) a step has 16. Cancellation does not reverse an effect that already happened.
+The interface supports mouse controls where the terminal supplies them. Buttons, footer hints, catalog rows and the file-change list respond to a left click; the wheel scrolls the conversation and every scrolling panel. The console keeps mouse reporting on while it runs, so a plain drag is seen by AXLR rather than by the terminal; see [copy and paste](#copy-and-paste). In an approval dialog, inspect the exact target and arguments with arrows, PgUp/PgDn or the wheel; `A` approves once and `D` denies. When offered, `L` executes this call and always allows the exact tool identity on future calls, `F` activates full autonomy and executes this call. `/approvals` lists saved choices. The autonomy switch approves known tools that the work mode permits; it persists until turned off. Restricted modes still require a decision for every local `exec`, and a new ceremony check command always needs approval. Their dialogs offer only decisions that apply to that call. Unknown tool names cannot be approved. An ordinary turn is limited to 32 tool calls; driven ceremonies reset the allowance as a step advances, and under the [compact profile](ceremonies.md#the-compact-profile-for-small-models) a step has 16. Cancellation does not reverse an effect that already happened.
+
+## Copy and paste
+
+Drag over the conversation to select text: the selection is painted while the button is held and copied when it is released, with a short confirmation in the footer. Double click selects a word, triple click a row, and Shift+click extends the selection to another cell. Esc drops it. The copied text follows the wrapped lines as shown, without the gutter. `/copy` (or **Copy last reply** in the action palette, `Y`) copies the last reply exactly as the model wrote it, including Markdown and code fences, or the selection if one exists.
+
+The console writes the clipboard with the OSC 52 terminal sequence, so copying works over SSH, and mirrors it to the X11 primary selection and to the host clipboard tools (`wl-copy`, `xclip`, `xsel`, `pbcopy`) when they are present. Terminals that refuse OSC 52 by default need it enabled: kitty, foot, WezTerm, Alacritty, iTerm2 and Windows Terminal accept writes, xterm needs `allowWindowOps`, and older VTE terminals (GNOME Terminal, Tilix) ignore them and rely on the host fallback; inside tmux add `set -g set-clipboard on`. The console cannot tell whether the terminal accepted a write.
+
+Hold Shift while dragging to bypass the console and let the terminal select natively (Alt in VS Code on Linux and Windows, Option in some macOS terminals). That selection includes the gutter and wraps lines where the screen wraps them. Paste with the terminal's shortcut (`Ctrl+Shift+V`, `Shift+Insert`, `Cmd+V`) or Shift+middle click; bracketed paste keeps newlines in the composer without sending the message.
 
 ## Work modes
 
