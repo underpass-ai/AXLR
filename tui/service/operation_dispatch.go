@@ -17,7 +17,12 @@ type operationSnapshotKey struct{}
 
 // decodeOperation validates the transport envelope without converting integers
 // to float64. Actual tool arguments and revisions use the existing handlers.
+// An absent or empty request is the empty object, so verbs without required
+// fields accept a bare MCP call, an empty BytesValue or a bodiless POST.
 func decodeOperation(op operation, data []byte) (map[string]json.RawMessage, bool) {
+	if len(bytes.TrimSpace(data)) == 0 {
+		data = []byte("{}")
+	}
 	if len(data) > 4<<20 {
 		return nil, false
 	}
@@ -61,8 +66,12 @@ func stringField(fields map[string]json.RawMessage, name string) string {
 	return value
 }
 
-func (s *Server) invokeOperation(ctx context.Context, op operation, data []byte, state *tls.ConnectionState, emit func(Event) error) operationResult {
-	request, _ := newID()
+// invokeOperation runs one verb for any transport. request is the caller's
+// default request ID; a safe request_id argument replaces it.
+func (s *Server) invokeOperation(ctx context.Context, op operation, data []byte, state *tls.ConnectionState, request string, emit func(Event) error) operationResult {
+	if !safeRequestID(request) {
+		request, _ = newID()
+	}
 	p, authenticated := authenticate(&http.Request{TLS: state}, s.principals)
 	if !authenticated {
 		return resultError(403, request, "forbidden", "certificate is not authorized")
@@ -79,6 +88,22 @@ func (s *Server) invokeOperation(ctx context.Context, op operation, data []byte,
 	}
 	if _, exists := fields["idempotency_key"]; exists && !keyPattern.MatchString(stringField(fields, "idempotency_key")) {
 		return resultError(400, request, "invalid_idempotency_key", "Idempotency-Key must be 16–128 safe ASCII characters")
+	}
+	// Resource IDs are checked before they become path segments, so an empty
+	// ID is an invalid_id error rather than an unmatched route. A session's
+	// pending call ID is model-assigned; the handler matches it exactly.
+	for _, name := range []string{"session_id", "call_id"} {
+		if _, exists := fields[name]; !exists {
+			continue
+		}
+		value := stringField(fields, name)
+		_, err := domain.NewSessionID(value)
+		if name == "call_id" && op.Name == "DecideSessionTool" && value != "" {
+			err = nil
+		}
+		if err != nil {
+			return resultError(400, request, "invalid_id", "invalid "+strings.TrimSuffix(name, "_id")+" ID")
+		}
 	}
 	if op.Name == "StreamEvents" {
 		return s.streamOperation(ctx, fields, p, request, emit)
@@ -154,16 +179,48 @@ func (s *Server) invokeOperation(ctx context.Context, op operation, data []byte,
 	r.Header.Set("Content-Type", "application/json")
 	r.Header.Set("X-Request-Id", request)
 	r.Header.Set("Idempotency-Key", stringField(fields, "idempotency_key"))
+	api, probe := s.operationHandlers()
 	w := &responseBuffer{header: http.Header{}}
 	if op.Name == "Liveness" || op.Name == "Readiness" {
-		s.ProbeHandler().ServeHTTP(w, r)
+		probe.ServeHTTP(w, r)
 	} else {
-		s.authenticated(s.apiRoutes()).ServeHTTP(w, r)
+		api.ServeHTTP(w, r)
 	}
-	if len(w.body) == 0 {
-		w.body = []byte("null")
+	return operationOutcome(op, w, request)
+}
+
+// operationOutcome keeps the service error vocabulary on every transport: a
+// probe failure or any response without the error envelope still names a code.
+func operationOutcome(op operation, w *responseBuffer, request string) operationResult {
+	status := w.status
+	if status == 0 {
+		status = http.StatusInternalServerError
 	}
-	return operationResult{w.status, request, json.RawMessage(bytes.TrimSpace(w.body))}
+	body := bytes.TrimSpace(w.body)
+	if len(body) == 0 {
+		body = []byte("null")
+	}
+	if !json.Valid(body) {
+		if status < 400 {
+			status = http.StatusInternalServerError
+		}
+		return resultError(status, request, "unexpected_response", strings.ToLower(http.StatusText(status)))
+	}
+	if status < 400 {
+		return operationResult{status, request, body}
+	}
+	var envelope struct {
+		Error *struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &envelope) == nil && envelope.Error != nil && envelope.Error.Code != "" {
+		return operationResult{status, request, body}
+	}
+	if op.Name == "Liveness" || op.Name == "Readiness" {
+		return resultError(status, request, "not_ready", "model configuration or engine discovery is not ready")
+	}
+	return resultError(status, request, "unexpected_response", strings.ToLower(http.StatusText(status)))
 }
 
 func (s *Server) handleOperation(w http.ResponseWriter, r *http.Request) {
@@ -172,13 +229,16 @@ func (s *Server) handleOperation(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 404, "unknown_operation", "operation is not registered")
 		return
 	}
-	var data json.RawMessage
-	if !readJSON(w, r, &data) {
+	data := json.RawMessage("{}")
+	if r.ContentLength != 0 && !readJSON(w, r, &data) {
 		return
 	}
 	// The HTTP operation endpoint has the same JSON envelope as the gRPC and
 	// MCP adapters. The original REST routes retain their existing payloads.
-	result := s.invokeOperation(r.Context(), op, data, r.TLS, nil)
+	// The request header is the default ID; a body request_id replaces it and
+	// the response header follows the envelope.
+	result := s.invokeOperation(r.Context(), op, data, r.TLS, requestID(r), nil)
+	w.Header().Set("X-Request-Id", result.RequestID)
 	code := result.StatusCode
 	if code == http.StatusNoContent {
 		code = http.StatusOK // retain the envelope for probe operations

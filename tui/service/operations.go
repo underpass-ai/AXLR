@@ -80,8 +80,11 @@ func resultError(code int, request, kind, message string) operationResult {
 	return operationResult{code, request, body}
 }
 
+// inventory is the shared read-only copy that every request consults.
+var inventory = operations()
+
 func findOperation(name string) (operation, bool) {
-	for _, op := range operations() {
+	for _, op := range inventory {
 		if op.Name == name {
 			return op, true
 		}

@@ -75,7 +75,7 @@ func (s *Server) grpcInvoke(ctx context.Context, op operation, data []byte, emit
 			state = &info.State
 		}
 	}
-	result := s.invokeOperation(ctx, op, data, state, emit)
+	result := s.invokeOperation(ctx, op, data, state, "", emit)
 	encoded, _ := json.Marshal(result)
 	if result.StatusCode >= 400 {
 		code := codes.Internal

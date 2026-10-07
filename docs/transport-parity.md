@@ -12,7 +12,8 @@ transports do not add missing engine RPCs or downstream MCP Apps negotiation.
 
 ## Connections and identity
 
-The HTTPS listener serves `/mcp` and `POST /v1/operations/{RPCName}`. Set optional
+The HTTPS listener serves `/mcp` and `POST /v1/operations/{RPCName}`, both described
+in [OpenAPI v1](../api/openapi/axlr-v1.yaml). Set optional
 `grpc_listen` (for example `127.0.0.1:9443`) to start a separate gRPC listener.
 Both require TLS 1.3 and a verified client certificate, mapping its fingerprint
 through the same principals file. CA-signed but unmapped certificates are
@@ -76,7 +77,9 @@ HTTP operations accept an `application/json` object. For example, POST to
 MCP uses the same object as `arguments` of `axlr_create_session`. gRPC uses
 `google.protobuf.BytesValue` containing that object's exact UTF-8 JSON bytes.
 This avoids protobuf Struct/float64 conversions of revisions or tool numbers.
-Consumers must likewise preserve numbers when encoding and reading JSON.
+Consumers must likewise preserve numbers when encoding and reading JSON. An
+absent or empty request is `{}`: a tool call without `arguments`, an empty
+`BytesValue` or a bodiless POST all satisfy verbs without required fields.
 
 Successful unary responses contain the shared envelope:
 
@@ -84,10 +87,13 @@ Successful unary responses contain the shared envelope:
 {"status_code":201,"request_id":"example-create","body":{"id":"...","model":"provider/model","status":"idle","revision":1}}
 ```
 
-HTTP operations use the envelope's status as their response code. Probe
-projections use HTTP 200 with `status_code:204` so HTTP does not discard the
-envelope. MCP returns it as `structuredContent` and exact JSON text. Application
-errors set `isError:true` and retain the existing `body.error` vocabulary.
+HTTP operations use the envelope's status as their response code and repeat the
+envelope's `request_id` in `X-Request-Id`; that ID comes from the body, else
+the request header, else the server. Probe projections use HTTP 200 with
+`status_code:204` so HTTP does not discard the envelope. MCP returns it as
+`structuredContent` and exact JSON text. Application errors set `isError:true`
+and retain the existing `body.error` vocabulary on every transport: a probe
+failure is `not_ready` and an empty `session_id` or `call_id` is `invalid_id`.
 
 gRPC maps input failures to `InvalidArgument`, forbidden to `PermissionDenied`,
 missing resources to `NotFound`, revision/idempotency/state conflicts to
@@ -133,13 +139,17 @@ MCP callers supplying `_meta.progressToken` receive events live through
 tracks its journal sequence. The final tool result contains the same page.
 Clients without progress support read the final page. Transport cancellation
 does not cancel the model turn; use `CancelSessionTurn` explicitly. Original
-REST SSE remains an unbounded stream with `Last-Event-ID` support.
+REST SSE remains an unbounded stream with `Last-Event-ID` support. Stopping the
+service drains in-flight gRPC calls and streams within the same ten-second
+window as HTTP before closing them.
 
 ## Verification
 
 `tui/service/transport_parity_test.go` exercises all 18 verbs over real mTLS HTTP,
 gRPC and MCP with fake model/tool ports. It checks colliding plugin names,
 cross-transport approval/replay executing once, ordered events and MCP live
-progress, roles/unmapped certificates, exact uint64 values and proto/catalogue
-schema equality. Existing tests cover persistence, recovery, audit, revisions
-and cancellation races. No live model or engine credentials are needed.
+progress, roles/unmapped certificates, exact uint64 values, proto/catalogue
+schema equality, empty requests, error envelopes for probe failures and empty
+IDs, request ID echo and graceful gRPC shutdown. Existing tests cover
+persistence, recovery, audit, revisions and cancellation races. No live model or
+engine credentials are needed.

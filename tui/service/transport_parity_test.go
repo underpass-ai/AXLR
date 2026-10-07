@@ -567,13 +567,146 @@ func TestConfiguredGRPCListenerBindsAndStopsWithService(t *testing.T) {
 	if err != nil || decodeResult(t, output.Value).StatusCode != 200 {
 		t.Fatalf("configured listener did not serve: %v", err)
 	}
+	id := seedParitySession(t, c.s, false)
+	_, _ = c.s.events.Append(id, "op", "text.delta", map[string]string{"text": "draining"})
+	stream, err := conn.NewStream(callCtx, &grpc.StreamDesc{ServerStreams: true}, "/"+grpcServiceName+"/StreamEvents")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := stream.SendMsg(wrapperspb.Bytes([]byte(`{"session_id":"` + id + `","wait_ms":1000}`))); err != nil {
+		t.Fatal(err)
+	}
+	_ = stream.CloseSend()
+	frame := new(wrapperspb.BytesValue)
+	if err := stream.RecvMsg(frame); err != nil || !strings.Contains(string(frame.Value), "draining") {
+		t.Fatalf("stream did not start before shutdown: %v", err)
+	}
 	stop()
+	// Shutdown drains the in-flight stream like HTTP instead of cutting it.
+	if err := stream.RecvMsg(frame); err != nil || decodeResult(t, frame.Value).StatusCode != 200 {
+		t.Fatalf("in-flight gRPC stream was cut during shutdown: %v", err)
+	}
 	select {
 	case err := <-done:
 		if err != nil {
 			t.Fatal(err)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(5 * time.Second):
 		t.Fatal("configured listeners did not stop")
+	}
+}
+
+// mcpRawCall posts one JSON-RPC message the way a non-SDK client would and
+// returns the service envelope carried by the tool result.
+func mcpRawCall(t *testing.T, c *parityClients, message string) operationResult {
+	t.Helper()
+	req, err := http.NewRequest("POST", c.url+"/mcp", strings.NewReader(message))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	response, err := c.http.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	data, _ := io.ReadAll(response.Body)
+	for _, line := range strings.Split(string(data), "\n") {
+		if payload, ok := strings.CutPrefix(line, "data: "); ok {
+			data = []byte(payload)
+		}
+	}
+	var reply struct {
+		Result struct {
+			Content []struct {
+				Text string `json:"text"`
+			} `json:"content"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(data, &reply); err != nil || len(reply.Result.Content) == 0 {
+		t.Fatalf("unexpected MCP reply: %s", data)
+	}
+	return decodeResult(t, []byte(reply.Result.Content[0].Text))
+}
+
+func TestVerbsWithoutRequiredFieldsAcceptEmptyInput(t *testing.T) {
+	c := newParityClients(t)
+	for _, name := range []string{"ListPlugins", "ListTools", "Liveness", "Readiness"} {
+		op, _ := findOperation(name)
+		expected := 200
+		if name == "Liveness" || name == "Readiness" {
+			expected = 204
+		}
+		response := apiRequest(t, c.http, "POST", c.url+"/v1/operations/"+name, "", "")
+		data, _ := io.ReadAll(response.Body)
+		response.Body.Close()
+		if got := decodeResult(t, data); got.StatusCode != expected {
+			t.Fatalf("http %s without a body: %+v", name, got)
+		}
+		output := new(wrapperspb.BytesValue)
+		if got := grpcResult(t, output, c.grpc.Invoke(context.Background(), "/"+grpcServiceName+"/"+name, &wrapperspb.BytesValue{}, output)); got.StatusCode != expected {
+			t.Fatalf("grpc %s with an empty message: %+v", name, got)
+		}
+		if got := mcpRawCall(t, c, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+op.Tool+`"}}`); got.StatusCode != expected {
+			t.Fatalf("mcp %s without arguments: %+v", name, got)
+		}
+	}
+	if got := c.call(t, "grpc", "GetSession", ""); got.StatusCode != 400 {
+		t.Fatalf("empty input satisfied a required field: %+v", got)
+	}
+}
+
+func TestProbeFailuresAndEmptyIDsKeepTheErrorEnvelope(t *testing.T) {
+	c := newParityClients(t)
+	c.s.deps.Ready = func(context.Context) error { return context.DeadlineExceeded }
+	for _, transport := range []string{"http", "grpc", "mcp"} {
+		for _, tc := range []struct {
+			op, input, code string
+			status          int
+		}{
+			{"Readiness", `{}`, "not_ready", 503},
+			{"GetSession", `{"session_id":""}`, "invalid_id", 400},
+			{"GetToolCall", `{"call_id":""}`, "invalid_id", 400},
+		} {
+			got := c.call(t, transport, tc.op, tc.input)
+			var body struct {
+				Error struct {
+					Code string `json:"code"`
+				} `json:"error"`
+			}
+			if got.StatusCode != tc.status || json.Unmarshal(got.Body, &body) != nil || body.Error.Code != tc.code {
+				t.Fatalf("%s/%s lost the error vocabulary: %+v", transport, tc.op, got)
+			}
+		}
+	}
+	err := c.grpc.Invoke(context.Background(), "/"+grpcServiceName+"/Readiness", wrapperspb.Bytes([]byte(`{}`)), new(wrapperspb.BytesValue))
+	if status.Code(err) != codes.Unavailable || !strings.Contains(err.Error(), "not ready") {
+		t.Fatalf("readiness failure over gRPC: %v", err)
+	}
+}
+
+func TestHTTPOperationRequestIDHeaderFollowsTheEnvelope(t *testing.T) {
+	c := newParityClients(t)
+	response := apiRequest(t, c.http, "POST", c.url+"/v1/operations/Liveness", `{"request_id":"from-body"}`, "")
+	data, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if got := decodeResult(t, data); got.RequestID != "from-body" || response.Header.Get("X-Request-Id") != "from-body" {
+		t.Fatalf("body request_id not echoed in the header: %+v header=%q", got, response.Header.Get("X-Request-Id"))
+	}
+	req, err := http.NewRequest("POST", c.url+"/v1/operations/Liveness", strings.NewReader(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Request-Id", "from-header")
+	response, err = c.http.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ = io.ReadAll(response.Body)
+	response.Body.Close()
+	if got := decodeResult(t, data); got.RequestID != "from-header" || response.Header.Get("X-Request-Id") != "from-header" {
+		t.Fatalf("header request ID not carried into the envelope: %+v", got)
 	}
 }
