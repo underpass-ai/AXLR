@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -37,7 +38,8 @@ func TestPlanRegistryRoundTripsAPlan(t *testing.T) {
 	if got.Status != domain.PlanReady || got.Tasks[0].Handback.Notes[0].Text != "use Fields" || got.Tasks[0].Context[0].Line != 8 || got.Syncs[0].Verdict != "green" || got.E2E.Args[1] != "./..." {
 		t.Fatalf("round trip: %+v", got)
 	}
-	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0600 {
+	// Windows has no owner-only mode bits to check.
+	if info, err := os.Stat(path); err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("registry is not private: %v %v", info, err)
 	}
 }
