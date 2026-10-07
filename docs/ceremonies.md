@@ -73,6 +73,8 @@ Under the compact profile:
 | Instructions | a description of the fields | under 500 bytes, leading with one exact example call; the guidance drops the plugin, history and self-repair paragraphs |
 | A malformed hand-back | refused | fields the step does not take are dropped and named in the reply (`ignored_fields`); a `check_command`, or its `args`, sent as one string is split on spaces unless it holds shell syntax, and still reaches the approval card |
 | The same call twice in a row | runs | refused with "same call as before; change something" |
+| A malformed `local_exec` (also in plan workers) | runs as sent | one layer of wrapping quotes (`` ` ``, `«»`, `“”`, `‘’`, `<|"|>`) is removed from the program and each argument, and a program holding spaces without shell syntax is split; seen with Gemma 4 on vLLM |
+| `red` of a plan task | — | `local_write` and `local_edit` reach only test files (a base name containing `test` or `spec`); the code changes in `green` |
 | Between steps | the transcript continues | the next step starts from a ledger: the request that began the ceremony, one line per accepted step with the transcript messages it spanned, then the hand-back that opened the step; the saved transcript keeps everything and `axlr_history` reads any message |
 | Memory recall / check output shown | 2 KiB / the full tail | 1 KiB / the last 2 KiB; MADE keeps the full evidence |
 

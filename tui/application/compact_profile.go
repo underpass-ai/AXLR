@@ -134,6 +134,17 @@ func compactRefusal(s domain.Session, pending domain.PendingTool) error {
 	if strings.HasPrefix(string(name), "axlr_") && !compactHostTools[name] {
 		return fmt.Errorf("%s is not available during this ceremony step", name)
 	}
+	if run, _, _ := compactRun(s); run.Step == "red" && (name == "local_write" || name == "local_edit") {
+		// Seen on 7 Oct 2026: Gemma 4 wrote the failing test and then fixed
+		// the code in the same step, so red never failed and the task ended
+		// BLOCKED. Red writes tests only; the code changes in green.
+		var target struct {
+			Path string `json:"path"`
+		}
+		if json.Unmarshal(pending.Call.Arguments.Bytes(), &target) == nil && !testLikePath(target.Path) {
+			return fmt.Errorf("%s %s refused: in red write only the failing test; change the code in green, after handing red back", name, target.Path)
+		}
+	}
 	activity := s.Export().Activity
 	for i, record := range activity {
 		if record.Call.ID != pending.Call.ID {
@@ -475,4 +486,11 @@ func normalizeExec(arguments root.JSONValue) (root.JSONValue, bool) {
 		return arguments, false
 	}
 	return value, true
+}
+
+// testLikePath reports a file that holds tests by the usual naming of most
+// languages: a base name containing "test" or "spec".
+func testLikePath(p string) bool {
+	base := strings.ToLower(p[strings.LastIndex(p, "/")+1:])
+	return strings.Contains(base, "test") || strings.Contains(base, "spec")
 }

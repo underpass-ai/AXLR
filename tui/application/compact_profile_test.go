@@ -237,3 +237,24 @@ func TestMalformedExecCallsAreRepaired(t *testing.T) {
 		t.Fatalf("check_command: %+v %v", command, err)
 	}
 }
+
+func TestRedWritesOnlyTests(t *testing.T) {
+	s := compactDeliverySession(t, "red")
+	run, _ := s.Ceremony()
+	run.Definition = "axlr_task"
+	if err := s.SetCeremony(run); err != nil {
+		t.Fatal(err)
+	}
+	code := root.ToolCall{ID: "c1", Name: "local_write", Arguments: mustObject(t, `{"path":"textstat.go","content":"x"}`)}
+	test := root.ToolCall{ID: "c2", Name: "local_edit", Arguments: mustObject(t, `{"path":"pkg/textstat_test.go","old_text":"a","new_text":"b"}`)}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{code, test}}}); err != nil {
+		t.Fatal(err)
+	}
+	pending := s.Pending()
+	if err := compactRefusal(s, pending[0]); err == nil || !strings.Contains(err.Error(), "only the failing test") {
+		t.Fatalf("code write in red: %v", err)
+	}
+	if err := compactRefusal(s, pending[1]); err != nil {
+		t.Fatalf("test edit in red refused: %v", err)
+	}
+}
