@@ -1,5 +1,32 @@
 # Documentation audit — 4 October 2026
 
+## 7 October 2026: the compact ceremony profile
+
+`/debug` and `/delivery` gain a compact profile for small models, selected by `ceremonies.profile`:
+- `auto`, the default, applies it when the session model's known window is 64K tokens or less;
+- `standard` and `compact` force a profile.
+
+Under it, a step has 16 calls and a context of at most 80/56/8/4 KiB. It sees only its own `axlr_step_done` fields, with a schema of its own and an instruction under 500 bytes that leads with an example. The local tools stay, but without write and edit in read-only steps; of the host tools only `axlr_history` remains. Tolerant decoding names ignored fields and splits a string command without shell syntax; such a command still goes through the approval card. The same call twice in a row is refused. Each step starts from a ledger of the accepted steps, while `message_index` references stay absolute.
+
+`local_models[].stream: false` asks a server for whole replies. The [ceremonies guide](ceremonies.md#the-compact-profile-for-small-models), the [console guide](console.md#local-models), [troubleshooting](troubleshooting.md#local-models) and a dated measurement block in the [27B plan](plans/2026-10-06-local-27b-ceremonies.md#compact-profile-measured-7-oct-2026) are updated. Issue [#70](https://github.com/underpass-ai/AXLR/issues/70) records the stalled-ceremony case the measurement exposed.
+
+**Checks run**
+- Both modules' tests, `go vet` and `gofmt`.
+- Unit tests:
+  - every compact instruction is under 500 bytes and its example decodes cleanly;
+  - every per-step field exists in the full schema;
+  - the tool surface per step, and refusals of hidden tools and repeated calls;
+  - tolerant decoding, including the shell refusal, and the approval of a recovered command;
+  - the ledger and the projection's origin table;
+  - the compact budget, persistence of the new run fields in the `.ceremony` sidecar, and the profile setting and its auto rule;
+  - the router asking for whole replies.
+- Live: nine console runs with Gemma 4 31B on vLLM against disposable MADE and KMP stores, all accepted by a hidden test. The numbers are in the plan.
+
+**Not verified**
+- Qwen3.8-27B and `/debug` under the compact profile.
+- A step long enough for the ledger cut to matter.
+- The "second reply without a tool call" rule, which stays for the task worker and #70.
+
 ## 7 October 2026: delegating judgements to TypeSafe Jev
 
 A `jev` section in `settings.json`, off by default, lets the model lean on TypeSafe Jev, the judgement model KMP already uses: `tool` offers `axlr_judge` (one yes/no or choice question about a state the model writes), and `final_check` asks Jev once per request whether the final answer completes it, returning a doubted answer to the model in a visible `[AXLR · Jev]` message. The tool is added to the host tools only when enabled, so the default request is unchanged. The adapter mirrors KMP's client: the pinned `jev-1.13.0`, a 256 KiB body, no redirects, at most two retries on 429. The [console guide](console.md#jev-an-external-judge-off-by-default), [troubleshooting](troubleshooting.md#jev) and [architecture](architecture.md) are updated.

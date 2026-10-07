@@ -57,6 +57,24 @@ With a registration named exactly `kmp`, AXLR attempts a wake before the procedu
 
 MADE remains the authority for claims and progress. On some interrupted completions/transitions, the driver inspects the instance and reconciles using MADE's enabled transitions and claimable steps. Multiple enabled transitions or an unresolved active claim require operator inspection. Reloading a session does not itself resume a turn or prove that a check had no effect. See [recovery](runbooks/recovery.md#recover-a-session-or-ceremony).
 
+### The compact profile for small models
+
+`/debug` and `/delivery` run under one of two profiles. `ceremonies.profile` in `settings.json` selects it: `auto` (the default) uses the compact profile when the session model's known window is 65,536 tokens or less, from a [local model's](console.md#local-models) `context_tokens` or the global `context_tokens` cap; `standard` and `compact` force one. The profile is decided when the ceremony begins and kept in its `.ceremony` record, so a resumed session keeps it. `/incident` and `/repair` always use the standard profile.
+
+Under the compact profile:
+
+| What | Standard | Compact |
+|:--|:--|:--|
+| Tool calls per step | 32 | 16 |
+| Model context | the window-derived budget | the smaller of that and 80 KiB ceiling, 56 KiB low watermark, 8 KiB per tool result, 4 KiB checkpoint |
+| Tools | four local tools and every host tool | the local tools (without `local_write` and `local_edit` in `reproduce`, `diagnose` and `brief`), `axlr_step_done`, `axlr_history`, and `axlr_judge` when Jev is on; a hidden tool called anyway is refused |
+| `axlr_step_done` | one schema with every ceremony's fields | the current step's fields only |
+| Instructions | a description of the fields | under 500 bytes, leading with one exact example call; the guidance drops the plugin, history and self-repair paragraphs |
+| A malformed hand-back | refused | fields the step does not take are dropped and named in the reply (`ignored_fields`); a `check_command`, or its `args`, sent as one string is split on spaces unless it holds shell syntax, and still reaches the approval card |
+| The same call twice in a row | runs | refused with "same call as before; change something" |
+| Between steps | the transcript continues | the next step starts from a ledger: the request that began the ceremony, one line per accepted step with the transcript messages it spanned, then the hand-back that opened the step; the saved transcript keeps everything and `axlr_history` reads any message |
+| Memory recall / check output shown | 2 KiB / the full tail | 1 KiB / the last 2 KiB; MADE keeps the full evidence |
+
 ## Why there is no bundled skill catalogue
 
 Until 5 Oct 2026 the console embedded a `made:axlr-ceremonies` skill with seven 1.0 definitions (`axlr_change`, `axlr_delivery`, `axlr_debug`, `axlr_review`, `axlr_research`, `axlr_publish`, `axlr_handoff`) for the model to drive itself. Measured on 1 Oct 2026 with a real model, the skill-guided path spent its whole turn on protocol (55 calls, context exhausted, code left broken) where direct work took 11 calls; publication had no approver and handoff no receiver. Review and research became [work modes](console.md#work-modes); debug and delivery became console-driven 2.0 definitions; change and handoff were dropped; the catalogue itself was retired. The [research notes](plans/2026-10-01-ceremony-driver-design.md) record the measurements and the decision.

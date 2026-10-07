@@ -51,8 +51,28 @@ type UserSettings struct {
 	LocalModels []LocalModel `json:"local_models,omitempty"`
 	// Jev enables TypeSafe Jev, an external judgement model; absent or with
 	// both switches off, nothing is sent to TypeSafe.
-	Jev   *JevSettings               `json:"jev,omitempty"`
-	Extra map[string]json.RawMessage `json:"-"`
+	Jev *JevSettings `json:"jev,omitempty"`
+	// Ceremonies selects the profile of /debug and /delivery.
+	Ceremonies *CeremonySettings          `json:"ceremonies,omitempty"`
+	Extra      map[string]json.RawMessage `json:"-"`
+}
+
+// CeremonySettings is the ceremonies section. Profile is "auto" (the
+// default: compact when the session model's known window is at most
+// CompactWindowTokens), "standard" or "compact".
+type CeremonySettings struct {
+	Profile string `json:"profile,omitempty"`
+}
+
+// CompactWindowTokens is the largest window the auto profile treats as small.
+const CompactWindowTokens = 65536
+
+// CeremonyProfile is the configured profile with the default applied.
+func (s UserSettings) CeremonyProfile() string {
+	if s.Ceremonies == nil || s.Ceremonies.Profile == "" {
+		return "auto"
+	}
+	return s.Ceremonies.Profile
 }
 
 // JevSettings is the jev section. Tool offers axlr_judge to the model;
@@ -91,7 +111,12 @@ type LocalModel struct {
 	Tools             *bool  `json:"tools,omitempty"`
 	StreamIdleSeconds int    `json:"stream_idle_seconds,omitempty"`
 	StreamMaxMinutes  int    `json:"stream_max_minutes,omitempty"`
+	// Stream false asks the server for whole replies instead of a stream.
+	Stream *bool `json:"stream,omitempty"`
 }
+
+// Streams reports whether requests to this server are streamed (default).
+func (m LocalModel) Streams() bool { return m.Stream == nil || *m.Stream }
 
 // Defaults for a local model's stream: a cold prefill of a long prompt on a
 // local GPU takes minutes before the first token, and decoding runs at a few
@@ -272,7 +297,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -346,6 +371,9 @@ func (s UserSettings) Validate() error {
 			return fmt.Errorf("settings local_models lists %s twice", local.ID)
 		}
 		localIDs[local.ID] = struct{}{}
+	}
+	if profile := s.CeremonyProfile(); profile != "auto" && profile != "standard" && profile != "compact" {
+		return errors.New("settings ceremonies.profile must be auto, standard or compact")
 	}
 	if j := s.Jev; j != nil {
 		if j.FinalThreshold < 0 || j.FinalThreshold >= 1 {

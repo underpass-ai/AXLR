@@ -1,6 +1,6 @@
 # Plan, task and sync: ceremonies for 27B-class local models
 
-Status: design with validated definitions (6 Oct 2026). The three definitions below are published and walked against MADE 0.10.0 in a disposable store by [`tools/ceremonies/spike_drafts.py`](../../tools/ceremonies/spike_drafts.py); they live under [`tools/ceremonies/drafts/`](../../tools/ceremonies/drafts/README.md) as drafts, not pinned, not embedded and not started by any console mode yet. No model has run them. The companion [research record](../research/2026-10-06-local-27b-agents.md) holds the sourced evidence this design rests on.
+Status: design with validated definitions (6 Oct 2026); the OpenAI-compatible endpoint and the compact profile are implemented (7 Oct 2026), plan, task and sync are not. The three definitions below are published and walked against MADE 0.10.0 in a disposable store by [`tools/ceremonies/spike_drafts.py`](../../tools/ceremonies/spike_drafts.py); they live under [`tools/ceremonies/drafts/`](../../tools/ceremonies/drafts/README.md) as drafts, not pinned, not embedded and not started by any console mode yet. No model has run them. The companion [research record](../research/2026-10-06-local-27b-agents.md) holds the sourced evidence this design rests on.
 Builds on: [ceremony driver](2026-10-01-ceremony-driver-design.md), [incident](2026-10-02-incident-ceremony-design.md) and [self-repair](2026-10-05-self-repair-design.md). The console drives MADE; the model does the work; the console owns every verdict.
 Brief (Tirso, 6 Oct 2026): small models with a precise context can take small tasks. Split the work into atomic tasks that are testable, unit and end to end; let each worker say when it has finished; add a periodic ceremony where the workers talk to each other.
 
@@ -172,6 +172,40 @@ ASUS GX10 (GB10, 121 GiB unified memory, aarch64). Three servers on loopback, ea
 Bytes per token: Qwen 3.6 on Go source and 3.8 on Markdown; Gemma 3.2 on Go source. The console's window-derived budget assumes 3.
 
 What this changes against the table above: the window is not the constraint on this machine (256K served, and the console lets `context_tokens` lower it); decoding is. At about 9 tokens per second a 400-token report costs 45 s and a 2,000-token step 4 minutes, while a cold 32K prefill costs about a minute and a cached one a fraction of a second. The compact profile's case for short hand-backs, one example call and a stable prefix is stronger here than the design assumed; its case for an 80 KiB ceiling is weaker. Decision 8 should weigh decode speed, not only window size.
+
+## Compact profile measured (7 Oct 2026)
+
+The compact profile is implemented for `/debug` and `/delivery` ([ceremonies guide](../ceremonies.md#the-compact-profile-for-small-models)). It covers every knob in the table above except the "reply without a tool call ends the task" rule, which belongs to the task worker of section 3 and is tracked for driven ceremonies in [#70](https://github.com/underpass-ai/AXLR/issues/70).
+
+The 1 Oct comparison of a ceremony against direct work was repeated with a local model. Setup:
+- **Model:** Gemma 4 31B QAT W4A16 on vLLM 0.22.1, with `stream: false`.
+- **Environment:** a disposable HOME with its own MADE and KMP stores.
+- **Task:** the same ten-line change in a scratch Go module: `WordCount` treats any run of whitespace as one separator and returns 0 for blank text, plus table-driven tests.
+- **Runs:** three per arm.
+- **Success:** a hidden acceptance test the model never saw.
+
+| Arm | Accepted | Mean time | Tool calls | `axlr_step_done` | Prompt tokens | Largest projected history |
+|:--|:--|--:|--:|--:|--:|--:|
+| `/normal`, direct | 3/3 | 133 s | 10–13 | — | 38–57K | 12–16 KB |
+| `/delivery`, standard profile | 3/3 | 235 s | 16–19 | 3–4 | 81–99K | 18–24 KB |
+| `/delivery`, compact profile | 3/3 | 158 s | 13–14 | 3 | 23–25K | 11–14 KB |
+
+**What it shows**
+- The compact profile cuts the ceremony's prompt tokens by about 73% and its time by about a third.
+- It keeps the ceremony's guarantee that the console, not the model, ran the check. It also spends no calls on host bookkeeping: the standard arm used `axlr_skill`, `axlr_session` and, once, `axlr_tools` with `axlr_call_tool`.
+- Every hand-back was accepted the first time, and no run hit a refusal.
+- The 1 Oct gap with the skill catalogue (55 calls against 11) does not reappear. With the console driving, a 27B-class model completes the ceremony at about 1.2 times the calls of direct work.
+
+**Streaming confound**
+- The first runs streamed. There, vLLM's `gemma4` parser sometimes returned a tool call as text (`<|tool_call>call:…`). Replaying one captured request, the call leaked in 1 of 3 streamed replies and in 0 of 3 non-streamed ones.
+- When it happened, a `/normal` turn ended with the code broken, and two compact ceremonies waited with the step open after the console's single reminder.
+- `local_models[].stream: false` avoids the leak; detecting the stall is [#70](https://github.com/underpass-ai/AXLR/issues/70).
+
+**Not measured**
+- Qwen3.8-27B.
+- `/debug`.
+- A task larger than ten lines.
+- The ledger cut under a long step: each step here stayed far below 80 KiB.
 
 ## Layer map
 

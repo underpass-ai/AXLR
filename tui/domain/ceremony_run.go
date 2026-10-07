@@ -44,6 +44,39 @@ type CeremonyRun struct {
 	Incident *IncidentRun
 	// Repair is the repair ceremony's state; nil for other ceremonies.
 	Repair *RepairRun
+	// Compact is the small-model profile, decided when the ceremony began
+	// and kept for its whole life: fewer calls per step, a smaller context,
+	// one step's fields at a time and a projection that starts each step
+	// from the ledger.
+	Compact bool
+	// Ledger holds what each accepted step recorded, in order; under the
+	// compact profile a step starts from it instead of the earlier steps'
+	// tool chatter.
+	Ledger []LedgerEntry
+	// StepCall is the axlr_step_done call that opened the current step; the
+	// compact projection cuts the transcript after its results.
+	StepCall string
+}
+
+// LedgerEntry is one accepted step: its recorded fields, bounded, and the
+// transcript messages it spanned, which axlr_history can still read.
+type LedgerEntry struct {
+	Step         string
+	Iteration    int
+	Text         string
+	FirstMessage int
+	LastMessage  int
+}
+
+// CompactStepCalls is the compact profile's tool-call budget per step.
+const CompactStepCalls = 16
+
+// StepCallLimit is the tool-call budget of one step of this run.
+func (r CeremonyRun) StepCallLimit() int {
+	if r.Compact {
+		return CompactStepCalls
+	}
+	return MaxTurnToolCalls
 }
 
 // AwaitingPerson is true while the console waits for the person's decision:
@@ -141,5 +174,6 @@ func (r CeremonyRun) clone() CeremonyRun {
 		repair.WakeRefs = append([]string(nil), repair.WakeRefs...)
 		r.Repair = &repair
 	}
+	r.Ledger = append([]LedgerEntry(nil), r.Ledger...)
 	return r
 }

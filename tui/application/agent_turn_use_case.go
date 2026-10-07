@@ -74,9 +74,12 @@ func rejectUnknown(ctx context.Context, s *domain.Session, store SessionStorePor
 		if known && resolveErr == nil {
 			verdict, reason := s.Mode().Judge(tool.Identity, args)
 			if verdict != domain.VerdictDeny {
-				return nil
+				if resolveErr = compactRefusal(*s, p); resolveErr == nil {
+					return nil
+				}
+			} else {
+				resolveErr = ModeDenial{Mode: s.Mode(), Reason: reason}
 			}
-			resolveErr = ModeDenial{Mode: s.Mode(), Reason: reason}
 		}
 		if err := rejectUnknownCall(ctx, s, store, trace, p, resolveErr); err != nil {
 			return err

@@ -18,9 +18,13 @@ type Client interface {
 }
 
 // Route sends a configured model to its server under the server's name.
+// NoStream asks the server for whole replies: some servers' streaming
+// tool-call parsers leak calls as text (vLLM 0.22.1 with gemma4 did on 7 Oct
+// 2026) while their non-streaming parser does not.
 type Route struct {
 	Client   Client
 	Upstream root.ModelID
+	NoStream bool
 }
 
 // Router dispatches by model id: configured local models to their server,
@@ -39,6 +43,13 @@ func (r Router) Complete(ctx context.Context, req root.CompletionRequest) (root.
 }
 
 func (r Router) Stream(ctx context.Context, req root.CompletionRequest, onText func(root.Text) error) (root.CompletionResult, error) {
+	if route, ok := r.Routes[req.Model]; ok && route.NoStream {
+		result, err := r.Complete(ctx, req)
+		if err != nil || result.Message.Content == "" {
+			return result, err
+		}
+		return result, onText(result.Message.Content)
+	}
 	client, req, err := r.route(req)
 	if err != nil {
 		return root.CompletionResult{}, err

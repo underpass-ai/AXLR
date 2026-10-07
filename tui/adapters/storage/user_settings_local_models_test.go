@@ -101,3 +101,20 @@ func TestUserSettingsJevSection(t *testing.T) {
 		}
 	}
 }
+
+func TestUserSettingsCeremonyProfile(t *testing.T) {
+	if (UserSettings{}).CeremonyProfile() != "auto" {
+		t.Fatal("default profile is not auto")
+	}
+	path := filepath.Join(t.TempDir(), "settings.json")
+	store, _ := NewUserSettingsStore(path, DefaultUserSettings())
+	for profile, valid := range map[string]bool{"auto": true, "standard": true, "compact": true, "tiny": false} {
+		if err := os.WriteFile(path, []byte(`{"ceremonies":{"profile":"`+profile+`"}}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.Load(context.Background())
+		if (err == nil) != valid || (valid && got.CeremonyProfile() != profile) {
+			t.Errorf("profile %s: %v %v", profile, got.Ceremonies, err)
+		}
+	}
+}

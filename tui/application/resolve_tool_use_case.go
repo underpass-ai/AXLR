@@ -67,7 +67,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	if !known || resolveErr != nil {
 		return rejectUnknown(ctx, s, u.Store, emit, u.Diagnostics)
 	}
-	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny {
+	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil {
 		return rejectUnknown(ctx, s, u.Store, emit, u.Diagnostics)
 	}
 	if decision == domain.DecisionAutoApprove && !approvesInSession(u.Approval, *s, tool.Identity, toolArgs) {
@@ -163,6 +163,11 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 				next.FinishCeremony()
 			case step.Run != nil:
 				// A refusal can still carry state, such as a reviewer failure.
+				if step.Accepted {
+					// The compact projection starts the next step after this
+					// call's results.
+					step.Run.StepCall = string(id)
+				}
 				if err := next.SetCeremony(*step.Run); err != nil {
 					return err
 				}

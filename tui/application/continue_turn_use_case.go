@@ -70,23 +70,40 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		contextSpan.End(DiagnosticErrorInvalidState)
 		return interrupt(err)
 	}
+	_, _, compact := compactRun(*session)
+	messages := session.Messages()
 	projector := u.Context
 	if projector == nil {
-		projector = NewDefaultModelContextProjector()
+		budget := domain.DefaultContextBudget()
 		if u.Windows != nil {
-			if sized, err := NewModelContextProjector(domain.ContextBudgetForWindow(u.Windows.ContextWindow(session.Export().Model))); err == nil {
-				projector = sized
-			}
+			budget = domain.ContextBudgetForWindow(u.Windows.ContextWindow(session.Export().Model))
 		}
+		if compact {
+			budget = budget.Smaller(domain.CompactContextBudget())
+		}
+		sized, err := NewModelContextProjector(budget)
+		if err != nil {
+			sized = NewDefaultModelContextProjector()
+		}
+		// A compact step starts from the ledger; references to the
+		// transcript stay absolute through the origin table.
+		if ledgered, origin := ledgerProjection(*session, messages); origin != nil {
+			messages, sized = ledgered, sized.WithOrigin(origin)
+		}
+		projector = sized
 	}
-	projection, err := projector.Project(session.Messages())
+	projection, err := projector.Project(messages)
+	if replaced := len(session.Messages()) - len(messages) + 1; len(messages) != len(session.Messages()) && err == nil {
+		projection.OriginalMessages = len(session.Messages())
+		projection.DroppedMessages += replaced
+	}
 	if err != nil {
 		contextSpan.End(DiagnosticErrorInvalidState)
 		return interrupt(err)
 	}
 	snapshot := session.ToolSnapshot()
 	guidance := modelHostGuidance(session)
-	if u.SessionLabels != nil {
+	if u.SessionLabels != nil && !compact {
 		text, err := sessionContextGuidance(ctx, *session, u.SessionLabels)
 		if err != nil {
 			contextSpan.End(DiagnosticErrorInvalidState)
@@ -94,7 +111,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 		guidance.Content += root.Text(text)
 	}
-	if u.PluginGuidance != nil {
+	if u.PluginGuidance != nil && !compact {
 		pluginText, err := u.PluginGuidance(ctx)
 		if err != nil {
 			contextSpan.End(DiagnosticErrorInvalidState)

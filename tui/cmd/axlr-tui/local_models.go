@@ -75,7 +75,7 @@ func (s localModelSetup) connect(httpClient *http.Client) (map[root.ModelID]loca
 			}
 			return nil, fmt.Errorf("local model %s: %w", local.ID, err)
 		}
-		routes[id] = localmodels.Route{Client: client, Upstream: root.ModelID(local.UpstreamModel())}
+		routes[id] = localmodels.Route{Client: client, Upstream: root.ModelID(local.UpstreamModel()), NoStream: !local.Streams()}
 	}
 	return routes, nil
 }
@@ -106,4 +106,20 @@ func jevJudge(settings *storage.JevSettings, getenv func(string) string) (*appli
 		return nil, fmt.Errorf("jev: %w", err)
 	}
 	return &application.Judge{Port: client, Tool: settings.Tool, FinalCheck: settings.FinalCheck, Threshold: settings.FinalThreshold}, nil
+}
+
+// compactProfile decides the ceremony profile per session model: always or
+// never when settings say so, otherwise compact for a known window of at
+// most storage.CompactWindowTokens.
+func compactProfile(profile string, windows application.ModelContextWindowPort) func(root.ModelID) bool {
+	switch profile {
+	case "compact":
+		return func(root.ModelID) bool { return true }
+	case "standard":
+		return nil
+	}
+	return func(model root.ModelID) bool {
+		window := windows.ContextWindow(model)
+		return window > 0 && window.Tokens() <= storage.CompactWindowTokens
+	}
 }
