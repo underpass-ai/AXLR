@@ -13,3 +13,8 @@ spec:
     - name: https
       port: {{ .Values.service.port }}
       targetPort: https
+    {{- if .Values.grpc.enabled }}
+    - name: grpc
+      port: {{ .Values.grpc.port }}
+      targetPort: grpc
+    {{- end }}

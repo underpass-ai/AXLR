@@ -33,6 +33,10 @@ spec:
           ports:
             - name: https
               containerPort: 8443
+            {{- if .Values.grpc.enabled }}
+            - name: grpc
+              containerPort: 9443
+            {{- end }}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

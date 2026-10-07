@@ -4,7 +4,7 @@
 
 AXLR is Underpass's default execution engine for agentic work. It owns the model loop, tools, approvals and sessions. KMP supplies durable, evidence-backed memory; MADE supplies tracked procedures and decision records. Connect both engines through MCP, then extend AXLR with other MCP tools and compatible OpenAI/Codex plugin packages. The [product contract](docs/product.md) defines these responsibilities and the capabilities available in each interface.
 
-AXLR operates in a **trusted workspace**. File tools stay inside the selected root; executed programs and connected MCP servers use the authority of their host. The console and JSON worker are not sandboxes. The HTTP service adds mTLS and explicit client roles.
+AXLR operates in a **trusted workspace**. File tools stay inside the selected root; executed programs and connected MCP servers use the authority of their host. The console and JSON worker are not sandboxes. The HTTP, gRPC and MCP service adds mTLS and explicit client roles.
 
 ## Start the console
 
@@ -34,7 +34,7 @@ After the second user prompt clarifies the task, the built-in session skill guid
 | Choose a work mode, run a ceremony or hand off a task | [Console modes](docs/console.md#work-modes), [ceremonies](docs/ceremonies.md) |
 | Connect an MCP server or install a package | [Plugins and MCP](docs/plugins.md) |
 | Call AXLR from a process through JSON | [Worker contract](docs/worker.md) |
-| Run the HTTP service or deploy AXLR with Helm | [Service API](docs/api.md), [Helm guide](docs/helm.md), [release process](docs/releasing.md) |
+| Run the HTTP, gRPC or MCP service or deploy AXLR with Helm | [Service API](docs/api.md), [transport parity](docs/transport-parity.md), [Helm guide](docs/helm.md), [release process](docs/releasing.md) |
 | Embed AXLR in Go or use its MCP client | [Go library](docs/library.md) |
 | Understand boundaries and package ownership | [Architecture](docs/architecture.md) |
 | Resolve a startup, model, plugin or session problem | [Troubleshooting](docs/troubleshooting.md) |
@@ -62,6 +62,6 @@ The JSON worker, `cmd/axlr`, accepts exactly one request on stdin and returns on
 
 ## Project status
 
-AXLR is an evolving pre-1.0 project with two Go modules. The console runs interactive tasks; the worker exposes a one-request process API; `axlr-serve` exposes HTTP `/v1` with mTLS. The checked-in release matrix targets Linux, macOS and Windows on amd64 and arm64. The Helm chart and release workflow are implemented; published assets require a successful tagged run. Source-build instructions use POSIX shell syntax. The service currently configures KMP and MADE only and does not expose the console's plugin installation or work-mode controls.
+AXLR is an evolving pre-1.0 project with two Go modules. The console runs interactive tasks; the worker exposes a one-request process API; `axlr-serve` exposes its 18 capabilities over HTTP, gRPC and MCP with mTLS. The checked-in release matrix targets Linux, macOS and Windows on amd64 and arm64. The Helm chart and release workflow are implemented; published assets require a successful tagged run. Source-build instructions use POSIX shell syntax. The service currently configures KMP and MADE only and does not expose the console's plugin installation or work-mode controls.
 
 Part of [Underpass AI](https://underpassai.com).

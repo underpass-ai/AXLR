@@ -1,6 +1,8 @@
 # AXLR MCP client
 
-`mcpclient` is the root Go module's client for external MCP servers. It uses the [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) over stdio or Streamable HTTP. AXLR's own `read`, `write`, `edit` and `exec` contract is not an MCP server.
+`mcpclient` is the root Go module's client for external MCP servers. It uses the [official Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) over stdio or Streamable HTTP. The trusted-local JSON worker exposes `read`, `write`, `edit` and `exec` through its process contract.
+
+The separate `axlr-serve` composition exposes an authenticated MCP server at `/mcp` and an optional gRPC listener. Its [transport contract](../docs/transport-parity.md) wraps local operations in durable approval intents; the trusted-local JSON worker remains a one-request process.
 
 ## Connect, discover and call
 

@@ -16,6 +16,9 @@ spec:
         {{- toYaml .Values.networkPolicy.ingressFrom | nindent 8 }}
       ports:
         - {protocol: TCP, port: 8443}
+        {{- if .Values.grpc.enabled }}
+        - {protocol: TCP, port: 9443}
+        {{- end }}
   egress:
     - to:
         {{- toYaml .Values.networkPolicy.egressTo | nindent 8 }}

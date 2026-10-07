@@ -1,0 +1,29 @@
+syntax = "proto3";
+package underpass.axlr.v1;
+option go_package = "github.com/underpass-ai/AXLR/tui/service/proto;axlrv1";
+
+import "google/protobuf/wrappers.proto";
+
+// Each BytesValue contains exact UTF-8 JSON, never protobuf JSON float values.
+// Request schemas and response/error envelopes: docs/transport-parity.md.
+// Client certificate identity, approvals and idempotency are shared with HTTP.
+service AxlrService {
+  rpc Read(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc Write(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc Edit(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc Exec(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc ListPlugins(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc CallPlugin(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc CreateSession(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc GetSession(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc StartTurn(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc StreamEvents(google.protobuf.BytesValue) returns (stream google.protobuf.BytesValue);
+  rpc DecideSessionTool(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc CancelSessionTurn(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc ListTools(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc CreateToolCall(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc GetToolCall(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc DecideToolCall(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc Liveness(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc Readiness(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+}

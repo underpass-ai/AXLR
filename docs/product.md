@@ -29,11 +29,13 @@ The [agent workflow runbook](runbooks/agent-workflow.md) makes this path operati
 | Interface | Agent loop and sessions | KMP / MADE | Extension route |
 |:--|:--|:--|:--|
 | `axlr-tui` | Interactive loop, six work modes, saved sessions and approval UI | Explicit connections; driven debug/delivery; optional KMP recall/outcome recording | `/plugin` packages and `/mcp` stdio or Streamable HTTP tools |
-| `axlr-serve` | HTTP `/v1`, mTLS, sessions, SSE, exact approvals and direct calls | Both remote adapters required by configuration/readiness | The shipped service config registers KMP and MADE only; no general plugin setting or work-mode API yet |
+| `axlr-serve` | HTTP `/v1`, gRPC and MCP, mTLS, sessions, event replay/follow, exact approvals and direct calls | Both remote adapters required by configuration/readiness | The shipped service config registers KMP and MADE only; no general plugin setting or work-mode API yet |
 | `axlr` JSON worker | One operation per process; caller owns the loop and policy | Calls any explicitly registered engine tool | Repeatable `--plugin` manifests |
 | Go library | Caller composes its loop, policy and persistence | Typed MCP client and plugin manager | Explicit registrations; custom HTTP clients for authentication |
 
 The service shares turn use cases with the console, but it does not wire the console's package catalogue, skill reader, mode controls or ceremony driver. Treat those as interface-specific capabilities, not service promises.
+
+The [transport parity contract](transport-parity.md) covers the 18 service/worker capabilities across HTTP operations, gRPC and MCP. Remote file, process and plugin operations retain the service's durable approval flow.
 
 ## Open extension model
 
