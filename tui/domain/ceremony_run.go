@@ -44,6 +44,12 @@ type CeremonyRun struct {
 	Incident *IncidentRun
 	// Repair is the repair ceremony's state; nil for other ceremonies.
 	Repair *RepairRun
+	// Plan is the plan ceremony's state; the proposal itself lives in the
+	// plan registry. Nil for other ceremonies.
+	Plan *PlanRun
+	// Model, when set, is the model the console asks while this ceremony is
+	// live instead of the session's: the planner for a plan.
+	Model string
 	// Compact is the small-model profile, decided when the ceremony began
 	// and kept for its whole life: fewer calls per step, a smaller context,
 	// one step's fields at a time and a projection that starts each step
@@ -82,8 +88,32 @@ func (r CeremonyRun) StepCallLimit() int {
 // AwaitingPerson is true while the console waits for the person's decision:
 // the model has no step to hand back.
 func (r CeremonyRun) AwaitingPerson() bool {
-	return r.Incident != nil && r.Incident.Awaiting != "" || r.Repair != nil && r.Repair.Awaiting != ""
+	return r.Incident != nil && r.Incident.Awaiting != "" || r.Repair != nil && r.Repair.Awaiting != "" || r.Plan != nil && r.Plan.Awaiting != ""
 }
+
+// PlanRun is what the plan ceremony carries between steps and across a
+// resume. The console owns it; the registry holds the proposal and MADE the
+// durable record.
+type PlanRun struct {
+	// ID is the plan's slug, the key of its registry record.
+	ID string
+	// Awaiting is AwaitingApproval while the plan is with the person.
+	Awaiting string
+	// Decided is the present decision MADE recorded; Granted is true once
+	// the approver granted the guard.
+	Decided string
+	Granted bool
+	// Returns counts the person's returns; ReturnReason is the last one,
+	// which reaches the next decompose instruction.
+	Returns      int
+	ReturnReason string
+	// Defects are the last unverified proposal's, for the next round.
+	Defects []string
+}
+
+// MaxPlanReturns is how often the person can send a plan back. MADE's
+// max_bounces of 3 is only the backstop.
+const MaxPlanReturns = 2
 
 // Awaiting values: the console waits for the person, not the model.
 const AwaitingApproval = "approval"
@@ -175,5 +205,10 @@ func (r CeremonyRun) clone() CeremonyRun {
 		r.Repair = &repair
 	}
 	r.Ledger = append([]LedgerEntry(nil), r.Ledger...)
+	if r.Plan != nil {
+		plan := *r.Plan
+		plan.Defects = append([]string(nil), plan.Defects...)
+		r.Plan = &plan
+	}
 	return r
 }

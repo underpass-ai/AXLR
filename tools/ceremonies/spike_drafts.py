@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""Walk the draft ceremony definitions through a real MADE engine.
+"""Walk the plan, task and sync definitions through a real MADE engine.
 
-Every YAML under tools/ceremonies/drafts/ is validated and published into a
-disposable store, then its happy and blocked paths are driven with the same
-calls the console makes: start, claim, complete, transition and guard
-approval. The scenarios document the design in docs/plans; a change to a
-draft that breaks one of them fails here before any driver code exists. Only
-Python's standard library and a compatible made-mcp binary are needed.
+Every draft under tools/ceremonies/drafts/, and every pinned definition that
+has a scenario here, is validated and published into a disposable store,
+then its happy and blocked paths are driven with the same calls the console
+makes: start, claim, complete, transition and guard approval. The scenarios
+document the design in docs/plans; a change that breaks one of them fails
+here. Only Python's standard library and a compatible made-mcp binary are
+needed.
 """
 
 import argparse
@@ -20,6 +21,7 @@ from check_pins import Engine  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[2]
 DRAFTS = REPO / "tools/ceremonies/drafts"
+DEFINITIONS = REPO / "tui/adapters/ceremonyhost/definitions"
 ACTIONS = ["validate_ceremony_draft", "publish_ceremony_definition", "get_ceremony_definition",
            "start_published_ceremony", "claim_ceremony_step", "complete_ceremony_step",
            "apply_ceremony_transition", "get_ceremony_instance", "approve_ceremony_guard"]
@@ -216,8 +218,9 @@ def main():
     parser.add_argument("--made-bin", required=True, help="absolute path to a compatible made-mcp binary")
     args = parser.parse_args()
     files = sorted(DRAFTS.glob("*.yaml"))
+    files += sorted(p for name in SCENARIOS for p in DEFINITIONS.glob(f"{name}-*.yaml"))
     if not files:
-        raise SystemExit(f"no drafts under {DRAFTS}")
+        raise SystemExit(f"no drafts under {DRAFTS} and no pinned definition with a scenario")
     with tempfile.TemporaryDirectory(prefix="axlr-spike-") as directory:
         engine = Engine(args.made_bin, Path(directory))
         try:
@@ -244,7 +247,7 @@ def main():
                 if scenario is None:
                     raise SystemExit(f"{name} has no scenario in {__file__}; add one with the draft")
                 scenario(walk)
-            print("all draft scenarios passed")
+            print("all plan, task and sync scenarios passed")
         finally:
             engine.close()
 

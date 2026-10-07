@@ -374,6 +374,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
 	if ceremonies != nil {
 		ceremonies.Compact = compactProfile(settings.CeremonyProfile(), locals.windows)
+		plans, err := storage.NewPlanRegistry(filepath.Join(stateBase, "axlr", "plans.json"))
+		if err != nil {
+			return fail(err)
+		}
+		ceremonies.Plans = plans
+		planner := settings.Planner()
+		if _, local := routes[root.ModelID(planner)]; planner != "" && !local && key == "" {
+			fmt.Fprintf(stderr, "axlr-tui: plan.model %s needs OPENROUTER_API_KEY; /plan uses the session model\n", planner)
+			planner = ""
+		}
+		ceremonies.Plan = application.PlanSettings{Planner: planner, AutoApprove: settings.Plan != nil && settings.Plan.AutoApprove}
 	}
 	repairPolicy := application.RepairPolicy{AutoMerge: repairConfiguration.AutoMerge, WatchDeadline: time.Duration(repairConfiguration.WatchMinutes) * time.Minute}
 	if ceremonies != nil {

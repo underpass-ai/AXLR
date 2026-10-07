@@ -36,8 +36,20 @@ type sessionCeremony struct {
 	Compact    bool             `json:"compact,omitempty"`
 	Ledger     []sessionLedger  `json:"ledger,omitempty"`
 	StepCall   string           `json:"step_call,omitempty"`
+	Model      string           `json:"model,omitempty"`
+	Plan       *sessionPlan     `json:"plan,omitempty"`
 	Incident   *sessionIncident `json:"incident,omitempty"`
 	Repair     *sessionRepair   `json:"repair,omitempty"`
+}
+
+type sessionPlan struct {
+	ID           string   `json:"id"`
+	Awaiting     string   `json:"awaiting,omitempty"`
+	Decided      string   `json:"decided,omitempty"`
+	Granted      bool     `json:"granted,omitempty"`
+	Returns      int      `json:"returns,omitempty"`
+	ReturnReason string   `json:"return_reason,omitempty"`
+	Defects      []string `json:"defects,omitempty"`
 }
 
 type sessionLedger struct {
@@ -111,7 +123,10 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 	if decoder.Decode(&record) != nil || record.Version != sessionCeremonyVersion {
 		return nil
 	}
-	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, Compact: record.Compact, StepCall: record.StepCall}
+	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model}
+	if p := record.Plan; p != nil {
+		run.Plan = &domain.PlanRun{ID: p.ID, Awaiting: p.Awaiting, Decided: p.Decided, Granted: p.Granted, Returns: p.Returns, ReturnReason: p.ReturnReason, Defects: p.Defects}
+	}
 	for _, entry := range record.Ledger {
 		run.Ledger = append(run.Ledger, domain.LedgerEntry{Step: entry.Step, Iteration: entry.Iteration, Text: entry.Text, FirstMessage: entry.FirstMessage, LastMessage: entry.LastMessage})
 	}
@@ -134,7 +149,10 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 		}
 		return nil
 	}
-	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, Compact: run.Compact, StepCall: run.StepCall}
+	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model}
+	if p := run.Plan; p != nil {
+		record.Plan = &sessionPlan{ID: p.ID, Awaiting: p.Awaiting, Decided: p.Decided, Granted: p.Granted, Returns: p.Returns, ReturnReason: p.ReturnReason, Defects: p.Defects}
+	}
 	for _, entry := range run.Ledger {
 		record.Ledger = append(record.Ledger, sessionLedger{Step: entry.Step, Iteration: entry.Iteration, Text: entry.Text, FirstMessage: entry.FirstMessage, LastMessage: entry.LastMessage})
 	}

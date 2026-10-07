@@ -139,6 +139,19 @@ The profile applies to every ceremony when the configured model is small (`cerem
 
 Serving-side prerequisites that no console knob replaces (research record, sections 3 and 4): an OpenAI-compatible endpoint, which AXLR does not have yet (the client is fixed to `https://openrouter.ai/api/v1/chat/completions`); a tool-call parser matched to the model's template (`hermes` or `qwen3_coder` for Qwen, `mistral` for Devstral, `openai` for gpt-oss, `gemma4` for Gemma 4); grammar-constrained tool-call decoding at the server so arguments are always valid JSON; an explicit context length of at least 32K (Ollama defaults to 4,096 under 24 GiB of VRAM and truncates silently from the start of the prompt); KV cache at f16 or q8_0, since extreme KV quantisation degrades tool calling; a prompt cache that survives between turns, which needs the stable prefix above; and the vendor's sampling settings per model, with thinking off for workers and, when reachable, a larger planner.
 
+## Decisions taken (Tirso, 7 Oct 2026)
+
+Answered by survey before section 3 started. They replace the proposals below where they differ:
+
+1. **Planner model:** a large model plans by default, `z-ai/glm-5.3-flash`, overridable with `plan.model`. The local 27B runs the tasks.
+2. **Workers:** sequential, in the shared workspace.
+3. **Approval:** the person approves every plan, and the approval covers its check commands.
+4. **Limits:** 2 returns per plan, 2 reconciliation rounds per sync, 3 rounds per phase and 16 calls per step.
+5. **Scope:** `git status --porcelain` plus digests; without Git, only the digests, and the hand-back says so.
+6. **Coordination:** notes relayed by the console, and also KMP memory. Notes are recorded with `plan` and `task` labels, and a worker's pack carries the notes the memory holds for its plan.
+7. **Where the plan lives:** `plans.json` in AXLR's state; nothing is written into the workspace.
+8. **Profile:** the explicit setting first, otherwise automatic by the model's window.
+
 ## Decisions to take (Tirso)
 
 1. **Planner model.** Same local 27B for `/plan`, or a larger model named by `plan.model` with the 27B as the worker. The design supports both; the verification step is what makes a 27B plan acceptable.

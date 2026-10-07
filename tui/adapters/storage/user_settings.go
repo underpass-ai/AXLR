@@ -53,8 +53,34 @@ type UserSettings struct {
 	// both switches off, nothing is sent to TypeSafe.
 	Jev *JevSettings `json:"jev,omitempty"`
 	// Ceremonies selects the profile of /debug and /delivery.
-	Ceremonies *CeremonySettings          `json:"ceremonies,omitempty"`
-	Extra      map[string]json.RawMessage `json:"-"`
+	Ceremonies *CeremonySettings `json:"ceremonies,omitempty"`
+	// Plan configures /plan.
+	Plan  *PlanSettings              `json:"plan,omitempty"`
+	Extra map[string]json.RawMessage `json:"-"`
+}
+
+// DefaultPlanner is the model that decomposes a brief unless plan.model
+// says otherwise: a large model plans, the session's local model works.
+const DefaultPlanner = "z-ai/glm-5.3-flash"
+
+// PlanSettings is the plan section: Model plans (default DefaultPlanner;
+// "session" uses the session's model) and AutoApprove starts a verified
+// plan without the person (default false).
+type PlanSettings struct {
+	Model       string `json:"model,omitempty"`
+	AutoApprove bool   `json:"auto_approve,omitempty"`
+}
+
+// Planner is the configured planner with the default applied; empty means
+// the session's model.
+func (s UserSettings) Planner() string {
+	if s.Plan == nil || s.Plan.Model == "" {
+		return DefaultPlanner
+	}
+	if s.Plan.Model == "session" {
+		return ""
+	}
+	return s.Plan.Model
 }
 
 // CeremonySettings is the ceremonies section. Profile is "auto" (the
@@ -297,7 +323,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies", "plan"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -374,6 +400,11 @@ func (s UserSettings) Validate() error {
 	}
 	if profile := s.CeremonyProfile(); profile != "auto" && profile != "standard" && profile != "compact" {
 		return errors.New("settings ceremonies.profile must be auto, standard or compact")
+	}
+	if p := s.Plan; p != nil && p.Model != "" && p.Model != "session" {
+		if _, err := root.NewModelID(p.Model); err != nil {
+			return errors.New("settings plan.model must be a model id or session")
+		}
 	}
 	if j := s.Jev; j != nil {
 		if j.FinalThreshold < 0 || j.FinalThreshold >= 1 {

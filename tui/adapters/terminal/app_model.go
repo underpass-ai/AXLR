@@ -468,7 +468,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("changes"))
 			}
-			if command == "/incident" || command == "/repair" {
+			if command == "/incident" || command == "/repair" || command == "/plan" {
 				if _, awaiting := m.incidentRun(); awaiting {
 					m.Composer.Input.Reset()
 					return m.openIncidentCard(), nil

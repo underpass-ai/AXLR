@@ -23,7 +23,7 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 // result is the console's own bookkeeping.
 func approvesInSession(policy ToolApprovalPolicyPort, s domain.Session, id domain.ToolIdentity, arguments root.JSONValue) bool {
 	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationStepDone {
-		return !stepDoneNeedsApproval(s, arguments)
+		return !stepDoneNeedsApproval(s, arguments) && !planNeedsApproval(s, arguments)
 	}
 	return approvesInMode(policy, s.Mode(), id, arguments)
 }
