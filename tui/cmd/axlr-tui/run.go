@@ -26,6 +26,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	"github.com/underpass-ai/AXLR/tui/adapters/engineupdate"
+	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/repairclone"
@@ -42,13 +43,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	key := getenv("OPENROUTER_API_KEY")
 	var trace application.DiagnosticPort
+	var localKeys []string
 	fail := func(err error) int {
 		if trace != nil {
 			_ = trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticOperationFailed, ErrorClass: application.DiagnosticErrorInternal})
 		}
 		message := err.Error()
-		if key != "" {
-			message = strings.ReplaceAll(message, key, "[redacted]")
+		for _, secret := range append([]string{key}, localKeys...) {
+			if secret != "" {
+				message = strings.ReplaceAll(message, secret, "[redacted]")
+			}
 		}
 		fmt.Fprintln(stderr, "axlr-tui:", message)
 		return 1
@@ -157,6 +161,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		return fail(err)
 	}
 	fmt.Fprintln(stderr, "axlr-tui: settings:", settingsPath)
+	locals := newLocalModelSetup(settings, getenv)
+	localKeys = locals.secrets
 	language := settings.Language
 	if fromEnvironment := getenv("AXLR_LANG"); fromEnvironment != "" {
 		language = fromEnvironment
@@ -215,32 +221,49 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			if createErr != nil {
 				return fail(createErr)
 			}
-			payloads, err = diagnostics.NewPayloadRecorder(payloadDirectory, key)
+			payloads, err = diagnostics.NewPayloadRecorder(payloadDirectory, payloadSecrets(key, locals.secrets)...)
 			if err != nil {
 				_ = os.Remove(payloadDirectory)
 				return fail(err)
 			}
 			fmt.Fprintln(stderr, "axlr-tui: payloads:", payloadDirectory)
 		}
-		transport = diagnostics.Transport{Next: transport, Trace: trace, Payloads: payloads}
+		transport = diagnostics.Transport{Next: transport, Trace: trace, Payloads: payloads, Endpoints: locals.endpoints}
 	}
 	clientHTTP := &http.Client{Transport: transport}
 	defer clientHTTP.CloseIdleConnections()
-	client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP})
+	// OpenRouter is optional once local models are configured; without a
+	// key and without local models the client reports the missing key.
+	var remote localmodels.Client
+	var remoteCatalog application.ModelCatalogPort
+	if key != "" || len(locals.models) == 0 {
+		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP})
+		if err != nil {
+			return fail(err)
+		}
+		remote = client
+		remoteCatalog = catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}
+	}
+	routes, err := locals.connect(clientHTTP)
 	if err != nil {
 		return fail(err)
 	}
+	router := localmodels.Router{Default: remote, Routes: routes}
 	configPath := *mcpConfigFlag
 	if configPath == "" {
 		configPath = filepath.Join(configBase, "axlr", "mcp.json")
 	} else if _, err := os.Stat(configPath); err != nil {
 		return fail(err)
 	}
-	persisted, err := storage.LoadMCPConfiguration(configPath, getenv)
+	var refusedKey string
+	persisted, err := storage.LoadMCPConfiguration(configPath, locals.pluginGetenv(getenv, &refusedKey))
+	if err == nil && refusedKey != "" {
+		err = fmt.Errorf("model key %s cannot be passed to plugins", refusedKey)
+	}
 	if err != nil {
 		return fail(err)
 	}
-	registrations, err := pluginRegistrations(paths, selections, getenv)
+	registrations, err := pluginRegistrations(paths, selections, getenv, locals.keyEnvs)
 	if err != nil {
 		return fail(err)
 	}
@@ -261,7 +284,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	configStore := storage.MCPConfigStore{Path: configPath}
 	pluginManager := axlr.NewPluginManager(manager, profiles, configStore.SaveApproval)
 	pluginManager.SetInstaller(configStore.AddManifest)
-	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, getenv)
+	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, locals.pluginGetenv(getenv, nil))
 	pluginManager.SetURLInstaller(configStore.AddURL)
 	pluginManager.Diagnostics = trace
 	approvalSettings, err := storage.NewApprovalSettingsInUserSettings(settingsStore, filepath.Join(filepath.Dir(configPath), "approvals.json"), pluginManager)
@@ -339,7 +362,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
-	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: client}}
+	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}}
 	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
 	repairPolicy := application.RepairPolicy{AutoMerge: repairConfiguration.AutoMerge, WatchDeadline: time.Duration(repairConfiguration.WatchMinutes) * time.Minute}
 	if ceremonies != nil {
@@ -370,7 +393,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		repairs = &application.SelfRepair{
 			Registry:  registry,
 			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: stderr},
-			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal()},
+			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal()},
 			Store:     loggedStore,
 			Engine:    ceremonies.Engine,
 			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts},
@@ -383,7 +406,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		defer repairs.Close()
 	}
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
 	var notices application.RepairNoticesPort
 	if repairs != nil {
 		continuation.SelfRepair = repairs
@@ -396,7 +419,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		InstalledPlugins:  axlrCatalog,
 		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands},
 		MADEPreparation:   &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore},
-		Models:            application.ListModelsUseCase{Catalog: catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}, Diagnostics: trace},
+		Models:            application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: locals.available, Remote: remoteCatalog}, Diagnostics: trace},
 		ModelPreference:   preferences,
 		SessionLabels:     sessionLabels,
 		ModelFavorites:    settingsStore.ModelFavorites(),
@@ -446,7 +469,7 @@ func localRuntimeEnvironment(getenv func(string) string) []string {
 	return env
 }
 
-func pluginRegistrations(paths, selections []string, getenv func(string) string) ([]plugins.Registration, error) {
+func pluginRegistrations(paths, selections []string, getenv func(string) string, modelKeys map[string]bool) ([]plugins.Registration, error) {
 	environments := map[root.PluginID][]string{}
 	for _, selection := range selections {
 		rawID, variable, ok := strings.Cut(selection, ":")
@@ -457,6 +480,9 @@ func pluginRegistrations(paths, selections []string, getenv func(string) string)
 		}
 		if source == "OPENROUTER_API_KEY" {
 			return nil, errors.New("OpenRouter key cannot be passed to plugins")
+		}
+		if modelKeys[source] {
+			return nil, fmt.Errorf("model key %s cannot be passed to plugins", source)
 		}
 		environments[id] = append(environments[id], name+"="+getenv(source))
 	}
@@ -514,4 +540,15 @@ func ceremonyDriver(registrations []plugins.Registration, tools application.Tool
 		driver.Memory = ceremonyhost.Memory{Tools: tools}
 	}
 	return driver
+}
+
+// payloadSecrets lists the non-empty keys the payload recorder redacts.
+func payloadSecrets(key string, local []string) []string {
+	secrets := make([]string, 0, 1+len(local))
+	for _, secret := range append([]string{key}, local...) {
+		if secret != "" {
+			secrets = append(secrets, secret)
+		}
+	}
+	return secrets
 }

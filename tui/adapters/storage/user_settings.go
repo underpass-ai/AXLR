@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,8 +41,108 @@ type UserSettings struct {
 	// Repair configures the /repair ceremony: which repository the console
 	// may repair, where it clones it and whether green pull requests merge
 	// without the person.
-	Repair *RepairSettings            `json:"repair,omitempty"`
-	Extra  map[string]json.RawMessage `json:"-"`
+	Repair *RepairSettings `json:"repair,omitempty"`
+	// ContextTokens caps the context window, in tokens, the console uses for
+	// every model; zero means no cap. A local model's own window applies
+	// when it is smaller.
+	ContextTokens int `json:"context_tokens,omitempty"`
+	// LocalModels are OpenAI-compatible servers, such as llama.cpp or vLLM,
+	// offered in /model next to OpenRouter's catalog.
+	LocalModels []LocalModel               `json:"local_models,omitempty"`
+	Extra       map[string]json.RawMessage `json:"-"`
+}
+
+// LocalModel is one entry of local_models. ID is what the session stores and
+// /model shows (a "local/" prefix keeps it apart from OpenRouter ids); URL is
+// the server's OpenAI base URL, such as http://127.0.0.1:8080/v1, to which
+// /chat/completions is appended; Model is the name sent to the server
+// (default ID; vLLM needs its served model name, llama.cpp ignores it);
+// APIKeyEnv names the environment variable holding the key, required unless
+// the URL is a loopback address; ContextTokens is the window the console
+// respects, which may be smaller than the server's; Tools false hides a model
+// whose server cannot return native tool calls, since AXLR needs them.
+type LocalModel struct {
+	ID                string `json:"id"`
+	Name              string `json:"name,omitempty"`
+	URL               string `json:"url"`
+	Model             string `json:"model,omitempty"`
+	APIKeyEnv         string `json:"api_key_env,omitempty"`
+	ContextTokens     int    `json:"context_tokens"`
+	Tools             *bool  `json:"tools,omitempty"`
+	StreamIdleSeconds int    `json:"stream_idle_seconds,omitempty"`
+	StreamMaxMinutes  int    `json:"stream_max_minutes,omitempty"`
+}
+
+// Defaults for a local model's stream: a cold prefill of a long prompt on a
+// local GPU takes minutes before the first token, and decoding runs at a few
+// tokens per second.
+const (
+	DefaultLocalStreamIdleSeconds = 600
+	DefaultLocalStreamMaxMinutes  = 60
+	maxLocalModels                = 16
+	maxContextTokens              = 16 << 20
+)
+
+// SupportsTools reports whether the server returns native tool calls.
+func (m LocalModel) SupportsTools() bool { return m.Tools == nil || *m.Tools }
+
+// UpstreamModel is the model name sent to the server.
+func (m LocalModel) UpstreamModel() string {
+	if m.Model != "" {
+		return m.Model
+	}
+	return m.ID
+}
+
+// ChatCompletionsURL is the endpoint the console posts to.
+func (m LocalModel) ChatCompletionsURL() string {
+	return strings.TrimRight(m.URL, "/") + "/chat/completions"
+}
+
+// StreamIdle and StreamMax are the stream limits with defaults applied.
+func (m LocalModel) StreamIdle() time.Duration {
+	if m.StreamIdleSeconds > 0 {
+		return time.Duration(m.StreamIdleSeconds) * time.Second
+	}
+	return DefaultLocalStreamIdleSeconds * time.Second
+}
+
+func (m LocalModel) StreamMax() time.Duration {
+	if m.StreamMaxMinutes > 0 {
+		return time.Duration(m.StreamMaxMinutes) * time.Minute
+	}
+	return DefaultLocalStreamMaxMinutes * time.Minute
+}
+
+func (m LocalModel) validate() error {
+	if _, err := root.NewModelID(m.ID); err != nil {
+		return errors.New("settings local_models entry has an invalid id")
+	}
+	if !utf8.ValidString(m.Name) || len(m.Name) > 200 || strings.ContainsAny(m.Name, "\r\n") {
+		return fmt.Errorf("settings local_models %s has an invalid name", m.ID)
+	}
+	parsed, err := url.Parse(m.URL)
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("settings local_models %s url must be an absolute http(s) URL without credentials, query or fragment", m.ID)
+	}
+	if m.Model != "" {
+		if _, err := root.NewModelID(m.Model); err != nil {
+			return fmt.Errorf("settings local_models %s has an invalid model", m.ID)
+		}
+	}
+	if m.APIKeyEnv != "" && !mcpEnvironmentName.MatchString(m.APIKeyEnv) {
+		return fmt.Errorf("settings local_models %s api_key_env must be an environment variable name", m.ID)
+	}
+	if m.ContextTokens < domain.MinimumContextWindow || m.ContextTokens > maxContextTokens {
+		return fmt.Errorf("settings local_models %s context_tokens must be between %d and %d", m.ID, domain.MinimumContextWindow, maxContextTokens)
+	}
+	if m.StreamIdleSeconds < 0 || m.StreamIdleSeconds > 3600 {
+		return fmt.Errorf("settings local_models %s stream_idle_seconds must be between 1 and 3600", m.ID)
+	}
+	if m.StreamMaxMinutes < 0 || m.StreamMaxMinutes > 720 {
+		return fmt.Errorf("settings local_models %s stream_max_minutes must be between 1 and 720", m.ID)
+	}
+	return nil
 }
 
 // RepairSettings is the repair section of settings.json. Repository is
@@ -150,7 +252,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -208,6 +310,22 @@ func (s UserSettings) Validate() error {
 		if r.MaxAttempts < 0 || r.MaxAttempts > 5 {
 			return errors.New("settings repair.max_attempts must be between 1 and 5")
 		}
+	}
+	if s.ContextTokens != 0 && (s.ContextTokens < domain.MinimumContextWindow || s.ContextTokens > maxContextTokens) {
+		return fmt.Errorf("settings context_tokens must be between %d and %d", domain.MinimumContextWindow, maxContextTokens)
+	}
+	if len(s.LocalModels) > maxLocalModels {
+		return errors.New("settings.json lists too many local models")
+	}
+	localIDs := make(map[string]struct{}, len(s.LocalModels))
+	for _, local := range s.LocalModels {
+		if err := local.validate(); err != nil {
+			return err
+		}
+		if _, duplicate := localIDs[local.ID]; duplicate {
+			return fmt.Errorf("settings local_models lists %s twice", local.ID)
+		}
+		localIDs[local.ID] = struct{}{}
 	}
 	if len(s.FavoriteModels) > maxFavoriteModels {
 		return errors.New("settings.json lists too many favorite models")

@@ -5,10 +5,16 @@ import "fmt"
 type ProviderError struct {
 	StatusCode int
 	Category   ProviderErrorCategory
+	// Provider names a non-OpenRouter endpoint; empty means OpenRouter.
+	Provider string
 }
 
 func (e *ProviderError) Error() string {
-	return fmt.Sprintf("OpenRouter %s (HTTP %d)", e.Category, e.StatusCode)
+	provider := e.Provider
+	if provider == "" {
+		provider = providerName
+	}
+	return fmt.Sprintf("%s %s (HTTP %d)", provider, e.Category, e.StatusCode)
 }
 
 func classifyProviderError(status int) *ProviderError {

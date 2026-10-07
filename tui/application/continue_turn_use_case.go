@@ -11,7 +11,11 @@ import (
 )
 
 type ContinueTurnUseCase struct {
-	Context        ModelContextPort
+	// Context projects the transcript; nil derives the budget from Windows.
+	Context ModelContextPort
+	// Windows sizes the default projection to the session model's context
+	// window; nil keeps the default byte budget.
+	Windows        ModelContextWindowPort
 	Validation     ToolArgumentValidationPort
 	Models         ModelStreamPort
 	Store          SessionStorePort
@@ -62,6 +66,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	projector := u.Context
 	if projector == nil {
 		projector = NewDefaultModelContextProjector()
+		if u.Windows != nil {
+			if sized, err := NewModelContextProjector(domain.ContextBudgetForWindow(u.Windows.ContextWindow(session.Export().Model))); err == nil {
+				projector = sized
+			}
+		}
 	}
 	projection, err := projector.Project(session.Messages())
 	if err != nil {

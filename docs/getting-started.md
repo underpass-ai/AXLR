@@ -1,6 +1,6 @@
 # Getting started
 
-This guide builds AXLR from a full checkout with Go 1.26. You need a terminal at least 50 × 15 cells and an OpenRouter API key for the interactive console. The commands below use a POSIX shell; the release workflow also targets macOS and Windows on amd64 and arm64. On Windows, use native executable paths and PowerShell environment syntax, and supply an absolute `HOME` or the required XDG directories. The JSON worker and local library tests do not need a model account.
+This guide builds AXLR from a full checkout with Go 1.26. You need a terminal at least 50 × 15 cells and, for the interactive console, an OpenRouter API key or a [local OpenAI-compatible server](console.md#local-models). The commands below use a POSIX shell; the release workflow also targets macOS and Windows on amd64 and arm64. On Windows, use native executable paths and PowerShell environment syntax, and supply an absolute `HOME` or the required XDG directories. The JSON worker and local library tests do not need a model account.
 
 ## 1. Build
 
@@ -19,13 +19,13 @@ AXLR is the default execution entry point in the [product stack](product.md). Co
 
 ## 2. Start a console
 
-Provide `OPENROUTER_API_KEY` through your shell's environment or secret manager, then run:
+Provide `OPENROUTER_API_KEY` through your shell's environment or secret manager, or configure `local_models` in the [settings file](console.md#local-models) to use a local server such as llama.cpp or vLLM without OpenRouter, then run:
 
 ```bash
 /tmp/axlr-tui --root "$PWD"
 ```
 
-Without a saved model, the console waits for you to choose one; startup alone does not send a model request or create a session. Type `/model`, choose a tool-capable text model, then send a prompt. Your account must have access to the selected OpenRouter model.
+Without a saved model, the console waits for you to choose one; startup alone does not send a model request or create a session. Type `/model`, choose a tool-capable text model, then send a prompt. Your account must have access to the selected OpenRouter model; a local model needs its server running.
 
 You can edit model, language and appearance in `$XDG_CONFIG_HOME/axlr/settings.json` (or `$HOME/.config/axlr/settings.json`). See the [settings format](console.md#edit-settings-as-json). The console reads changes on its next launch.
 
@@ -54,6 +54,6 @@ It reads one JSON document from stdin and writes one JSON response to stdout. Th
 
 ## Where data goes
 
-The console sends model requests to OpenRouter and saves sessions under `$XDG_STATE_HOME/axlr/sessions`, falling back to `$HOME/.local/state/axlr/sessions`. Diagnostics use a private `logs/` directory in the same state base. HTTP request and response payload capture is enabled by default and contains conversation content, with credentials redacted; set `--trace-payloads=false` if you only need timings. [Console guide](console.md#diagnostics-and-privacy) has the full behavior.
+The console sends model requests to OpenRouter, or to the configured local server for a local model, and saves sessions under `$XDG_STATE_HOME/axlr/sessions`, falling back to `$HOME/.local/state/axlr/sessions`. Diagnostics use a private `logs/` directory in the same state base. HTTP request and response payload capture is enabled by default and contains conversation content, with credentials redacted; set `--trace-payloads=false` if you only need timings. [Console guide](console.md#diagnostics-and-privacy) has the full behavior.
 
 Local tools act on the chosen workspace. `exec` and MCP servers use host account permissions, so run AXLR in an account and workspace you trust.

@@ -24,6 +24,7 @@ type repairWorkbenches struct {
 	registrations []plugins.Registration
 	labels        application.SessionLabelsPort
 	models        application.ModelStreamPort
+	windows       application.ModelContextWindowPort
 	store         application.SessionStorePort
 	trace         application.DiagnosticPort
 	validator     application.ToolArgumentValidationPort
@@ -56,7 +57,7 @@ func (w repairWorkbenches) Open(_ context.Context, clone string) (application.Re
 	driver.Forge = ceremonyhost.Forge{Checks: ceremonyhost.Checks{Tools: runner}}
 	driver.RepairPolicy = w.policy
 	approval := application.RepairToolPolicy{Next: w.approval, AutonomousLocal: w.autonomous}
-	continuation := application.ContinueTurnUseCase{Validation: w.validator, Models: w.models, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver}
+	continuation := application.ContinueTurnUseCase{Validation: w.validator, Models: w.models, Windows: w.windows, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver}
 	catalog := axlr.ToolCatalog{Plugins: w.manager, Diagnostics: w.trace, Profiles: w.profiles}
 	return &application.UseCaseWorkbench{
 		Start:    application.StartTurnUseCase{Catalog: catalog, Store: w.store, Continue: continuation, Tools: runner, Approval: approval},
