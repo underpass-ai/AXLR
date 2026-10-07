@@ -27,6 +27,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		return domain.CompletionResult{}, err
 	}
 	wire.Stream = true
+	c.template(&wire)
 	if c.endpoint != endpoint {
 		// OpenAI-compatible servers such as vLLM report token usage in a
 		// stream only when asked; OpenRouter always reports it.

@@ -139,6 +139,9 @@ type LocalModel struct {
 	StreamMaxMinutes  int    `json:"stream_max_minutes,omitempty"`
 	// Stream false asks the server for whole replies instead of a stream.
 	Stream *bool `json:"stream,omitempty"`
+	// Thinking false turns the model's thinking off through the chat
+	// template (enable_thinking); workers want short replies.
+	Thinking *bool `json:"thinking,omitempty"`
 }
 
 // Streams reports whether requests to this server are streamed (default).
