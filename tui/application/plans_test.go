@@ -64,6 +64,7 @@ func TestAffectedTasksAreThoseTheFailureNames(t *testing.T) {
 
 // scriptedBench plays a worker: each task ends with the scripted status.
 type scriptedBench struct {
+	files   map[string][]byte
 	plans   *memoryPlans
 	outcome map[string]domain.TaskStatus
 	order   []string
@@ -76,6 +77,9 @@ func (b *scriptedBench) BeginTask(_ context.Context, s *domain.Session, _ domain
 }
 func (b *scriptedBench) Begin(_ context.Context, s *domain.Session, _ root.Text, _ func(Event) error) error {
 	run, _ := s.Ceremony()
+	if b.files != nil {
+		b.files["shared.go"] = []byte("half done by " + run.Task.Task)
+	}
 	record := b.plans.records[0]
 	t, _ := record.Task(run.Task.Task)
 	t.Status = b.outcome[t.ID]
@@ -87,7 +91,20 @@ func (b *scriptedBench) RunSync(_ context.Context, _ domain.PlanRecord, wave int
 	b.syncs = append(b.syncs, wave)
 	return SyncOutcome{Instance: fmt.Sprint("sync", wave), Verdict: "green"}, nil
 }
-func (b *scriptedBench) Digest(context.Context, string) string { return "" }
+func (b *scriptedBench) Digest(_ context.Context, path string) string {
+	if content, ok := b.files[path]; ok {
+		return string(content)
+	}
+	return ""
+}
+func (b *scriptedBench) ReadFile(_ context.Context, path string) ([]byte, bool, error) {
+	content, ok := b.files[path]
+	return content, ok, nil
+}
+func (b *scriptedBench) WriteFile(_ context.Context, path string, content []byte) error {
+	b.files[path] = content
+	return nil
+}
 func (b *scriptedBench) Resolve(context.Context, *domain.Session, root.ToolCallID, domain.ToolDecision, func(Event) error) error {
 	return errors.New("unused")
 }
@@ -148,5 +165,27 @@ func TestARunnerSyncsEachFinishedWaveAndEndsDone(t *testing.T) {
 	runner.Close()
 	if record := plans.records[0]; record.Status != domain.PlanDone || len(record.Syncs) != 2 || fmt.Sprint(bench.syncs) != "[1 2]" {
 		t.Fatalf("record %+v syncs %v", record, bench.syncs)
+	}
+}
+
+func TestABlockedTaskPutsItsScopeBack(t *testing.T) {
+	plans := &memoryPlans{}
+	_ = plans.Save(context.Background(), domain.PlanRecord{ID: "p", Session: "s", Workspace: domain.Workspace(t.TempDir()), Worker: "local/gemma", Status: domain.PlanReady, Waves: 2, Tasks: []domain.PlanTask{
+		{ID: "a", Wave: 1, Scope: []string{"shared.go"}, Status: domain.TaskPending},
+		{ID: "b", Wave: 2, Scope: []string{"shared.go"}, DependsOn: []string{"a"}, Status: domain.TaskPending},
+	}})
+	bench := &scriptedBench{files: map[string][]byte{"shared.go": []byte("original")}, plans: plans, outcome: map[string]domain.TaskStatus{"a": domain.TaskDone, "b": domain.TaskBlocked}}
+	runner := &PlanRunner{Plans: plans, Store: &memoryStore{}, Workbench: benchPort{bench}, RunToken: "t"}
+	if err := runner.Start(context.Background(), "p"); err != nil {
+		t.Fatal(err)
+	}
+	runner.Wait()
+	runner.Close()
+	// a's work stays; b's half-done change is undone back to a's.
+	if got := string(bench.files["shared.go"]); got != "half done by a" {
+		t.Fatalf("shared.go = %q", got)
+	}
+	if reason := plans.records[0].Tasks[1].Reason; !strings.Contains(reason, "restored shared.go") {
+		t.Fatalf("reason = %q", reason)
 	}
 }

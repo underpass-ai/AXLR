@@ -56,6 +56,16 @@ curl -s http://127.0.0.1:8080/v1/chat/completions -H 'content-type: application/
 | An `[AXLR · Jev]` message appears after an answer that was complete | Jev doubted it below `final_threshold` | The model can say why the answer is complete; lower `final_threshold` or turn `final_check` off if it happens often |
 | The model asks `axlr_judge` an "A or B" question and gets only `yes` | It omitted `options` | The tool's description asks for options; a model that ignores it is a model limit, not a Jev one |
 
+## Plans
+
+| Symptom | Check | Next action |
+|:--|:--|:--|
+| `/plan` cannot start | MADE is prepared with the seven definitions | Press `P` in `/mcp` again; it publishes `axlr_plan`, `axlr_task` and `axlr_sync` 1.0 |
+| The plan comes back with defects three times and ends `BLOCKED` | Read the defects on the plan's last hand-back | Give a narrower brief, or let a larger model plan (`plan.model`) |
+| A task ends `BLOCKED` with "the model did not use its tools" | The worker's transcript (the task's session id is on the plans panel) | Usually the server's tool-call parser: try `"stream": false` on the local model |
+| A task ends `BLOCKED` asking for the person's approval | The worker called a tool the approval policy keeps under a card | Workers run without the person; allow that tool, or change the plan |
+| A plan shows `interrupted` | The console stopped while it ran | Open `/plan` and press `r`; finished tasks are not run again |
+
 ## Inspect the right diagnostics
 
 The console's JSONL trace reports timing and failure classes without prompt content. Its default payload directory includes redacted HTTP bodies and can include conversation content. If you only need timings, launch with `--trace-payloads=false`. Do not paste payload files into an issue without reviewing them.

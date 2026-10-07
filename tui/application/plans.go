@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -23,6 +24,9 @@ type PlanWorkbench interface {
 	RunSync(ctx context.Context, plan domain.PlanRecord, wave int, reconcile Reconciler) (SyncOutcome, error)
 	// Digest is the SHA-256 of a workspace file, "" when it does not exist.
 	Digest(ctx context.Context, path string) string
+	// ReadFile and WriteFile let the runner put a blocked task's scope back.
+	ReadFile(ctx context.Context, path string) ([]byte, bool, error)
+	WriteFile(ctx context.Context, path string, content []byte) error
 }
 
 // PlanWorkbenchPort opens a workbench in the plan's workspace.
@@ -343,6 +347,48 @@ func (r *PlanRunner) runTask(ctx context.Context, workbench PlanWorkbench, planI
 			t.Status, t.Session, t.Reason = domain.TaskRunning, id, ""
 		}
 	})
+	// A task that does not finish must not leave half its work behind: the
+	// next tasks and the sync would build on it. Its scope files are put back
+	// as they were; files it created are named, not deleted.
+	saved := map[string][]byte{}
+	for _, p := range task.Scope {
+		if content, found, err := workbench.ReadFile(ctx, p); err == nil && found {
+			saved[p] = content
+		}
+	}
+	defer func() {
+		current, err := r.load(ctx, planID)
+		if err != nil {
+			return
+		}
+		t, ok := current.Task(taskID)
+		if !ok || t.Status == domain.TaskDone {
+			return
+		}
+		var restored, created []string
+		for _, p := range task.Scope {
+			if original, existed := saved[p]; existed {
+				if now, _, _ := workbench.ReadFile(ctx, p); string(now) != string(original) && workbench.WriteFile(context.WithoutCancel(ctx), p, original) == nil {
+					restored = append(restored, p)
+				}
+			} else if workbench.Digest(ctx, p) != "" {
+				created = append(created, p)
+			}
+		}
+		if len(restored)+len(created) == 0 {
+			return
+		}
+		r.update(ctx, planID, func(p *domain.PlanRecord) {
+			if t, ok := p.Task(taskID); ok {
+				if len(restored) > 0 {
+					t.Reason += "; restored " + strings.Join(restored, ", ")
+				}
+				if len(created) > 0 {
+					t.Reason += "; left the new files " + strings.Join(created, ", ")
+				}
+			}
+		})
+	}()
 	if err := workbench.BeginTask(ctx, &child, record, *task); err != nil {
 		fail("start: " + err.Error())
 		return

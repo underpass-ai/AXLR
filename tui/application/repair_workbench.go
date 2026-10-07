@@ -36,6 +36,24 @@ func (w *UseCaseWorkbench) RunSync(ctx context.Context, plan domain.PlanRecord, 
 	return w.Start.Continue.Ceremonies.RunSync(ctx, plan, wave, reconcile)
 }
 
+// ReadFile reads a workspace file through the driver's files port.
+func (w *UseCaseWorkbench) ReadFile(ctx context.Context, path string) ([]byte, bool, error) {
+	d := w.Start.Continue.Ceremonies
+	if d == nil || d.Files == nil {
+		return nil, false, errors.New("the workspace files are unavailable")
+	}
+	return d.Files.Read(ctx, path, maxDigestedFile)
+}
+
+// WriteFile replaces a workspace file through the driver's files port.
+func (w *UseCaseWorkbench) WriteFile(ctx context.Context, path string, content []byte) error {
+	d := w.Start.Continue.Ceremonies
+	if d == nil || d.Files == nil {
+		return errors.New("the workspace files are unavailable")
+	}
+	return d.Files.Write(ctx, path, content)
+}
+
 // Digest reads a workspace file's digest through the driver's files port.
 func (w *UseCaseWorkbench) Digest(ctx context.Context, path string) string {
 	d := w.Start.Continue.Ceremonies
