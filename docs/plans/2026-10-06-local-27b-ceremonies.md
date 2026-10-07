@@ -243,6 +243,8 @@ Four more runs the same evening, each after a console-side fix for what the prev
 | 5 | Gemma 4 | joined arguments split; the repeat refusal shows the call shape | 2 of 4 done (glm planned 4 tasks), syncs green; `add-charcount` spent its budget on mixed wrappers before the hint worked | 16 min |
 | 6 | **Qwen3.8-27B** (llama.cpp, `thinking: false`) | mixed wrappers stripped; `local_models[].thinking` added after a Qwen run with thinking on spent about 4,000 tokens before a single call | **plan done: 3 of 3 tasks, sync green, hidden acceptance test passed** | **13.5 min** |
 
+Run 7 measured the planner's focused surface: glm made 7 read and exec calls before handing the plan back, with no host-tool detours. It also exposed a race. After the approval, glm kept working in the plan's session and wrote `CharCount` and its test itself. The third worker found them already present and declared its task untestable, so the run was partial: 2 of 3 tasks, both syncs green. Since then an approved plan's session asks the model nothing more.
+
 In run 6, glm put `LineCount` and `CharCount` in new files, so the three scopes were disjoint and one wave held all three tasks. Planning took 3.5 min. The tasks took 3, 1.8 and 3.4 min, each going through `red` and `green` once. Every hand-back left a note for `all`.
 
 **What worked**
