@@ -18,7 +18,7 @@ flowchart TB
     A --> L[Local file and process adapters]
     A --> P[Plugin tool port]
     P --> M[MCP manager and client]
-    T --> O[OpenRouter model adapter]
+    T --> O[OpenRouter or local model adapter]
     G --> O
     T --> S[Private session and config storage]
     H --> J[Sessions · events · idempotency · audit]
@@ -35,11 +35,13 @@ flowchart TB
 | `runtime/` | Executor composition, codecs, request and response mapping, bounds |
 | `plugins/` | Explicit MCP manifest and allowed-tool enforcement |
 | `mcpclient/` | Named MCP stdio and Streamable HTTP sessions |
-| `adapters/openrouter/` | Model request and response mapping, completion and SSE streaming |
+| `adapters/openrouter/` | Model request and response mapping, completion and SSE streaming, for OpenRouter or any configured OpenAI-compatible endpoint |
 | `cmd/axlr/` | One-request JSON process adapter |
 | `tui/domain/`, `tui/application/` | Session/mode policy, bounded model context, turn loop, host controls and ceremony driver |
 | `tui/adapters/terminal/`, `tui/cmd/axlr-tui/` | Console UI and composition, models, approvals, package browsing and engine preparation |
 | `tui/adapters/ceremonyhost/`, `tui/adapters/madesetup/` | Pinned MADE procedures, actual check execution, KMP outcome calls and operator preparation |
+| `tui/adapters/typesafe/` | TypeSafe Jev judgement client behind `JudgementPort`, used by `axlr_judge` and the final check |
+| `tui/adapters/localmodels/` | Routing of configured local models to their servers, the merged `/model` catalog and each model's context window |
 | `tui/adapters/storage/`, `tui/adapters/diagnostics/` | Private sessions, settings, MCP config and diagnostics |
 | `tui/service/`, `tui/cmd/axlr-serve/` | HTTP/mTLS adapter, principal roles, event journals, direct calls, idempotency and remote engines |
 

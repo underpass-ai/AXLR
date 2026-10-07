@@ -12,7 +12,7 @@ GOWORK=off CGO_ENABLED=0 go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-t
 /tmp/axlr-tui --root "$PWD"
 ```
 
-Supply `OPENROUTER_API_KEY` through the host environment before launch. Type `/model` to select a model, then send a prompt. `--model provider/model` selects one directly; `--lang es` changes interface labels to Spanish. `F1` opens the keyboard guide.
+Supply `OPENROUTER_API_KEY` through the host environment before launch, or configure [local models](../docs/console.md#local-models). Type `/model` to select a model, then send a prompt. `--model provider/model` selects one directly; `--lang es` changes interface labels to Spanish. `F1` opens the keyboard guide.
 
 ## Read next
 

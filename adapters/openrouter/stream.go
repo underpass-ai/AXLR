@@ -27,16 +27,21 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		return domain.CompletionResult{}, err
 	}
 	wire.Stream = true
+	if c.endpoint != endpoint {
+		// OpenAI-compatible servers such as vLLM report token usage in a
+		// stream only when asked; OpenRouter always reports it.
+		wire.StreamOptions = &streamOptionsDTO{IncludeUsage: true}
+	}
 	body, err := json.Marshal(wire)
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not encode OpenRouter request")
 	}
 	streamCtx, cancelStream := context.WithCancelCause(ctx)
 	defer cancelStream(nil)
-	timeout := &StreamTimeoutError{}
+	timeout := &StreamTimeoutError{provider: c.provider}
 	inactivityTimer := time.AfterFunc(c.streamInactivityTimeout, func() { cancelStream(timeout) })
 	defer inactivityTimer.Stop()
-	maximumDurationTimeout := &StreamTimeoutError{maximumDuration: true}
+	maximumDurationTimeout := &StreamTimeoutError{maximumDuration: true, provider: c.provider}
 	maximumDurationTimer := time.AfterFunc(c.streamMaxDuration, func() { cancelStream(maximumDurationTimeout) })
 	defer maximumDurationTimer.Stop()
 	streamError := func() error {
@@ -49,11 +54,11 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		}
 		return nil
 	}
-	httpReq, err := http.NewRequestWithContext(streamCtx, http.MethodPost, endpoint, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(streamCtx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not create OpenRouter request")
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	c.authorize(httpReq)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
 	response, err := c.http.Do(httpReq)
@@ -61,7 +66,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		if cause := streamError(); cause != nil {
 			return domain.CompletionResult{}, cause
 		}
-		return domain.CompletionResult{}, &TransportError{Cause: err}
+		return domain.CompletionResult{}, &TransportError{Cause: err, Provider: c.provider}
 	}
 	var closeOnce sync.Once
 	closeBody := func() { closeOnce.Do(func() { _ = response.Body.Close() }) }
@@ -71,7 +76,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		return domain.CompletionResult{}, cause
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return domain.CompletionResult{}, classifyProviderError(response.StatusCode)
+		return domain.CompletionResult{}, c.providerError(response.StatusCode)
 	}
 	decoder := newSSEDecoder(response.Body)
 	var accumulator streamAccumulator

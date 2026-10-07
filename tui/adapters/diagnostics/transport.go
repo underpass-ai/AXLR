@@ -6,6 +6,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/application"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -15,6 +16,43 @@ type Transport struct {
 	Next     http.RoundTripper
 	Trace    application.DiagnosticPort
 	Payloads *PayloadRecorder
+	// Endpoints are the base URLs of configured local model servers, such as
+	// http://127.0.0.1:8080/v1. Their requests are traced like OpenRouter's.
+	Endpoints []string
+}
+
+// classify reports whether a request goes to a model provider and which
+// endpoint it reaches. OpenRouter is always traced; a local server only when
+// its scheme, host and port match a configured endpoint and the path lies
+// under that endpoint's path.
+func (t Transport) classify(target *url.URL) (application.DiagnosticEndpoint, bool) {
+	var rest string
+	if strings.EqualFold(target.Hostname(), "openrouter.ai") && strings.HasPrefix(target.Path, "/api/v1/") {
+		rest = strings.TrimPrefix(target.Path, "/api/v1")
+	} else {
+		matched := false
+		for _, raw := range t.Endpoints {
+			base, err := url.Parse(raw)
+			if err != nil || !strings.EqualFold(base.Scheme, target.Scheme) || !strings.EqualFold(base.Host, target.Host) {
+				continue
+			}
+			prefix := strings.TrimRight(base.Path, "/")
+			if strings.HasPrefix(target.Path, prefix+"/") {
+				rest, matched = strings.TrimPrefix(target.Path, prefix), true
+				break
+			}
+		}
+		if !matched {
+			return "", false
+		}
+	}
+	switch rest {
+	case "/chat/completions":
+		return application.DiagnosticEndpointChat, true
+	case "/models":
+		return application.DiagnosticEndpointModels, true
+	}
+	return application.DiagnosticEndpointOther, true
 }
 
 var requestSequence atomic.Uint64
@@ -24,18 +62,12 @@ func (t Transport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if next == nil {
 		next = http.DefaultTransport
 	}
-	if !strings.EqualFold(request.URL.Hostname(), "openrouter.ai") || !strings.HasPrefix(request.URL.Path, "/api/v1/") {
+	endpoint, traced := t.classify(request.URL)
+	if !traced {
 		return next.RoundTrip(request)
 	}
 	id := requestSequence.Add(1)
 	started := time.Now()
-	endpoint := application.DiagnosticEndpointOther
-	if request.URL.Path == "/api/v1/chat/completions" {
-		endpoint = application.DiagnosticEndpointChat
-	}
-	if request.URL.Path == "/api/v1/models" {
-		endpoint = application.DiagnosticEndpointModels
-	}
 	event := application.DiagnosticEvent{Stage: application.DiagnosticRequestSent, Endpoint: endpoint, RequestID: id, Bytes: max(0, int(request.ContentLength))}
 	ctx, span := application.StartDiagnosticSpan(request.Context(), t.Trace, application.DiagnosticActionHTTP, event)
 	request = request.WithContext(ctx)
@@ -112,7 +144,7 @@ func (t Transport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if err == nil && response != nil && response.Body != nil {
 		isError := status < 200 || status >= 300
 		contentType := strings.ToLower(response.Header.Get("Content-Type"))
-		isSSE := !isError && (strings.HasPrefix(contentType, "text/event-stream") || (contentType == "" && request.URL.Path == "/api/v1/chat/completions"))
+		isSSE := !isError && (strings.HasPrefix(contentType, "text/event-stream") || (contentType == "" && endpoint == application.DiagnosticEndpointChat))
 		response.Body = &streamBody{next: response.Body, trace: t.Trace, payloads: t.Payloads, endpoint: endpoint, id: id, started: started, ctx: ctx, span: span, errorResponse: isError, jsonResponse: !isSSE}
 	} else {
 		class := application.DiagnosticErrorNone

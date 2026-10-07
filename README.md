@@ -17,7 +17,7 @@ GOWORK=off go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
 /tmp/axlr-tui --root "$PWD"
 ```
 
-Supply `OPENROUTER_API_KEY` through your normal environment or secret manager before launching. In the console, choose a model with `/model` and send a prompt. Use `F1` for controls, `/mcp` for AXLR's server connections, `/plugin` for AXLR-managed packages, and `/update` to update the connected local MADE and KMP engines.
+Supply `OPENROUTER_API_KEY` through your normal environment or secret manager before launching, or configure [local models](docs/console.md#local-models) served by llama.cpp or vLLM. In the console, choose a model with `/model` and send a prompt. Use `F1` for controls, `/mcp` for AXLR's server connections, `/plugin` for AXLR-managed packages, and `/update` to update the connected local MADE and KMP engines.
 
 The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker. New sessions use `/normal`; `/review`, `/writer` and `/research` tailor local tool policy, while `/debug`, `/delivery`, `/incident` and `/repair` run prepared MADE procedures (`axlr-tui --repair "<brief>"` lets the console repair its own repository through a pull request, and the agent can request that repair from any session with evidence the console validates). Follow the [agent workflow](docs/runbooks/agent-workflow.md) to put AXLR, KMP and MADE to work together.
 

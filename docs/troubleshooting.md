@@ -4,7 +4,7 @@ Start with the visible symptom, then use the relevant check. AXLR prints startup
 
 | Symptom | Check | Next action |
 |:--|:--|:--|
-| `axlr-tui` rejects startup | Run `/tmp/axlr-tui --help` and check `OPENROUTER_API_KEY`, `--root` and `--lang` | Supply a key through the host environment, use an existing workspace and `en` or `es` |
+| `axlr-tui` rejects startup | Run `/tmp/axlr-tui --help` and check `OPENROUTER_API_KEY`, `--root`, `--lang` and `local_models` in `settings.json` | Supply a key through the host environment or configure a local model, use an existing workspace and `en` or `es` |
 | No model is selected | Open `/model` or pass `--model provider/model` | Choose a tool-capable text model available to the OpenRouter account |
 | Model catalog fails | Inspect the error and use its Retry action | Check connectivity, account access and key; `--model` can bypass catalog lookup for a known model |
 | `/plugin` cannot add a source | Check that it is an absolute local path or an HTTPS Git URL containing a supported marketplace or package manifest | Fix the source and retry; AXLR stores packages in its own data directory |
@@ -27,6 +27,33 @@ Start with the visible symptom, then use the relevant check. AXLR prints startup
 | API revision or idempotency conflict | Reload the current resource and compare the original request | A changed decision needs a new key and the current revision; reconnecting SSE does not require a new turn |
 | Worker exits `2` | Protocol JSON was malformed, oversized or contained unknown fields | Compare the request with the [worker contract](worker.md) |
 | Worker exits `0` but tool failed | Inspect response `status` and `error.code` | A valid protocol request can produce `failed`, `rejected` or `timed_out` |
+
+## Local models
+
+| Symptom | Check | Next action |
+|:--|:--|:--|
+| `local model …: … API key is required (set NAME)` | The URL is not a loopback address | Export the variable named by `api_key_env`, or point `url` at `127.0.0.1` |
+| `model endpoint must use https unless it is a loopback address` | A non-loopback `url` uses `http` | Serve it over TLS, or reach it through a loopback tunnel |
+| `model … is not a configured local model and OPENROUTER_API_KEY is not set` | The session's model is an OpenRouter id | Export the key, or choose a local model in `/model` |
+| `model endpoint HOST invalid_request (HTTP 400)` | The server refused the request, often because its template does not declare tools | Run the smoke test below |
+| The model answers in text, or repeats the same call | The server's tool-call parser does not match the model's template | Fix the server's parser or template; AXLR receives only what the server returns |
+| `… stream inactivity timeout` | A cold prefill took longer than `stream_idle_seconds` | Raise `stream_idle_seconds` or lower `context_tokens` |
+| A long session is refused by the server for its context length | `context_tokens` is larger than the server's window | Set `context_tokens` at or below the server's `-c` or `--max-model-len` |
+
+Smoke test for a server, which must return `tool_calls` with valid JSON, not text:
+
+```bash
+curl -s http://127.0.0.1:8080/v1/chat/completions -H 'content-type: application/json' -d '{"model":"MODEL","messages":[{"role":"user","content":"Read README.md"}],"tools":[{"type":"function","function":{"name":"local_read","description":"Read a workspace file.","parameters":{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}}}]}'
+```
+
+## Jev
+
+| Symptom | Check | Next action |
+|:--|:--|:--|
+| `jev: TYPESAFE_API_KEY is required for Jev` | `jev.tool` or `jev.final_check` is on | Export the key, or turn both switches off |
+| `axlr_judge` returns `TypeSafe rejected the API key (HTTP 401)` | The key in the console's environment | Replace the key; nothing else changes |
+| An `[AXLR · Jev]` message appears after an answer that was complete | Jev doubted it below `final_threshold` | The model can say why the answer is complete; lower `final_threshold` or turn `final_check` off if it happens often |
+| The model asks `axlr_judge` an "A or B" question and gets only `yes` | It omitted `options` | The tool's description asks for options; a model that ignores it is a model limit, not a Jev one |
 
 ## Inspect the right diagnostics
 

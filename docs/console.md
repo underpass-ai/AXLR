@@ -1,6 +1,6 @@
 # Interactive console
 
-`axlr-tui` is AXLR's terminal interface. It streams OpenRouter output, lets you review tool calls, and keeps resumable local sessions. [Getting started](getting-started.md) covers the initial build and launch.
+`axlr-tui` is AXLR's terminal interface. It streams output from OpenRouter or from [local OpenAI-compatible servers](#local-models), lets you review tool calls, and keeps resumable local sessions. [Getting started](getting-started.md) covers the initial build and launch.
 
 ## Work in a session
 
@@ -94,21 +94,80 @@ The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/
     "about": "project:axlr",
     "autonomous": true,
     "max_attempts": 2
-  }
+  },
+  "context_tokens": 65536,
+  "local_models": [
+    {
+      "id": "local/qwen3.8-27b",
+      "name": "Qwen3.8-27B (llama.cpp)",
+      "url": "http://127.0.0.1:8080/v1",
+      "context_tokens": 65536
+    },
+    {
+      "id": "local/gemma-4-31b",
+      "name": "Gemma 4 31B (vLLM)",
+      "url": "http://127.0.0.1:8082/v1",
+      "model": "gemma-4-31b",
+      "context_tokens": 65536
+    }
+  ]
 }
 ```
 
 All keys are optional. `repair` configures `/repair` and the agent's self-repair: `repository` is the `owner/name` the console may repair (default `underpass-ai/AXLR`), `directory` where it clones (default `<data>/axlr/repairs`), `auto_merge` whether green pull requests merge without the person (default `false`), `watch_minutes` how long one check round may take (default 45), `about` the KMP project scope (default `project:<name>`), `autonomous` whether an agent-requested repair session runs local tools in its clone without a card (default `true`; the reproduction command and the merge always wait for the person) and `max_attempts` how many repair sessions one failure may start (default 2, at most 5). See [ceremonies](ceremonies.md#self-repair-the-console-drives-the-pull-request) and [self-repair from a running session](ceremonies.md#self-repair-from-a-running-session). `model` may be empty to choose a model in the console. `language` accepts `en` or `es`; `theme` accepts `auto`, `ink`, `aurora`, `paper`, `phosphor` or `editorial`; `icons` accepts `safe`, `nerd-mono` or `ascii`. In `approvals`, `autonomous` enables automatic approval for every known tool; `allowed` contains exact tool identities saved by the approval dialog. Edits take effect on the next launch. `--model` overrides the JSON model for one launch; `--lang` overrides `AXLR_LANG`, which overrides the JSON language. Selecting `/model`, saving `/theme`, or changing `/autonomy` or always-allow choices updates the corresponding JSON keys while retaining other settings, including keys from newer AXLR versions. The console writes the file with owner-only permissions and rejects invalid JSON without replacing it.
 
+`context_tokens` and `local_models` are described under [local models](#local-models), and `jev` under [Jev](#jev-an-external-judge-off-by-default).
+
 Existing `model-preference.json` and `ui-preference.json` files under the state directory are read until `settings.json` exists. Existing `approvals.json` choices are read until `settings.json` has an `approvals` section. The next related change writes those values into `settings.json`; the old files are left in place. MCP server connections and their own approval policies remain in the separate `$XDG_CONFIG_HOME/axlr/mcp.json` file.
 
 ## Model context
 
-The private session store retains the full transcript. Model requests receive a bounded projection: a 1 MiB message-history ceiling, a 768 KiB low watermark, normally at most 64 KiB per tool result, and a 16 KiB extractive checkpoint. These are byte limits, not the model's advertised token window. Host results such as exact tool-discovery schemas are retained up to 64 KiB, and `axlr_history` pages hold up to 32 KiB.
+The private session store retains the full transcript. Model requests receive a bounded projection: a 1 MiB message-history ceiling, a 768 KiB low watermark, normally at most 64 KiB per tool result, and a 16 KiB extractive checkpoint. These are byte limits, not the model's advertised token window. When the model's window is known from [settings](#local-models) and too small for them, the four limits shrink in proportion: the ceiling becomes three quarters of the window at three bytes per token (147,456 bytes for 65,536 tokens), the low watermark three quarters of the ceiling, a tool result at most an eighth of the ceiling and the checkpoint at most an eighth of the low watermark. Host results such as exact tool-discovery schemas are retained up to 64 KiB, and `axlr_history` pages hold up to 32 KiB.
 
 When the active turn alone exceeds the budget, AXLR progressively reduces its tool-result excerpts to 8, 4, 2 and then 1 KiB. It asks the model to finish from the evidence already gathered. The current prompt and tool arguments are not silently shortened; context that still cannot fit produces an explicit error. Full saved results remain intact. `axlr_history` can recover earlier-turn messages, but refuses tool results from the current turn to avoid a rereading loop.
 
-The model normally sees four local tools plus `axlr_tools` (exact plugin schema discovery), `axlr_call_tool` (registered plugin invocation), `axlr_history` (paged saved messages), `axlr_skill` (paged skill resources), `axlr_session` (current-session title and exact memory scope), `axlr_request_repair` (ask the console to repair a defect of AXLR in a separate session, with evidence the console validates) and `axlr_repair_status` (the repairs linked to the session). Session bookkeeping and repair requests run without a separate approval, because the request itself starts nothing the person has not agreed to; plugin calls retain their configured policy. Review mode hides local write/edit; an active driven ceremony adds `axlr_step_done`; a repair session never sees `axlr_request_repair`. Plugin arguments are validated against the discovered schema before execution; `x-*` keywords are treated as annotations. `axlr_tools` returns a schema without its `x-*` annotations; a schema that still does not fit one host result comes back as an outline of paths and sizes, and `path` (a JSON pointer such as `/properties/stages`) returns that part exactly, including an annotation such as `/x-made-pattern-catalog`. Read only the required schema and follow resource page cursors. [Context policy research](research/2026-09-30-context-policy.md) records the original design; [the audit](documentation-audit.md) covers the later active-turn compaction change.
+The model normally sees four local tools plus `axlr_tools` (exact plugin schema discovery), `axlr_call_tool` (registered plugin invocation), `axlr_history` (paged saved messages), `axlr_skill` (paged skill resources), `axlr_session` (current-session title and exact memory scope), `axlr_request_repair` (ask the console to repair a defect of AXLR in a separate session, with evidence the console validates) and `axlr_repair_status` (the repairs linked to the session), plus `axlr_judge` when [Jev](#jev-an-external-judge-off-by-default) is enabled. Session bookkeeping and repair requests run without a separate approval, because the request itself starts nothing the person has not agreed to; plugin calls retain their configured policy. Review mode hides local write/edit; an active driven ceremony adds `axlr_step_done`; a repair session never sees `axlr_request_repair`. Plugin arguments are validated against the discovered schema before execution; `x-*` keywords are treated as annotations. `axlr_tools` returns a schema without its `x-*` annotations; a schema that still does not fit one host result comes back as an outline of paths and sizes, and `path` (a JSON pointer such as `/properties/stages`) returns that part exactly, including an annotation such as `/x-made-pattern-catalog`. Read only the required schema and follow resource page cursors. [Context policy research](research/2026-09-30-context-policy.md) records the original design; [the audit](documentation-audit.md) covers the later active-turn compaction change.
+
+## Local models
+
+`local_models` lists OpenAI-compatible servers, such as `llama-server` or vLLM, that `/model` lists together with OpenRouter's catalog; favorites keep a model on top. Each entry has:
+
+| Key | Meaning |
+|:--|:--|
+| `id` | The model id the session saves and `/model` shows; a `local/` prefix groups the entries and keeps them apart from OpenRouter ids |
+| `name` | Display name; default `id` |
+| `url` | The server's OpenAI base URL, such as `http://127.0.0.1:8080/v1`; the console posts to `<url>/chat/completions` |
+| `model` | The name sent to the server; default `id`. vLLM needs its `--served-model-name`; llama.cpp ignores it |
+| `api_key_env` | The environment variable holding the server's key. A loopback URL (`localhost`, `127.0.0.0/8`, `::1`) needs no key and receives no `Authorization` header; any other host must use `https` and a key |
+| `context_tokens` | Required, at least 4096: the window the console respects for this model. It may be smaller than the server's own `-c` or `--max-model-len` |
+| `tools` | Default `true`. AXLR needs native tool calls, so `false` hides the model from `/model` instead of degrading it |
+| `stream_idle_seconds`, `stream_max_minutes` | Stream limits; defaults 600 seconds without a byte and 60 minutes in total, since a cold prefill of a long prompt on a local GPU takes minutes before the first token |
+
+The top-level `context_tokens` caps the window for every model, local or OpenRouter; a local model's own `context_tokens` applies when it is smaller. The console turns the window into the byte budget of the [model context](#model-context): the message history may use three quarters of the window at three bytes per token, which leaves room for the guidance, the tool schemas and the reply. Without a known window the default budget applies.
+
+With at least one local model, `OPENROUTER_API_KEY` is optional: without it `/model` lists only the local models, and a session whose model is not local is refused at its first request. Model keys, both `OPENROUTER_API_KEY` and every `api_key_env`, are never passed to plugins, and they are redacted from diagnostics. Local requests are traced like OpenRouter's when their scheme, host, port and path match a configured `url`.
+
+Serving is outside AXLR. A server must return native `tool_calls`: run llama.cpp with `--jinja` and a template that declares tools, and vLLM with `--enable-auto-tool-choice` and the parser that matches the model (`qwen3_coder` for Qwen, `gemma4` for Gemma 4, `mistral` for Devstral, `openai` for gpt-oss). Ollama truncates the prompt silently from the beginning unless `OLLAMA_CONTEXT_LENGTH` is set. [Troubleshooting](troubleshooting.md#local-models) has a smoke test.
+
+## Jev, an external judge (off by default)
+
+[TypeSafe Jev](https://docs.typesafe.ai/api.md) is a judgement model: given a state and a typed question, it returns the probability of yes, or a choice among options with a probability for each and its confidence. It neither generates text nor acts. The `jev` section lets a model, a small local one in particular, lean on it:
+
+```json
+"jev": {
+  "tool": true,
+  "final_check": true,
+  "final_threshold": 0.5,
+  "model": "jev-1.13.0",
+  "timeout_ms": 20000
+}
+```
+
+- `tool` offers the model `axlr_judge`, so it can ask Jev at a real fork: which approach or next step, which candidate fix, whether a result satisfies the task. The model writes the state Jev sees; Jev sees nothing else. The call runs without a card, like the other host bookkeeping. Without `tool`, the tool is not in the request at all, even in a session that used it before.
+- `final_check` asks Jev, once per request, whether the model's final answer completes it. Jev sees the request, the final answer and one line per tool call. When the probability is below `final_threshold` (default 0.5), the console adds one visible `[AXLR · Jev]` message with the estimate, and the model continues: it either finishes the work or explains why the answer is complete. The check is skipped during a driven ceremony, and a failed or slow Jev call never blocks the turn. The diagnostics trace records each check's duration and failure, never its content.
+- `model` is the pinned Jev version (default `jev-1.13.0`, the one KMP uses); `-latest` aliases are refused. `timeout_ms` bounds one request, from 1000 to 60000.
+
+Either switch sends text to TypeSafe: the model's questions with their state, and, with `final_check`, the request and the final answer. The console says so on stderr at launch. The key is read from `TYPESAFE_API_KEY`, which must be set when either switch is on; it is redacted from diagnostics, and it stays available to plugins because KMP reads it for its own Jev features.
 
 ## Saved sessions and recovery
 
@@ -126,6 +185,6 @@ The workspace must match the saved one. The saved model is restored without a ca
 
 Each launch writes a private JSONL timing trace under `$XDG_STATE_HOME/axlr/logs`, falling back to `$HOME/.local/state/axlr/logs`. The path is printed at startup. Trace records cover startup, requests, streaming, tools, rendering and session saves; they omit prompts, responses, tool arguments, model IDs and credentials.
 
-By default, a separate private directory beside the trace captures OpenRouter HTTP request and response bodies, including model catalog and errors. Those bodies can contain prompts and tool results. Authorization headers are excluded; configured API keys and recognizable credential patterns are redacted. Capture is bounded to 8 MiB per file, and a launch can create multiple files. Use `--trace-payloads=false` to disable body capture while retaining timing records. `--trace-file /path/trace.jsonl` selects another trace path and appends to an existing file.
+By default, a separate private directory beside the trace captures OpenRouter and configured local-model HTTP request and response bodies, including model catalog and errors. Those bodies can contain prompts and tool results. Authorization headers are excluded; configured API keys and recognizable credential patterns are redacted. Capture is bounded to 8 MiB per file, and a launch can create multiple files. Use `--trace-payloads=false` to disable body capture while retaining timing records. `--trace-file /path/trace.jsonl` selects another trace path and appends to an existing file.
 
 The [payload audit](diagnostics/2026-09-30-tui-payloads.md) and [MCP diagnostic](diagnostics/2026-09-30-tui-mcp.md) contain measured examples. [Troubleshooting](troubleshooting.md) gives a symptom-first path.

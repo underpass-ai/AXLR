@@ -156,6 +156,23 @@ Run with `python3 tools/ceremonies/spike_drafts.py --made-bin <made-mcp>` in a d
 
 Walked, all as expected: plan approved by the person (`approve` without the guard is refused, `approved_automatically` after a manual `approve` is refused); plan returned, decomposed again and declined; plan approved automatically; three returns accepted and the fourth cycle refused by the bounce limit; three unverified rounds, a fourth claim refused, `decompose_exhausted` → `BLOCKED`. Task test-first through `RED`, `GREEN`, `HANDBACK` to `DONE` (`test_present` refused when `test_first=true`, `test_failing` refused with `red=false`); task without test-first straight to `GREEN`; declared untestable → `BLOCKED`; three failed greens → `BLOCKED`. Sync green at once; red → reconcile → red → reconcile → blocked; red → reconcile → green; four rounds accepted and the fifth cycle refused by the bounce limit.
 
+## Measured on the GX10 (7 Oct 2026)
+
+ASUS GX10 (GB10, 121 GiB unified memory, aarch64). Three servers on loopback, each answering the smoke tool request with one valid `tool_calls` entry: Qwen3.8-27B UD-Q6_K and its abliterated variant on llama.cpp `b23efaa` (`--jinja`, `-c 262144`, KV q8_0, ports 8080 and 8081), and Gemma 4 31B QAT W4A16 on vLLM 0.22.1 (`--tool-call-parser gemma4 --reasoning-parser gemma4`, `--max-model-len 65536`, port 8082). One request at a time, the other servers idle, a prompt cut from `tui/application/*.go`:
+
+| Model | Prompt | Cold prefill | Decode | Prefix-cache hit |
+|:--|--:|--:|--:|--:|
+| Qwen3.8-27B Q6_K | 4K | 626 tok/s (6.6 s) | 9.0 tok/s | 0.2 s |
+| Qwen3.8-27B Q6_K | 32K | 595 tok/s (55 s) | 8.3 tok/s | 0.2 s |
+| Gemma 4 31B W4A16 | 4K | 644 tok/s (6.4 s) | 9.3 tok/s | 0.2 s |
+| Gemma 4 31B W4A16 | 32K | 553 tok/s (59 s)¹ | 8.4 tok/s | 0.4 s |
+
+¹ The 32K prompt starts with the 4K one, so vLLM's prefix cache served its first 4K tokens.
+
+Bytes per token: Qwen 3.6 on Go source and 3.8 on Markdown; Gemma 3.2 on Go source. The console's window-derived budget assumes 3.
+
+What this changes against the table above: the window is not the constraint on this machine (256K served, and the console lets `context_tokens` lower it); decoding is. At about 9 tokens per second a 400-token report costs 45 s and a 2,000-token step 4 minutes, while a cold 32K prefill costs about a minute and a cached one a fraction of a second. The compact profile's case for short hand-backs, one example call and a stable prefix is stronger here than the design assumed; its case for an 80 KiB ceiling is weaker. Decision 8 should weigh decode speed, not only window size.
+
 ## Layer map
 
 | Layer | New or changed | Responsibility |
