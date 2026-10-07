@@ -1,16 +1,10 @@
-# Draft ceremony definitions
+# Ceremony drafts
 
-These definitions are designed but not shipped. They are validated and published into a disposable MADE store by CI (`tools/ceremonies/check_pins.py` validates them, `tools/ceremonies/spike_drafts.py` walks their happy and blocked paths), but no console mode starts them, no pin exists for them in `tui/adapters/ceremonyhost/definitions.go`, and `/mcp → P` does not publish them.
+This directory holds definitions that are designed but not yet driven by the console. CI validates and publishes each draft into a disposable MADE store (`tools/ceremonies/check_pins.py`) and walks its happy and blocked paths (`tools/ceremonies/spike_drafts.py`). No pin exists for a draft and `/mcp → P` does not publish it.
 
-| Definition | Design | Purpose |
-|:--|:--|:--|
-| `axlr_plan` 1.0 | [Plan, task and sync](../../../docs/plans/2026-10-06-local-27b-ceremonies.md) | Decompose a brief into atomic, console-verified tasks the person approves |
-| `axlr_task` 1.0 | same | Finish one atomic task in a fresh, precise context, test-first when the plan asks for it |
-| `axlr_sync` 1.0 | same | Integrate a wave with the end-to-end check and relay the workers' notes |
+There are no drafts at the moment. `axlr_plan`, `axlr_task` and `axlr_sync` 1.0 started here on 6 Oct 2026. They became pinned definitions under [`tui/adapters/ceremonyhost/definitions/`](../../../tui/adapters/ceremonyhost/definitions/) on 7 Oct 2026, when the console started driving them; `spike_drafts.py` still walks their scenarios there.
 
-A draft moves to `tui/adapters/ceremonyhost/definitions/` only together with the driver code that runs it and its digest pin. A draft must not share a name and version with a pinned definition; the pin check fails if it does.
-
-Validate the drafts locally with a compatible `made-mcp` binary (CI uses the checksummed 0.10.0 release):
+Validate locally with a compatible `made-mcp` binary (CI uses the checksummed 0.10.0 release):
 
 ```bash
 python3 tools/ceremonies/check_pins.py --made-bin /absolute/path/to/made-mcp

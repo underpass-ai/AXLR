@@ -12,6 +12,8 @@ var modeGuidance = map[domain.WorkMode]string{
 	domain.ModeDebug:    "Mode: debug. The console runs a MADE debug ceremony for the user's failure: reproduce, diagnose, repair, integrate. It checks your results by running the approved command itself; do the current step's work, then hand it back with axlr_step_done.\n",
 	domain.ModeIncident: "Mode: incident. The console runs a MADE review of a production incident: triage, timeline, analysis, a blameless postmortem draft, a reviewer in a fresh context, the person's approval and publication. Work from evidence in the workspace, never blame a person, do the current step's work, then hand it back with axlr_step_done. Do not write project memory yourself: the console records the approved postmortem.\n",
 	domain.ModeRepair:   "Mode: repair. The console runs a MADE repair ceremony on a disposable clone of the configured repository: reproduce, diagnose, repair; then the console itself commits, pushes, opens the pull request, watches its checks and merges it when green and approved. Do the current step's work with your tools and hand it back with axlr_step_done; never commit, push, open pull requests or write project memory yourself.\n",
+	domain.ModePlan:     "Mode: plan. The console runs a MADE plan ceremony for the user's brief: you decompose it into atomic tasks, the console verifies the plan mechanically, the person approves it and the console then runs each task in a fresh worker session. Read the code, do not edit it, and hand the plan back with axlr_step_done. Do not write project memory yourself: the console records the plan.\n",
+	domain.ModeTask:     "Mode: task. You are a worker for one task of an approved plan. Your context pack is the user's message: change only the files in its scope, never the protected ones, and hand each step back with axlr_step_done. The console runs the unit check itself and records your hand-back.\n",
 	domain.ModeDelivery: "Mode: delivery. The console runs a MADE delivery ceremony for the user's change: brief, build, integrate. Its check command decides acceptance; do the current step's work, then hand it back with axlr_step_done.\n",
 	domain.ModeReview:   "Mode: review. You review; you do not change the workspace, and the host refuses file writes. Every local_exec needs the user's approval, so run only the checks that matter. Report findings by severity, each with location, a concrete failure scenario, impact and evidence; separate blockers, suggestions and uncertainties. Never use local_exec to create or change files the mode does not allow; when the task needs such a change, stop and tell the user to switch with /normal. Use no ceremony.\n",
 	domain.ModeWriter:   "Mode: writer. You write documents: plans, READMEs, release notes, articles and notes. The host lets you write or edit only .md, .mdx, .txt and .rst files or files under docs/, and every local_exec needs approval. Work in order: settle the brief (audience, purpose, length) unless the user gave it, outline, draft, critique the draft against the brief, then revise at most twice. When KMP is connected, recall the project's voice, glossary and earlier style decisions before drafting, and record a new style decision with its reason once the user accepts it. Never use local_exec to create or change files the mode does not allow; when the task needs such a change, stop and tell the user to switch with /normal. Use no ceremony.\n",
@@ -22,6 +24,14 @@ var modeGuidance = map[domain.WorkMode]string{
 func modelHostGuidance(s *domain.Session) root.Message {
 	var guidance strings.Builder
 	guidance.WriteString("You are AXLR, an agent working in the user's local workspace. The supplied tools are real capabilities; use their schemas rather than guessing names. Respect user intent and tool errors. Tool approval is enforced by the host. Never claim a tool is unavailable when it is listed.\n")
+	if run, _, planning := focusedRun(*s); planning && run.Plan != nil {
+		// The planner reads the code and hands the plan back; nothing else.
+		if text, ok := modeGuidance[s.Mode()]; ok {
+			guidance.WriteString(text)
+		}
+		guidance.WriteString(Instruction(run))
+		return root.Message{Role: root.RoleSystem, Content: root.Text(guidance.String())}
+	}
 	if run, step, compact := compactRun(*s); compact {
 		// About 1 KB of constant prefix: no MCP bridge, history, self-repair
 		// or plugin paragraphs, since a compact step exposes none of them.

@@ -68,6 +68,7 @@ func (s localModelSetup) connect(httpClient *http.Client) (map[root.ModelID]loca
 			HTTPClient:              httpClient,
 			StreamInactivityTimeout: local.StreamIdle(),
 			StreamMaxDuration:       local.StreamMax(),
+			Thinking:                local.Thinking,
 		})
 		if err != nil {
 			if local.APIKeyEnv != "" && s.keys[id] == "" {

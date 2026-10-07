@@ -1,6 +1,6 @@
 # Plan, task and sync: ceremonies for 27B-class local models
 
-Status: design with validated definitions (6 Oct 2026); the OpenAI-compatible endpoint and the compact profile are implemented (7 Oct 2026), plan, task and sync are not. The three definitions below are published and walked against MADE 0.10.0 in a disposable store by [`tools/ceremonies/spike_drafts.py`](../../tools/ceremonies/spike_drafts.py); they live under [`tools/ceremonies/drafts/`](../../tools/ceremonies/drafts/README.md) as drafts, not pinned, not embedded and not started by any console mode yet. No model has run them. The companion [research record](../research/2026-10-06-local-27b-agents.md) holds the sourced evidence this design rests on.
+Status: implemented (7 Oct 2026). The OpenAI-compatible endpoint, the compact profile and plan, task and sync run in the console; `axlr_plan`, `axlr_task` and `axlr_sync` 1.0 are pinned. The sections below are the design as written on 6 Oct; "Decisions taken" and the dated measurement blocks record what changed and what was measured. The three definitions below are published and walked against MADE 0.10.0 in a disposable store by [`tools/ceremonies/spike_drafts.py`](../../tools/ceremonies/spike_drafts.py); they live under [`tools/ceremonies/drafts/`](../../tools/ceremonies/drafts/README.md) as drafts, not pinned, not embedded and not started by any console mode yet. No model has run them. The companion [research record](../research/2026-10-06-local-27b-agents.md) holds the sourced evidence this design rests on.
 Builds on: [ceremony driver](2026-10-01-ceremony-driver-design.md), [incident](2026-10-02-incident-ceremony-design.md) and [self-repair](2026-10-05-self-repair-design.md). The console drives MADE; the model does the work; the console owns every verdict.
 Brief (Tirso, 6 Oct 2026): small models with a precise context can take small tasks. Split the work into atomic tasks that are testable, unit and end to end; let each worker say when it has finished; add a periodic ceremony where the workers talk to each other.
 
@@ -139,6 +139,19 @@ The profile applies to every ceremony when the configured model is small (`cerem
 
 Serving-side prerequisites that no console knob replaces (research record, sections 3 and 4): an OpenAI-compatible endpoint, which AXLR does not have yet (the client is fixed to `https://openrouter.ai/api/v1/chat/completions`); a tool-call parser matched to the model's template (`hermes` or `qwen3_coder` for Qwen, `mistral` for Devstral, `openai` for gpt-oss, `gemma4` for Gemma 4); grammar-constrained tool-call decoding at the server so arguments are always valid JSON; an explicit context length of at least 32K (Ollama defaults to 4,096 under 24 GiB of VRAM and truncates silently from the start of the prompt); KV cache at f16 or q8_0, since extreme KV quantisation degrades tool calling; a prompt cache that survives between turns, which needs the stable prefix above; and the vendor's sampling settings per model, with thinking off for workers and, when reachable, a larger planner.
 
+## Decisions taken (Tirso, 7 Oct 2026)
+
+Answered by survey before section 3 started. They replace the proposals below where they differ:
+
+1. **Planner model:** a large model plans by default, `z-ai/glm-5.3-flash`, overridable with `plan.model`. The local 27B runs the tasks.
+2. **Workers:** sequential, in the shared workspace.
+3. **Approval:** the person approves every plan, and the approval covers its check commands.
+4. **Limits:** 2 returns per plan, 2 reconciliation rounds per sync, 3 rounds per phase and 16 calls per step.
+5. **Scope:** `git status --porcelain` plus digests; without Git, only the digests, and the hand-back says so.
+6. **Coordination:** notes relayed by the console, and also KMP memory. Notes are recorded with `plan` and `task` labels, and a worker's pack carries the notes the memory holds for its plan.
+7. **Where the plan lives:** `plans.json` in AXLR's state; nothing is written into the workspace.
+8. **Profile:** the explicit setting first, otherwise automatic by the model's window.
+
 ## Decisions to take (Tirso)
 
 1. **Planner model.** Same local 27B for `/plan`, or a larger model named by `plan.model` with the 27B as the worker. The design supports both; the verification step is what makes a 27B plan acceptable.
@@ -206,6 +219,44 @@ The 1 Oct comparison of a ceremony against direct work was repeated with a local
 - `/debug`.
 - A task larger than ten lines.
 - The ledger cut under a long step: each step here stayed far below 80 KiB.
+
+## Plan, task and sync measured (7 Oct 2026)
+
+**Setup**
+- **Run:** one three-task plan, run twice end to end in the console, through a pseudo-terminal that approved the commands and the plan.
+- **Models:** `z-ai/glm-5.3-flash` planned over OpenRouter; Gemma 4 31B on vLLM (`stream: false`, compact profile) ran the tasks.
+- **Environment:** a disposable HOME with its own MADE and KMP stores.
+- **Brief:** fix `WordCount`, add `LineCount`, add `CharCount`, each with table-driven tests, in the same scratch module as the profile measurement.
+- **Success:** a hidden acceptance test.
+
+| Run | Planning | Plan | Tasks | Syncs | Workspace after | Total |
+|:--|--:|:--|:--|:--|:--|--:|
+| 1 | 3.5 min, verified first round | 3 tasks in 3 waves (all three share `textstat.go`, so the planner chained them) | `wordcount` done in 5.5 min, `linecount` done in 7 min, `charcount` blocked after 20 min in `red` (16 calls spent repeating a `local_edit` whose `old_text` no longer matched) | waves 1 and 2 green | build broken by `charcount`'s half-done edit; acceptance failed | 37 min |
+| 2 (scope restore added) | 13 min, verified first round | same shape | `wordcount-whitespace` blocked after 2.5 min in `red`; the other two skipped | none | `textstat_test.go` restored, `go test` green, nothing implemented | 16 min |
+
+Four more runs the same evening, each after a console-side fix for what the previous one exposed:
+
+| Run | Worker | Fix since the previous run | Outcome | Total |
+|:--|:--|:--|:--|--:|
+| 3 | Gemma 4 | `local_exec` repair: wrapping quotes stripped, a program holding spaces split | first task blocked in `red`: Gemma wrote the test, then fixed the code in the same step, so `red` never failed (×3) | 11 min |
+| 4 | Gemma 4 | `red` may write only test files | 2 of 3 done, syncs green; `charcount` blocked in `green` on arguments sent as one joined string | 21 min |
+| 5 | Gemma 4 | joined arguments split; the repeat refusal shows the call shape | 2 of 4 done (glm planned 4 tasks), syncs green; `add-charcount` spent its budget on mixed wrappers before the hint worked | 16 min |
+| 6 | **Qwen3.8-27B** (llama.cpp, `thinking: false`) | mixed wrappers stripped; `local_models[].thinking` added after a Qwen run with thinking on spent about 4,000 tokens before a single call | **plan done: 3 of 3 tasks, sync green, hidden acceptance test passed** | **13.5 min** |
+
+Run 7 measured the planner's focused surface: glm made 7 read and exec calls before handing the plan back, with no host-tool detours. It also exposed a race. After the approval, glm kept working in the plan's session and wrote `CharCount` and its test itself. The third worker found them already present and declared its task untestable, so the run was partial: 2 of 3 tasks, both syncs green. Since then an approved plan's session asks the model nothing more.
+
+In run 6, glm put `LineCount` and `CharCount` in new files, so the three scopes were disjoint and one wave held all three tasks. Planning took 3.5 min. The tasks took 3, 1.8 and 3.4 min, each going through `red` and `green` once. Every hand-back left a note for `all`.
+
+**What worked**
+- The planner's proposals verified on the first round in every run.
+- Plan approval, sequential waves, frozen test digests, the git-status scope check, hand-backs with notes, per-wave syncs and skipping the dependents of a blocked task all behaved as designed.
+- Run 1 exposed a real defect: a blocked task left its partial edit and broke the build for everyone. Since then the runner restores a blocked task's scope files (files the task created are named, not deleted).
+
+**What failed, and where**
+- **Planner wandering.** Under the standard profile, glm spent calls on host tools (`axlr_skill`, KMP guide, `kmp_wake`) before proposing. One of its responses streamed 1.5 MB, almost all reasoning. Giving the decompose step a compact tool surface is the next step.
+- **Malformed worker calls.** Both blocked tasks failed on the Gemma 4 and vLLM `gemma4` interface, not on the orchestration. The worker sent `local_exec` with `program: "go test"` and arguments wrapped in `«…»` or backticks, and repeated the call. The repeated-call guard refused it seven times, but each refusal still spent the step's budget.
+- **Follow-up.** Extend the compact profile's tolerant decoding to `local_exec`: split a program with a space, and strip wrapping quote characters. Then measure Qwen3.8-27B as the worker.
+- **Not run.** The frontier-worker arm (glm for the tasks too), at Tirso's choice, to save credit.
 
 ## Layer map
 

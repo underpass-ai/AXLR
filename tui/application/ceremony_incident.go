@@ -400,6 +400,9 @@ func (d *CeremonyDriver) Approve(ctx context.Context, s domain.Session) (StepRes
 	if run.Repair != nil {
 		return d.approveMerge(ctx, s, run)
 	}
+	if run.Plan != nil {
+		return d.approvePlan(ctx, s, run)
+	}
 	if i.Decided == "return" {
 		return StepResult{}, errors.New("MADE already recorded a return; press d to send the draft back")
 	}
@@ -469,6 +472,11 @@ func copyRun(run domain.CeremonyRun) domain.CeremonyRun {
 		repair.WakeRefs = slices.Clone(repair.WakeRefs)
 		run.Repair = &repair
 	}
+	if run.Plan != nil {
+		plan := *run.Plan
+		plan.Defects = slices.Clone(plan.Defects)
+		run.Plan = &plan
+	}
 	return run
 }
 
@@ -481,6 +489,9 @@ func (d *CeremonyDriver) Return(ctx context.Context, s domain.Session, reason st
 	}
 	if run.Repair != nil {
 		return d.declineMerge(ctx, s, run, reason)
+	}
+	if run.Plan != nil {
+		return d.returnPlan(ctx, s, run, reason)
 	}
 	reason = strings.TrimSpace(reason)
 	switch {
@@ -547,6 +558,9 @@ func (d *CeremonyDriver) awaiting(s domain.Session) (domain.CeremonyRun, *domain
 func CanReturn(run domain.CeremonyRun) bool {
 	if run.Repair != nil {
 		return CanDecline(run)
+	}
+	if run.Plan != nil {
+		return run.Plan.Decided == "" && run.Plan.Returns < domain.MaxPlanReturns || run.Plan.Decided == "return"
 	}
 	return run.Incident != nil && run.Incident.Decided != "approve" && (run.Incident.Returns < domain.MaxIncidentReturns || run.Incident.Decided == "return")
 }

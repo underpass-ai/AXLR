@@ -89,6 +89,9 @@ func (m AppModel) footerStatus() string {
 		}
 		parts = append(parts, badge)
 	}
+	if badge := m.planBadge(); badge != "" {
+		parts = append(parts, badge)
+	}
 	if badge := m.repairBadge(); badge != "" {
 		parts = append(parts, badge)
 	}

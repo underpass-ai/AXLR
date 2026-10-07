@@ -19,7 +19,7 @@ import (
 
 // compactCeremonies are the definitions the compact profile applies to; the
 // incident and repair ceremonies keep the standard profile.
-var compactCeremonies = map[string]bool{"axlr_debug": true, "axlr_delivery": true}
+var compactCeremonies = map[string]bool{"axlr_debug": true, "axlr_delivery": true, "axlr_task": true}
 
 // CompactCeremony reports whether the compact profile can drive definition.
 func CompactCeremony(definition string) bool { return compactCeremonies[definition] }
@@ -65,11 +65,43 @@ var compactSteps = map[string]compactStep{
 		schema:      `{"type":"object","properties":{"summary":{"type":"string","minLength":1}},"required":["summary"],"additionalProperties":false}`,
 		instruction: `Example: axlr_step_done {"summary":"Use strings.Fields in WordCount; added table tests"}. Make the smallest change that meets the criteria, then hand back. The console reruns the approved check command; it must exit 0. In a later attempt, fix what its output shows.`,
 	},
+	"red": {
+		fields:      []string{"test_files", "expected", "untestable", "observed"},
+		schema:      `{"type":"object","properties":{"test_files":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"string"}},"expected":{"type":"string"},"untestable":{"type":"boolean"},"observed":{"type":"string"}},"additionalProperties":false}`,
+		instruction: `Example: axlr_step_done {"test_files":["lines_test.go"],"expected":"undefined: LineCount"}. Write the failing test inside the scope and change nothing else; the console runs the unit check and it must fail. If no test can fail first, send {"untestable":true,"observed":"why"}.`,
+	},
+	"green": {
+		fields:      []string{"summary", "summary_en", "notes", "questions"},
+		schema:      `{"type":"object","properties":{"summary":{"type":"string","minLength":1},"summary_en":{"type":"string","minLength":1},"notes":{"type":"array","maxItems":4,"items":{"type":"object","properties":{"to":{"type":"string"},"text":{"type":"string","maxLength":500}},"required":["to","text"],"additionalProperties":false}},"questions":{"type":"array","maxItems":2,"items":{"type":"string"}}},"required":["summary","summary_en"],"additionalProperties":false}`,
+		instruction: `Example: axlr_step_done {"summary":"Added LineCount","summary_en":"LineCount counts lines.","notes":[{"to":"all","text":"LineCount ignores a final newline"}]}. Make the unit check pass changing only the scope, never the test files or protected files.`,
+	},
 	"integrate": {
 		fields:      []string{"report", "summary_en"},
 		schema:      `{"type":"object","properties":{"report":{"type":"string","minLength":1},"summary_en":{"type":"string","minLength":1}},"required":["report","summary_en"],"additionalProperties":false}`,
 		instruction: `Example: axlr_step_done {"report":"What changed, the evidence and the limits, in the user's language","summary_en":"Two plain English sentences for project memory."}. Write the report and hand back.`,
 	},
+}
+
+// decomposeStep is the planner's focused surface: measured on 7 Oct 2026,
+// glm-5.3-flash under the full surface spent calls on axlr_skill, the KMP
+// guide and kmp_wake before proposing, and planning took 3 to 13 minutes.
+// The planner keeps the standard budget; only its tools and guidance narrow.
+var decomposeStep = compactStep{
+	fields:   []string{"tasks", "e2e_check", "interfaces", "summary_en"},
+	readOnly: true,
+}
+
+// focusedRun returns the step whose tool surface and guidance are narrowed:
+// a compact step, or a plan's decompose step.
+func focusedRun(s domain.Session) (domain.CeremonyRun, compactStep, bool) {
+	if run, step, ok := compactRun(s); ok {
+		return run, step, true
+	}
+	run, live := s.Ceremony()
+	if live && run.Plan != nil && run.Step == "decompose" && !run.AwaitingPerson() {
+		return run, decomposeStep, true
+	}
+	return domain.CeremonyRun{}, compactStep{}, false
 }
 
 // compactRun returns the live compact run of a session when the model has a
@@ -97,10 +129,12 @@ func compactTools(tools []root.ToolDefinition, step compactStep) []root.ToolDefi
 		case step.readOnly && (tool.Name == "local_write" || tool.Name == "local_edit"):
 		case strings.HasPrefix(string(tool.Name), "axlr_") && !compactHostTools[tool.Name]:
 		case tool.Name == HostStepDoneName:
-			schema, err := root.NewJSONObject([]byte(step.schema))
-			if err == nil {
-				tool.Parameters = schema
-				tool.Description = "Hand this step's result to the console, which checks it and replies with the next step. Send only the fields of the example."
+			if step.schema != "" {
+				schema, err := root.NewJSONObject([]byte(step.schema))
+				if err == nil {
+					tool.Parameters = schema
+					tool.Description = "Hand this step's result to the console, which checks it and replies with the next step. Send only the fields of the example."
+				}
 			}
 			out = append(out, tool)
 		default:
@@ -113,7 +147,7 @@ func compactTools(tools []root.ToolDefinition, step compactStep) []root.ToolDefi
 // compactRefusal refuses a call the compact step does not offer, and the
 // same call twice in a row, the loop small models fall into.
 func compactRefusal(s domain.Session, pending domain.PendingTool) error {
-	_, step, ok := compactRun(s)
+	_, step, ok := focusedRun(s)
 	if !ok {
 		return nil
 	}
@@ -124,6 +158,17 @@ func compactRefusal(s domain.Session, pending domain.PendingTool) error {
 	if strings.HasPrefix(string(name), "axlr_") && !compactHostTools[name] {
 		return fmt.Errorf("%s is not available during this ceremony step", name)
 	}
+	if run, _, _ := compactRun(s); run.Step == "red" && (name == "local_write" || name == "local_edit") {
+		// Seen on 7 Oct 2026: Gemma 4 wrote the failing test and then fixed
+		// the code in the same step, so red never failed and the task ended
+		// BLOCKED. Red writes tests only; the code changes in green.
+		var target struct {
+			Path string `json:"path"`
+		}
+		if json.Unmarshal(pending.Call.Arguments.Bytes(), &target) == nil && !testLikePath(target.Path) {
+			return fmt.Errorf("%s %s refused: in red write only the failing test; change the code in green, after handing red back", name, target.Path)
+		}
+	}
 	activity := s.Export().Activity
 	for i, record := range activity {
 		if record.Call.ID != pending.Call.ID {
@@ -132,6 +177,9 @@ func compactRefusal(s domain.Session, pending domain.PendingTool) error {
 		if i > 0 {
 			previous := activity[i-1].Call
 			if previous.Name == name && bytes.Equal(canonicalJSON(previous.Arguments.Bytes()), canonicalJSON(pending.Call.Arguments.Bytes())) {
+				if name == "local_exec" {
+					return errors.New(`same call as before; change something. A local_exec call is {"program":"go","args":["test","./..."]}: the program alone, then one list item per argument, with no extra quotes`)
+				}
 				return errors.New("same call as before; change something")
 			}
 		}
@@ -208,7 +256,32 @@ func normalizeCheckCommand(raw json.RawMessage) (json.RawMessage, error) {
 	if json.Unmarshal(raw, &object) != nil {
 		return nil, errors.New(`check_command must be {"program":"go","args":["test","./..."]}`)
 	}
+	if rawProgram, ok := object["program"]; ok {
+		var program string
+		if json.Unmarshal(rawProgram, &program) == nil {
+			var leading []string
+			program = unwrapQuotes(program)
+			if fields := strings.Fields(program); len(fields) > 1 && !strings.ContainsAny(program, shellMetacharacters) {
+				program, leading = fields[0], fields[1:]
+			}
+			object["program"], _ = json.Marshal(program)
+			if len(leading) > 0 {
+				var args []string
+				if raw, ok := object["args"]; ok {
+					_ = json.Unmarshal(raw, &args)
+				}
+				object["args"], _ = json.Marshal(append(leading, args...))
+			}
+		}
+	}
 	if rawArgs, ok := object["args"]; ok {
+		var list []string
+		if json.Unmarshal(rawArgs, &list) == nil {
+			for i := range list {
+				list[i] = unwrapQuotes(list[i])
+			}
+			object["args"], _ = json.Marshal(list)
+		}
 		var argLine string
 		if json.Unmarshal(rawArgs, &argLine) == nil {
 			if strings.ContainsAny(argLine, shellMetacharacters) {
@@ -222,6 +295,7 @@ func normalizeCheckCommand(raw json.RawMessage) (json.RawMessage, error) {
 }
 
 func splitCommand(line string) (string, []string, error) {
+	line = unwrapQuotes(line)
 	if strings.ContainsAny(line, shellMetacharacters) {
 		return "", nil, errors.New(`check_command must be {"program":"go","args":["test","./..."]}; shell syntax is not run`)
 	}
@@ -370,4 +444,106 @@ func compactCheckEvidence(report map[string]any) {
 		copied["output_tail"] = "…" + tail[start:]
 	}
 	report["check"] = copied
+}
+
+// wrappingQuotes are pairs small models (or their servers' tool-call
+// parsers) put around a program or an argument: seen on 7 Oct 2026 with
+// Gemma 4 on vLLM, which sent `go test` arguments as «./...» and `./...`.
+var wrappingQuotes = [][2]string{{"`", "`"}, {"«", "»"}, {"“", "”"}, {"‘", "’"}, {`<|"|>`, `<|"|>`}}
+
+// unwrapQuotes strips the wrapping marks from both ends, in any mix: the
+// same run also sent `TestCharCount`<|"|> with two different wrappers.
+func unwrapQuotes(text string) string {
+	trimmed := strings.TrimSpace(text)
+	for changed := true; changed; {
+		changed = false
+		for _, pair := range wrappingQuotes {
+			for _, mark := range pair {
+				if len(trimmed) > len(mark) && strings.HasPrefix(trimmed, mark) {
+					trimmed, changed = trimmed[len(mark):], true
+				}
+				if len(trimmed) > len(mark) && strings.HasSuffix(trimmed, mark) {
+					trimmed, changed = trimmed[:len(trimmed)-len(mark)], true
+				}
+			}
+		}
+	}
+	if trimmed == strings.TrimSpace(text) {
+		return text
+	}
+	return trimmed
+}
+
+// tolerantSession reports sessions whose local exec calls are normalized:
+// a live compact step, or a plan worker.
+func tolerantSession(s domain.Session) bool {
+	if _, _, compact := compactRun(s); compact {
+		return true
+	}
+	return s.Mode() == domain.ModeTask
+}
+
+// normalizeExec repairs the usual malformed local_exec call of a small
+// model: one layer of wrapping quotes is removed from the program and each
+// argument, and a program that holds spaces but no shell syntax is split
+// into the program and leading arguments. Anything else is left for the
+// runtime to judge.
+func normalizeExec(arguments root.JSONValue) (root.JSONValue, bool) {
+	var call map[string]json.RawMessage
+	if json.Unmarshal(arguments.Bytes(), &call) != nil {
+		return arguments, false
+	}
+	var program string
+	if json.Unmarshal(call["program"], &program) != nil {
+		return arguments, false
+	}
+	var args []string
+	if raw, ok := call["args"]; ok && json.Unmarshal(raw, &args) != nil {
+		return arguments, false
+	}
+	changed := false
+	fixed := unwrapQuotes(program)
+	if fields := strings.Fields(fixed); len(fields) > 1 && !strings.ContainsAny(fixed, shellMetacharacters) {
+		fixed, args = fields[0], append(fields[1:], args...)
+	}
+	changed = fixed != program
+	var split []string
+	for _, arg := range args {
+		unwrapped := unwrapQuotes(arg)
+		// Seen on 7 Oct 2026: the whole list sent as one argument,
+		// test","-count=1","./...
+		if parts := strings.Split(unwrapped, `","`); len(parts) > 1 {
+			for _, part := range parts {
+				split = append(split, strings.Trim(part, `"`))
+			}
+			changed = true
+			continue
+		}
+		if unwrapped != arg {
+			changed = true
+		}
+		split = append(split, unwrapped)
+	}
+	args = split
+	if !changed {
+		return arguments, false
+	}
+	call["program"], _ = json.Marshal(fixed)
+	call["args"], _ = json.Marshal(args)
+	encoded, err := json.Marshal(call)
+	if err != nil {
+		return arguments, false
+	}
+	value, err := root.NewJSONObject(encoded)
+	if err != nil {
+		return arguments, false
+	}
+	return value, true
+}
+
+// testLikePath reports a file that holds tests by the usual naming of most
+// languages: a base name containing "test" or "spec".
+func testLikePath(p string) bool {
+	base := strings.ToLower(p[strings.LastIndex(p, "/")+1:])
+	return strings.Contains(base, "test") || strings.Contains(base, "spec")
 }

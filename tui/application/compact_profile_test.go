@@ -214,3 +214,49 @@ func TestCompactBudgetIsTheSmallerOfTheTwo(t *testing.T) {
 		t.Fatalf("a 16K window must shrink further: %d", small.MaximumBytes())
 	}
 }
+
+func TestMalformedExecCallsAreRepaired(t *testing.T) {
+	for raw, want := range map[string]string{
+		`{"program":"go test","args":["«-count=1»","«./...»"]}`:                                `{"args":["test","-count=1","./..."],"program":"go"}`,
+		`{"program":"go","args":["test\",\"-count=1\",\"./..."]}`:                              `{"args":["test","-count=1","./..."],"program":"go"}`,
+		"{\"program\":\"go test\",\"args\":[\"``-run`<|\\\"|>\",\"`TestCharCount`<|\\\"|>\"]}": `{"args":["test","-run","TestCharCount"],"program":"go"}`,
+		"{\"program\":\"go\",\"args\":[\"test\",\"`.`\"]}":                                     `{"args":["test","."],"program":"go"}`,
+		`{"program":"«go test»","args":["./..."]}`:                                             `{"args":["test","./..."],"program":"go"}`,
+		`{"program":"ls","args":["-R","<|\"|>.<|\"|>"]}`:                                       `{"args":["-R","."],"program":"ls"}`,
+	} {
+		got, changed := normalizeExec(mustObject(t, raw))
+		if !changed || string(got.Bytes()) != want {
+			t.Errorf("%s → %s (changed=%v), want %s", raw, got.Bytes(), changed, want)
+		}
+	}
+	for _, untouched := range []string{`{"program":"go","args":["test","./..."]}`, `{"program":"sh -c 'x | y'"}`, `{"program":"go","args":["test"],"timeout_ms":5}`} {
+		if got, changed := normalizeExec(mustObject(t, untouched)); changed {
+			t.Errorf("%s changed to %s", untouched, got.Bytes())
+		}
+	}
+	done, _, err := decodeCompactStepDone(compactSteps["brief"], mustObject(t, `{"criteria":"c","scope":"s","check_command":{"program":"go test","args":["«./...»"]}}`))
+	if command, _ := done.command(); err != nil || command.Program != "go" || strings.Join(command.Args, " ") != "test ./..." {
+		t.Fatalf("check_command: %+v %v", command, err)
+	}
+}
+
+func TestRedWritesOnlyTests(t *testing.T) {
+	s := compactDeliverySession(t, "red")
+	run, _ := s.Ceremony()
+	run.Definition = "axlr_task"
+	if err := s.SetCeremony(run); err != nil {
+		t.Fatal(err)
+	}
+	code := root.ToolCall{ID: "c1", Name: "local_write", Arguments: mustObject(t, `{"path":"textstat.go","content":"x"}`)}
+	test := root.ToolCall{ID: "c2", Name: "local_edit", Arguments: mustObject(t, `{"path":"pkg/textstat_test.go","old_text":"a","new_text":"b"}`)}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{code, test}}}); err != nil {
+		t.Fatal(err)
+	}
+	pending := s.Pending()
+	if err := compactRefusal(s, pending[0]); err == nil || !strings.Contains(err.Error(), "only the failing test") {
+		t.Fatalf("code write in red: %v", err)
+	}
+	if err := compactRefusal(s, pending[1]); err != nil {
+		t.Fatalf("test edit in red refused: %v", err)
+	}
+}

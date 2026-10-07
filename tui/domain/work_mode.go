@@ -22,6 +22,12 @@ const (
 	// through a MADE ceremony: the console opens, watches and merges the
 	// pull request itself.
 	ModeRepair WorkMode = "repair"
+	// ModePlan decomposes a brief into atomic tasks the console verifies
+	// and the person approves, then runs them.
+	ModePlan WorkMode = "plan"
+	// ModeTask is a worker session the console starts for one task of an
+	// approved plan; it is never selected by the person.
+	ModeTask WorkMode = "task"
 )
 
 func ParseWorkMode(raw string) (WorkMode, error) {
@@ -31,7 +37,7 @@ func ParseWorkMode(raw string) (WorkMode, error) {
 
 func (m WorkMode) Validate() error {
 	switch m {
-	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident, ModeRepair:
+	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident, ModeRepair, ModePlan, ModeTask:
 		return nil
 	}
 	return errors.New("unknown work mode")
@@ -39,5 +45,5 @@ func (m WorkMode) Validate() error {
 
 // StartsCeremony reports modes whose first prompt starts a MADE ceremony.
 func (m WorkMode) StartsCeremony() bool {
-	return m == ModeDebug || m == ModeDelivery || m == ModeIncident || m == ModeRepair
+	return m == ModeDebug || m == ModeDelivery || m == ModeIncident || m == ModeRepair || m == ModePlan
 }

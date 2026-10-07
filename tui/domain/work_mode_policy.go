@@ -24,7 +24,10 @@ var documentExtensions = map[string]bool{".md": true, ".mdx": true, ".txt": true
 // Judge applies the mode to a resolved call. Plugin and host tools are not
 // workspace changes and stay under their own approval policy.
 func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict, string) {
-	if (m == ModeIncident || m == ModeRepair) && id.Kind == ToolKindPlugin && id.Plugin.PluginID == "kmp" && id.Plugin.ToolName == "kmp_write_memory" {
+	if (m == ModeIncident || m == ModeRepair || m == ModePlan || m == ModeTask) && id.Kind == ToolKindPlugin && id.Plugin.PluginID == "kmp" && id.Plugin.ToolName == "kmp_write_memory" {
+		if m == ModePlan || m == ModeTask {
+			return VerdictDeny, "plan and task modes: the console records the plan, each hand-back and each sync in KMP; do not write project memory yourself"
+		}
 		// Seen on 2 Oct 2026: the model recorded an unapproved draft. Only
 		// the approved postmortem reaches memory, written by the console;
 		// repair records its cause and outcome the same way.
@@ -33,7 +36,7 @@ func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict,
 		}
 		return VerdictDeny, "incident mode: the console records the approved postmortem in KMP after the person approves it; do not write project memory yourself"
 	}
-	if m == "" || m == ModeNormal || m.StartsCeremony() || id.Kind != ToolKindLocal {
+	if m == "" || m == ModeNormal || m.StartsCeremony() || m == ModeTask || id.Kind != ToolKindLocal {
 		return VerdictAllow, ""
 	}
 	switch id.LocalOperation {

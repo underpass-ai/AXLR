@@ -61,7 +61,7 @@ The permanent grant allows running, inspecting and resuming published ceremonies
 
 Preparation is repeatable for matching identities and definitions. If it partially fails, inspect the displayed error, persisted work identity, published versions and temporary grant before retrying. If revocation failed, the install grant expires after five minutes; report and verify its state rather than assuming it was removed.
 
-`P` installs only the four driver definitions: debug/delivery **2.0**, incident **1.0** and repair **1.0**. It also prepares a separate approver identity for the incident and merge approval cards; the work identity cannot approve those guards. The seven **1.0** skill definitions are installed separately on an explicit request. See [ceremonies](../ceremonies.md).
+`P` installs only the seven driver definitions: debug/delivery **2.0**, and incident, repair, plan, task and sync **1.0**. It also prepares a separate approver identity for the incident and merge approval cards; the work identity cannot approve those guards. The seven **1.0** skill definitions are installed separately on an explicit request. See [ceremonies](../ceremonies.md).
 
 ## Direct binary or remote operator setup
 

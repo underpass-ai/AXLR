@@ -12,6 +12,9 @@ type ClientConfig struct {
 	// endpoint. Empty uses OpenRouter. A loopback endpoint (localhost,
 	// 127.0.0.0/8 or ::1) needs no API key.
 	Endpoint string
+	// Thinking false asks a local server's chat template to turn the
+	// model's thinking off; nil leaves the server's default.
+	Thinking *bool
 	// StreamInactivityTimeout limits the wait for headers or the next SSE data event.
 	// Zero uses the one-minute default.
 	StreamInactivityTimeout time.Duration

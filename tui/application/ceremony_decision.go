@@ -23,6 +23,21 @@ func (u StartTurnUseCase) Decide(ctx context.Context, session *domain.Session, a
 	} else {
 		result, err = u.Continue.Ceremonies.Return(ctx, *session, reason)
 	}
+	return u.applyDecision(ctx, session, result, err, func(next domain.Session) root.Text { return decisionNote(approve, reason, next) }, emit)
+}
+
+// Decline applies the person's x on a plan card: the plan ends BLOCKED.
+func (u StartTurnUseCase) Decline(ctx context.Context, session *domain.Session, reason string, emit func(Event) error) error {
+	if session == nil || u.Catalog == nil || u.Store == nil || u.Continue.Ceremonies == nil {
+		return errors.New("the decision needs a session and a connected ceremony driver")
+	}
+	result, err := u.Continue.Ceremonies.DeclinePlan(ctx, *session, reason)
+	return u.applyDecision(ctx, session, result, err, func(domain.Session) root.Text {
+		return root.Text("[AXLR] The person declined the plan: " + reason + ". The ceremony is over. Tell the user in their language.")
+	}, emit)
+}
+
+func (u StartTurnUseCase) applyDecision(ctx context.Context, session *domain.Session, result StepResult, err error, note func(domain.Session) root.Text, emit func(Event) error) error {
 	next := *session
 	switch {
 	case err == nil && result.Accepted && result.Run == nil:
@@ -42,11 +57,22 @@ func (u StartTurnUseCase) Decide(ctx context.Context, session *domain.Session, a
 		}
 		return err
 	}
+	if run, live := session.Ceremony(); live && run.Plan != nil && result.Accepted && result.Run == nil {
+		// Seen on 7 Oct 2026: after the person approved, the planner kept
+		// working in this session and edited the workspace while the plan's
+		// workers ran. An approved plan's session asks the model nothing:
+		// the plans panel and the footer report the run.
+		if err := u.Store.Save(ctx, next); err != nil {
+			return err
+		}
+		*session = next
+		return emitSession(session, emit)
+	}
 	tools, err := u.Catalog.Snapshot(ctx)
 	if err != nil {
 		return err
 	}
-	if err := next.BeginTurn(decisionNote(approve, reason, next), tools); err != nil {
+	if err := next.BeginTurn(note(next), tools); err != nil {
 		return err
 	}
 	if err := u.Store.Save(ctx, next); err != nil {
@@ -62,6 +88,12 @@ func decisionNote(approve bool, reason string, s domain.Session) root.Text {
 	run, live := s.Ceremony()
 	if !live {
 		return "[AXLR] The person decided; the ceremony is over. Tell the user the outcome."
+	}
+	if run.Plan != nil {
+		if approve {
+			return "[AXLR] The person approved the plan. Tell the user in their language; the console runs its tasks."
+		}
+		return root.Text(fmt.Sprintf("[AXLR] The person returned the plan: %s. Current step: %s. %s%s", reason, run.Step, stepInstructions[run.Step], planInstruction(run)))
 	}
 	if approve {
 		published := ""

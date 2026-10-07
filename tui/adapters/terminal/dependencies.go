@@ -38,4 +38,6 @@ type Dependencies struct {
 	InitialDraft string
 	// Repairs shows the self-repairs the agent requested; nil without MADE.
 	Repairs RepairPanelPort
+	// Plans shows the plans and their tasks; nil without MADE.
+	Plans PlanPanelPort
 }

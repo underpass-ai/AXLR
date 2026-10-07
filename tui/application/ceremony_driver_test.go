@@ -28,6 +28,8 @@ var fakeTransitions = map[string]string{
 	"reproduced": "DIAGNOSE", "not_reproducible": "BLOCKED", "reproduce_exhausted": "BLOCKED",
 	"diagnosed": "REPAIR", "repaired": "INTEGRATE", "repair_exhausted": "BLOCKED",
 	"briefed": "BUILD", "verified": "INTEGRATE", "build_exhausted": "BLOCKED", "integrated": "COMPLETED",
+	"decomposed": "APPROVAL", "decompose_exhausted": "BLOCKED", "approved": "READY", "approved_automatically": "READY", "returned": "DECOMPOSE", "declined": "BLOCKED",
+	"test_first": "RED", "test_present": "GREEN", "test_failing": "GREEN", "untestable": "BLOCKED", "red_exhausted": "BLOCKED", "check_passing": "HANDBACK", "green_exhausted": "BLOCKED", "handed_back": "DONE",
 }
 
 func (f *fakeEngine) Ready(context.Context, string, string) error { return f.ready }

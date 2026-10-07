@@ -44,6 +44,14 @@ type CeremonyRun struct {
 	Incident *IncidentRun
 	// Repair is the repair ceremony's state; nil for other ceremonies.
 	Repair *RepairRun
+	// Plan is the plan ceremony's state; the proposal itself lives in the
+	// plan registry. Nil for other ceremonies.
+	Plan *PlanRun
+	// Task is a plan task's state; nil for other ceremonies.
+	Task *TaskRun
+	// Model, when set, is the model the console asks while this ceremony is
+	// live instead of the session's: the planner for a plan.
+	Model string
 	// Compact is the small-model profile, decided when the ceremony began
 	// and kept for its whole life: fewer calls per step, a smaller context,
 	// one step's fields at a time and a projection that starts each step
@@ -82,8 +90,51 @@ func (r CeremonyRun) StepCallLimit() int {
 // AwaitingPerson is true while the console waits for the person's decision:
 // the model has no step to hand back.
 func (r CeremonyRun) AwaitingPerson() bool {
-	return r.Incident != nil && r.Incident.Awaiting != "" || r.Repair != nil && r.Repair.Awaiting != ""
+	return r.Incident != nil && r.Incident.Awaiting != "" || r.Repair != nil && r.Repair.Awaiting != "" || r.Plan != nil && r.Plan.Awaiting != ""
 }
+
+// PlanRun is what the plan ceremony carries between steps and across a
+// resume. The console owns it; the registry holds the proposal and MADE the
+// durable record.
+type PlanRun struct {
+	// ID is the plan's slug, the key of its registry record.
+	ID string
+	// Awaiting is AwaitingApproval while the plan is with the person.
+	Awaiting string
+	// Decided is the present decision MADE recorded; Granted is true once
+	// the approver granted the guard.
+	Decided string
+	Granted bool
+	// Returns counts the person's returns; ReturnReason is the last one,
+	// which reaches the next decompose instruction.
+	Returns      int
+	ReturnReason string
+	// Defects are the last unverified proposal's, for the next round.
+	Defects []string
+}
+
+// TaskRun is what a task ceremony carries: the task's contract and the
+// digests the console compares against. The console owns it.
+type TaskRun struct {
+	Plan, Task string
+	Scope      []string
+	Protect    []string
+	Check      CheckCommand
+	TestFirst  bool
+	// Start holds the SHA-256 of every scope, protected and already dirty
+	// file when the task started; "" for a file that did not exist.
+	Start map[string]string
+	// Frozen holds the digests of the test files red named; green must not
+	// change them.
+	Frozen map[string]string
+	// Git is false when the workspace is not a repository: only the digests
+	// are enforced and the hand-back says so.
+	Git bool
+}
+
+// MaxPlanReturns is how often the person can send a plan back. MADE's
+// max_bounces of 3 is only the backstop.
+const MaxPlanReturns = 2
 
 // Awaiting values: the console waits for the person, not the model.
 const AwaitingApproval = "approval"
@@ -175,5 +226,35 @@ func (r CeremonyRun) clone() CeremonyRun {
 		r.Repair = &repair
 	}
 	r.Ledger = append([]LedgerEntry(nil), r.Ledger...)
+	if r.Plan != nil {
+		plan := *r.Plan
+		plan.Defects = append([]string(nil), plan.Defects...)
+		r.Plan = &plan
+	}
+	if r.Task != nil {
+		task := r.Task.Clone()
+		r.Task = &task
+	}
 	return r
+}
+
+// Clone copies the task run, maps included.
+func (t TaskRun) Clone() TaskRun {
+	t.Scope = append([]string(nil), t.Scope...)
+	t.Protect = append([]string(nil), t.Protect...)
+	t.Check.Args = append([]string(nil), t.Check.Args...)
+	t.Start = cloneDigests(t.Start)
+	t.Frozen = cloneDigests(t.Frozen)
+	return t
+}
+
+func cloneDigests(in map[string]string) map[string]string {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

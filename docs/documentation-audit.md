@@ -1,5 +1,55 @@
 # Documentation audit — 4 October 2026
 
+## 7 October 2026: plan, task and sync
+
+`/plan` (alias `/planificar`) drives three newly pinned definitions: `axlr_plan`, `axlr_task` and `axlr_sync` 1.0. `/mcp → P` now publishes seven definitions.
+
+**The plan**
+- The planner (`plan.model`, default `z-ai/glm-5.3-flash`) decomposes the brief.
+- The console verifies it mechanically:
+  - ids, dependencies and waves;
+  - scopes disjoint within each wave;
+  - citations;
+  - commands, which the person approves first and the console runs once as a baseline;
+  - 12 KiB context packs.
+- The person approves it on the plan card: `a` approves, `d` sends it back, `x` declines; `plan.auto_approve` records an automatic approval instead.
+
+**Tasks and syncs**
+- An approved plan runs in the background, wave by wave. Each task gets a fresh `task` session with the compact profile and autonomous local tools.
+- Each task runs `start`, then `red` (frozen test digests) when test-first, then `green` (protected digests and the git-status scope), then the console's `handback`. Notes are relayed to later tasks and recorded in KMP with plan, task and wave labels.
+- A finished wave is integrated by `axlr_sync` with up to two reconciliation rounds.
+- A blocked task's scope files are restored, and its dependents are skipped.
+- The registry is `plans.json`. The `/plan` panel and the footer badge show progress.
+
+**Decisions and deviations**
+- The eight decisions Tirso took by survey are recorded in the plan.
+- `/plan` takes the brief as the next prompt rather than `/plan <brief>`.
+- The worker's KMP read is a focused wake, because the adapter has no read by label.
+- Reconcile workers end with a free-text summary and `NOTE` lines rather than `axlr_step_done`.
+
+**Docs updated:** [ceremonies](ceremonies.md#plans-atomic-tasks-for-small-models), [console](console.md), [troubleshooting](troubleshooting.md#plans), [architecture](architecture.md), the [MADE runbook](runbooks/made.md), the drafts README and the [plan](plans/2026-10-06-local-27b-ceremonies.md#plan-task-and-sync-measured-7-oct-2026).
+
+**Checks run**
+- Both modules' tests (`-race` for the runner), `go vet` and `gofmt`.
+- `check_pins.py` and `spike_drafts.py` against MADE 0.10.0 on aarch64, where all seven pins match.
+- Unit tests:
+  - plan verification, return, decline and automatic approval, and the planner model;
+  - red and green with frozen and protected digests and an out-of-scope refusal, and the hand-back;
+  - sync rounds;
+  - the runner's wave order, skipping and scope restore;
+  - registry and sidecar persistence.
+- Six live end-to-end plans, with numbers in the plan:
+  - Each Gemma 4 run exposed one worker failure that the console now absorbs:
+    - a blocked task's half-done edit (the scope is now restored);
+    - malformed `local_exec` calls (the arguments are now repaired);
+    - code changed during `red` (`red` now writes tests only).
+  - The sixth run used Qwen3.8-27B on llama.cpp with `thinking: false`. It finished 3 of 3 tasks in 13.5 min and passed the hidden acceptance test.
+
+**Not verified**
+- The frontier-worker arm.
+- A sync that actually needed reconciliation with a live model; the rounds are covered by tests.
+- Resuming an interrupted plan with `r`.
+
 ## 7 October 2026: the compact ceremony profile
 
 `/debug` and `/delivery` gain a compact profile for small models, selected by `ceremonies.profile`:

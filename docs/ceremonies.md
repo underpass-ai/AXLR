@@ -9,9 +9,10 @@ AXLR runs ordinary work directly. The console starts a MADE ceremony when the us
 | `/debug` | `axlr_debug` 2.0 | Reproduce with a nonzero command exit → diagnose → repair until the same command exits zero → integrate |
 | `/delivery` | `axlr_delivery` 2.0 | Brief with criteria, scope and baseline command → build until that command exits zero → integrate |
 | `/incident` | `axlr_incident` 1.0 | Triage → evidence timeline → analysis and actions → draft and fresh-context review → person's approval → postmortem publication |
+| `/plan` | `axlr_plan`, `axlr_task`, `axlr_sync` 1.0 | Decompose a brief into verified atomic tasks → the person's approval → each task in a fresh worker (red, green, hand-back) → a sync after each wave; see [plans](#plans-atomic-tasks-for-small-models) |
 | `/repair` | `axlr_repair` 1.0 | Reproduce → diagnose → repair in a fresh clone → the console commits, pushes and opens the pull request → watches its checks → merge decision (automatic or the person's) → squash merge |
 
-The [MADE runbook](runbooks/made.md#prepare-the-driven-ceremonies) prepares the work identity and publishes the four pinned definitions. Selecting a mode does not start an instance; the next prompt does. AXLR checks the published semantic digest, starts the instance and claims its first step. Missing or conflicting definitions stop the start.
+The [MADE runbook](runbooks/made.md#prepare-the-driven-ceremonies) prepares the work identity and publishes the seven pinned definitions. Selecting a mode does not start an instance; the next prompt does. AXLR checks the published semantic digest, starts the instance and claims its first step. Missing or conflicting definitions stop the start.
 
 The model does real work with AXLR tools and returns the current step's fields through `axlr_step_done`. AXLR runs the check itself, records its output in MADE, applies an enabled transition and claims the next step. The model must not also drive that instance through direct `made_*` calls.
 
@@ -72,6 +73,8 @@ Under the compact profile:
 | Instructions | a description of the fields | under 500 bytes, leading with one exact example call; the guidance drops the plugin, history and self-repair paragraphs |
 | A malformed hand-back | refused | fields the step does not take are dropped and named in the reply (`ignored_fields`); a `check_command`, or its `args`, sent as one string is split on spaces unless it holds shell syntax, and still reaches the approval card |
 | The same call twice in a row | runs | refused with "same call as before; change something" |
+| A malformed `local_exec` (also in plan workers) | runs as sent | one layer of wrapping quotes (`` ` ``, `«»`, `“”`, `‘’`, `<|"|>`) is removed from the program and each argument, and a program holding spaces without shell syntax is split; seen with Gemma 4 on vLLM |
+| `red` of a plan task | — | `local_write` and `local_edit` reach only test files (a base name containing `test` or `spec`); the code changes in `green` |
 | Between steps | the transcript continues | the next step starts from a ledger: the request that began the ceremony, one line per accepted step with the transcript messages it spanned, then the hand-back that opened the step; the saved transcript keeps everything and `axlr_history` reads any message |
 | Memory recall / check output shown | 2 KiB / the full tail | 1 KiB / the last 2 KiB; MADE keeps the full evidence |
 
@@ -81,9 +84,44 @@ Until 5 Oct 2026 the console embedded a `made:axlr-ceremonies` skill with seven 
 
 Roles in a definition describe responsibilities and do not spawn agents. Independent review requires a distinct context or person: the incident ceremony uses a fresh-context reviewer and a person's approval, the repair ceremony a person's merge decision. MADE records caller-declared actor/role provenance, so guard approval and grant administration stay off the work identity; a role name alone does not enforce separation.
 
-## Drafts for 27B-class local models
+## Plans: atomic tasks for small models
 
-Three further definitions are designed for small local models and are not shipped: `axlr_plan` 1.0 decomposes a brief into atomic, console-verified tasks the person approves; `axlr_task` 1.0 finishes one task in a fresh, precise context, test-first when the plan asks for it; `axlr_sync` 1.0 integrates a wave with the end-to-end check and relays the workers' notes. They live under [`tools/ceremonies/drafts/`](../tools/ceremonies/drafts/README.md); CI validates and walks them against MADE 0.10.0, but no console mode starts them, no pin exists and `P` does not publish them. The [design](plans/2026-10-06-local-27b-ceremonies.md) records the step contracts, the compact profile and the decisions still open; the [research record](research/2026-10-06-local-27b-agents.md) holds the evidence.
+`/plan`, then the brief as the next prompt (`/planificar` is an alias), runs three pinned definitions. Small models take small tasks well when the console builds their context and owns every verdict.
+
+1. **Decompose.** The planner splits the brief into 1 to 12 tasks:
+   - Each task has an id, a goal, a scope of 1 to 8 paths, up to 8 citations `{path, line, quote}`, a unit check, dependencies, test-first and protected files.
+   - The plan as a whole has an end-to-end check, shared interfaces and an English summary.
+   - The planner is `plan.model`: by default `z-ai/glm-5.3-flash`, `session` for the session's model. Without `OPENROUTER_API_KEY` a remote planner falls back to the session model, and the console says so at launch.
+   - The commands the hand-back names go through the approval card, under autonomy too, because the console runs each one once while verifying.
+2. **Verify.** The console checks the proposal without a model. Every defect goes back to the planner with the task id; three unverified rounds end the plan `BLOCKED`. It checks:
+   - slug ids, unique;
+   - known, acyclic dependencies, from which it computes the waves;
+   - paths inside the workspace;
+   - disjoint scopes within a wave;
+   - each citation's quote, at least 12 characters, present on its line with whitespace collapsed;
+   - commands that run, with their exit recorded as the baseline;
+   - a context pack of at most 12 KiB per task: the task, the scope with new files marked, the interfaces, the check, the protected files, and the cited regions with 20 lines of margin.
+3. **Approve.** The plan card shows the task table:
+   - `a` approves through the separate approver identity and covers the plan's check commands;
+   - `d` sends it back with a reason, twice at most;
+   - `x` declines it with a reason.
+
+   `plan.auto_approve` records an automatic approval instead. After the person approves, the plan's session asks the model nothing more, because a planner that kept working would edit the workspace under the workers. After an automatic approval, the model is told to answer in a sentence and stop.
+4. **Tasks.** The approved plan runs in the background, wave by wave. The tasks of a wave run one after another in the same workspace, each in a fresh `task` session with the session's model and autonomous local tools. Its first message is the context pack, plus the notes earlier tasks addressed to it and what KMP recalls for its plan and task.
+   - **`start`** (console): records the digests of the scope, protected and already-changed files, and runs the unit check as a baseline.
+   - **`red`** (test-first only): the named test files must have changed and the check must fail; their digests are then frozen.
+   - **`green`:** the frozen and protected files must be intact, every change must be inside the scope (`git status`; without Git only the digests), and the check must pass.
+   - **`handback`** (console): records the changed files and the revision.
+
+   The worker's notes (up to 4, at most 500 characters, to a task or `all`) and questions (up to 2) are kept for later tasks and the person. A task blocked by its rounds, by a call needing the person, or by a second reply without a tool call ends `BLOCKED`, and the tasks that depend on it are skipped.
+5. **Sync.** After a wave whose tasks all finished, the console runs the end-to-end check.
+   - Green records the integration.
+   - Red opens a reconciliation round. Each affected task gets a fresh worker with its own hand-back, the others' hand-backs, the notes for it and the failing tail. It may change only its scope, or leave a `NOTE <task>: text` line.
+   - Two red rounds end the sync `BLOCKED`.
+
+`/plan` shows the plans panel while a plan runs or is interrupted. `r` runs an interrupted plan again, and `n` starts a new one. The footer shows `plan <id> · wave 2/3 · <task> <step>`. The registry is `<state>/axlr/plans.json`; nothing is written into the workspace except the tasks' work.
+
+The plan, each hand-back and each sync are written to KMP with `plan`, `task`, `wave`, `session` and `ws` labels; the model never writes memory in these modes. The [design](plans/2026-10-06-local-27b-ceremonies.md) records the contracts, the decisions taken and the measurements; the [research record](research/2026-10-06-local-27b-agents.md) holds the evidence.
 
 ## Source and validation
 
@@ -99,4 +137,4 @@ To validate the shipped definitions and their pins against a compatible MADE bin
 python3 tools/ceremonies/check_pins.py --made-bin /absolute/path/to/made-mcp
 ```
 
-Each YAML is validated and published into the disposable store; its semantic digest must match the pin in `definitions.go`, and every pin must have a YAML. The drafts are validated and published the same way without a pin, and `python3 tools/ceremonies/spike_drafts.py --made-bin …` walks their happy and blocked paths. Bump the immutable published version when a definition's content changes.
+Each YAML is validated and published into the disposable store; its semantic digest must match the pin in `definitions.go`, and every pin must have a YAML. Drafts, when there are any, are validated and published the same way without a pin, and `python3 tools/ceremonies/spike_drafts.py --made-bin …` walks the happy and blocked paths of the plan, task and sync definitions. Bump the immutable published version when a definition's content changes.

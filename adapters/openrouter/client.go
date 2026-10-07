@@ -20,6 +20,7 @@ type Client struct {
 	apiKey                  string
 	endpoint                string
 	provider                string
+	thinking                *bool
 	http                    http.Client
 	streamInactivityTimeout time.Duration
 	streamMaxDuration       time.Duration
@@ -61,7 +62,7 @@ func New(config ClientConfig) (*Client, error) {
 		client = *config.HTTPClient
 	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{apiKey: strings.TrimSpace(config.APIKey), endpoint: target, provider: provider, http: client, streamInactivityTimeout: streamInactivityTimeout, streamMaxDuration: streamMaxDuration}, nil
+	return &Client{apiKey: strings.TrimSpace(config.APIKey), endpoint: target, provider: provider, thinking: config.Thinking, http: client, streamInactivityTimeout: streamInactivityTimeout, streamMaxDuration: streamMaxDuration}, nil
 }
 
 func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (domain.CompletionResult, error) {
@@ -72,6 +73,7 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	if err != nil {
 		return domain.CompletionResult{}, err
 	}
+	c.template(&wire)
 	body, err := json.Marshal(wire)
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not encode OpenRouter request")
@@ -121,4 +123,11 @@ func (c *Client) providerError(status int) *ProviderError {
 		err.Provider = c.provider
 	}
 	return err
+}
+
+// template asks the chat template to turn thinking off when configured.
+func (c *Client) template(wire *requestDTO) {
+	if c.thinking != nil && !*c.thinking {
+		wire.ChatTemplateKwargs = map[string]any{"enable_thinking": false}
+	}
 }

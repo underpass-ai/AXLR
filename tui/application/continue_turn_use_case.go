@@ -71,12 +71,17 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	_, _, compact := compactRun(*session)
+	// A ceremony may ask another model than the session's: the planner.
+	model := session.Export().Model
+	if run, live := session.Ceremony(); live && run.Model != "" {
+		model = root.ModelID(run.Model)
+	}
 	messages := session.Messages()
 	projector := u.Context
 	if projector == nil {
 		budget := domain.DefaultContextBudget()
 		if u.Windows != nil {
-			budget = domain.ContextBudgetForWindow(u.Windows.ContextWindow(session.Export().Model))
+			budget = domain.ContextBudgetForWindow(u.Windows.ContextWindow(model))
 		}
 		if compact {
 			budget = budget.Smaller(domain.CompactContextBudget())
@@ -103,7 +108,8 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	snapshot := session.ToolSnapshot()
 	guidance := modelHostGuidance(session)
-	if u.SessionLabels != nil && !compact {
+	_, _, focused := focusedRun(*session)
+	if u.SessionLabels != nil && !focused {
 		text, err := sessionContextGuidance(ctx, *session, u.SessionLabels)
 		if err != nil {
 			contextSpan.End(DiagnosticErrorInvalidState)
@@ -111,7 +117,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 		guidance.Content += root.Text(text)
 	}
-	if u.PluginGuidance != nil && !compact {
+	if u.PluginGuidance != nil && !focused {
 		pluginText, err := u.PluginGuidance(ctx)
 		if err != nil {
 			contextSpan.End(DiagnosticErrorInvalidState)
@@ -125,7 +131,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		// absent from the request while Jev is off.
 		tools = withoutTool(tools, HostJudgeName)
 	}
-	req := root.CompletionRequest{Model: session.Export().Model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
+	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticContextProjected, SpanID: CurrentDiagnosticSpan(contextCtx), Messages: len(req.Messages), Tools: len(req.Tools), OriginalMessages: projection.OriginalMessages, DroppedMessages: projection.DroppedMessages, OriginalBytes: projection.OriginalBytes, ProjectedBytes: projection.ProjectedBytes, ContextCutIndex: projection.CutIndex})
 	}

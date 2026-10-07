@@ -109,3 +109,18 @@ func TestEndpointErrorsNameTheEndpoint(t *testing.T) {
 		t.Fatalf("error = %v", err)
 	}
 }
+
+func TestThinkingOffReachesTheChatTemplate(t *testing.T) {
+	off := false
+	client, err := New(ClientConfig{Endpoint: "http://127.0.0.1:8080/v1/chat/completions", Thinking: &off, HTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		raw, _ := io.ReadAll(r.Body)
+		assertJSONEqual(t, raw, `{"model":"openai/gpt-4o","messages":[{"role":"user","content":"Hi"}],"stream":false,"chat_template_kwargs":{"enable_thinking":false}}`)
+		return testResponse(200, `{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`), nil
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.Complete(context.Background(), simpleCompletionRequest()); err != nil {
+		t.Fatal(err)
+	}
+}
