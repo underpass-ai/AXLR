@@ -427,14 +427,27 @@ func compactCheckEvidence(report map[string]any) {
 // Gemma 4 on vLLM, which sent `go test` arguments as «./...» and `./...`.
 var wrappingQuotes = [][2]string{{"`", "`"}, {"«", "»"}, {"“", "”"}, {"‘", "’"}, {`<|"|>`, `<|"|>`}}
 
+// unwrapQuotes strips the wrapping marks from both ends, in any mix: the
+// same run also sent `TestCharCount`<|"|> with two different wrappers.
 func unwrapQuotes(text string) string {
 	trimmed := strings.TrimSpace(text)
-	for _, pair := range wrappingQuotes {
-		if len(trimmed) > len(pair[0])+len(pair[1]) && strings.HasPrefix(trimmed, pair[0]) && strings.HasSuffix(trimmed, pair[1]) {
-			return trimmed[len(pair[0]) : len(trimmed)-len(pair[1])]
+	for changed := true; changed; {
+		changed = false
+		for _, pair := range wrappingQuotes {
+			for _, mark := range pair {
+				if len(trimmed) > len(mark) && strings.HasPrefix(trimmed, mark) {
+					trimmed, changed = trimmed[len(mark):], true
+				}
+				if len(trimmed) > len(mark) && strings.HasSuffix(trimmed, mark) {
+					trimmed, changed = trimmed[:len(trimmed)-len(mark)], true
+				}
+			}
 		}
 	}
-	return text
+	if trimmed == strings.TrimSpace(text) {
+		return text
+	}
+	return trimmed
 }
 
 // tolerantSession reports sessions whose local exec calls are normalized:
