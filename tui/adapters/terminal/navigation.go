@@ -177,6 +177,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if k.String() == "ctrl+c" && !m.approvalFocus() {
 			return m, nil, false
 		}
+		if k.String() == "esc" && m.overlay == "" && !m.approvalFocus() && m.Transcript.Selection.Set {
+			// Esc first drops a copied selection; a second Esc cancels work.
+			m.clearSelection()
+			return m, nil, true
+		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
 			if k.String() == "f" {
@@ -341,6 +346,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.ThemePicker = NewThemePicker(m.UIPreferences, m.Theme.Locale)
 		m.overlay = "theme"
 		return m, nil, true
+	case "copy":
+		m.overlay = ""
+		cmd := m.copyLatest()
+		return m, cmd, true
 	case "plugins", "catalog-refresh", "catalog-change", "catalog-marketplace":
 		if m.Busy {
 			m.Status.Error = m.Theme.T("error.pluginsBusy")

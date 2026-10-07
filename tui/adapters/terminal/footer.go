@@ -70,6 +70,9 @@ func (m AppModel) footerStatus() string {
 	status := m.Status
 	status.Waiting, status.Executing, status.ToolName = m.providerWaiting, m.toolExecuting, m.toolName
 	parts := []string{}
+	if status.Notice != "" {
+		parts = append(parts, status.Notice)
+	}
 	if activity := m.statusActivity(status); activity != "" {
 		parts = append(parts, activity)
 	} else {

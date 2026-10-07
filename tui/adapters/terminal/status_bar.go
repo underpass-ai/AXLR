@@ -18,6 +18,9 @@ type StatusBar struct {
 	ToolName    string
 	ToolSeconds int
 	Autonomous  bool
+	// Notice is a short confirmation, such as a copy, shown until the next
+	// key press.
+	Notice string
 }
 
 func (s StatusBar) View(w int) string {
