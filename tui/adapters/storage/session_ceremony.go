@@ -38,8 +38,22 @@ type sessionCeremony struct {
 	StepCall   string           `json:"step_call,omitempty"`
 	Model      string           `json:"model,omitempty"`
 	Plan       *sessionPlan     `json:"plan,omitempty"`
+	Task       *sessionTask     `json:"task,omitempty"`
 	Incident   *sessionIncident `json:"incident,omitempty"`
 	Repair     *sessionRepair   `json:"repair,omitempty"`
+}
+
+type sessionTask struct {
+	Plan      string            `json:"plan"`
+	Task      string            `json:"task"`
+	Scope     []string          `json:"scope,omitempty"`
+	Protect   []string          `json:"protect,omitempty"`
+	Program   string            `json:"check_program,omitempty"`
+	Args      []string          `json:"check_args,omitempty"`
+	TestFirst bool              `json:"test_first,omitempty"`
+	Start     map[string]string `json:"start,omitempty"`
+	Frozen    map[string]string `json:"frozen,omitempty"`
+	Git       bool              `json:"git,omitempty"`
 }
 
 type sessionPlan struct {
@@ -124,6 +138,9 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 		return nil
 	}
 	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model}
+	if t := record.Task; t != nil {
+		run.Task = &domain.TaskRun{Plan: t.Plan, Task: t.Task, Scope: t.Scope, Protect: t.Protect, Check: domain.CheckCommand{Program: t.Program, Args: t.Args}, TestFirst: t.TestFirst, Start: t.Start, Frozen: t.Frozen, Git: t.Git}
+	}
 	if p := record.Plan; p != nil {
 		run.Plan = &domain.PlanRun{ID: p.ID, Awaiting: p.Awaiting, Decided: p.Decided, Granted: p.Granted, Returns: p.Returns, ReturnReason: p.ReturnReason, Defects: p.Defects}
 	}
@@ -150,6 +167,9 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 		return nil
 	}
 	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model}
+	if t := run.Task; t != nil {
+		record.Task = &sessionTask{Plan: t.Plan, Task: t.Task, Scope: t.Scope, Protect: t.Protect, Program: t.Check.Program, Args: t.Check.Args, TestFirst: t.TestFirst, Start: t.Start, Frozen: t.Frozen, Git: t.Git}
+	}
 	if p := run.Plan; p != nil {
 		record.Plan = &sessionPlan{ID: p.ID, Awaiting: p.Awaiting, Decided: p.Decided, Granted: p.Granted, Returns: p.Returns, ReturnReason: p.ReturnReason, Defects: p.Defects}
 	}

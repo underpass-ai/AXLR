@@ -47,6 +47,8 @@ type CeremonyRun struct {
 	// Plan is the plan ceremony's state; the proposal itself lives in the
 	// plan registry. Nil for other ceremonies.
 	Plan *PlanRun
+	// Task is a plan task's state; nil for other ceremonies.
+	Task *TaskRun
 	// Model, when set, is the model the console asks while this ceremony is
 	// live instead of the session's: the planner for a plan.
 	Model string
@@ -109,6 +111,25 @@ type PlanRun struct {
 	ReturnReason string
 	// Defects are the last unverified proposal's, for the next round.
 	Defects []string
+}
+
+// TaskRun is what a task ceremony carries: the task's contract and the
+// digests the console compares against. The console owns it.
+type TaskRun struct {
+	Plan, Task string
+	Scope      []string
+	Protect    []string
+	Check      CheckCommand
+	TestFirst  bool
+	// Start holds the SHA-256 of every scope, protected and already dirty
+	// file when the task started; "" for a file that did not exist.
+	Start map[string]string
+	// Frozen holds the digests of the test files red named; green must not
+	// change them.
+	Frozen map[string]string
+	// Git is false when the workspace is not a repository: only the digests
+	// are enforced and the hand-back says so.
+	Git bool
 }
 
 // MaxPlanReturns is how often the person can send a plan back. MADE's
@@ -210,5 +231,30 @@ func (r CeremonyRun) clone() CeremonyRun {
 		plan.Defects = append([]string(nil), plan.Defects...)
 		r.Plan = &plan
 	}
+	if r.Task != nil {
+		task := r.Task.Clone()
+		r.Task = &task
+	}
 	return r
+}
+
+// Clone copies the task run, maps included.
+func (t TaskRun) Clone() TaskRun {
+	t.Scope = append([]string(nil), t.Scope...)
+	t.Protect = append([]string(nil), t.Protect...)
+	t.Check.Args = append([]string(nil), t.Check.Args...)
+	t.Start = cloneDigests(t.Start)
+	t.Frozen = cloneDigests(t.Frozen)
+	return t
+}
+
+func cloneDigests(in map[string]string) map[string]string {
+	if in == nil {
+		return nil
+	}
+	out := make(map[string]string, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

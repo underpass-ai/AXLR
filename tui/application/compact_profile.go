@@ -19,7 +19,7 @@ import (
 
 // compactCeremonies are the definitions the compact profile applies to; the
 // incident and repair ceremonies keep the standard profile.
-var compactCeremonies = map[string]bool{"axlr_debug": true, "axlr_delivery": true}
+var compactCeremonies = map[string]bool{"axlr_debug": true, "axlr_delivery": true, "axlr_task": true}
 
 // CompactCeremony reports whether the compact profile can drive definition.
 func CompactCeremony(definition string) bool { return compactCeremonies[definition] }
@@ -64,6 +64,16 @@ var compactSteps = map[string]compactStep{
 		fields:      []string{"summary"},
 		schema:      `{"type":"object","properties":{"summary":{"type":"string","minLength":1}},"required":["summary"],"additionalProperties":false}`,
 		instruction: `Example: axlr_step_done {"summary":"Use strings.Fields in WordCount; added table tests"}. Make the smallest change that meets the criteria, then hand back. The console reruns the approved check command; it must exit 0. In a later attempt, fix what its output shows.`,
+	},
+	"red": {
+		fields:      []string{"test_files", "expected", "untestable", "observed"},
+		schema:      `{"type":"object","properties":{"test_files":{"type":"array","minItems":1,"maxItems":4,"items":{"type":"string"}},"expected":{"type":"string"},"untestable":{"type":"boolean"},"observed":{"type":"string"}},"additionalProperties":false}`,
+		instruction: `Example: axlr_step_done {"test_files":["lines_test.go"],"expected":"undefined: LineCount"}. Write the failing test inside the scope and change nothing else; the console runs the unit check and it must fail. If no test can fail first, send {"untestable":true,"observed":"why"}.`,
+	},
+	"green": {
+		fields:      []string{"summary", "summary_en", "notes", "questions"},
+		schema:      `{"type":"object","properties":{"summary":{"type":"string","minLength":1},"summary_en":{"type":"string","minLength":1},"notes":{"type":"array","maxItems":4,"items":{"type":"object","properties":{"to":{"type":"string"},"text":{"type":"string","maxLength":500}},"required":["to","text"],"additionalProperties":false}},"questions":{"type":"array","maxItems":2,"items":{"type":"string"}}},"required":["summary","summary_en"],"additionalProperties":false}`,
+		instruction: `Example: axlr_step_done {"summary":"Added LineCount","summary_en":"LineCount counts lines.","notes":[{"to":"all","text":"LineCount ignores a final newline"}]}. Make the unit check pass changing only the scope, never the test files or protected files.`,
 	},
 	"integrate": {
 		fields:      []string{"report", "summary_en"},

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
@@ -36,6 +37,26 @@ type repairWorkbenches struct {
 	reviewerModel string
 	policy        application.RepairPolicy
 	autonomous    bool
+	// plans and compact serve plan workers: the registry the task driver
+	// writes and the ceremony profile.
+	plans   application.PlanRegistryPort
+	compact func(root.ModelID) bool
+}
+
+// planWorkbenches is application.PlanWorkbenchPort: a workbench rooted at
+// the plan's workspace with autonomous local tools, since workers run
+// without the person once the plan is approved.
+type planWorkbenches struct{ repairWorkbenches }
+
+var _ application.PlanWorkbenchPort = planWorkbenches{}
+
+func (w planWorkbenches) Open(ctx context.Context, workspace string) (application.PlanWorkbench, error) {
+	w.autonomous = true
+	bench, err := w.repairWorkbenches.Open(ctx, workspace)
+	if err != nil {
+		return nil, err
+	}
+	return bench.(*application.UseCaseWorkbench), nil
 }
 
 var _ application.RepairWorkbenchPort = repairWorkbenches{}
@@ -56,6 +77,7 @@ func (w repairWorkbenches) Open(_ context.Context, clone string) (application.Re
 	driver.Approver = &madesetup.Approver{ConfigPath: w.configPath, Getenv: w.getenv}
 	driver.Forge = ceremonyhost.Forge{Checks: ceremonyhost.Checks{Tools: runner}}
 	driver.RepairPolicy = w.policy
+	driver.Plans, driver.Compact = w.plans, w.compact
 	approval := application.RepairToolPolicy{Next: w.approval, AutonomousLocal: w.autonomous}
 	continuation := application.ContinueTurnUseCase{Validation: w.validator, Models: w.models, Windows: w.windows, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver}
 	catalog := axlr.ToolCatalog{Plugins: w.manager, Diagnostics: w.trace, Profiles: w.profiles}

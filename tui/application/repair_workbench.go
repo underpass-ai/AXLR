@@ -18,7 +18,33 @@ type UseCaseWorkbench struct {
 	Closer   func() error
 }
 
-var _ RepairWorkbench = (*UseCaseWorkbench)(nil)
+var _ PlanWorkbench = (*UseCaseWorkbench)(nil)
+
+// BeginTask starts a plan task's ceremony in the worker session.
+func (w *UseCaseWorkbench) BeginTask(ctx context.Context, s *domain.Session, plan domain.PlanRecord, task domain.PlanTask) error {
+	if w.Start.Continue.Ceremonies == nil {
+		return errors.New("MADE is not connected; tasks cannot run")
+	}
+	return w.Start.Continue.Ceremonies.BeginTask(ctx, s, plan, task)
+}
+
+// RunSync integrates a wave of the plan.
+func (w *UseCaseWorkbench) RunSync(ctx context.Context, plan domain.PlanRecord, wave int, reconcile Reconciler) (SyncOutcome, error) {
+	if w.Start.Continue.Ceremonies == nil {
+		return SyncOutcome{}, errors.New("MADE is not connected; the sync cannot run")
+	}
+	return w.Start.Continue.Ceremonies.RunSync(ctx, plan, wave, reconcile)
+}
+
+// Digest reads a workspace file's digest through the driver's files port.
+func (w *UseCaseWorkbench) Digest(ctx context.Context, path string) string {
+	d := w.Start.Continue.Ceremonies
+	if d == nil || d.Files == nil {
+		return ""
+	}
+	digest, _ := d.fileDigest(ctx, path)
+	return digest
+}
 
 // Observe attaches the observer to the shared ceremony driver.
 func (w *UseCaseWorkbench) Observe(observer CeremonyObserverPort) {

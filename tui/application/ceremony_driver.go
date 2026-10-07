@@ -42,6 +42,7 @@ var stateSteps = map[string]string{
 	"TRIAGE": "triage", "TIMELINE": "timeline", "ANALYSIS": "analysis",
 	"REVIEW": "revise", "APPROVAL": "present", "PUBLISH": "publish",
 	"DECOMPOSE": "decompose",
+	"START":     "start", "RED": "red", "GREEN": "green", "HANDBACK": "handback",
 }
 
 // stepInstructions is what the model is asked to do in each step and what
@@ -53,6 +54,8 @@ var stepInstructions = map[string]string{
 	"brief":     "Read the repository and settle the change. Call axlr_step_done with criteria (observable behaviour), scope and check_command {program, args} (no shell) whose zero exit proves the criteria. The console runs it once as a baseline.",
 	"build":     "Implement the smallest change that meets the criteria; in later rounds fix what the previous check output shows, without growing scope. Call axlr_step_done with summary only. The console reruns the check command approved in brief, which is fixed for the rest of the ceremony; it must exit zero.",
 	"integrate": "Write the report for the user in their language: what changed, the evidence and the limits. Call axlr_step_done with report and summary_en, two or three plain English sentences for project memory. The console records the revision and stores summary_en in KMP.",
+	"red":       "Write the failing test for the task's missing behaviour, inside the scope, and change nothing else yet. Call axlr_step_done with test_files (the 1 to 4 test files you wrote or changed) and expected (what the failure should show). The console runs the unit check: it must fail. If no test can fail first, send untestable=true with observed (why).",
+	"green":     "Make the unit check pass by changing only the files in the task's scope; never change the test files you named in red or the protected files. Call axlr_step_done with summary, summary_en (two plain English sentences), optional notes (up to 4 {to: a task id or all, text: at most 500 characters} for later tasks) and optional questions (up to 2) for the person. The console checks the scope and runs the unit check: it must pass.",
 	"decompose": "Read the repository and split the brief into 1 to 12 atomic tasks that small models will do one by one, each in a fresh session with only its context pack. Do not edit files. Call axlr_step_done with tasks, e2e_check, interfaces and summary_en. Each task is {id (slug), goal (one sentence), scope (1 to 8 workspace paths it may change), context (up to 8 citations {path, line, quote} of code it must read, with the quote copied from that line), unit_check {program, args} (no shell), depends_on (task ids), test_first (bool), protect (files it must not change)}. Tasks of the same wave (no dependency between them) must not share a scope path. e2e_check {program, args} proves the whole plan; interfaces (at most 2 KiB) states the names, signatures and contracts the tasks share. The console verifies the plan mechanically, runs every command once as a baseline (the person approves them first) and returns exact defects; a task whose context pack exceeds 12 KiB must be split.",
 }
 
@@ -83,6 +86,8 @@ type CeremonyDriver struct {
 	// Plans and Plan serve /plan: the registry of proposals and the planner.
 	Plans PlanRegistryPort
 	Plan  PlanSettings
+	// Starter runs a plan once the person approved it; nil leaves it READY.
+	Starter PlanStarter
 }
 
 // observe tells the observer where the ceremony stands. The report is copied
@@ -133,6 +138,7 @@ type stepDone struct {
 	ConnectTo    []memoryLinkArgument `json:"connect_to"`
 	incidentDone
 	planDone
+	taskDone
 }
 
 func decodeStepDone(arguments root.JSONValue) (stepDone, error) {
@@ -465,6 +471,22 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		output = map[string]any{"report": done.Report, "summary_en": done.SummaryEN, "revision": strings.TrimSpace(revision.Output), "dirty": strings.TrimSpace(dirty.Output), "integrated": true}
 		report["revision"] = output["revision"]
 		trigger = "integrated"
+	case "red", "green":
+		if run.Task == nil {
+			return refuse("this step belongs to a plan task"), nil
+		}
+		var refusal string
+		if run.Step == "red" {
+			output, trigger, repeat, refusal, err = d.taskRed(ctx, &run, done, report)
+		} else {
+			output, trigger, repeat, refusal, err = d.taskGreen(ctx, s, &run, done, report)
+		}
+		if err != nil {
+			return StepResult{}, err
+		}
+		if refusal != "" {
+			return refuse(refusal), nil
+		}
 	case "decompose":
 		var refusal string
 		output, trigger, repeat, refusal, err = d.decompose(ctx, s, run, done, report)
@@ -520,6 +542,8 @@ func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain
 	if terminalStates[state] {
 		if run.Plan != nil {
 			report["memory"] = d.finishPlan(ctx, s, run, state)
+		} else if run.Task != nil {
+			report["memory"] = d.finishTask(ctx, s, run, state, output)
 		} else {
 			report["memory"] = d.record(ctx, s, run, state, output)
 		}
@@ -545,6 +569,10 @@ func (d *CeremonyDriver) enterStep(ctx context.Context, s domain.Session, run do
 			return d.awaitPlan(ctx, s, run, report)
 		}
 		return d.awaitPerson(ctx, run, report)
+	case "handback":
+		if run.Task != nil {
+			return d.taskHandback(ctx, s, run, report)
+		}
 	case "review":
 		return d.reviewDraft(ctx, s, run, report)
 	}

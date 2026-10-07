@@ -606,6 +606,12 @@ func (d *CeremonyDriver) finishPlan(ctx context.Context, s domain.Session, run d
 	if err := d.Plans.Save(ctx, record); err != nil {
 		return "not recorded: " + bounded(err.Error(), 300)
 	}
+	if status == domain.PlanReady && d.Starter != nil {
+		if err := d.Starter.Start(context.WithoutCancel(ctx), record.ID); err != nil {
+			record.Error = bounded("start: "+err.Error(), 600)
+			_ = d.Plans.Save(ctx, record)
+		}
+	}
 	if d.Memory == nil || status != domain.PlanReady {
 		return d.record(ctx, s, run, state, map[string]any{"summary_en": record.SummaryEN})
 	}

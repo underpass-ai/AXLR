@@ -204,6 +204,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				next, cmd := m.incidentKey(k)
 				return next, cmd, true
 			}
+			if m.overlay == "plans" && k.String() != "esc" {
+				next, cmd := m.planKey(k)
+				return next, cmd, true
+			}
 			if m.overlay == "repairs" && (k.String() != "esc" || m.RepairPanel.Reasoning) {
 				next, cmd := m.repairKey(k)
 				return next, cmd, true
@@ -810,6 +814,8 @@ func (m AppModel) overlayView(base string) string {
 	case "incident":
 		title, subtitle, content := m.incidentCardView()
 		body = m.Theme.Overlay(title, subtitle, content, m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
+	case "plans":
+		body = m.Theme.Overlay(m.Theme.T("plans.title"), m.Theme.T("plans.hints"), m.Info.View(), m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
 	case "repairs":
 		title, subtitle, content := m.repairPanelView()
 		body = m.Theme.Overlay(title, subtitle, content, m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)

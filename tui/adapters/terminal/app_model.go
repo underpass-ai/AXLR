@@ -58,6 +58,7 @@ type AppModel struct {
 	Info                Transcript
 	IncidentCard        IncidentCard
 	RepairPanel         RepairPanel
+	PlanPanel           PlanPanel
 	overlay             ControlIntent
 	draft               string
 	submittedPrompt     string
@@ -126,10 +127,13 @@ func New(deps Dependencies) AppModel {
 	}
 	m.refreshTranscript()
 	m.syncApproval()
-	return m.loadRepairs()
+	return m.loadRepairs().loadPlans()
 }
 func (m AppModel) Init() tea.Cmd {
 	repairs := m.subscribeRepairs()
+	if plans := m.subscribePlans(); plans != nil {
+		repairs = tea.Batch(repairs, plans)
+	}
 	if m.Theme.Monochrome {
 		return repairs
 	}
@@ -149,6 +153,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Theme.Light = !v.IsDark()
 		m.applyUIPreferences(m.UIPreferences)
 		return m, nil
+	case planEventMsg:
+		m = m.loadPlans()
+		m = m.refreshPlanPanel()
+		return m, m.subscribePlans()
 	case repairEventMsg:
 		// A repair session changed: reread the registry, redraw the panel,
 		// open it when a decision waits and nothing else is on screen, and
@@ -473,6 +481,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Composer.Input.Reset()
 					return m.openIncidentCard(), nil
 				}
+			}
+			if command == "/plan" && len(m.activePlans()) > 0 {
+				// A plan that runs or was interrupted is shown first; n in
+				// the panel starts a new one.
+				m.Composer.Input.Reset()
+				return m.openPlanPanel(), nil
 			}
 			if command == "/repair" && len(m.repairRecords()) > 0 {
 				// Repairs the agent requested from this session, or that wait

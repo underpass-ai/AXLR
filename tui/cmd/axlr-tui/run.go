@@ -428,6 +428,24 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		defer repairs.Close()
 	}
+	// Plans: an approved plan runs its tasks in fresh worker sessions rooted
+	// at the workspace, one after another, and a sync after each wave.
+	var planRunner *application.PlanRunner
+	var planPanel terminal.PlanPanelPort
+	if ceremonies != nil && ceremonies.Plans != nil {
+		var token [8]byte
+		if _, err := rand.Read(token[:]); err != nil {
+			return fail(err)
+		}
+		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact}}
+		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(token[:]), Lifetime: ctx}
+		if err := planRunner.Reconcile(ctx); err != nil {
+			fmt.Fprintln(stderr, "axlr-tui: plan registry:", err)
+		}
+		defer planRunner.Close()
+		ceremonies.Starter = planRunner
+		planPanel = planRunner
+	}
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies}
 	var notices application.RepairNoticesPort
 	if repairs != nil {
@@ -462,6 +480,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Monochrome:        getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
 		InitialDraft:      initialDraft,
 		Repairs:           repairPanelPort(repairs),
+		Plans:             planPanel,
 	})
 	defer app.Close()
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
