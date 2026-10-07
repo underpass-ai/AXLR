@@ -24,6 +24,14 @@ var modeGuidance = map[domain.WorkMode]string{
 func modelHostGuidance(s *domain.Session) root.Message {
 	var guidance strings.Builder
 	guidance.WriteString("You are AXLR, an agent working in the user's local workspace. The supplied tools are real capabilities; use their schemas rather than guessing names. Respect user intent and tool errors. Tool approval is enforced by the host. Never claim a tool is unavailable when it is listed.\n")
+	if run, _, planning := focusedRun(*s); planning && run.Plan != nil {
+		// The planner reads the code and hands the plan back; nothing else.
+		if text, ok := modeGuidance[s.Mode()]; ok {
+			guidance.WriteString(text)
+		}
+		guidance.WriteString(Instruction(run))
+		return root.Message{Role: root.RoleSystem, Content: root.Text(guidance.String())}
+	}
 	if run, step, compact := compactRun(*s); compact {
 		// About 1 KB of constant prefix: no MCP bridge, history, self-repair
 		// or plugin paragraphs, since a compact step exposes none of them.

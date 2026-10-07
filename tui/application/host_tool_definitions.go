@@ -80,7 +80,7 @@ func ModelTools(snapshot []domain.AvailableTool) []root.ToolDefinition {
 // axlr_request_repair never reaches a repair session.
 func SessionTools(s domain.Session, snapshot []domain.AvailableTool) []root.ToolDefinition {
 	tools := ModeTools(s.Mode(), snapshot)
-	if _, step, compact := compactRun(s); compact {
+	if _, step, focused := focusedRun(s); focused {
 		return compactTools(tools, step)
 	}
 	run, live := s.Ceremony()

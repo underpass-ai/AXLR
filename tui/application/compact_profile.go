@@ -82,6 +82,28 @@ var compactSteps = map[string]compactStep{
 	},
 }
 
+// decomposeStep is the planner's focused surface: measured on 7 Oct 2026,
+// glm-5.3-flash under the full surface spent calls on axlr_skill, the KMP
+// guide and kmp_wake before proposing, and planning took 3 to 13 minutes.
+// The planner keeps the standard budget; only its tools and guidance narrow.
+var decomposeStep = compactStep{
+	fields:   []string{"tasks", "e2e_check", "interfaces", "summary_en"},
+	readOnly: true,
+}
+
+// focusedRun returns the step whose tool surface and guidance are narrowed:
+// a compact step, or a plan's decompose step.
+func focusedRun(s domain.Session) (domain.CeremonyRun, compactStep, bool) {
+	if run, step, ok := compactRun(s); ok {
+		return run, step, true
+	}
+	run, live := s.Ceremony()
+	if live && run.Plan != nil && run.Step == "decompose" && !run.AwaitingPerson() {
+		return run, decomposeStep, true
+	}
+	return domain.CeremonyRun{}, compactStep{}, false
+}
+
 // compactRun returns the live compact run of a session when the model has a
 // step to hand back.
 func compactRun(s domain.Session) (domain.CeremonyRun, compactStep, bool) {
@@ -107,10 +129,12 @@ func compactTools(tools []root.ToolDefinition, step compactStep) []root.ToolDefi
 		case step.readOnly && (tool.Name == "local_write" || tool.Name == "local_edit"):
 		case strings.HasPrefix(string(tool.Name), "axlr_") && !compactHostTools[tool.Name]:
 		case tool.Name == HostStepDoneName:
-			schema, err := root.NewJSONObject([]byte(step.schema))
-			if err == nil {
-				tool.Parameters = schema
-				tool.Description = "Hand this step's result to the console, which checks it and replies with the next step. Send only the fields of the example."
+			if step.schema != "" {
+				schema, err := root.NewJSONObject([]byte(step.schema))
+				if err == nil {
+					tool.Parameters = schema
+					tool.Description = "Hand this step's result to the console, which checks it and replies with the next step. Send only the fields of the example."
+				}
 			}
 			out = append(out, tool)
 		default:
@@ -123,7 +147,7 @@ func compactTools(tools []root.ToolDefinition, step compactStep) []root.ToolDefi
 // compactRefusal refuses a call the compact step does not offer, and the
 // same call twice in a row, the loop small models fall into.
 func compactRefusal(s domain.Session, pending domain.PendingTool) error {
-	_, step, ok := compactRun(s)
+	_, step, ok := focusedRun(s)
 	if !ok {
 		return nil
 	}

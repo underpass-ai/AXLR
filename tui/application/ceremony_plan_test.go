@@ -177,3 +177,34 @@ func TestThePlannerModelAnswersWhileThePlanIsLive(t *testing.T) {
 		t.Fatalf("asked %s; session model %s", asked, s.Export().Model)
 	}
 }
+
+func TestThePlannerSeesOnlyWhatDecomposeNeeds(t *testing.T) {
+	_, _, _, _, s := planDriver(t)
+	local := []domain.AvailableTool{}
+	for _, name := range []string{"local_read", "local_write", "local_edit", "local_exec"} {
+		id, _ := domain.NewLocalToolIdentity(strings.TrimPrefix(name, "local_"))
+		schema, _ := root.NewJSONObject([]byte(`{"type":"object"}`))
+		local = append(local, domain.AvailableTool{Identity: id, Definition: root.ToolDefinition{Name: root.ToolName(name), Parameters: schema}})
+	}
+	var names []string
+	for _, tool := range SessionTools(s, append(local, HostTools()...)) {
+		names = append(names, string(tool.Name))
+	}
+	if strings.Join(names, ",") != "axlr_history,axlr_step_done,local_exec,local_read" {
+		t.Fatalf("planner tools = %v", names)
+	}
+	guidance := string(modelHostGuidance(&s).Content)
+	if strings.Contains(guidance, "axlr_call_tool") || strings.Contains(guidance, "Self-repair") || !strings.Contains(guidance, "Mode: plan") || !strings.Contains(guidance, "atomic tasks") {
+		t.Fatalf("planner guidance: %s", guidance)
+	}
+	if err := s.BeginTurn("plan it", append(local, HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	skill := root.ToolCall{ID: "k1", Name: HostSkillName, Arguments: mustObject(t, `{"plugin":"axlr","skill":"x"}`)}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{skill}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := compactRefusal(s, s.Pending()[0]); err == nil {
+		t.Fatal("the planner called a hidden host tool")
+	}
+}

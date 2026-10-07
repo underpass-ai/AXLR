@@ -108,7 +108,8 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	snapshot := session.ToolSnapshot()
 	guidance := modelHostGuidance(session)
-	if u.SessionLabels != nil && !compact {
+	_, _, focused := focusedRun(*session)
+	if u.SessionLabels != nil && !focused {
 		text, err := sessionContextGuidance(ctx, *session, u.SessionLabels)
 		if err != nil {
 			contextSpan.End(DiagnosticErrorInvalidState)
@@ -116,7 +117,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 		guidance.Content += root.Text(text)
 	}
-	if u.PluginGuidance != nil && !compact {
+	if u.PluginGuidance != nil && !focused {
 		pluginText, err := u.PluginGuidance(ctx)
 		if err != nil {
 			contextSpan.End(DiagnosticErrorInvalidState)
