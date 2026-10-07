@@ -217,10 +217,11 @@ func TestCompactBudgetIsTheSmallerOfTheTwo(t *testing.T) {
 
 func TestMalformedExecCallsAreRepaired(t *testing.T) {
 	for raw, want := range map[string]string{
-		`{"program":"go test","args":["«-count=1»","«./...»"]}`: `{"args":["test","-count=1","./..."],"program":"go"}`,
-		"{\"program\":\"go\",\"args\":[\"test\",\"`.`\"]}":      `{"args":["test","."],"program":"go"}`,
-		`{"program":"«go test»","args":["./..."]}`:              `{"args":["test","./..."],"program":"go"}`,
-		`{"program":"ls","args":["-R","<|\"|>.<|\"|>"]}`:        `{"args":["-R","."],"program":"ls"}`,
+		`{"program":"go test","args":["«-count=1»","«./...»"]}`:   `{"args":["test","-count=1","./..."],"program":"go"}`,
+		`{"program":"go","args":["test\",\"-count=1\",\"./..."]}`: `{"args":["test","-count=1","./..."],"program":"go"}`,
+		"{\"program\":\"go\",\"args\":[\"test\",\"`.`\"]}":        `{"args":["test","."],"program":"go"}`,
+		`{"program":"«go test»","args":["./..."]}`:                `{"args":["test","./..."],"program":"go"}`,
+		`{"program":"ls","args":["-R","<|\"|>.<|\"|>"]}`:          `{"args":["-R","."],"program":"ls"}`,
 	} {
 		got, changed := normalizeExec(mustObject(t, raw))
 		if !changed || string(got.Bytes()) != want {

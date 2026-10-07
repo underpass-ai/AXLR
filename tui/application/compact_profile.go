@@ -153,6 +153,9 @@ func compactRefusal(s domain.Session, pending domain.PendingTool) error {
 		if i > 0 {
 			previous := activity[i-1].Call
 			if previous.Name == name && bytes.Equal(canonicalJSON(previous.Arguments.Bytes()), canonicalJSON(pending.Call.Arguments.Bytes())) {
+				if name == "local_exec" {
+					return errors.New(`same call as before; change something. A local_exec call is {"program":"go","args":["test","./..."]}: the program alone, then one list item per argument, with no extra quotes`)
+				}
 				return errors.New("same call as before; change something")
 			}
 		}
@@ -467,11 +470,24 @@ func normalizeExec(arguments root.JSONValue) (root.JSONValue, bool) {
 		fixed, args = fields[0], append(fields[1:], args...)
 	}
 	changed = fixed != program
-	for i, arg := range args {
-		if unwrapped := unwrapQuotes(arg); unwrapped != arg {
-			args[i], changed = unwrapped, true
+	var split []string
+	for _, arg := range args {
+		unwrapped := unwrapQuotes(arg)
+		// Seen on 7 Oct 2026: the whole list sent as one argument,
+		// test","-count=1","./...
+		if parts := strings.Split(unwrapped, `","`); len(parts) > 1 {
+			for _, part := range parts {
+				split = append(split, strings.Trim(part, `"`))
+			}
+			changed = true
+			continue
 		}
+		if unwrapped != arg {
+			changed = true
+		}
+		split = append(split, unwrapped)
 	}
+	args = split
 	if !changed {
 		return arguments, false
 	}
