@@ -218,7 +218,32 @@ func normalizeCheckCommand(raw json.RawMessage) (json.RawMessage, error) {
 	if json.Unmarshal(raw, &object) != nil {
 		return nil, errors.New(`check_command must be {"program":"go","args":["test","./..."]}`)
 	}
+	if rawProgram, ok := object["program"]; ok {
+		var program string
+		if json.Unmarshal(rawProgram, &program) == nil {
+			var leading []string
+			program = unwrapQuotes(program)
+			if fields := strings.Fields(program); len(fields) > 1 && !strings.ContainsAny(program, shellMetacharacters) {
+				program, leading = fields[0], fields[1:]
+			}
+			object["program"], _ = json.Marshal(program)
+			if len(leading) > 0 {
+				var args []string
+				if raw, ok := object["args"]; ok {
+					_ = json.Unmarshal(raw, &args)
+				}
+				object["args"], _ = json.Marshal(append(leading, args...))
+			}
+		}
+	}
 	if rawArgs, ok := object["args"]; ok {
+		var list []string
+		if json.Unmarshal(rawArgs, &list) == nil {
+			for i := range list {
+				list[i] = unwrapQuotes(list[i])
+			}
+			object["args"], _ = json.Marshal(list)
+		}
 		var argLine string
 		if json.Unmarshal(rawArgs, &argLine) == nil {
 			if strings.ContainsAny(argLine, shellMetacharacters) {
@@ -232,6 +257,7 @@ func normalizeCheckCommand(raw json.RawMessage) (json.RawMessage, error) {
 }
 
 func splitCommand(line string) (string, []string, error) {
+	line = unwrapQuotes(line)
 	if strings.ContainsAny(line, shellMetacharacters) {
 		return "", nil, errors.New(`check_command must be {"program":"go","args":["test","./..."]}; shell syntax is not run`)
 	}
@@ -380,4 +406,73 @@ func compactCheckEvidence(report map[string]any) {
 		copied["output_tail"] = "…" + tail[start:]
 	}
 	report["check"] = copied
+}
+
+// wrappingQuotes are pairs small models (or their servers' tool-call
+// parsers) put around a program or an argument: seen on 7 Oct 2026 with
+// Gemma 4 on vLLM, which sent `go test` arguments as «./...» and `./...`.
+var wrappingQuotes = [][2]string{{"`", "`"}, {"«", "»"}, {"“", "”"}, {"‘", "’"}, {`<|"|>`, `<|"|>`}}
+
+func unwrapQuotes(text string) string {
+	trimmed := strings.TrimSpace(text)
+	for _, pair := range wrappingQuotes {
+		if len(trimmed) > len(pair[0])+len(pair[1]) && strings.HasPrefix(trimmed, pair[0]) && strings.HasSuffix(trimmed, pair[1]) {
+			return trimmed[len(pair[0]) : len(trimmed)-len(pair[1])]
+		}
+	}
+	return text
+}
+
+// tolerantSession reports sessions whose local exec calls are normalized:
+// a live compact step, or a plan worker.
+func tolerantSession(s domain.Session) bool {
+	if _, _, compact := compactRun(s); compact {
+		return true
+	}
+	return s.Mode() == domain.ModeTask
+}
+
+// normalizeExec repairs the usual malformed local_exec call of a small
+// model: one layer of wrapping quotes is removed from the program and each
+// argument, and a program that holds spaces but no shell syntax is split
+// into the program and leading arguments. Anything else is left for the
+// runtime to judge.
+func normalizeExec(arguments root.JSONValue) (root.JSONValue, bool) {
+	var call map[string]json.RawMessage
+	if json.Unmarshal(arguments.Bytes(), &call) != nil {
+		return arguments, false
+	}
+	var program string
+	if json.Unmarshal(call["program"], &program) != nil {
+		return arguments, false
+	}
+	var args []string
+	if raw, ok := call["args"]; ok && json.Unmarshal(raw, &args) != nil {
+		return arguments, false
+	}
+	changed := false
+	fixed := unwrapQuotes(program)
+	if fields := strings.Fields(fixed); len(fields) > 1 && !strings.ContainsAny(fixed, shellMetacharacters) {
+		fixed, args = fields[0], append(fields[1:], args...)
+	}
+	changed = fixed != program
+	for i, arg := range args {
+		if unwrapped := unwrapQuotes(arg); unwrapped != arg {
+			args[i], changed = unwrapped, true
+		}
+	}
+	if !changed {
+		return arguments, false
+	}
+	call["program"], _ = json.Marshal(fixed)
+	call["args"], _ = json.Marshal(args)
+	encoded, err := json.Marshal(call)
+	if err != nil {
+		return arguments, false
+	}
+	value, err := root.NewJSONObject(encoded)
+	if err != nil {
+		return arguments, false
+	}
+	return value, true
 }

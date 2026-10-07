@@ -141,6 +141,9 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			}
 			hostSpan.End(class)
 		} else {
+			if tool.Identity.Kind == domain.ToolKindLocal && tool.Identity.LocalOperation == "exec" && tolerantSession(*s) {
+				toolArgs, _ = normalizeExec(toolArgs)
+			}
 			outcome, runErr = u.Tools.Execute(ctx, tool.Identity, toolArgs)
 		}
 		if outcome.IsError || outcome.Uncertain {
