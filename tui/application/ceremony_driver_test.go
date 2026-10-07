@@ -67,6 +67,10 @@ func (f *fakeEngine) Transition(_ context.Context, _, trigger string) (string, e
 	}
 	return f.state, nil
 }
+func (f *fakeEngine) Cancel(_ context.Context, _, reason string) error {
+	f.calls = append(f.calls, "cancel "+reason)
+	return nil
+}
 func (f *fakeEngine) Inspect(context.Context, string) (CeremonyView, error) {
 	f.calls = append(f.calls, "inspect")
 	return f.view, nil

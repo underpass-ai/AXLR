@@ -52,6 +52,14 @@ The agent of any session can ask the console to repair AXLR itself while its own
 
 **Updating the runtime.** When the repair ends, the original session's next prompt carries a visible `[AXLR] Self-repair …` note with the pull request, the merge commit, the MADE instance and the KMP report, or the reason it stopped. A merge changes the repository, not the process that detected the defect: the note says which build the console still runs and that it needs an update or a rebuild and a restart before the repaired behaviour can be relied on. The console never replaces its own executable, and a second request for the same failure from the same build is refused with that reminder.
 
+### A step the model will not hand back
+
+When the model ends its turn with the step still open, the console reminds it once with a visible `[AXLR]` message. If the answer held a tool call written as text (`<|tool_call>`, `<tool_call>`, `[TOOL_CALLS]`, `<|python_tag|>` and similar), the reminder says so: the server's parser failed to turn it into a call.
+
+If the model ends its turn again, the console does not leave the session waiting. It cancels the MADE instance with the reason, records the outcome in KMP and returns the session to normal mode. It then adds one visible message naming the server's tool-call parser as the first suspect when the markup was there, and the model answers the user. A plan worker ends `BLOCKED` with that reason instead. Self-repair keeps its own nudges. The trace records a `ceremony_stalled` stage.
+
+A session restored with a step open and no turn running shows `step <name> open: send a message to continue, or /stop-ceremony` in the footer. Any message continues the step. `/stop-ceremony` (alias `/parar`) cancels the instance in MADE and returns to normal mode; nothing in the workspace is rolled back.
+
 ### Memory and recovery
 
 With a registration named exactly `kmp`, AXLR attempts a wake before the procedure and an outcome write at its terminal state. It uses the exact about saved through `axlr_session`, with `ws:<session-id>` as fallback. The driver rechecks the selected about at completion, since startup may have established it after the first claim. Wake errors are disclosed without stopping MADE; an outcome write failure is reported as `not recorded`. Bounded recall retains refs and marks pending continuation; it is not a complete project-memory audit. Terminal outcomes are observations with stable idempotency keys. A `needs_review` response remains pending for writer inspection, rather than being acknowledged blindly. For other reusable decisions, follow the [KMP runbook](runbooks/kmp.md#use-memory-in-a-task).

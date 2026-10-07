@@ -44,6 +44,9 @@ const (
 	// DiagnosticJudgement records one Jev final check: its time and whether
 	// it failed, never the verdict's text.
 	DiagnosticJudgement DiagnosticStage = "judgement"
+	// DiagnosticCeremonyStalled records a ceremony the console cancelled
+	// because its model stopped handing the step back, or the person stopped.
+	DiagnosticCeremonyStalled DiagnosticStage = "ceremony_stalled"
 )
 
 func (stage DiagnosticStage) Valid() bool {
@@ -62,7 +65,7 @@ func (stage DiagnosticStage) Valid() bool {
 		DiagnosticRender, DiagnosticResize,
 		DiagnosticToolRequested, DiagnosticToolApproved, DiagnosticToolRejected,
 		DiagnosticToolCompleted, DiagnosticOperationDone, DiagnosticOperationFailed,
-		DiagnosticJudgement:
+		DiagnosticJudgement, DiagnosticCeremonyStalled:
 		return true
 	default:
 		return false

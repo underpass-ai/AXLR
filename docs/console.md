@@ -13,6 +13,7 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Enter` / `Shift+Enter` | Send / insert a newline |
 | `/model` | Choose a model |
 | `/normal`, `/review`, `/writer`, `/research` | Choose direct work and its local tool policy |
+| `/stop-ceremony` | Cancel the running ceremony in MADE and return to normal mode (alias `/parar`); see [a step the model will not hand back](ceremonies.md#a-step-the-model-will-not-hand-back) |
 | `/plan` | Select planning for the next prompt: the brief becomes verified atomic tasks you approve, run by workers; shows the plans panel while a plan runs. See [plans](ceremonies.md#plans-atomic-tasks-for-small-models) |
 | `/debug`, `/delivery`, `/incident`, `/repair` | Select a console-driven MADE procedure for the next prompt; `/incident` and `/repair` also open a pending approval card, and `/repair` opens the self-repairs panel when the agent requested one from this session |
 | `/update` | Update explicitly configured local KMP and MADE engines |

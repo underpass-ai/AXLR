@@ -85,6 +85,10 @@ func (m AppModel) footerStatus() string {
 			badge = m.Theme.Tf("ceremony.badge", badge, run.Step, run.Iteration)
 			if run.AwaitingPerson() {
 				badge = m.Theme.Tf("incident.badgeAwaiting", m.Theme.T("mode."+string(mode)))
+			} else if m.deps.Session != nil && !m.Busy {
+				if open, idle := application.OpenStepIdle(*m.deps.Session); idle {
+					badge = m.Theme.Tf("ceremony.badgeOpen", badge, open.Step)
+				}
 			}
 		}
 		parts = append(parts, badge)

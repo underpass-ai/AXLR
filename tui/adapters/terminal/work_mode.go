@@ -1,7 +1,10 @@
 package terminal
 
 import (
+	"context"
+
 	tea "charm.land/bubbletea/v2"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -37,4 +40,25 @@ func (m AppModel) switchMode(mode domain.WorkMode) (AppModel, tea.Cmd) {
 	m.Status.Error = ""
 	m.Composer.Input.Reset()
 	return m, nil
+}
+
+// stopCeremony is /stop-ceremony: the person ends the live ceremony.
+func (m AppModel) stopCeremony() (AppModel, tea.Cmd) {
+	if m.Busy {
+		m.Status.Error = m.Theme.T("mode.busy")
+		return m, nil
+	}
+	if m.deps.Session == nil {
+		m.Status.Error = m.Theme.T("ceremony.nothingToStop")
+		return m, nil
+	}
+	if _, live := m.deps.Session.Ceremony(); !live {
+		m.Status.Error = m.Theme.T("ceremony.nothingToStop")
+		return m, nil
+	}
+	start := m.deps.Start
+	m.Status.Error = ""
+	return m, m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+		return start.StopCeremony(ctx, s, emit)
+	})
 }
