@@ -1,0 +1,87 @@
+version: '1.0'
+name: axlr_plan
+description: Decompose a brief into atomic tasks that a small model can finish in a fresh, precise context. The agent proposes tasks with a scope, verified context citations, a unit check and dependencies, plus the plan's end-to-end check; the console verifies every item mechanically and the person approves the plan before any task starts; at most three decomposition rounds and two returns, then BLOCKED.
+inputs:
+  required:
+  - brief
+  - workspace
+  optional:
+  - memory_about
+outputs:
+  plan:
+    type: object
+states:
+- id: DECOMPOSE
+  initial: true
+- id: APPROVAL
+- id: READY
+  terminal: true
+- id: BLOCKED
+  terminal: true
+transitions:
+- from: DECOMPOSE
+  to: APPROVAL
+  trigger: decomposed
+  guards: [decompose_completed, plan_verified]
+- from: DECOMPOSE
+  to: BLOCKED
+  trigger: decompose_exhausted
+  guards: [decompose_exhausted]
+- from: APPROVAL
+  to: READY
+  trigger: approved
+  guards: [present_completed, person_requested_approval, person_approves]
+- from: APPROVAL
+  to: READY
+  trigger: approved_automatically
+  guards: [present_completed, automatic_approval]
+- from: APPROVAL
+  to: DECOMPOSE
+  trigger: returned
+  guards: [present_completed, return_requested]
+- from: APPROVAL
+  to: BLOCKED
+  trigger: declined
+  guards: [present_completed, person_declined]
+steps:
+- id: decompose
+  state: DECOMPOSE
+  handler: host_callback
+  repeat:
+    max_iterations: 3
+    until:
+      output_field: settled
+      equals: true
+  config:
+    num_agents: 1
+    prompt: Split the brief into atomic tasks. Each task names a goal, the files it may change, verified citations to the code the worker must read, a unit check command and the tasks it depends on; the plan names the end-to-end check and the interfaces the tasks share. The console verifies ids, dependencies, scopes, citations and that every command runs, and records verified=true and settled=true; otherwise it returns the defects for the next round.
+    see_prior: true
+- id: present
+  state: APPROVAL
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console shows the person the verified plan as a table of tasks, waves and checks, and completes this step only on the person's keypress, recording decision approve, return with the reason, or decline; with automatic approval configured it records decision automatic. Approval also needs the human guard, granted through the separate approver identity.
+    see_prior: true
+guards:
+  decompose_completed: {type: automated, check: 'step_status:decompose:COMPLETED'}
+  plan_verified: {type: automated, check: 'output_field:decompose:verified=true'}
+  decompose_exhausted: {type: automated, check: 'step_repeat_exhausted:decompose'}
+  present_completed: {type: automated, check: 'step_status:present:COMPLETED'}
+  person_requested_approval: {type: automated, check: 'output_field:present:decision="approve"'}
+  person_approves: {type: human, check: manual_approval}
+  automatic_approval: {type: automated, check: 'output_field:present:decision="automatic"'}
+  return_requested: {type: automated, check: 'output_field:present:decision="return"'}
+  person_declined: {type: automated, check: 'output_field:present:decision="decline"'}
+roles:
+- id: AXLR
+  allowed_actions: [decompose, decomposed, decompose_exhausted, present, approved_automatically, returned, declined]
+- id: HUMAN_APPROVER
+  allowed_actions: [approved]
+timeouts:
+  step_default: 3600
+retry_policies:
+  default: {max_attempts: 1, backoff_seconds: 1}
+max_parallel: 1
+max_transitions: 20
+max_bounces: 3

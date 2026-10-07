@@ -1,0 +1,71 @@
+version: '1.0'
+name: axlr_sync
+description: Integrate the tasks a wave finished. The console runs the plan's end-to-end check; when it fails, each affected task's worker, in a fresh context with the other tasks' hand-backs and the failing output, repairs its own scope or leaves a note for another task, and the console runs the check again; at most two reconciliation rounds, then BLOCKED with the exchange recorded.
+inputs:
+  required:
+  - plan
+  - wave
+  - tasks
+  - workspace
+  optional:
+  - memory_about
+outputs:
+  integration:
+    type: object
+states:
+- id: INTEGRATE
+  initial: true
+- id: RECONCILE
+- id: SYNCED
+  terminal: true
+- id: BLOCKED
+  terminal: true
+transitions:
+- from: INTEGRATE
+  to: SYNCED
+  trigger: integrated
+  guards: [integrate_completed, e2e_green]
+- from: INTEGRATE
+  to: RECONCILE
+  trigger: conflict
+  guards: [integrate_completed, e2e_red]
+- from: INTEGRATE
+  to: BLOCKED
+  trigger: exhausted
+  guards: [integrate_completed, e2e_blocked]
+- from: RECONCILE
+  to: INTEGRATE
+  trigger: reconciled
+  guards: [reconcile_completed, round_recorded]
+steps:
+- id: integrate
+  state: INTEGRATE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: The console runs the plan's end-to-end check over the wave's hand-backs. It records verdict green when it exits zero, red with the output tail while a reconciliation round remains, and blocked when the rounds are exhausted or the command cannot run. No model turn.
+    see_prior: true
+- id: reconcile
+  state: RECONCILE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: For each affected task the console opens a fresh worker context with that task's hand-back, the other tasks' hand-backs, the notes addressed to it and the failing output, and asks it to repair its own scope or to leave a note for the task whose change conflicts. The console enforces the scope, collects every response and records the round with reconciled=true.
+    see_prior: true
+guards:
+  integrate_completed: {type: automated, check: 'step_status:integrate:COMPLETED'}
+  e2e_green: {type: automated, check: 'output_field:integrate:verdict="green"'}
+  e2e_red: {type: automated, check: 'output_field:integrate:verdict="red"'}
+  e2e_blocked: {type: automated, check: 'output_field:integrate:verdict="blocked"'}
+  reconcile_completed: {type: automated, check: 'step_status:reconcile:COMPLETED'}
+  round_recorded: {type: automated, check: 'output_field:reconcile:reconciled=true'}
+roles:
+- id: AXLR
+  allowed_actions: [integrate, integrated, conflict, exhausted, reconcile, reconciled]
+timeouts:
+  step_default: 3600
+retry_policies:
+  default: {max_attempts: 1, backoff_seconds: 1}
+max_parallel: 1
+max_transitions: 20
+max_bounces: 4
