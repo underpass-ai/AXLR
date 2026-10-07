@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"google.golang.org/grpc"
 )
 
 type Dependencies struct {
@@ -27,25 +29,28 @@ type Dependencies struct {
 }
 
 type Server struct {
-	Config      Config
-	deps        Dependencies
-	base        *storage.SessionStore
-	sessions    *sessionStore
-	events      *eventStore
-	keys        *idempotencyStore
-	calls       *callStore
-	audit       *auditStore
-	principals  map[string]Principal
-	mu          sync.Mutex
-	jobs        sync.WaitGroup
-	closing     bool
-	operations  map[string]context.CancelFunc
-	locks       map[string]*sync.Mutex
-	callLocks   map[string]*sync.Mutex
-	directSlots chan struct{}
-	streamSlots chan struct{}
-	root        context.Context
-	stop        context.CancelFunc
+	Config         Config
+	deps           Dependencies
+	base           *storage.SessionStore
+	sessions       *sessionStore
+	events         *eventStore
+	keys           *idempotencyStore
+	calls          *callStore
+	audit          *auditStore
+	principals     map[string]Principal
+	mu             sync.Mutex
+	jobs           sync.WaitGroup
+	closing        bool
+	operations     map[string]context.CancelFunc
+	locks          map[string]*sync.Mutex
+	callLocks      map[string]*sync.Mutex
+	directSlots    chan struct{}
+	streamSlots    chan struct{}
+	root           context.Context
+	stop           context.CancelFunc
+	handlersOnce   sync.Once
+	operationAPI   http.Handler
+	operationProbe http.Handler
 }
 
 func NewServer(cfg Config, deps Dependencies) (*Server, error) {
@@ -184,7 +189,7 @@ func (s *Server) cancelOperation(id string) bool {
 	return true
 }
 
-func (s *Server) APIHandler() http.Handler {
+func (s *Server) apiRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/sessions", s.handleCreateSession)
 	mux.HandleFunc("GET /v1/sessions/{id}", s.handleGetSession)
@@ -196,6 +201,17 @@ func (s *Server) APIHandler() http.Handler {
 	mux.HandleFunc("POST /v1/tool-calls", s.handleCreateToolCall)
 	mux.HandleFunc("GET /v1/tool-calls/{id}", s.handleGetToolCall)
 	mux.HandleFunc("POST /v1/tool-calls/{id}/decisions", s.handleToolDecision)
+	return mux
+}
+
+func (s *Server) APIHandler() http.Handler {
+	mux := s.apiRoutes()
+	mux.Handle("/mcp", s.mcpHandler())
+	mux.HandleFunc("POST /v1/operations/{verb}", s.handleOperation)
+	return s.authenticated(mux)
+}
+
+func (s *Server) authenticated(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestID := r.Header.Get("X-Request-Id")
 		if !safeRequestID(requestID) {
@@ -209,8 +225,18 @@ func (s *Server) APIHandler() http.Handler {
 		}
 		ctx := context.WithValue(r.Context(), principalKey{}, p)
 		ctx = context.WithValue(ctx, requestIDKey{}, requestID)
-		mux.ServeHTTP(w, r.WithContext(ctx))
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// operationHandlers serves the transport adapters from one router instance
+// instead of rebuilding the REST and probe muxes on every call.
+func (s *Server) operationHandlers() (api, probe http.Handler) {
+	s.handlersOnce.Do(func() {
+		s.operationAPI = s.authenticated(s.apiRoutes())
+		s.operationProbe = s.ProbeHandler()
+	})
+	return s.operationAPI, s.operationProbe
 }
 
 func safeRequestID(id string) bool {
@@ -253,6 +279,19 @@ func (s *Server) Serve(ctx context.Context) error {
 	probe := &http.Server{Addr: s.Config.ProbeListen, Handler: s.ProbeHandler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 5 * time.Second}
 	apiErr := make(chan error, 1)
 	probeErr := make(chan error, 1)
+	grpcErr := make(chan error, 1)
+	var rpc *grpc.Server
+	if s.Config.GRPCListen != "" {
+		if rpc, err = s.grpcServer(); err != nil {
+			return err
+		}
+		listener, err := net.Listen("tcp", s.Config.GRPCListen)
+		if err != nil {
+			rpc.Stop()
+			return err
+		}
+		go func() { grpcErr <- rpc.Serve(listener) }()
+	}
 	go func() {
 		err := api.ListenAndServeTLS("", "")
 		if !errors.Is(err, http.ErrServerClosed) {
@@ -269,11 +308,28 @@ func (s *Server) Serve(ctx context.Context) error {
 	case <-ctx.Done():
 	case err = <-apiErr:
 	case err = <-probeErr:
+	case err = <-grpcErr:
 	}
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	// gRPC drains in-flight RPCs within the same window as the HTTP servers
+	// and is only cut off when that window elapses.
+	drained := make(chan struct{})
+	go func() {
+		if rpc != nil {
+			rpc.GracefulStop()
+		}
+		close(drained)
+	}()
 	_ = api.Shutdown(shutdownCtx)
 	_ = probe.Shutdown(shutdownCtx)
+	select {
+	case <-drained:
+	case <-shutdownCtx.Done():
+		if rpc != nil {
+			rpc.Stop()
+		}
+	}
 	return err
 }
 

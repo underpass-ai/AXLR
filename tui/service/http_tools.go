@@ -11,6 +11,9 @@ import (
 )
 
 func (s *Server) availableTools(r *http.Request) ([]domain.AvailableTool, error) {
+	if tools, ok := r.Context().Value(operationSnapshotKey{}).([]domain.AvailableTool); ok {
+		return tools, nil
+	}
 	if s.deps.Catalog == nil {
 		return nil, errors.New("tool catalog unavailable")
 	}

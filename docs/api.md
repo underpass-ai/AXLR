@@ -1,6 +1,8 @@
 # Service API (source builds)
 
-`axlr-serve` is the HTTP adapter in the `tui` Go module. It reuses the console's turn and tool-resolution use cases. The JSON worker remains a one-request process. The route and payload reference is [OpenAPI v1](../api/openapi/axlr-v1.yaml). See [service operations](runbooks/service.md) for probes, a direct-read smoke check and recovery.
+`axlr-serve` is the service adapter in the `tui` Go module. It reuses the console's turn and tool-resolution use cases. The JSON worker remains a one-request process. The REST route and payload reference is [OpenAPI v1](../api/openapi/axlr-v1.yaml). See [service operations](runbooks/service.md) for probes, a direct-read smoke check and recovery.
+
+The same service capabilities are available through gRPC and an authenticated Streamable HTTP MCP server at `/mcp`. The [transport parity contract](transport-parity.md) lists all 18 verbs, shared schemas, approvals and event delivery; the OpenAPI document also describes `POST /v1/operations/{verb}` and `/mcp`. Set optional `grpc_listen` to a separate address such as `127.0.0.1:9443`; an omitted field leaves it disabled. Existing REST payloads and probe routes remain available.
 
 Build with `GOWORK=off go -C tui build -trimpath -o /tmp/axlr-serve ./cmd/axlr-serve`; run `/tmp/axlr-serve --config=/absolute/path/service.json`. `--version` prints the injected build version. The service configuration is strict JSON (at most 64 KiB) with absolute file paths and explicit listeners. This template names existing files/services; replace every placeholder before launch:
 

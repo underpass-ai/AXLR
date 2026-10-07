@@ -1,5 +1,7 @@
 # Helm deployment
 
+The HTTPS Service also exposes the authenticated MCP endpoint `/mcp`. Enable `grpc.enabled=true` to add the separate mTLS gRPC listener on container port 9443; `grpc.port` selects the Service port. The chart includes the corresponding NetworkPolicy rule when enabled. See [transport parity](transport-parity.md) for the shared verb contract.
+
 The [AXLR chart](../charts/axlr/Chart.yaml) installs one AXLR service replica. KMP and MADE remain existing remote services; the pod contains only their MCP adapters. Start from [`values.example.yaml`](../charts/axlr/values.example.yaml), replace every placeholder, then run:
 
 ```bash

@@ -6,4 +6,8 @@ metadata:
     {{- include "axlr.labels" . | nindent 4 }}
 data:
   service.json: |
-    {{ dict "api_listen" "0.0.0.0:8443" "probe_listen" "127.0.0.1:8081" "workspace" .Values.workspace.mountPath "state_dir" "/state" "server_cert_file" "/secrets/api/tls.crt" "server_key_file" "/secrets/api/tls.key" "client_ca_file" "/secrets/client-ca/ca.crt" "principals_file" "/secrets/principals/principals.json" "model_api_key_file" "/secrets/model/api-key" "kmp" (dict "endpoint" .Values.kmp.endpoint "server_name" .Values.kmp.tls.serverName "tls_dir" "/secrets/kmp" "command" "/usr/local/bin/kmp-mcp") "made" (dict "endpoint" .Values.made.endpoint "server_name" .Values.made.tls.serverName "tls_dir" "/secrets/made" "command" "/usr/local/bin/made-mcp") | toJson }}
+    {{- $config := dict "api_listen" "0.0.0.0:8443" "probe_listen" "127.0.0.1:8081" "workspace" .Values.workspace.mountPath "state_dir" "/state" "server_cert_file" "/secrets/api/tls.crt" "server_key_file" "/secrets/api/tls.key" "client_ca_file" "/secrets/client-ca/ca.crt" "principals_file" "/secrets/principals/principals.json" "model_api_key_file" "/secrets/model/api-key" "kmp" (dict "endpoint" .Values.kmp.endpoint "server_name" .Values.kmp.tls.serverName "tls_dir" "/secrets/kmp" "command" "/usr/local/bin/kmp-mcp") "made" (dict "endpoint" .Values.made.endpoint "server_name" .Values.made.tls.serverName "tls_dir" "/secrets/made" "command" "/usr/local/bin/made-mcp")  }}
+    {{- if .Values.grpc.enabled }}
+    {{- $_ := set $config "grpc_listen" "0.0.0.0:9443" }}
+    {{- end }}
+    {{ $config | toJson }}

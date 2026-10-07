@@ -11,6 +11,9 @@ state:
 service:
   type: ClusterIP
   port: 8443
+grpc:
+  enabled: false
+  port: 9443
 api:
   serverTLS:
     existingSecret: ""

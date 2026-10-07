@@ -21,6 +21,7 @@ type EngineConfig struct {
 
 type Config struct {
 	APIListen       string       `json:"api_listen"`
+	GRPCListen      string       `json:"grpc_listen,omitempty"`
 	ProbeListen     string       `json:"probe_listen"`
 	Workspace       string       `json:"workspace"`
 	StateDir        string       `json:"state_dir"`
@@ -66,6 +67,14 @@ func (c Config) Validate() error {
 	}
 	if _, _, err := net.SplitHostPort(c.APIListen); err != nil {
 		return errors.New("invalid API listener")
+	}
+	if c.GRPCListen != "" {
+		if _, _, err := net.SplitHostPort(c.GRPCListen); err != nil {
+			return errors.New("invalid gRPC listener")
+		}
+		if c.GRPCListen == c.APIListen || c.GRPCListen == c.ProbeListen {
+			return errors.New("gRPC listener must be separate from API and probes")
+		}
 	}
 	for name, value := range map[string]string{"workspace": c.Workspace, "state_dir": c.StateDir, "server_cert_file": c.ServerCertFile, "server_key_file": c.ServerKeyFile, "client_ca_file": c.ClientCAFile, "principals_file": c.PrincipalsFile, "model_api_key_file": c.ModelAPIKeyFile} {
 		if !filepath.IsAbs(value) || strings.ContainsRune(value, 0) {

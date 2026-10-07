@@ -196,6 +196,63 @@ paths:
             application/json:
               schema: {$ref: '#/components/schemas/CallReference'}
         default: {$ref: '#/components/responses/Error'}
+  /v1/operations/{verb}:
+    parameters:
+      - {name: verb, in: path, required: true, schema: {type: string, enum: [Read, Write, Edit, Exec, ListPlugins, CallPlugin, CreateSession, GetSession, StartTurn, StreamEvents, DecideSessionTool, CancelSessionTurn, ListTools, CreateToolCall, GetToolCall, DecideToolCall, Liveness, Readiness]}}
+    post:
+      operationId: invokeOperation
+      description: >-
+        Transport-neutral form of the capability named by verb, shared with the gRPC RPC and the
+        MCP tool of the same name; docs/transport-parity.md lists each verb's arguments. The body
+        is the verb's argument object and an absent or empty body is {}. request_id and
+        idempotency_key travel in the body instead of headers, and the X-Request-Id response
+        header follows the envelope. The HTTP status repeats the envelope's status_code, except
+        that probe results use HTTP 200 with status_code 204. Failures keep the Error schema in
+        body, including not_ready for probe failures and invalid_id for an empty resource ID.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                request_id: {type: string, maxLength: 128}
+                idempotency_key: {type: string, pattern: '^[A-Za-z0-9._~-]{16,128}$'}
+      responses:
+        '2XX':
+          description: Result envelope; body is the response of the underlying REST route or null.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperationResult'}
+        default:
+          description: Result envelope whose body is an Error.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/OperationResult'}
+  /mcp:
+    post:
+      operationId: mcp
+      description: >-
+        Stateless MCP Streamable HTTP endpoint on the API listener. Each POST carries one
+        JSON-RPC 2.0 message and is authenticated by its own client certificate; no MCP session
+        ID is issued. tools/list returns the 18 axlr_* tools and tools/call returns the
+        OperationResult envelope as structuredContent and as text, with isError set for
+        status_code 400 and above. GET and DELETE return 405.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {type: object, description: JSON-RPC 2.0 request or notification.}
+      responses:
+        '200':
+          description: JSON-RPC response as JSON or as a single-message SSE stream; Accept must list both media types.
+          content:
+            application/json:
+              schema: {type: object}
+            text/event-stream:
+              schema: {type: string}
+        '405': {description: Only POST is served on the stateless endpoint.}
+        default: {$ref: '#/components/responses/Error'}
   /livez:
     get:
       operationId: liveness
@@ -232,7 +289,7 @@ components:
               expected_revision: {type: integer, minimum: 1}
   responses:
     Error:
-      description: Error; codes include invalid_json, invalid_id, forbidden, not_found, stale_revision, idempotency_conflict, engine_unavailable, storage_error and internal_error.
+      description: Error; codes include invalid_json, invalid_id, forbidden, not_found, stale_revision, idempotency_conflict, engine_unavailable, storage_error, internal_error, unknown_operation and not_ready.
       content:
         application/json:
           schema: {$ref: '#/components/schemas/Error'}
@@ -296,6 +353,13 @@ components:
         description: {type: string}
         schema: {type: object}
         available: {type: boolean}
+    OperationResult:
+      type: object
+      required: [status_code, request_id, body]
+      properties:
+        status_code: {type: integer}
+        request_id: {type: string}
+        body: {description: The underlying REST response, null for probes, or an Error.}
     CallReference:
       type: object
       required: [call_id, status, revision]
