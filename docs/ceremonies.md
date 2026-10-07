@@ -106,7 +106,7 @@ Roles in a definition describe responsibilities and do not spawn agents. Indepen
    - `d` sends it back with a reason, twice at most;
    - `x` declines it with a reason.
 
-   `plan.auto_approve` records an automatic approval instead.
+   `plan.auto_approve` records an automatic approval instead. After the person approves, the plan's session asks the model nothing more, because a planner that kept working would edit the workspace under the workers. After an automatic approval, the model is told to answer in a sentence and stop.
 4. **Tasks.** The approved plan runs in the background, wave by wave. The tasks of a wave run one after another in the same workspace, each in a fresh `task` session with the session's model and autonomous local tools. Its first message is the context pack, plus the notes earlier tasks addressed to it and what KMP recalls for its plan and task.
    - **`start`** (console): records the digests of the scope, protected and already-changed files, and runs the unit check as a baseline.
    - **`red`** (test-first only): the named test files must have changed and the check must fail; their digests are then frozen.

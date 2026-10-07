@@ -57,6 +57,17 @@ func (u StartTurnUseCase) applyDecision(ctx context.Context, session *domain.Ses
 		}
 		return err
 	}
+	if run, live := session.Ceremony(); live && run.Plan != nil && result.Accepted && result.Run == nil {
+		// Seen on 7 Oct 2026: after the person approved, the planner kept
+		// working in this session and edited the workspace while the plan's
+		// workers ran. An approved plan's session asks the model nothing:
+		// the plans panel and the footer report the run.
+		if err := u.Store.Save(ctx, next); err != nil {
+			return err
+		}
+		*session = next
+		return emitSession(session, emit)
+	}
 	tools, err := u.Catalog.Snapshot(ctx)
 	if err != nil {
 		return err

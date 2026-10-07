@@ -549,6 +549,9 @@ func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain
 		}
 		report["ceremony"] = state
 		report["instruction"] = "The ceremony is over and the session is back in normal mode. Tell the user the outcome in their language."
+		if run.Plan != nil && state == "READY" {
+			report["instruction"] = "The plan is approved and the console now runs its tasks in separate worker sessions in this workspace. Do not read, run or change anything: answer the user in one or two sentences in their language and end your turn."
+		}
 		d.observe(run, state, report, true, false)
 		return accept(report, nil), nil
 	}

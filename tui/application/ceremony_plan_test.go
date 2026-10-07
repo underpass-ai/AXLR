@@ -208,3 +208,19 @@ func TestThePlannerSeesOnlyWhatDecomposeNeeds(t *testing.T) {
 		t.Fatal("the planner called a hidden host tool")
 	}
 }
+
+func TestApprovingAPlanAsksTheModelNothingMore(t *testing.T) {
+	d, _, _, _, s := planDriver(t)
+	step(t, d, &s, planArgs(t, goodTasks))
+	asked := 0
+	u := StartTurnUseCase{Catalog: &catalogStub{}, Store: &memoryStore{}, Continue: ContinueTurnUseCase{Store: &memoryStore{}, Ceremonies: d, Models: streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		asked++
+		return assistant("I'll start on the tasks myself"), nil
+	})}}
+	if err := u.Decide(context.Background(), &s, true, "", ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if asked != 0 || s.Mode() != domain.ModeNormal {
+		t.Fatalf("the planner was asked again (%d) or the mode stayed %s", asked, s.Mode())
+	}
+}
