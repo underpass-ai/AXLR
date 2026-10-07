@@ -1,5 +1,9 @@
 # Documentation audit — 4 October 2026
 
+## v0.3.0 release preparation
+
+Releases `main` at `5962f0d`. Since v0.2.3: `/repair` drives a repository fix in a clone through to a merged pull request (#61) and the agent can request it from a running session (#64); the axlr-ceremonies 1.0 skill catalogue is retired and CI validates the driver definitions and their pins (#62); the ceremony recall focuses on the user's request (#63); local OpenAI-compatible models are served from `settings.json` with a configurable context window (#68); debug and delivery run under a compact profile for small local models (#71); plan briefs become verified atomic tasks run by small-model workers with per-wave syncs (#72); a ceremony whose model stops handing the step back ends, and the person can stop one (#73). The chart's `version` and `appVersion` are `0.3.0`. Publication and the six-platform native checks belong to the release workflow.
+
 ## 7 October 2026: stalled ceremonies (#70)
 
 A driven ceremony no longer waits forever when its model stops handing the step back.
