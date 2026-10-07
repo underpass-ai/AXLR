@@ -108,6 +108,7 @@ func (e *incidentEngine) Transition(_ context.Context, _, trigger string) (strin
 	delete(e.outputs, "present")
 	return e.state, nil
 }
+func (e *incidentEngine) Cancel(context.Context, string, string) error { return nil }
 func (e *incidentEngine) Inspect(context.Context, string) (CeremonyView, error) {
 	view := CeremonyView{State: e.state, Enabled: e.enabled(), Completed: map[string]map[string]any{}}
 	for step, output := range e.outputs {

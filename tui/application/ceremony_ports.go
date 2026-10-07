@@ -26,6 +26,9 @@ type CeremonyEnginePort interface {
 	Transition(ctx context.Context, instance, trigger string) (state string, err error)
 	// Inspect reads where the instance is, to reconcile an interrupted advance.
 	Inspect(ctx context.Context, instance string) (CeremonyView, error)
+	// Cancel ends the instance irreversibly with a recorded reason: a stalled
+	// step the model will not hand back, or the person's stop.
+	Cancel(ctx context.Context, instance, reason string) error
 }
 
 // CeremonyView is the part of a MADE instance the driver reconciles from.

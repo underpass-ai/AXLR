@@ -32,11 +32,12 @@ var slashCommands = []slashCommand{
 	{"/incident", "slash.incident"},
 	{"/repair", "slash.repair"},
 	{"/plan", "slash.plan"},
+	{"/stop-ceremony", "slash.stopCeremony"},
 	{"/exit", "slash.exit"},
 }
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/planificar": "/plan"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/planificar": "/plan", "/parar": "/stop-ceremony"}
 
 const slashSuggestionLimit = 6
 

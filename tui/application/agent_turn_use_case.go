@@ -46,7 +46,10 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 			if err != nil {
 				return err
 			}
-			if !reminded {
+			if !reminded && err == nil {
+				reminded, err = cancelStalled(ctx, s, u.Continue, emit)
+			}
+			if !reminded && err == nil {
 				reminded, err = checkFinalAnswer(ctx, s, u.Continue, emit)
 			}
 			if err != nil || !reminded {
@@ -118,7 +121,7 @@ func remindOpenStep(ctx context.Context, s *domain.Session, store SessionStorePo
 	if err := next.SetCeremony(run); err != nil {
 		return false, err
 	}
-	if err := next.BeginTurn(stepReminder(run), next.ToolSnapshot()); err != nil {
+	if err := next.BeginTurn(stepReminder(run)+root.Text(leakNote(*s)), next.ToolSnapshot()); err != nil {
 		return false, err
 	}
 	if err := store.Save(ctx, next); err != nil {

@@ -148,6 +148,11 @@ func (e Engine) Inspect(ctx context.Context, instance string) (application.Cerem
 	return view, nil
 }
 
+func (e Engine) Cancel(ctx context.Context, instance, reason string) error {
+	_, err := e.made(ctx, "made_cancel_ceremony", map[string]any{"ceremony_id": instance, "actor_id": actorID, "actor_kind": actorKind, "reason": reason})
+	return err
+}
+
 func (e Engine) Transition(ctx context.Context, instance, trigger string) (string, error) {
 	if _, err := e.made(ctx, "made_apply_ceremony_transition", map[string]any{"ceremony_id": instance, "trigger": trigger, "actor_kind": actorKind}); err != nil {
 		return "", err

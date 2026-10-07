@@ -472,6 +472,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("approvals"))
 			}
+			if command == "/stop-ceremony" {
+				m.Composer.Input.Reset()
+				return m.stopCeremony()
+			}
 			if command == "/changes" || command == "/diff" {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("changes"))

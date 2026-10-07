@@ -37,7 +37,7 @@ Start with the visible symptom, then use the relevant check. AXLR prints startup
 | `model … is not a configured local model and OPENROUTER_API_KEY is not set` | The session's model is an OpenRouter id | Export the key, or choose a local model in `/model` |
 | `model endpoint HOST invalid_request (HTTP 400)` | The server refused the request, often because its template does not declare tools | Run the smoke test below |
 | The model answers in text, or repeats the same call | The server's tool-call parser does not match the model's template | Fix the server's parser or template; AXLR receives only what the server returns |
-| The answer ends with raw markup such as `<|tool_call>call:local_write{…}` | The server's streaming parser leaked a tool call as text | Set `"stream": false` on that local model; a driven ceremony left waiting with its step open is tracked in [#70](https://github.com/underpass-ai/AXLR/issues/70) |
+| The answer ends with raw markup such as `<|tool_call>call:local_write{…}` | The server's streaming parser leaked a tool call as text | Set `"stream": false` on that local model. A ceremony whose model does this twice is cancelled with the reason; a restored one with its step open can be stopped with `/stop-ceremony` |
 | `… stream inactivity timeout` | A cold prefill took longer than `stream_idle_seconds` | Raise `stream_idle_seconds` or lower `context_tokens` |
 | A long session is refused by the server for its context length | `context_tokens` is larger than the server's window | Set `context_tokens` at or below the server's `-c` or `--max-model-len` |
 

@@ -1,5 +1,28 @@
 # Documentation audit — 4 October 2026
 
+## 7 October 2026: stalled ceremonies (#70)
+
+A driven ceremony no longer waits forever when its model stops handing the step back.
+
+- **The reminder.** The console's one reminder now names a tool call that leaked as text (`<|tool_call>`, `<tool_call>`, `[TOOL_CALLS]`, `<|python_tag|>` and similar).
+- **A second plain reply** cancels the MADE instance (`made_cancel_ceremony`, already in the work grant) with the reason and records the outcome. The session returns to normal mode, and one visible message names the server's tool-call parser as the first suspect when markup was present. A plan worker ends `BLOCKED` with that reason. Self-repair keeps its own nudges.
+- **A restored session** with a step open and no turn shows it in the footer; `/stop-ceremony` (alias `/parar`) cancels it.
+- **Trace.** The trace gains a `ceremony_stalled` stage.
+
+At Tirso's request there is no time-based limit: a slow model keeps its time, and a stopped one is detected by its behaviour. The [ceremonies guide](ceremonies.md#a-step-the-model-will-not-hand-back), the [console guide](console.md) and [troubleshooting](troubleshooting.md) are updated.
+
+**Checks run**
+- Both modules' tests, `go vet` and `gofmt`.
+- Unit tests:
+  - two replies with leaked markup end the ceremony, the reminder names the markup, and the notice names the parser;
+  - the reminder carries no leak note without markup;
+  - a paused open step is reported and stopped by the person;
+  - a stalled self-repair is left to its runner.
+
+**Not verified**
+- A live model reaching the cancellation. The plan runs that motivated this ended earlier through the step budget or the worker rule.
+- The footer's rendering in a terminal.
+
 ## 7 October 2026: plan, task and sync
 
 `/plan` (alias `/planificar`) drives three newly pinned definitions: `axlr_plan`, `axlr_task` and `axlr_sync` 1.0. `/mcp → P` now publishes seven definitions.
