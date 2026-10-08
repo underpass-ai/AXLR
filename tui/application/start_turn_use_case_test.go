@@ -74,7 +74,7 @@ func TestStartTurnPersistsUserBeforeStreamingAndAssistantAfter(t *testing.T) {
 		if len(store.states) != 1 || store.states[0].Messages[0].Content != "hello" {
 			t.Fatal("user not saved before model")
 		}
-		if r.Model != "test/model" || len(r.Tools) != 8 || !requestHasTool(r, "read") {
+		if r.Model != "test/model" || len(r.Tools) != 9 || !requestHasTool(r, "read") {
 			t.Fatalf("request: %+v", r)
 		}
 		for _, d := range []root.Text{"hi", " there"} {

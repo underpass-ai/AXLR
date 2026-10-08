@@ -50,6 +50,9 @@ func modelHostGuidance(s *domain.Session) root.Message {
 	if text, ok := modeGuidance[s.Mode()]; ok {
 		guidance.WriteString(text)
 	}
+	if !s.Mode().ForgesPullRequest() && s.Mode() != domain.ModeTask && s.Mode() != domain.ModePlan {
+		guidance.WriteString("Self-improvement: when AXLR's own tools made this task needlessly hard in a way your calls show (a capability local_* or axlr_* lacks, a result you had to work around) and the same friction happened at least twice in this session, you may call axlr_request_improvement once per session with description, expected, observed, concrete evidence and the IDs of at least two of those calls. Never for the user's project, a program you ran, MCP plugins, credentials or the network, and never instead of finishing the task or telling the user. A started improvement runs in a separate session and the person approves its check and its merge.\n")
+	}
 	if !s.Mode().ForgesPullRequest() {
 		guidance.WriteString("Self-repair: when a local_* or axlr_* tool fails in a way that points at AXLR itself (an internal_error, an unreadable result, a host refusal that is not about your arguments, a wrong result you can show), retry it once; if it recurs, call axlr_request_repair with description, expected, observed, concrete evidence and the IDs of the failing calls. Never request it for failures of the project, of a program you ran, of your arguments, of permissions, credentials, OpenRouter, MCP servers or the network; tell the user those. A started repair runs in a separate session: continue your task and consult axlr_repair_status when asked.\n")
 	}

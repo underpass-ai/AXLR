@@ -30,6 +30,9 @@ const (
 	HostOperationRequestRepair = "request_repair"
 	// HostOperationRepairStatus reads the repairs linked to this session.
 	HostOperationRepairStatus = "repair_status"
+	// HostOperationRequestImprovement asks the console to improve AXLR
+	// itself in a separate session, with cited calls it validates first.
+	HostOperationRequestImprovement = "request_improvement"
 	// HostOperationJudge asks TypeSafe Jev, an external judgement model, one
 	// question; offered only when settings enable it.
 	HostOperationJudge = "judge"
@@ -54,7 +57,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationJudge:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge:
 			return nil
 		}
 	case ToolKindLocal:

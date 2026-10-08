@@ -8,12 +8,13 @@ import (
 // Discovery and current-session bookkeeping are intrinsic. Wrappers retain target approval.
 func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity) bool {
 	if id.Kind == domain.ToolKindHost {
-		// A repair request starts a separate session the console validates
-		// and drives; its own approvals (the check command, the merge) stay
-		// with the person, so the request itself needs no card. A judgement
+		// A repair or improvement request starts a separate session the
+		// console validates and drives; its own approvals (the check command,
+		// the merge) stay with the person, so the request itself needs no
+		// card. A judgement
 		// asks Jev a question the person enabled in settings and changes
 		// nothing.
-		return id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationJudge
+		return id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationRequestImprovement || id.LocalOperation == domain.HostOperationJudge
 	}
 	return policy != nil && policy.AutoApproves(id)
 }

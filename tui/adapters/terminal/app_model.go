@@ -514,9 +514,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m.openPlanPanel(), nil
 			}
-			if command == "/repair" && len(m.repairRecords()) > 0 {
-				// Repairs the agent requested from this session, or that wait
-				// for the person, are shown before any mode change.
+			if command == "/repair" && len(m.repairRecords()) > 0 || command == "/improve" && improvementRecords(m.repairRecords()) {
+				// Repairs and improvements the agent requested from this
+				// session, or that wait for the person, are shown before any
+				// mode change.
 				m.Composer.Input.Reset()
 				return m.openRepairPanel(), nil
 			}

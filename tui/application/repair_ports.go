@@ -70,9 +70,11 @@ type RepairNoticesPort interface {
 	Drain(ctx context.Context, session domain.SessionID) ([]string, error)
 }
 
-// RepairRequestPort is the host tool side of self-repair.
+// RepairRequestPort is the host tool side of self-repair and of the
+// improvements the agent requests.
 type RepairRequestPort interface {
 	Request(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error)
+	RequestImprovement(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error)
 	Status(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error)
 }
 
