@@ -105,10 +105,15 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	if e = s.claim(session.Export().ID); e != nil {
 		return e
 	}
-	data, e := json.Marshal(record)
-	if e != nil {
+	// json.Marshal would escape <, > and & inside tool call arguments, so a
+	// loaded session would no longer send the bytes the live one sent.
+	var encoded bytes.Buffer
+	encoder := json.NewEncoder(&encoded)
+	encoder.SetEscapeHTML(false)
+	if e = encoder.Encode(record); e != nil {
 		return e
 	}
+	data := bytes.TrimSuffix(encoded.Bytes(), []byte("\n"))
 	file, e := os.CreateTemp(s.dir, ".snapshot-*")
 	if e != nil {
 		return e
