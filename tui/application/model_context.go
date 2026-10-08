@@ -57,7 +57,7 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		guidance.WriteString("Self-repair: when a local_* or axlr_* tool fails in a way that points at AXLR itself (an internal_error, an unreadable result, a host refusal that is not about your arguments, a wrong result you can show), retry it once; if it recurs, call axlr_request_repair with description, expected, observed, concrete evidence and the IDs of the failing calls. Never request it for failures of the project, of a program you ran, of your arguments, of permissions, credentials, OpenRouter, MCP servers or the network; tell the user those. A started repair runs in a separate session: continue your task and consult axlr_repair_status when asked.\n")
 	}
 	if run, live := s.Ceremony(); live {
-		guidance.WriteString(Instruction(run))
+		guidance.WriteString(ceremonyStanding(run))
 	}
 	plugins := map[root.PluginID][]string{}
 	for _, tool := range s.ToolSnapshot() {
