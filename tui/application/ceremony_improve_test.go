@@ -107,7 +107,15 @@ func TestImproveBriefNeedsAFailingCheckThenWaitsForThePersonsMerge(t *testing.T)
 	if strings.Contains(joined, "merge_automatic") || !strings.Contains(joined, "transition merge_approved") || !strings.Contains(joined, "claim brief 2") {
 		t.Fatalf("calls: %s", joined)
 	}
-	if len(checks.runs) != 3 {
+	var checked, statuses int
+	for _, run := range checks.runs {
+		if run.Program == "git" {
+			statuses++
+		} else {
+			checked++
+		}
+	}
+	if checked != 3 || statuses != 2 {
 		t.Fatalf("checks: %v", checks.runs)
 	}
 	p := forge.proposals[0]
@@ -128,6 +136,25 @@ func TestImproveBriefNeedsAFailingCheckThenWaitsForThePersonsMerge(t *testing.T)
 	}
 	if labels := memory.labels[len(memory.labels)-1]; labels["improvement"][0] != "20261008-1200-show-the-log" || labels["repair"] != nil {
 		t.Fatalf("labels: %v", labels)
+	}
+}
+
+func TestImproveBriefRefusesAClonePastItsBaseline(t *testing.T) {
+	d, engine, checks, _, s := improveDriver(t, &fakeForge{}, 1)
+	if err := d.Begin(context.Background(), &s, "show the log"); err != nil {
+		t.Fatal(err)
+	}
+	checks.status = " M tui/cmd/axlr-tui/run.go\n"
+	r := step(t, d, &s, improveBriefArgs)
+	if r["accepted"] != false || !strings.Contains(r["error"].(string), "the clone already has changes ( M tui/cmd/axlr-tui/run.go)") {
+		t.Fatalf("dirty clone: %v", r)
+	}
+	if len(checks.runs) != 1 || strings.Contains(strings.Join(engine.calls, " | "), "complete brief") {
+		t.Fatalf("the check must not run on a changed clone: %v %v", checks.runs, engine.calls)
+	}
+	checks.status = ""
+	if r := step(t, d, &s, improveBriefArgs); r["next_step"] != "build" {
+		t.Fatalf("clean clone: %v", r)
 	}
 }
 

@@ -47,6 +47,18 @@ func (d *CeremonyDriver) improveBrief(ctx context.Context, run *domain.CeremonyR
 	if !ok || done.Criteria == "" || done.Scope == "" {
 		return nil, "", false, "brief needs criteria, scope and check_command {program, args}, or feasible=false with observed", nil
 	}
+	// The pull request says the check failed before the change; that holds
+	// only if nothing in the clone has changed yet.
+	status, err := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"status", "--porcelain"}})
+	if err != nil {
+		return nil, "", false, "", err
+	}
+	switch {
+	case !status.Ran || status.ExitCode != 0:
+		return nil, "", false, "the console could not read git status in the clone (" + bounded(strings.TrimSpace(status.Output), 300) + "); the brief's check must run before any change", nil
+	case strings.TrimSpace(status.Output) != "":
+		return nil, "", false, "the clone already has changes (" + bounded(strings.TrimRight(status.Output, "\r\n"), 300) + "); the brief's check must run before any change: revert them, then hand back the brief, or send feasible=false with observed", nil
+	}
 	run.Check = command
 	result, err := d.Checks.Run(ctx, command)
 	if err != nil {

@@ -361,7 +361,7 @@ func (d *CeremonyDriver) watch(ctx context.Context, run domain.CeremonyRun) (str
 			return "blocked", map[string]any{"reason": "the pull request was closed outside the ceremony"}, nil
 		case len(status.Failed) > 0 && status.Pending == 0:
 			if r.Rounds+1 >= domain.MaxRepairRounds+1 {
-				return "blocked", map[string]any{"reason": fmt.Sprintf("checks failed after %d repair rounds", r.Rounds), "failed": status.Failed}, nil
+				return "blocked", map[string]any{"reason": fmt.Sprintf("checks failed after %d %s rounds", r.Rounds, r.Kind()), "failed": status.Failed}, nil
 			}
 			return "red", map[string]any{"failed": status.Failed, "passed": status.Passed}, nil
 		case status.Pending == 0 && status.MergeState == "BEHIND" && !updated:
