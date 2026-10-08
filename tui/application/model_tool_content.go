@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+
+	root "github.com/underpass-ai/AXLR/domain"
 )
 
 // projectToolContent removes transport duplication while keeping protocol state.
 // A clipped result is a valid JSON object with explicit original provenance; its
 // excerpt is a string, never a fragment represented as if it were valid data.
 func projectToolContent(raw string, index, limit int) (string, error) {
-	return projectToolContentIn(raw, index, limit, excerptHistorical)
+	return projectToolContentIn(raw, index, limit, excerptHistorical, "")
 }
 
 // excerptPlace says where a clipped result sits, which decides how the model
@@ -30,38 +32,14 @@ const (
 	excerptCompacted
 )
 
-func projectToolContentIn(raw string, index, limit int, place excerptPlace) (string, error) {
-	original, decodeErr := decodeContextJSON([]byte(raw))
-	if decodeErr != nil {
-		if contentJSONBytes(raw) <= limit-256 {
-			return raw, nil
-		}
-		original = raw
-	}
-	semantic := original
-	if envelope, ok := original.(map[string]any); ok {
-		if _, runtimeEnvelope := envelope["protocol_version"]; runtimeEnvelope {
-			if output, ok := envelope["output"].(map[string]any); ok {
-				semantic = projectMCPOutput(output)
-				if result, ok := semantic.(map[string]any); ok {
-					for _, key := range []string{"status", "error", "uncertain"} {
-						if value, exists := envelope[key]; exists && value != nil {
-							if current, exists := result[key]; exists && !reflect.DeepEqual(current, value) {
-								result["runtime_"+key] = value
-							} else {
-								result[key] = value
-							}
-						}
-					}
-					result["protocol_version"] = envelope["protocol_version"]
-				}
-			}
-		}
+// projectToolContentIn clips a result of the named tool when it does not fit
+// limit; the tool decides how the excerpt tells the model to get the rest.
+func projectToolContentIn(raw string, index, limit int, place excerptPlace, tool root.ToolName) (string, error) {
+	original, semantic, whole := wholeToolContent(raw)
+	if contentJSONBytes(whole) <= limit-256 {
+		return whole, nil
 	}
 	encoded, _ := json.Marshal(semantic)
-	if contentJSONBytes(string(encoded)) <= limit-256 {
-		return string(encoded), nil
-	}
 	// One text serves the current turn and the closed one: a result that
 	// changed its text when its turn closed broke the provider's cached
 	// prefix at that message on every turn.
@@ -69,6 +47,14 @@ func projectToolContentIn(raw string, index, limit int, place excerptPlace) (str
 		"kind": "axlr_tool_result_excerpt", "lossy": true,
 		"message_index": index, "original_bytes": len(raw),
 		"retrieval": fmt.Sprintf("While this turn is open, axlr_history will not re-read this result: repeat the original call with a narrower query, filter or page. Once the turn has closed, axlr_history({message_index: %d, offset_bytes: 0}); continue with next_offset_bytes for the exact original result.", index),
+	}
+	// A local_read page has no query or filter: the rest is read from the
+	// file. Its offset is sized here at its largest and set once the
+	// excerpt is chosen.
+	page, isPage := localReadPageOf(semantic)
+	read := tool == "local_read" && isPage && place != excerptCompacted
+	if read {
+		bounded["retrieval"] = localReadRetrieval(page.end(), limit)
 	}
 	if place == excerptCompacted {
 		bounded["retrieval"] = "This turn no longer fits the model context, so its earlier results were shortened. Answer with what you have, or ask the user before gathering more."
@@ -101,6 +87,9 @@ func projectToolContentIn(raw string, index, limit int, place excerptPlace) (str
 		bounded["excerpt_start"] = utf8Prefix(string(encoded), available/2)
 		bounded["excerpt_end"] = utf8Suffix(string(encoded), available/2)
 		bounded["omitted_bytes"] = len(encoded) - len(bounded["excerpt_start"].(string)) - len(bounded["excerpt_end"].(string))
+		if read {
+			bounded["retrieval"] = localReadRetrieval(page.resume(bounded["excerpt_start"].(string)), limit)
+		}
 		result, _ := json.Marshal(bounded)
 		if contentJSONBytes(string(result)) <= limit-256 {
 			return string(result), nil
@@ -110,6 +99,45 @@ func projectToolContentIn(raw string, index, limit int, place excerptPlace) (str
 		}
 		available /= 2
 	}
+}
+
+// wholeToolContent is what the projection keeps of a result that fits: the
+// raw text when it is not JSON, otherwise its JSON without the transport
+// duplication. original is the decoded result and semantic that view of it.
+func wholeToolContent(raw string) (original, semantic any, whole string) {
+	original, decodeErr := decodeContextJSON([]byte(raw))
+	if decodeErr != nil {
+		return raw, raw, raw
+	}
+	semantic = original
+	if envelope, ok := original.(map[string]any); ok {
+		if _, runtimeEnvelope := envelope["protocol_version"]; runtimeEnvelope {
+			if output, ok := envelope["output"].(map[string]any); ok {
+				semantic = projectMCPOutput(output)
+				if result, ok := semantic.(map[string]any); ok {
+					for _, key := range []string{"status", "error", "uncertain"} {
+						if value, exists := envelope[key]; exists && value != nil {
+							if current, exists := result[key]; exists && !reflect.DeepEqual(current, value) {
+								result["runtime_"+key] = value
+							} else {
+								result[key] = value
+							}
+						}
+					}
+					result["protocol_version"] = envelope["protocol_version"]
+				}
+			}
+		}
+	}
+	encoded, _ := json.Marshal(semantic)
+	return original, semantic, string(encoded)
+}
+
+// toolResultFits reports whether the projection keeps raw whole when it
+// allows limit bytes per tool result.
+func toolResultFits(raw string, limit int) bool {
+	_, _, whole := wholeToolContent(raw)
+	return contentJSONBytes(whole) <= limit-256
 }
 
 func contentJSONBytes(text string) int {
