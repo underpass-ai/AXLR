@@ -55,6 +55,10 @@ func mapResponse(wire responseDTO) (domain.CompletionResult, error) {
 			CompletionTokens: wire.Usage.CompletionTokens,
 			TotalTokens:      wire.Usage.TotalTokens,
 		}
+		if details := wire.Usage.PromptTokensDetails; details != nil {
+			result.Usage.CachedTokens = details.CachedTokens
+			result.Usage.CacheWriteTokens = details.CacheWriteTokens
+		}
 	}
 	return result, nil
 }

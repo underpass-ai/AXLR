@@ -33,7 +33,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		// stream only when asked; OpenRouter always reports it.
 		wire.StreamOptions = &streamOptionsDTO{IncludeUsage: true}
 	}
-	body, err := json.Marshal(wire)
+	body, err := json.Marshal(c.body(wire))
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not encode OpenRouter request")
 	}

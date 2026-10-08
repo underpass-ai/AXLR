@@ -74,7 +74,7 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 		return domain.CompletionResult{}, err
 	}
 	c.template(&wire)
-	body, err := json.Marshal(wire)
+	body, err := json.Marshal(c.body(wire))
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not encode OpenRouter request")
 	}
@@ -107,6 +107,12 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 		return domain.CompletionResult{}, errors.New("malformed OpenRouter response")
 	}
 	return mapResponse(reply)
+}
+
+// body is what the request encodes: marked for the prompt cache when the
+// model and the endpoint support it, the wire request otherwise.
+func (c *Client) body(wire requestDTO) any {
+	return promptCacheBody(wire, c.endpoint == endpoint)
 }
 
 // authorize sets the bearer header only when a key is configured: a loopback
