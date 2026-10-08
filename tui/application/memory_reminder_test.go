@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -32,9 +33,12 @@ func toolCall(t *testing.T, id string, name root.ToolName, arguments string) roo
 
 func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 	edit := toolCall(t, "e1", "local_edit", `{}`)
-	reads := []root.ToolCall{}
-	for _, id := range []string{"r1", "r2", "r3", "r4", "r5"} {
-		reads = append(reads, toolCall(t, id, "local_read", `{}`))
+	reads, commands := []root.ToolCall{}, []root.ToolCall{}
+	for i := 1; i <= 8; i++ {
+		reads = append(reads, toolCall(t, fmt.Sprintf("r%d", i), "local_read", `{}`))
+	}
+	for i := 1; i <= 5; i++ {
+		commands = append(commands, toolCall(t, fmt.Sprintf("x%d", i), "local_exec", `{}`))
 	}
 	for _, tc := range []struct {
 		name    string
@@ -42,7 +46,9 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		want    bool
 	}{
 		{"a file change", memoryRequest(t, edit), true},
-		{"five calls", memoryRequest(t, reads...), true},
+		{"five commands", memoryRequest(t, commands...), true},
+		{"commands and reads", memoryRequest(t, append([]root.ToolCall{reads[0], reads[1]}, commands[:3]...)...), false},
+		{"eight reads", memoryRequest(t, reads...), false},
 		{"a question", memoryRequest(t, reads[:2]...), false},
 		{"session startup", memoryRequest(t, toolCall(t, "b1", HostSessionName, `{}`), toolCall(t, "b2", HostSkillName, `{}`), toolCall(t, "b3", HostToolsName, `{}`), toolCall(t, "b4", HostCallToolName, `{"name":"kmp_guide","arguments":{}}`), toolCall(t, "b5", HostCallToolName, `{"name":"kmp_wake","arguments":{}}`), toolCall(t, "b6", "kmp_wake", `{}`)), false},
 		{"bridged write", memoryRequest(t, edit, toolCall(t, "w1", HostCallToolName, `{"name":"kmp_write_memory","arguments":{}}`)), false},

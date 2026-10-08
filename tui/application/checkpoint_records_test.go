@@ -138,3 +138,23 @@ func TestCheckpointFlagsNothingUnrecordedWithoutMemory(t *testing.T) {
 		}
 	}
 }
+
+// A turn that only read files did no work worth recording, as the memory
+// reminder counts it, even in a session that uses KMP.
+func TestCheckpointDoesNotFlagAReadOnlyTurn(t *testing.T) {
+	messages := []root.Message{
+		{Role: root.RoleUser, Content: "lista los encabezados"},
+		{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{recordCall(t, "k1", string(HostCallToolName), `{"name":"kmp_wake","arguments":{}}`)}},
+		{Role: root.RoleTool, ToolCallID: "k1", Content: `{"status":"ok"}`},
+	}
+	for i := 0; i < 8; i++ {
+		id := fmt.Sprintf("r%d", i)
+		messages = append(messages,
+			root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{recordCall(t, id, "local_read", `{"path":"docs/console.md"}`)}},
+			root.Message{Role: root.RoleTool, ToolCallID: root.ToolCallID(id), Content: `{"content":""}`})
+	}
+	messages = append(messages, root.Message{Role: root.RoleAssistant, Content: "encabezados"})
+	if record := omittedTurnRecords(messages, 0, len(messages))[0]; record.worked || record.unrecorded {
+		t.Fatalf("read-only turn: %+v", record)
+	}
+}
