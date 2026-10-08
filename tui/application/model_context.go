@@ -77,6 +77,9 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		switch id {
 		case "kmp":
 			pluginGuidance.WriteString("KMP is Underpass graph-temporal agent memory. It recovers stored evidence and records decisions, constraints and outcomes. Recover relevant project context before re-deriving it; UNKNOWN is a valid answer. Read only the brief entry of kmp_guide initially, and request a specific extended topic only when needed for the current operation. Reuse the KMP agent and context identity and the guidance already present in this conversation; do not initialize a fresh agent, fetch all guide topics or reread them every turn. Use explicit project scope and evidence.\n")
+			if modelRecordsMemory(*s) {
+				pluginGuidance.WriteString("Record what the work settles: before your final answer, when the task settled a decision, constraint, fix or outcome worth reusing, write it with kmp_write_memory under the session's exact about, with its source evidence and a stable idempotency key, as kmp_guide describes, and say what you recorded. Never record transcripts, guesses or facts nothing settled.\n")
+			}
 		case "made":
 			pluginGuidance.WriteString("MADE is Underpass's engine for agentic ceremonies: structured procedures, working sessions, review loops and human approval. It is available through the registered MADE MCP tools. Discover existing ceremonies and their required transitions through its tools; never invent ceremony results or approvals.\n")
 		}
@@ -84,7 +87,7 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		// whole catalogue, so it is reached through axlr_tools only when needed.
 		entries := []string{}
 		for _, name := range plugins[id] {
-			if strings.Contains(name, "guide") {
+			if strings.Contains(name, "guide") || id == "kmp" && strings.HasPrefix(name, "kmp_write_memory =") {
 				entries = append(entries, name)
 			}
 		}
