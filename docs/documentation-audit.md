@@ -1,5 +1,9 @@
 # Documentation audit — 4 October 2026
 
+## v0.4.1 release preparation
+
+Releases `main` at `9069309`. Since v0.4.0: the system prompt stays identical across user turns, so provider prompt caches keep hitting (#80); installed skills are listed by name under their package's description instead of one full entry each, including skills whose `SKILL.md` starts with a multibyte character (#81); when the trace sits inside the workspace, payload captures go to the private state `logs/` directory so the model cannot read its own earlier requests (#82). The chart's `version` and `appVersion` are `0.4.1`. Publication and the six-platform native checks belong to the release workflow.
+
 ## v0.4.0 release preparation
 
 Releases `main` at `3078d13`. Since v0.3.0: transcript text is copied by dragging, through OSC 52 with the host clipboard tools as fallback, and `/copy` copies the last reply as the model wrote it (#77); a message queued while the model works joins the running turn after its tool step instead of cancelling it, and the queue is visible in traces (#78). The chart's `version` and `appVersion` are `0.4.0`. Publication and the six-platform native checks belong to the release workflow.
