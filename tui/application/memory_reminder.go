@@ -15,8 +15,10 @@ import (
 const memoryReminderPrefix = "[AXLR · memory]"
 
 // memoryReminderCalls is how many local tool calls make a request worth
-// recording when it changed no file. Host bookkeeping and KMP reads do not
-// count: a session's startup alone makes several of them.
+// recording when it changed no file. File reads do not count, since a request
+// that only read settled nothing durable, and neither do host bookkeeping and
+// KMP reads: a session's startup alone makes several of them. A command does,
+// since running a check or a test can settle an outcome.
 const memoryReminderCalls = 5
 
 // memoryReminder is the console's message; it leaves the judgement to the
@@ -91,7 +93,8 @@ func personRequest(messages []root.Message) int {
 
 // needsMemoryReminder reads one request: it was not reminded yet, ran no
 // ceremony step, attempted no memory write (an attempt the person denied
-// counts: they decided), and changed a file or made several local tool calls.
+// counts: they decided), and changed a file or made several local tool calls
+// other than file reads.
 func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 	local, changed := 0, false
 	for _, message := range request[1:] {
@@ -99,7 +102,7 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 			return false
 		}
 		for _, call := range message.ToolCalls {
-			if strings.HasPrefix(string(call.Name), "local_") {
+			if countsForMemory(call.Name) {
 				local++
 			}
 			switch call.Name {
@@ -118,4 +121,10 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 		}
 	}
 	return changed || local >= memoryReminderCalls
+}
+
+// countsForMemory reports whether a call counts toward memoryReminderCalls:
+// a local tool call that is not a file read.
+func countsForMemory(name root.ToolName) bool {
+	return strings.HasPrefix(string(name), "local_") && name != "local_read"
 }
