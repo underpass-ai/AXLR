@@ -117,7 +117,7 @@ func (m AppModel) footerStatus() string {
 
 func (m AppModel) statusActivity(status StatusBar) string {
 	activity := m.activityLabel(status)
-	if activity != "" && m.steerPrompt != "" {
+	if activity != "" && m.steer.Peek() != "" {
 		activity += " · " + m.Theme.T("status.queued")
 	}
 	return activity

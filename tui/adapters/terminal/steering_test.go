@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -29,7 +30,7 @@ func TestSteeringQueuesWithoutCancellingAndStartsNewUserTurn(t *testing.T) {
 	m.cancel = func() { cancelled = true }
 	m.Composer.Input.SetValue("new direction")
 	m = update(m, ControlIntent("send"))
-	if cancelled || m.steerPrompt != "new direction" || m.Composer.Input.Value() != "" {
+	if cancelled || m.steer.Peek() != "new direction" || m.Composer.Input.Value() != "" {
 		t.Fatal("steer was not queued or the reasoning stream was cancelled")
 	}
 	if view := m.Transcript.View(); !strings.Contains(view, "new direction") || !strings.Contains(view, m.Theme.T("transcript.queued")) {
@@ -52,16 +53,36 @@ func TestSteeringQueuesWithoutCancellingAndStartsNewUserTurn(t *testing.T) {
 	}
 }
 
-func TestQueuedSteerCancelsAtTheNextModelRequest(t *testing.T) {
+func TestQueuedSteerLeavesTheTurnToTakeIt(t *testing.T) {
 	m := sized()
 	m.Busy = true
 	m.toolExecuting = true
 	cancelled := false
 	m.cancel = func() { cancelled = true }
-	m.steerPrompt = "after the tool"
+	m.steer.Add("after the tool")
+	m = update(m, application.Event{Kind: application.EventStreamStart})
+	if cancelled {
+		t.Fatal("queued steer cancelled a turn that takes it after its tool step")
+	}
+}
+
+func TestQueuedSteerStopsACeremonyStepWithoutReportingAnError(t *testing.T) {
+	m := sized()
+	m.Busy = true
+	m.operationID = 4
+	m.toolExecuting = true
+	m.Header.State.Ceremony = &domain.CeremonyRun{Definition: "axlr_incident", Step: "present"}
+	cancelled := false
+	m.cancel = func() { cancelled = true }
+	m.steer.Add("after the tool")
 	m = update(m, application.Event{Kind: application.EventStreamStart})
 	if !cancelled {
-		t.Fatal("queued steer did not stop the next model request")
+		t.Fatal("queued steer did not stop the ceremony step")
+	}
+	m.steer.Take()
+	m = update(m, operationComplete{ID: 4, Session: *m.deps.Session, Err: errors.Join(context.Canceled, context.Canceled)})
+	if m.Status.Error != "" {
+		t.Fatalf("stopping for a queued message was reported as an error: %q", m.Status.Error)
 	}
 }
 
@@ -70,7 +91,7 @@ func TestSendDuringUnrelatedBusyOperationKeepsDraft(t *testing.T) {
 	m.Busy = true
 	m.Composer.Input.SetValue("keep this message")
 	m = update(m, ControlIntent("send"))
-	if m.Composer.Input.Value() != "keep this message" || m.steerPrompt != "" {
+	if m.Composer.Input.Value() != "keep this message" || m.steer.Peek() != "" {
 		t.Fatal("unrelated operation consumed user input as a steer")
 	}
 }

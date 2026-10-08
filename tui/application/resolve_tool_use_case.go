@@ -149,7 +149,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		if outcome.IsError || outcome.Uncertain {
 			spanClass = DiagnosticErrorTool
 		}
-		runErr = errors.Join(runErr, ctx.Err())
+		runErr = joinCause(runErr, ctx.Err())
 		if runErr != nil {
 			outcome = domain.ToolOutcome{Content: root.Text(fmt.Sprintf("tool execution failed; effect unknown: %v", runErr)), IsError: true, Uncertain: true}
 		}
@@ -194,7 +194,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		*s = next
 		if runErr != nil {
 			u.recordToolCompletion(ctx, started, DiagnosticErrorTool)
-			return errors.Join(runErr, emitTool(s, id, emit), emit(Event{Kind: EventState, State: s.Status()}))
+			return joinCause(joinCause(runErr, emitTool(s, id, emit)), emit(Event{Kind: EventState, State: s.Status()}))
 		}
 	}
 	if err := emitTool(s, id, emit); err != nil {

@@ -47,6 +47,13 @@ const (
 	// DiagnosticCeremonyStalled records a ceremony the console cancelled
 	// because its model stopped handing the step back, or the person stopped.
 	DiagnosticCeremonyStalled DiagnosticStage = "ceremony_stalled"
+	// DiagnosticPromptQueued records a message the person sent while an
+	// operation was running; DiagnosticSteerApplied records it joining the
+	// running turn after a tool step, and DiagnosticSteerCancelled the
+	// operation the console stopped for it instead.
+	DiagnosticPromptQueued   DiagnosticStage = "prompt_queued"
+	DiagnosticSteerApplied   DiagnosticStage = "steer_applied"
+	DiagnosticSteerCancelled DiagnosticStage = "steer_cancelled"
 )
 
 func (stage DiagnosticStage) Valid() bool {
@@ -65,7 +72,8 @@ func (stage DiagnosticStage) Valid() bool {
 		DiagnosticRender, DiagnosticResize,
 		DiagnosticToolRequested, DiagnosticToolApproved, DiagnosticToolRejected,
 		DiagnosticToolCompleted, DiagnosticOperationDone, DiagnosticOperationFailed,
-		DiagnosticJudgement, DiagnosticCeremonyStalled:
+		DiagnosticJudgement, DiagnosticCeremonyStalled,
+		DiagnosticPromptQueued, DiagnosticSteerApplied, DiagnosticSteerCancelled:
 		return true
 	default:
 		return false

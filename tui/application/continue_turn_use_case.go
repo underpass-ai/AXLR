@@ -48,18 +48,27 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		next := *session
 		if next.Status() == domain.StatusStreaming {
 			if err := next.InterruptDraft(root.Text(draft.String())); err != nil {
-				return errors.Join(cause, err)
+				return joinCause(cause, err)
 			}
 		}
 		// The caller's cancelled stream must not cancel saving its interrupted draft.
 		if err := u.Store.Save(context.WithoutCancel(ctx), next); err != nil {
-			return errors.Join(cause, err)
+			return joinCause(cause, err)
 		}
 		*session = next
-		return errors.Join(cause, emit(Event{Kind: EventState, State: next.Status()}))
+		return joinCause(cause, emit(Event{Kind: EventState, State: next.Status()}))
 	}
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
+	}
+	// What the person wrote during the last tool step joins this turn here,
+	// before the next request is built, rather than cancelling it.
+	if steered, err := applySteer(ctx, session, u.Store, u.Diagnostics); err != nil {
+		return interrupt(err)
+	} else if steered {
+		if err := emitSession(session, emit); err != nil {
+			return interrupt(err)
+		}
 	}
 	contextCtx, contextSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionContext, DiagnosticEvent{Messages: len(session.Messages()), Tools: len(session.ToolSnapshot())})
 	hostTools := HostTools()
@@ -77,6 +86,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		model = root.ModelID(run.Model)
 	}
 	messages := session.Messages()
+	if _, live := session.Ceremony(); !live {
+		messages = markSteered(messages)
+	}
 	projector := u.Context
 	if projector == nil {
 		budget := domain.DefaultContextBudget()
