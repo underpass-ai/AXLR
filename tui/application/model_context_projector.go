@@ -121,7 +121,7 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 			if exactSchema {
 				limit, place = MaxHostResultBytes, excerptHistorical // Exact discovery schemas must remain executable.
 			}
-			content, err := projectToolContentIn(string(message.Content), p.at(i), limit, place)
+			content, err := projectToolContentIn(string(message.Content), p.at(i), limit, place, names[message.ToolCallID])
 			if err == nil && exactSchema {
 				value, _ := decodeContextJSON([]byte(content))
 				object, _ := value.(map[string]any)
