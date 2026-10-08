@@ -224,19 +224,19 @@ func (p *PluginPanel) Update(msg tea.Msg, mode ControlIntent) ControlIntent {
 			p.Selected = visible[at]
 			p.refresh()
 			return ""
-		case "r":
+		case "r", "R":
 			return "plugins-refresh"
-		case "p":
+		case "p", "P":
 			if mode == "mcp" && p.Selected < len(p.Items) && p.Items[p.Selected].Profile.ID == "made" {
 				return "made-prepare"
 			}
 			return ""
-		case "i":
+		case "i", "I":
 			p.installing = true
 			p.InstallInput.Reset()
 			p.InstallInput.Focus()
 			return ""
-		case "a", "enter":
+		case "a", "A", "enter":
 			if mode == "mcp" && len(p.Items) > 0 && len(p.visible(mode)) > 0 {
 				p.confirming = true
 			}
