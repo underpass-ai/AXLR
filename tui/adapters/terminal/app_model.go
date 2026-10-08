@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -69,14 +70,19 @@ type AppModel struct {
 	submittedPrompt     string
 	submittedAt         int
 	unsentPrompts       []string
-	steerPrompt         string
-	promptHistory       []string
-	historyIndex        int
-	historyDraft        string
-	events              <-chan tea.Msg
-	cancel              context.CancelFunc
-	zones               *zone.Manager
-	prefix              string
+	// steer holds what the person wrote while the operation ran; the running
+	// turn takes it after a tool step, or it starts the next turn.
+	steer *steerQueue
+	// steerCancelled marks the operation the console stopped for a queued
+	// message, so its cancellation is not reported as an error.
+	steerCancelled uint64
+	promptHistory  []string
+	historyIndex   int
+	historyDraft   string
+	events         <-chan tea.Msg
+	cancel         context.CancelFunc
+	zones          *zone.Manager
+	prefix         string
 }
 
 func assistantInMessages(messages []root.Message, start int) bool {
@@ -104,7 +110,7 @@ func New(deps Dependencies) AppModel {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
-	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix()}
+	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}}
 	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()
 	m.Changes.Theme = m.Theme
@@ -250,7 +256,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.memoryActive = v.Memory
 		}
 		if v.Kind == application.EventStreamStart {
-			if m.steerPrompt != "" && m.cancel != nil {
+			// An ordinary turn takes the queued message itself before this
+			// request; a ceremony step is never steered, so it stops here.
+			if m.Header.State.Ceremony != nil && m.steer.Peek() != "" && m.cancel != nil {
+				m.steerCancelled = m.operationID
+				m.record(application.DiagnosticEvent{Stage: application.DiagnosticSteerCancelled, Bytes: len(m.steer.Peek())})
 				m.cancel()
 			}
 			m.toolExecuting = false
@@ -406,7 +416,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.draft = ""
 			m.draftOperationID = 0
 		}
-		if v.Err != nil {
+		steered := m.steerCancelled == v.ID && errors.Is(v.Err, context.Canceled)
+		m.steerCancelled = 0
+		if v.Err != nil && !steered {
 			m.Status.Error = v.Err.Error()
 			if v.PluginApproval != nil {
 				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
@@ -419,14 +431,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.refreshTranscript()
 		m.syncApproval()
-		if m.steerPrompt == "" && !m.inlineApproval() {
+		if m.steer.Peek() == "" && !m.inlineApproval() {
 			m = m.autoOpenIncidentCard()
 			m = m.autoOpenRepairPanel()
 		}
-		if m.steerPrompt != "" {
-			prompt := root.Text(m.steerPrompt)
-			m.steerPrompt = ""
+		if queued, ok := m.steer.Take(); ok {
+			prompt := queued
 			m.refreshTranscript()
+			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
 			start := m.deps.Start
@@ -556,15 +568,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.Busy && command != "" && (m.submittedPrompt != "" || m.Header.State.Status == domain.StatusStreaming || m.Header.State.Status == domain.StatusApproval || m.toolExecuting || m.providerWaiting) {
 				message := m.Composer.Input.Value()
 				m.rememberPrompt(message)
-				if m.steerPrompt == "" {
-					m.steerPrompt = message
-				} else {
-					m.steerPrompt += "\n\n" + message
-				}
+				m.steer.Add(message)
+				m.record(application.DiagnosticEvent{Stage: application.DiagnosticPromptQueued, Bytes: len(message)})
 				m.Composer.Input.Reset()
 				m.refreshTranscript()
-				// The queued message waits for the current model step: cancelling a
-				// reasoning model here discards minutes of work on every message.
+				// The queued message waits for the current model step: the turn
+				// takes it after its next tool step, or it starts the next turn.
 				return m, nil
 			}
 			if m.Busy || strings.TrimSpace(m.Composer.Input.Value()) == "" {
@@ -803,5 +812,5 @@ func (m *AppModel) refreshTranscript() {
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
 	}
-	m.Transcript.AppendQueued(m.steerPrompt)
+	m.Transcript.AppendQueued(m.steer.Peek())
 }

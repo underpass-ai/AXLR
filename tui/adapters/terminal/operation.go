@@ -88,6 +88,9 @@ func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 	lifetime := m.lifetime
 	ctx, cancel := context.WithCancel(lifetime.ctx)
 	m.cancel = cancel
+	if m.steer != nil {
+		ctx = application.WithSteer(ctx, m.steer)
+	}
 	m.Busy = true
 	m.record(application.DiagnosticEvent{Stage: application.DiagnosticOperationStarted, OperationID: id})
 	trace := m.deps.Diagnostics

@@ -132,6 +132,29 @@ func (s *Session) BeginTurn(prompt axlr.Text, tools []AvailableTool) error {
 	s.state = next
 	return nil
 }
+
+// Steer adds a message the person sent while the turn was running. It joins
+// the running turn after its tool results; like a new turn, it restarts the
+// call budget, which counts calls since the last user message.
+func (s *Session) Steer(prompt axlr.Text) error {
+	if s.Status() != StatusStreaming || len(s.Pending()) != 0 {
+		return errors.New("steering requires a streaming turn without pending calls")
+	}
+	if s.state.Ceremony != nil {
+		return errors.New("a ceremony step cannot be steered")
+	}
+	message := axlr.Message{Role: axlr.RoleUser, Content: prompt}
+	if err := message.Validate(); err != nil {
+		return err
+	}
+	next := s.Export()
+	next.Messages = append(next.Messages, message)
+	stampLast(&next)
+	next.TurnCallCount = 0
+	next.FinishedBudgetBase = 0
+	s.state = next
+	return nil
+}
 func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 	if s.Status() != StatusStreaming {
 		return errors.New("assistant completion requires streaming state")

@@ -1,5 +1,9 @@
 # Documentation audit — 4 October 2026
 
+## 8 October 2026: queued messages join the running turn
+
+Reported from session `43e5a435`: a message queued while the model worked cancelled the operation at the next model request, after that request had been sent, and started a new turn. The console showed `context canceled` (sometimes twice, from a cancellation joined with the emit that reported it) through the whole next turn, and 8 of the session's 12 prompts were never answered because each queued one cut the turn of the previous one. The turn now takes the queued message after a tool step, before building the next request, and the model reads it with a note asking it to answer both; ceremony steps keep the old stop, without the error. The [console guide](console.md) and [troubleshooting](troubleshooting.md#inspect-the-right-diagnostics) describe the behavior and the new `prompt_queued`, `steer_applied` and `steer_cancelled` trace stages.
+
 ## v0.3.0 release preparation
 
 Releases `main` at `5962f0d`. Since v0.2.3: `/repair` drives a repository fix in a clone through to a merged pull request (#61) and the agent can request it from a running session (#64); the axlr-ceremonies 1.0 skill catalogue is retired and CI validates the driver definitions and their pins (#62); the ceremony recall focuses on the user's request (#63); local OpenAI-compatible models are served from `settings.json` with a configurable context window (#68); debug and delivery run under a compact profile for small local models (#71); plan briefs become verified atomic tasks run by small-model workers with per-wave syncs (#72); a ceremony whose model stops handing the step back ends, and the person can stop one (#73). The chart's `version` and `appVersion` are `0.3.0`. Publication and the six-platform native checks belong to the release workflow.
