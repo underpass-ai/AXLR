@@ -64,8 +64,19 @@ func TestCodexMarketplaceInstallsOnlyIntoAXLR(t *testing.T) {
 		t.Fatalf("Codex source mutated: %v", err)
 	}
 	guidance, err := catalog.Guidance(ctx)
-	if err != nil || !strings.Contains(guidance, "Example skill") || !strings.Contains(guidance, "axlr_skill") || strings.Contains(guidance, packageRoot) {
+	if err != nil || !strings.Contains(guidance, "\n- sample: Example. Skills: example.") || strings.Contains(guidance, "Example skill") || !strings.Contains(guidance, "axlr_skill") || strings.Contains(guidance, packageRoot) {
 		t.Fatalf("guidance: %q %v", guidance, err)
+	}
+}
+func TestClipTextCutsAtAWordBoundary(t *testing.T) {
+	for _, c := range []struct{ text, want string }{
+		{"short  text", "short text"},
+		{"Design, critique, implement and export", "Design, critique…"},
+		{"unbrokenwordlongerthanthelimit", "unbrokenwordlonger…"},
+	} {
+		if got := clipText(c.text, 18); got != c.want {
+			t.Errorf("clipText(%q) = %q, want %q", c.text, got, c.want)
+		}
 	}
 }
 func TestCodexPluginSourceAndPathSafety(t *testing.T) {
