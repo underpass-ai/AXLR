@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Walk the plan, task and sync definitions through a real MADE engine.
+"""Walk the plan, task, sync and improve definitions through a real MADE engine.
 
 Every draft under tools/ceremonies/drafts/, and every pinned definition that
 has a scenario here, is validated and published into a disposable store,
@@ -210,7 +210,83 @@ def sync(w):
         raise SystemExit("FAIL: the engine must allow at least the console's two rounds")
 
 
-SCENARIOS = {"axlr_plan": plan, "axlr_task": task, "axlr_sync": sync}
+def improve(w):
+    print("axlr_improve 1.0")
+    inputs = dict(improvement_brief="show the app log to the agent", workspace="/ws", repository="underpass-ai/axlr-repair-lab")
+
+    def to_watch(i, key):
+        w.step(i, "build", f"build:{key}", dict(verified=True, summary="done", summary_en="done"))
+        w.transition(i, "verified")
+        w.step(i, "propose", f"propose:{key}", dict(proposed=True, pull_request=7, url="https://example.invalid/pull/7", head_sha="abc"))
+        expect(f"proposed {key}", w.transition(i, "proposed"), "WATCH")
+
+    print("  a check that already passes, then one that fails; approved by the person")
+    i = w.start("axlr_improve", "1.0", inputs)
+    w.step(i, "brief", "brief:1", dict(missing=False, settled=False, criteria="c", scope="s"))
+    refused("briefed while the check passes", lambda: w.transition(i, "briefed"))
+    w.step(i, "brief", "brief:2", dict(missing=True, settled=True, criteria="c", scope="s"))
+    expect("briefed", w.transition(i, "briefed"), "BUILD")
+    w.step(i, "build", "build:1", dict(verified=False, summary="wip", summary_en="wip"))
+    refused("verified while the check fails", lambda: w.transition(i, "verified"))
+    to_watch(i, "2")
+    w.step(i, "watch", "watch:1", dict(verdict="green"))
+    expect("checks_passed", w.transition(i, "checks_passed"), "DECIDE")
+    w.step(i, "decide", "decide:1", dict(decision="approve", pull_request=7))
+    refused("merge_approved without the human guard", lambda: w.transition(i, "merge_approved"))
+    refused("merge_automatic, which the definition does not have", lambda: w.transition(i, "merge_automatic"))
+    w.approve(i, "person_approves")
+    expect("merge_approved", w.transition(i, "merge_approved"), "MERGE")
+    w.step(i, "merge", "merge:1", dict(merged=True, merge_sha="def"))
+    expect("merged", w.transition(i, "merged"), "COMPLETED")
+    print("  an automatic decision has no way into MERGE")
+    i = w.start("axlr_improve", "1.0", inputs)
+    w.step(i, "brief", "brief:1", dict(missing=True, settled=True))
+    w.transition(i, "briefed")
+    to_watch(i, "1")
+    w.step(i, "watch", "watch:1", dict(verdict="green"))
+    w.transition(i, "checks_passed")
+    w.step(i, "decide", "decide:1", dict(decision="automatic"))
+    refused("merge_approved after an automatic decision", lambda: w.transition(i, "merge_approved"))
+    refused("merge_declined after an automatic decision", lambda: w.transition(i, "merge_declined"))
+    print("  declared not feasible")
+    i = w.start("axlr_improve", "1.0", inputs)
+    w.step(i, "brief", "brief:1", dict(feasible=False, missing=False, settled=True, observed="already there"))
+    refused("briefed when not feasible", lambda: w.transition(i, "briefed"))
+    expect("not_feasible", w.transition(i, "not_feasible"), "BLOCKED")
+    print("  briefs exhausted")
+    i = w.start("axlr_improve", "1.0", inputs)
+    for n in range(3):
+        w.step(i, "brief", f"brief:{n}", dict(missing=False, settled=False))
+    expect("brief_exhausted", w.transition(i, "brief_exhausted"), "BLOCKED")
+    print("  builds exhausted")
+    i = w.start("axlr_improve", "1.0", inputs)
+    w.step(i, "brief", "brief:1", dict(missing=True, settled=True))
+    w.transition(i, "briefed")
+    for n in range(3):
+        w.step(i, "build", f"build:{n}", dict(verified=False))
+    expect("build_exhausted", w.transition(i, "build_exhausted"), "BLOCKED")
+    print("  red, build, red, build, blocked; then declined")
+    i = w.start("axlr_improve", "1.0", inputs)
+    w.step(i, "brief", "brief:1", dict(missing=True, settled=True))
+    w.transition(i, "briefed")
+    to_watch(i, "c0")
+    for n in range(2):
+        w.step(i, "watch", f"watch:c{n}", dict(verdict="red", failed=["go"]))
+        expect(f"checks_failed {n + 1}", w.transition(i, "checks_failed"), "BUILD")
+        to_watch(i, f"c{n + 1}")
+    w.step(i, "watch", "watch:c2", dict(verdict="blocked", reason="checks failed after 2 rounds"))
+    expect("watch_blocked", w.transition(i, "watch_blocked"), "BLOCKED")
+    i = w.start("axlr_improve", "1.0", inputs)
+    w.step(i, "brief", "brief:1", dict(missing=True, settled=True))
+    w.transition(i, "briefed")
+    to_watch(i, "1")
+    w.step(i, "watch", "watch:1", dict(verdict="green"))
+    w.transition(i, "checks_passed")
+    w.step(i, "decide", "decide:1", dict(decision="decline", reason="not now"))
+    expect("merge_declined", w.transition(i, "merge_declined"), "BLOCKED")
+
+
+SCENARIOS = {"axlr_plan": plan, "axlr_task": task, "axlr_sync": sync, "axlr_improve": improve}
 
 
 def main():
@@ -247,7 +323,7 @@ def main():
                 if scenario is None:
                     raise SystemExit(f"{name} has no scenario in {__file__}; add one with the draft")
                 scenario(walk)
-            print("all plan, task and sync scenarios passed")
+            print("all plan, task, sync and improve scenarios passed")
         finally:
             engine.close()
 
