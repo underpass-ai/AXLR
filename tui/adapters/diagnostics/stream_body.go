@@ -43,6 +43,8 @@ type streamBody struct {
 	jsonResponse    bool
 	readErr         error
 	drainErr        error
+	toolName        string
+	toolBytes       int
 }
 
 func (b *streamBody) record(stage application.DiagnosticStage, size, count int) {
@@ -183,9 +185,14 @@ func (b *streamBody) observeFrame(data []byte) {
 		size = 0
 		for _, call := range choice.Delta.ToolCalls {
 			size += len(call.Function.Name) + len(call.Function.Arguments)
+			if call.Function.Name != "" && call.Function.Name != b.toolName {
+				b.toolName, b.toolBytes = call.Function.Name, 0
+			}
+			b.toolBytes += len(call.Function.Arguments)
 		}
 		if len(choice.Delta.ToolCalls) > 0 {
 			b.activity(domain.ProviderToolCall)
+			application.NotifyToolCallProgress(b.ctx, b.toolName, b.toolBytes)
 			b.record(application.DiagnosticToolDelta, size, len(choice.Delta.ToolCalls))
 		}
 	}
