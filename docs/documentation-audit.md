@@ -1,5 +1,9 @@
 # Documentation audit — 4 October 2026
 
+## v0.4.0 release preparation
+
+Releases `main` at `3078d13`. Since v0.3.0: transcript text is copied by dragging, through OSC 52 with the host clipboard tools as fallback, and `/copy` copies the last reply as the model wrote it (#77); a message queued while the model works joins the running turn after its tool step instead of cancelling it, and the queue is visible in traces (#78). The chart's `version` and `appVersion` are `0.4.0`. Publication and the six-platform native checks belong to the release workflow.
+
 ## 8 October 2026: queued messages join the running turn
 
 Reported from session `43e5a435`: a message queued while the model worked cancelled the operation at the next model request, after that request had been sent, and started a new turn. The console showed `context canceled` (sometimes twice, from a cancellation joined with the emit that reported it) through the whole next turn, and 8 of the session's 12 prompts were never answered because each queued one cut the turn of the previous one. The turn now takes the queued message after a tool step, before building the next request, and the model reads it with a note asking it to answer both; ceremony steps keep the old stop, without the error. The [console guide](console.md) and [troubleshooting](troubleshooting.md#inspect-the-right-diagnostics) describe the behavior and the new `prompt_queued`, `steer_applied` and `steer_cancelled` trace stages.
