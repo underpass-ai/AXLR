@@ -49,6 +49,7 @@ func (m AppModel) statusView() string {
 	status.Waiting = m.providerWaiting
 	status.Executing = m.toolExecuting
 	status.ToolName = m.toolName
+	status.PreparingTool, status.PreparingBytes = m.toolCallName, m.toolCallBytes
 	if m.providerWaiting || m.toolExecuting {
 		if m.UIPreferences.ReduceMotion {
 			status.Indicator = m.Theme.Icon("waiting")
