@@ -86,7 +86,7 @@ Dos datos que corrigen la lectura inicial:
 - **Objetivo por defecto para modelos remotos: 64K tokens totales**, con marca
   baja a la mitad del máximo (no a 3/4). En bytes a 2,44 B/token, reservando
   17 KiB para system + esquemas: máximo 138.752, marca baja 69.376, 17.344 por
-  resultado, 8.672 de checkpoint. Medido en esta sesión: $0,90 sin caché /
+  resultado, 11.562 de checkpoint (un sexto de la marca baja: el mapa por turno del PR3 no cabía en un octavo). Medido en esta sesión: $0,90 sin caché /
   $0,28 con caché, 11 cortes, 87 % de acierto de caché, 56 mensajes por request
   de media. La marca baja a 1/2 reduce los cortes de 16 a 11 y el coste un 15 %
   frente a 3/4, y es exactamente lo que #8 ya hacía (96 KiB / 64 KiB).
