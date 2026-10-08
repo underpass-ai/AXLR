@@ -86,7 +86,11 @@ func (m AppModel) footerStatus() string {
 	if mode := m.Header.State.Mode; mode != "" && mode != domain.ModeNormal {
 		badge := m.Theme.T("mode." + string(mode))
 		if run := m.Header.State.Ceremony; run != nil {
-			badge = m.Theme.Tf("ceremony.badge", badge, run.Step, run.Iteration)
+			if limit := application.AttemptLimit(*run); limit > 0 {
+				badge = m.Theme.Tf("ceremony.badgeBounded", badge, run.Step, run.Iteration, limit)
+			} else {
+				badge = m.Theme.Tf("ceremony.badge", badge, run.Step, run.Iteration)
+			}
 			if run.AwaitingPerson() {
 				badge = m.Theme.Tf("incident.badgeAwaiting", m.Theme.T("mode."+string(mode)))
 			} else if m.deps.Session != nil && !m.Busy {
