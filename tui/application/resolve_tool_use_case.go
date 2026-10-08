@@ -26,10 +26,31 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 	if emit == nil {
 		emit = func(Event) error { return nil }
 	}
+	run, live := s.Ceremony()
+	wasTask := live && run.Task != nil
 	if err := u.resolveOne(ctx, s, id, decision, emit); err != nil {
 		return err
 	}
+	// A plan task's outcome is already in the plan panel: when its ceremony
+	// has finished, close the turn here instead of asking the model again.
+	if _, still := s.Ceremony(); wasTask && !still && s.Status() == domain.StatusStreaming {
+		return u.closeTaskTurn(ctx, s, emit)
+	}
 	return u.advance(ctx, s, emit)
+}
+
+// closeTaskTurn ends a finished task's turn without a model request. The
+// closing message is the console's own, not the model's.
+func (u ResolveToolUseCase) closeTaskTurn(ctx context.Context, s *domain.Session, emit func(Event) error) error {
+	next := *s
+	if err := next.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "The task ended; its outcome is in the plan."}}); err != nil {
+		return err
+	}
+	if err := u.Store.Save(ctx, next); err != nil {
+		return err
+	}
+	*s = next
+	return emit(Event{Kind: EventState, State: s.Status()})
 }
 func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) (returnErr error) {
 	ctx, span := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolResolve, DiagnosticEvent{ToolOrdinal: toolDiagnosticOrdinal(s, id)})
