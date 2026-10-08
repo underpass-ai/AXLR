@@ -64,8 +64,7 @@ func (c Checks) Run(ctx context.Context, command domain.CheckCommand) (applicati
 		}
 		return application.CheckResult{ExitCode: -1, Output: tail(message)}, nil
 	}
-	whole := envelope.Output.Stdout + envelope.Output.Stderr
-	return application.CheckResult{Ran: true, ExitCode: envelope.Output.ExitCode, Output: tail(whole), Full: whole}, nil
+	return application.CheckResult{Ran: true, ExitCode: envelope.Output.ExitCode, Output: tail(envelope.Output.Stdout + envelope.Output.Stderr), Stdout: envelope.Output.Stdout}, nil
 }
 
 func tail(text string) string {

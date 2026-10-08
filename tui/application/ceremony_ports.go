@@ -63,9 +63,11 @@ type CheckResult struct {
 	ExitCode int
 	// Output is the bounded tail of stdout and stderr, for showing to the model.
 	Output string
-	// Full is the whole stdout and stderr within the runtime's output cap, for
-	// callers that parse the output. Empty when the runner only has Output.
-	Full string
+	// Stdout is the whole stdout within the runtime's output cap, for callers
+	// that parse it: stderr may carry notices (gh's release notice, for one)
+	// that are not part of the parsed value. Empty when the runner only has
+	// Output.
+	Stdout string
 }
 
 // MemoryPort is KMP as the ceremony driver sees it.

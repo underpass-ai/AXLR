@@ -12,11 +12,12 @@ import (
 )
 
 // execPort answers the exec tool like the local runtime does: a completed
-// envelope whose stdout is the given text, so Checks.Run cuts it to its tail.
-type execPort struct{ stdout string }
+// envelope whose stdout and stderr are the given texts, so Checks.Run cuts
+// them to its tail.
+type execPort struct{ stdout, stderr string }
 
 func (p execPort) Execute(_ context.Context, _ domain.ToolIdentity, _ root.JSONValue) (domain.ToolOutcome, error) {
-	encoded, _ := json.Marshal(map[string]any{"status": "completed", "output": map[string]any{"exit_code": 0, "stdout": p.stdout, "stderr": ""}})
+	encoded, _ := json.Marshal(map[string]any{"status": "completed", "output": map[string]any{"exit_code": 0, "stdout": p.stdout, "stderr": p.stderr}})
 	return domain.ToolOutcome{Content: root.Text(encoded)}, nil
 }
 
@@ -29,7 +30,8 @@ func TestForgeStatusReadsALargePullRequestView(t *testing.T) {
 	if len(view) <= checkTail {
 		t.Fatalf("fixture is %d bytes, must exceed the %d-byte check tail", len(view), checkTail)
 	}
-	checksRunner := Checks{Tools: execPort{stdout: view}}
+	// gh prints its release notice on stderr with exit 0; it is not part of the view.
+	checksRunner := Checks{Tools: execPort{stdout: view, stderr: "\nA new release of gh is available: 2.80.0 → 2.81.0\n"}}
 	status, err := Forge{Checks: checksRunner}.Status(context.Background(), "underpass-ai/AXLR", 95)
 	if err != nil {
 		t.Fatalf("a pull request view larger than the check tail must parse: %v", err)
