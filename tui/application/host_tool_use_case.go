@@ -25,12 +25,17 @@ type HostToolUseCase struct {
 }
 
 // historyPageLimit is the largest encoded axlr_history page that the
-// projection of the session's model keeps whole.
+// projection of the session's model keeps whole: its budget, or the compact
+// one when a compact ceremony step is running, as the continuation sizes it.
 func (u HostToolUseCase) historyPageLimit(session domain.Session) int {
 	if u.Windows == nil {
 		return MaxHistoryReadBytes
 	}
-	return min(MaxHistoryReadBytes, u.Windows.ContextBudget(sessionModel(session)).ToolResultBytes())
+	budget := u.Windows.ContextBudget(sessionModel(session))
+	if _, _, compact := compactRun(session); compact {
+		budget = budget.Smaller(domain.CompactContextBudget())
+	}
+	return min(MaxHistoryReadBytes, budget.ToolResultBytes())
 }
 
 func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, identity domain.ToolIdentity, arguments root.JSONValue) (domain.ToolOutcome, error) {

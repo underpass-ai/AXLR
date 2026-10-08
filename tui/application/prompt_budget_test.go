@@ -118,3 +118,33 @@ func TestClippedResultKeepsItsTextWhenItsTurnCloses(t *testing.T) {
 		t.Fatalf("excerpt changed when the turn closed:\n%s\n%s", during.Messages[2].Content, after.Messages[2].Content)
 	}
 }
+
+// A compact ceremony step projects at most 8 KiB per tool result, so its
+// axlr_history pages shrink to that as well.
+func TestHostHistoryPagesWithinTheCompactBudget(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn(root.Text(strings.Repeat("x", 40000)), turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteAssistant(assistant("listo")); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("recupera", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_delivery", Version: "2.0", Instance: "i", Step: "build", Iteration: 1, Compact: true}); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, compact := compactRun(s); !compact {
+		t.Fatal("expected a compact step")
+	}
+	windows := windowsFunc(func(root.ModelID) domain.ContextWindow { return 0 })
+	identity := domain.ToolIdentity{Kind: domain.ToolKindHost, LocalOperation: domain.HostOperationHistory}
+	outcome, err := HostToolUseCase{Windows: windows}.Execute(context.Background(), s, identity, hostJSON(t, `{"message_index":0,"limit_bytes":32768}`))
+	if err != nil || outcome.IsError {
+		t.Fatalf("history page: err=%v outcome=%+v", err, outcome)
+	}
+	if limit := domain.CompactContextBudget().ToolResultBytes(); contentJSONBytes(string(outcome.Content)) > limit-256 {
+		t.Fatalf("page of %d encoded bytes for a compact result budget of %d", contentJSONBytes(string(outcome.Content)), limit)
+	}
+}
