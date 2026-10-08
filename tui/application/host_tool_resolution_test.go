@@ -6,6 +6,7 @@ import (
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -78,6 +79,30 @@ func TestHostWrapperRejectsBypassAmbiguityAndMalformedInput(t *testing.T) {
 	}
 	if _, _, known, err := ResolveToolCall(turnTools(), root.ToolCall{Name: HostCallToolName}); known || err != nil {
 		t.Fatal("host privilege fabricated outside frozen snapshot")
+	}
+}
+
+// A model that lost the earlier examples guessed field names one rejection at
+// a time; the refusal must name the accepted shape and stay an argument error.
+func TestHostWrapperRefusalNamesAcceptedFields(t *testing.T) {
+	snapshot := append(turnTools(), HostTools()...)
+	snapshot = append(snapshot, hostPlugin(t, "memory", "kmp", "kmp_wake"))
+	for input, want := range map[string]string{
+		`{"tool":"memory","arguments":{}}`: `unknown host argument "tool"; accepted: name, arguments`,
+		`{"name":"memory","args":{}}`:      `unknown host argument "args"; accepted: name, arguments`,
+		`["memory"]`:                       `host arguments must be an object; accepted: name, arguments`,
+	} {
+		_, _, _, err := ResolveToolCall(snapshot, root.ToolCall{Name: HostCallToolName, Arguments: hostJSON(t, input)})
+		if err == nil || err.Error() != want {
+			t.Fatalf("%s: got %v, want %q", input, err, want)
+		}
+		classified := false
+		for _, word := range argumentWords {
+			classified = classified || strings.Contains(strings.ToLower(err.Error()), word)
+		}
+		if !classified {
+			t.Fatalf("%s: refusal no longer reads as an argument error", input)
+		}
 	}
 }
 

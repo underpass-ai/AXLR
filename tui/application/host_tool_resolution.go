@@ -8,6 +8,7 @@ import (
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"io"
+	"strings"
 )
 
 // ResolveToolCall resolves against the frozen authority snapshot. The wrapper
@@ -67,11 +68,13 @@ func hostFindTool(snapshot []domain.AvailableTool, name root.ToolName) (domain.A
 
 // Strict decoding rejects duplicate or unknown bridge fields before authority
 // resolution, so malformed wrapper objects cannot change which tool is approved.
+// Shape errors name the accepted fields so the model can correct the call
+// instead of guessing another field name.
 func decodeHostArguments(value root.JSONValue, allowed ...string) (map[string]json.RawMessage, error) {
 	d := json.NewDecoder(bytes.NewReader(value.Bytes()))
 	token, err := d.Token()
 	if err != nil || token != json.Delim('{') {
-		return nil, errors.New("host arguments must be an object")
+		return nil, fmt.Errorf("host arguments must be an object; accepted: %s", strings.Join(allowed, ", "))
 	}
 	fields := make(map[string]bool, len(allowed))
 	for _, key := range allowed {
@@ -85,7 +88,7 @@ func decodeHostArguments(value root.JSONValue, allowed ...string) (map[string]js
 		}
 		key, ok := token.(string)
 		if !ok || !fields[key] {
-			return nil, fmt.Errorf("unknown host argument %q", key)
+			return nil, fmt.Errorf("unknown host argument %q; accepted: %s", key, strings.Join(allowed, ", "))
 		}
 		if _, exists := result[key]; exists {
 			return nil, fmt.Errorf("duplicate host argument %q", key)
