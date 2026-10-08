@@ -44,14 +44,17 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		result, err = u.sessionContext(ctx, session, arguments)
 	case domain.HostOperationStepDone:
 		err = errors.New("ceremony steps are handled by the ceremony driver")
-	case domain.HostOperationRequestRepair, domain.HostOperationRepairStatus:
+	case domain.HostOperationRequestRepair, domain.HostOperationRepairStatus, domain.HostOperationRequestImprovement:
 		if u.Repairs == nil {
-			err = errors.New("self-repair is not available in this console: it needs MADE prepared and a repair repository configured")
+			err = errors.New("self-repair and self-improvement are not available in this console: they need MADE prepared and a repair repository configured")
 			break
 		}
-		if identity.LocalOperation == domain.HostOperationRequestRepair {
+		switch identity.LocalOperation {
+		case domain.HostOperationRequestRepair:
 			result, err = u.Repairs.Request(ctx, session, arguments)
-		} else {
+		case domain.HostOperationRequestImprovement:
+			result, err = u.Repairs.RequestImprovement(ctx, session, arguments)
+		default:
 			result, err = u.Repairs.Status(ctx, session, arguments)
 		}
 	case domain.HostOperationJudge:

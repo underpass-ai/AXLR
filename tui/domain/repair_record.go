@@ -45,9 +45,13 @@ func (s RepairStatus) Awaiting() bool {
 
 // RepairRecord links a session that detected a defect of AXLR with the
 // separate session that repairs it, and keeps what both need to show:
-// progress, the pull request, the outcome and the integration reports.
+// progress, the pull request, the outcome and the integration reports. An
+// improvement the agent requested is recorded the same way.
 type RepairRecord struct {
 	ID string
+	// Improvement is true when the separate session improves AXLR through
+	// axlr_improve instead of repairing a defect.
+	Improvement bool
 	// Signature identifies the failure (repository, tool and failure class),
 	// so the same defect is not repaired twice at once and a merged repair is
 	// not requested again by the build that still carries the defect.
@@ -92,6 +96,14 @@ func (r RepairRecord) Validate() error {
 		return nil
 	}
 	return errors.New("unknown repair status")
+}
+
+// Kind names the record's work for people: "repair" or "improvement".
+func (r RepairRecord) Kind() string {
+	if r.Improvement {
+		return "improvement"
+	}
+	return "repair"
 }
 
 // Active reports a record that still occupies the repair slot.

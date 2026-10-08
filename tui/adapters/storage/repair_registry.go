@@ -25,6 +25,7 @@ type repairRegistryFile struct {
 
 type repairEntry struct {
 	ID          string    `json:"id"`
+	Improvement bool      `json:"improvement,omitempty"`
 	Signature   string    `json:"signature"`
 	Repository  string    `json:"repository"`
 	Parent      string    `json:"parent"`
@@ -192,13 +193,13 @@ func (r *RepairRegistry) write(ctx context.Context, data []byte) error {
 }
 
 func fromRecord(record domain.RepairRecord) repairEntry {
-	return repairEntry{ID: record.ID, Signature: record.Signature, Repository: record.Repository, Parent: string(record.Parent), Session: string(record.Session), Clone: record.Clone, Brief: record.Brief, Build: record.Build,
+	return repairEntry{ID: record.ID, Improvement: record.Improvement, Signature: record.Signature, Repository: record.Repository, Parent: string(record.Parent), Session: string(record.Session), Clone: record.Clone, Brief: record.Brief, Build: record.Build,
 		Status: string(record.Status), Step: record.Step, State: record.State, Instance: record.Instance, PullRequest: record.PullRequest, URL: record.URL, MergeSHA: record.MergeSHA, Pending: record.Pending, Memory: record.Memory, Error: record.Error,
 		Attempt: record.Attempt, RunToken: record.RunToken, Notice: record.Notice, Notified: record.Notified, Created: record.Created.UTC(), Updated: record.Updated.UTC()}
 }
 
 func toRecord(entry repairEntry) domain.RepairRecord {
-	return domain.RepairRecord{ID: entry.ID, Signature: entry.Signature, Repository: entry.Repository, Parent: domain.SessionID(entry.Parent), Session: domain.SessionID(entry.Session), Clone: entry.Clone, Brief: entry.Brief, Build: entry.Build,
+	return domain.RepairRecord{ID: entry.ID, Improvement: entry.Improvement, Signature: entry.Signature, Repository: entry.Repository, Parent: domain.SessionID(entry.Parent), Session: domain.SessionID(entry.Session), Clone: entry.Clone, Brief: entry.Brief, Build: entry.Build,
 		Status: domain.RepairStatus(entry.Status), Step: entry.Step, State: entry.State, Instance: entry.Instance, PullRequest: entry.PullRequest, URL: entry.URL, MergeSHA: entry.MergeSHA, Pending: entry.Pending, Memory: entry.Memory, Error: entry.Error,
 		Attempt: entry.Attempt, RunToken: entry.RunToken, Notice: entry.Notice, Notified: entry.Notified, Created: entry.Created, Updated: entry.Updated}
 }

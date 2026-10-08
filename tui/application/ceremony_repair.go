@@ -14,8 +14,11 @@ import (
 
 const (
 	// RepairMarker is the file the launcher writes in a repair clone; its
-	// presence is what lets /repair start there.
+	// presence is what lets /repair start there, or /improve when its kind
+	// is ImproveKind.
 	RepairMarker = ".axlr-repair.json"
+	// ImproveKind marks a clone prepared by --improve.
+	ImproveKind = "improve"
 	// repairPoll and repairWatch are the defaults when settings.json is silent.
 	repairPoll        = 30 * time.Second
 	repairWatch       = 45 * time.Minute
@@ -31,7 +34,9 @@ type RepairMarkerFile struct {
 	Brief      string `json:"brief"`
 	About      string `json:"about"`
 	Issue      string `json:"issue,omitempty"`
-	Created    string `json:"created"`
+	// Kind is ImproveKind for an improvement clone, empty for a repair.
+	Kind    string `json:"kind,omitempty"`
+	Created string `json:"created"`
 	// Origin is the session that requested the repair from a running
 	// console, empty for a launcher clone; Build the console build that
 	// detected the defect.
@@ -57,6 +62,9 @@ func repairInstruction(run domain.CeremonyRun) string {
 	r := run.Repair
 	if r == nil {
 		return ""
+	}
+	if r.Improvement {
+		return improveInstruction(run)
 	}
 	var text strings.Builder
 	fmt.Fprintf(&text, " Repair of %s in this clone (branch %s).", r.Repository, r.Branch)
@@ -109,22 +117,30 @@ func repairLinks(run domain.CeremonyRun, proposed []memoryLinkArgument) ([]Memor
 }
 
 // beginRepair reads the clone's marker and the focused recall. It refuses a
-// workspace the launcher did not prepare, because the console would otherwise
-// push a branch from an arbitrary directory.
+// workspace the launcher did not prepare for this mode, because the console
+// would otherwise push a branch from an arbitrary directory.
 func (d *CeremonyDriver) beginRepair(ctx context.Context, s *domain.Session, run *domain.CeremonyRun) (map[string]string, error) {
+	improve := s.Mode() == domain.ModeImprove
+	kind, clone, launch := "repair", "a repair clone", `axlr-tui --repair "<failure brief or #issue>"`
+	if improve {
+		kind, clone, launch = "improvement", "an improvement clone", `axlr-tui --improve "<improvement brief or #issue>"`
+	}
 	if d.Files == nil || d.Forge == nil {
-		return nil, errors.New("the repair ceremony needs workspace files and a forge; prepare MADE with /mcp → P")
+		return nil, fmt.Errorf("the %s ceremony needs workspace files and a forge; prepare MADE with /mcp → P", kind)
 	}
 	data, found, err := d.Files.Read(ctx, RepairMarker, 16<<10)
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", RepairMarker, err)
 	}
 	if !found {
-		return nil, errors.New("this workspace is not a repair clone; start one with: axlr-tui --repair \"<failure brief or #issue>\"")
+		return nil, fmt.Errorf("this workspace is not %s; start one with: %s", clone, launch)
 	}
 	var marker RepairMarkerFile
 	if err := json.Unmarshal(data, &marker); err != nil || marker.Version != 1 || marker.Repository == "" || marker.Slug == "" {
 		return nil, fmt.Errorf("%s is not a valid repair marker", RepairMarker)
+	}
+	if (marker.Kind == ImproveKind) != improve {
+		return nil, fmt.Errorf("this workspace is not %s: its marker was written for the other ceremony; start one with: %s", clone, launch)
 	}
 	if marker.Base == "" {
 		marker.Base = "main"
@@ -134,9 +150,13 @@ func (d *CeremonyDriver) beginRepair(ctx context.Context, s *domain.Session, run
 		about = "project:" + strings.ToLower(marker.Repository[strings.LastIndex(marker.Repository, "/")+1:])
 	}
 	title, _, _ := strings.Cut(strings.TrimSpace(marker.Brief), "\n")
-	repair := &domain.RepairRun{Repository: marker.Repository, Base: marker.Base, Slug: marker.Slug, Branch: "repair/" + marker.Slug, Title: bounded("Repair: "+strings.TrimSpace(title), 72)}
-	if repair.Title == "Repair: " {
-		repair.Title = bounded("Repair: "+strings.ReplaceAll(marker.Slug, "-", " "), 72)
+	branch, prefix := "repair/", "Repair: "
+	if improve {
+		branch, prefix = "improve/", "Improve: "
+	}
+	repair := &domain.RepairRun{Improvement: improve, Repository: marker.Repository, Base: marker.Base, Slug: marker.Slug, Branch: branch + marker.Slug, Title: bounded(prefix+strings.TrimSpace(title), 72)}
+	if repair.Title == prefix {
+		repair.Title = bounded(prefix+strings.ReplaceAll(marker.Slug, "-", " "), 72)
 	}
 	run.About = about
 	run.Repair = repair
@@ -204,7 +224,7 @@ func toStrings(value any) []string {
 func repairLabels(s domain.Session, run domain.CeremonyRun) map[string][]string {
 	labels := map[string][]string{"ceremony": {run.Definition}, "step": {run.Step}, "ws": {string(s.Export().Workspace)}, "session": {string(s.Export().ID)}}
 	if r := run.Repair; r != nil {
-		labels["repair"], labels["repository"] = []string{r.Slug}, []string{r.Repository}
+		labels[r.Kind()], labels["repository"] = []string{r.Slug}, []string{r.Repository}
 		if r.PullRequest > 0 {
 			labels["pull_request"] = []string{fmt.Sprintf("%d", r.PullRequest)}
 		}
@@ -231,7 +251,7 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 	switch {
 	case run.Step == "watch":
 		lease = d.watchDeadline() + 15*time.Minute
-	case run.Step == "decide" && !d.RepairPolicy.AutoMerge:
+	case run.Step == "decide" && !d.automaticMerge(run):
 		lease = presentLease // the person may answer days later
 	}
 	if fence != "" {
@@ -245,8 +265,12 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 	var trigger string
 	switch run.Step {
 	case "propose":
+		trailer := "Repaired-by"
+		if r.Improvement {
+			trailer = "Improved-by"
+		}
 		pr, err := d.Forge.Propose(ctx, RepairProposal{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Number: r.PullRequest,
-			Title: r.Title, Body: repairBody(run), Trailer: fmt.Sprintf("Repaired-by: AXLR %s %s %s", run.Definition, run.Version, run.Instance)})
+			Title: r.Title, Body: repairBody(run), Trailer: fmt.Sprintf("%s: AXLR %s %s %s", trailer, run.Definition, run.Version, run.Instance)})
 		if err != nil {
 			if ctx.Err() != nil {
 				return StepResult{}, err
@@ -280,7 +304,7 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 			trigger = "watch_blocked"
 		}
 	case "decide":
-		if !d.RepairPolicy.AutoMerge {
+		if !d.automaticMerge(run) {
 			return d.awaitMerge(run, report)
 		}
 		output, trigger = map[string]any{"decision": "automatic", "pull_request": r.PullRequest}, "merge_automatic"
@@ -337,7 +361,7 @@ func (d *CeremonyDriver) watch(ctx context.Context, run domain.CeremonyRun) (str
 			return "blocked", map[string]any{"reason": "the pull request was closed outside the ceremony"}, nil
 		case len(status.Failed) > 0 && status.Pending == 0:
 			if r.Rounds+1 >= domain.MaxRepairRounds+1 {
-				return "blocked", map[string]any{"reason": fmt.Sprintf("checks failed after %d repair rounds", r.Rounds), "failed": status.Failed}, nil
+				return "blocked", map[string]any{"reason": fmt.Sprintf("checks failed after %d %s rounds", r.Rounds, r.Kind()), "failed": status.Failed}, nil
 			}
 			return "red", map[string]any{"failed": status.Failed, "passed": status.Passed}, nil
 		case status.Pending == 0 && status.MergeState == "BEHIND" && !updated:
@@ -366,6 +390,12 @@ func (d *CeremonyDriver) watch(ctx context.Context, run domain.CeremonyRun) (str
 			return "", nil, err
 		}
 	}
+}
+
+// automaticMerge reports whether decide records an automatic merge: only a
+// repair under repair.auto_merge. axlr_improve has no such transition.
+func (d *CeremonyDriver) automaticMerge(run domain.CeremonyRun) bool {
+	return d.RepairPolicy.AutoMerge && run.Repair != nil && !run.Repair.Improvement
 }
 
 func (d *CeremonyDriver) watchDeadline() time.Duration {
@@ -400,6 +430,9 @@ func (d *CeremonyDriver) sleep(ctx context.Context, wait time.Duration) error {
 // as the console's work so nobody mistakes it for a hand-written change.
 func repairBody(run domain.CeremonyRun) string {
 	r := run.Repair
+	if r.Improvement {
+		return improveBody(run)
+	}
 	var body strings.Builder
 	fmt.Fprintf(&body, "Repair made by the AXLR console through MADE ceremony `%s` %s, instance `%s`.\n\n", run.Definition, run.Version, run.Instance)
 	if r.Cause != "" {
@@ -425,7 +458,11 @@ func repairBody(run domain.CeremonyRun) string {
 func (d *CeremonyDriver) awaitMerge(run domain.CeremonyRun, report map[string]any) (StepResult, error) {
 	r := run.Repair
 	r.Awaiting, r.Decided, r.Granted = domain.AwaitingApproval, "", false
-	report["next_step"], report["instruction"] = run.Step, fmt.Sprintf("Pull request #%d (%s) is green and waits for the person's merge decision on the approval card (/repair). Tell the user and end your turn.", r.PullRequest, r.URL)
+	command := "/repair"
+	if r.Improvement {
+		command = "/improve"
+	}
+	report["next_step"], report["instruction"] = run.Step, fmt.Sprintf("Pull request #%d (%s) is green and waits for the person's merge decision on the approval card (%s). Tell the user and end your turn.", r.PullRequest, r.URL, command)
 	d.observe(run, "DECIDE", report, false, true)
 	return accept(report, &run), nil
 }

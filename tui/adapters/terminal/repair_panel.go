@@ -171,7 +171,7 @@ func repairPanelContent(records []domain.RepairRecord, theme Theme) string {
 		if i > 0 {
 			lines = append(lines, "")
 		}
-		lines = append(lines, theme.Accent(theme.Tf("repairs.row", record.ID, theme.T("repairs.status."+string(record.Status)))))
+		lines = append(lines, theme.Accent(theme.Tf(kindKey("repairs.row", record), record.ID, theme.T("repairs.status."+string(record.Status)))))
 		lines = append(lines, theme.Tf("repairs.step", orDash(record.Step), orDash(record.State), record.Attempt, record.Repository))
 		if record.PullRequest > 0 {
 			lines = append(lines, theme.Tf("repairs.pullRequest", record.PullRequest, record.URL))
@@ -301,9 +301,28 @@ func (m AppModel) repairBadge() string {
 		if record.Status.Terminal() {
 			continue
 		}
-		return m.Theme.Tf("repairs.badge", shortRepairID(record.ID), m.Theme.T("repairs.status."+string(record.Status)))
+		return m.Theme.Tf(kindKey("repairs.badge", record), shortRepairID(record.ID), m.Theme.T("repairs.status."+string(record.Status)))
 	}
 	return ""
+}
+
+// kindKey picks the improvement wording of a repair key for an improvement.
+func kindKey(key string, record domain.RepairRecord) string {
+	if record.Improvement {
+		return key + "Improvement"
+	}
+	return key
+}
+
+// improvementRecords reports whether the panel's records include an
+// improvement, which /improve then opens instead of changing the mode.
+func improvementRecords(records []domain.RepairRecord) bool {
+	for _, record := range records {
+		if record.Improvement {
+			return true
+		}
+	}
+	return false
 }
 
 func shortRepairID(id string) string {

@@ -86,10 +86,11 @@ func (d *CeremonyDriver) StopCeremony(ctx context.Context, s *domain.Session, re
 
 // cancelStalled ends a stalled ceremony instead of leaving the session
 // waiting forever, and starts one console turn so the reason is visible in
-// the transcript. Self-repair keeps its own nudges and decides itself.
+// the transcript. Self-repair and self-improvement keep their own nudges and
+// decide themselves.
 func cancelStalled(ctx context.Context, s *domain.Session, u ContinueTurnUseCase, emit func(Event) error) (bool, error) {
 	reason := StalledReason(*s)
-	if reason == "" || s.Mode() == domain.ModeRepair || u.Ceremonies == nil {
+	if reason == "" || s.Mode().ForgesPullRequest() || u.Ceremonies == nil {
 		return false, nil
 	}
 	run, _ := s.Ceremony()

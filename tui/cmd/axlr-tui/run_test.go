@@ -445,3 +445,17 @@ func TestRunRejectsResumeMismatchAndAllowsHelp(t *testing.T) {
 		t.Fatalf("%d %s", code, &out)
 	}
 }
+
+func TestRunRefusesConflictingLaunchClones(t *testing.T) {
+	for _, args := range [][]string{
+		{"--repair", "it breaks", "--improve", "show the log"},
+		{"--improve", "show the log", "--session", "0123456789abcdef0123456789abcdef"},
+	} {
+		env := cliEnv(t)
+		var out bytes.Buffer
+		code := run(context.Background(), append([]string{"--root", t.TempDir(), "--model", "test/model"}, args...), func(k string) string { return env[k] }, func(tea.Model) error { return nil }, &out)
+		if code == 0 || !strings.Contains(out.String(), "--improve") {
+			t.Fatalf("%v: %d %s", args, code, &out)
+		}
+	}
+}

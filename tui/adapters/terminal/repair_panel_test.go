@@ -63,7 +63,7 @@ func TestRepairPanelOpensForADecisionAndApprovesIt(t *testing.T) {
 		t.Fatalf("panel not opened for a pending decision: %q", m.overlay)
 	}
 	view := m.View().Content
-	for _, want := range []string{"Self-repairs", "waiting for your approval", "go test ./...", "axlr-child-1", "a approve"} {
+	for _, want := range []string{"Self-repairs and improvements", "waiting for your approval", "go test ./...", "axlr-child-1", "a approve"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("panel lacks %q:\n%s", want, view)
 		}
@@ -202,5 +202,24 @@ func TestRepairPanelIsAbsentWithoutACoordinatorOrRecords(t *testing.T) {
 	close(closed)
 	if msg := readRepairEvent(closed)(); msg != nil {
 		t.Fatal("closed channel ends the subscription")
+	}
+}
+
+func TestImprovementsShowTheirKindAndOpenFromImprove(t *testing.T) {
+	record := awaitingRecord(domain.RepairRunning)
+	record.Improvement = true
+	repairs := &fakeRepairs{records: []domain.RepairRecord{record}, events: make(chan application.RepairEvent, 1)}
+	m := repairModel(t, repairs)
+	m.Composer.Input.SetValue("/improve")
+	next, _ := m.Update(ControlIntent("send"))
+	m = next.(AppModel)
+	if m.overlay != "repairs" || m.Header.State.Mode == domain.ModeImprove {
+		t.Fatalf("/improve with a linked improvement: overlay %q mode %q", m.overlay, m.Header.State.Mode)
+	}
+	if view := m.View().Content; !strings.Contains(view, "Improvement 20261005-1200-edit-fails") {
+		t.Fatalf("panel lacks the improvement row:\n%s", view)
+	}
+	if badge := m.repairBadge(); !strings.HasPrefix(badge, "improvement ") {
+		t.Fatalf("badge %q", badge)
 	}
 }

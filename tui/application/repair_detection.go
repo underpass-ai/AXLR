@@ -72,21 +72,30 @@ func decodeRepairRequest(arguments root.JSONValue) (repairRequest, error) {
 	case len(request.ToolCalls) == 0 || len(request.ToolCalls) > maxRepairCitedCalls:
 		return repairRequest{}, fmt.Errorf("tool_calls needs between 1 and %d IDs of calls from this session that show the failure", maxRepairCitedCalls)
 	}
-	for i, item := range request.Evidence {
-		request.Evidence[i] = strings.TrimSpace(item)
-		if request.Evidence[i] == "" || len(request.Evidence[i]) > maxRepairEvidenceLen {
-			return repairRequest{}, fmt.Errorf("evidence items must be nonempty and at most %d bytes", maxRepairEvidenceLen)
+	if err := request.normalizeItems(); err != nil {
+		return repairRequest{}, err
+	}
+	return request, nil
+}
+
+// normalizeItems trims the evidence and the cited call IDs and refuses empty,
+// oversized or repeated ones.
+func (r *repairRequest) normalizeItems() error {
+	for i, item := range r.Evidence {
+		r.Evidence[i] = strings.TrimSpace(item)
+		if r.Evidence[i] == "" || len(r.Evidence[i]) > maxRepairEvidenceLen {
+			return fmt.Errorf("evidence items must be nonempty and at most %d bytes", maxRepairEvidenceLen)
 		}
 	}
 	seen := map[string]bool{}
-	for i, id := range request.ToolCalls {
-		request.ToolCalls[i] = strings.TrimSpace(id)
-		if request.ToolCalls[i] == "" || seen[request.ToolCalls[i]] {
-			return repairRequest{}, errors.New("tool_calls must be distinct, nonempty call IDs")
+	for i, id := range r.ToolCalls {
+		r.ToolCalls[i] = strings.TrimSpace(id)
+		if r.ToolCalls[i] == "" || seen[r.ToolCalls[i]] {
+			return errors.New("tool_calls must be distinct, nonempty call IDs")
 		}
-		seen[request.ToolCalls[i]] = true
+		seen[r.ToolCalls[i]] = true
 	}
-	return request, nil
+	return nil
 }
 
 func (r repairRequest) texts() []string {
@@ -310,6 +319,13 @@ func repairSignature(repository string, failures []citedFailure) string {
 // model's account plus the exact outcomes it cited, so the repair session
 // reproduces what the origin session saw rather than a paraphrase.
 func repairBrief(s domain.Session, request repairRequest, failures []citedFailure, build string) string {
+	return requestBrief(s, request, failures, build, "Failing calls as the origin session saw them:",
+		"Reproduce the defect in this clone with a command that fails before any change; a failure that cannot be shown here ends the repair blocked.")
+}
+
+// requestBrief is the brief a repair or improvement session starts with: the
+// model's account, the evidence and the cited calls, then the closing line.
+func requestBrief(s domain.Session, request repairRequest, cited []citedFailure, build, heading, closing string) string {
 	state := s.Export()
 	byID := map[root.ToolCallID]domain.PendingTool{}
 	for _, record := range state.Activity {
@@ -321,12 +337,12 @@ func repairBrief(s domain.Session, request repairRequest, failures []citedFailur
 	for _, item := range request.Evidence {
 		fmt.Fprintf(&brief, "- %s\n", item)
 	}
-	brief.WriteString("\nFailing calls as the origin session saw them:\n")
-	for _, failure := range failures {
-		record := byID[failure.ID]
-		fmt.Fprintf(&brief, "- %s %s %s → %s\n", failure.ID, failure.Tool, bounded(singleLineText(string(record.Call.Arguments.Bytes())), 400), bounded(singleLineText(string(record.Outcome.Content)), 600))
+	brief.WriteString("\n" + heading + "\n")
+	for _, call := range cited {
+		record := byID[call.ID]
+		fmt.Fprintf(&brief, "- %s %s %s → %s\n", call.ID, call.Tool, bounded(singleLineText(string(record.Call.Arguments.Bytes())), 400), bounded(singleLineText(string(record.Outcome.Content)), 600))
 	}
-	brief.WriteString("\nReproduce the defect in this clone with a command that fails before any change; a failure that cannot be shown here ends the repair blocked.")
+	brief.WriteString("\n" + closing)
 	return bounded(brief.String(), maxRepairBrief)
 }
 
@@ -337,6 +353,12 @@ func singleLineText(text string) string {
 // RepairSlug names a repair, its clone directory and its branch: a timestamp
 // and the brief's first words, kebab-cased.
 func RepairSlug(brief string, now time.Time) string {
+	return now.Format("20060102-1504") + "-" + slugWords(brief)
+}
+
+// slugWords is the brief's first words, lowercased and kebab-cased, at most
+// about 40 characters; "failure" when it has none.
+func slugWords(brief string) string {
 	var words []string
 	length := 0
 	for _, field := range strings.Fields(strings.ToLower(brief)) {
@@ -358,5 +380,5 @@ func RepairSlug(brief string, now time.Time) string {
 	if len(words) == 0 {
 		words = []string{"failure"}
 	}
-	return now.Format("20060102-1504") + "-" + strings.Join(words, "-")
+	return strings.Join(words, "-")
 }

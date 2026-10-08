@@ -43,15 +43,18 @@ func checkFinalAnswer(ctx context.Context, s *domain.Session, u ContinueTurnUseC
 	if len(messages) == 0 || messages[len(messages)-1].Role != root.RoleAssistant || len(messages[len(messages)-1].ToolCalls) > 0 {
 		return false, nil
 	}
-	start := -1
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == root.RoleUser {
-			start = i
-			break
-		}
-	}
-	if start < 0 || strings.HasPrefix(string(messages[start].Content), jevFinalPrefix) {
+	// The request is the person's last message with everything after it,
+	// console messages included, so a later console turn (a memory reminder,
+	// a cancelled ceremony) neither repeats the check nor stands in for the
+	// person's request.
+	start := personRequest(messages)
+	if start < 0 {
 		return false, nil
+	}
+	for _, message := range messages[start+1:] {
+		if message.Role == root.RoleUser && strings.HasPrefix(string(message.Content), jevFinalPrefix) {
+			return false, nil
+		}
 	}
 	state, err := finalCheckState(messages[start:])
 	if err != nil {

@@ -57,7 +57,7 @@ func TestPrepareRepairCloneWritesTheMarkerAndReadsIssues(t *testing.T) {
 	repairs := filepath.Join(t.TempDir(), "repairs")
 	env := []string{"PATH=" + bin + string(os.PathListSeparator) + "/usr/bin:/bin", "HOME=" + t.TempDir()}
 	settings := storage.RepairSettings{Repository: "o/r", About: "project:r"}
-	clone, brief, err := prepareRepairClone(context.Background(), settings, repairs, "#7", env, io.Discard)
+	clone, brief, err := prepareRepairClone(context.Background(), settings, repairs, "", "#7", env, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestPrepareRepairCloneWritesTheMarkerAndReadsIssues(t *testing.T) {
 	if !strings.Contains(string(calls), "gh issue view 7 --repo o/r") || !strings.Contains(string(calls), "gh repo clone o/r "+clone) {
 		t.Fatalf("calls:\n%s", calls)
 	}
-	if _, _, err := prepareRepairClone(context.Background(), settings, repairs, "   ", env, io.Discard); err == nil {
+	if _, _, err := prepareRepairClone(context.Background(), settings, repairs, "", "   ", env, io.Discard); err == nil {
 		t.Fatal("an empty brief must be refused")
 	}
 }
@@ -92,7 +92,7 @@ func TestPrepareRepairCloneDefaultsTheAboutAndHonoursTheDirectory(t *testing.T) 
 	bin, _ := stubTools(t)
 	directory := filepath.Join(t.TempDir(), "elsewhere")
 	env := []string{"PATH=" + bin + string(os.PathListSeparator) + "/usr/bin:/bin", "HOME=" + t.TempDir()}
-	clone, brief, err := prepareRepairClone(context.Background(), storage.RepairSettings{Repository: "underpass-ai/AXLR", Directory: directory}, "/ignored", "the card hides stdin", env, io.Discard)
+	clone, brief, err := prepareRepairClone(context.Background(), storage.RepairSettings{Repository: "underpass-ai/AXLR", Directory: directory}, "/ignored", "", "the card hides stdin", env, io.Discard)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,8 +114,27 @@ func TestPrepareRepairCloneReportsAFailingClone(t *testing.T) {
 		t.Fatal(err)
 	}
 	env := []string{"PATH=" + bin + string(os.PathListSeparator) + "/usr/bin:/bin", "HOME=" + t.TempDir()}
-	_, _, err := prepareRepairClone(context.Background(), storage.RepairSettings{Repository: "o/r"}, t.TempDir(), "x", env, io.Discard)
+	_, _, err := prepareRepairClone(context.Background(), storage.RepairSettings{Repository: "o/r"}, t.TempDir(), "", "x", env, io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "not logged in") {
 		t.Fatalf("got %v", err)
+	}
+}
+
+func TestPrepareImproveCloneMarksTheKind(t *testing.T) {
+	bin, _ := stubTools(t)
+	repairs := filepath.Join(t.TempDir(), "repairs")
+	env := []string{"PATH=" + bin + string(os.PathListSeparator) + "/usr/bin:/bin", "HOME=" + t.TempDir()}
+	settings := storage.RepairSettings{Repository: "o/r"}
+	clone, brief, err := prepareRepairClone(context.Background(), settings, repairs, application.ImproveKind, "show the log to the agent", env, io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(filepath.Join(clone, application.RepairMarker))
+	var marker application.RepairMarkerFile
+	if err := json.Unmarshal(data, &marker); err != nil || marker.Kind != application.ImproveKind || brief != "show the log to the agent" {
+		t.Fatalf("marker %s brief %q", data, brief)
+	}
+	if _, _, err := prepareRepairClone(context.Background(), settings, repairs, application.ImproveKind, " ", env, io.Discard); err == nil || !strings.Contains(err.Error(), "--improve") {
+		t.Fatalf("empty improvement brief: %v", err)
 	}
 }

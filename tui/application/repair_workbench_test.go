@@ -160,10 +160,14 @@ func TestStartTurnCarriesRepairNoticesIntoThePrompt(t *testing.T) {
 	}
 }
 
-type fakeRequestPort struct{ requests, statuses int }
+type fakeRequestPort struct{ requests, improvements, statuses int }
 
 func (f *fakeRequestPort) Request(context.Context, domain.Session, root.JSONValue) (any, error) {
 	f.requests++
+	return map[string]any{"accepted": true}, nil
+}
+func (f *fakeRequestPort) RequestImprovement(context.Context, domain.Session, root.JSONValue) (any, error) {
+	f.improvements++
 	return map[string]any{"accepted": true}, nil
 }
 func (f *fakeRequestPort) Status(context.Context, domain.Session, root.JSONValue) (any, error) {
@@ -173,27 +177,27 @@ func (f *fakeRequestPort) Status(context.Context, domain.Session, root.JSONValue
 
 func TestHostToolRoutesRepairRequestsAndRefusesWithoutACoordinator(t *testing.T) {
 	s := hostSession(t, "reply")
-	for _, op := range []string{domain.HostOperationRequestRepair, domain.HostOperationRepairStatus} {
+	for _, op := range []string{domain.HostOperationRequestRepair, domain.HostOperationRepairStatus, domain.HostOperationRequestImprovement} {
 		out := hostExecute(t, s, op, `{}`)
 		if !out.IsError || !strings.Contains(string(out.Content), "not available") {
 			t.Fatalf("%s without coordinator: %s", op, out.Content)
 		}
 	}
 	port := &fakeRequestPort{}
-	for _, op := range []string{domain.HostOperationRequestRepair, domain.HostOperationRepairStatus} {
+	for _, op := range []string{domain.HostOperationRequestRepair, domain.HostOperationRepairStatus, domain.HostOperationRequestImprovement} {
 		id, _ := domain.NewHostToolIdentity(op)
 		out, err := (HostToolUseCase{Repairs: port}).Execute(context.Background(), s, id, hostJSON(t, `{}`))
 		if err != nil || out.IsError {
 			t.Fatalf("%s: %v %s", op, err, out.Content)
 		}
 	}
-	if port.requests != 1 || port.statuses != 1 {
+	if port.requests != 1 || port.statuses != 1 || port.improvements != 1 {
 		t.Fatalf("routing: %+v", port)
 	}
 }
 
 func TestRepairToolsAreIntrinsicAndHiddenFromRepairSessions(t *testing.T) {
-	for _, op := range []string{domain.HostOperationRequestRepair, domain.HostOperationRepairStatus} {
+	for _, op := range []string{domain.HostOperationRequestRepair, domain.HostOperationRepairStatus, domain.HostOperationRequestImprovement} {
 		id, _ := domain.NewHostToolIdentity(op)
 		if !automaticallyApproves(nil, id) {
 			t.Fatalf("%s needs a card", op)

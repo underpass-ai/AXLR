@@ -90,28 +90,33 @@ func TestAnOpenStepWithoutATurnCanBeStoppedByThePerson(t *testing.T) {
 	}
 }
 
-func TestSelfRepairKeepsItsOwnNudges(t *testing.T) {
-	d := &CeremonyDriver{Engine: &fakeEngine{}, Checks: &fakeChecks{}}
-	s := turnSession(t)
-	if err := s.SetMode(domain.ModeRepair); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.BeginTurn("repair", turnTools()); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_repair", Version: "1.0", Instance: "i", Step: "repair", Iteration: 1, Reminded: true}); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.CompleteAssistant(assistant("done?")); err != nil {
-		t.Fatal(err)
-	}
-	if StalledReason(s) == "" {
-		t.Fatal("the case is not stalled")
-	}
-	if cancelled, err := cancelStalled(context.Background(), &s, ContinueTurnUseCase{Store: &memoryStore{}, Ceremonies: d}, ignoreEvent); err != nil || cancelled {
-		t.Fatalf("a repair was cancelled: %v %v", cancelled, err)
-	}
-	if _, live := s.Ceremony(); !live {
-		t.Fatal("the repair ceremony was ended")
+func TestSelfRepairAndSelfImprovementKeepTheirOwnNudges(t *testing.T) {
+	for mode, run := range map[domain.WorkMode]domain.CeremonyRun{
+		domain.ModeRepair:  {Definition: "axlr_repair", Version: "1.0", Instance: "i", Step: "repair", Iteration: 1, Reminded: true},
+		domain.ModeImprove: {Definition: "axlr_improve", Version: "1.0", Instance: "i", Step: "brief", Iteration: 1, Reminded: true, Repair: &domain.RepairRun{Improvement: true}},
+	} {
+		d := &CeremonyDriver{Engine: &fakeEngine{}, Checks: &fakeChecks{}}
+		s := turnSession(t)
+		if err := s.SetMode(mode); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.BeginTurn("work", turnTools()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SetCeremony(run); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.CompleteAssistant(assistant("done?")); err != nil {
+			t.Fatal(err)
+		}
+		if StalledReason(s) == "" {
+			t.Fatalf("%s: the case is not stalled", mode)
+		}
+		if cancelled, err := cancelStalled(context.Background(), &s, ContinueTurnUseCase{Store: &memoryStore{}, Ceremonies: d}, ignoreEvent); err != nil || cancelled {
+			t.Fatalf("%s was cancelled: %v %v", mode, cancelled, err)
+		}
+		if _, live := s.Ceremony(); !live {
+			t.Fatalf("the %s ceremony was ended", mode)
+		}
 	}
 }

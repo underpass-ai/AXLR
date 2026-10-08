@@ -65,6 +65,16 @@ func (f *fakeEngine) Transition(_ context.Context, _, trigger string) (string, e
 	if f.definition == "axlr_repair" && trigger == "repaired" {
 		f.state = "PROPOSE" // the repair ceremony proposes instead of integrating
 	}
+	if f.definition == "axlr_improve" {
+		// The improve ceremony proposes after build and builds again after
+		// a red check round.
+		switch trigger {
+		case "verified":
+			f.state = "PROPOSE"
+		case "checks_failed":
+			f.state = "BUILD"
+		}
+	}
 	return f.state, nil
 }
 func (f *fakeEngine) Cancel(_ context.Context, _, reason string) error {
@@ -79,10 +89,15 @@ func (f *fakeEngine) Inspect(context.Context, string) (CeremonyView, error) {
 type fakeChecks struct {
 	exits []int
 	runs  []domain.CheckCommand
+	// status is what git status --porcelain prints: a clean clone by default.
+	status string
 }
 
 func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckResult, error) {
 	f.runs = append(f.runs, command)
+	if command.Program == "git" && len(command.Args) > 0 && command.Args[0] == "status" {
+		return CheckResult{Ran: true, Output: f.status}, nil
+	}
 	if command.Program == "git" {
 		return CheckResult{Ran: true, Output: "abc123\n"}, nil
 	}

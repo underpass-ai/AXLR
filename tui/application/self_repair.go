@@ -187,6 +187,9 @@ func (r *SelfRepair) Request(ctx context.Context, s domain.Session, arguments ro
 	if s.Mode() == domain.ModeRepair {
 		return nil, errors.New("a repair session cannot request another repair; finish this one and report the defect to the user")
 	}
+	if s.Mode() == domain.ModeImprove {
+		return nil, errors.New("an improvement session cannot request a repair; finish this one and report the defect to the user")
+	}
 	if dir := r.Settings.Directory; dir != "" && strings.HasPrefix(string(state.Workspace)+string(filepath.Separator), filepath.Clean(dir)+string(filepath.Separator)) {
 		return nil, errors.New("this workspace is a repair clone; a repair cannot start another repair from it")
 	}
@@ -217,55 +220,120 @@ func (r *SelfRepair) Request(ctx context.Context, s domain.Session, arguments ro
 			attempts++
 		}
 	}
-	now := r.now()
 	brief := repairBrief(s, request, failures, r.Build)
-	record := domain.RepairRecord{ID: RepairSlug(request.Description, now.UTC()), Signature: signature, Repository: r.Settings.Repository, Parent: state.ID, Brief: brief, Build: r.Build,
-		Status: domain.RepairPreparing, Attempt: attempts + 1, RunToken: r.RunToken, Created: now}
+	record := domain.RepairRecord{Signature: signature, Brief: brief, Attempt: attempts + 1}
+	if err := r.start(ctx, s, records, &record, request.Description); err != nil {
+		return nil, err
+	}
+	return map[string]any{"accepted": true, "repair": record.ID, "session": record.Session, "clone": record.Clone, "repository": record.Repository, "status": record.Status, "attempt": record.Attempt,
+		"instruction": "The repair runs in a separate session rooted in the clone; this session continues its task. The reproduction command and the merge wait for the person on the /repair panel. Consult axlr_repair_status for progress; do not request the same repair again. A merged repair does not change this running console: it needs an updated build and a restart."}, nil
+}
+
+// RequestImprovement is the axlr_request_improvement host tool: validate the
+// cited calls, apply the improvement admission rules, clone and start an
+// improvement session the console drives like a repair session.
+func (r *SelfRepair) RequestImprovement(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error) {
+	if err := r.configured(); err != nil {
+		return nil, err
+	}
+	request, err := decodeImprovementRequest(arguments)
+	if err != nil {
+		return nil, err
+	}
+	state := s.Export()
+	switch s.Mode() {
+	case domain.ModeRepair:
+		return nil, errors.New("a repair session cannot request an improvement; finish this one and tell the user what you would improve")
+	case domain.ModeImprove:
+		return nil, errors.New("an improvement session cannot request another improvement; finish this one and tell the user what you would improve")
+	case domain.ModeTask, domain.ModePlan:
+		return nil, errors.New("plan and task sessions cannot request an improvement; leave a note for the person instead")
+	}
+	if dir := r.Settings.Directory; dir != "" && strings.HasPrefix(string(state.Workspace)+string(filepath.Separator), filepath.Clean(dir)+string(filepath.Separator)) {
+		return nil, errors.New("this workspace is a repair or improvement clone; an improvement cannot start from it")
+	}
+	if cause := externalCause(request.texts()...); cause != "" {
+		return nil, fmt.Errorf("the request names an external cause (%q): a provider, credential, permission or network problem is not something AXLR can improve; resolve it or tell the user", cause)
+	}
+	calls, refusal := citedFriction(s, request)
+	if refusal != "" {
+		return nil, errors.New(refusal)
+	}
+	signature := improvementSignature(r.Settings.Repository, calls, request.Description)
+	records, err := r.Registry.Load(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("read the repair registry: %w", err)
+	}
+	if refusal := r.admitImprovement(records, state.ID, signature); refusal != "" {
+		return nil, errors.New(refusal)
+	}
+	if err := r.Engine.Ready(ctx, "axlr_improve", "1.0"); err != nil {
+		return nil, fmt.Errorf("MADE cannot run the improve ceremony: %w; publish it with /mcp → P", err)
+	}
+	record := domain.RepairRecord{Improvement: true, Signature: signature, Brief: improvementBrief(s, request, calls, r.Build), Attempt: 1}
+	if err := r.start(ctx, s, records, &record, request.Description); err != nil {
+		return nil, err
+	}
+	return map[string]any{"accepted": true, "improvement": record.ID, "session": record.Session, "clone": record.Clone, "repository": record.Repository, "status": record.Status,
+		"instruction": "The improvement runs in a separate session rooted in the clone; this session continues its task. Its check command and the merge wait for the person on the /improve panel, and the merge is always the person's. Consult axlr_repair_status for progress; do not request it again. A merged improvement does not change this running console: it needs an updated build and a restart."}, nil
+}
+
+// start records a repair or improvement, prepares its clone, creates the
+// session that works there in the matching mode and drives it in the
+// background. The record carries Improvement, Signature, Brief and Attempt.
+func (r *SelfRepair) start(ctx context.Context, s domain.Session, records []domain.RepairRecord, record *domain.RepairRecord, description string) error {
+	state := s.Export()
+	now := r.now()
+	kind, mode, cloneKind := "repair", domain.ModeRepair, ""
+	if record.Improvement {
+		kind, mode, cloneKind = "improvement", domain.ModeImprove, ImproveKind
+	}
+	record.ID, record.Repository, record.Parent, record.Build = RepairSlug(description, now.UTC()), r.Settings.Repository, state.ID, r.Build
+	record.Status, record.RunToken, record.Created = domain.RepairPreparing, r.RunToken, now
 	for _, existing := range records {
 		if existing.ID == record.ID {
-			record.ID += "-" + signature[:4]
+			record.ID += "-" + record.Signature[:4]
 		}
 	}
-	if err := r.save(ctx, &record); err != nil {
-		return nil, fmt.Errorf("record the repair: %w", err)
+	if err := r.save(ctx, record); err != nil {
+		return fmt.Errorf("record the %s: %w", kind, err)
 	}
-	clone, err := r.Clones.Prepare(ctx, RepairCloneRequest{Repository: r.Settings.Repository, Brief: brief, About: r.about(), Slug: record.ID, Origin: state.ID, Build: r.Build})
+	clone, err := r.Clones.Prepare(ctx, RepairCloneRequest{Repository: r.Settings.Repository, Brief: record.Brief, About: r.about(), Slug: record.ID, Kind: cloneKind, Origin: state.ID, Build: r.Build})
 	if err != nil {
 		record.Status, record.Error = domain.RepairFailed, bounded("clone: "+err.Error(), 600)
-		record.Notice = repairNotice(record, r.Build)
-		_ = r.save(ctx, &record)
-		return nil, fmt.Errorf("the clone could not be prepared, so no repair session started: %w", err)
+		record.Notice = repairNotice(*record, r.Build)
+		_ = r.save(ctx, record)
+		return fmt.Errorf("the clone could not be prepared, so no %s session started: %w", kind, err)
 	}
 	record.Clone = clone.Path
 	childID, err := r.newID()
 	if err != nil {
-		return nil, r.fail(ctx, &record, err)
+		return r.fail(ctx, record, err)
 	}
 	child, err := domain.NewSession(childID, domain.Workspace(clone.Path), state.Model)
 	if err != nil {
-		return nil, r.fail(ctx, &record, err)
+		return r.fail(ctx, record, err)
 	}
-	if err := child.SetMode(domain.ModeRepair); err != nil {
-		return nil, r.fail(ctx, &record, err)
+	if err := child.SetMode(mode); err != nil {
+		return r.fail(ctx, record, err)
 	}
 	if err := r.Store.Save(ctx, child); err != nil {
-		return nil, r.fail(ctx, &record, fmt.Errorf("save the repair session: %w", err))
+		return r.fail(ctx, record, fmt.Errorf("save the %s session: %w", kind, err))
 	}
 	record.Session = childID
 	workbench, err := r.Workbench.Open(ctx, clone.Path)
 	if err != nil {
-		return nil, r.fail(ctx, &record, fmt.Errorf("open the repair workbench: %w", err))
+		return r.fail(ctx, record, fmt.Errorf("open the %s workbench: %w", kind, err))
 	}
 	record.Status = domain.RepairRunning
-	if err := r.save(ctx, &record); err != nil {
+	if err := r.save(ctx, record); err != nil {
 		_ = workbench.Close()
-		return nil, fmt.Errorf("record the repair: %w", err)
+		return fmt.Errorf("record the %s: %w", kind, err)
 	}
-	if err := r.launch(record, child, workbench, root.Text(brief), true); err != nil {
-		return nil, r.fail(ctx, &record, err)
+	if err := r.launch(*record, child, workbench, root.Text(record.Brief), true); err != nil {
+		return r.fail(ctx, record, err)
 	}
-	return map[string]any{"accepted": true, "repair": record.ID, "session": childID, "clone": clone.Path, "repository": record.Repository, "status": record.Status, "attempt": record.Attempt,
-		"instruction": "The repair runs in a separate session rooted in the clone; this session continues its task. The reproduction command and the merge wait for the person on the /repair panel. Consult axlr_repair_status for progress; do not request the same repair again. A merged repair does not change this running console: it needs an updated build and a restart."}, nil
+	return nil
 }
 
 func (r *SelfRepair) about() string {
@@ -576,7 +644,11 @@ func describePending(call domain.PendingTool) string {
 }
 
 func repairNudge(run domain.CeremonyRun, nudge int) root.Text {
-	return root.Text(fmt.Sprintf("[AXLR] Nobody is reading this repair session: the %s step of %s is still open (reminder %d of %d). Do the step's work and hand it back with axlr_step_done; if it cannot be done, say so through axlr_step_done (reproducible=false in reproduce) instead of ending your turn. %s", run.Step, run.Definition, nudge, maxRepairNudges, stepInstructions[run.Step]))
+	kind, escape := "repair", "reproducible=false in reproduce"
+	if improving(run) {
+		kind, escape = "improvement", "feasible=false in brief"
+	}
+	return root.Text(fmt.Sprintf("[AXLR] Nobody is reading this %s session: the %s step of %s is still open (reminder %d of %d). Do the step's work and hand it back with axlr_step_done; if it cannot be done, say so through axlr_step_done (%s) instead of ending your turn. %s", kind, run.Step, run.Definition, nudge, maxRepairNudges, escape, baseInstruction(run)))
 }
 
 // repairNotice is the message the parent session receives when the repair
@@ -584,18 +656,22 @@ func repairNudge(run domain.CeremonyRun, nudge int) root.Text {
 // repository, not the process that detected the defect.
 func repairNotice(record domain.RepairRecord, build string) string {
 	var text strings.Builder
+	label, change, panel := "Self-repair", "the fix", "/repair"
+	if record.Improvement {
+		label, change, panel = "Self-improvement", "the change", "/improve"
+	}
 	switch record.Status {
 	case domain.RepairCompleted:
-		fmt.Fprintf(&text, "[AXLR] Self-repair %s merged pull request #%d (%s) into %s as %s.", record.ID, record.PullRequest, record.URL, record.Repository, record.MergeSHA)
-		fmt.Fprintf(&text, " This console still runs build %s, which does not contain the fix: update or rebuild AXLR and restart the console before relying on the repaired behaviour.", build)
+		fmt.Fprintf(&text, "[AXLR] %s %s merged pull request #%d (%s) into %s as %s.", label, record.ID, record.PullRequest, record.URL, record.Repository, record.MergeSHA)
+		fmt.Fprintf(&text, " This console still runs build %s, which does not contain %s: update or rebuild AXLR and restart the console before relying on it.", build, change)
 	case domain.RepairBlocked:
-		fmt.Fprintf(&text, "[AXLR] Self-repair %s ended BLOCKED at step %s: %s.", record.ID, record.Step, record.Error)
+		fmt.Fprintf(&text, "[AXLR] %s %s ended BLOCKED at step %s: %s.", label, record.ID, record.Step, record.Error)
 		if record.URL != "" {
 			fmt.Fprintf(&text, " Pull request #%d (%s) is left as it is.", record.PullRequest, record.URL)
 		}
 		fmt.Fprintf(&text, " The clone %s and session %s keep the evidence (axlr-tui --root <clone> --session <session>).", record.Clone, record.Session)
 	case domain.RepairFailed:
-		fmt.Fprintf(&text, "[AXLR] Self-repair %s failed: %s.", record.ID, record.Error)
+		fmt.Fprintf(&text, "[AXLR] %s %s failed: %s.", label, record.ID, record.Error)
 		if record.Clone != "" {
 			fmt.Fprintf(&text, " The clone %s keeps the evidence", record.Clone)
 			if record.Session != "" {
@@ -604,7 +680,7 @@ func repairNotice(record domain.RepairRecord, build string) string {
 			text.WriteString(".")
 		}
 	case domain.RepairInterrupted:
-		fmt.Fprintf(&text, "[AXLR] Self-repair %s was interrupted (%s); the person can recover it from the /repair panel without repeating what already happened.", record.ID, record.Error)
+		fmt.Fprintf(&text, "[AXLR] %s %s was interrupted (%s); the person can recover it from the %s panel without repeating what already happened.", label, record.ID, record.Error, panel)
 	default:
 		return ""
 	}
@@ -822,7 +898,7 @@ func (r *SelfRepair) Status(ctx context.Context, s domain.Session, arguments roo
 		if wanted != "" && record.ID != wanted || wanted == "" && record.Parent != state.ID && record.Session != state.ID {
 			continue
 		}
-		entry := map[string]any{"repair": record.ID, "status": record.Status, "repository": record.Repository, "attempt": record.Attempt, "updated": record.Updated.UTC().Format(time.RFC3339)}
+		entry := map[string]any{"repair": record.ID, "kind": record.Kind(), "status": record.Status, "repository": record.Repository, "attempt": record.Attempt, "updated": record.Updated.UTC().Format(time.RFC3339)}
 		for key, value := range map[string]string{"step": record.Step, "state": record.State, "instance": record.Instance, "url": record.URL, "merge_sha": record.MergeSHA, "pending": record.Pending, "error": record.Error, "memory": record.Memory, "clone": record.Clone, "session": string(record.Session), "parent": string(record.Parent)} {
 			if value != "" {
 				entry[key] = value
@@ -839,7 +915,7 @@ func (r *SelfRepair) Status(ctx context.Context, s domain.Session, arguments roo
 	if out == nil {
 		out = []map[string]any{}
 	}
-	return map[string]any{"repairs": out, "build": r.Build, "note": "A completed repair changed the repository, not this running console; it needs an updated build and a restart. Decisions the person owes appear in pending."}, nil
+	return map[string]any{"repairs": out, "build": r.Build, "note": "A completed repair or improvement changed the repository, not this running console; it needs an updated build and a restart. Decisions the person owes appear in pending."}, nil
 }
 
 // Close stops the background repairs; each marks itself interrupted.

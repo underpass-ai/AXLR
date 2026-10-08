@@ -52,6 +52,9 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 			if !reminded && err == nil {
 				reminded, err = checkFinalAnswer(ctx, s, u.Continue, emit)
 			}
+			if !reminded && err == nil {
+				reminded, err = remindMemory(ctx, s, u.Continue, emit)
+			}
 			if err != nil || !reminded {
 				return err
 			}

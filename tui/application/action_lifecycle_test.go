@@ -63,7 +63,7 @@ func TestContinueLifecycleCorrelatesModelAndContextIncludingStreamFailure(t *tes
 			parent.End(DiagnosticErrorNone)
 			lifecyclePair(t, trace, DiagnosticActionContext, parentID, DiagnosticErrorNone)
 			start, _ := lifecyclePair(t, trace, DiagnosticActionModel, parentID, tc.class)
-			if start.SpanID != modelID || start.Messages != 2 || start.Tools != 8 {
+			if start.SpanID != modelID || start.Messages != 2 || start.Tools != 9 {
 				t.Fatal("model measurements or port context do not identify request", start)
 			}
 			for _, e := range trace.events {

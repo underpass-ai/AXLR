@@ -21,6 +21,8 @@ type RepairCloneRequest struct {
 	Repository, Brief, About, Slug string
 	// Issue is the GitHub issue number the brief came from, if any.
 	Issue string
+	// Kind is ImproveKind for an improvement clone, empty for a repair.
+	Kind string
 	// Origin is the session that asked for the repair; Build the console
 	// build that detected the defect. Both go into the clone's marker.
 	Origin domain.SessionID
@@ -68,9 +70,11 @@ type RepairNoticesPort interface {
 	Drain(ctx context.Context, session domain.SessionID) ([]string, error)
 }
 
-// RepairRequestPort is the host tool side of self-repair.
+// RepairRequestPort is the host tool side of self-repair and of the
+// improvements the agent requests.
 type RepairRequestPort interface {
 	Request(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error)
+	RequestImprovement(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error)
 	Status(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error)
 }
 

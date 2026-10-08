@@ -12,6 +12,7 @@ var modeGuidance = map[domain.WorkMode]string{
 	domain.ModeDebug:    "Mode: debug. The console runs a MADE debug ceremony for the user's failure: reproduce, diagnose, repair, integrate. It checks your results by running the approved command itself; do the current step's work, then hand it back with axlr_step_done.\n",
 	domain.ModeIncident: "Mode: incident. The console runs a MADE review of a production incident: triage, timeline, analysis, a blameless postmortem draft, a reviewer in a fresh context, the person's approval and publication. Work from evidence in the workspace, never blame a person, do the current step's work, then hand it back with axlr_step_done. Do not write project memory yourself: the console records the approved postmortem.\n",
 	domain.ModeRepair:   "Mode: repair. The console runs a MADE repair ceremony on a disposable clone of the configured repository: reproduce, diagnose, repair; then the console itself commits, pushes, opens the pull request, watches its checks and merges it when green and approved. Do the current step's work with your tools and hand it back with axlr_step_done; never commit, push, open pull requests or write project memory yourself.\n",
+	domain.ModeImprove:  "Mode: improve. The console runs a MADE improvement ceremony on a disposable clone of the configured repository: brief, with a check that fails until the improvement exists, and build until it passes; then the console itself commits, pushes, opens the pull request, watches its checks and merges it only when the person approves. Do the current step's work with your tools and hand it back with axlr_step_done; never commit, push, open pull requests or write project memory yourself.\n",
 	domain.ModePlan:     "Mode: plan. The console runs a MADE plan ceremony for the user's brief: you decompose it into atomic tasks, the console verifies the plan mechanically, the person approves it and the console then runs each task in a fresh worker session. Read the code, do not edit it, and hand the plan back with axlr_step_done. Do not write project memory yourself: the console records the plan.\n",
 	domain.ModeTask:     "Mode: task. You are a worker for one task of an approved plan. Your context pack is the user's message: change only the files in its scope, never the protected ones, and hand each step back with axlr_step_done. The console runs the unit check itself and records your hand-back.\n",
 	domain.ModeDelivery: "Mode: delivery. The console runs a MADE delivery ceremony for the user's change: brief, build, integrate. Its check command decides acceptance; do the current step's work, then hand it back with axlr_step_done.\n",
@@ -49,7 +50,10 @@ func modelHostGuidance(s *domain.Session) root.Message {
 	if text, ok := modeGuidance[s.Mode()]; ok {
 		guidance.WriteString(text)
 	}
-	if s.Mode() != domain.ModeRepair {
+	if !s.Mode().ForgesPullRequest() && s.Mode() != domain.ModeTask && s.Mode() != domain.ModePlan {
+		guidance.WriteString("Self-improvement: when AXLR's own tools made this task needlessly hard in a way your calls show (a capability local_* or axlr_* lacks, a result you had to work around) and the same friction happened at least twice in this session, you may call axlr_request_improvement once per session with description, expected, observed, concrete evidence and the IDs of at least two of those calls. Never for the user's project, a program you ran, MCP plugins, credentials or the network, and never instead of finishing the task or telling the user. A started improvement runs in a separate session and the person approves its check and its merge.\n")
+	}
+	if !s.Mode().ForgesPullRequest() {
 		guidance.WriteString("Self-repair: when a local_* or axlr_* tool fails in a way that points at AXLR itself (an internal_error, an unreadable result, a host refusal that is not about your arguments, a wrong result you can show), retry it once; if it recurs, call axlr_request_repair with description, expected, observed, concrete evidence and the IDs of the failing calls. Never request it for failures of the project, of a program you ran, of your arguments, of permissions, credentials, OpenRouter, MCP servers or the network; tell the user those. A started repair runs in a separate session: continue your task and consult axlr_repair_status when asked.\n")
 	}
 	if run, live := s.Ceremony(); live {
@@ -73,6 +77,9 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		switch id {
 		case "kmp":
 			pluginGuidance.WriteString("KMP is Underpass graph-temporal agent memory. It recovers stored evidence and records decisions, constraints and outcomes. Recover relevant project context before re-deriving it; UNKNOWN is a valid answer. Read only the brief entry of kmp_guide initially, and request a specific extended topic only when needed for the current operation. Reuse the KMP agent and context identity and the guidance already present in this conversation; do not initialize a fresh agent, fetch all guide topics or reread them every turn. Use explicit project scope and evidence.\n")
+			if modelRecordsMemory(*s) {
+				pluginGuidance.WriteString("Record what the work settles: before your final answer, when the task settled a decision, constraint, fix or outcome worth reusing, write it with kmp_write_memory under the session's exact about, with its source evidence and a stable idempotency key, as kmp_guide describes, and say what you recorded. Never record transcripts, guesses or facts nothing settled.\n")
+			}
 		case "made":
 			pluginGuidance.WriteString("MADE is Underpass's engine for agentic ceremonies: structured procedures, working sessions, review loops and human approval. It is available through the registered MADE MCP tools. Discover existing ceremonies and their required transitions through its tools; never invent ceremony results or approvals.\n")
 		}
@@ -80,7 +87,7 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		// whole catalogue, so it is reached through axlr_tools only when needed.
 		entries := []string{}
 		for _, name := range plugins[id] {
-			if strings.Contains(name, "guide") {
+			if strings.Contains(name, "guide") || id == "kmp" && strings.HasPrefix(name, "kmp_write_memory =") {
 				entries = append(entries, name)
 			}
 		}

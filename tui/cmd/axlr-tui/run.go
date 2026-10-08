@@ -70,6 +70,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	sessionFlag := flags.String("session", "", "saved session ID")
 	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
 	repairFlag := flags.String("repair", "", "start a repair of the configured repository in a fresh clone: a failure brief or #issue")
+	improveFlag := flags.String("improve", "", "start an improvement of the configured repository in a fresh clone: an improvement brief or #issue; the merge waits for you")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
 	flags.Func("plugin-env-from", "ID:KEY=HOST_ENV_VAR; repeatable", func(v string) error { selections = append(selections, v); return nil })
@@ -192,11 +193,22 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	repairConfiguration := settings.RepairConfiguration()
 	initialDraft := ""
-	if *repairFlag != "" {
+	// --repair and --improve open the console in a fresh clone, in the mode
+	// whose ceremony ends in the console's pull request.
+	launchFlag, launchMode, launchKind, launchRequest := "", domain.WorkMode(""), "", ""
+	switch {
+	case *repairFlag != "" && *improveFlag != "":
+		return fail(errors.New("--repair and --improve cannot be combined"))
+	case *repairFlag != "":
+		launchFlag, launchMode, launchRequest = "--repair", domain.ModeRepair, *repairFlag
+	case *improveFlag != "":
+		launchFlag, launchMode, launchKind, launchRequest = "--improve", domain.ModeImprove, application.ImproveKind, *improveFlag
+	}
+	if launchMode != "" {
 		if *sessionFlag != "" {
-			return fail(errors.New("--repair starts a new session; it cannot be combined with --session"))
+			return fail(fmt.Errorf("%s starts a new session; it cannot be combined with --session", launchFlag))
 		}
-		clone, brief, err := prepareRepairClone(ctx, repairConfiguration, filepath.Join(dataBase, "axlr", "repairs"), *repairFlag, localRuntimeEnvironment(getenv), stderr)
+		clone, brief, err := prepareRepairClone(ctx, repairConfiguration, filepath.Join(dataBase, "axlr", "repairs"), launchKind, launchRequest, localRuntimeEnvironment(getenv), stderr)
 		if err != nil {
 			return fail(err)
 		}
@@ -361,8 +373,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			if createErr != nil {
 				return fail(createErr)
 			}
-			if *repairFlag != "" {
-				if err := created.SetMode(domain.ModeRepair); err != nil {
+			if launchMode != "" {
+				if err := created.SetMode(launchMode); err != nil {
 					return fail(err)
 				}
 				if err := loggedStore.Save(ctx, created); err != nil {
@@ -370,8 +382,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 				}
 			}
 			session = &created
-		} else if *repairFlag != "" {
-			return fail(errors.New("--repair needs a model: pass --model or choose one in settings.json"))
+		} else if launchMode != "" {
+			return fail(fmt.Errorf("%s needs a model: pass --model or choose one in settings.json", launchFlag))
 		}
 	}
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}

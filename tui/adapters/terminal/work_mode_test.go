@@ -41,3 +41,18 @@ func TestModeCannotChangeDuringATurn(t *testing.T) {
 		t.Fatal("mode changed while busy or the draft was lost")
 	}
 }
+
+func TestImproveCommandAndAliasSelectTheImproveCeremony(t *testing.T) {
+	for _, command := range []string{"/improve", "/mejorar"} {
+		m := sized()
+		m.deps.Store = submissionStore{}
+		m = send(t, m, command)
+		if m.deps.Session.Mode() != domain.ModeImprove || m.Status.Error != "" {
+			t.Fatalf("%s: mode %q error %q", command, m.deps.Session.Mode(), m.Status.Error)
+		}
+		if !strings.Contains(ansi.Strip(m.View().Content), "improve ceremony") {
+			t.Fatalf("%s: footer has no improve badge", command)
+		}
+		m.Close()
+	}
+}

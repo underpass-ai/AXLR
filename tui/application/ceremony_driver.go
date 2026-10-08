@@ -29,6 +29,7 @@ var ceremonySpecs = map[domain.WorkMode]ceremonySpec{
 	domain.ModeDelivery: {definition: "axlr_delivery", version: "2.0", first: "brief", briefInput: "task_brief"},
 	domain.ModeIncident: {definition: "axlr_incident", version: "1.0", first: "triage", briefInput: "incident_brief"},
 	domain.ModeRepair:   {definition: "axlr_repair", version: "1.0", first: "reproduce", briefInput: "failure_brief"},
+	domain.ModeImprove:  {definition: "axlr_improve", version: "1.0", first: "brief", briefInput: "improvement_brief"},
 	domain.ModePlan:     {definition: "axlr_plan", version: "1.0", first: "decompose", briefInput: "brief"},
 }
 
@@ -125,6 +126,7 @@ type stepDone struct {
 		Args    []string `json:"args"`
 	} `json:"check_command"`
 	Reproducible *bool                `json:"reproducible"`
+	Feasible     *bool                `json:"feasible"`
 	Expected     string               `json:"expected"`
 	Observed     string               `json:"observed"`
 	RootCause    string               `json:"root_cause"`
@@ -229,7 +231,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		memoryLimit = compactMemoryBytes
 	}
 	memory := ""
-	if d.Memory != nil && s.Mode() != domain.ModeRepair {
+	if d.Memory != nil && !s.Mode().ForgesPullRequest() {
 		// The user's request is the intent: a store with Jev configured keeps
 		// the evidence relevant to it instead of the about's whole history.
 		if text, _, err := d.Memory.WakeFocused(ctx, about, string(prompt)); err == nil {
@@ -265,7 +267,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		}
 		run.Plan = &domain.PlanRun{ID: slug}
 	}
-	if s.Mode() == domain.ModeRepair {
+	if s.Mode().ForgesPullRequest() {
 		extra, err := d.beginRepair(ctx, s, &run)
 		if err != nil {
 			return err
@@ -316,10 +318,10 @@ func claimKey(run domain.CeremonyRun) string {
 // Instruction is the guidance line for the session's current step.
 func Instruction(run domain.CeremonyRun) string {
 	attempt := ""
-	if run.Step == "reproduce" || run.Step == "repair" || run.Step == "build" {
+	if run.Step == "reproduce" || run.Step == "repair" || run.Step == "build" || run.Step == "brief" && improving(run) {
 		attempt = fmt.Sprintf(" (attempt %d of %d)", run.Iteration, ceremonyRepeatLimit)
 	}
-	text := fmt.Sprintf("Ceremony %s %s is running; the console drives MADE, so never call made_* tools for it. Current step: %s%s. %s", run.Definition, run.Version, run.Step, attempt, stepInstructions[run.Step])
+	text := fmt.Sprintf("Ceremony %s %s is running; the console drives MADE, so never call made_* tools for it. Current step: %s%s. %s", run.Definition, run.Version, run.Step, attempt, baseInstruction(run))
 	if !run.Check.IsZero() {
 		text += fmt.Sprintf(" Approved check command: %s.", run.Check.Program+" "+strings.Join(run.Check.Args, " "))
 	}
@@ -405,6 +407,17 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		}
 		trigger = "diagnosed"
 	case "brief":
+		if improving(run) {
+			var refusal string
+			output, trigger, repeat, refusal, err = d.improveBrief(ctx, &run, done, report)
+			if err != nil {
+				return StepResult{}, err
+			}
+			if refusal != "" {
+				return refuse(refusal), nil
+			}
+			break
+		}
 		command, ok := done.command()
 		if !ok || done.Criteria == "" || done.Scope == "" {
 			return refuse("brief needs criteria, scope and check_command {program, args}"), nil
@@ -426,7 +439,7 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		}
 		if run.Repair != nil {
 			if done.SummaryEN == "" {
-				return refuse("repair needs summary and summary_en"), nil
+				return refuse(run.Step + " needs summary and summary_en"), nil
 			}
 			run.Repair.Summary = bounded(done.SummaryEN, 1500)
 		}
@@ -595,8 +608,19 @@ func stepInstruction(run domain.CeremonyRun) string {
 	if step, ok := compactSteps[run.Step]; ok && run.Compact {
 		return step.instruction
 	}
+	return baseInstruction(run)
+}
+
+// baseInstruction is the standard instruction for the run's step; an
+// improvement words brief and build its own way.
+func baseInstruction(run domain.CeremonyRun) string {
+	if text, ok := improveInstructions[run.Step]; ok && improving(run) {
+		return text
+	}
 	return stepInstructions[run.Step]
 }
+
+func improving(run domain.CeremonyRun) bool { return run.Repair != nil && run.Repair.Improvement }
 
 // reconcile recovers from an advance that was interrupted after MADE may
 // already have recorded part of it: a completion whose answer was lost, a
@@ -754,14 +778,23 @@ func utf8Start(b byte) bool { return b&0xC0 != 0x80 }
 func (d *CeremonyDriver) recordRepair(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output map[string]any) string {
 	r := run.Repair
 	kind := "observation"
-	summary := fmt.Sprintf("Repair %q of %s ended %s at step %s.", r.Slug, r.Repository, state, run.Step)
+	what := "Repair"
+	if r.Improvement {
+		what = "Improvement"
+	}
+	summary := fmt.Sprintf("%s %q of %s ended %s at step %s.", what, r.Slug, r.Repository, state, run.Step)
 	if state == "COMPLETED" && r.MergeSHA != "" {
 		kind = "success_path"
-		summary = fmt.Sprintf("Repair %q of %s merged as pull request #%d (%s).", r.Slug, r.Repository, r.PullRequest, r.MergeSHA)
+		summary = fmt.Sprintf("%s %q of %s merged as pull request #%d (%s).", what, r.Slug, r.Repository, r.PullRequest, r.MergeSHA)
 	} else if reason, _ := output["reason"].(string); reason != "" {
 		summary += " Reason: " + bounded(reason, 600)
 	} else if errText, _ := output["error"].(string); errText != "" {
 		summary += " Error: " + bounded(errText, 600)
+	} else if observed, _ := output["observed"].(string); observed != "" && r.Improvement {
+		summary += " Not feasible: " + bounded(observed, 600)
+	}
+	if r.Criteria != "" {
+		summary += " Criteria: " + bounded(r.Criteria, 600)
 	}
 	if r.Summary != "" {
 		summary += " " + r.Summary

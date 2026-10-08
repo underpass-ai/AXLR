@@ -24,7 +24,7 @@ var documentExtensions = map[string]bool{".md": true, ".mdx": true, ".txt": true
 // Judge applies the mode to a resolved call. Plugin and host tools are not
 // workspace changes and stay under their own approval policy.
 func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict, string) {
-	if (m == ModeIncident || m == ModeRepair || m == ModePlan || m == ModeTask) && id.Kind == ToolKindPlugin && id.Plugin.PluginID == "kmp" && id.Plugin.ToolName == "kmp_write_memory" {
+	if (m == ModeIncident || m.ForgesPullRequest() || m == ModePlan || m == ModeTask) && id.Kind == ToolKindPlugin && id.Plugin.PluginID == "kmp" && id.Plugin.ToolName == "kmp_write_memory" {
 		if m == ModePlan || m == ModeTask {
 			return VerdictDeny, "plan and task modes: the console records the plan, each hand-back and each sync in KMP; do not write project memory yourself"
 		}
@@ -33,6 +33,9 @@ func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict,
 		// repair records its cause and outcome the same way.
 		if m == ModeRepair {
 			return VerdictDeny, "repair mode: the console records the diagnosed cause and the repair outcome in KMP; pass connect_to through axlr_step_done instead of writing project memory yourself"
+		}
+		if m == ModeImprove {
+			return VerdictDeny, "improve mode: the console records the improvement outcome in KMP; do not write project memory yourself"
 		}
 		return VerdictDeny, "incident mode: the console records the approved postmortem in KMP after the person approves it; do not write project memory yourself"
 	}
