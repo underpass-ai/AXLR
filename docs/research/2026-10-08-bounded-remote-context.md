@@ -219,11 +219,14 @@ Lecturas:
   cerrados a `{path, bytes, note: "content is on disk; local_read"}` (~200 B).
   Rotura de caché: una por turno cerrado en la posición de la llamada, como P8;
   barata porque solo invalida el turno recién cerrado.
-- **`content` + `structured_content` en el bridge**: 26 resultados llevan ambos
-  y solo 2 son idénticos, así que la deduplicación actual no actúa. Política de
-  Pi: cuando `content` tiene texto, omitir `structured_content` en la proyección
-  dejando `structured_content_omitted: <bytes>` (el original queda en
-  `axlr_history`). Un `kmp_write_memory` pasa de 5.240 B a ~900 B.
+- **`content` + `structured_content` en el bridge** (corregido al implementar
+  el PR4): 26 resultados llevan ambos. En MADE el texto es el mismo JSON y la
+  proyección ya lo deduplica (el payload no lleva `structured_content`). En
+  KMP el texto es una línea de resumen más `kmp_guidance`, y la respuesta, la
+  prueba y el recibo están solo en `structured_content`: no es duplicación y
+  no se recorta. Lo que sobra es verbosidad de KMP (issue aparte). La política de Pi
+  (omitir `structured_content` cuando hay texto) aquí perdería las respuestas
+  de KMP.
 - **Verbosidad de KMP** (issue en KMP, no en AXLR). Un `kmp_write_memory` de 912 B
   de argumentos devuelve 5.240 B: `structured_content` 4.292 B
   (`proposed_relations` 1.732, `clocks` 575, `viewer` 389, `receipt` 365,
