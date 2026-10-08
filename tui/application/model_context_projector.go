@@ -106,6 +106,11 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 	for i, message := range original {
 		projected[i] = message
 		projected[i].ToolCalls = append([]root.ToolCall(nil), message.ToolCalls...)
+		if len(starts) > 0 && i < starts[len(starts)-1] {
+			for c, call := range projected[i].ToolCalls {
+				projected[i].ToolCalls[c].Arguments = closedWriteArguments(call)
+			}
+		}
 		if message.Role == root.RoleTool {
 			limit := p.budget.ToolResultBytes()
 			place := excerptHistorical
