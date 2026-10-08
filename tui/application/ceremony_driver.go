@@ -355,6 +355,15 @@ func stepAttempt(run domain.CeremonyRun) string {
 	return ""
 }
 
+// AttemptLimit is the attempt bound of the current step, or zero when the
+// console does not bound it.
+func AttemptLimit(run domain.CeremonyRun) int {
+	if stepAttempt(run) == "" {
+		return 0
+	}
+	return ceremonyRepeatLimit
+}
+
 // stepCheck is the approved check command, once there is one.
 func stepCheck(run domain.CeremonyRun) string {
 	if run.Check.IsZero() {
