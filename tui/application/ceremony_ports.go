@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -11,6 +12,42 @@ import (
 // ErrCeremonyNotPrepared means the pinned 2.0 definition is not published in
 // the connected MADE store; only the explicit /mcp → P action publishes it.
 var ErrCeremonyNotPrepared = errors.New("prepare MADE first: /mcp → P")
+
+// MissingDefinition is a pinned MADE definition the connected store does not
+// publish yet.
+type MissingDefinition struct {
+	Name, Version string
+}
+
+// notPreparedError names the missing definitions and the one-time action; it
+// matches ErrCeremonyNotPrepared with errors.Is.
+type notPreparedError struct {
+	missing []MissingDefinition
+}
+
+// NotPreparedError returns ErrCeremonyNotPrepared's failure naming each missing
+// definition with its version and the exact action to publish it.
+func NotPreparedError(missing ...MissingDefinition) error {
+	return notPreparedError{missing: missing}
+}
+
+func (e notPreparedError) Error() string {
+	names := make([]string, 0, len(e.missing))
+	for _, m := range e.missing {
+		names = append(names, m.Name+" "+m.Version)
+	}
+	list := strings.Join(names, ", ")
+	if list == "" {
+		list = "the MADE definition"
+	}
+	return "MADE definition not published: " + list +
+		". Preparing MADE is a one-time setup: open /mcp, select MADE and press p. " +
+		"Your prompt was kept in the composer; send it again after preparing."
+}
+
+func (e notPreparedError) Is(target error) bool {
+	return target == ErrCeremonyNotPrepared
+}
 
 // CeremonyEnginePort is MADE as the ceremony driver sees it. Implementations
 // keep MCP shapes out of the application layer.
