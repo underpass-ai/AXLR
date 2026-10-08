@@ -143,6 +143,8 @@ The private session store retains the full transcript. Model requests receive a 
 
 When the history crosses the ceiling, whole earlier turns are dropped until it is back under the low watermark, and one checkpoint message takes their place. It quotes each omitted request of the person exactly, newest first (an excerpt when they no longer fit), and next to each the files the turn wrote, which are on disk, and the memory it recorded in KMP (`about` and `idempotency_key` of each accepted `kmp_write_memory`); a turn that wrote files or made five or more local calls in a session that uses KMP, and recorded nothing, is marked `unrecorded`. Console messages (`[AXLR…]`) belong to the request before them. The checkpoint keeps the KMP agent and context identities and the index of the last guide and protocol result, and tells the model to recover what the session settled from KMP, a file from disk and one exact message with `axlr_history`. When the map no longer fits, older turns keep only their request and `records_omitted_at_or_before` says from which one. The checkpoint quotes no assistant prose.
 
+In a closed turn, the arguments of a `local_write` or `local_edit` call of 512 bytes or more keep their path and mode, and the written text is replaced by its size (`content_omitted_bytes`, `old_text_omitted_bytes`, `new_text_omitted_bytes`) and a note to `local_read` the file: the file on disk holds it. The saved transcript keeps them whole, and the turn in progress keeps them exact.
+
 Host results such as exact tool-discovery schemas are retained up to 64 KiB, and `axlr_history` pages hold up to 32 KiB, or what the model's budget keeps per tool result when that is less, so a recovered page is never excerpted again.
 
 ### Prompt caching
