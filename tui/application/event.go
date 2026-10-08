@@ -16,4 +16,7 @@ type Event struct {
 	State         domain.SessionStatus
 	Tool          domain.PendingTool
 	Usage         *root.TokenUsage
+	// ToolCallName and ToolCallBytes describe the call being streamed.
+	ToolCallName  string
+	ToolCallBytes int
 }
