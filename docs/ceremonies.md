@@ -1,6 +1,6 @@
 # Ceremonies
 
-AXLR runs ordinary work directly. The console starts a MADE ceremony when the user selects `/debug`, `/delivery`, `/incident` or `/repair`, or when the agent requests a [self-repair](#self-repair-from-a-running-session) with evidence; the console drives the instance and the model does each step's work. The model never drives a console ceremony through direct `made_*` calls. For any other MADE procedure the user asks for explicitly, the model works with the registered MADE tools under their own approval policy, without a bundled catalogue.
+AXLR runs ordinary work directly. The console starts a MADE ceremony when the user selects `/debug`, `/delivery`, `/incident`, `/repair` or `/improve`, or when the agent requests a [self-repair](#self-repair-from-a-running-session) with evidence; the console drives the instance and the model does each step's work. The model never drives a console ceremony through direct `made_*` calls. For any other MADE procedure the user asks for explicitly, the model works with the registered MADE tools under their own approval policy, without a bundled catalogue.
 
 ## Console-driven ceremonies
 
@@ -11,8 +11,9 @@ AXLR runs ordinary work directly. The console starts a MADE ceremony when the us
 | `/incident` | `axlr_incident` 1.0 | Triage → evidence timeline → analysis and actions → draft and fresh-context review → person's approval → postmortem publication |
 | `/plan` | `axlr_plan`, `axlr_task`, `axlr_sync` 1.0 | Decompose a brief into verified atomic tasks → the person's approval → each task in a fresh worker (red, green, hand-back) → a sync after each wave; see [plans](#plans-atomic-tasks-for-small-models) |
 | `/repair` | `axlr_repair` 1.0 | Reproduce → diagnose → repair in a fresh clone → the console commits, pushes and opens the pull request → watches its checks → merge decision (automatic or the person's) → squash merge |
+| `/improve` | `axlr_improve` 1.0 | Brief with a check that fails in a fresh clone → build until it passes → the console commits, pushes and opens the pull request → watches its checks → the person's merge decision → squash merge |
 
-The [MADE runbook](runbooks/made.md#prepare-the-driven-ceremonies) prepares the work identity and publishes the seven pinned definitions. Selecting a mode does not start an instance; the next prompt does. AXLR checks the published semantic digest, starts the instance and claims its first step. Missing or conflicting definitions stop the start.
+The [MADE runbook](runbooks/made.md#prepare-the-driven-ceremonies) prepares the work identity and publishes the eight pinned definitions. Selecting a mode does not start an instance; the next prompt does. AXLR checks the published semantic digest, starts the instance and claims its first step. Missing or conflicting definitions stop the start.
 
 The model does real work with AXLR tools and returns the current step's fields through `axlr_step_done`. AXLR runs the check itself, records its output in MADE, applies an enabled transition and claims the next step. The model must not also drive that instance through direct `made_*` calls.
 
@@ -52,6 +53,14 @@ The agent of any session can ask the console to repair AXLR itself while its own
 
 **Updating the runtime.** When the repair ends, the original session's next prompt carries a visible `[AXLR] Self-repair …` note with the pull request, the merge commit, the MADE instance and the KMP report, or the reason it stopped. A merge changes the repository, not the process that detected the defect: the note says which build the console still runs and that it needs an update or a rebuild and a restart before the repaired behaviour can be relied on. The console never replaces its own executable, and a second request for the same failure from the same build is refused with that reminder.
 
+### Self-improvement: the same pull request, the person's merge
+
+`/improve` is the sibling of `/repair` for a change that is not a failure: a capability the console lacks, a rough edge, an issue such as "make the application log visible to the agent". It works on the same repository and in the same kind of clone: `axlr-tui --improve "<improvement brief or #issue>"` clones `repair.repository` beside the repair clones, writes `.axlr-repair.json` with `"kind": "improve"` and opens the console there in improve mode with the brief in the composer. `/improve` refuses a workspace without that marker, `/repair` refuses an improvement clone and `/improve` a repair clone, each printing the launcher command.
+
+`brief` takes `criteria`, `scope` and `check_command`. The console runs the command once in the untouched clone, after the person approves it, and accepts the brief only when it exits non-zero: the check must show that the improvement is missing, so the pull request can later show the same command failing before the change and passing after it. A check that already passes is sent back with that reason, at most three briefs. When the improvement already exists or cannot be made safely as a small change, the model sends `feasible=false` with `observed` and the ceremony ends `BLOCKED` with the reason. `build` makes the smallest change, returns `summary` and `summary_en` and must make the approved check exit zero, at most three attempts.
+
+From there the console does what it does for a repair: it commits on `improve/<slug>` with the trailer `Improved-by: AXLR axlr_improve 1.0 <instance>`, opens the pull request titled `Improve: <first line of the brief>` with the criteria, scope, summary and the before/after evidence, watches its checks and brings a red round back to `build` at most twice. The merge is always the person's: `axlr_improve` 1.0 has no automatic transition and `repair.auto_merge` does not apply, so green checks open the merge card (`/improve` reopens it), `a` approves and merges with squash and `d` declines with a reason and ends `BLOCKED` with the pull request open. At the terminal state the console records the outcome in the project about (`success_path` or `observation`, labelled `improvement`); the model may not write project memory in this mode, and an improvement session cannot request a self-repair. A watch interrupted by cancellation, a crash or a reload is resumed as a repair's is. The agent cannot request an improvement from a running session yet; the [design](plans/2026-10-08-self-improve-design.md) records the decisions and that next step.
+
 ### A step the model will not hand back
 
 When the model ends its turn with the step still open, the console reminds it once with a visible `[AXLR]` message. If the answer held a tool call written as text (`<|tool_call>`, `<tool_call>`, `[TOOL_CALLS]`, `<|python_tag|>` and similar), the reminder says so: the server's parser failed to turn it into a call.
@@ -68,7 +77,7 @@ MADE remains the authority for claims and progress. On some interrupted completi
 
 ### The compact profile for small models
 
-`/debug` and `/delivery` run under one of two profiles. `ceremonies.profile` in `settings.json` selects it: `auto` (the default) uses the compact profile when the session model's known window is 65,536 tokens or less, from a [local model's](console.md#local-models) `context_tokens` or the global `context_tokens` cap; `standard` and `compact` force one. The profile is decided when the ceremony begins and kept in its `.ceremony` record, so a resumed session keeps it. `/incident` and `/repair` always use the standard profile.
+`/debug` and `/delivery` run under one of two profiles. `ceremonies.profile` in `settings.json` selects it: `auto` (the default) uses the compact profile when the session model's known window is 65,536 tokens or less, from a [local model's](console.md#local-models) `context_tokens` or the global `context_tokens` cap; `standard` and `compact` force one. The profile is decided when the ceremony begins and kept in its `.ceremony` record, so a resumed session keeps it. `/incident`, `/repair` and `/improve` always use the standard profile.
 
 Under the compact profile:
 
@@ -145,4 +154,4 @@ To validate the shipped definitions and their pins against a compatible MADE bin
 python3 tools/ceremonies/check_pins.py --made-bin /absolute/path/to/made-mcp
 ```
 
-Each YAML is validated and published into the disposable store; its semantic digest must match the pin in `definitions.go`, and every pin must have a YAML. Drafts, when there are any, are validated and published the same way without a pin, and `python3 tools/ceremonies/spike_drafts.py --made-bin …` walks the happy and blocked paths of the plan, task and sync definitions. Bump the immutable published version when a definition's content changes.
+Each YAML is validated and published into the disposable store; its semantic digest must match the pin in `definitions.go`, and every pin must have a YAML. Drafts, when there are any, are validated and published the same way without a pin, and `python3 tools/ceremonies/spike_drafts.py --made-bin …` walks the happy and blocked paths of the plan, task, sync and improve definitions. Bump the immutable published version when a definition's content changes.
