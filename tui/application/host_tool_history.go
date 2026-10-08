@@ -6,7 +6,13 @@ import (
 	root "github.com/underpass-ai/AXLR/domain"
 )
 
-func hostHistory(messages []root.Message, arguments root.JSONValue) (any, error) {
+// hostHistory pages a persisted message. pageLimit bounds the encoded page:
+// MaxHistoryReadBytes, or the projection's tool result budget when that is
+// smaller, so a page is never excerpted again by the projection it feeds.
+func hostHistory(messages []root.Message, arguments root.JSONValue, pageLimit int) (any, error) {
+	if pageLimit <= 0 || pageLimit > MaxHistoryReadBytes {
+		pageLimit = MaxHistoryReadBytes
+	}
 	args, err := decodeHostArguments(arguments, "message_index", "offset_bytes", "limit_bytes")
 	if err != nil {
 		return nil, err
@@ -58,7 +64,7 @@ func hostHistory(messages []root.Message, arguments root.JSONValue) (any, error)
 		if err != nil {
 			return nil, err
 		}
-		if contentJSONBytes(string(encoded)) <= MaxHistoryReadBytes-256 {
+		if contentJSONBytes(string(encoded)) <= pageLimit-256 {
 			return result, nil
 		}
 		if withCalls {

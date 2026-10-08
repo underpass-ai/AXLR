@@ -19,6 +19,23 @@ type HostToolUseCase struct {
 	Repairs RepairRequestPort
 	// Judge serves axlr_judge; nil means Jev is not enabled.
 	Judge JudgementPort
+	// Windows bounds an axlr_history page to the projection's tool result
+	// budget for the session's model; nil keeps MaxHistoryReadBytes.
+	Windows ModelContextWindowPort
+}
+
+// historyPageLimit is the largest encoded axlr_history page that the
+// projection of the session's model keeps whole: its budget, or the compact
+// one when a compact ceremony step is running, as the continuation sizes it.
+func (u HostToolUseCase) historyPageLimit(session domain.Session) int {
+	if u.Windows == nil {
+		return MaxHistoryReadBytes
+	}
+	budget := u.Windows.ContextBudget(sessionModel(session))
+	if _, _, compact := compactRun(session); compact {
+		budget = budget.Smaller(domain.CompactContextBudget())
+	}
+	return min(MaxHistoryReadBytes, budget.ToolResultBytes())
 }
 
 func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, identity domain.ToolIdentity, arguments root.JSONValue) (domain.ToolOutcome, error) {
@@ -37,7 +54,7 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 	case domain.HostOperationTools:
 		result, err = hostDiscover(session.ToolSnapshot(), arguments)
 	case domain.HostOperationHistory:
-		result, err = hostHistory(session.Messages(), arguments)
+		result, err = hostHistory(session.Messages(), arguments, u.historyPageLimit(session))
 	case domain.HostOperationSkill:
 		result, err = u.readSkill(ctx, arguments)
 	case domain.HostOperationSession:

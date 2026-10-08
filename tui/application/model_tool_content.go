@@ -62,15 +62,15 @@ func projectToolContentIn(raw string, index, limit int, place excerptPlace) (str
 	if contentJSONBytes(string(encoded)) <= limit-256 {
 		return string(encoded), nil
 	}
+	// One text serves the current turn and the closed one: a result that
+	// changed its text when its turn closed broke the provider's cached
+	// prefix at that message on every turn.
 	bounded := map[string]any{
 		"kind": "axlr_tool_result_excerpt", "lossy": true,
 		"message_index": index, "original_bytes": len(raw),
-		"retrieval": fmt.Sprintf("axlr_history({message_index: %d, offset_bytes: 0}); continue with next_offset_bytes for the exact original result.", index),
+		"retrieval": fmt.Sprintf("While this turn is open, axlr_history will not re-read this result: repeat the original call with a narrower query, filter or page. Once the turn has closed, axlr_history({message_index: %d, offset_bytes: 0}); continue with next_offset_bytes for the exact original result.", index),
 	}
-	switch place {
-	case excerptCurrentTurn:
-		bounded["retrieval"] = "This result belongs to the current turn and axlr_history will not re-read it. If you need more of it, repeat the original call with a narrower query, filter or page."
-	case excerptCompacted:
+	if place == excerptCompacted {
 		bounded["retrieval"] = "This turn no longer fits the model context, so its earlier results were shortened. Answer with what you have, or ask the user before gathering more."
 	}
 	if controls := protocolControls(original); controls != nil {

@@ -111,3 +111,27 @@ func TestRouterAsksForWholeRepliesWhenStreamingIsOff(t *testing.T) {
 		t.Fatalf("completed=%d streamed=%d text=%v err=%v", client.completed, client.streamed, text, err)
 	}
 }
+
+func TestWindowsBudgetLocalModelsByWindowAndRemoteOnesByPrompt(t *testing.T) {
+	w := Windows{Local: map[root.ModelID]domain.ContextWindow{"local/qwen": 65536}}
+	if got := w.ContextBudget("local/qwen"); got != domain.ContextBudgetForWindow(65536) {
+		t.Fatalf("local model budget = %+v", got)
+	}
+	if got := w.ContextBudget("anthropic/claude-haiku-5.5"); got != domain.ContextBudgetForPrompt(domain.DefaultPromptTokens) || got == domain.DefaultContextBudget() {
+		t.Fatalf("remote model budget = %+v", got)
+	}
+	w.Prompt = 96000
+	if got := w.ContextBudget("anthropic/claude-haiku-5.5"); got != domain.ContextBudgetForPrompt(96000) {
+		t.Fatalf("remote model budget with prompt_tokens = %+v", got)
+	}
+	// The cap still bounds a remote model, and the prompt budget still
+	// bounds a cap that holds more.
+	w.Cap = 32768
+	if got := w.ContextBudget("anthropic/claude-haiku-5.5"); got != domain.ContextBudgetForPrompt(96000).Smaller(domain.ContextBudgetForWindow(32768)) || got.MaximumBytes() != domain.ContextBudgetForWindow(32768).MaximumBytes() {
+		t.Fatalf("capped remote model budget = %+v", got)
+	}
+	w.Cap = 1 << 20
+	if got := w.ContextBudget("anthropic/claude-haiku-5.5"); got != domain.ContextBudgetForPrompt(96000) {
+		t.Fatalf("remote model under a large cap = %+v", got)
+	}
+}

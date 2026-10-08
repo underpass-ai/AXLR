@@ -15,6 +15,9 @@ func NewContextBudget(maximum, lowWater, toolResult, checkpoint int) (ContextBud
 	return ContextBudget{maximum, lowWater, toolResult, checkpoint}, nil
 }
 
+// DefaultContextBudget is the ceiling: what a model whose known window holds
+// it may receive. A model with an unknown window gets ContextBudgetForPrompt
+// instead, since every byte it receives is paid for.
 func DefaultContextBudget() ContextBudget {
 	budget, _ := NewContextBudget(1024*1024, 768*1024, 64*1024, 16*1024)
 	return budget
@@ -61,12 +64,13 @@ const (
 )
 
 // ContextBudgetForWindow scales the default byte budget down to a model's
-// context window. An unknown window, or one large enough for the default,
-// keeps the default. The four limits stay in their default proportions.
+// context window. A window large enough for the default keeps the default;
+// an unknown window gets the default prompt budget, since nothing says the
+// model holds more. The four limits stay in their default proportions.
 func ContextBudgetForWindow(window ContextWindow) ContextBudget {
 	budget := DefaultContextBudget()
 	if window.Tokens() < MinimumContextWindow {
-		return budget
+		return ContextBudgetForPrompt(DefaultPromptTokens)
 	}
 	maximum := window.Tokens() / windowShareDenominator * windowShareNumerator * windowBytesPerToken
 	if maximum >= budget.maximum {
@@ -80,4 +84,53 @@ func ContextBudgetForWindow(window ContextWindow) ContextBudget {
 		return budget
 	}
 	return scaled
+}
+
+// Prompt budget for a model whose window is unknown: a remote model, whose
+// every prompt token is paid for. The limits are derived from the prompt size
+// the console is willing to send, not from a window.
+const (
+	// DefaultPromptTokens is the prompt a request may reach by default. It
+	// stays under the 100K tokens above which Claude Haiku 5.5 costs five
+	// times as much, with room for the guidance, the schemas and the reply.
+	DefaultPromptTokens = 64000
+	// MinimumPromptTokens is the smallest prompt a budget can be derived
+	// from: below it the guidance and the schemas leave no room for a turn.
+	MinimumPromptTokens = 16384
+	// promptBytesPerTokenHundredths is what a prompt token held on Claude
+	// Haiku 5.5 through OpenRouter: 2.44 bytes over the 198 requests of one
+	// session (8 October 2026), against the 3 the window budget assumes.
+	// Tokenizers that hold more bytes per token cost fewer tokens for the
+	// same bytes, so the budget errs on the cheap side for them.
+	promptBytesPerTokenHundredths = 244
+	// promptPrefixReserve is what the guidance and the tool schemas, which
+	// the projection does not bound, took at most in that session: 7.7 KB
+	// and 9.7 KB.
+	promptPrefixReserve = 17 << 10
+)
+
+// ContextBudgetForPrompt bounds the projection so that a request stays near
+// tokens: the history gets the prompt's bytes minus the reserve for guidance
+// and schemas, the low watermark is half the ceiling so a cut leaves room for
+// many appends before the next one, a tool result is at most an eighth of the
+// ceiling and the checkpoint at most an eighth of the low watermark. A prompt
+// below the minimum gets the default; one that holds the default ceiling or
+// more keeps the default.
+func ContextBudgetForPrompt(tokens int) ContextBudget {
+	if tokens < MinimumPromptTokens {
+		tokens = DefaultPromptTokens
+	}
+	ceiling := DefaultContextBudget()
+	maximum := tokens*promptBytesPerTokenHundredths/100 - promptPrefixReserve
+	if maximum >= ceiling.maximum {
+		return ceiling
+	}
+	lowWater := maximum / 2
+	toolResult := min(ceiling.toolResult, maximum/8)
+	checkpoint := min(ceiling.checkpoint, lowWater/8)
+	budget, err := NewContextBudget(maximum, lowWater, toolResult, checkpoint)
+	if err != nil {
+		return ceiling
+	}
+	return budget
 }

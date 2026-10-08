@@ -3,9 +3,16 @@ package domain
 import "testing"
 
 func TestContextBudgetForWindowScalesWithTheWindow(t *testing.T) {
-	for _, window := range []ContextWindow{0, 1, MinimumContextWindow - 1, 1 << 20, 10_000_000} {
+	for _, window := range []ContextWindow{1 << 20, 10_000_000} {
 		if ContextBudgetForWindow(window) != DefaultContextBudget() {
 			t.Fatalf("window %d did not keep the default budget", window)
+		}
+	}
+	// An unknown window says nothing about the model, so it gets the prompt
+	// budget rather than the ceiling.
+	for _, window := range []ContextWindow{0, 1, MinimumContextWindow - 1} {
+		if ContextBudgetForWindow(window) != ContextBudgetForPrompt(DefaultPromptTokens) {
+			t.Fatalf("window %d did not get the prompt budget", window)
 		}
 	}
 	for _, tc := range []struct {

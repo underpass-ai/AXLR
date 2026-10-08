@@ -54,13 +54,13 @@ func TestHistoryWillNotRereadAResultOfTheCurrentTurn(t *testing.T) {
 		v, _ := root.NewJSONObject([]byte(fmt.Sprintf(`{"message_index":%d}`, i)))
 		return v
 	}
-	if _, err := hostHistory(messages, args(5)); err == nil || !strings.Contains(err.Error(), "current turn") {
+	if _, err := hostHistory(messages, args(5), MaxHistoryReadBytes); err == nil || !strings.Contains(err.Error(), "current turn") {
 		t.Fatalf("current-turn result re-read: %v", err)
 	}
-	if _, err := hostHistory(messages, args(2)); err != nil {
+	if _, err := hostHistory(messages, args(2), MaxHistoryReadBytes); err != nil {
 		t.Fatalf("earlier turn refused: %v", err)
 	}
-	if _, err := hostHistory(messages, args(3)); err != nil {
+	if _, err := hostHistory(messages, args(3), MaxHistoryReadBytes); err != nil {
 		t.Fatalf("the current user message refused: %v", err)
 	}
 }

@@ -46,6 +46,10 @@ type UserSettings struct {
 	// every model; zero means no cap. A local model's own window applies
 	// when it is smaller.
 	ContextTokens int `json:"context_tokens,omitempty"`
+	// PromptTokens is the prompt, in tokens, a request to a model whose
+	// window is unknown (OpenRouter's) may reach; zero means
+	// domain.DefaultPromptTokens. A local model's window applies instead.
+	PromptTokens int `json:"prompt_tokens,omitempty"`
 	// LocalModels are OpenAI-compatible servers, such as llama.cpp or vLLM,
 	// offered in /model next to OpenRouter's catalog.
 	LocalModels []LocalModel `json:"local_models,omitempty"`
@@ -387,6 +391,9 @@ func (s UserSettings) Validate() error {
 	}
 	if s.ContextTokens != 0 && (s.ContextTokens < domain.MinimumContextWindow || s.ContextTokens > maxContextTokens) {
 		return fmt.Errorf("settings context_tokens must be between %d and %d", domain.MinimumContextWindow, maxContextTokens)
+	}
+	if s.PromptTokens != 0 && (s.PromptTokens < domain.MinimumPromptTokens || s.PromptTokens > maxContextTokens) {
+		return fmt.Errorf("settings prompt_tokens must be between %d and %d", domain.MinimumPromptTokens, maxContextTokens)
 	}
 	if len(s.LocalModels) > maxLocalModels {
 		return errors.New("settings.json lists too many local models")

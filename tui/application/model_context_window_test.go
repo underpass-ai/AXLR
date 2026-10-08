@@ -13,6 +13,9 @@ import (
 type windowsFunc func(root.ModelID) domain.ContextWindow
 
 func (f windowsFunc) ContextWindow(id root.ModelID) domain.ContextWindow { return f(id) }
+func (f windowsFunc) ContextBudget(id root.ModelID) domain.ContextBudget {
+	return domain.ContextBudgetForWindow(f(id))
+}
 
 func TestContinueTurnSizesTheProjectionToTheModelWindow(t *testing.T) {
 	prompt := root.Text(strings.Repeat("palabra ", 4000)) // 32 KB
