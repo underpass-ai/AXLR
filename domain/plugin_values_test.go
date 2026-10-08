@@ -48,3 +48,16 @@ func TestJSONValueOwnsValidatedBytes(t *testing.T) {
 		t.Fatal("accepted multiple JSON values")
 	}
 }
+
+func TestJSONValueCompactRemovesOnlyWhitespace(t *testing.T) {
+	value, err := NewJSONObject([]byte("{\"path\": \"a b.go\",\n  \"text\": \"x < y && \\u00e9\"}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(value.Compact().Bytes()); got != `{"path":"a b.go","text":"x < y && \u00e9"}` {
+		t.Fatalf("compacted = %s", got)
+	}
+	if got := (JSONValue{}).Compact(); len(got.Bytes()) != 0 {
+		t.Fatalf("empty value compacted to %s", got.Bytes())
+	}
+}

@@ -189,6 +189,14 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 	}
 	next := s.Export()
 	message.ToolCalls = append([]axlr.ToolCall(nil), message.ToolCalls...)
+	// Arguments are held in the compact form the session store writes, so a
+	// resumed session sends its earlier calls with the bytes the live one did.
+	// A replay checks the saved bytes as they are.
+	if !s.replaying {
+		for i := range message.ToolCalls {
+			message.ToolCalls[i].Arguments = message.ToolCalls[i].Arguments.Compact()
+		}
+	}
 	next.Messages = append(next.Messages, message)
 	stampLast(&next)
 	next.TurnCallCount += len(message.ToolCalls)
