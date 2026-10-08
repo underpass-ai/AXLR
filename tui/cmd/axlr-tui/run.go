@@ -225,7 +225,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if trace != nil {
 		var payloads *diagnostics.PayloadRecorder
 		if *tracePayloads {
-			payloadDirectory, createErr := os.MkdirTemp(filepath.Dir(tracePath), filepath.Base(tracePath)+".payloads-")
+			payloadParent, note, parentErr := payloadParent(workspacePath, tracePath, getenv)
+			if parentErr != nil {
+				return fail(parentErr)
+			}
+			if note != "" {
+				fmt.Fprintln(stderr, "axlr-tui:", note)
+			}
+			payloadDirectory, createErr := os.MkdirTemp(payloadParent, filepath.Base(tracePath)+".payloads-")
 			if createErr != nil {
 				return fail(createErr)
 			}
@@ -584,6 +591,37 @@ func ceremonyDriver(registrations []plugins.Registration, tools application.Tool
 }
 
 // payloadSecrets lists the non-empty keys the payload recorder redacts.
+// payloadParent is where a launch's payload directory goes: beside the trace,
+// unless that is inside the workspace. Payloads hold whole requests, tool
+// results included, so a model searching the workspace would read its own
+// earlier requests and send them back, larger each time. The note says where
+// they went instead, or that no place outside the workspace was found.
+func payloadParent(workspace, tracePath string, getenv func(string) string) (string, string, error) {
+	parent := filepath.Dir(tracePath)
+	resolved, err := filepath.EvalSymlinks(parent)
+	if err != nil {
+		return "", "", err
+	}
+	if !pathWithin(workspace, resolved) {
+		return parent, "", nil
+	}
+	fallback, err := diagnostics.DefaultDirectory(getenv)
+	if err != nil {
+		return "", "", err
+	}
+	if resolvedFallback, err := filepath.EvalSymlinks(fallback); err != nil {
+		return "", "", err
+	} else if pathWithin(workspace, resolvedFallback) {
+		return parent, "payloads are inside the workspace, where the model's tools can read them; use --trace-payloads=false or a workspace that does not contain the state directory", nil
+	}
+	return fallback, "the trace is inside the workspace; payloads go to " + fallback + " so the model's tools do not read them", nil
+}
+
+func pathWithin(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+}
+
 func payloadSecrets(key string, local []string) []string {
 	secrets := make([]string, 0, 1+len(local))
 	for _, secret := range append([]string{key}, local...) {
