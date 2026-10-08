@@ -72,11 +72,20 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 			prompt = root.Text(string(prompt) + "\n\n" + notice)
 		}
 	}
+	began := false
 	if _, live := next.Ceremony(); next.Mode().StartsCeremony() && !live {
 		// The ceremony starts before the turn so its first step instruction
 		// reaches the model's first request.
 		if err := u.Continue.Ceremonies.Begin(ctx, &next, prompt); err != nil {
 			return err
+		}
+		began = true
+	}
+	if run, live := next.Ceremony(); live {
+		// A standard ceremony's step travels on the person's prompt, not in
+		// the system prompt; the planner and compact steps keep theirs there.
+		if _, _, focused := focusedRun(next); !focused {
+			prompt = root.Text(string(prompt) + "\n\n" + CurrentStepNote(run, began))
 		}
 	}
 	if err := next.BeginTurn(prompt, tools); err != nil {
