@@ -220,3 +220,24 @@ func TestRunCanDisablePayloadsAndKeepDefaultDiagnostics(t *testing.T) {
 		t.Fatalf("files=%v err=%v output=%s", files, err, &output)
 	}
 }
+
+// Payloads hold whole requests; beside a trace inside the workspace, the
+// model's own searches would read them and send them back, larger each time.
+func TestRunKeepsPayloadsOutsideTheWorkspace(t *testing.T) {
+	env := cliEnv(t)
+	root := t.TempDir()
+	path := filepath.Join(root, "trace.jsonl")
+	var output bytes.Buffer
+	code := run(context.Background(), []string{"--root", root, "--trace-file", path}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
+	if code != 0 {
+		t.Fatalf("exit=%d output=%s", code, &output)
+	}
+	if beside, _ := filepath.Glob(path + ".payloads-*"); len(beside) != 0 {
+		t.Fatalf("payloads inside the workspace: %v", beside)
+	}
+	logs := filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs")
+	moved, err := filepath.Glob(filepath.Join(logs, "trace.jsonl.payloads-*"))
+	if err != nil || len(moved) != 1 || !strings.Contains(output.String(), "payloads: "+moved[0]) || !strings.Contains(output.String(), "payloads go to "+logs) {
+		t.Fatalf("moved=%v err=%v output=%s", moved, err, &output)
+	}
+}
