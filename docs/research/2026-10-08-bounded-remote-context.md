@@ -86,7 +86,7 @@ Dos datos que corrigen la lectura inicial:
 - **Objetivo por defecto para modelos remotos: 64K tokens totales**, con marca
   baja a la mitad del máximo (no a 3/4). En bytes a 2,44 B/token, reservando
   17 KiB para system + esquemas: máximo 138.752, marca baja 69.376, 17.344 por
-  resultado, 8.672 de checkpoint. Medido en esta sesión: $0,90 sin caché /
+  resultado, 11.562 de checkpoint (un sexto de la marca baja: el mapa por turno del PR3 no cabía en un octavo). Medido en esta sesión: $0,90 sin caché /
   $0,28 con caché, 11 cortes, 87 % de acierto de caché, 56 mensajes por request
   de media. La marca baja a 1/2 reduce los cortes de 16 a 11 y el coste un 15 %
   frente a 3/4, y es exactamente lo que #8 ya hacía (96 KiB / 64 KiB).
@@ -219,11 +219,14 @@ Lecturas:
   cerrados a `{path, bytes, note: "content is on disk; local_read"}` (~200 B).
   Rotura de caché: una por turno cerrado en la posición de la llamada, como P8;
   barata porque solo invalida el turno recién cerrado.
-- **`content` + `structured_content` en el bridge**: 26 resultados llevan ambos
-  y solo 2 son idénticos, así que la deduplicación actual no actúa. Política de
-  Pi: cuando `content` tiene texto, omitir `structured_content` en la proyección
-  dejando `structured_content_omitted: <bytes>` (el original queda en
-  `axlr_history`). Un `kmp_write_memory` pasa de 5.240 B a ~900 B.
+- **`content` + `structured_content` en el bridge** (corregido al implementar
+  el PR4): 26 resultados llevan ambos. En MADE el texto es el mismo JSON y la
+  proyección ya lo deduplica (el payload no lleva `structured_content`). En
+  KMP el texto es una línea de resumen más `kmp_guidance`, y la respuesta, la
+  prueba y el recibo están solo en `structured_content`: no es duplicación y
+  no se recorta. Lo que sobra es verbosidad de KMP (issue aparte). La política de Pi
+  (omitir `structured_content` cuando hay texto) aquí perdería las respuestas
+  de KMP.
 - **Verbosidad de KMP** (issue en KMP, no en AXLR). Un `kmp_write_memory` de 912 B
   de argumentos devuelve 5.240 B: `structured_content` 4.292 B
   (`proposed_relations` 1.732, `clocks` 575, `viewer` 389, `receipt` 365,

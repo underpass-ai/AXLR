@@ -630,7 +630,13 @@ func TestRepairThatFailsDuringTheSessionKeepsTheEvidence(t *testing.T) {
 	if !strings.Contains(record.Notice, "failed") || !strings.Contains(record.Notice, record.Clone) {
 		t.Fatalf("notice: %s", record.Notice)
 	}
+	// The session records the failure before its deferred Close runs, so
+	// wait for the close rather than reading it at once: seen on 8 Oct 2026
+	// on windows-11-arm, closed was still 0.
 	snapshot := bench.snapshot()
+	for deadline := time.Now().Add(5 * time.Second); snapshot.closed == 0 && time.Now().Before(deadline); snapshot = bench.snapshot() {
+		time.Sleep(5 * time.Millisecond)
+	}
 	if snapshot.begins != 1 || snapshot.continues != maxRepairRetries || snapshot.closed != 1 {
 		t.Fatalf("retries: %+v", snapshot)
 	}

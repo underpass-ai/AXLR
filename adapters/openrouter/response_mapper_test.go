@@ -74,3 +74,19 @@ func TestMapResponseRejectsMalformedChoices(t *testing.T) {
 		})
 	}
 }
+
+func TestMapResponseReadsPromptCacheUsage(t *testing.T) {
+	content := "ok"
+	wire := responseDTO{Choices: []choiceDTO{{Message: messageDTO{Role: "assistant", Content: &content}, FinishReason: "stop"}}, Usage: &usageDTO{PromptTokens: 1000, CompletionTokens: 10, TotalTokens: 1010, PromptTokensDetails: &promptTokensDetailsDTO{CachedTokens: 800, CacheWriteTokens: 150}}}
+	result, err := mapResponse(wire)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Usage == nil || result.Usage.CachedTokens != 800 || result.Usage.CacheWriteTokens != 150 || result.Usage.PromptTokens != 1000 {
+		t.Fatalf("usage = %+v", result.Usage)
+	}
+	wire.Usage.PromptTokensDetails = nil
+	if result, err := mapResponse(wire); err != nil || result.Usage.CachedTokens != 0 || result.Usage.CacheWriteTokens != 0 {
+		t.Fatalf("usage without details = %+v (%v)", result.Usage, err)
+	}
+}

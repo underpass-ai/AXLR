@@ -191,7 +191,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	modelSpan.End(class)
 	if u.Diagnostics != nil {
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderDone, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class})
+		done := DiagnosticEvent{Stage: DiagnosticProviderDone, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class}
+		if usage := result.Usage; usage != nil {
+			done.PromptTokens, done.CompletionTokens, done.CachedTokens, done.CacheWriteTokens = usage.PromptTokens, usage.CompletionTokens, usage.CachedTokens, usage.CacheWriteTokens
+		}
+		_ = u.Diagnostics.Record(done)
 	}
 	if err != nil {
 		return interrupt(err)
