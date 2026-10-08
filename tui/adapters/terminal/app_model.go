@@ -57,22 +57,25 @@ type AppModel struct {
 	toolExecuting       bool
 	toolStarted         time.Time
 	toolName            string
-	updatingBatch       bool
-	operationID         uint64
-	operationMessages   int
-	streamMessages      int
-	streamPending       bool
-	draftOperationID    uint64
-	Help                HelpOverlay
-	Info                Transcript
-	IncidentCard        IncidentCard
-	RepairPanel         RepairPanel
-	PlanPanel           PlanPanel
-	overlay             ControlIntent
-	draft               string
-	submittedPrompt     string
-	submittedAt         int
-	unsentPrompts       []string
+	// toolCallName and toolCallBytes describe the tool call being streamed.
+	toolCallName      string
+	toolCallBytes     int
+	updatingBatch     bool
+	operationID       uint64
+	operationMessages int
+	streamMessages    int
+	streamPending     bool
+	draftOperationID  uint64
+	Help              HelpOverlay
+	Info              Transcript
+	IncidentCard      IncidentCard
+	RepairPanel       RepairPanel
+	PlanPanel         PlanPanel
+	overlay           ControlIntent
+	draft             string
+	submittedPrompt   string
+	submittedAt       int
+	unsentPrompts     []string
 	// steer holds what the person wrote while the operation ran; the running
 	// turn takes it after a tool step, or it starts the next turn.
 	steer *steerQueue
@@ -292,6 +295,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Kind == application.EventProviderActivity && m.Busy && m.streamPending {
 			m.Status.Phase = v.ProviderPhase
 			m.providerWaiting = v.ProviderPhase != domain.ProviderContent
+		}
+		if v.Kind == application.EventToolCallProgress && m.Busy && m.streamPending {
+			m.toolCallName = singleLine(v.ToolCallName)
+			m.toolCallBytes = v.ToolCallBytes
+		}
+		if v.Kind == application.EventTextDelta || v.Kind == application.EventToolExecutionStarted {
+			m.toolCallName, m.toolCallBytes = "", 0
 		}
 		if v.Kind == application.EventState {
 			m.Status.State = v.State
