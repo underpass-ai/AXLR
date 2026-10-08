@@ -30,6 +30,10 @@ func TestPromptCacheBodyMarksAnthropicModelsOnOpenRouter(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The outer messages must shadow the embedded request's, not join it.
+	if strings.Count(string(encoded), `"messages"`) != 1 || strings.Count(string(encoded), `"cache_control"`) != 2 {
+		t.Fatalf("duplicate keys in %s", encoded)
+	}
 	assertJSONEqual(t, encoded, `{
 		"model": "anthropic/claude-haiku-5.5",
 		"cache_control": {"type": "ephemeral"},
