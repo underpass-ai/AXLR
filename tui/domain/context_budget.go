@@ -113,9 +113,11 @@ const (
 // tokens: the history gets the prompt's bytes minus the reserve for guidance
 // and schemas, the low watermark is half the ceiling so a cut leaves room for
 // many appends before the next one, a tool result is at most an eighth of the
-// ceiling and the checkpoint at most an eighth of the low watermark. A prompt
-// below the minimum gets the default; one that holds the default ceiling or
-// more keeps the default.
+// ceiling and the checkpoint at most a sixth of the low watermark: it maps
+// every omitted turn (exact request, files written, memory recorded), and
+// at an eighth the 50 turns of session c33e8e86 left no room for the map. A
+// prompt below the minimum gets the default; one that holds the default
+// ceiling or more keeps the default.
 func ContextBudgetForPrompt(tokens int) ContextBudget {
 	if tokens < MinimumPromptTokens {
 		tokens = DefaultPromptTokens
@@ -127,7 +129,7 @@ func ContextBudgetForPrompt(tokens int) ContextBudget {
 	}
 	lowWater := maximum / 2
 	toolResult := min(ceiling.toolResult, maximum/8)
-	checkpoint := min(ceiling.checkpoint, lowWater/8)
+	checkpoint := min(ceiling.checkpoint, lowWater/6)
 	budget, err := NewContextBudget(maximum, lowWater, toolResult, checkpoint)
 	if err != nil {
 		return ceiling
