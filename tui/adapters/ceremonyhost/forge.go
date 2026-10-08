@@ -25,6 +25,8 @@ type Forge struct{ Checks application.CheckRunnerPort }
 
 var _ application.ForgePort = Forge{}
 
+// run returns the whole output of a successful command, for parsing. Failures
+// quote only the tail, which is enough to show the model what went wrong.
 func (f Forge) run(ctx context.Context, program string, args ...string) (string, error) {
 	result, err := f.Checks.Run(ctx, domain.CheckCommand{Program: program, Args: args})
 	if err != nil {
@@ -32,6 +34,9 @@ func (f Forge) run(ctx context.Context, program string, args ...string) (string,
 	}
 	if !result.Ran || result.ExitCode != 0 {
 		return result.Output, fmt.Errorf("%s %s: exit %d: %s", program, strings.Join(args, " "), result.ExitCode, strings.TrimSpace(result.Output))
+	}
+	if result.Full != "" {
+		return result.Full, nil
 	}
 	return result.Output, nil
 }
