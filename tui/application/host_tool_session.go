@@ -70,12 +70,25 @@ func (u HostToolUseCase) sessionContext(ctx context.Context, s domain.Session, a
 	return sessionContextValue(s, label), err
 }
 
+// sessionGuidance is the session metadata in the system prompt. It leaves out
+// user_prompt_count, which axlr_session still reports: a value that changes
+// every turn would change the prompt's prefix, and a prefix cache reuses
+// nothing after the first changed token.
+type sessionGuidance struct {
+	ID        domain.SessionID `json:"session_id"`
+	Workspace domain.Workspace `json:"workspace"`
+	Title     root.Text        `json:"title"`
+	About     string           `json:"about"`
+}
+
 func sessionContextGuidance(ctx context.Context, s domain.Session, store SessionLabelsPort) (string, error) {
 	labels, err := store.Load(ctx)
 	if err != nil {
 		return "", err
 	}
-	value := sessionContextValue(s, labels[s.Export().ID])
+	state := s.Export()
+	label := labels[state.ID]
+	value := sessionGuidance{ID: state.ID, Workspace: state.Workspace, Title: label.Title, About: label.About}
 	data, err := json.Marshal(value)
 	if err != nil {
 		return "", err
@@ -89,7 +102,7 @@ func sessionContextGuidance(ctx context.Context, s domain.Session, store Session
 		}
 	}
 	if value.Title == "" || hasKMP && value.About == "" {
-		text += "Use the built-in axlr:axlr-session skill at session startup; read it with axlr_skill and reuse it while present. Establish the exact memory scope early. Once user_prompt_count reaches 2, define the missing title before your final answer. Follow the skill's bounded inter-about search when KMP is connected.\n"
+		text += "Use the built-in axlr:axlr-session skill at session startup; read it with axlr_skill and reuse it while present. Establish the exact memory scope early. After the second user prompt, define the missing title before your final answer. Follow the skill's bounded inter-about search when KMP is connected.\n"
 	}
 	if hasKMP {
 		text += "After the second user prompt clarifies the task, follow axlr:axlr-session for one relevant inter-about comparison unless its result already exists in this session. Reuse existing comparison results; a title or scope alone does not prove the search ran.\n"
