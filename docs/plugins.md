@@ -59,7 +59,7 @@ The MCP server must still have its executable, credentials and configuration ava
 
 Open `/plugin`. Tab switches installed and available packages, `/` searches and `R` refreshes. Press `M` to add an **absolute local path** or **HTTPS Git URL** (optionally with `#subdir`) containing `.codex-plugin/plugin.json` or `.agents/plugins/marketplace.json`. AXLR reads the Codex package format but owns this installation; it does not invoke the Codex CLI or change the Codex app's packages. Select a staged package and press Enter to install it.
 
-AXLR indexes installed skills for the model to read on demand. If a package declares MCP servers, AXLR registers them in its MCP configuration with **manual** approval. Inspect the exact connection in `/mcp`. Other package components are retained but not activated. Package storage and MCP registration are different records; removing one does not mean its engine's persistent data was deleted.
+AXLR indexes installed skills for the model to read on demand: the model sees each package's description and its skill names, and reads a skill's `SKILL.md` through `axlr_skill` when one matches the task. If a package declares MCP servers, AXLR registers them in its MCP configuration with **manual** approval. Inspect the exact connection in `/mcp`. Other package components are retained but not activated. Package storage and MCP registration are different records; removing one does not mean its engine's persistent data was deleted.
 
 ## Connect an MCP server directly
 

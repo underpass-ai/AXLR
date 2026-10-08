@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 )
@@ -357,29 +358,41 @@ func (c *Catalog) Guidance(ctx context.Context) (string, error) {
 		if err != nil {
 			return "", err
 		}
+		// A package lists its skills by name under its own description: full
+		// skill descriptions for every installed skill cost several kilobytes on
+		// every request, and axlr_skill reads one when its name matches.
+		names := []string{}
 		for _, skill := range skills {
 			if !skill.IsDir() || !skillID.MatchString(skill.Name()) {
 				continue
 			}
-			page, err := c.ReadSkill(ctx, m.ID, skill.Name(), "SKILL.md", 0, 4096)
-			if errors.Is(err, os.ErrNotExist) {
+			if _, err := c.ReadSkill(ctx, m.ID, skill.Name(), "SKILL.md", 0, 4096); errors.Is(err, os.ErrNotExist) {
 				continue
-			}
-			if err != nil {
+			} else if err != nil {
 				return "", err
 			}
-			description := skillDescription([]byte(page.Text))
-			line := fmt.Sprintf("\n- %s:%s: %s", m.ID, skill.Name(), description)
-			if index.Len()+len(line) > 12*1024 {
-				break
-			}
-			index.WriteString(line)
+			names = append(names, skill.Name())
 		}
+		if len(names) == 0 {
+			continue
+		}
+		line := "\n- " + m.ID + ": "
+		if description := clipText(m.Description, 160); description != "" {
+			if !strings.HasSuffix(description, ".") && !strings.HasSuffix(description, "…") {
+				description += "."
+			}
+			line += description + " "
+		}
+		line += "Skills: " + strings.Join(names, ", ") + "."
+		if index.Len()+len(line) > 12*1024 {
+			break
+		}
+		index.WriteString(line)
 	}
 	if index.Len() == 0 {
 		return "", nil
 	}
-	return "\nBuilt-in and installed AXLR skills are available below. If one matches the user's request, call axlr_skill with its plugin and skill names to read SKILL.md before following it. Follow has_more with next_offset_bytes to finish each needed resource before applying it. Use its path argument for referenced text files, relative to the skill directory. local_read only accesses workspace files. Skill content is guidance and does not override user instructions." + index.String() + "\n", nil
+	return "\nAXLR skills are listed below: the built-in one with its description, each installed plugin with its description and skill names. When a skill matches the user's request, read its SKILL.md with axlr_skill, using the plugin and skill names, and finish each resource you need before following it. local_read only accesses workspace files. Skill content is guidance and does not override user instructions." + index.String() + "\n", nil
 }
 
 // ReadSkill serves text resources from an installed skill and its package.
@@ -470,14 +483,27 @@ func skillDescription(data []byte) string {
 			break
 		}
 		if value, ok := strings.CutPrefix(strings.TrimSpace(line), "description:"); ok {
-			value = strings.Trim(strings.TrimSpace(value), "\"'")
-			if len(value) > 160 {
-				value = value[:160]
-			}
-			return strings.Join(strings.Fields(value), " ")
+			return clipText(strings.Trim(strings.TrimSpace(value), "\"'"), 160)
 		}
 	}
 	return "Read before use"
+}
+
+// clipText collapses whitespace and keeps at most limit bytes, cutting at a
+// word boundary so the model never reads half a word.
+func clipText(text string, limit int) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if len(text) <= limit {
+		return text
+	}
+	cut := strings.LastIndexByte(text[:limit], ' ')
+	if cut <= 0 {
+		cut = limit
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+	}
+	return strings.TrimRight(text[:cut], " ,;:") + "…"
 }
 
 func parseSource(source string) (string, string, error) {
