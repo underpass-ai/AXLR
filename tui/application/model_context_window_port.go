@@ -25,3 +25,20 @@ func sessionModel(s domain.Session) root.ModelID {
 	}
 	return model
 }
+
+// projectionBudget is the byte budget the default projection applies to a
+// session's requests: the session model's, the default prompt budget when
+// nothing is known about the model, and within the compact budget while a
+// compact ceremony step is running.
+func projectionBudget(windows ModelContextWindowPort, s domain.Session) domain.ContextBudget {
+	// Without Windows nothing is known about the model, and an unknown
+	// window gets the prompt budget, never the ceiling.
+	budget := domain.ContextBudgetForWindow(0)
+	if windows != nil {
+		budget = windows.ContextBudget(sessionModel(s))
+	}
+	if _, _, compact := compactRun(s); compact {
+		budget = budget.Smaller(domain.CompactContextBudget())
+	}
+	return budget
+}

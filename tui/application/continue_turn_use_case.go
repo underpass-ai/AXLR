@@ -80,7 +80,6 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		contextSpan.End(DiagnosticErrorInvalidState)
 		return interrupt(err)
 	}
-	_, _, compact := compactRun(*session)
 	model := sessionModel(*session)
 	messages := session.Messages()
 	if _, live := session.Ceremony(); !live {
@@ -88,16 +87,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	projector := u.Context
 	if projector == nil {
-		// Without Windows nothing is known about the model, and an unknown
-		// window gets the prompt budget, never the ceiling.
-		budget := domain.ContextBudgetForWindow(0)
-		if u.Windows != nil {
-			budget = u.Windows.ContextBudget(model)
-		}
-		if compact {
-			budget = budget.Smaller(domain.CompactContextBudget())
-		}
-		sized, err := NewModelContextProjector(budget)
+		sized, err := NewModelContextProjector(projectionBudget(u.Windows, *session))
 		if err != nil {
 			sized, _ = NewModelContextProjector(domain.ContextBudgetForWindow(0))
 		}
