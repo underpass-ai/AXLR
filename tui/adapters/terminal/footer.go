@@ -107,6 +107,9 @@ func (m AppModel) footerStatus() string {
 	}
 	if m.tokens > 0 {
 		parts = append(parts, m.Theme.Tf("footer.tokens", formatTokens(m.tokens)))
+		if m.cached > 0 {
+			parts = append(parts, m.Theme.Tf("footer.cache", m.cached))
+		}
 	}
 	text := strings.Join(parts, " · ")
 	if m.Theme.Monochrome {
