@@ -19,12 +19,15 @@ import (
 )
 
 type AppModel struct {
-	deps             Dependencies
-	lifetime         *lifecycle
-	Header           Header
-	Transcript       Transcript
-	Composer         Composer
-	tokens           int
+	deps       Dependencies
+	lifetime   *lifecycle
+	Header     Header
+	Transcript Transcript
+	Composer   Composer
+	tokens     int
+	// cached is the share, in percent, of the last request's prompt that the
+	// provider read from its prompt cache; zero without a cache.
+	cached           int
 	Status           StatusBar
 	Layout           Layout
 	Theme            Theme
@@ -295,6 +298,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.Usage != nil {
 			m.tokens = v.Usage.TotalTokens
+			m.cached = 0
+			if v.Usage.PromptTokens > 0 {
+				m.cached = 100 * v.Usage.CachedTokens / v.Usage.PromptTokens
+			}
 		}
 		if m.events != nil {
 			cmd := m.waitingCommand(readOperation(m.events))
@@ -390,6 +397,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
 			m.tokens = 0
+			m.cached = 0
 			m.unsentPrompts = nil
 			m.resetPromptHistory()
 			m.draft = ""
