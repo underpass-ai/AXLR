@@ -34,7 +34,7 @@ func (e Engine) Ready(ctx context.Context, definition, version string) error {
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) && (refused.Code == "not_found" || strings.Contains(refused.Message, "not found")) {
-			return application.ErrCeremonyNotPrepared
+			return application.NotPreparedError(application.MissingDefinition{Name: definition, Version: version})
 		}
 		return err
 	}
