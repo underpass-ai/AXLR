@@ -13,6 +13,7 @@ import (
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -161,6 +162,94 @@ func TestSessionStorePendingAndUncertainRecovery(t *testing.T) {
 			t.Fatal("loaded approval active")
 		}
 	}
+}
+
+// argumentBytes lists the tool call arguments exactly as a request carries
+// them: the OpenRouter adapter sends string(call.Arguments.Bytes()).
+func argumentBytes(messages []root.Message) []string {
+	var arguments []string
+	for _, message := range messages {
+		for _, call := range message.ToolCalls {
+			arguments = append(arguments, string(call.Arguments.Bytes()))
+		}
+	}
+	return arguments
+}
+
+// A resume must send earlier tool calls with the bytes the live session sent:
+// one changed byte early in the history misses a strict-prefix prompt cache
+// for everything after it. Providers stream arguments with spaces, and the
+// texts they carry often hold <, > and &.
+func TestSessionStoreResumesToolCallArgumentsByteForByte(t *testing.T) {
+	store, _ := openStore(t)
+	s := fixture(t)
+	schema, e := root.NewJSONObject([]byte(`{"type":"object"}`))
+	must(t, e)
+	identity, e := domain.NewLocalToolIdentity("read")
+	must(t, e)
+	streamed, e := root.NewJSONObject([]byte(`{"path": "a.go", "note": "go test 2>&1 && echo <done>"}`))
+	must(t, e)
+	must(t, s.BeginTurn("read", []domain.AvailableTool{{Definition: root.ToolDefinition{Name: "read", Parameters: schema}, Identity: identity}}))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "one", Name: "read", Arguments: streamed}}}}))
+	must(t, s.RecordToolOutcome("one", domain.DecisionApprove, domain.ToolOutcome{Content: "package a"}))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "read"}}))
+	if got, want := argumentBytes(s.Messages()), []string{`{"path":"a.go","note":"go test 2>&1 && echo <done>"}`}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("live arguments = %q, want %q", got, want)
+	}
+	projector := application.NewDefaultModelContextProjector()
+	before, e := projector.Project(s.Messages())
+	must(t, e)
+	must(t, store.Save(context.Background(), s))
+	got, e := store.Load(context.Background(), s.Export().ID)
+	must(t, e)
+	after, e := projector.Project(got.Messages())
+	must(t, e)
+	if a, b := argumentBytes(after.Messages), argumentBytes(before.Messages); !reflect.DeepEqual(a, b) {
+		t.Fatalf("resumed request arguments = %q, want %q", a, b)
+	}
+	if !reflect.DeepEqual(after.Messages, before.Messages) || !reflect.DeepEqual(got.Export(), s.Export()) {
+		t.Fatalf("resumed session changed: %+v", got.Export())
+	}
+}
+
+// Sessions saved before the store stopped escaping hold arguments such as
+// {"note":"x \u003c y"}: they still load, and keep those bytes on every resume.
+func TestSessionStoreKeepsEscapedArgumentsOfOlderSnapshots(t *testing.T) {
+	store, dir := openStore(t)
+	s := fixture(t)
+	schema, e := root.NewJSONObject([]byte(`{"type":"object"}`))
+	must(t, e)
+	identity, e := domain.NewLocalToolIdentity("read")
+	must(t, e)
+	arguments, e := root.NewJSONObject([]byte(`{"note":"x < y && z","path":"a.go"}`))
+	must(t, e)
+	must(t, s.BeginTurn("read", []domain.AvailableTool{{Definition: root.ToolDefinition{Name: "read", Parameters: schema}, Identity: identity}}))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "one", Name: "read", Arguments: arguments}}}}))
+	must(t, s.RecordToolOutcome("one", domain.DecisionApprove, domain.ToolOutcome{Content: "package a"}))
+	must(t, store.Save(context.Background(), s))
+	path := filepath.Join(dir, string(s.Export().ID)+".json")
+	raw, err := os.ReadFile(path)
+	must(t, err)
+	var record map[string]any
+	must(t, json.Unmarshal(raw, &record))
+	legacy, err := json.Marshal(record) // escapes <, > and & as earlier saves did
+	must(t, err)
+	must(t, os.WriteFile(path, legacy, 0600))
+	escaped := []string{`{"note":"x \u003c y \u0026\u0026 z","path":"a.go"}`}
+	for range 2 {
+		loaded, err := store.Load(context.Background(), s.Export().ID)
+		must(t, err)
+		if got := argumentBytes(loaded.Messages()); !reflect.DeepEqual(got, escaped) {
+			t.Fatalf("older arguments = %q, want %q", got, escaped)
+		}
+		must(t, store.Save(context.Background(), loaded))
+	}
+	// A snapshot rewritten by another tool, with spaces in its arguments,
+	// loaded before arguments were compacted and still does.
+	spaced := strings.ReplaceAll(string(legacy), `"path":"a.go"`, `"path": "a.go"`)
+	must(t, os.WriteFile(path, []byte(spaced), 0600))
+	_, err = store.Load(context.Background(), s.Export().ID)
+	must(t, err)
 }
 func TestSessionStoreRejectsVersionMalformedAndTraversal(t *testing.T) {
 	store, dir := openStore(t)
