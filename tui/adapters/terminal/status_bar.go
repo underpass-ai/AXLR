@@ -17,7 +17,11 @@ type StatusBar struct {
 	Executing   bool
 	ToolName    string
 	ToolSeconds int
-	Autonomous  bool
+	// PreparingTool and PreparingBytes name the tool call being streamed and
+	// the argument bytes received so far.
+	PreparingTool  string
+	PreparingBytes int
+	Autonomous     bool
 	// Notice is a short confirmation, such as a copy, shown until the next
 	// key press.
 	Notice string
@@ -43,6 +47,9 @@ func (s StatusBar) View(w int) string {
 			label = Translate(s.Locale, "status.reasoning")
 		case domain.ProviderToolCall:
 			label = Translate(s.Locale, "status.preparingTools")
+			if s.PreparingTool != "" {
+				label = Translatef(s.Locale, "status.preparingTool", s.PreparingTool, formatBytes(s.PreparingBytes))
+			}
 		}
 		text += fmt.Sprintf(" | %s%s · %ds", indicator, label, s.WaitSeconds)
 	}
