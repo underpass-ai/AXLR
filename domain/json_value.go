@@ -28,6 +28,16 @@ func NewJSONObject(raw []byte) (JSONValue, error) {
 
 func (v JSONValue) Bytes() []byte { return append([]byte(nil), v.raw...) }
 
+// Compact returns the value without insignificant whitespace, as
+// json.Compact writes it; strings and their escapes are left as they are.
+func (v JSONValue) Compact() JSONValue {
+	var compacted bytes.Buffer
+	if err := json.Compact(&compacted, v.raw); err != nil {
+		return v
+	}
+	return JSONValue{raw: compacted.Bytes()}
+}
+
 func (v JSONValue) isObject() bool {
 	trimmed := bytes.TrimSpace(v.raw)
 	return len(trimmed) > 0 && trimmed[0] == '{'
