@@ -72,10 +72,20 @@ func coalesceOperation(queued []tea.Msg) tea.Msg {
 	}
 	return operationBatch{Messages: result}
 }
+
+// clearStaleError drops the previous operation's error when a new operation
+// starts. An error that explains an unsaved draft stays while the draft is shown.
+func (m *AppModel) clearStaleError() {
+	if m.draft == "" {
+		m.Status.Error = ""
+	}
+}
+
 func (m *AppModel) BeginOperation(run Operation) tea.Cmd {
 	if m.Busy {
 		return nil
 	}
+	m.clearStaleError()
 	m.operationID++
 	id := m.operationID
 	var snapshot domain.Session

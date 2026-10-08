@@ -590,6 +590,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.steer.Add(message)
 				m.record(application.DiagnosticEvent{Stage: application.DiagnosticPromptQueued, Bytes: len(message)})
 				m.Composer.Input.Reset()
+				m.clearStaleError()
 				m.refreshTranscript()
 				// The queued message waits for the current model step: the turn
 				// takes it after its next tool step, or it starts the next turn.
