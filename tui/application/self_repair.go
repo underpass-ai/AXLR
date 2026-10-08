@@ -187,6 +187,9 @@ func (r *SelfRepair) Request(ctx context.Context, s domain.Session, arguments ro
 	if s.Mode() == domain.ModeRepair {
 		return nil, errors.New("a repair session cannot request another repair; finish this one and report the defect to the user")
 	}
+	if s.Mode() == domain.ModeImprove {
+		return nil, errors.New("an improvement session cannot request a repair; finish this one and report the defect to the user")
+	}
 	if dir := r.Settings.Directory; dir != "" && strings.HasPrefix(string(state.Workspace)+string(filepath.Separator), filepath.Clean(dir)+string(filepath.Separator)) {
 		return nil, errors.New("this workspace is a repair clone; a repair cannot start another repair from it")
 	}

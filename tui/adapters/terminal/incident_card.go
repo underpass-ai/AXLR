@@ -122,6 +122,9 @@ func repairCardContent(run domain.CeremonyRun, theme Theme) string {
 	if r.Cause != "" {
 		lines = append(lines, "", r.Cause)
 	}
+	if r.Criteria != "" {
+		lines = append(lines, "", r.Criteria)
+	}
 	if r.Summary != "" {
 		lines = append(lines, "", r.Summary)
 	}

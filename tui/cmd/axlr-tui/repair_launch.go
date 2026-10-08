@@ -14,14 +14,17 @@ import (
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
-// prepareRepairClone is the launcher's --repair: it clones the configured
-// repository into a fresh directory under repairs (or the configured
-// directory) and writes the marker that lets /repair start there. "#123"
-// reads the issue as the brief. It returns the clone path and the brief that
-// fills the composer.
-func prepareRepairClone(ctx context.Context, settings storage.RepairSettings, repairs, request string, env []string, stderr io.Writer) (string, string, error) {
+// prepareRepairClone is the launcher's --repair, or --improve when kind is
+// application.ImproveKind: it clones the configured repository into a fresh
+// directory under repairs (or the configured directory) and writes the marker
+// that lets /repair or /improve start there. "#123" reads the issue as the
+// brief. It returns the clone path and the brief that fills the composer.
+func prepareRepairClone(ctx context.Context, settings storage.RepairSettings, repairs, kind, request string, env []string, stderr io.Writer) (string, string, error) {
 	request = strings.TrimSpace(request)
 	if request == "" {
+		if kind == application.ImproveKind {
+			return "", "", errors.New("--improve needs an improvement brief or #issue")
+		}
 		return "", "", errors.New("--repair needs a failure brief or #issue")
 	}
 	if settings.Directory != "" {
@@ -39,7 +42,7 @@ func prepareRepairClone(ctx context.Context, settings storage.RepairSettings, re
 	if len(brief) > 8<<10 {
 		brief = brief[:8<<10]
 	}
-	clone, err := preparer.Prepare(ctx, application.RepairCloneRequest{Repository: settings.Repository, Brief: brief, About: settings.About, Slug: application.RepairSlug(brief, time.Now().UTC()), Issue: issue, Build: buildinfo.Version})
+	clone, err := preparer.Prepare(ctx, application.RepairCloneRequest{Repository: settings.Repository, Brief: brief, About: settings.About, Slug: application.RepairSlug(brief, time.Now().UTC()), Issue: issue, Kind: kind, Build: buildinfo.Version})
 	if err != nil {
 		return "", "", err
 	}

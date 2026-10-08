@@ -1,5 +1,6 @@
-// Package repairclone prepares the disposable clone a repair works in: the
-// launcher's --repair and the agent's axlr_request_repair both use it.
+// Package repairclone prepares the disposable clone a repair or an
+// improvement works in: the launcher's --repair and --improve and the agent's
+// axlr_request_repair all use it.
 package repairclone
 
 import (
@@ -95,7 +96,7 @@ func (p Preparer) Prepare(ctx context.Context, request application.RepairCloneRe
 	if len(brief) > 8<<10 {
 		brief = brief[:8<<10]
 	}
-	marker := application.RepairMarkerFile{Version: 1, Repository: request.Repository, Base: strings.TrimSpace(base), Slug: request.Slug, Brief: brief, About: about, Issue: request.Issue, Created: now().UTC().Format(time.RFC3339), Origin: string(request.Origin), Build: request.Build}
+	marker := application.RepairMarkerFile{Version: 1, Repository: request.Repository, Base: strings.TrimSpace(base), Slug: request.Slug, Brief: brief, About: about, Issue: request.Issue, Kind: request.Kind, Created: now().UTC().Format(time.RFC3339), Origin: string(request.Origin), Build: request.Build}
 	data, err := json.MarshalIndent(marker, "", "  ")
 	if err != nil {
 		return application.RepairClone{}, err

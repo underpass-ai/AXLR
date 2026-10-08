@@ -21,6 +21,8 @@ type RepairCloneRequest struct {
 	Repository, Brief, About, Slug string
 	// Issue is the GitHub issue number the brief came from, if any.
 	Issue string
+	// Kind is ImproveKind for an improvement clone, empty for a repair.
+	Kind string
 	// Origin is the session that asked for the repair; Build the console
 	// build that detected the defect. Both go into the clone's marker.
 	Origin domain.SessionID

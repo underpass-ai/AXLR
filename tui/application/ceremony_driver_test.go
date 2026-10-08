@@ -65,6 +65,16 @@ func (f *fakeEngine) Transition(_ context.Context, _, trigger string) (string, e
 	if f.definition == "axlr_repair" && trigger == "repaired" {
 		f.state = "PROPOSE" // the repair ceremony proposes instead of integrating
 	}
+	if f.definition == "axlr_improve" {
+		// The improve ceremony proposes after build and builds again after
+		// a red check round.
+		switch trigger {
+		case "verified":
+			f.state = "PROPOSE"
+		case "checks_failed":
+			f.state = "BUILD"
+		}
+	}
 	return f.state, nil
 }
 func (f *fakeEngine) Cancel(_ context.Context, _, reason string) error {

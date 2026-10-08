@@ -136,3 +136,27 @@ func TestIncidentStateSurvivesAResume(t *testing.T) {
 		t.Fatalf("incident not restored: %+v", run.Incident)
 	}
 }
+
+func TestImprovementStateSurvivesAResume(t *testing.T) {
+	store, _ := openStore(t)
+	const id = "b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1b1"
+	s, _ := domain.NewSession(id, domain.Workspace(t.TempDir()), "test/model")
+	if err := s.SetMode(domain.ModeImprove); err != nil {
+		t.Fatal(err)
+	}
+	improvement := domain.RepairRun{Improvement: true, Repository: "o/r", Base: "main", Branch: "improve/x", Slug: "x", Title: "Improve: x", PullRequest: 7, URL: "u", HeadSHA: "h", Rounds: 1, Feedback: "go", Summary: "s", Criteria: "the log is shown", Scope: "tui/cmd", Awaiting: domain.AwaitingApproval}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_improve", Version: "1.0", Instance: "axlr-m", Step: "decide", Iteration: 1, Fence: "f", Repair: &improvement}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, ok := loaded.Ceremony()
+	if !ok || run.Repair == nil || !reflect.DeepEqual(*run.Repair, improvement) || loaded.Mode() != domain.ModeImprove || !run.AwaitingPerson() {
+		t.Fatalf("improvement not restored: %+v", run.Repair)
+	}
+}

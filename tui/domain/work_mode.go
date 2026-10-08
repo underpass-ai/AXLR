@@ -22,6 +22,10 @@ const (
 	// through a MADE ceremony: the console opens, watches and merges the
 	// pull request itself.
 	ModeRepair WorkMode = "repair"
+	// ModeImprove improves the configured repository in a disposable clone
+	// through the same console-driven pull request; the merge always waits
+	// for the person.
+	ModeImprove WorkMode = "improve"
 	// ModePlan decomposes a brief into atomic tasks the console verifies
 	// and the person approves, then runs them.
 	ModePlan WorkMode = "plan"
@@ -37,13 +41,17 @@ func ParseWorkMode(raw string) (WorkMode, error) {
 
 func (m WorkMode) Validate() error {
 	switch m {
-	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident, ModeRepair, ModePlan, ModeTask:
+	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident, ModeRepair, ModeImprove, ModePlan, ModeTask:
 		return nil
 	}
 	return errors.New("unknown work mode")
 }
 
+// ForgesPullRequest reports modes whose ceremony works in a launcher clone
+// and ends in a pull request the console opens, watches and merges.
+func (m WorkMode) ForgesPullRequest() bool { return m == ModeRepair || m == ModeImprove }
+
 // StartsCeremony reports modes whose first prompt starts a MADE ceremony.
 func (m WorkMode) StartsCeremony() bool {
-	return m == ModeDebug || m == ModeDelivery || m == ModeIncident || m == ModeRepair || m == ModePlan
+	return m == ModeDebug || m == ModeDelivery || m == ModeIncident || m == ModeRepair || m == ModeImprove || m == ModePlan
 }

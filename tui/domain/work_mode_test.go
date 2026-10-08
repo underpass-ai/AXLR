@@ -35,6 +35,12 @@ func TestParseWorkModeAcceptsOnlyKnownModes(t *testing.T) {
 			t.Fatalf("accepted %q", raw)
 		}
 	}
+	if mode, err := ParseWorkMode("improve"); err != nil || !mode.StartsCeremony() || !mode.ForgesPullRequest() {
+		t.Fatalf("improve: %q %v", mode, err)
+	}
+	if !ModeRepair.ForgesPullRequest() || ModeDelivery.ForgesPullRequest() {
+		t.Fatal("only repair and improve end in the console's pull request")
+	}
 }
 
 func TestModesJudgeWorkspaceChanges(t *testing.T) {
