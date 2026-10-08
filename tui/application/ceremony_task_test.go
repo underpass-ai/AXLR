@@ -93,6 +93,43 @@ func TestATaskRunsRedGreenAndHandsBack(t *testing.T) {
 	}
 }
 
+func TestTaskEndsAtDoneWithoutAnotherModelRequest(t *testing.T) {
+	d, files, checks, _, s, _ := taskSetup(t, true)
+	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
+	checks.status = append(checks.status, "?? lines_test.go")
+	checks.exits = []int{1}
+	if r := step(t, d, &s, `{"test_files":["lines_test.go"],"expected":"undefined: LineCount"}`); r["next_step"] != "green" {
+		t.Fatalf("red: %v", r)
+	}
+	files.files["lines.go"] = []byte("package textstat\nfunc LineCount(s string) int { return 0 }\n")
+	checks.status = append(checks.status, "?? lines.go")
+	checks.exits = []int{0}
+	if err := s.BeginTurn("go", append(turnTools(), HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	// The model hands the green step back through axlr_step_done as its last call.
+	handBack := root.ToolCall{ID: "done", Name: HostStepDoneName, Arguments: mustObject(t, `{"summary":"Added LineCount","summary_en":"LineCount counts lines."}`)}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{handBack}}}); err != nil {
+		t.Fatal(err)
+	}
+	modelRequests := 0
+	models := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		modelRequests++
+		return assistant("done"), nil
+	})
+	store := &memoryStore{}
+	u := ResolveToolUseCase{Store: store, Continue: ContinueTurnUseCase{Store: store, Ceremonies: d, Models: models}}
+	if err := u.Execute(context.Background(), &s, "done", domain.DecisionApprove, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if _, live := s.Ceremony(); live || s.Mode() != domain.ModeNormal {
+		t.Fatal("task ceremony still live after DONE")
+	}
+	if modelRequests != 0 {
+		t.Fatalf("model requests after DONE = %d, want 0", modelRequests)
+	}
+}
+
 func TestATaskThatCannotBeTestedEndsBlocked(t *testing.T) {
 	d, _, _, plans, s, _ := taskSetup(t, true)
 	if r := step(t, d, &s, `{"untestable":true,"observed":"the behaviour needs a network"}`); r["ceremony"] != "BLOCKED" {
