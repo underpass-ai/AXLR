@@ -68,6 +68,19 @@ func TestCodexMarketplaceInstallsOnlyIntoAXLR(t *testing.T) {
 		t.Fatalf("guidance: %q %v", guidance, err)
 	}
 }
+
+// A SKILL.md that starts with a multibyte character, such as a byte order
+// mark, is still listed; the index must never fail the turn.
+func TestGuidanceListsSkillStartingWithMultibyteCharacter(t *testing.T) {
+	axlr := t.TempDir()
+	packageRoot := filepath.Join(axlr, "plugins", "installed", "sample")
+	mustWrite(t, filepath.Join(packageRoot, ".codex-plugin", "plugin.json"), `{"name":"sample","version":"1.0.0","description":"Example","skills":"./skills/"}`)
+	mustWrite(t, filepath.Join(packageRoot, "skills", "bom", "SKILL.md"), "\ufeff---\nname: bom\n---\nUse this skill.\n")
+	guidance, err := (&Catalog{Root: axlr}).Guidance(context.Background())
+	if err != nil || !strings.Contains(guidance, "Skills: bom.") {
+		t.Fatalf("guidance: %q %v", guidance, err)
+	}
+}
 func TestClipTextCutsAtAWordBoundary(t *testing.T) {
 	for _, c := range []struct{ text, want string }{
 		{"short  text", "short text"},

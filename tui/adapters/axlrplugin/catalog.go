@@ -366,7 +366,7 @@ func (c *Catalog) Guidance(ctx context.Context) (string, error) {
 			if !skill.IsDir() || !skillID.MatchString(skill.Name()) {
 				continue
 			}
-			if _, err := c.ReadSkill(ctx, m.ID, skill.Name(), "SKILL.md", 0, 1); errors.Is(err, os.ErrNotExist) {
+			if _, err := c.ReadSkill(ctx, m.ID, skill.Name(), "SKILL.md", 0, 4096); errors.Is(err, os.ErrNotExist) {
 				continue
 			} else if err != nil {
 				return "", err
