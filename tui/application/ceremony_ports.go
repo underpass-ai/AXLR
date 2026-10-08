@@ -98,8 +98,13 @@ type CheckResult struct {
 	// refused); ExitCode is then meaningless.
 	Ran      bool
 	ExitCode int
-	// Output is the bounded tail of stdout and stderr.
+	// Output is the bounded tail of stdout and stderr, for showing to the model.
 	Output string
+	// Stdout is the whole stdout within the runtime's output cap, for callers
+	// that parse it: stderr may carry notices (gh's release notice, for one)
+	// that are not part of the parsed value. Empty when the runner only has
+	// Output.
+	Stdout string
 }
 
 // MemoryPort is KMP as the ceremony driver sees it.
