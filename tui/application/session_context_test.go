@@ -49,8 +49,8 @@ func TestSecondExchangeAutomaticallyPersistsTitleInAgentLoop(t *testing.T) {
 	calls := 0
 	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: store, SessionLabels: labels, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
 		calls++
-		if !strings.Contains(string(req.Messages[0].Content), `"user_prompt_count":2`) {
-			t.Fatal("lost original prompt count")
+		if strings.Contains(string(req.Messages[0].Content), "user_prompt_count") {
+			t.Fatal("the system prompt carries a value that changes every turn")
 		}
 		if calls == 1 {
 			return assistant("", root.ToolCall{ID: "set-title", Name: HostSessionName, Arguments: hostJSON(t, `{"title":"Corregir sesiones AXLR","about":"project:AXLR"}`)}), nil
@@ -66,6 +66,30 @@ func TestSecondExchangeAutomaticallyPersistsTitleInAgentLoop(t *testing.T) {
 	activity := s.Export().Activity
 	if calls != 2 || s.Status() != domain.StatusComplete || len(activity) != 1 || activity[0].Decision != domain.DecisionAutoApprove || activity[0].Outcome.IsError {
 		t.Fatalf("bookkeeping interrupted normal work: %+v", activity)
+	}
+}
+
+// A prefix cache reuses nothing after the first changed token, so the system
+// prompt must not change from one user turn to the next while the session's
+// labels stay the same.
+func TestSystemPromptStaysIdenticalAcrossUserTurns(t *testing.T) {
+	s := turnSession(t)
+	labels := &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{}}
+	var prompts []root.Text
+	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: &memoryStore{}, SessionLabels: labels, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		prompts = append(prompts, req.Messages[0].Content)
+		return assistant("Hecho"), nil
+	})}}
+	for _, prompt := range []string{"Revisa AXLR", "Ahora el skill", "Y los tests"} {
+		if err := s.BeginTurn(root.Text(prompt), HostTools()); err != nil {
+			t.Fatal(err)
+		}
+		if err := u.Execute(context.Background(), &s, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(prompts) != 3 || prompts[0] != prompts[1] || prompts[1] != prompts[2] {
+		t.Fatalf("system prompt changed between user turns:\n%s\n---\n%s", prompts[0], prompts[len(prompts)-1])
 	}
 }
 
