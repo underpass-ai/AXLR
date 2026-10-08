@@ -44,6 +44,7 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		{"a file change", memoryRequest(t, edit), true},
 		{"five calls", memoryRequest(t, reads...), true},
 		{"a question", memoryRequest(t, reads[:2]...), false},
+		{"session startup", memoryRequest(t, toolCall(t, "b1", HostSessionName, `{}`), toolCall(t, "b2", HostSkillName, `{}`), toolCall(t, "b3", HostToolsName, `{}`), toolCall(t, "b4", HostCallToolName, `{"name":"kmp_guide","arguments":{}}`), toolCall(t, "b5", HostCallToolName, `{"name":"kmp_wake","arguments":{}}`), toolCall(t, "b6", "kmp_wake", `{}`)), false},
 		{"bridged write", memoryRequest(t, edit, toolCall(t, "w1", HostCallToolName, `{"name":"kmp_write_memory","arguments":{}}`)), false},
 		{"direct write", memoryRequest(t, edit, toolCall(t, "w1", "kmp_write_memory", `{}`)), false},
 		{"a ceremony", memoryRequest(t, edit, toolCall(t, "s1", HostStepDoneName, `{}`)), false},

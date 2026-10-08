@@ -14,8 +14,9 @@ import (
 // so the reminder costs at most one extra model turn per request.
 const memoryReminderPrefix = "[AXLR · memory]"
 
-// memoryReminderCalls is how many tool calls make a request worth recording
-// when it changed no file.
+// memoryReminderCalls is how many local tool calls make a request worth
+// recording when it changed no file. Host bookkeeping and KMP reads do not
+// count: a session's startup alone makes several of them.
 const memoryReminderCalls = 5
 
 // memoryReminder is the console's message; it leaves the judgement to the
@@ -90,15 +91,17 @@ func personRequest(messages []root.Message) int {
 
 // needsMemoryReminder reads one request: it was not reminded yet, ran no
 // ceremony step, attempted no memory write (an attempt the person denied
-// counts: they decided), and changed a file or made several tool calls.
+// counts: they decided), and changed a file or made several local tool calls.
 func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
-	calls, changed := 0, false
+	local, changed := 0, false
 	for _, message := range request[1:] {
 		if message.Role == root.RoleUser && strings.HasPrefix(string(message.Content), memoryReminderPrefix) {
 			return false
 		}
 		for _, call := range message.ToolCalls {
-			calls++
+			if strings.HasPrefix(string(call.Name), "local_") {
+				local++
+			}
 			switch call.Name {
 			case write, HostStepDoneName:
 				return false
@@ -114,5 +117,5 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 			}
 		}
 	}
-	return changed || calls >= memoryReminderCalls
+	return changed || local >= memoryReminderCalls
 }

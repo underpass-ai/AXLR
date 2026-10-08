@@ -69,7 +69,7 @@ The agent of a normal, review, writer, research, debug, delivery or incident ses
 
 When the model ends its turn with the step still open, the console reminds it once with a visible `[AXLR]` message. If the answer held a tool call written as text (`<|tool_call>`, `<tool_call>`, `[TOOL_CALLS]`, `<|python_tag|>` and similar), the reminder says so: the server's parser failed to turn it into a call.
 
-If the model ends its turn again, the console does not leave the session waiting. It cancels the MADE instance with the reason, records the outcome in KMP and returns the session to normal mode. It then adds one visible message naming the server's tool-call parser as the first suspect when the markup was there, and the model answers the user. A plan worker ends `BLOCKED` with that reason instead. Self-repair keeps its own nudges. The trace records a `ceremony_stalled` stage.
+If the model ends its turn again, the console does not leave the session waiting. It cancels the MADE instance with the reason, records the outcome in KMP and returns the session to normal mode. It then adds one visible message naming the server's tool-call parser as the first suspect when the markup was there, and the model answers the user. A plan worker ends `BLOCKED` with that reason instead. Self-repair and self-improvement keep their own nudges. The trace records a `ceremony_stalled` stage.
 
 A session restored with a step open and no turn running shows `step <name> open: send a message to continue, or /stop-ceremony` in the footer. Any message continues the step. `/stop-ceremony` (alias `/parar`) cancels the instance in MADE and returns to normal mode; nothing in the workspace is rolled back.
 
