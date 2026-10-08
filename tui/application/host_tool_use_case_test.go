@@ -192,7 +192,7 @@ func TestHostHistoryPagesToolContentWithoutReescaping(t *testing.T) {
 		{Role: root.RoleTool, ToolCallID: "call_read", Content: root.Text(result)},
 		{Role: root.RoleUser, Content: "next"},
 	}
-	page, err := hostHistory(messages, hostJSON(t, `{"message_index":2,"limit_bytes":16384}`))
+	page, err := hostHistory(messages, hostJSON(t, `{"message_index":2,"limit_bytes":16384}`), MaxHistoryReadBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +200,7 @@ func TestHostHistoryPagesToolContentWithoutReescaping(t *testing.T) {
 	if fields["text"] != result || fields["has_more"] != false || fields["total_bytes"] != len(result) || fields["tool_call_id"] != root.ToolCallID("call_read") {
 		t.Fatalf("tool content was not returned verbatim in one page: %+v", fields)
 	}
-	page, err = hostHistory(messages, hostJSON(t, `{"message_index":1}`))
+	page, err = hostHistory(messages, hostJSON(t, `{"message_index":1}`), MaxHistoryReadBytes)
 	if err != nil || page.(map[string]any)["tool_calls"] == nil {
 		t.Fatalf("assistant tool calls missing: %v %+v", err, page)
 	}

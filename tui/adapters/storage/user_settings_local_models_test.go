@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 func TestUserSettingsLoadLocalModelsAndKeepThemWhenSelectorsSave(t *testing.T) {
@@ -115,6 +117,20 @@ func TestUserSettingsCeremonyProfile(t *testing.T) {
 		got, err := store.Load(context.Background())
 		if (err == nil) != valid || (valid && got.CeremonyProfile() != profile) {
 			t.Errorf("profile %s: %v %v", profile, got.Ceremonies, err)
+		}
+	}
+}
+
+func TestPromptTokensValidation(t *testing.T) {
+	for _, tc := range []struct {
+		tokens int
+		ok     bool
+	}{{0, true}, {domain.MinimumPromptTokens, true}, {64000, true}, {domain.MinimumPromptTokens - 1, false}, {maxContextTokens + 1, false}} {
+		settings := DefaultUserSettings()
+		settings.PromptTokens = tc.tokens
+		err := settings.Validate()
+		if (err == nil) != tc.ok {
+			t.Fatalf("prompt_tokens %d: err=%v", tc.tokens, err)
 		}
 	}
 }

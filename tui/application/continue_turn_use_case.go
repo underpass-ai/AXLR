@@ -13,8 +13,9 @@ import (
 type ContinueTurnUseCase struct {
 	// Context projects the transcript; nil derives the budget from Windows.
 	Context ModelContextPort
-	// Windows sizes the default projection to the session model's context
-	// window; nil keeps the default byte budget.
+	// Windows sizes the default projection to the session model: its window
+	// when known, the prompt budget otherwise; nil uses the default prompt
+	// budget.
 	Windows        ModelContextWindowPort
 	Validation     ToolArgumentValidationPort
 	Models         ModelStreamPort
@@ -80,27 +81,25 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	_, _, compact := compactRun(*session)
-	// A ceremony may ask another model than the session's: the planner.
-	model := session.Export().Model
-	if run, live := session.Ceremony(); live && run.Model != "" {
-		model = root.ModelID(run.Model)
-	}
+	model := sessionModel(*session)
 	messages := session.Messages()
 	if _, live := session.Ceremony(); !live {
 		messages = markSteered(messages)
 	}
 	projector := u.Context
 	if projector == nil {
-		budget := domain.DefaultContextBudget()
+		// Without Windows nothing is known about the model, and an unknown
+		// window gets the prompt budget, never the ceiling.
+		budget := domain.ContextBudgetForWindow(0)
 		if u.Windows != nil {
-			budget = domain.ContextBudgetForWindow(u.Windows.ContextWindow(model))
+			budget = u.Windows.ContextBudget(model)
 		}
 		if compact {
 			budget = budget.Smaller(domain.CompactContextBudget())
 		}
 		sized, err := NewModelContextProjector(budget)
 		if err != nil {
-			sized = NewDefaultModelContextProjector()
+			sized, _ = NewModelContextProjector(domain.ContextBudgetForWindow(0))
 		}
 		// A compact step starts from the ledger; references to the
 		// transcript stay absolute through the origin table.
