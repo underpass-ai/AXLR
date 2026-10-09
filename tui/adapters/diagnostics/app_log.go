@@ -13,6 +13,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 // AppLogName is the console's readable log in the default diagnostics
@@ -202,7 +203,7 @@ func (w *appLogWriter) Write(p []byte) (int, error) {
 			}
 			end = len(w.pending)
 		}
-		if line := strings.TrimSpace(string(w.pending[:min(end, len(w.pending))])); line != "" && w.log != nil {
+		if line := strings.TrimSpace(string(w.pending[:min(end, len(w.pending))])); line != "" && !bannerArt(line) && w.log != nil {
 			w.log.write(w.level, w.prefix+line)
 		}
 		w.pending = w.pending[min(end+1, len(w.pending)):]
@@ -211,6 +212,15 @@ func (w *appLogWriter) Write(p []byte) (int, error) {
 			return len(p), nil
 		}
 	}
+}
+
+// bannerArt reports a line drawn with box-drawing or block characters, such
+// as the KMP logo a plugin prints on standard error at every start. On 10
+// October 2026 each console start wrote eight such lines to the log, which
+// buried the one line that said the plugin connected.
+func bannerArt(line string) bool {
+	r, _ := utf8.DecodeRuneInString(line)
+	return r >= 0x2500 && r <= 0x259F
 }
 
 // Close closes the log; later entries are dropped.
