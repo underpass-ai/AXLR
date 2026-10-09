@@ -47,9 +47,14 @@ var slashWord = regexp.MustCompile(`^/[a-z-]+$`)
 
 // slashSuggestions lists the commands a single-line draft starting with "/"
 // could complete to. A draft that is already an exact command, or that
-// carries text after a space other than a command's own argument, gets none.
+// carries text after a space other than a command's own argument, gets none:
+// Enter runs a complete command as typed, never a suggestion it is a prefix
+// of (bare /autonomy is not /autonomy on).
 func slashSuggestions(draft string) []slashCommand {
 	if !strings.HasPrefix(draft, "/") || strings.Contains(draft, "\n") {
+		return nil
+	}
+	if _, exact := isSlashCommand(draft); exact {
 		return nil
 	}
 	var out []slashCommand

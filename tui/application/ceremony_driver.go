@@ -164,36 +164,53 @@ func (d stepDone) command() (domain.CheckCommand, bool) {
 // user has not approved for this ceremony: the approval card then shows it.
 func stepDoneNeedsApproval(s domain.Session, arguments root.JSONValue) bool {
 	run, live := s.Ceremony()
-	if !live {
-		return false // the driver refuses it without running anything
+	if !live || run.Step == "decompose" {
+		return false // the driver refuses it without running anything; planNeedsApproval reads decompose
 	}
-	// The same decoding as the driver's, so a command the compact profile
-	// recovers from a string still reaches the approval card.
-	done, _, err := decodeStepDoneFor(run, arguments)
-	if err != nil {
-		return false // malformed calls are refused by the driver, not executed
-	}
-	proposed, ok := done.command()
-	if !ok {
-		return false
-	}
-	switch run.Step {
-	case "reproduce", "brief":
-		return !proposed.Equal(run.Check)
-	}
-	return false // steps that run no command ignore it
+	return unapproved(run, approvalChecks(run, arguments))
 }
 
-// planNeedsApproval is true for a decompose hand-back that names commands:
-// the console runs each once while verifying, so the person approves them
-// first, under autonomy too.
+// planNeedsApproval is true for a decompose hand-back that names a command
+// the person has not approved in this ceremony: the console runs each once
+// while verifying, so the person approves them first, under autonomy too.
 func planNeedsApproval(s domain.Session, arguments root.JSONValue) bool {
 	run, live := s.Ceremony()
 	if !live || run.Step != "decompose" {
 		return false
 	}
-	done, err := decodeStepDone(arguments)
-	return err == nil && len(done.planDone.commands()) > 0
+	return unapproved(run, approvalChecks(run, arguments))
+}
+
+// approvalChecks are the commands an axlr_step_done call puts on the
+// approval card: the check command reproduce or brief proposes, every
+// command a decompose names.
+func approvalChecks(run domain.CeremonyRun, arguments root.JSONValue) []domain.CheckCommand {
+	switch run.Step {
+	case "reproduce", "brief":
+		// The same decoding as the driver's, so a command the compact profile
+		// recovers from a string still reaches the approval card.
+		done, _, err := decodeStepDoneFor(run, arguments)
+		if err != nil {
+			return nil // malformed calls are refused by the driver, not executed
+		}
+		if proposed, ok := done.command(); ok {
+			return []domain.CheckCommand{proposed}
+		}
+	case "decompose":
+		if done, err := decodeStepDone(arguments); err == nil {
+			return done.planDone.commands()
+		}
+	}
+	return nil // steps that run no command ignore it
+}
+
+func unapproved(run domain.CeremonyRun, commands []domain.CheckCommand) bool {
+	for _, command := range commands {
+		if !run.Approves(command) {
+			return true
+		}
+	}
+	return false
 }
 
 // Begin starts the ceremony the session's mode names, before the turn that
@@ -279,7 +296,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 	}
 	if s.Mode() == domain.ModeIncident {
 		if d.Files == nil || d.Reviewer == nil || d.Approver == nil {
-			return errors.New("the incident ceremony needs workspace files, a reviewer and the approver; prepare MADE with /mcp → P")
+			return errors.New("the incident ceremony needs workspace files, a reviewer and the approver; prepare MADE: open /mcp, select MADE and press p")
 		}
 		// The model would otherwise spend a command creating it.
 		if err := d.Files.MakeDir(ctx, incidentDir); err != nil {
@@ -511,7 +528,7 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if err != nil {
 			return StepResult{}, err
 		}
-		passed := result.Ran && result.ExitCode == 0
+		passed := result.Ran && result.ExitCode == 0 && !result.RanNoTests()
 		field, success, exhausted := "repaired", "repaired", "repair_exhausted"
 		if run.Step == "build" {
 			field, success, exhausted = "verified", "verified", "build_exhausted"
@@ -531,15 +548,17 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 			report["feedback"] = "the check command still fails; fix what its output shows"
 			if !result.Ran {
 				report["feedback"] = "the check command did not run: " + result.Output
+			} else if result.RanNoTests() {
+				report["feedback"] = noTestsFeedback
 			}
 		}
 	case "integrate":
 		if done.Report == "" || done.SummaryEN == "" {
 			return refuse("integrate needs report and summary_en"), nil
 		}
-		revision, _ := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"rev-parse", "HEAD"}})
-		dirty, _ := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"status", "--porcelain"}})
-		output = map[string]any{"report": done.Report, "summary_en": done.SummaryEN, "revision": strings.TrimSpace(revision.Output), "dirty": strings.TrimSpace(dirty.Output), "integrated": true}
+		revision := gitAnswer(ctx, d.Checks, "rev-parse", "HEAD")
+		dirty := bounded(gitAnswer(ctx, d.Checks, "status", "--porcelain"), 4<<10)
+		output = map[string]any{"report": done.Report, "summary_en": done.SummaryEN, "revision": revision, "dirty": dirty, "integrated": true}
 		report["revision"] = output["revision"]
 		trigger = "integrated"
 	case "red", "green":
@@ -614,7 +633,11 @@ func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain
 		if run.Plan != nil {
 			report["memory"] = d.finishPlan(ctx, s, run, state)
 		} else if run.Task != nil {
-			report["memory"] = d.finishTask(ctx, s, run, state, output)
+			memory, err := d.finishTask(ctx, s, run, state, output)
+			if err != nil {
+				return StepResult{}, err
+			}
+			report["memory"] = memory
 		} else {
 			report["memory"] = d.record(ctx, s, run, state, output)
 		}
@@ -710,6 +733,11 @@ func (d *CeremonyDriver) reconcile(ctx context.Context, s domain.Session, run do
 		step = "review" // the draft was handed in; its review never ran
 	}
 	if ok && repairConsoleSteps[step] && run.Repair != nil {
+		if view.LiveErr != nil {
+			// Whether our own claim is live is unknown: claiming the step
+			// again or passing over it would both be guesses.
+			return StepResult{}, errors.Join(cause, view.LiveErr)
+		}
 		if fence := view.Live[step]; fence != "" {
 			// Our own claim is still live: finish the console step with it.
 			run.Step, run.Iteration = step, 1
@@ -802,6 +830,9 @@ func (d *CeremonyDriver) record(ctx context.Context, s domain.Session, run domai
 
 func addEvidence(output, report map[string]any, command domain.CheckCommand, result CheckResult) {
 	evidence := map[string]any{"program": command.Program, "args": command.Args, "exit_code": result.ExitCode, "output_tail": result.Output}
+	if result.RanNoTests() {
+		evidence["ran_no_tests"] = true
+	}
 	output["check"] = evidence
 	report["check"] = evidence
 }

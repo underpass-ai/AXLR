@@ -89,6 +89,19 @@ type AppModel struct {
 	cancel         context.CancelFunc
 	zones          *zone.Manager
 	prefix         string
+
+	// closedCancelled marks the operation stopped because the person closed
+	// its panel (the model picker while it loads); likewise not an error.
+	closedCancelled uint64
+	// failures are errors of operations that ended while a message was
+	// queued; the conversation shows them until the person's next message.
+	failures []string
+}
+
+// turnRunning reports whether the busy operation is a turn, which takes a
+// queued message; other operations (updates, lists, preparation) do not.
+func (m AppModel) turnRunning() bool {
+	return m.submittedPrompt != "" || m.Header.State.Status == domain.StatusStreaming || m.Header.State.Status == domain.StatusApproval || m.toolExecuting || m.providerWaiting
 }
 
 func assistantInMessages(messages []root.Message, start int) bool {
@@ -238,6 +251,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SearchBox.Input.SetCursor(m.SearchBox.Input.Position())
 		m.sizeApproval()
 		infoWidth, infoHeight := OverlayBodySize(v.Width, v.Height-1)
+		if m.overlay == "incident" || m.overlay == "repairs" || m.overlay == "plans" {
+			// These panels keep two rows under their content for the
+			// reason input, as when they opened.
+			infoHeight = max(1, infoHeight-2)
+		}
 		m.Info.SetWidth(infoWidth)
 		m.Info.Viewport.SetHeight(infoHeight)
 		m.Transcript.ApplyTheme(m.Theme)
@@ -372,11 +390,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.InstalledPlugins.Resize(m.Layout.Width, m.Layout.Height-2)
 		}
-		if v.MADEPreparation != nil {
+		// m.Info is shared by several overlays: a result is written only
+		// while its own panel is open, never over one opened since.
+		if v.MADEPreparation != nil && m.overlay == "made-setup" {
 			m.Info.SetContent(madePreparationContent(*v.MADEPreparation, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
 		}
-		if v.EngineUpdates != nil {
+		if v.EngineUpdates != nil && m.overlay == "updates" {
 			m.Info.SetContent(engineUpdateContent(*v.EngineUpdates, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
 		}
@@ -409,18 +429,27 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tokens = 0
 			m.cached = 0
 			m.unsentPrompts = nil
+			m.failures = nil
 			m.resetPromptHistory()
 			m.draft = ""
 			m.draftOperationID = 0
 		}
+		// returned says where a prompt the session did not take went; it
+		// follows the operation's error, which cannot know.
+		returned := ""
 		if m.submittedPrompt != "" && v.Err != nil {
 			messages := m.Header.State.Messages
-			accepted := len(messages) > m.submittedAt && messages[m.submittedAt].Role == root.RoleUser && string(messages[m.submittedAt].Content) == m.submittedPrompt
+			// StartTurn stores the prompt with console notes appended (a
+			// resumed step, repair notices, the ceremony step), so the
+			// stored message starts with the prompt rather than equals it.
+			accepted := len(messages) > m.submittedAt && messages[m.submittedAt].Role == root.RoleUser && strings.HasPrefix(string(messages[m.submittedAt].Content), m.submittedPrompt)
 			if !accepted {
 				if m.Composer.Input.Value() == "" {
 					m.Composer.Input.SetValue(m.submittedPrompt)
+					returned = m.Theme.T("error.promptReturned")
 				} else {
 					m.unsentPrompts = append(m.unsentPrompts, m.submittedPrompt)
+					returned = m.Theme.T("error.promptUnsent")
 				}
 			}
 		}
@@ -434,12 +463,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.draft = ""
 			m.draftOperationID = 0
 		}
-		steered := m.steerCancelled == v.ID && errors.Is(v.Err, context.Canceled)
-		m.steerCancelled = 0
+		steered := (m.steerCancelled == v.ID || m.closedCancelled == v.ID) && errors.Is(v.Err, context.Canceled)
+		m.steerCancelled, m.closedCancelled = 0, 0
 		if v.Err != nil && !steered {
 			m.Status.Error = v.Err.Error()
 			if v.PluginApproval != nil {
 				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
+			}
+			if errors.Is(v.Err, domain.ErrToolCallLimit) {
+				// The turn paused with its answer kept: say how it goes on,
+				// in the person's language, and keep any error joined to it.
+				m.Status.Error = strings.Replace(m.Status.Error, domain.ErrToolCallLimit.Error(), m.Theme.T("error.toolCallLimit"), 1)
+			}
+			if returned != "" {
+				m.Status.Error += " " + returned
 			}
 		} else if m.draft == "" {
 			m.Status.Error = ""
@@ -455,6 +492,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if queued, ok := m.steer.Take(); ok {
 			prompt := queued
+			if v.Err != nil && !errors.Is(v.Err, context.Canceled) {
+				// The queued turn starts now and clears the footer error
+				// before it is drawn: the failure stays in the conversation.
+				// A cancellation is the person's own Esc, not a failure.
+				m.failures = append(m.failures, m.Status.Error)
+			}
 			m.refreshTranscript()
 			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 			m.submittedPrompt = string(prompt)
@@ -535,9 +578,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/repair" && len(m.repairRecords()) > 0 || command == "/improve" && improvementRecords(m.repairRecords()) {
 				// Repairs and improvements the agent requested from this
 				// session, or that wait for the person, are shown before any
-				// mode change.
+				// mode change; n in the panel then selects the mode.
 				m.Composer.Input.Reset()
-				return m.openRepairPanel(), nil
+				m = m.openRepairPanel()
+				m.RepairPanel.mode = slashModes[command]
+				return m, nil
 			}
 			if mode, ok := slashModes[command]; ok {
 				return m.switchMode(mode)
@@ -584,7 +629,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return changed, cmd
 			}
-			if m.Busy && command != "" && (m.submittedPrompt != "" || m.Header.State.Status == domain.StatusStreaming || m.Header.State.Status == domain.StatusApproval || m.toolExecuting || m.providerWaiting) {
+			if m.Busy && command != "" && m.turnRunning() {
 				message := m.Composer.Input.Value()
 				m.rememberPrompt(message)
 				m.steer.Add(message)
@@ -596,7 +641,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// takes it after its next tool step, or it starts the next turn.
 				return m, nil
 			}
-			if m.Busy || strings.TrimSpace(m.Composer.Input.Value()) == "" {
+			if strings.TrimSpace(m.Composer.Input.Value()) == "" {
+				return m, nil
+			}
+			if m.Busy {
+				// An operation that is not a turn runs (an update, MADE
+				// preparation, a list): the draft stays, and the person
+				// learns why it was not sent.
+				m.Status.Notice = m.Theme.T("notice.operationRunning")
 				return m, nil
 			}
 			if m.Header.State.ID == "" {
@@ -618,6 +670,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.submittedAt = len(m.Header.State.Messages)
 			m.Composer.Input.Reset()
 			m.Status.Error = ""
+			m.failures = nil
 			m.draft = ""
 			m.draftOperationID = 0
 			if m.Header.State.Status == domain.StatusInterrupted && m.Header.State.Draft != "" {
@@ -761,8 +814,9 @@ func (m AppModel) View() tea.View {
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && !m.approvalFocus() && m.overlay == "" {
 		view.Cursor = m.Composer.Input.Cursor()
 		if view.Cursor != nil {
-			// Header and the rule above the composer.
-			view.Cursor.Y += 2 + m.Layout.BodyHeight
+			// Header, the conversation as drawn (a long error takes rows
+			// from it) and the rule above the composer.
+			view.Cursor.Y += 2 + m.Layout.BodyHeight - (m.footerRows() - 1)
 		}
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && m.overlay == "models" && !m.approvalFocus() {
@@ -832,5 +886,6 @@ func (m *AppModel) refreshTranscript() {
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
 	}
+	m.Transcript.AppendFailures(m.failures)
 	m.Transcript.AppendQueued(m.steer.Peek())
 }

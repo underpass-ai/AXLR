@@ -16,6 +16,9 @@ import (
 // The original call ID and history are unchanged.
 func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domain.AvailableTool, root.JSONValue, bool, error) {
 	tool, known, err := hostFindTool(snapshot, call.Name)
+	if err == nil {
+		err = malformedArguments(call.Arguments)
+	}
 	if err != nil || !known {
 		return domain.AvailableTool{}, root.JSONValue{}, known, err
 	}
@@ -45,6 +48,38 @@ func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domai
 		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New("axlr_call_tool can only call registered plugin tools")
 	}
 	return target, arguments, true, nil
+}
+
+// malformedArgumentsKey names the object the model adapter
+// (adapters/openrouter/response_mapper.go) puts in place of a call's
+// arguments that were not a JSON object, such as a call the output limit cut
+// short; keep the two names in step.
+const malformedArgumentsKey = "axlr_malformed_arguments"
+
+// malformedArguments refuses a call whose arguments the adapter could not
+// read, with the reason, so every resolution path records a tool error the
+// model can correct instead of running or pausing on it.
+func malformedArguments(arguments root.JSONValue) error {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(arguments.Bytes(), &fields) != nil {
+		return nil
+	}
+	raw, found := fields[malformedArgumentsKey]
+	if !found {
+		return nil
+	}
+	var malformed struct {
+		Error            string `json:"error"`
+		CutByOutputLimit bool   `json:"cut_by_output_limit"`
+	}
+	_ = json.Unmarshal(raw, &malformed)
+	if malformed.Error == "" {
+		malformed.Error = "unknown error"
+	}
+	if malformed.CutByOutputLimit {
+		return fmt.Errorf("the model's output limit cut the call's arguments (%s); send the complete call again, shorter", malformed.Error)
+	}
+	return fmt.Errorf("the call's arguments were not a valid JSON object (%s); send the complete call again", malformed.Error)
 }
 
 func hostFindTool(snapshot []domain.AvailableTool, name root.ToolName) (domain.AvailableTool, bool, error) {

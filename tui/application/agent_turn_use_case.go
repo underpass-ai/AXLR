@@ -35,8 +35,16 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 			tool, args, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending.Call)
 			if known && resolveErr == nil && approvesInSession(u.Approval, *s, tool.Identity, args) {
 				resolver := ResolveToolUseCase{Tools: u.Tools, Store: u.Continue.Store, Diagnostics: u.Continue.Diagnostics, Approval: u.Approval, Validation: u.Continue.Validation, Continue: u.Continue}
+				run, live := s.Ceremony()
+				wasTask := live && run.Task != nil
 				if err := resolver.resolveOne(ctx, s, pending.Call.ID, domain.DecisionAutoApprove, emit); err != nil {
 					return err
+				}
+				// Workers run without the person, so a task's last hand-back
+				// is approved here, not in ResolveToolUseCase.Execute: its
+				// turn closes at DONE the same way.
+				if _, still := s.Ceremony(); wasTask && !still && s.Status() == domain.StatusStreaming {
+					return resolver.closeTaskTurn(ctx, s, emit)
 				}
 				continue
 			}

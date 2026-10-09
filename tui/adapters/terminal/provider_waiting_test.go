@@ -35,6 +35,38 @@ func TestWaitingIndicatorUpdatesWithoutProviderTextAndKeepsEscape(t *testing.T) 
 		t.Fatal("waiting prevented cancellation")
 	}
 }
+
+// An error raised while an operation runs (here /model refused during a
+// stream) sits above the activity: the spinner, its timer and the cancel
+// hint stay in view, in the footer and under an overlay.
+func TestAnErrorWhileBusyKeepsTheActivityInView(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Busy = true
+	m.operationID = 1
+	m = update(m, application.Event{Kind: application.EventStreamStart})
+	m.Composer.Input.SetValue("/model")
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.Status.Error != m.Theme.T("error.modelBusy") {
+		t.Fatalf("error %q", m.Status.Error)
+	}
+	lines := strings.Split(ansi.Strip(m.View().Content), "\n")
+	if len(lines) != m.Layout.Height {
+		t.Fatalf("the view is %d rows; want %d", len(lines), m.Layout.Height)
+	}
+	footer := strings.Join(lines[len(lines)-2:], "\n")
+	for _, want := range []string{m.Theme.T("error.modelBusy"), "esc cancel", "Waiting for model · 0s"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("footer lacks %q:\n%s", want, footer)
+		}
+	}
+	m = update(m, ControlIntent("palette"))
+	lines = strings.Split(ansi.Strip(m.View().Content), "\n")
+	if status := lines[len(lines)-1]; !strings.Contains(status, "Waiting for model") || !strings.Contains(status, "Error: ") {
+		t.Fatalf("the overlay's status row hides the activity: %q", status)
+	}
+}
+
 func TestWaitingTickDoesNotRestartWhenIdleOrStale(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()

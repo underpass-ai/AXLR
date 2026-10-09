@@ -12,8 +12,12 @@ import (
 
 const (
 	checkTimeoutMS = 300000 // the runtime's hard limit (runtime/config.go)
-	checkOutput    = 16 << 10
-	checkTail      = 4 << 10
+	// checkOutput caps a model's check command, whose tail is all the model
+	// sees; consoleOutput is the runtime's hard limit, the most a console
+	// command that parses its output may ask for.
+	checkOutput   = 16 << 10
+	consoleOutput = application.ConsoleOutputBytes
+	checkTail     = 4 << 10
 )
 
 // Checks is application.CheckRunnerPort over AXLR's local exec runtime.
@@ -30,7 +34,11 @@ func (c Checks) Run(ctx context.Context, command domain.CheckCommand) (applicati
 	if args == nil {
 		args = []string{}
 	}
-	encoded, err := json.Marshal(map[string]any{"program": command.Program, "args": args, "timeout_ms": checkTimeoutMS, "max_output_bytes": checkOutput})
+	limit := checkOutput
+	if command.MaxOutput > 0 {
+		limit = min(command.MaxOutput, consoleOutput)
+	}
+	encoded, err := json.Marshal(map[string]any{"program": command.Program, "args": args, "timeout_ms": checkTimeoutMS, "max_output_bytes": limit})
 	if err != nil {
 		return application.CheckResult{}, err
 	}
@@ -45,9 +53,10 @@ func (c Checks) Run(ctx context.Context, command domain.CheckCommand) (applicati
 	var envelope struct {
 		Status string `json:"status"`
 		Output *struct {
-			ExitCode int    `json:"exit_code"`
-			Stdout   string `json:"stdout"`
-			Stderr   string `json:"stderr"`
+			ExitCode  int    `json:"exit_code"`
+			Stdout    string `json:"stdout"`
+			Stderr    string `json:"stderr"`
+			Truncated bool   `json:"truncated"`
 		} `json:"output"`
 		Error *struct {
 			Message string `json:"message"`
@@ -64,7 +73,7 @@ func (c Checks) Run(ctx context.Context, command domain.CheckCommand) (applicati
 		}
 		return application.CheckResult{ExitCode: -1, Output: tail(message)}, nil
 	}
-	return application.CheckResult{Ran: true, ExitCode: envelope.Output.ExitCode, Output: tail(envelope.Output.Stdout + envelope.Output.Stderr), Stdout: envelope.Output.Stdout}, nil
+	return application.CheckResult{Ran: true, ExitCode: envelope.Output.ExitCode, Output: tail(envelope.Output.Stdout + envelope.Output.Stderr), Stdout: envelope.Output.Stdout, Truncated: envelope.Output.Truncated}, nil
 }
 
 func tail(text string) string {

@@ -322,3 +322,27 @@ func TestModelSelectionBareScreenLongWorkspaceAtMinimumWidth(t *testing.T) {
 		t.Fatalf("workspace missing or screen overflows: %q", view)
 	}
 }
+
+type blockingModelCatalog struct{}
+
+func (blockingModelCatalog) List(ctx context.Context) ([]domain.AvailableModel, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+// Esc on a loading picker is the person closing it, not a failure to report.
+func TestClosingTheModelPickerWhileItLoadsReportsNoError(t *testing.T) {
+	session := navSession(t)
+	m, _ := selectionModel(t, &session)
+	m.deps.Models = application.ListModelsUseCase{Catalog: blockingModelCatalog{}}
+	n, cmd := m.Update(ControlIntent("models"))
+	m = n.(AppModel)
+	if !m.Busy || m.overlay != "models" {
+		t.Fatal("the catalog is not loading")
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = drain(t, m, cmd)
+	if m.overlay != "" || m.Status.Error != "" || strings.Contains(m.View().Content, "context canceled") {
+		t.Fatalf("closing the picker reported %q:\n%s", m.Status.Error, m.View().Content)
+	}
+}

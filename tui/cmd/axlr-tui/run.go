@@ -234,6 +234,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 	}
 	var transport http.RoundTripper = http.DefaultTransport
+	var payloadDirectory string
 	if trace != nil {
 		var payloads *diagnostics.PayloadRecorder
 		if *tracePayloads {
@@ -244,7 +245,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			if note != "" {
 				fmt.Fprintln(stderr, "axlr-tui:", note)
 			}
-			payloadDirectory, createErr := os.MkdirTemp(payloadParent, filepath.Base(tracePath)+".payloads-")
+			var createErr error
+			payloadDirectory, createErr = os.MkdirTemp(payloadParent, filepath.Base(tracePath)+".payloads-")
 			if createErr != nil {
 				return fail(createErr)
 			}
@@ -256,6 +258,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			fmt.Fprintln(stderr, "axlr-tui: payloads:", payloadDirectory)
 		}
 		transport = diagnostics.Transport{Next: transport, Trace: trace, Payloads: payloads, Endpoints: locals.endpoints}
+	}
+	if *traceFlag == "" {
+		// Every launch adds a trace and a payload directory to the default
+		// directory; earlier ones past trace_retention_days go, silently.
+		_ = diagnostics.PruneDefault(getenv, settings.TraceRetention(), time.Now(), tracePath, payloadDirectory)
 	}
 	clientHTTP := &http.Client{Transport: transport}
 	defer clientHTTP.CloseIdleConnections()

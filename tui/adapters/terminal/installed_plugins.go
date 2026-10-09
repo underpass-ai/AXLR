@@ -181,7 +181,8 @@ func (p *InstalledPlugins) Update(msg tea.Msg) ControlIntent {
 		return ""
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok {
-		switch key.String() {
+		// The footer prints the letters uppercase: Shift+letter is the same key.
+		switch strings.ToLower(key.String()) {
 		case "/":
 			p.searching = true
 			p.Search.Focus()

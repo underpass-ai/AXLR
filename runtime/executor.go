@@ -37,9 +37,9 @@ func New(c Config) (*Executor, error) {
 		c.MaxOutputBytes = hardFileBytes
 	}
 	if c.MaxTimeout == 0 {
-		c.MaxTimeout = hardTimeout
+		c.MaxTimeout = HardTimeout
 	}
-	if c.MaxReadBytes < 1 || c.MaxReadBytes > hardFileBytes || c.MaxFileBytes < 1 || c.MaxFileBytes > hardFileBytes || c.MaxOutputBytes < 1 || c.MaxOutputBytes > hardFileBytes || c.MaxTimeout < time.Millisecond || c.MaxTimeout > hardTimeout {
+	if c.MaxReadBytes < 1 || c.MaxReadBytes > hardFileBytes || c.MaxFileBytes < 1 || c.MaxFileBytes > hardFileBytes || c.MaxOutputBytes < 1 || c.MaxOutputBytes > hardFileBytes || c.MaxTimeout < time.Millisecond || c.MaxTimeout > HardTimeout {
 		return nil, errors.New("profile limits exceed trusted-local bounds")
 	}
 	for _, v := range c.Env {

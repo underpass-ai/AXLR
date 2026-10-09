@@ -158,6 +158,95 @@ func TestContinueTurnCallLimitPersistsPause(t *testing.T) {
 		t.Fatalf("limit state: %+v", s.Export())
 	}
 }
+
+// sessionNearCallLimit is a turn that already made all but one of its calls.
+func sessionNearCallLimit(t *testing.T) domain.Session {
+	t.Helper()
+	s := turnSession(t)
+	if err := s.BeginTurn("go", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	calls := make([]root.ToolCall, domain.MaxTurnToolCalls-1)
+	for i := range calls {
+		calls[i] = call(root.ToolCallID(fmt.Sprintf("c%d", i)), "read")
+	}
+	if err := s.CompleteAssistant(assistant("", calls...)); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range calls {
+		if err := s.RecordToolOutcome(c.ID, domain.DecisionApprove, domain.ToolOutcome{Content: "ok"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return s
+}
+
+// The answer that crosses the call limit was streamed to the person: it is
+// kept, its calls are answered as not run, and the turn pauses.
+func TestTheAnswerAtTheCallLimitIsKeptWithItsCallsNotRun(t *testing.T) {
+	s := sessionNearCallLimit(t)
+	before := len(s.Messages())
+	store := &memoryStore{}
+	const text = "I found the cause; reading two more files"
+	u := ContinueTurnUseCase{Store: store, Models: streamFunc(func(_ context.Context, _ root.CompletionRequest, emit func(root.Text) error) (root.CompletionResult, error) {
+		_ = emit(text)
+		return assistant(text, call("x1", "read"), call("x2", "read")), nil
+	})}
+	shown := 0
+	record := func(e Event) error {
+		if e.Kind == EventSession && e.Snapshot != nil {
+			shown = len(e.Snapshot.Messages)
+		}
+		return nil
+	}
+	if err := u.Execute(context.Background(), &s, record); !errors.Is(err, domain.ErrToolCallLimit) {
+		t.Fatalf("limit error: %v", err)
+	}
+	messages := s.Messages()
+	if s.Status() != domain.StatusInterrupted || len(s.Pending()) != 0 || len(messages) != before+3 || messages[before].Content != text || len(messages[before].ToolCalls) != 2 {
+		t.Fatalf("the streamed answer was dropped: %s %+v", s.Status(), messages[before:])
+	}
+	if shown != before+3 {
+		t.Fatalf("the transcript shown has %d messages, not the kept answer's %d", shown, before+3)
+	}
+	for _, record := range s.Export().Activity[len(s.Export().Activity)-2:] {
+		if record.Decision != domain.DecisionDeny || !record.Outcome.IsError || !strings.Contains(string(record.Outcome.Content), "not run: the turn reached its 32 tool-call limit") {
+			t.Fatalf("call over the limit: %+v", record)
+		}
+	}
+	saved := store.states[len(store.states)-1]
+	if _, err := domain.RestoreSession(saved); err != nil || len(saved.Messages) != before+3 {
+		t.Fatalf("the kept answer was not saved: %v", err)
+	}
+}
+
+// Resuming is the person's word to go on, like a steered message: the retry
+// gets a new call budget instead of tripping the limit on every answer with
+// two calls (Ctrl+R, and the plan and repair loops that continue a turn).
+func TestResumingAfterTheCallLimitRestartsTheTurnBudget(t *testing.T) {
+	s := sessionNearCallLimit(t)
+	requests := 0
+	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: &memoryStore{}, Models: streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		requests++
+		return assistant("", call(root.ToolCallID(fmt.Sprintf("x%d", requests)), "read"), call(root.ToolCallID(fmt.Sprintf("y%d", requests)), "read")), nil
+	})}}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); !errors.Is(err, domain.ErrToolCallLimit) {
+		t.Fatalf("limit error: %v", err)
+	}
+	if err := s.ResumeTurn(); err != nil {
+		t.Fatal(err)
+	}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatalf("the retry tripped the limit again: %v", err)
+	}
+	if requests != 2 || s.Status() != domain.StatusApproval || len(s.Pending()) != 2 {
+		t.Fatalf("requests %d, status %s, pending %d", requests, s.Status(), len(s.Pending()))
+	}
+	if _, err := domain.RestoreSession(s.Export()); err != nil {
+		t.Fatalf("a resumed turn no longer restores: %v", err)
+	}
+}
+
 func TestContinueTurnUnknownOnlyReturnsAfterOneStream(t *testing.T) {
 	s := turnSession(t)
 	_ = s.BeginTurn("go", turnTools())

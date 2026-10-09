@@ -17,11 +17,16 @@ func TestNotPreparedErrorNamesMissingDefinitions(t *testing.T) {
 		"open /mcp",
 		"select MADE",
 		"press p",
-		"composer",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Fatalf("error %q does not contain %q", msg, want)
 		}
+	}
+	// Where the prompt went is the console's to say: a plan task and a tool
+	// result carry this text too, and the console may keep the prompt as a
+	// "Not sent" row rather than in the composer.
+	if strings.Contains(msg, "composer") {
+		t.Fatalf("error %q claims where the prompt went", msg)
 	}
 
 	if !errors.Is(err, ErrCeremonyNotPrepared) {

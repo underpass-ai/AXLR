@@ -74,6 +74,74 @@ func TestPreparerClonesWritesTheMarkerWithItsOriginAndExcludesIt(t *testing.T) {
 	}
 }
 
+// gh and git print notices on stderr while succeeding (gh's release notice,
+// git's safe.directory or locale warnings); they are not part of the issue
+// brief or the base branch, which are read from stdout alone.
+func TestPreparerReadsAnswersFromStdoutOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stubs")
+	}
+	bin := t.TempDir()
+	script := "#!/bin/sh\n" +
+		"echo 'A new release of gh is available: 2.80.0 -> 2.81.0' >&2\n" +
+		"echo 'warning: unable to access /root/.config/git/attributes: Permission denied' >&2\n" +
+		"case \"$1 $2\" in\n" +
+		"  'repo clone') mkdir -p \"$4/.git/info\";;\n" +
+		"  'rev-parse --abbrev-ref') echo main;;\n" +
+		"  'issue view') printf 'Broken thing\\n\\nIt breaks.\\n';;\n" +
+		"esac\nexit 0\n"
+	for _, name := range []string{"gh", "git"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	preparer := Preparer{Repairs: filepath.Join(t.TempDir(), "repairs"), Env: []string{"PATH=" + bin + string(os.PathListSeparator) + "/usr/bin:/bin"}}
+	issue, err := preparer.Issue(context.Background(), "o/r", "7")
+	if err != nil || issue != "Issue #7 of o/r: Broken thing\n\nIt breaks." {
+		t.Fatalf("issue %q %v", issue, err)
+	}
+	clone, err := preparer.Prepare(context.Background(), application.RepairCloneRequest{Repository: "o/r", Brief: issue, Slug: "s"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(clone.Path, application.RepairMarker))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var marker application.RepairMarkerFile
+	if err := json.Unmarshal(data, &marker); err != nil {
+		t.Fatal(err)
+	}
+	if clone.Base != "main" || marker.Base != "main" {
+		t.Fatalf("base %q, marker base %q", clone.Base, marker.Base)
+	}
+}
+
+// If the marker cannot be excluded, Prepare fails: otherwise the forge's
+// git add would commit and push the marker (brief, about, origin session)
+// into the pull request.
+func TestPreparerFailsWhenTheMarkerCannotBeExcluded(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("shell stubs")
+	}
+	bin := t.TempDir()
+	// The clone's .git/info is a file, so .git/info/exclude cannot be opened.
+	script := "#!/bin/sh\ncase \"$1 $2\" in\n" +
+		"  'repo clone') mkdir -p \"$4/.git\"; : > \"$4/.git/info\";;\n" +
+		"  'rev-parse --abbrev-ref') echo main;;\n" +
+		"esac\nexit 0\n"
+	for _, name := range []string{"gh", "git"} {
+		if err := os.WriteFile(filepath.Join(bin, name), []byte(script), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	preparer := Preparer{Repairs: filepath.Join(t.TempDir(), "repairs"), Env: []string{"PATH=" + bin + string(os.PathListSeparator) + "/usr/bin:/bin"}}
+	_, err := preparer.Prepare(context.Background(), application.RepairCloneRequest{Repository: "o/r", Brief: "b", Slug: "s"})
+	if err == nil || !strings.Contains(err.Error(), "exclude") {
+		t.Fatalf("an unexcluded marker must fail the clone: %v", err)
+	}
+}
+
 func TestPreparerRefusesBadRequestsAndReportsAFailingClone(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell stubs")

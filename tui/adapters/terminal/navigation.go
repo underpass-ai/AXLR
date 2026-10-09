@@ -184,7 +184,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
-			if k.String() == "f" {
+			if strings.ToLower(k.String()) == "f" {
 				intent = "autonomy-on"
 			}
 			if intent == ControlIntent(domain.DecisionAutoApprove) {
@@ -322,6 +322,16 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	if wheel, ok := msg.(tea.MouseWheelMsg); ok && m.approvalFocus() {
 		m.Approval.Details.Viewport, _ = m.Approval.Details.Viewport.Update(wheel)
+		return m, nil, true
+	}
+	if wheel, ok := msg.(tea.MouseWheelMsg); ok && m.overlay != "" && m.overlay != "search" {
+		// The wheel scrolls what is on screen: the overlays drawn from
+		// m.Info scroll it, and the others keep the conversation behind
+		// them still. Search shows the conversation, so it falls through.
+		switch m.overlay {
+		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident":
+			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
+		}
 		return m, nil, true
 	}
 	if !hasIntent {
@@ -579,6 +589,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}, true
 	case ModelCloseIntent:
 		if m.cancel != nil {
+			// The person closed the picker: the loading it stops is no
+			// failure to report.
+			m.closedCancelled = m.operationID
 			m.cancel()
 		}
 		m.overlay = ""
@@ -594,7 +607,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			if intent == "autonomy-on" {
 				if settings == nil {
-					return errors.New("approval settings are unavailable")
+					return errors.New(m.Theme.T("error.approvalSettings"))
 				}
 				if err := settings.SetAutonomous(ctx, true); err != nil {
 					return err
@@ -603,11 +616,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			if intent == "always-allow" {
 				if settings == nil {
-					return errors.New("approval settings are unavailable")
+					return errors.New(m.Theme.T("error.approvalSettings"))
 				}
 				tool, _, known, err := application.ResolveToolCall(s.ToolSnapshot(), p.Call)
 				if !known || err != nil {
-					return errors.New("cannot save approval for unknown tool")
+					return errors.New(m.Theme.T("error.approvalUnknownTool"))
 				}
 				if err := settings.Allow(ctx, tool.Identity); err != nil {
 					return err
@@ -778,9 +791,11 @@ func (m *AppModel) showHit() {
 		prefix.Messages = prefix.Messages[:prefix.ArchivedDrafts[archived].AfterMessage]
 		prefix.ArchivedDrafts = prefix.ArchivedDrafts[:archived]
 	}
+	// The prefix is measured with the transcript's own theme: Editorial
+	// speaker rows, folded tool runs and the icon set change the line count.
 	rendered := NewTranscript()
 	rendered.SetWidth(m.Transcript.Viewport.Width())
-	rendered.SetSession(prefix, "", Theme{Monochrome: true})
+	rendered.SetSession(prefix, "", m.Theme)
 	m.Transcript.Viewport.SetYOffset(rendered.VisualLineCount())
 }
 func (m AppModel) overlayView(base string) string {

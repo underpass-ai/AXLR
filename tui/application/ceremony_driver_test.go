@@ -89,17 +89,27 @@ func (f *fakeEngine) Inspect(context.Context, string) (CeremonyView, error) {
 type fakeChecks struct {
 	exits []int
 	runs  []domain.CheckCommand
-	// status is what git status --porcelain prints: a clean clone by default.
-	status string
+	// status is what git status --porcelain prints: a clean clone by default;
+	// statusStderr is what it adds on stderr while still exiting 0.
+	status, statusStderr string
+	// git, when set, answers the other git commands (rev-parse HEAD in a
+	// repository without commits, say).
+	git *CheckResult
+	// outputs is what the next check commands print, one per run; "tail"
+	// once it is empty.
+	outputs []string
 }
 
 func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckResult, error) {
 	f.runs = append(f.runs, command)
 	if command.Program == "git" && len(command.Args) > 0 && command.Args[0] == "status" {
-		return CheckResult{Ran: true, Output: f.status}, nil
+		return CheckResult{Ran: true, Output: f.status + f.statusStderr, Stdout: f.status}, nil
 	}
 	if command.Program == "git" {
-		return CheckResult{Ran: true, Output: "abc123\n"}, nil
+		if f.git != nil {
+			return *f.git, nil
+		}
+		return CheckResult{Ran: true, Output: "abc123\n", Stdout: "abc123\n"}, nil
 	}
 	exit := 0
 	if len(f.exits) > 0 {
@@ -108,7 +118,11 @@ func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckR
 	if exit == -1 {
 		return CheckResult{ExitCode: -1, Output: "program not found"}, nil
 	}
-	return CheckResult{Ran: true, ExitCode: exit, Output: "tail"}, nil
+	output := "tail"
+	if len(f.outputs) > 0 {
+		output, f.outputs = f.outputs[0], f.outputs[1:]
+	}
+	return CheckResult{Ran: true, ExitCode: exit, Output: output, Stdout: output}, nil
 }
 
 type fakeMemory struct {
@@ -221,6 +235,32 @@ func TestDebugCeremonyRunsEndToEndOnConsoleChecks(t *testing.T) {
 	}
 }
 
+// unbornHead is git rev-parse HEAD in a repository without commits: it
+// echoes the argument on stdout, explains on stderr and exits 128.
+var unbornHead = CheckResult{Ran: true, ExitCode: 128, Stdout: "HEAD\n",
+	Output: "HEAD\nfatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.\nUse '--' to separate paths from revisions, like this:\n'git <command> [<revision>...] -- [<file>...]'\n"}
+
+// Integrate records git's answer as evidence only when git answered: a
+// failed rev-parse, or a warning git status printed on stderr, is not a
+// revision or a dirty file.
+func TestIntegrateRecordsOnlyWhatGitAnswered(t *testing.T) {
+	engine := &fakeEngine{}
+	checks := &fakeChecks{exits: []int{1, 0}, git: &unbornHead, statusStderr: "warning: could not open directory 'cache/': Permission denied\n"}
+	d := &CeremonyDriver{Engine: engine, Checks: checks, Now: func() time.Time { return time.Unix(1, 0) }}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range []string{reproduceArgs, `{"root_cause":"r","evidence":"e","proposed_fix":"f"}`, `{"summary":"fixed"}`} {
+		step(t, d, &s, args)
+	}
+	r := step(t, d, &s, `{"report":"hecho","summary_en":"Fixed."}`)
+	integrated := engine.completed[len(engine.completed)-1]
+	if r["ceremony"] != "COMPLETED" || integrated["revision"] != "" || integrated["dirty"] != "" || r["revision"] != "" {
+		t.Fatalf("integrate recorded revision %q and dirty %q", integrated["revision"], integrated["dirty"])
+	}
+}
+
 func TestStepRefusalsLeaveMADEUntouched(t *testing.T) {
 	engine := &fakeEngine{}
 	d := &CeremonyDriver{Engine: engine, Checks: &fakeChecks{}}
@@ -291,6 +331,67 @@ func TestOnlyANewCheckCommandNeedsTheUser(t *testing.T) {
 	}
 	if !approvesInSession(nil, s, stepDone, mustObject(t, `{"summary":"x","check_command":{"program":"sh","args":["-c","true"]}}`)) {
 		t.Fatal("repair asked to approve a command it will ignore")
+	}
+}
+
+// The person approves a check command once per ceremony: a hand-back the
+// driver refuses (here a missing field) loses run.Check, but the same
+// command sent again needs no second card. Another command still does.
+func TestAnApprovedCheckCommandIsNotAskedAgainAfterARefusal(t *testing.T) {
+	incomplete := `{"check_command":{"program":"python3","args":["-m","unittest"]},"expected":"2 hola"}`
+	s, store := pendingCall(t, domain.ModeDebug, "axlr_step_done", incomplete)
+	d := &CeremonyDriver{Engine: &fakeEngine{}, Checks: &fakeChecks{exits: []int{1}}}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "axlr-i", Step: "reproduce", Iteration: 1, Fence: "fence-reproduce"}); err != nil {
+		t.Fatal(err)
+	}
+	stepDone, _ := domain.NewHostToolIdentity(domain.HostOperationStepDone)
+	if approvesInSession(allowEverything{}, s, stepDone, mustObject(t, incomplete)) {
+		t.Fatal("a new check command was approved automatically")
+	}
+	u := ResolveToolUseCase{Store: store, Continue: ContinueTurnUseCase{Store: store, Ceremonies: d}}
+	if err := u.resolveOne(context.Background(), &s, "call-1", domain.DecisionApprove, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if run, live := s.Ceremony(); !live || run.Step != "reproduce" || !run.Check.IsZero() || !s.Export().Activity[0].Outcome.IsError {
+		t.Fatalf("the incomplete hand-back was not refused: %+v", run)
+	}
+	if !approvesInSession(nil, s, stepDone, mustObject(t, reproduceArgs)) {
+		t.Fatal("the command the person approved was asked again")
+	}
+	if approvesInSession(allowEverything{}, s, stepDone, mustObject(t, `{"check_command":{"program":"sh","args":["-c","exit 1"]},"expected":"x","observed":"y"}`)) {
+		t.Fatal("another command was approved automatically")
+	}
+}
+
+// A decompose hand-back the console sends back for a defect keeps the
+// commands the person approved: the next round with the same commands
+// needs no second card. A new command still does.
+func TestApprovedPlanCommandsAreNotAskedAgainAfterADefect(t *testing.T) {
+	d, _, _, _, s := planDriver(t)
+	if err := s.BeginTurn("planifica", append(turnTools(), HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	defective := planArgs(t, strings.Replace(goodTasks, `"line":8`, `"line":3`, 1))
+	handBack := root.ToolCall{ID: "decompose-1", Name: HostStepDoneName, Arguments: mustObject(t, defective)}
+	if err := s.CompleteAssistant(assistant("", handBack)); err != nil {
+		t.Fatal(err)
+	}
+	if !planNeedsApproval(s, handBack.Arguments) {
+		t.Fatal("the plan's commands skipped the approval card")
+	}
+	store := &memoryStore{}
+	u := ResolveToolUseCase{Store: store, Continue: ContinueTurnUseCase{Store: store, Ceremonies: d}}
+	if err := u.resolveOne(context.Background(), &s, "decompose-1", domain.DecisionApprove, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if run, live := s.Ceremony(); !live || run.Step != "decompose" || run.Iteration != 2 {
+		t.Fatalf("the defective plan did not go back to decompose: %+v", run)
+	}
+	if planNeedsApproval(s, mustObject(t, planArgs(t, goodTasks))) {
+		t.Fatal("the commands the person approved were asked again")
+	}
+	if !planNeedsApproval(s, mustObject(t, planArgs(t, strings.Replace(goodTasks, "TestLineCount", "TestLines", 1)))) {
+		t.Fatal("a new command skipped the approval card")
 	}
 }
 

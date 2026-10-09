@@ -403,3 +403,15 @@ func publishTestSession(t *testing.T, m AppModel, session domain.Session) AppMod
 	})
 	return drain(t, m, cmd)
 }
+
+// The approval keys' own failures reach the footer in the person's language.
+func TestAlwaysAllowWithoutApprovalSettingsReportsATranslatedError(t *testing.T) {
+	m := approvalModel(t)
+	m.Theme.Locale = Spanish
+	m.deps.ApprovalSettings = nil
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'l', Text: "l"})
+	m = drain(t, next.(AppModel), cmd)
+	if want := Translate(Spanish, "error.approvalSettings"); m.Status.Error != want {
+		t.Fatalf("error %q; want %q", m.Status.Error, want)
+	}
+}

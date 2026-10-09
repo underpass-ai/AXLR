@@ -25,16 +25,25 @@ type Forge struct{ Checks application.CheckRunnerPort }
 
 var _ application.ForgePort = Forge{}
 
-// run returns the whole stdout of a successful command, for parsing. Failures
-// quote only the tail of stdout and stderr, which is enough to show the model
-// what went wrong.
+// stageArgs stage every change in the clone except its repair marker. The
+// preparer also lists the marker in .git/info/exclude; the pathspec keeps it
+// out of the commit even where that did not hold.
+var stageArgs = []string{"add", "-A", "--", ".", ":(exclude)" + application.RepairMarker}
+
+// run returns the whole stdout of a successful command, for parsing: it asks
+// the runtime for its whole output limit and refuses an output cut there.
+// Failures quote only the tail of stdout and stderr, which is enough to show
+// the model what went wrong.
 func (f Forge) run(ctx context.Context, program string, args ...string) (string, error) {
-	result, err := f.Checks.Run(ctx, domain.CheckCommand{Program: program, Args: args})
+	result, err := f.Checks.Run(ctx, domain.CheckCommand{Program: program, Args: args, MaxOutput: consoleOutput})
 	if err != nil {
 		return "", err
 	}
 	if !result.Ran || result.ExitCode != 0 {
 		return result.Output, fmt.Errorf("%s %s: exit %d: %s", program, strings.Join(args, " "), result.ExitCode, strings.TrimSpace(result.Output))
+	}
+	if result.Truncated {
+		return "", fmt.Errorf("%s %s: its output was cut at the runtime's %d-byte limit; the console does not parse a partial answer", program, strings.Join(args, " "), consoleOutput)
 	}
 	if result.Stdout != "" {
 		return result.Stdout, nil
@@ -51,7 +60,7 @@ func (f Forge) Propose(ctx context.Context, p application.RepairProposal) (appli
 			return application.PullRequest{}, err
 		}
 	}
-	if _, err := f.run(ctx, "git", "add", "-A"); err != nil {
+	if _, err := f.run(ctx, "git", stageArgs...); err != nil {
 		return application.PullRequest{}, err
 	}
 	staged, _ := f.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"diff", "--cached", "--quiet"}})

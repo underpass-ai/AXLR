@@ -22,6 +22,8 @@ type fakeRegistry struct {
 	mu      sync.Mutex
 	records []domain.RepairRecord
 	fail    error
+	// refuse, when set, fails the saves it matches.
+	refuse func(domain.RepairRecord) bool
 }
 
 func (f *fakeRegistry) Load(context.Context) ([]domain.RepairRecord, error) {
@@ -36,6 +38,9 @@ func (f *fakeRegistry) Load(context.Context) ([]domain.RepairRecord, error) {
 func (f *fakeRegistry) Save(_ context.Context, record domain.RepairRecord) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.refuse != nil && f.refuse(record) {
+		return errDiskFull
+	}
 	for i := range f.records {
 		if f.records[i].ID == record.ID {
 			f.records[i] = record

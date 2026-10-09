@@ -606,14 +606,19 @@ func (d *CeremonyDriver) finishPlan(ctx context.Context, s domain.Session, run d
 	if err := d.Plans.Save(ctx, record); err != nil {
 		return "not recorded: " + bounded(err.Error(), 300)
 	}
+	unsaved := ""
 	if status == domain.PlanReady && d.Starter != nil {
 		if err := d.Starter.Start(context.WithoutCancel(ctx), record.ID); err != nil {
 			record.Error = bounded("start: "+err.Error(), 600)
-			_ = d.Plans.Save(ctx, record)
+			if err := d.Plans.Save(ctx, record); err != nil {
+				// The panel shows the registry, which cannot say why the
+				// plan did not start: this answer has to.
+				unsaved = fmt.Sprintf("; the plan did not start (%s) and the plan registry did not save that: %s", record.Error, bounded(err.Error(), 300))
+			}
 		}
 	}
 	if d.Memory == nil || status != domain.PlanReady {
-		return d.record(ctx, s, run, state, map[string]any{"summary_en": record.SummaryEN})
+		return d.record(ctx, s, run, state, map[string]any{"summary_en": record.SummaryEN}) + unsaved
 	}
 	var table strings.Builder
 	for _, t := range record.Tasks {
@@ -623,9 +628,9 @@ func (d *CeremonyDriver) finishPlan(ctx context.Context, s domain.Session, run d
 	summary := fmt.Sprintf("Plan %s approved (%s): %d tasks in %d waves. %s", record.ID, record.Decision, len(record.Tasks), record.Waves, record.SummaryEN)
 	evidence := fmt.Sprintf("MADE instance %s; e2e %s %s (baseline exit %d)\n%s", run.Instance, record.E2E.Program, strings.Join(record.E2E.Args, " "), record.E2EBaseline, bounded(table.String(), 4000))
 	if _, err := d.Memory.RecordLinked(ctx, run.About, labels, MemoryRecord{ID: run.Instance + "-plan", Kind: "decision", Summary: summary, Evidence: evidence}); err != nil {
-		return "not recorded: " + bounded(err.Error(), 300)
+		return "not recorded: " + bounded(err.Error(), 300) + unsaved
 	}
-	return "recorded in " + run.About
+	return "recorded in " + run.About + unsaved
 }
 
 // planInstruction adds what the planner must fix: the person's reason for a

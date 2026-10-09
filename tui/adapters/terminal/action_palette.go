@@ -105,9 +105,10 @@ func (p ActionPalette) Update(msg tea.Msg) (ActionPalette, ControlIntent, tea.Cm
 				}
 				return p, "", nil
 			default:
+				// Shortcuts are drawn uppercase: Shift+letter is the same key.
 				for _, item := range actionItems {
 					a := item.(actionItem)
-					if key.String() == a.shortcut {
+					if strings.ToLower(key.String()) == a.shortcut {
 						return p, a.intent, nil
 					}
 				}

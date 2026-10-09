@@ -184,6 +184,34 @@ func TestClientLifecycleAndArguments(t *testing.T) {
 	}
 }
 
+func TestDisconnectAllowsTheServerToConnectAgain(t *testing.T) {
+	client := New()
+	defer client.Close()
+	if err := client.Disconnect("never"); err != nil {
+		t.Fatalf("disconnecting an unknown server: %v", err)
+	}
+	_, first := testServer(t, "live", 0)
+	if err := client.connect(context.Background(), "live", first); err != nil {
+		t.Fatal(err)
+	}
+	_, second := testServer(t, "live", 0)
+	if err := client.connect(context.Background(), "live", second); err == nil {
+		t.Fatal("second session accepted while the first is open")
+	}
+	if err := client.Disconnect("live"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.ListTools(context.Background(), "live"); err == nil {
+		t.Fatal("disconnected server still listed tools")
+	}
+	if err := client.connect(context.Background(), "live", second); err != nil {
+		t.Fatalf("reconnect after disconnect: %v", err)
+	}
+	if _, err := client.Call(context.Background(), ToolRef{Server: "live", Name: "echo"}, map[string]any{"text": "again"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestRepeatedToolCursorStops(t *testing.T) {
 	server := mcp.NewServer(&mcp.Implementation{Name: "loop", Version: "1.0.0"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "dummy"}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {

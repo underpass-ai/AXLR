@@ -138,12 +138,14 @@ func (s *Server) handleCreateToolCall(w http.ResponseWriter, r *http.Request) {
 		call.Approver = "policy:auto"
 		call.DecisionRequestID = requestID(r)
 	}
-	if err := s.calls.Save(call); err != nil {
-		writeError(w, requestID(r), 500, "storage_error", "unable to save call intent")
-		return
-	}
+	// The audit record is synced before the call exists; a claim without a call
+	// becomes a cancelled intent on restart.
 	if err := s.audit.Append(auditRecord{Principal: principal(r).ID, RequestID: requestID(r), Action: "tool_call.create", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID}); err != nil {
 		writeError(w, requestID(r), 500, "storage_error", "unable to audit call intent")
+		return
+	}
+	if err := s.calls.Save(call); err != nil {
+		writeError(w, requestID(r), 500, "storage_error", "unable to save call intent")
 		return
 	}
 	if auto {
@@ -262,12 +264,13 @@ func (s *Server) handleToolDecision(w http.ResponseWriter, r *http.Request) {
 		call.Result = &domain.ToolOutcome{Content: "tool call denied", IsError: true}
 	}
 	call.Revision++
-	if err := s.calls.Save(call); err != nil {
-		writeError(w, requestID(r), 500, "storage_error", "unable to save decision")
-		return
-	}
+	// An unaudited decision is never saved, so the call can still be decided.
 	if err := s.audit.Append(auditRecord{Principal: principal(r).ID, RequestID: requestID(r), Action: "tool_call.decision", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID}); err != nil {
 		writeError(w, requestID(r), 500, "storage_error", "unable to audit decision")
+		return
+	}
+	if err := s.calls.Save(call); err != nil {
+		writeError(w, requestID(r), 500, "storage_error", "unable to save decision")
 		return
 	}
 	if input.Decision == "approve" {

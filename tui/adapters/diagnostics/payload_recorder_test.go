@@ -2,9 +2,11 @@ package diagnostics
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -101,5 +103,112 @@ func TestPayloadRecorderLimitsRedactedFileSize(t *testing.T) {
 	body := bytes.Repeat([]byte("a"), payloadLimit/len("[redacted]")+1)
 	if err := recorder.Save(1, "request", body); err == nil {
 		t.Fatal("redaction expanded past capture limit")
+	}
+}
+
+// Tool results carry credentials the model read: GitHub, AWS and Slack
+// tokens and private keys must not reach a capture verbatim. The samples are
+// fake and built from pieces so secret scanners do not flag the test source.
+func TestPayloadRecorderRedactsCommonCredentialFormats(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "payloads")
+	recorder, err := NewPayloadRecorder(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	secrets := []string{
+		"ghp_" + strings.Repeat("A1b2", 9),
+		"gho_" + strings.Repeat("Z9y8", 9),
+		"ghs_" + strings.Repeat("Q7w6", 9),
+		"ghu_" + strings.Repeat("E5r4", 9),
+		"ghr_" + strings.Repeat("T3y2", 9),
+		"github_pat_11ABCDEFG0123456789_" + strings.Repeat("aB3", 20),
+		"AKIA" + "IOSFODNN7EXAMPLE",
+		"ASIA" + "Y34FZKBOKMUTVV7A",
+		"xox" + "b-1234567890-0987654321-" + "AbCdEfGhIjKlMnOpQrStUvWx",
+		"wJalrXUtnFEMI/" + "K7MDENG/bPxRfiCYEXAMPLEKEY",
+		"je7MtGbClwBF/" + "2Zp9Utk/h3yCo8nvbEXAMPLEKEY",
+		"b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQ",
+		"AAAAAAAAAAEAAAAzAAAAC3NzaC1lZDI1NTE5AAAAIB",
+		"MIIEowIBAAKCAQEAtruncatedbody",
+	}
+	result := "keep-this-text ghost_writer\n" + strings.Join(secrets[:9], "\n") +
+		"\nAWS_SECRET_ACCESS_KEY=" + secrets[9] +
+		"\n{\"SecretAccessKey\": \"" + secrets[10] + "\"}\n" +
+		"-----BEGIN OPENSSH PRIVATE KEY-----\n" + secrets[11] + "\n" + secrets[12] + "\n-----END OPENSSH PRIVATE KEY-----\nafter the key"
+	truncated := "-----BEGIN RSA PRIVATE KEY-----\n" + secrets[13]
+	request, err := json.Marshal(map[string]any{"messages": []map[string]string{
+		{"role": "tool", "tool_call_id": "a", "content": result},
+		{"role": "tool", "tool_call_id": "b", "content": truncated},
+		{"role": "user", "content": "still here"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recorder.Save(1, "request", request); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := os.ReadFile(filepath.Join(dir, "000001-request.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range secrets {
+		if bytes.Contains(saved, []byte(secret)) {
+			t.Errorf("kept verbatim: %s", secret)
+		}
+	}
+	for _, kept := range []string{"keep-this-text ghost_writer", "AWS_SECRET_ACCESS_KEY=", "SecretAccessKey", "after the key", "still here"} {
+		if !bytes.Contains(saved, []byte(kept)) {
+			t.Errorf("over-redacted %q: %s", kept, saved)
+		}
+	}
+	if !json.Valid(saved) {
+		t.Fatalf("redaction broke the JSON: %s", saved)
+	}
+}
+
+// A model that echoes the configured key, or writes a token into a tool
+// call, streams it in pieces: "sk-or" in one delta, the rest in the next.
+// No single chunk holds the secret, so the capture is redacted over each
+// field's text joined across chunks.
+func TestPayloadRecorderRedactsSecretsSplitAcrossStreamDeltas(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "payloads")
+	key := "sk-or-v1-" + "0123456789abcdef0123456789abcdef"
+	recorder, err := NewPayloadRecorder(dir, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frames := []string{
+		`{"id":"gen-1","choices":[{"index":0,"delta":{"role":"assistant","content":"Your key is sk-or"}}]}`,
+		`{"id":"gen-1","choices":[{"index":0,"delta":{"content":"-v1-0123456789abcdef"}}]}`,
+		`{"id":"gen-1","choices":[{"index":0,"delta":{"content":"0123456789abcdef, keep it safe."}}]}`,
+		`{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"write","arguments":"{\"token\":\"ghp_A1b2A1b2A1b2"}}]}}]}`,
+		`{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"A1b2A1b2A1b2A1b2A1b2A1b2\"}"}}]}}]}`,
+		`{"choices":[{"index":0,"delta":{"reasoning":"-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBg"}}]}`,
+		`{"choices":[{"index":0,"delta":{"reasoning":"kqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----"}}]}`,
+		`{"choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":4,"total_tokens":7}}`,
+		`[DONE]`,
+	}
+	wire := "data: " + strings.Join(frames, "\n\ndata: ") + "\n\n"
+	if err := recorder.SaveResponse(1, []byte(wire), true); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := os.ReadFile(filepath.Join(dir, "000001-response.sse"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"0123456789abcdef", "A1b2", "MIIEvQIBADANBg", "kqhkiG9w0BAQEFAASC"} {
+		if bytes.Contains(saved, []byte(secret)) {
+			t.Errorf("split secret survives: %s", secret)
+		}
+	}
+	for _, kept := range []string{"Your key is [redacted]", ", keep it safe.", `{\"token\":\"[redacted]`, `"finish_reason":"stop"`, `"total_tokens":7`, "data: [DONE]"} {
+		if !bytes.Contains(saved, []byte(kept)) {
+			t.Errorf("missing %q in %s", kept, saved)
+		}
+	}
+	for _, line := range strings.Split(string(saved), "\n") {
+		if payload, ok := strings.CutPrefix(line, "data: "); ok && payload != "[DONE]" && !json.Valid([]byte(payload)) {
+			t.Errorf("frame is no longer JSON: %s", line)
+		}
 	}
 }

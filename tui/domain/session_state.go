@@ -38,7 +38,8 @@ type SessionState struct {
 	Ceremony *CeremonyRun
 	// FinishedBudgetBase keeps the call budget a ceremony restarted after
 	// the ceremony closes mid-turn, so the closing answer is not counted
-	// against calls the steps already paid for. It lives for one turn.
+	// against calls the steps already paid for, and the one a resume
+	// restarted. It lives for one turn.
 	FinishedBudgetBase int
 }
 

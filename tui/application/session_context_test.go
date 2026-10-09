@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -129,5 +130,54 @@ func TestCeremonyUsesSavedProjectAndScopeChosenAfterBegin(t *testing.T) {
 				t.Fatalf("terminal outcome scope: %s %+v", got, memory)
 			}
 		})
+	}
+}
+
+// The system prompt asks to establish the memory scope early: a first-prompt
+// call that also proposes a title keeps the about and defers only the title.
+func TestAnEarlyTitleIsDeferredWithoutLosingTheAbout(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn("revisa", HostTools()); err != nil {
+		t.Fatal(err)
+	}
+	labels := &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{}}
+	identity, _ := domain.NewHostToolIdentity(domain.HostOperationSession)
+	out, err := (HostToolUseCase{Labels: labels}).Execute(context.Background(), s, identity, hostJSON(t, `{"title":"Revisar AXLR","about":"project:AXLR"}`))
+	if err != nil || out.IsError {
+		t.Fatalf("refused whole: %v %s", err, out.Content)
+	}
+	if stored := labels.labels[s.Export().ID]; stored.About != "project:AXLR" || stored.Title != "" {
+		t.Fatalf("stored label: %+v", stored)
+	}
+	var result struct {
+		Title    string `json:"title"`
+		About    string `json:"about"`
+		Deferred string `json:"title_deferred"`
+	}
+	if err := json.Unmarshal([]byte(out.Content), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.About != "project:AXLR" || result.Title != "" || !strings.Contains(result.Deferred, "second user prompt") {
+		t.Fatalf("result: %s", out.Content)
+	}
+}
+
+// Console messages all start with "[AXLR": the memory reminder and Jev's
+// "[AXLR · …]" ones are not the person's prompts either.
+func TestConsoleMessagesDoNotCountAsUserPrompts(t *testing.T) {
+	for _, console := range []root.Text{memoryReminder, jevFinalPrefix + " ...", "[AXLR] The build step of ceremony axlr_delivery is still open."} {
+		s := turnSession(t)
+		if err := s.BeginTurn("arregla el test", HostTools()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.CompleteAssistant(assistant("hecho")); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.BeginTurn(console, HostTools()); err != nil {
+			t.Fatal(err)
+		}
+		if count := userPromptCount(s); count != 1 {
+			t.Fatalf("%.20q counted: %d prompts", console, count)
+		}
 	}
 }

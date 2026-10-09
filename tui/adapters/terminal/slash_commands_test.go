@@ -1,11 +1,13 @@
 package terminal
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 )
 
 func typeDraft(m AppModel, text string) AppModel {
@@ -27,6 +29,7 @@ func TestSlashSuggestionsListMatchingCommands(t *testing.T) {
 		"/":          "/model,/theme,/mcp,/plugin,/changes,/approvals",
 		"/m":         "/model,/mcp",
 		"/autonomy ": "/autonomy on,/autonomy off",
+		"/autonomy":  "",
 		"/model":     "",
 		"hola /m":    "",
 		"/m\nmore":   "",
@@ -59,6 +62,26 @@ func TestEnterOnAPartialCommandRunsTheHighlightedOne(t *testing.T) {
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.overlay != "theme" {
 		t.Fatalf("overlay = %q; want theme", m.overlay)
+	}
+}
+
+// The bare command shows the current state: a complete command never runs
+// the suggestion it happens to be a prefix of.
+func TestEnterOnBareAutonomyLeavesAutonomyUnchanged(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	settings, err := storage.NewApprovalSettings(filepath.Join(t.TempDir(), "approvals.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.deps.ApprovalSettings = settings
+	m = typeDraft(m, "/autonomy")
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if settings.Autonomous() || m.Status.Autonomous {
+		t.Fatal("Enter on /autonomy turned full autonomy on")
+	}
+	if m.Composer.Input.Value() != "" || m.Status.Error != "" {
+		t.Fatalf("bare /autonomy not handled: draft=%q error=%q", m.Composer.Input.Value(), m.Status.Error)
 	}
 }
 

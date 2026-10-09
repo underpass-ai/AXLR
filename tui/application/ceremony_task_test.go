@@ -16,6 +16,10 @@ type taskChecks struct {
 	status []string
 	exits  []int
 	runs   []string
+	// rev, when set, answers git rev-parse HEAD.
+	rev *CheckResult
+	// output, when set, is what the unit check prints.
+	output string
 }
 
 func (c *taskChecks) Run(_ context.Context, command domain.CheckCommand) (CheckResult, error) {
@@ -23,13 +27,24 @@ func (c *taskChecks) Run(_ context.Context, command domain.CheckCommand) (CheckR
 	c.runs = append(c.runs, line)
 	if command.Program == "git" {
 		if command.Args[0] == "status" {
-			return CheckResult{Ran: true, Output: strings.Join(c.status, "\n")}, nil
+			// git status -z ends every entry with a NUL.
+			var stdout strings.Builder
+			for _, entry := range c.status {
+				stdout.WriteString(entry + "\x00")
+			}
+			return CheckResult{Ran: true, Output: strings.Join(c.status, "\n"), Stdout: stdout.String()}, nil
 		}
-		return CheckResult{Ran: true, Output: "rev123\n"}, nil
+		if c.rev != nil {
+			return *c.rev, nil
+		}
+		return CheckResult{Ran: true, Output: "rev123\n", Stdout: "rev123\n"}, nil
 	}
 	exit := 0
 	if len(c.exits) > 0 {
 		exit, c.exits = c.exits[0], c.exits[1:]
+	}
+	if c.output != "" {
+		return CheckResult{Ran: true, ExitCode: exit, Output: c.output, Stdout: c.output}, nil
 	}
 	return CheckResult{Ran: true, ExitCode: exit, Output: "FAIL lines_test.go: undefined: LineCount"}, nil
 }
@@ -93,6 +108,48 @@ func TestATaskRunsRedGreenAndHandsBack(t *testing.T) {
 	}
 }
 
+// In a repository without commits git rev-parse HEAD fails; its stdout and
+// stderr ("HEAD\nfatal: ambiguous argument 'HEAD'…") are not a revision for
+// MADE, the plan registry or KMP.
+func TestTaskHandbackRecordsNoRevisionWithoutACommit(t *testing.T) {
+	d, files, checks, plans, s, _ := taskSetup(t, true)
+	checks.rev = &unbornHead
+	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
+	checks.status = append(checks.status, "?? lines_test.go")
+	checks.exits = []int{1}
+	step(t, d, &s, `{"test_files":["lines_test.go"],"expected":"undefined: LineCount"}`)
+	files.files["lines.go"] = []byte("package textstat\nfunc LineCount(s string) int { return 0 }\n")
+	checks.status = append(checks.status, "?? lines.go")
+	checks.exits = []int{0}
+	if r := step(t, d, &s, `{"summary":"Added LineCount","summary_en":"LineCount counts lines."}`); r["ceremony"] != "DONE" {
+		t.Fatalf("green: %v", r)
+	}
+	engine := d.Engine.(*fakeEngine)
+	handback := engine.completed[len(engine.completed)-1]
+	if task := plans.records[0].Tasks[0]; handback["revision"] != "" || task.Handback == nil || task.Handback.Revision != "" {
+		t.Fatalf("revision in MADE %q, in the registry %+v", handback["revision"], task.Handback)
+	}
+}
+
+// A unit check whose -run pattern matches no test exits 0: it neither shows
+// the new test failing at red nor proves the task at green.
+func TestTaskUnitCheckThatRanNoTestsIsNeitherRedNorGreen(t *testing.T) {
+	d, files, checks, _, s, _ := taskSetup(t, true)
+	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
+	checks.status = append(checks.status, "?? lines_test.go")
+	checks.exits, checks.output = []int{0}, "testing: warning: no tests to run\nPASS\nok  \tx/textstat\t0.003s\n"
+	if r := step(t, d, &s, `{"test_files":["lines_test.go"],"expected":"undefined: LineCount"}`); r["next_step"] != "red" || !strings.Contains(r["feedback"].(string), "ran no tests") {
+		t.Fatalf("red with no test run: %v", r)
+	}
+	g, gfiles, gchecks, _, gs, _ := taskSetup(t, false)
+	gfiles.files["lines.go"] = []byte("package textstat\nfunc LineCount(s string) int { return 0 }\n")
+	gchecks.status = append(gchecks.status, "?? lines.go")
+	gchecks.exits, gchecks.output = []int{0}, "ok  \tx/textstat\t0.003s [no tests to run]\n"
+	if r := step(t, g, &gs, `{"summary":"Added LineCount","summary_en":"LineCount counts lines."}`); r["next_step"] != "green" || !strings.Contains(r["feedback"].(string), "ran no tests") {
+		t.Fatalf("green with no test run: %v", r)
+	}
+}
+
 func TestTaskEndsAtDoneWithoutAnotherModelRequest(t *testing.T) {
 	d, files, checks, _, s, _ := taskSetup(t, true)
 	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
@@ -127,6 +184,61 @@ func TestTaskEndsAtDoneWithoutAnotherModelRequest(t *testing.T) {
 	}
 	if modelRequests != 0 {
 		t.Fatalf("model requests after DONE = %d, want 0", modelRequests)
+	}
+}
+
+// taskAtGreenHandBack is a task whose green step passed its check, with the
+// model's axlr_step_done waiting as the turn's only call. The hand-back
+// proposes no command, so the agent loop approves it without the person.
+func taskAtGreenHandBack(t *testing.T) (*CeremonyDriver, domain.Session) {
+	t.Helper()
+	d, files, checks, _, s, _ := taskSetup(t, true)
+	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
+	checks.status = append(checks.status, "?? lines_test.go")
+	checks.exits = []int{1}
+	if r := step(t, d, &s, `{"test_files":["lines_test.go"],"expected":"undefined: LineCount"}`); r["next_step"] != "green" {
+		t.Fatalf("red: %v", r)
+	}
+	files.files["lines.go"] = []byte("package textstat\nfunc LineCount(s string) int { return 0 }\n")
+	checks.status = append(checks.status, "?? lines.go")
+	checks.exits = []int{0}
+	if err := s.BeginTurn("go", append(turnTools(), HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	handBack := root.ToolCall{ID: "done", Name: HostStepDoneName, Arguments: mustObject(t, `{"summary":"Added LineCount","summary_en":"LineCount counts lines."}`)}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{handBack}}}); err != nil {
+		t.Fatal(err)
+	}
+	return d, s
+}
+
+// Workers run without the person: a green hand-back proposes no command, so
+// the agent loop approves it itself. The turn still ends at DONE without
+// asking the model again in normal mode with the full tool surface.
+func TestATaskApprovedAutomaticallyEndsAtDoneWithoutAnotherModelRequest(t *testing.T) {
+	d, s := taskAtGreenHandBack(t)
+	modelRequests := 0
+	models := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		modelRequests++
+		return assistant("summary nobody reads"), nil
+	})
+	store := &memoryStore{}
+	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: store, Ceremonies: d, Models: models}}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if _, live := s.Ceremony(); live || s.Mode() != domain.ModeNormal {
+		t.Fatal("task ceremony still live after DONE")
+	}
+	if modelRequests != 0 {
+		t.Fatalf("model requests after DONE = %d, want 0", modelRequests)
+	}
+	messages := s.Messages()
+	if last := messages[len(messages)-1]; s.Status() != domain.StatusComplete || last.Role != root.RoleAssistant || !strings.Contains(string(last.Content), "outcome is in the plan") {
+		t.Fatalf("turn not closed by the console: %s %+v", s.Status(), last)
+	}
+	if saved := store.states[len(store.states)-1]; saved.Status != domain.StatusComplete {
+		t.Fatalf("closed turn not saved: %s", saved.Status)
 	}
 }
 
