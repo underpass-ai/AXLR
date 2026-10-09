@@ -10,6 +10,7 @@ import (
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	axlrruntime "github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -141,6 +142,31 @@ func (s *callStore) Recover() error {
 	return nil
 }
 
+const (
+	directCallTimeout = 30 * time.Second
+	// directCallMargin lets a local exec hit its own timeout, stop its process
+	// tree and report timed_out before the service abandons the call.
+	directCallMargin = 10 * time.Second
+)
+
+// directCallDeadline bounds one direct call. A local exec gets its timeout_ms,
+// or the runtime's 30 s default, capped at the runtime's hard limit, plus a
+// margin. Other tools, and anything shorter, keep 30 s.
+func directCallDeadline(call toolCall) time.Duration {
+	if call.Identity.Kind != domain.ToolKindLocal || call.Identity.LocalOperation != "exec" {
+		return directCallTimeout
+	}
+	var args struct {
+		TimeoutMS int64 `json:"timeout_ms"`
+	}
+	timeout := directCallTimeout
+	if json.Unmarshal(call.Args, &args) == nil && args.TimeoutMS > 0 {
+		timeout = time.Duration(args.TimeoutMS) * time.Millisecond
+	}
+	timeout = min(timeout, axlrruntime.HardTimeout) + directCallMargin
+	return max(timeout, directCallTimeout)
+}
+
 func (s *Server) runDirectCall(id string) {
 	select {
 	case s.directSlots <- struct{}{}:
@@ -173,7 +199,7 @@ func (s *Server) runDirectCall(id string) {
 	if s.calls.Save(call) != nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(s.root, 30*time.Second)
+	ctx, cancel := context.WithTimeout(s.root, directCallDeadline(call))
 	defer cancel()
 	args, err := root.NewJSONObject(call.Args)
 	if err != nil {

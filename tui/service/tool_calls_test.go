@@ -11,6 +11,7 @@ import (
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	axlrruntime "github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -236,5 +237,38 @@ func TestExecuteAuditFailureNeverMarksCallRunning(t *testing.T) {
 	}
 	if call.Status != "pending_approval" || call.Decision != "approve" || call.Revision != 2 {
 		t.Fatalf("call that never ran is reported as status=%s revision=%d", call.Status, call.Revision)
+	}
+}
+
+// deadlineTool reports how long its context leaves the call to run.
+type deadlineTool struct{ remaining chan time.Duration }
+
+func (d deadlineTool) Execute(ctx context.Context, _ domain.ToolIdentity, _ root.JSONValue) (domain.ToolOutcome, error) {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		d.remaining <- -1
+	} else {
+		d.remaining <- time.Until(deadline)
+	}
+	return domain.ToolOutcome{Content: "done"}, nil
+}
+
+func TestApprovedExecRunsUnderItsOwnTimeout(t *testing.T) {
+	s, ts, client, _ := testServer(t)
+	tool := deadlineTool{remaining: make(chan time.Duration, 1)}
+	s.deps.Tools = tool
+	id := createDirectCall(t, client, ts.URL, `{"tool":"local_exec","arguments":{"program":"/bin/sleep","args":["120"],"timeout_ms":180000}}`)
+	response := apiRequest(t, client, "POST", ts.URL+"/v1/tool-calls/"+id+"/decisions", `{"decision":"approve","expected_revision":1}`, "abcdef1234567890")
+	response.Body.Close()
+	if response.StatusCode != 202 {
+		t.Fatalf("approve: %d", response.StatusCode)
+	}
+	select {
+	case remaining := <-tool.remaining:
+		if remaining <= 180*time.Second || remaining > axlrruntime.HardTimeout+time.Minute {
+			t.Fatalf("exec with timeout_ms=180000 runs under a %v deadline", remaining.Round(time.Second))
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("tool did not run")
 	}
 }
