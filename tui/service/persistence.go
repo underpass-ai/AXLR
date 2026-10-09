@@ -298,7 +298,30 @@ func (s *idempotencyStore) Claim(principal, key, method, path string, body []byt
 	request := sha256.Sum256(append([]byte(method+"\x00"+path+"\x00"), body...))
 	record := idempotencyRecord{Principal: principal, Request: hex.EncodeToString(request[:]), Resource: resource, Path: path}
 	filePath := filepath.Join(s.dir, hex.EncodeToString(identity[:])+".json")
-	f, err := os.OpenFile(filePath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	data, err := json.Marshal(record)
+	if err != nil {
+		return "", false, err
+	}
+	// The record is complete and synced before it is linked under its key, so
+	// a crash never leaves an empty or partial claim. The link keeps O_EXCL's
+	// exclusivity: it fails when the key is already claimed.
+	f, err := os.CreateTemp(s.dir, ".claim-*")
+	if err != nil {
+		return "", false, err
+	}
+	defer os.Remove(f.Name())
+	if err = f.Chmod(0600); err == nil {
+		if _, err = f.Write(data); err == nil {
+			err = f.Sync()
+		}
+	}
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return "", false, err
+	}
+	err = os.Link(f.Name(), filePath)
 	if errors.Is(err, os.ErrExist) {
 		data, readErr := os.ReadFile(filePath)
 		if readErr != nil {
@@ -312,17 +335,6 @@ func (s *idempotencyStore) Claim(principal, key, method, path string, body []byt
 			return "", false, errIdempotencyConflict
 		}
 		return old.Resource, true, nil
-	}
-	if err != nil {
-		return "", false, err
-	}
-	data, _ := json.Marshal(record)
-	_, err = f.Write(data)
-	if err == nil {
-		err = f.Sync()
-	}
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
 	}
 	if err != nil {
 		return "", false, err
@@ -348,12 +360,22 @@ func (s *idempotencyStore) Records() ([]idempotencyRecord, error) {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(s.dir, entry.Name()))
+		path := filepath.Join(s.dir, entry.Name())
+		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
 		var record idempotencyRecord
-		if err := json.Unmarshal(data, &record); err != nil || record.Principal == "" || record.Resource == "" {
+		if err := json.Unmarshal(data, &record); err != nil {
+			// Claim used to create the key before writing it; a crash there left
+			// an empty or partial record whose request never reached a handler.
+			// It is set aside as <key>.json.invalid, which frees the key.
+			if err := os.Rename(path, path+".invalid"); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if record.Principal == "" || record.Resource == "" {
 			return nil, errors.New("invalid idempotency record")
 		}
 		records = append(records, record)
