@@ -373,7 +373,10 @@ func (d *CeremonyDriver) taskHandback(ctx context.Context, s domain.Session, run
 		if record, err := d.planRecord(ctx, task.Plan); err == nil {
 			if t, ok := record.Task(task.Task); ok && t.Handback != nil {
 				t.Handback.Changed, t.Handback.Revision = changed, revision
-				_ = d.Plans.Save(ctx, record)
+				if err := d.Plans.Save(context.WithoutCancel(ctx), record); err != nil {
+					// MADE still records them in the step output below.
+					report["registry"] = "the plan registry did not save this task's changed files and revision: " + bounded(err.Error(), 300)
+				}
 			}
 		}
 	}
@@ -388,8 +391,10 @@ func (d *CeremonyDriver) taskHandback(ctx context.Context, s domain.Session, run
 	return d.enter(ctx, s, run, state, output, report)
 }
 
-// finishTask records a task's terminal state in the registry and memory.
-func (d *CeremonyDriver) finishTask(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output map[string]any) string {
+// finishTask records a task's terminal state in the registry and memory. A
+// registry that refuses the outcome is an error: the task would stay running
+// there, and a restarted console would reset it to pending and run it again.
+func (d *CeremonyDriver) finishTask(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output map[string]any) (string, error) {
 	task := run.Task
 	status, reason := domain.TaskDone, ""
 	if state != "DONE" {
@@ -407,12 +412,14 @@ func (d *CeremonyDriver) finishTask(ctx context.Context, s domain.Session, run d
 				t.Status, t.Reason, t.Instance, t.Step, t.Session = status, reason, run.Instance, run.Step, s.Export().ID
 				handback, wave = t.Handback, t.Wave
 				record.Updated = d.now()
-				_ = d.Plans.Save(ctx, record)
+				if err := d.Plans.Save(context.WithoutCancel(ctx), record); err != nil {
+					return "", fmt.Errorf("record task %s of plan %s as %s: %w", task.Task, task.Plan, strings.ToLower(string(status)), err)
+				}
 			}
 		}
 	}
 	if d.Memory == nil {
-		return "not recorded: KMP is not connected"
+		return "not recorded: KMP is not connected", nil
 	}
 	labels := map[string][]string{"ceremony": {run.Definition}, "plan": {task.Plan}, "task": {task.Task}, "wave": {fmt.Sprint(wave)}, "session": {string(s.Export().ID)}, "ws": {string(s.Export().Workspace)}}
 	kind, summary := "observation", fmt.Sprintf("Task %s of plan %s %s.", task.Task, task.Plan, strings.ToLower(string(status)))
@@ -433,9 +440,9 @@ func (d *CeremonyDriver) finishTask(ctx context.Context, s domain.Session, run d
 		}
 	}
 	if _, err := d.Memory.RecordLinked(ctx, run.About, labels, MemoryRecord{ID: run.Instance + "-handback", Kind: kind, Summary: summary, Evidence: evidence}); err != nil {
-		return "not recorded: " + bounded(err.Error(), 300)
+		return "not recorded: " + bounded(err.Error(), 300), nil
 	}
-	return "recorded in " + run.About
+	return "recorded in " + run.About, nil
 }
 
 // TaskPrompt is the worker's first message: the context pack and the notes

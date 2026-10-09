@@ -616,7 +616,11 @@ func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain
 		if run.Plan != nil {
 			report["memory"] = d.finishPlan(ctx, s, run, state)
 		} else if run.Task != nil {
-			report["memory"] = d.finishTask(ctx, s, run, state, output)
+			memory, err := d.finishTask(ctx, s, run, state, output)
+			if err != nil {
+				return StepResult{}, err
+			}
+			report["memory"] = memory
 		} else {
 			report["memory"] = d.record(ctx, s, run, state, output)
 		}

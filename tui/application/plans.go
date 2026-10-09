@@ -57,6 +57,9 @@ type PlanRunner struct {
 	events  chan PlanEvent
 	closed  bool
 	wg      sync.WaitGroup
+	// unsaved is the plan changes the registry refused since Records last
+	// reported them: the registry cannot show those itself.
+	unsaved error
 }
 
 func (r *PlanRunner) now() time.Time {
@@ -103,14 +106,19 @@ func (r *PlanRunner) publish(record domain.PlanRecord) {
 	}
 }
 
-// Records lists the plans, newest first.
+// Records lists the plans, newest first. It also reports, once, the plan
+// changes the registry refused since the last call, so the panel shows them.
 func (r *PlanRunner) Records(ctx context.Context) ([]domain.PlanRecord, error) {
+	r.mu.Lock()
+	unsaved := r.unsaved
+	r.unsaved = nil
+	r.mu.Unlock()
 	records, err := r.Plans.Load(ctx)
 	if err != nil {
-		return nil, err
+		return nil, errors.Join(err, unsaved)
 	}
 	sort.Slice(records, func(i, j int) bool { return records[i].Updated.After(records[j].Updated) })
-	return records, nil
+	return records, unsaved
 }
 
 // Start runs a ready plan in the background.
@@ -213,7 +221,9 @@ func (r *PlanRunner) load(ctx context.Context, id string) (domain.PlanRecord, er
 }
 
 // update reloads the plan, applies change and saves it, so the driver's
-// writes from inside a task are never lost.
+// writes from inside a task are never lost. A change the registry refuses is
+// not published as if it were saved: it is kept for Records to report, and
+// the panel is told to reload so it does.
 func (r *PlanRunner) update(ctx context.Context, id string, change func(*domain.PlanRecord)) domain.PlanRecord {
 	ctx = context.WithoutCancel(ctx)
 	record, err := r.load(ctx, id)
@@ -222,7 +232,15 @@ func (r *PlanRunner) update(ctx context.Context, id string, change func(*domain.
 	}
 	change(&record)
 	record.Updated = r.now()
-	_ = r.Plans.Save(ctx, record)
+	if err := r.Plans.Save(ctx, record); err != nil {
+		r.mu.Lock()
+		r.unsaved = errors.Join(r.unsaved, fmt.Errorf("plan %s: the registry did not save its latest change: %w", id, err))
+		r.mu.Unlock()
+		if stored, err := r.load(ctx, id); err == nil {
+			r.publish(stored)
+		}
+		return record
+	}
 	r.publish(record)
 	return record
 }
