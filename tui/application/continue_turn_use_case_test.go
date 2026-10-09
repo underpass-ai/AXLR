@@ -202,7 +202,12 @@ func TestTheAnswerAtTheCallLimitIsKeptWithItsCallsNotRun(t *testing.T) {
 	if err := u.Execute(context.Background(), &s, record); !errors.Is(err, domain.ErrToolCallLimit) {
 		t.Fatalf("limit error: %v", err)
 	}
+	// One call was left, so the request carried the budget note first.
 	messages := s.Messages()
+	if !domain.BudgetNote(messages[before].Content) {
+		t.Fatalf("no budget note before the answer: %+v", messages[before])
+	}
+	before++
 	if s.Status() != domain.StatusInterrupted || len(s.Pending()) != 0 || len(messages) != before+3 || messages[before].Content != text || len(messages[before].ToolCalls) != 2 {
 		t.Fatalf("the streamed answer was dropped: %s %+v", s.Status(), messages[before:])
 	}

@@ -1,7 +1,8 @@
 package application
 
 import (
-	"encoding/json"
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -10,95 +11,136 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// bigTurn is one user turn whose tool results fit the per-result limit one
-// by one but not the context budget together, like the MADE research turn
-// that failed on 2 Oct 2026.
-func bigTurn(t *testing.T, results, size int) []root.Message {
-	t.Helper()
-	args, _ := root.NewJSONObject([]byte(`{}`))
-	messages := []root.Message{{Role: root.RoleUser, Content: "investiga"}}
-	for i := 0; i < results; i++ {
-		id := root.ToolCallID(fmt.Sprintf("c%d", i))
-		messages = append(messages, root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: id, Name: "local_read", Arguments: args}}})
-		body, _ := json.Marshal(map[string]any{"status": "completed", "output": map[string]any{"text": strings.Repeat("x", size)}})
-		messages = append(messages, root.Message{Role: root.RoleTool, ToolCallID: id, Content: root.Text(body)})
-	}
-	return messages
+// execTools is a session surface whose one tool runs through the tool port
+// as it is, unlike local_read, which the resolver pages.
+func execTools() []domain.AvailableTool {
+	schema, _ := root.NewJSONObject([]byte(`{"type":"object"}`))
+	id, _ := domain.NewLocalToolIdentity("exec")
+	return []domain.AvailableTool{{Definition: root.ToolDefinition{Name: "exec", Parameters: schema}, Identity: id}}
 }
 
-func TestATurnThatOutgrowsTheBudgetIsCompactedNotAborted(t *testing.T) {
-	messages := bigTurn(t, scaled(12), 14000)
-	projection, err := NewDefaultModelContextProjector().Project(messages)
-	if err != nil {
-		t.Fatalf("turn aborted: %v", err)
-	}
-	if !projection.TurnCompacted || projection.ProjectedBytes > domain.DefaultContextBudget().MaximumBytes() {
-		t.Fatalf("compacted=%v bytes=%d", projection.TurnCompacted, projection.ProjectedBytes)
-	}
-	last := projection.Messages[len(projection.Messages)-1]
-	if !strings.Contains(string(last.Content), "Answer with what you have") {
-		t.Fatalf("the model is not told the turn was shortened: %.300s", last.Content)
+// budgetAgent auto-approves and runs every call; each request answers with
+// calls(request number) exec calls, or a final answer when it returns 0.
+func budgetAgent(store *memoryStore, limit int, requests *[]root.CompletionRequest, calls func(int) int) AgentTurnUseCase {
+	model := streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		*requests = append(*requests, req)
+		n := calls(len(*requests))
+		toolCalls := make([]root.ToolCall, n)
+		for i := range toolCalls {
+			toolCalls[i] = call(root.ToolCallID(fmt.Sprintf("r%dc%d", len(*requests), i)), "exec")
+		}
+		if n == 0 {
+			return assistant("done"), nil
+		}
+		return assistant("", toolCalls...), nil
+	})
+	return AgentTurnUseCase{
+		Continue: ContinueTurnUseCase{Store: store, Models: model, TurnToolCalls: limit, Validation: argumentValidationFunc(func(root.ToolDefinition, root.JSONValue) error { return nil })},
+		Approval: approvalFunc(func(domain.ToolIdentity) bool { return true }),
+		Tools: executionFunc(func(context.Context, domain.ToolIdentity, root.JSONValue) (domain.ToolOutcome, error) {
+			return domain.ToolOutcome{Content: "ok"}, nil
+		}),
 	}
 }
 
-// A ceremony runs all its steps in one turn: one that wrote a few large
-// files outgrows the prompt budget through the write arguments alone, which
-// the step-down of tool results never reached. The compacted turn shortens
-// the arguments of the writes that happened; the files hold their text.
-func TestATurnThatWroteLargeFilesIsCompactedNotAborted(t *testing.T) {
-	budget := domain.ContextBudgetForPrompt(domain.DefaultPromptTokens)
-	projector, err := NewModelContextProjector(budget)
-	if err != nil {
+func budgetNotes(messages []root.Message) []string {
+	var notes []string
+	for _, message := range messages {
+		if message.Role == root.RoleUser && domain.BudgetNote(message.Content) {
+			notes = append(notes, string(message.Content))
+		}
+	}
+	return notes
+}
+
+// With a fifth of the budget left the model is told once, in a note that
+// is never rewritten, and the budget goes on: the note is not the person's
+// word, which would restart it.
+func TestTheModelIsWarnedOnceBeforeTheCallLimit(t *testing.T) {
+	s := turnSession(t)
+	store := &memoryStore{}
+	if err := s.BeginTurn("go", execTools()); err != nil {
 		t.Fatal(err)
 	}
-	messages := []root.Message{{Role: root.RoleUser, Content: "write the generated tables"}}
-	content := strings.Repeat("var table = []int{1, 2, 3, 4, 5, 6, 7, 8, 9}\n", 1200)
-	for i := 0; i < 3; i++ {
-		id := fmt.Sprintf("w%d", i)
-		messages = append(messages,
-			root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{recordCall(t, id, "local_write", fmt.Sprintf(`{"path":"t%d.go","content":%s,"mode":"create"}`, i, quoteJSON(content)))}},
-			root.Message{Role: root.RoleTool, ToolCallID: root.ToolCallID(id), Content: `{"status":"completed","output":{"written":true}}`})
-	}
-	if ModelMessagesBytes(messages) <= budget.MaximumBytes() {
-		t.Fatal("the turn fits; the test proves nothing")
-	}
-	projection, err := projector.Project(messages)
-	if err != nil {
-		t.Fatalf("every continuation of this turn fails: %v", err)
-	}
-	if !projection.TurnCompacted || projection.ProjectedBytes > budget.MaximumBytes() {
-		t.Fatalf("compacted=%v bytes=%d", projection.TurnCompacted, projection.ProjectedBytes)
-	}
-	var shortened map[string]any
-	if err := json.Unmarshal(projection.Messages[1].ToolCalls[0].Arguments.Bytes(), &shortened); err != nil {
+	var requests []root.CompletionRequest
+	u := budgetAgent(store, 10, &requests, func(n int) int {
+		if n <= 9 {
+			return 1
+		}
+		return 0
+	})
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
 		t.Fatal(err)
 	}
-	recover, _ := shortened["recover"].(string)
-	if shortened["path"] != "t0.go" || shortened["content_omitted_bytes"] != float64(len(content)) || !strings.Contains(recover, "local_read") || strings.Contains(recover, "closed") {
-		t.Fatalf("current-turn write: %s", projection.Messages[1].ToolCalls[0].Arguments.Bytes())
+	notes := budgetNotes(s.Messages())
+	want := domain.BudgetNotePrefix + " 2 tool calls left in this turn. Finish the task with what you have, or stop and tell the user what remains; they can continue with a new budget."
+	if len(notes) != 1 || notes[0] != want {
+		t.Fatalf("notes = %q", notes)
+	}
+	// The ninth request, with 8 of 10 calls made, was the first to carry it,
+	// as its last message; the tenth kept it where it was.
+	for i, req := range requests {
+		last := req.Messages[len(req.Messages)-1]
+		if noted := domain.BudgetNote(last.Content); noted != (i == 8) {
+			t.Fatalf("request %d ends with %q", i+1, last.Content)
+		}
+	}
+	if count := s.Export().TurnCallCount; count != 9 || s.Status() != domain.StatusComplete {
+		t.Fatalf("turn count %d, status %s", count, s.Status())
+	}
+	// The saved transcript replays with the note inside the turn.
+	if _, err := domain.RestoreSession(store.states[len(store.states)-1]); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestAFittingTurnIsNotCompacted(t *testing.T) {
-	projection, err := NewDefaultModelContextProjector().Project(bigTurn(t, 3, 2000))
-	if err != nil || projection.TurnCompacted {
-		t.Fatalf("compacted a turn that fits: %v %v", projection.TurnCompacted, err)
+// A console-driven step that reaches the limit continues with a new budget
+// twice, telling the model each time; the third time the person decides.
+func TestACeremonyStepContinuesTwiceAtTheCallLimit(t *testing.T) {
+	s := turnSession(t)
+	store := &memoryStore{}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "repair", Iteration: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("fix it", append(execTools(), HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	var requests []root.CompletionRequest
+	u := budgetAgent(store, 8, &requests, func(int) int { return 3 })
+	err := u.Execute(context.Background(), &s, ignoreEvent)
+	if !errors.Is(err, domain.ErrToolCallLimit) || s.Status() != domain.StatusInterrupted {
+		t.Fatalf("err = %v, status %s", err, s.Status())
+	}
+	var continued []string
+	for _, note := range budgetNotes(s.Messages()) {
+		if strings.Contains(note, "the console continued it with a new budget") {
+			continued = append(continued, note)
+		}
+	}
+	if len(continued) != 2 || !strings.Contains(continued[0], "reached its 8 tool-call limit") || !strings.Contains(continued[1], "(2 of 2)") || !strings.Contains(continued[1], "axlr_step_done") {
+		t.Fatalf("continued = %q", continued)
+	}
+	if run, _ := s.Ceremony(); run.LimitStep != "repair#1" || run.LimitResumes != 2 {
+		t.Fatalf("run = %+v", run)
+	}
+	// Three budgets of three requests each, the last one cut at its limit.
+	if len(requests) != 9 {
+		t.Fatalf("requests = %d", len(requests))
+	}
+	if _, err := domain.RestoreSession(store.states[len(store.states)-1]); err != nil {
+		t.Fatal(err)
 	}
 }
 
-func TestHistoryWillNotRereadAResultOfTheCurrentTurn(t *testing.T) {
-	messages := append(bigTurn(t, 1, 100), bigTurn(t, 1, 100)...)
-	args := func(i int) root.JSONValue {
-		v, _ := root.NewJSONObject([]byte(fmt.Sprintf(`{"message_index":%d}`, i)))
-		return v
+// Outside a ceremony the person decides at the limit, as before.
+func TestAnOrdinaryTurnStillPausesAtTheCallLimit(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn("go", execTools()); err != nil {
+		t.Fatal(err)
 	}
-	if _, err := hostHistory(messages, args(5), MaxHistoryReadBytes); err == nil || !strings.Contains(err.Error(), "current turn") {
-		t.Fatalf("current-turn result re-read: %v", err)
-	}
-	if _, err := hostHistory(messages, args(2), MaxHistoryReadBytes); err != nil {
-		t.Fatalf("earlier turn refused: %v", err)
-	}
-	if _, err := hostHistory(messages, args(3), MaxHistoryReadBytes); err != nil {
-		t.Fatalf("the current user message refused: %v", err)
+	var requests []root.CompletionRequest
+	u := budgetAgent(&memoryStore{}, 8, &requests, func(int) int { return 3 })
+	if err := u.Execute(context.Background(), &s, ignoreEvent); !errors.Is(err, domain.ErrToolCallLimit) || len(requests) != 3 {
+		t.Fatalf("err = %v after %d requests", err, len(requests))
 	}
 }

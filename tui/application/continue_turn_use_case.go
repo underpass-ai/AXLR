@@ -35,6 +35,9 @@ type ContinueTurnUseCase struct {
 	// Calibration learns each model's bytes per prompt token from the
 	// requests it serves; nil measures nothing.
 	Calibration TokenCalibrationPort
+	// TurnToolCalls is the turn's tool-call budget (settings'
+	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
+	TurnToolCalls int
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {
@@ -73,6 +76,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		if err := emitSession(session, emit); err != nil {
 			return interrupt(err)
 		}
+	}
+	if err := warnCallBudget(ctx, session, u, emit); err != nil {
+		return interrupt(err)
 	}
 	contextCtx, contextSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionContext, DiagnosticEvent{Messages: len(session.Messages()), Tools: len(session.ToolSnapshot())})
 	hostTools := HostTools()
@@ -207,7 +213,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolRequested, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: len(result.Message.ToolCalls)})
 	}
 	next := *session
-	if err := next.CompleteAssistant(result); err != nil {
+	if err := next.CompleteAssistantWithin(result, u.turnLimit()); err != nil {
 		// CompleteAssistant can deliberately pause at the call limit: the
 		// answer is kept with its calls answered as not run, so the person
 		// sees it in the transcript instead of a dropped draft.

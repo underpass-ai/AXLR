@@ -71,6 +71,8 @@ When the model ends its turn with the step still open, the console reminds it on
 
 If the model ends its turn again, the console does not leave the session waiting. It cancels the MADE instance with the reason, records the outcome in KMP and returns the session to normal mode. It then adds one visible message naming the server's tool-call parser as the first suspect when the markup was there, and the model answers the user. A plan worker ends `BLOCKED` with that reason instead. Self-repair and self-improvement keep their own nudges. The trace records a `ceremony_stalled` stage.
 
+A step that runs out of tool calls is not left waiting either. When a fifth of the step's budget is left (6 of 32 calls, 3 of a compact step's 16) the next request carries one `[AXLR · budget]` note telling the model how many calls remain and to finish and hand the step back with `axlr_step_done`. If the step still reaches the limit, the console continues it with a new budget, as Ctrl+R would, and says so in another `[AXLR · budget]` note; it does this at most twice per step and attempt, and the third time the turn pauses for the person as before. On 9 October 2026 `/improve` with claude-haiku-5.5 reached the 32-call limit three times while exploring its brief, and each time the step waited for someone to press Ctrl+R. Repair, improvement and plan sessions the console drives in the background continue the same way, and their own retries still follow.
+
 A session restored with a step open and no turn running shows `step <name> open: send a message to continue, or /stop-ceremony` in the footer. Any message continues the step. `/stop-ceremony` (alias `/parar`) cancels the instance in MADE and returns to normal mode; nothing in the workspace is rolled back.
 
 ### Memory and recovery
@@ -89,7 +91,7 @@ Under the compact profile:
 
 | What | Standard | Compact |
 |:--|:--|:--|
-| Tool calls per step | 32 | 16 |
+| Tool calls per step | `turn_tool_calls` (32) | 16, or `turn_tool_calls` when smaller |
 | Model context | the window-derived budget | the smaller of that and 80 KiB ceiling, 56 KiB low watermark, 8 KiB per tool result, 4 KiB checkpoint |
 | Tools | four local tools and every host tool | the local tools (without `local_write` and `local_edit` in `reproduce`, `diagnose` and `brief`), `axlr_step_done`, `axlr_history`, and `axlr_judge` when Jev is on; a hidden tool called anyway is refused |
 | `axlr_step_done` | one schema with every ceremony's fields | the current step's fields only |
