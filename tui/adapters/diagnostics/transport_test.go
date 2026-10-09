@@ -323,7 +323,9 @@ func TestUnreadErrorDrainIsBoundedAndCancelledWithoutChangingReadBytes(t *testin
 		if time.Since(started) > 1500*time.Millisecond {
 			t.Fatal("error drain exceeded time budget")
 		}
-		failed, ended := 0, 0
+		// The drain ends the wire and the HTTP exchange with its class; the
+		// empty capture of what arrived is still written, so it is saved.
+		failed, ended, wireDone := 0, 0, 0
 		want := application.DiagnosticErrorTimeout
 		if cancelled {
 			want = application.DiagnosticErrorCancelled
@@ -332,6 +334,12 @@ func TestUnreadErrorDrainIsBoundedAndCancelledWithoutChangingReadBytes(t *testin
 			if event.Stage == application.DiagnosticPayloadFailed {
 				failed++
 			}
+			if event.Stage == application.DiagnosticWireDone {
+				wireDone++
+				if event.ErrorClass != want {
+					t.Fatal(event)
+				}
+			}
 			if event.Action == application.DiagnosticActionHTTP && event.Stage == application.DiagnosticActionEnd {
 				ended++
 				if event.ErrorClass != want {
@@ -339,7 +347,7 @@ func TestUnreadErrorDrainIsBoundedAndCancelledWithoutChangingReadBytes(t *testin
 				}
 			}
 		}
-		if failed != 1 || ended != 1 {
+		if failed != 0 || ended != 1 || wireDone != 1 {
 			t.Fatal(trace.events)
 		}
 	}
@@ -386,6 +394,57 @@ func TestErrorDrainCapturesRemainingJSONAfterClientReadAndBoundsOversize(t *test
 		} else if failed != 1 {
 			t.Fatal(trace.events)
 		}
+	}
+}
+
+// A stream the person cancels is still captured: the trace marks the wire
+// cancelled and the capture saved, not a storage failure for a file that
+// exists.
+func TestCancelledStreamCaptureIsSavedAndWireIsCancelled(t *testing.T) {
+	trace := &traceEvents{}
+	dir := filepath.Join(t.TempDir(), "payloads")
+	recorder, _ := NewPayloadRecorder(dir)
+	wire := "data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\ndata: {\"choices\":[{\"delta\":{\"content\":\" answer\"}}]}\n\n"
+	transport := Transport{Trace: trace, Payloads: recorder, Next: transportFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": []string{"text/event-stream"}}, Body: io.NopCloser(strings.NewReader(wire))}, nil
+	})}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req, _ := http.NewRequestWithContext(ctx, http.MethodPost, "https://openrouter.ai/api/v1/chat/completions", strings.NewReader(`{}`))
+	resp, err := transport.RoundTrip(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := make([]byte, 20)
+	if _, err := io.ReadFull(resp.Body, first); err != nil {
+		t.Fatal(err)
+	}
+	cancel()
+	_ = resp.Body.Close()
+	var saved, failed, failedSpans int
+	var wireDone application.DiagnosticErrorClass
+	for _, event := range trace.events {
+		switch event.Stage {
+		case application.DiagnosticPayloadSaved:
+			saved++
+		case application.DiagnosticPayloadFailed:
+			failed++
+		case application.DiagnosticWireDone:
+			wireDone = event.ErrorClass
+		}
+		if event.Action == application.DiagnosticActionPayload && event.Stage == application.DiagnosticActionEnd && event.ErrorClass != "" {
+			failedSpans++
+		}
+	}
+	if saved != 2 || failed != 0 || failedSpans != 0 || wireDone != application.DiagnosticErrorCancelled {
+		t.Fatalf("saved=%d failed=%d failed capture spans=%d wire_done=%q", saved, failed, failedSpans, wireDone)
+	}
+	matches, _ := filepath.Glob(filepath.Join(dir, "*-response.sse"))
+	if len(matches) != 1 {
+		t.Fatalf("response capture missing: %v", matches)
+	}
+	if data, _ := os.ReadFile(matches[0]); string(data) != wire[:20] {
+		t.Fatalf("capture=%q", data)
 	}
 }
 
