@@ -97,9 +97,15 @@ func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
 	if m.connected[id] {
 		return nil
 	}
+	name := mcpclient.ServerName(id)
+	// A session the manager never recorded is stale: replace it, do not reuse it.
+	_ = m.client.Disconnect(name)
 	r := m.registrations[id]
-	err := m.client.Connect(ctx, mcpclient.Server{Name: mcpclient.ServerName(id), Command: r.Manifest.Command, URL: r.Manifest.URL, Args: r.Manifest.Args, Env: r.Env})
+	err := m.client.Connect(ctx, mcpclient.Server{Name: name, Command: r.Manifest.Command, URL: r.Manifest.URL, Args: r.Manifest.Args, Env: r.Env})
 	if ctx.Err() != nil {
+		if err == nil {
+			_ = m.client.Disconnect(name)
+		}
 		return ctx.Err()
 	}
 	if err != nil {
@@ -107,6 +113,17 @@ func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
 	}
 	m.connected[id] = true
 	return nil
+}
+
+// forgetLost drops the session of a server that has gone away, such as a
+// stdio server that exited, so the next operation launches it again. The
+// failed operation itself is not retried.
+func (m *Manager) forgetLost(id domain.PluginID, err error) {
+	if !mcpclient.ConnectionLost(err) {
+		return
+	}
+	delete(m.connected, id)
+	_ = m.client.Disconnect(mcpclient.ServerName(id))
 }
 
 func (m *Manager) List(ctx context.Context) ([]domain.PluginTool, error) {
@@ -147,6 +164,7 @@ func (m *Manager) listServer(ctx context.Context, id domain.PluginID) ([]domain.
 		return nil, err
 	}
 	tools, err := m.client.ListTools(ctx, mcpclient.ServerName(id))
+	m.forgetLost(id, err)
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
@@ -210,6 +228,7 @@ func (m *Manager) Call(ctx context.Context, call domain.PluginCall) (domain.Plug
 		return domain.PluginResult{}, err
 	}
 	tools, err := m.client.ListTools(ctx, mcpclient.ServerName(call.Ref.PluginID))
+	m.forgetLost(call.Ref.PluginID, err)
 	if ctx.Err() != nil {
 		return domain.PluginResult{}, ctx.Err()
 	}
@@ -227,6 +246,7 @@ func (m *Manager) Call(ctx context.Context, call domain.PluginCall) (domain.Plug
 		return domain.PluginResult{}, domain.Reject("unknown_plugin_tool", "plugin tool is not advertised")
 	}
 	remote, err := m.client.Call(ctx, mcpclient.ToolRef{Server: mcpclient.ServerName(call.Ref.PluginID), Name: mcpclient.ToolName(call.Ref.ToolName)}, arguments)
+	m.forgetLost(call.Ref.PluginID, err)
 	if ctx.Err() != nil {
 		return domain.PluginResult{}, ctx.Err()
 	}
