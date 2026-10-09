@@ -788,9 +788,11 @@ func (m *AppModel) showHit() {
 		prefix.Messages = prefix.Messages[:prefix.ArchivedDrafts[archived].AfterMessage]
 		prefix.ArchivedDrafts = prefix.ArchivedDrafts[:archived]
 	}
+	// The prefix is measured with the transcript's own theme: Editorial
+	// speaker rows, folded tool runs and the icon set change the line count.
 	rendered := NewTranscript()
 	rendered.SetWidth(m.Transcript.Viewport.Width())
-	rendered.SetSession(prefix, "", Theme{Monochrome: true})
+	rendered.SetSession(prefix, "", m.Theme)
 	m.Transcript.Viewport.SetYOffset(rendered.VisualLineCount())
 }
 func (m AppModel) overlayView(base string) string {
