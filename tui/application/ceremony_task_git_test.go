@@ -146,11 +146,11 @@ func TestTaskScopeCheckListsARenameByItsNewPath(t *testing.T) {
 func TestTaskScopeCheckReadsNonASCIIPaths(t *testing.T) {
 	dir := gitRepository(t, nil)
 	writeFile(t, dir, "café.md", "x")
-	writeFile(t, dir, "docs/ñandú \"quoted\".md", "x")
+	writeFile(t, dir, "docs/ñandú (copia).md", "x")
 	d := &CeremonyDriver{Checks: gitDirChecks{dir: dir}, Files: gitDirFiles{dir: dir}}
-	task := &domain.TaskRun{Scope: []string{"café.md", "docs/ñandú \"quoted\".md"}, Git: true, Start: map[string]string{}}
+	task := &domain.TaskRun{Scope: []string{"café.md", "docs/ñandú (copia).md"}, Git: true, Start: map[string]string{}}
 	changed, err := d.changedByTask(context.Background(), task)
-	if err != nil || strings.Join(changed, "|") != "café.md|docs/ñandú \"quoted\".md" {
+	if err != nil || strings.Join(changed, "|") != "café.md|docs/ñandú (copia).md" {
 		t.Fatalf("changed %q err=%v, want the two scope files by name", changed, err)
 	}
 }
