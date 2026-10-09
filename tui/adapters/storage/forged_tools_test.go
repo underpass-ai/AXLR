@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -94,7 +95,7 @@ func TestForgedToolStoreKeepsAPrivateRegistryPerWorkspace(t *testing.T) {
 		t.Fatalf("another workspace sees %+v", listed)
 	}
 	info, err := os.Stat(store.registry(first))
-	if err != nil || info.Mode().Perm() != 0o600 {
+	if err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("registry %v, %v", info, err)
 	}
 	// A damaged registry, or one of another workspace, is refused, not read.
