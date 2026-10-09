@@ -42,7 +42,7 @@ File paths are relative to the workspace. AXLR anchors file operations through `
 
 `write` in `create` mode never overwrites a destination. `replace` needs the SHA-256 of a previously observed full file. `edit` replaces exactly one literal occurrence; zero or multiple matches are conflicts. These checks do not create a transaction against concurrent external writers. A host should serialize its mutations.
 
-Default `read` size is 64 KiB and its maximum is 1 MiB. Editable files are capped at 1 MiB. Default combined process-output capture is 256 KiB, maximum 1 MiB; excess output is drained and counted. Default process timeout is 30 seconds, maximum five minutes. A serialized response above 4 MiB becomes a `response_too_large` failure because JSON escaping can expand content.
+Default `read` size is 64 KiB and its maximum is 1 MiB. Editable files are capped at 1 MiB. Default combined process-output capture is 256 KiB, maximum 1 MiB; excess output is drained and counted. Default process timeout is 30 seconds, maximum five minutes. A request over either maximum is rejected with the limit it exceeded (`timeout_ms 600000 exceeds the 300000 ms limit`). The console's `local_exec` schema states both maxima, and the console checks local tool arguments against their schema before it shows an approval card, so such a call is refused before the person approves it. A serialized response above 4 MiB becomes a `response_too_large` failure because JSON escaping can expand content.
 
 ## Responses and exit codes
 

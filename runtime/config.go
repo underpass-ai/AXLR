@@ -36,6 +36,10 @@ const (
 // HardTimeout is the longest timeout an exec request may ask for.
 const HardTimeout = 5 * time.Minute
 
+// HardOutputBytes is the most output an exec request may ask to keep. The
+// local_exec schema the console offers states both limits.
+const HardOutputBytes = hardFileBytes
+
 type Config struct {
 	Root string
 	Env  []string

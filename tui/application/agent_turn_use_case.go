@@ -27,7 +27,7 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 		if err := ctx.Err(); err != nil {
 			return err
 		}
-		if err := rejectUnknown(ctx, s, u.Continue.Store, emit, u.Continue.Diagnostics); err != nil {
+		if err := rejectUnknown(ctx, s, u.Continue.admission(), emit); err != nil {
 			return err
 		}
 		if s.Status() == domain.StatusApproval && len(s.Pending()) > 0 {
@@ -87,7 +87,22 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 	}
 	return domain.AvailableTool{}, false
 }
-func rejectUnknown(ctx context.Context, s *domain.Session, store SessionStorePort, emit func(Event) error, trace DiagnosticPort) error {
+
+// headAdmission is what rejectUnknown checks the call at the head against
+// before any card or automatic approval.
+type headAdmission struct {
+	Store SessionStorePort
+	Trace DiagnosticPort
+	// Validation checks local arguments against their schema; nil leaves
+	// that to the runtime.
+	Validation ToolArgumentValidationPort
+}
+
+func (u ContinueTurnUseCase) admission() headAdmission {
+	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation}
+}
+
+func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, emit func(Event) error) error {
 	for s.Status() == domain.StatusApproval && len(s.Pending()) > 0 {
 		p := s.Pending()[0]
 		tool, args, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), p.Call)
@@ -95,13 +110,15 @@ func rejectUnknown(ctx context.Context, s *domain.Session, store SessionStorePor
 			verdict, reason := s.Mode().Judge(tool.Identity, args)
 			if verdict != domain.VerdictDeny {
 				if resolveErr = compactRefusal(*s, p); resolveErr == nil {
-					return nil
+					if resolveErr = localArgumentError(admit.Validation, tool, args); resolveErr == nil {
+						return nil
+					}
 				}
 			} else {
 				resolveErr = ModeDenial{Mode: s.Mode(), Reason: reason}
 			}
 		}
-		if err := rejectUnknownCall(ctx, s, store, trace, p, resolveErr); err != nil {
+		if err := rejectUnknownCall(ctx, s, admit.Store, admit.Trace, p, resolveErr); err != nil {
 			return err
 		}
 		if err := emitTool(s, p.Call.ID, emit); err != nil {

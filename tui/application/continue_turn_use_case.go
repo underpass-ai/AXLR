@@ -276,7 +276,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	*session = next
 	// Reject only at the head: tool results must retain model order. Decision
 	// resolution must apply this lookup again as later calls reach the head.
-	if err := rejectUnknown(ctx, session, u.Store, func(Event) error { return nil }, u.Diagnostics); err != nil {
+	if err := rejectUnknown(ctx, session, u.admission(), func(Event) error { return nil }); err != nil {
 		return err
 	}
 	if err := emitSession(session, emit); err != nil {

@@ -283,6 +283,25 @@ func TestExecRejectsOverflowTimeout(t *testing.T) {
 	}
 }
 
+// On 10 October 2026 claude-haiku-5.5 asked for timeout_ms 600000; the
+// refusal said only "timeout exceeds profile limit", so it guessed again.
+func TestExecLimitRefusalsStateTheLimit(t *testing.T) {
+	e, _ := newTestExecutor(t, Config{Root: t.TempDir()})
+	for arguments, want := range map[string]string{
+		`{"program":"/bin/sh","timeout_ms":600000}`:        "timeout_ms 600000 exceeds the 300000 ms limit",
+		`{"program":"/bin/sh","timeout_ms":-1}`:            "timeout_ms must not be negative",
+		`{"program":"/bin/sh","max_output_bytes":2097152}`: "max_output_bytes 2097152 exceeds the 1048576 byte limit",
+	} {
+		r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "x", Tool: "exec", Arguments: json.RawMessage(arguments)})
+		if r.Status != "rejected" || r.Error == nil || !strings.Contains(r.Error.Message, want) {
+			t.Fatalf("%s: %+v %+v", arguments, r, r.Error)
+		}
+	}
+	if HardTimeout.Milliseconds() != 300000 || HardOutputBytes != 1<<20 {
+		t.Fatalf("limits changed: %v %d; update the local_exec schema", HardTimeout, HardOutputBytes)
+	}
+}
+
 func TestExecDefaultsRespectReducedHostProfile(t *testing.T) {
 	if goruntime.GOOS == "windows" {
 		t.Skip("POSIX shell scenario")

@@ -85,11 +85,12 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	started := time.Now()
 
 	tool, toolArgs, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending[0].Call)
+	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation}
 	if !known || resolveErr != nil {
-		return rejectUnknown(ctx, s, u.Store, emit, u.Diagnostics)
+		return rejectUnknown(ctx, s, admit, emit)
 	}
-	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil {
-		return rejectUnknown(ctx, s, u.Store, emit, u.Diagnostics)
+	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || localArgumentError(u.Validation, tool, toolArgs) != nil {
+		return rejectUnknown(ctx, s, admit, emit)
 	}
 	if decision == domain.DecisionAutoApprove && !approvesInSession(u.Approval, *s, tool.Identity, toolArgs) {
 		return errors.New("tool is not configured for automatic approval")
