@@ -48,7 +48,8 @@ func NewThemePicker(p domain.UIPreferences, locales ...Locale) ThemePicker {
 
 func (p ThemePicker) Update(msg tea.Msg) (ThemePicker, ControlIntent, tea.Cmd) {
 	if key, ok := msg.(tea.KeyPressMsg); ok {
-		switch key.String() {
+		// The hints print I and A: Shift+letter is the same key.
+		switch strings.ToLower(key.String()) {
 		case "esc":
 			if !p.List.SettingFilter() {
 				return p, "theme-cancel", nil

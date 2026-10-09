@@ -184,7 +184,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
-			if k.String() == "f" {
+			if strings.ToLower(k.String()) == "f" {
 				intent = "autonomy-on"
 			}
 			if intent == ControlIntent(domain.DecisionAutoApprove) {
