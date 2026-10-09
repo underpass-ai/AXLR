@@ -11,6 +11,7 @@ The model picker filters to text models that support tools. Tab changes provider
 | Control | Action |
 |:--|:--|
 | `Enter` / `Shift+Enter` | Send / insert a newline |
+| `/` | List every command that starts with what you typed, six at a time; ↑↓ scroll the list and select, Tab completes, Enter runs the selected one |
 | `/model` | Choose a model |
 | `/normal`, `/review`, `/writer`, `/research` | Choose direct work and its local tool policy |
 | `/stop-ceremony` | Cancel the running ceremony in MADE and return to normal mode (alias `/parar`); see [a step the model will not hand back](ceremonies.md#a-step-the-model-will-not-hand-back) |

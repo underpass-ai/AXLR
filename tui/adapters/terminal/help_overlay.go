@@ -16,6 +16,9 @@ func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, heig
 		theme.T("help.changes"),
 		theme.T("help.commandsMCPPlugins"),
 		theme.T("help.commandsUpdate"),
+		theme.T("help.commandsModes"),
+		theme.T("help.commandsCeremonies"),
+		theme.T("help.commandsJobs"),
 		"",
 		theme.Accent(theme.T("help.navigate")),
 		theme.T("help.shortcuts"),
@@ -29,13 +32,15 @@ func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, heig
 		theme.T("help.modelSelect"),
 		theme.T("help.themeOptions"),
 	}
-	if height < 20 {
+	if _, body := OverlayBodySize(width, height); body < len(rows) {
+		// The full list no longer fits once it names every command.
 		rows = []string{
 			theme.T("help.sendShort"),
 			theme.T("help.commandsModelTheme"),
 			theme.T("help.changes"),
 			theme.T("help.commandsMCPPlugins"),
 			theme.T("help.commandsUpdate"),
+			theme.T("help.commandsShort"),
 			theme.T("help.shortcuts"),
 			theme.T("help.views"),
 			theme.T("help.copyShort"),

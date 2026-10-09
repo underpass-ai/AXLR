@@ -45,6 +45,7 @@ type AppModel struct {
 	Changes          ChangeViewer
 	memoryActive     bool
 	slashSelected    int
+	slashTop         int
 	// lastClick, lastClickAt and clickCount tell a double or triple click
 	// on the transcript from separate clicks.
 	lastClick           Selection
@@ -714,9 +715,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch v.String() {
 			case "up":
 				m.slashSelected = max(0, min(m.slashSelected, len(suggestions)-1)-1)
+				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions))
 				return m, nil
 			case "down":
 				m.slashSelected = min(len(suggestions)-1, m.slashSelected+1)
+				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions))
 				return m, nil
 			case "tab":
 				m.Composer.Input.SetValue(suggestions[min(m.slashSelected, len(suggestions)-1)].name)
@@ -812,7 +815,8 @@ func (m AppModel) View() tea.View {
 		body := m.mainTranscript()
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
 			lines := strings.Split(body, "\n")
-			menu := m.slashMenu(suggestions[:min(len(suggestions), len(lines))])
+			menu := m.slashMenu(suggestions)
+			menu = menu[max(0, len(menu)-len(lines)):]
 			body = strings.Join(append(lines[:len(lines)-len(menu)], menu...), "\n")
 		}
 		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, composer, footer)
