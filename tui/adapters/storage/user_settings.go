@@ -83,9 +83,16 @@ type UserSettings struct {
 	TraceRetentionDays *int `json:"trace_retention_days,omitempty"`
 	// TracePayloads stores redacted request and response bodies beside the
 	// trace by default; --trace-payloads decides for one launch.
-	TracePayloads bool                       `json:"trace_payloads,omitempty"`
-	Extra         map[string]json.RawMessage `json:"-"`
+	TracePayloads bool `json:"trace_payloads,omitempty"`
+	// ForgedTools offers axlr_forge_tool and axlr_run_tool; absent means on.
+	// A pointer keeps an explicit false when another setting is saved.
+	ForgedTools *bool                      `json:"forged_tools,omitempty"`
+	Extra       map[string]json.RawMessage `json:"-"`
 }
+
+// ForgedToolsEnabled reports whether forged tools are offered: on unless
+// forged_tools is false.
+func (s UserSettings) ForgedToolsEnabled() bool { return s.ForgedTools == nil || *s.ForgedTools }
 
 // turn_tool_calls bounds: below 8 a turn cannot read, edit and check; above
 // 256 one turn could spend a session's budget without the person.
@@ -372,7 +379,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox", "engines", "max_session_usd", "jobs"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break

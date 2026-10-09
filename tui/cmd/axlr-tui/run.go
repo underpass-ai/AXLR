@@ -497,6 +497,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
 	// Each session keeps its usage ledger beside its snapshot.
 	continuation.Usage, continuation.MaxSessionUSD = store, settings.MaxSessionUSD
+	if settings.ForgedToolsEnabled() {
+		// The model forges workspace tools and runs them in the same session.
+		continuation.Forge = &storage.ForgedToolStore{}
+	}
 	if _, kmp := activeEngineCommands["kmp"]; kmp {
 		// axlr_remember writes the model's memories in one call.
 		continuation.Remember = ceremonyhost.Memory{Tools: runner}

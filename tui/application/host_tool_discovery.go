@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func hostDiscover(snapshot []domain.AvailableTool, arguments root.JSONValue) (any, error) {
+func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, arguments root.JSONValue) (any, error) {
 	args, err := decodeHostArguments(arguments, "query", "name", "path", "limit", "offset")
 	if err != nil {
 		return nil, err
@@ -51,6 +51,9 @@ func hostDiscover(snapshot []domain.AvailableTool, arguments root.JSONValue) (an
 			return nil, err
 		}
 		if !known || tool.Identity.Kind != domain.ToolKindPlugin {
+			if made, found := findForged(forged, name); found {
+				return forgedView(made, path)
+			}
 			return nil, fmt.Errorf("unknown registered plugin tool %q", name)
 		}
 		if _, err := root.NewJSONObject(tool.Definition.Parameters.Bytes()); err != nil {
@@ -82,10 +85,29 @@ func hostDiscover(snapshot []domain.AvailableTool, arguments root.JSONValue) (an
 		}
 	}
 	sort.Slice(plugins, func(i, j int) bool { return plugins[i].Definition.Name < plugins[j].Definition.Name })
+	// Forged tools follow the plugin tools under the same search; they are
+	// called through axlr_run_tool.
+	candidates := make([]discoveryCandidate, 0, len(plugins)+len(forged))
+	for _, tool := range plugins {
+		candidates = append(candidates, discoveryCandidate{
+			text:    string(tool.Definition.Name) + " " + tool.Identity.Plugin.PluginID.String() + " " + tool.Identity.Plugin.ToolName.String() + " " + string(tool.Definition.Description),
+			summary: map[string]any{"name": tool.Definition.Name, "plugin": tool.Identity.Plugin.PluginID, "tool": tool.Identity.Plugin.ToolName},
+			about:   string(tool.Definition.Description),
+		})
+	}
+	sorted := append([]ForgedTool(nil), forged...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
+	for _, tool := range sorted {
+		candidates = append(candidates, discoveryCandidate{
+			text:    tool.Name + " forged " + tool.Description,
+			summary: map[string]any{"name": tool.Name, "forged": true, "call_with": HostRunToolName},
+			about:   tool.Description,
+		})
+	}
 	summaries := make([]map[string]any, 0, limit)
 	matched := 0
-	for _, tool := range plugins {
-		text := strings.ToLower(string(tool.Definition.Name) + " " + tool.Identity.Plugin.PluginID.String() + " " + tool.Identity.Plugin.ToolName.String() + " " + string(tool.Definition.Description))
+	for _, candidate := range candidates {
+		text := strings.ToLower(candidate.text)
 		matches := true
 		for _, term := range terms {
 			if !strings.Contains(text, term) {
@@ -98,11 +120,12 @@ func hostDiscover(snapshot []domain.AvailableTool, arguments root.JSONValue) (an
 		}
 		matched++
 		if matched > offset && len(summaries) < limit {
-			description := []rune(strings.Join(strings.Fields(string(tool.Definition.Description)), " "))
+			description := []rune(strings.Join(strings.Fields(candidate.about), " "))
 			if len(description) > 160 {
 				description = append(description[:160], '…')
 			}
-			summaries = append(summaries, map[string]any{"name": tool.Definition.Name, "plugin": tool.Identity.Plugin.PluginID, "tool": tool.Identity.Plugin.ToolName, "description": string(description)})
+			candidate.summary["description"] = string(description)
+			summaries = append(summaries, candidate.summary)
 		}
 	}
 	if offset > matched {
@@ -122,4 +145,30 @@ func hostInteger(args map[string]json.RawMessage, key string, fallback int) (int
 		return 0, fmt.Errorf("%s must be an integer", key)
 	}
 	return *value, nil
+}
+
+// discoveryCandidate is one plugin or forged tool under an axlr_tools search.
+type discoveryCandidate struct {
+	text, about string
+	summary     map[string]any
+}
+
+// forgedView is axlr_tools' answer for one forged tool's exact name: its
+// schema, or the part path selects, and how it runs.
+func forgedView(tool ForgedTool, path string) (any, error) {
+	if _, err := root.NewJSONObject(tool.InputSchema); err != nil {
+		return nil, fmt.Errorf("forged tool %q has no valid input_schema; forge it again", tool.Name)
+	}
+	view, err := toolSchemaView(tool.InputSchema, path)
+	if err != nil {
+		return nil, err
+	}
+	files := make([]string, 0, len(tool.Files))
+	for file := range tool.Files {
+		files = append(files, ForgedToolsDir+"/"+tool.Name+"/"+file)
+	}
+	sort.Strings(files)
+	view["name"], view["forged"], view["call_with"], view["description"] = tool.Name, true, HostRunToolName, tool.Description
+	view["command"], view["files"] = append([]string{tool.Program}, tool.Args...), files
+	return view, nil
 }

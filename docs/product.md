@@ -49,6 +49,7 @@ Compatibility is defined by the [component matrix](plugins.md#codex-plugin-compa
 - Driven ceremonies use eight pinned definitions: `axlr_debug` / `axlr_delivery` **2.0** and `axlr_incident`, `axlr_repair`, `axlr_improve`, `axlr_plan`, `axlr_task`, `axlr_sync` **1.0**. The earlier skill catalogue of seven **1.0** definitions was retired on 5 Oct 2026.
 - Automatic ceremony memory uses `ws:<session-id>`, not a stable project identity. Project-wide recall and richer decision links remain explicit KMP work. KMP failure does not roll back a completed MADE step.
 - A work mode constrains AXLR's local file tools and process approval. It does not sandbox programs or classify external MCP side effects. Engine authorization and host approval remain separate.
+- A forged tool is a program the model writes into the workspace: only `axlr_forge_tool` registers it, each run is approved as a `local_exec` and runs under the same confinement, and a tool whose files changed since it was forged does not run. It is not a sandbox unless the exec sandbox is on.
 - A role in a ceremony does not spawn a worker. Independent review and ownership transfer need real participants and evidence.
 - Completion means observed work and appropriate checks. A lost response, approval or state transition alone cannot prove that an external operation succeeded.
 

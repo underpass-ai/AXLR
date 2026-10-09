@@ -1,0 +1,24 @@
+# Forged tools (meta-tooling) design
+
+Status: implemented (9 Oct 2026): `axlr_forge_tool` and `axlr_run_tool`, on by default (`forged_tools` in settings). Scope chosen by Tirso: the tool half of "agents that write their own tools at runtime" (Sandhya Subramani, AWS, Strands Agents' meta-tooling: an editor, a shell and `load_tool`); runtime sub-agents are left for a separate design. Decisions taken with the advisor.
+
+## Goal
+
+When no tool does what a task needs, the model writes one and calls it at once, in the same session and without restarting the console, and fixes it by writing it again. Strands does this by loading Python files from a tools directory into the running agent. AXLR keeps its own invariants while doing the same: a fixed request prefix, explicit registration, approval per effect and the runtime's confinement.
+
+## Decisions
+
+- **Two fixed host tools, not a new tool kind.** `axlr_forge_tool` (upsert) and `axlr_run_tool` (`{name, arguments}`) are host tools like `axlr_tools` / `axlr_call_tool`. A forged tool never enters `tools[]` or the system prompt, so the prompt cache survives a new tool and `TestForgingKeepsTheRequestPrefix` proves it. A new `ToolIdentity` kind would have touched about twenty switches; an MCP server per tool would have added a system-prompt paragraph and needs an unregister the plugin manager does not have.
+- **Resolution at call time.** `axlr_run_tool` reads the workspace registry when it runs, not the turn's frozen snapshot, which is what makes a tool forged in this turn callable in this turn. `axlr_tools` lists forged tools beside plugin tools (marked `forged`, `call_with: axlr_run_tool`) and returns a forged tool's schema by exact name, so the model looks before writing ("always check whether it exists" in the talk).
+- **Registration, not scanning.** `.axlr/tools/registry.json` is written only by `axlr_forge_tool`; a directory planted under `.axlr/tools/` is not a tool. The registry keeps each file's SHA-256 and `axlr_run_tool` refuses a tool whose files changed since: the code that runs is the code on the approved forge card. `args` must name one of the tool's own files, so a forged tool is never a bare `sh -c`.
+- **Judged and approved as what it does.** As `axlr_remember` is approved as `kmp_write_memory`, `axlr_forge_tool` is judged and approved as `local_write` and `axlr_run_tool` as `local_exec`. Review mode keeps running forged tools but is not offered the forge; writer, research and the other restricted modes refuse forging and ask for every run. Always-allow stays on the local identities (host kinds cannot be always-allowed); autonomy follows them.
+- **Arguments on stdin.** A run validates the arguments against the tool's `input_schema` with the plugin validator and passes them as one JSON object on stdin; the card shows them. Restricted modes refuse a model's `local_exec` with stdin because stdin hides code below the card's fold; here stdin is data the card shows in full.
+- **Confinement, not a sandbox.** A run is a `local_exec`: workspace cwd, `PATH` and `HOME`, the runtime's timeout and output limit, and the bubblewrap [exec sandbox](../console.md#exec-sandbox) when configured. Without it, a forged tool has the person's rights, like any approved command.
+- **Workspace persistence.** Tools stay in `.axlr/tools/<name>/` for later sessions of the same project; committing or ignoring them is the person's choice. Re-forging replaces the directory, so no file of an old version lingers.
+- **Ordinary sessions only.** Ceremonies, repairs, improvements, plans and tasks keep their own tool surface. A forged tool's failure is refused as evidence for `axlr_request_repair`: fixing AXLR would not fix it.
+
+## Not done
+
+- **Runtime sub-agents** (the talk's second demo: the agent writes two to four specialised agents and calls them). AXLR's child sessions (`UseCaseWorkbench`) need MADE and a ceremony, `Reviewer` is a single generation without a tool loop, and the product contract says a ceremony role does not spawn a worker. A design would need a bounded child loop with a tool subset, its own budget and cost ledger, and a way to show its transcript.
+- **Evals of forged tools.** The talk's evals (goal achieved, right tool and parameters, inter-agent order) map onto Jev and the transcript; nothing scores forged tools yet.
+- **Per-tool always-allow** for one forged tool rather than every `local_exec`.

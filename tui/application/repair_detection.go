@@ -161,6 +161,9 @@ func classifyCall(snapshot []domain.AvailableTool, record domain.PendingTool) (c
 	if tool.Identity.Kind == domain.ToolKindPlugin {
 		return cited, fmt.Sprintf("call %s is %s, an MCP plugin tool of %s: its failures belong to that server, not to AXLR", record.Call.ID, record.Call.Name, tool.Identity.Plugin.PluginID)
 	}
+	if record.Call.Name == HostRunToolName {
+		return cited, fmt.Sprintf("call %s ran a tool forged in this workspace: its failures belong to that tool; fix it with axlr_forge_tool instead of repairing AXLR", record.Call.ID)
+	}
 	if record.Decision == domain.DecisionDeny {
 		return cited, fmt.Sprintf("call %s was denied by the user or the mode; a denial is not a defect", record.Call.ID)
 	}

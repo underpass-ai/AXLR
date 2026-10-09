@@ -38,6 +38,10 @@ type ContinueTurnUseCase struct {
 	// Remember writes axlr_remember's memories in KMP; nil, without KMP,
 	// offers no axlr_remember.
 	Remember RememberPort
+	// Forge keeps the workspace's forged tools (forged_tools.go); nil, when
+	// settings turn them off, offers neither axlr_forge_tool nor
+	// axlr_run_tool.
+	Forge ForgedToolsPort
 	// TurnToolCalls is the turn's tool-call budget (settings'
 	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
 	TurnToolCalls int
@@ -95,6 +99,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if u.offersRemember(*session) {
 		hostTools = append(hostTools, RememberTool())
+	}
+	if u.offersForge(*session) {
+		hostTools = append(hostTools, ForgeTool(), RunTool())
 	}
 	if err := session.EnsureHostTools(hostTools); err != nil {
 		contextSpan.End(DiagnosticErrorInvalidState)
@@ -154,6 +161,12 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if !u.offersRemember(*session) {
 		tools = withoutTool(tools, HostRememberName)
+	}
+	if !u.offersForge(*session) {
+		tools = withoutTool(withoutTool(tools, HostForgeToolName), HostRunToolName)
+	} else if session.Mode().HidesWriteTools() {
+		// Review mode runs forged tools but writes none.
+		tools = withoutTool(tools, HostForgeToolName)
 	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
 	if u.Diagnostics != nil {
