@@ -92,7 +92,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			response.RequestID = req.RequestID
 		}
 		switch req.Tool {
-		case "read", "write", "edit", "exec", "plugins.list", "plugins.call":
+		case "read", "write", "edit", "exec", "search", "list", "plugins.list", "plugins.call":
 			response.Tool = req.Tool
 		}
 		code = 2

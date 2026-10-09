@@ -7,9 +7,11 @@ import (
 	"github.com/underpass-ai/AXLR/dto"
 )
 
-type ResponseMapper struct{}
+// ResponseMapper maps results to their wire DTOs. ListingBytes bounds the
+// encoded output of a search or listing page.
+type ResponseMapper struct{ ListingBytes int }
 
-func (ResponseMapper) Map(result any) any {
+func (m ResponseMapper) Map(result any) any {
 	switch v := result.(type) {
 	case []domain.PluginTool:
 		tools := make([]dto.PluginToolOutput, 0, len(v))
@@ -37,6 +39,10 @@ func (ResponseMapper) Map(result any) any {
 		return dto.WriteOutput{WrittenBytes: v.WrittenBytes, ContentSHA256: string(v.Digest)}
 	case domain.ExecResult:
 		return dto.ExecOutput{ExitCode: v.ExitCode, Stdout: v.Stdout, Stderr: v.Stderr, CapturedBytes: v.CapturedBytes, DiscardedBytes: v.DiscardedBytes, Truncated: v.Truncated}
+	case domain.SearchResult:
+		return m.searchOutput(v)
+	case domain.ListResult:
+		return m.listOutput(v)
 	default:
 		return nil
 	}

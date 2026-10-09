@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/underpass-ai/AXLR/domain"
@@ -178,7 +179,91 @@ func (m RequestMapper) Map(req dto.Request) (any, error) {
 			return nil, err
 		}
 		return domain.ExecCommand{Program: program, Args: argv, Cwd: cwd, Stdin: stdin, Timeout: timeout, OutputLimit: outputLimit}, nil
+	case "search":
+		var a dto.SearchArgs
+		if err := strictJSON(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		scope, err := domain.NewScopePath(a.Path)
+		if err != nil {
+			return nil, err
+		}
+		pattern, err := domain.NewSearchPattern(a.Pattern, a.Literal, a.IgnoreCase)
+		if err != nil {
+			return nil, err
+		}
+		glob, err := domain.NewNameGlob(a.Glob)
+		if err != nil {
+			return nil, err
+		}
+		if a.ContextLines < 0 || a.ContextLines > maxSearchContext {
+			return nil, errors.New("context_lines must be between 0 and 5")
+		}
+		results, err := pageSize(a.MaxResults, defaultSearchResults, maxSearchResults, "max_results")
+		if err != nil {
+			return nil, err
+		}
+		if a.Offset < 0 {
+			return nil, errors.New("offset cannot be negative")
+		}
+		limit, err := m.listingBytes(a.MaxBytes)
+		if err != nil {
+			return nil, err
+		}
+		return domain.SearchCommand{Scope: scope, Pattern: pattern, Glob: glob, ContextLines: a.ContextLines, MaxResults: results, Offset: a.Offset, MaxBytes: limit, MaxFiles: searchFiles, MaxScanBytes: searchScanBytes}, nil
+	case "list":
+		var a dto.ListArgs
+		if err := strictJSON(req.Arguments, &a); err != nil {
+			return nil, err
+		}
+		scope, err := domain.NewScopePath(a.Path)
+		if err != nil {
+			return nil, err
+		}
+		glob, err := domain.NewNameGlob(a.Glob)
+		if err != nil {
+			return nil, err
+		}
+		depth, err := pageSize(a.MaxDepth, defaultListDepth, maxListDepth, "max_depth")
+		if err != nil {
+			return nil, err
+		}
+		if !a.Recursive {
+			depth = 1
+		}
+		entries, err := pageSize(a.MaxEntries, defaultListEntries, maxListEntries, "max_entries")
+		if err != nil {
+			return nil, err
+		}
+		if a.Offset < 0 {
+			return nil, errors.New("offset cannot be negative")
+		}
+		limit, err := m.listingBytes(a.MaxBytes)
+		if err != nil {
+			return nil, err
+		}
+		return domain.ListCommand{Scope: scope, Glob: glob, Depth: depth, MaxEntries: entries, Offset: a.Offset, MaxBytes: limit, MaxVisits: listVisits}, nil
 	default:
 		return nil, errors.New("unknown tool")
 	}
+}
+
+// pageSize is n, or fallback when n is omitted (zero), within 1..maximum.
+func pageSize(n, fallback, maximum int, name string) (int, error) {
+	if n == 0 {
+		return fallback, nil
+	}
+	if n < 1 || n > maximum {
+		return 0, fmt.Errorf("%s must be between 1 and %d", name, maximum)
+	}
+	return n, nil
+}
+
+// listingBytes bounds the encoded output of a search or listing page like a
+// read: 64 KiB by default, at most the profile's read limit.
+func (m RequestMapper) listingBytes(n int) (domain.ByteLimit, error) {
+	if n == 0 {
+		n = min(defaultListingBytes, m.MaxReadBytes)
+	}
+	return domain.NewByteLimit(n, m.MaxReadBytes)
 }

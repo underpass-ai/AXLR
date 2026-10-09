@@ -82,6 +82,7 @@ func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 	mapper := RequestMapper{MaxReadBytes: e.config.MaxReadBytes, MaxFileBytes: e.config.MaxFileBytes, MaxOutputBytes: e.config.MaxOutputBytes, MaxTimeout: e.config.MaxTimeout}
 	command, err := mapper.Map(req)
 	var result any
+	listingBytes := 0
 	if err == nil {
 		if ctx.Err() != nil {
 			err = &domain.Fault{Status: "cancelled", Code: "cancelled", Message: "request cancelled before execution"}
@@ -95,6 +96,12 @@ func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 				result, err = (application.EditUseCase{Files: e.files, MaxFileBytes: e.config.MaxFileBytes}).Execute(c)
 			case domain.ExecCommand:
 				result, err = (application.ExecUseCase{Processes: e.processes}).Execute(ctx, c)
+			case domain.SearchCommand:
+				listingBytes = int(c.MaxBytes)
+				result, err = (application.SearchUseCase{Files: e.files}).Execute(ctx, c)
+			case domain.ListCommand:
+				listingBytes = int(c.MaxBytes)
+				result, err = (application.ListUseCase{Files: e.files}).Execute(ctx, c)
 			case domain.PluginListCommand:
 				if e.config.Plugins == nil {
 					err = domain.Reject("plugins_unavailable", "plugins are not configured")
@@ -128,7 +135,7 @@ func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 			r.Error = &dto.Failure{Code: "internal_error", Message: err.Error()}
 		}
 	} else {
-		r.Output = (ResponseMapper{}).Map(result)
+		r.Output = (ResponseMapper{ListingBytes: listingBytes}).Map(result)
 	}
 	r.FinishedAt = time.Now().UTC()
 	r.DurationMS = time.Since(start).Milliseconds()
