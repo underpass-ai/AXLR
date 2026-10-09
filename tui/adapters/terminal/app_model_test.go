@@ -262,8 +262,15 @@ func TestAppModelOperationCancelAndError(t *testing.T) {
 	})
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = update(m, cmd())
-	if m.Busy || !strings.Contains(m.View().Content, "context canceled") {
+	if m.Busy || !strings.Contains(m.View().Content, m.Theme.T("status.cancelled")) {
 		t.Fatal("cancellation not visible")
+	}
+	cmd = m.BeginOperation(func(context.Context, *domain.Session, func(application.Event) error) error {
+		return errors.New("save failed")
+	})
+	m = update(m, cmd())
+	if m.Status.Error != "save failed" {
+		t.Fatalf("an operation's own error was hidden: %q", m.Status.Error)
 	}
 }
 func TestAppModelSendShowsPromptWhileStreaming(t *testing.T) {
@@ -371,7 +378,7 @@ func TestAppModelMouseSendAndCancel(t *testing.T) {
 	}
 	m = update(m, tea.MouseClickMsg{X: z.StartX, Y: z.StartY, Button: tea.MouseLeft})
 	m = update(m, cmd())
-	if m.Busy || !strings.Contains(m.View().Content, "context canceled") {
+	if m.Busy || !strings.Contains(m.View().Content, m.Theme.T("status.cancelled")) {
 		t.Fatal("mouse cancel differs from keyboard cancel")
 	}
 

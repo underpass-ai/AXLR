@@ -99,6 +99,10 @@ type AppModel struct {
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
+	// cancelledAt is one more than the number of messages when the person's
+	// Esc stopped a turn (zero for none): the conversation marks it until a
+	// message follows or another operation runs.
+	cancelledAt int
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -349,6 +353,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
 		}
+		wasTurn := m.turnRunning()
 		if m.cancel != nil {
 			m.cancel()
 		}
@@ -474,8 +479,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		steered := (m.steerCancelled == v.ID || m.closedCancelled == v.ID) && errors.Is(v.Err, context.Canceled)
 		m.steerCancelled, m.closedCancelled = 0, 0
-		if v.Err != nil && !steered {
-			m.Status.Error = v.Err.Error()
+		m.cancelledAt = 0
+		if cancelled := errors.Is(v.Err, context.Canceled) && !steered; cancelled && v.Err.Error() == context.Canceled.Error() && v.PluginApproval == nil {
+			// On 10 October 2026 Esc left "! context canceled" across the
+			// footer, hiding the state and the cost: the person's own Esc
+			// is not an error, so it is said in the footer's state instead.
+			m.Status.Error = ""
+			m.Status.Notice = strings.TrimSpace(m.Theme.T("status.cancelled") + " " + returned)
+			if status := v.Session.Status(); wasTurn || status == domain.StatusStreaming || status == domain.StatusInterrupted || status == domain.StatusApproval {
+				m.cancelledAt = len(m.Header.State.Messages) + 1
+			}
+		} else if v.Err != nil && !steered {
+			m.Status.Error = strings.Replace(v.Err.Error(), context.Canceled.Error(), m.Theme.T("status.cancelled"), 1)
 			if v.PluginApproval != nil {
 				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
 			}
@@ -910,5 +925,8 @@ func (m *AppModel) refreshTranscript() {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
 	}
 	m.Transcript.AppendFailures(m.failures)
+	if m.cancelledAt == len(m.Header.State.Messages)+1 && !m.Busy {
+		m.Transcript.AppendCancelled()
+	}
 	m.Transcript.AppendQueued(m.steer.Peek())
 }

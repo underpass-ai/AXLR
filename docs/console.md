@@ -32,7 +32,7 @@ The model picker filters to text models that support tools. Tab changes provider
 | `Ctrl+R` | Explicitly continue an interrupted turn |
 | `Tab` | Switch between transcript and activity views |
 | `F1` | Show in-app help |
-| `Esc` | Drop a selection, close an overlay or cancel the active turn |
+| `Esc` | Drop a selection, close an overlay or cancel the active turn; the footer then says “Cancelled” beside the session state and cost, and the conversation ends with “Cancelled by you” until the next message |
 | `Ctrl+C` | Cancel active work; quit when idle |
 | Drag over the conversation | Select text and copy it on release; double click takes a word, triple click a row, Shift+click extends |
 | `/copy` (alias `/copiar`) | Copy the last reply as the model wrote it, or the current selection |
