@@ -168,6 +168,9 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		} else if tool.Identity.Kind == domain.ToolKindLocal && tool.Identity.LocalOperation == "read" {
 			// A page is sized to what the projection keeps per tool result.
 			outcome, runErr = boundedLocalRead(ctx, u.Tools, tool.Identity, toolArgs, projectionBudget(u.Continue.Windows, *s).ToolResultBytes())
+		} else if tool.Identity.Kind == domain.ToolKindLocal && (tool.Identity.LocalOperation == "search" || tool.Identity.LocalOperation == "list") {
+			// So is a page of matches or entries.
+			outcome, runErr = boundedLocalListing(ctx, u.Tools, tool.Identity, toolArgs, projectionBudget(u.Continue.Windows, *s).ToolResultBytes())
 		} else {
 			if tool.Identity.Kind == domain.ToolKindLocal && tool.Identity.LocalOperation == "exec" && tolerantSession(*s) {
 				toolArgs, _ = normalizeExec(toolArgs)

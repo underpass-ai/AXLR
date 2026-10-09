@@ -487,6 +487,8 @@ var enMessages = map[string]string{
 	"transcript.toolAwaiting":              "waiting for approval",
 	"transcript.toolApproved":              "approved by you",
 	"transcript.toolDenied":                "denied",
+	"transcript.searchIn":                  "\"%s\" in %s", // local search
+	"transcript.listRecursive":             "%s, recursive",
 	"transcript.interruptedDraft":          "interrupted draft: ",
 	"status.complete":                      "complete",
 	"header.chooseModel":                   "Type /model to choose a model",
@@ -970,6 +972,8 @@ var esMessages = map[string]string{
 	"transcript.toolAwaiting":              "esperando aprobación",
 	"transcript.toolApproved":              "aprobada por ti",
 	"transcript.toolDenied":                "denegada",
+	"transcript.searchIn":                  "\"%s\" en %s", // local search
+	"transcript.listRecursive":             "%s, recursivo",
 	"transcript.interruptedDraft":          "borrador interrumpido: ",
 	"status.complete":                      "completo",
 	"header.chooseModel":                   "Escribe /model para elegir un modelo",

@@ -65,7 +65,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("local identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case "read", "write", "edit", "exec":
+		case "read", "write", "edit", "exec", "search", "list":
 			return nil
 		}
 	case ToolKindPlugin:

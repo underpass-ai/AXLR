@@ -23,7 +23,7 @@ func TestToolCatalogLocalSchemasAndFrozenLookup(t *testing.T) {
 	if err != nil || len(snapshot) != len(localToolDefinitions())+len(application.HostTools()) {
 		t.Fatalf("%+v %v", snapshot, err)
 	}
-	for i, op := range []string{"read", "write", "edit", "exec"} {
+	for i, op := range []string{"read", "write", "edit", "exec", "search"} {
 		tool := snapshot[i]
 		if tool.Definition.Name != root.ToolName("local_"+op) || tool.Identity.LocalOperation != op {
 			t.Fatalf("%+v", tool)
@@ -139,6 +139,41 @@ func TestToolCatalogReservesHostAndLocalNamesWithoutHidingPlugins(t *testing.T) 
 		id, err := ResolveTool(snapshot, host.Definition.Name)
 		if err != nil || id.Kind != domain.ToolKindHost || id != host.Identity {
 			t.Fatal("reserved host authority changed")
+		}
+	}
+}
+
+// local_search and local_list follow the other local tools and their
+// schemas hold the runtime's bounds, so a call outside them is refused
+// before it reaches the runtime.
+func TestLocalSearchAndListSchemasHoldTheRuntimeBounds(t *testing.T) {
+	tools := localToolDefinitions()
+	if len(tools) != 6 || tools[4].Definition.Name != "local_search" || tools[5].Definition.Name != "local_list" || tools[5].Identity.LocalOperation != "list" || tools[5].Identity.Validate() != nil {
+		t.Fatalf("local tools %+v", tools)
+	}
+	validator := NewToolArgumentValidator()
+	for _, tc := range []struct {
+		tool  int
+		args  string
+		valid bool
+	}{
+		{4, `{"pattern":"func \\w+","path":"tui","glob":"**/*_test.go","ignore_case":true,"literal":false,"context_lines":2,"max_results":200,"offset":50,"max_bytes":0}`, true},
+		{4, `{"pattern":"x","context_lines":6}`, false},
+		{4, `{"pattern":"x","max_results":201}`, false},
+		{4, `{"pattern":""}`, false},
+		{4, `{"query":"x"}`, false},
+		{5, `{}`, true},
+		{5, `{"path":"docs","glob":"*.md","recursive":true,"max_depth":8,"max_entries":500,"offset":200}`, true},
+		{5, `{"recursive":true,"max_depth":9}`, false},
+		{5, `{"max_entries":0}`, false},
+		{5, `{"pattern":"x"}`, false},
+	} {
+		args, err := root.NewJSONObject([]byte(tc.args))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := validator.Validate(tools[tc.tool].Definition, args); (err == nil) != tc.valid {
+			t.Errorf("%s %s: %v", tools[tc.tool].Definition.Name, tc.args, err)
 		}
 	}
 }
