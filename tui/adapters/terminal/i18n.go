@@ -545,6 +545,7 @@ var enMessages = map[string]string{
 	"transcript.toolInvalid":               "invalid arguments, the model retries",
 	"transcript.toolUnknown":               "unknown tool, refused",
 	"transcript.toolOverBudget":            "over budget",
+	"transcript.memoryReminder":            "console: asked the model to record memory",
 	"transcript.searchIn":                  "\"%s\" in %s", // local search
 	"transcript.listRecursive":             "%s, recursive",
 	"transcript.interruptedDraft":          "interrupted draft: ",
@@ -1117,6 +1118,7 @@ var esMessages = map[string]string{
 	"transcript.toolInvalid":               "argumentos no válidos, el modelo reintenta",
 	"transcript.toolUnknown":               "herramienta desconocida, rechazada",
 	"transcript.toolOverBudget":            "fuera de presupuesto",
+	"transcript.memoryReminder":            "consola: pidió al modelo que guarde memoria",
 	"transcript.searchIn":                  "\"%s\" en %s", // local search
 	"transcript.listRecursive":             "%s, recursivo",
 	"transcript.interruptedDraft":          "borrador interrumpido: ",

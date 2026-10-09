@@ -117,6 +117,8 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			at = s.MessageTimes[index]
 		}
 		switch {
+		case m.Role == root.RoleUser && consoleMemoryReminder(m.Content):
+			t.appendRow(transcriptRow{Label: theme.Icon("memory") + " ", LabelTone: toneAccent, Text: theme.T("transcript.memoryReminder"), Kind: transcriptRowMemory, Indent: true, At: at})
 		case m.Role == root.RoleUser:
 			t.appendRow(transcriptRow{Label: theme.Icon("user") + " ", LabelTone: toneAccent, Text: string(m.Content), Kind: transcriptRowUser, Indent: true, At: at, Aside: formatClock(at, clock)})
 		case m.Role == root.RoleAssistant && m.Content != "":
