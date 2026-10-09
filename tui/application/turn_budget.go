@@ -35,7 +35,7 @@ func warnCallBudget(ctx context.Context, s *domain.Session, u ContinueTurnUseCas
 		return nil
 	}
 	next := *s
-	if err := next.Note(budgetWarning(next, left)); err != nil {
+	if err := next.Note(budgetWarning(next, left, limit)); err != nil {
 		return err
 	}
 	if err := u.Store.Save(ctx, next); err != nil {
@@ -62,15 +62,19 @@ func budgetNoted(messages []root.Message, used int) bool {
 	return false
 }
 
-func budgetWarning(s domain.Session, left int) root.Text {
+// budgetWarning says how many calls are left and that the count is this
+// budget's: on 9 October 2026 claude-haiku-5.5, asked to go on after "1
+// tool call left in this turn", stopped after one call of the new turn,
+// taking the old note for its budget.
+func budgetWarning(s domain.Session, left, limit int) root.Text {
 	calls := fmt.Sprintf("%d tool calls", left)
 	if left == 1 {
 		calls = "1 tool call"
 	}
 	if run, live := s.Ceremony(); live && !run.AwaitingPerson() {
-		return root.Text(fmt.Sprintf("%s %s left for this step. Finish its work and hand it back with axlr_step_done, or hand back what you have.", domain.BudgetNotePrefix, calls))
+		return root.Text(fmt.Sprintf("%s %s left of this step's %d. Finish its work and hand it back with axlr_step_done, or hand back what you have; the next step starts a new budget.", domain.BudgetNotePrefix, calls, limit))
 	}
-	return root.Text(fmt.Sprintf("%s %s left in this turn. Finish the task with what you have, or stop and tell the user what remains; they can continue with a new budget.", domain.BudgetNotePrefix, calls))
+	return root.Text(fmt.Sprintf("%s %s left of this turn's %d. Finish the task with what you have, or stop and tell the user what remains; the user's next message starts a new budget of %d.", domain.BudgetNotePrefix, calls, limit, limit))
 }
 
 // resumeStepAtLimit continues a console-driven ceremony step that paused at
