@@ -87,14 +87,21 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 				a.calls = make(map[int]toolCallDTO)
 			}
 			call := a.calls[*fragment.Index]
-			call.ID += fragment.ID
+			// The id and name arrive whole, once in OpenAI's stream; some
+			// providers repeat them in every chunk. Only arguments are
+			// fragments to join.
+			if fragment.ID != "" {
+				call.ID = fragment.ID
+			}
 			if fragment.Type != "" {
 				if fragment.Type != "function" {
 					return nil, errors.New("unsupported OpenRouter tool call type")
 				}
 				call.Type = fragment.Type
 			}
-			call.Function.Name += fragment.Function.Name
+			if fragment.Function.Name != "" {
+				call.Function.Name = fragment.Function.Name
+			}
 			call.Function.Arguments += fragment.Function.Arguments
 			a.calls[*fragment.Index] = call
 		}

@@ -1,17 +1,17 @@
 package diagnostics
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sync"
 )
 
 // PayloadRecorder saves redacted bodies only, never authorization headers.
 // Each individual capture is bounded; a long session retains every exchange.
+// PruneDefault deletes a directory in the default location at a later
+// launch, once it is older than the retention period.
 type PayloadRecorder struct {
 	directory string
 	secrets   []string
@@ -19,8 +19,6 @@ type PayloadRecorder struct {
 }
 
 const payloadLimit = 8 * 1024 * 1024
-
-var credentialPattern = regexp.MustCompile(`(?i)(bearer\s+)[a-z0-9._~+/=-]+|\bsk-[a-z0-9_-]{16,}`)
 
 func NewPayloadRecorder(directory string, secrets ...string) (*PayloadRecorder, error) {
 	if !filepath.IsAbs(directory) {
@@ -58,17 +56,13 @@ func (p *PayloadRecorder) save(id uint64, kind string, body []byte, responseExte
 	if len(body) > payloadLimit {
 		return errors.New("payload exceeds capture limit")
 	}
-	body = append([]byte(nil), body...)
-	for _, secret := range p.secrets {
-		if secret != "" {
-			body = bytes.ReplaceAll(body, []byte(secret), []byte("[redacted]"))
-		}
+	// Redaction builds new slices and never writes to the caller's body. A
+	// stream is searched across its chunks first, while a secret split
+	// between them is still whole in the joined text.
+	if kind == "response" && responseExtension == "sse" {
+		body = p.redactStream(body)
 	}
-	// Both credential patterns begin with b/B or the Unicode case-fold set
-	// s/S/ſ. Avoid the regex scan when none exists in a large payload.
-	if bytes.IndexAny(body, "bBsS") >= 0 || bytes.Contains(body, []byte("ſ")) {
-		body = credentialPattern.ReplaceAll(body, []byte("[redacted]"))
-	}
+	body = p.redact(body)
 	if len(body) > payloadLimit {
 		return errors.New("redacted payload exceeds capture limit")
 	}

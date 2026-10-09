@@ -223,14 +223,14 @@ func (b *streamBody) Close() error {
 		}
 		if b.payloads != nil {
 			_, captureSpan := application.StartDiagnosticSpan(b.ctx, b.trace, application.DiagnosticActionPayload, application.DiagnosticEvent{Endpoint: b.endpoint, RequestID: b.id, Bytes: b.bytes})
+			// A read error, a failed drain or a cancellation cuts the body
+			// short; wire_done and the HTTP span already carry that class.
+			// The capture of what arrived fails only when it is not saved.
 			var saveErr error
 			if b.oversized {
 				saveErr = io.ErrShortBuffer
 			} else {
 				saveErr = b.payloads.SaveResponse(b.id, b.body, !b.jsonResponse)
-			}
-			if saveErr == nil {
-				saveErr = errors.Join(b.readErr, b.drainErr, cancellation)
 			}
 			if b.trace != nil {
 				stage := application.DiagnosticPayloadSaved
