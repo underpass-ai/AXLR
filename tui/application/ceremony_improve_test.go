@@ -119,7 +119,7 @@ func TestImproveBriefNeedsAFailingCheckThenWaitsForThePersonsMerge(t *testing.T)
 		t.Fatalf("checks: %v", checks.runs)
 	}
 	p := forge.proposals[0]
-	if p.Branch != "improve/20261008-1200-show-the-log" || p.Title != "Improve: show the log" || !strings.HasPrefix(p.Trailer, "Improved-by: AXLR axlr_improve 1.0 ") {
+	if p.Branch != "improve/20261008-1200-show-the-log" || p.Title != "Improve: The console prints its log tail" || !strings.HasPrefix(p.Trailer, "Improved-by: AXLR axlr_improve 1.0 ") {
 		t.Fatalf("proposal: %+v", p)
 	}
 	for _, want := range []string{"Improvement made by the AXLR console", "## Criteria\n\naxlr logs prints the last lines", "## Scope\n\ntui/cmd", "The console prints its log tail.", "`go test ./cmd/...` failed before the change and passed after it"} {
@@ -185,6 +185,44 @@ func TestImproveCountsAGoCheckThatRanNoTestsAsMissingNotPassing(t *testing.T) {
 	}
 	if r := step(t, d, &s, `{"summary":"s","summary_en":"The console prints its log tail."}`); r["next_step"] != "decide" {
 		t.Fatalf("a build whose check ran the test passes: %v", r)
+	}
+}
+
+// The pull request is titled from what changed, summary_en's first
+// sentence, cut on a word boundary within 72 bytes with the ellipsis, not
+// from the brief cut mid-word past 72 ("…model request afte…").
+func TestImprovePullRequestTitleIsTheSummarysFirstSentence(t *testing.T) {
+	forge := &fakeForge{statuses: []PullRequestStatus{{State: "OPEN", MergeState: "CLEAN", Passed: 3}}}
+	d, _, _, _, s := improveDriver(t, forge, 1, 0)
+	d.Files = fakeRepairFiles{marker: strings.Replace(improveMarker, `"brief":"show the log\nto the agent"`, `"brief":"A plan task (worker) session makes one extra model request after DONE, which nobody reads"`, 1)}
+	if err := d.Begin(context.Background(), &s, "x"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, improveBriefArgs)
+	if r := step(t, d, &s, `{"summary":"s","summary_en":"A finished plan task now closes its turn without asking the model again. The console ends the worker session at DONE."}`); r["next_step"] != "decide" {
+		t.Fatalf("build: %v", r)
+	}
+	if title := forge.proposals[0].Title; title != "Improve: A finished plan task now closes its turn without asking the…" || len(title) > 72 {
+		t.Fatalf("title %q (%d bytes)", title, len(title))
+	}
+}
+
+func TestProposalTitleFallsBackToTheBriefOnAWordBoundary(t *testing.T) {
+	for _, c := range []struct {
+		repair domain.RepairRun
+		want   string
+	}{
+		{domain.RepairRun{Improvement: true, Title: "Improve: A plan task (worker) session makes one extra model request…"}, "Improve: A plan task (worker) session makes one extra model request…"},
+		{domain.RepairRun{Summary: "Fixed word splitting."}, "Repair: Fixed word splitting"},
+		{domain.RepairRun{Summary: "Version 0.4.1 reads the log! Then it stops."}, "Repair: Version 0.4.1 reads the log"},
+		{domain.RepairRun{Summary: strings.Repeat("x", 90)}, "Repair: " + strings.Repeat("x", 61) + "…"},
+	} {
+		if got := proposalTitle(c.repair); got != c.want || len(got) > 72 {
+			t.Fatalf("proposalTitle(%+v) = %q, want %q", c.repair, got, c.want)
+		}
+	}
+	if got := titleWithin("Improve: ", "A plan task (worker) session makes one extra model request after DONE, which nobody reads"); got != "Improve: A plan task (worker) session makes one extra model request…" {
+		t.Fatalf("brief title %q", got)
 	}
 }
 
