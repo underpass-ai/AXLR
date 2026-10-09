@@ -162,14 +162,15 @@ func (s *Server) runDirectCall(id string) {
 	call.Status = "running"
 	call.Revision++
 	call.Result = &domain.ToolOutcome{Content: "tool execution started; effect unknown", IsError: true, Uncertain: true}
-	if s.calls.Save(call) != nil {
-		return
-	}
 	actor := call.Approver
 	if actor == "" {
 		actor = call.Owner
 	}
+	// The execute record is synced before the call is reported as running.
 	if s.audit.Append(auditRecord{Principal: actor, RequestID: call.DecisionRequestID, Action: "tool_call.execute", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID}) != nil {
+		return
+	}
+	if s.calls.Save(call) != nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(s.root, 30*time.Second)

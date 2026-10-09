@@ -131,3 +131,110 @@ func TestCallRecoveryNeverReexecutesApprovedEffect(t *testing.T) {
 		t.Fatalf("repeated recovery changed call: %+v", again)
 	}
 }
+
+type approveEverything struct{}
+
+func (approveEverything) AutoApproves(domain.ToolIdentity) bool { return true }
+
+// reopenAudit stands in for the audit volume recovering after a failure.
+func reopenAudit(t *testing.T, s *Server) {
+	t.Helper()
+	audit, err := newAuditStore(filepath.Join(s.Config.StateDir, "audit"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.audit = audit
+}
+
+func TestDecisionAuditFailureLeavesCallUndecided(t *testing.T) {
+	s, ts, client, _ := testServer(t)
+	id := createDirectCall(t, client, ts.URL, `{"tool":"local_read","arguments":{"path":"sample.txt"}}`)
+	_ = s.audit.Close() // stands in for ENOSPC or EIO on the audit volume
+	url := ts.URL + "/v1/tool-calls/" + id + "/decisions"
+	response := apiRequest(t, client, "POST", url, `{"decision":"approve","expected_revision":1}`, "abcdef1234567890")
+	response.Body.Close()
+	if response.StatusCode != 500 {
+		t.Fatalf("approve without audit: %d", response.StatusCode)
+	}
+	call, err := s.calls.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if call.Status != "pending_approval" || call.Decision != "" || call.Revision != 1 {
+		t.Fatalf("unaudited decision was saved: status=%s decision=%q revision=%d", call.Status, call.Decision, call.Revision)
+	}
+	reopenAudit(t, s)
+	response = apiRequest(t, client, "POST", url, `{"decision":"approve","expected_revision":1}`, "fresh-key-1234567890")
+	response.Body.Close()
+	if response.StatusCode != 202 {
+		t.Fatalf("approve after the audit recovered: %d", response.StatusCode)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for directCallStatus(t, client, ts.URL, id) != "completed" {
+		if time.Now().After(deadline) {
+			t.Fatal("approved call did not complete")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestAutoApprovedCreateAuditFailureSavesNoCall(t *testing.T) {
+	s, ts, client, _ := testServer(t)
+	s.deps.Approval = approveEverything{}
+	_ = s.audit.Close()
+	response := apiRequest(t, client, "POST", ts.URL+"/v1/tool-calls", `{"tool":"local_read","arguments":{"path":"sample.txt"}}`, "1234567890abcdef")
+	response.Body.Close()
+	if response.StatusCode != 500 {
+		t.Fatalf("create without audit: %d", response.StatusCode)
+	}
+	saved, err := filepath.Glob(filepath.Join(s.Config.StateDir, "tool-calls", "*.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(saved) != 0 {
+		t.Fatalf("unaudited auto-approved call was saved: %v", saved)
+	}
+}
+
+func TestExecuteAuditFailureNeverMarksCallRunning(t *testing.T) {
+	s, ts, client, _ := testServer(t)
+	gate := gatedTool{entered: make(chan struct{}), release: make(chan struct{})}
+	s.deps.Tools = gate
+	id := createDirectCall(t, client, ts.URL, `{"tool":"local_read","arguments":{"path":"sample.txt"}}`)
+	// Occupy every direct slot so the approved call cannot start yet.
+	for i := 0; i < cap(s.directSlots); i++ {
+		s.directSlots <- struct{}{}
+	}
+	response := apiRequest(t, client, "POST", ts.URL+"/v1/tool-calls/"+id+"/decisions", `{"decision":"approve","expected_revision":1}`, "abcdef1234567890")
+	response.Body.Close()
+	if response.StatusCode != 202 {
+		t.Fatalf("approve: %d", response.StatusCode)
+	}
+	lock := s.callLock(id)
+	lock.Lock()
+	_ = s.audit.Close()
+	for i := 0; i < cap(s.directSlots); i++ {
+		<-s.directSlots
+	}
+	// The worker holds a slot while it waits for the call lock.
+	for len(s.directSlots) != 1 {
+		time.Sleep(time.Millisecond)
+	}
+	lock.Unlock()
+	// It returns the slot only after it has finished.
+	for len(s.directSlots) != 0 {
+		time.Sleep(time.Millisecond)
+	}
+	select {
+	case <-gate.entered:
+		t.Fatal("tool ran without an execute record")
+	default:
+	}
+	call, err := s.calls.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if call.Status != "pending_approval" || call.Decision != "approve" || call.Revision != 2 {
+		t.Fatalf("call that never ran is reported as status=%s revision=%d", call.Status, call.Revision)
+	}
+}
