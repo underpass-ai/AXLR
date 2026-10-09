@@ -377,11 +377,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.InstalledPlugins.Resize(m.Layout.Width, m.Layout.Height-2)
 		}
-		if v.MADEPreparation != nil {
+		// m.Info is shared by several overlays: a result is written only
+		// while its own panel is open, never over one opened since.
+		if v.MADEPreparation != nil && m.overlay == "made-setup" {
 			m.Info.SetContent(madePreparationContent(*v.MADEPreparation, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
 		}
-		if v.EngineUpdates != nil {
+		if v.EngineUpdates != nil && m.overlay == "updates" {
 			m.Info.SetContent(engineUpdateContent(*v.EngineUpdates, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
 		}
