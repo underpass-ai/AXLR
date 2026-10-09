@@ -31,9 +31,9 @@ func rejectUnknownCall(ctx context.Context, s *domain.Session, store SessionStor
 		if errors.As(invalid[0], &denial) {
 			reason = denial.Error()
 		}
-		if len(reason) > 1024 {
-			reason = reason[:1024]
-		}
+		// The reason may quote non-ASCII argument text: cut on a rune
+		// boundary so the outcome stays valid UTF-8.
+		reason = utf8Prefix(reason, 1024)
 	}
 	if err := next.RecordToolOutcome(p.Call.ID, domain.DecisionDeny, domain.ToolOutcome{Content: root.Text(reason), IsError: true}); err != nil {
 		return err
