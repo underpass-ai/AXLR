@@ -63,21 +63,32 @@ func (m AppModel) approvalCard() string {
 // mainTranscript is the conversation sized to the rows the composer or the
 // approval card leave free.
 func (m AppModel) mainTranscript() string {
+	t := m.shownTranscript()
 	if m.overlay == "search" {
-		t := m.Transcript
 		t.Highlight = strings.TrimSpace(m.SearchBox.Input.Value())
-		return t.View()
-	}
-	if !m.inlineApproval() {
-		return m.Transcript.View()
-	}
-	t := m.Transcript
-	bottom := t.Viewport.AtBottom()
-	t.Viewport.SetHeight(max(1, m.Layout.Height-2-approvalCardChrome-m.approvalDetailRows()))
-	if bottom {
-		t.Viewport.GotoBottom()
 	}
 	return t.View()
+}
+
+// shownTranscript is the conversation as the main view draws it: the
+// approval card and a long error take rows from it, and it keeps showing
+// its latest line when it was at the bottom. Mouse selection maps cells
+// through the same geometry.
+func (m AppModel) shownTranscript() Transcript {
+	t := m.Transcript
+	height := t.Viewport.Height()
+	if m.inlineApproval() {
+		height = m.Layout.Height - 2 - approvalCardChrome - m.approvalDetailRows()
+	}
+	height = max(1, height-(m.footerRows()-1))
+	if height != t.Viewport.Height() {
+		bottom := t.Viewport.AtBottom()
+		t.Viewport.SetHeight(height)
+		if bottom {
+			t.Viewport.GotoBottom()
+		}
+	}
+	return t
 }
 
 func (m AppModel) inlineApproval() bool {

@@ -250,6 +250,7 @@ func (p *PluginPanel) Update(msg tea.Msg, mode ControlIntent) ControlIntent {
 func (p PluginPanel) View(mode ControlIntent, w, h int) string {
 	w, h = max(1, w), max(1, h)
 	p.Search.Placeholder = p.Theme.T("plugins.searchPlaceholder")
+	p.InstallInput.Placeholder = p.Theme.T("mcp.manifestPlaceholder")
 	title := p.Theme.T("plugins.mcpTitle")
 	filters := []string{p.Theme.T("filters.all"), p.Theme.T("filters.connected"), p.Theme.T("filters.errors"), p.Theme.T("filters.manualTitle"), p.Theme.T("filters.autoTitle")}
 	filter := filters[min(p.filter, len(filters)-1)]

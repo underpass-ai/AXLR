@@ -95,3 +95,23 @@ func TestUpdatePaletteAndLocalizedNarrowResults(t *testing.T) {
 		t.Fatal("failure reported as complete")
 	}
 }
+
+// A result that arrives after its panel was closed does not write into the
+// overlay the person opened since: they share m.Info.
+func TestBackgroundResultsLeaveAnotherOverlayAlone(t *testing.T) {
+	for _, intent := range []ControlIntent{"updates", "made-prepare"} {
+		m := sized()
+		m.deps.EngineUpdates = &engineUpdaterStub{results: []application.EngineUpdateResult{{Engine: "made", Version: "9.9.9", Status: "current"}}}
+		m.deps.MADEPreparation = &madePreparerStub{result: application.MADEPreparation{Status: "granted", WorkIdentity: "axlr-work-9z9z", GrantID: "g"}}
+		next, cmd := m.Update(intent)
+		m = next.(AppModel)
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+		m = update(m, ControlIntent("info"))
+		m = runUIOperation(m, cmd)
+		view := ansi.Strip(m.View().Content)
+		if m.overlay != "info" || strings.Contains(view, "9.9.9") || strings.Contains(view, "axlr-work-9z9z") || !strings.Contains(view, string(testWorkspace())) {
+			t.Fatalf("%s: the result replaced the information overlay:\n%s", intent, view)
+		}
+		m.Close()
+	}
+}

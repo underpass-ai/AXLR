@@ -180,7 +180,9 @@ func (p *ModelPicker) ensureVisible() {
 
 func (p ModelPicker) Update(msg tea.Msg, zones *zone.Manager, prefix string) (ModelPicker, ControlIntent, tea.Cmd) {
 	if key, ok := msg.(tea.KeyPressMsg); ok {
-		switch key.String() {
+		// "Retry R" is printed uppercase: Shift+R is the same key. Other
+		// letters still reach the search input as typed.
+		switch strings.ToLower(key.String()) {
 		case "esc":
 			return p, ModelCloseIntent, nil
 		case "enter":

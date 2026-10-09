@@ -36,6 +36,9 @@ type RepairPanel struct {
 	// shown is the record and status the panel last opened for on its own,
 	// so closing it is respected until the next decision arrives.
 	shown string
+	// mode is what n starts: the mode of the /repair or /improve that
+	// opened the panel, empty when the panel opened on its own.
+	mode domain.WorkMode
 }
 
 // readRepairEvent waits for the next record change.
@@ -116,6 +119,7 @@ func (m AppModel) openRepairPanel() AppModel {
 		m.Status.Error = m.Theme.T("repairs.nothing")
 		return m
 	}
+	m.RepairPanel.mode = ""
 	m.Info = NewTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
@@ -265,6 +269,13 @@ func (m AppModel) repairKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		}
 		m.Status.Error = ""
 		return m.refreshRepairPanel(), nil
+	case "n":
+		// The records are shown before the mode changes; n still starts a
+		// new repair or improvement.
+		if m.RepairPanel.mode != "" {
+			m.overlay = ""
+			return m.switchMode(m.RepairPanel.mode)
+		}
 	}
 	m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 	return m, nil
@@ -287,6 +298,12 @@ func (m AppModel) decideRepair(approve bool, reason string) AppModel {
 
 func (m AppModel) repairPanelView() (string, string, string) {
 	subtitle := m.Theme.T("repairs.hints")
+	switch m.RepairPanel.mode {
+	case domain.ModeRepair:
+		subtitle = m.Theme.T("repairs.hintsNew")
+	case domain.ModeImprove:
+		subtitle = m.Theme.T("repairs.hintsNewImprovement")
+	}
 	body := m.Info.View()
 	if m.RepairPanel.Reasoning {
 		body += "\n\n" + m.RepairPanel.Reason.View()

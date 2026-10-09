@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -221,5 +222,64 @@ func TestImprovementsShowTheirKindAndOpenFromImprove(t *testing.T) {
 	}
 	if badge := m.repairBadge(); !strings.HasPrefix(badge, "improvement ") {
 		t.Fatalf("badge %q", badge)
+	}
+}
+
+// /repair and /improve show the records first; n in the panel still starts
+// the mode, however many records exist.
+func TestRepairPanelStartsANewRepairOrImprovementWithN(t *testing.T) {
+	merged := awaitingRecord(domain.RepairCompleted)
+	merged.Improvement, merged.Pending = true, ""
+	elsewhere := awaitingRecord(domain.RepairRunning)
+	elsewhere.Parent, elsewhere.Pending = "1123456789abcdef0123456789abcdef", ""
+	for _, test := range []struct {
+		command string
+		record  domain.RepairRecord
+		mode    domain.WorkMode
+		hint    string
+	}{
+		{"/improve", merged, domain.ModeImprove, "n new improvement"},
+		{"/repair", elsewhere, domain.ModeRepair, "n new repair"},
+	} {
+		m := repairModel(t, &fakeRepairs{records: []domain.RepairRecord{test.record}})
+		store, err := storage.New(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.deps.Store = store
+		m.Composer.Input.SetValue(test.command)
+		m = update(m, ControlIntent("send"))
+		if m.overlay != "repairs" || !strings.Contains(m.View().Content, test.hint) {
+			t.Fatalf("%s: overlay %q, hints lack %q:\n%s", test.command, m.overlay, test.hint, m.View().Content)
+		}
+		m = update(m, tea.KeyPressMsg{Code: 'n', Text: "n"})
+		if m.overlay != "" || m.Header.State.Mode != test.mode || m.Status.Error != "" {
+			t.Fatalf("%s then n: overlay %q, mode %q, error %q", test.command, m.overlay, m.Header.State.Mode, m.Status.Error)
+		}
+		store.Close()
+	}
+}
+
+// The reason input sits under the panel's content: a resize keeps the two
+// rows the panel and the incident card leave for it.
+func TestTheReasonInputSurvivesAResize(t *testing.T) {
+	repairs := &fakeRepairs{records: []domain.RepairRecord{awaitingRecord(domain.RepairAwaitingMerge)}}
+	m := repairModel(t, repairs)
+	m = update(m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	prompt := strings.TrimSpace(Translate(English, "repairs.reasonPrompt"))
+	if !strings.Contains(m.View().Content, prompt) {
+		t.Fatal("the reason input is not shown")
+	}
+	for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 30}, {Width: 90, Height: 26}} {
+		if m = update(m, size); !m.RepairPanel.Reasoning || !strings.Contains(m.View().Content, prompt) {
+			t.Fatalf("after a resize to %dx%d the reason input is gone:\n%s", size.Width, size.Height, m.View().Content)
+		}
+	}
+
+	card := awaitingModel(t, 0)
+	card = update(card, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	question := strings.TrimSpace(Translate(Spanish, "incident.reasonPrompt"))
+	if card = update(card, tea.WindowSizeMsg{Width: 100, Height: 30}); !strings.Contains(card.View().Content, question) {
+		t.Fatalf("after a resize the incident card lost its reason input:\n%s", card.View().Content)
 	}
 }

@@ -167,11 +167,13 @@ func (t Theme) selectionStyle() lipgloss.Style {
 }
 
 // transcriptPoint maps a screen cell to transcript content coordinates. The
-// body starts under the one-row header; columns inside the gutter clamp to
-// the first cell, and rows past the content clamp to its last line.
+// body starts under the one-row header and is the conversation as drawn
+// (shownTranscript); columns inside the gutter clamp to the first cell, and
+// rows past the content clamp to its last line.
 func (m AppModel) transcriptPoint(x, y int) (textPoint, bool) {
 	top := 1
-	height := m.Transcript.Viewport.Height()
+	shown := m.shownTranscript()
+	height := shown.Viewport.Height()
 	if y < top || y >= top+height {
 		return textPoint{}, false
 	}
@@ -179,7 +181,7 @@ func (m AppModel) transcriptPoint(x, y int) (textPoint, bool) {
 	if lines == 0 {
 		return textPoint{}, false
 	}
-	line := min(lines-1, m.Transcript.Viewport.YOffset()+y-top)
+	line := min(lines-1, shown.Viewport.YOffset()+y-top)
 	return textPoint{Line: line, Col: max(0, x-m.Transcript.Gutter)}, true
 }
 
@@ -187,7 +189,7 @@ func (m AppModel) transcriptPoint(x, y int) (textPoint, bool) {
 // the first visible row, below it to the last visible row.
 func (m AppModel) clampedPoint(x, y int) textPoint {
 	top := 1
-	bottom := top + max(1, m.Transcript.Viewport.Height()) - 1
+	bottom := top + max(1, m.shownTranscript().Viewport.Height()) - 1
 	if p, ok := m.transcriptPoint(x, max(top, min(bottom, y))); ok {
 		return p
 	}

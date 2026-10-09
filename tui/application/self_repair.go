@@ -287,7 +287,7 @@ func (r *SelfRepair) RequestImprovement(ctx context.Context, s domain.Session, a
 		return nil, errors.New(refusal)
 	}
 	if err := r.Engine.Ready(ctx, "axlr_improve", "1.0"); err != nil {
-		return nil, fmt.Errorf("MADE cannot run the improve ceremony: %w; publish it with /mcp → P", err)
+		return nil, fmt.Errorf("MADE cannot run the improve ceremony: %w", err)
 	}
 	record := domain.RepairRecord{Improvement: true, Signature: signature, Brief: improvementBrief(s, request, calls, r.Build), Attempt: 1}
 	if err := r.start(ctx, s, records, &record, request.Description); err != nil {
