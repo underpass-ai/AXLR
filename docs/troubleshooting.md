@@ -71,7 +71,7 @@ curl -s http://127.0.0.1:8080/v1/chat/completions -H 'content-type: application/
 
 ## Inspect the right diagnostics
 
-The console's JSONL trace reports timing and failure classes without prompt content. Its default payload directory includes redacted HTTP bodies and can include conversation content. If you only need timings, launch with `--trace-payloads=false`. Queued messages appear as `prompt_queued`; `steer_applied` records one joining the running turn and `steer_cancelled` a ceremony step stopped for one. Do not paste payload files into an issue without reviewing them.
+The console's JSONL trace reports timing and failure classes without prompt content. Request and response bodies are saved only when you ask: launch with `--trace-payloads` (or set `trace_payloads` in settings) to reproduce a problem with them; they are redacted but can include conversation content and file contents. Queued messages appear as `prompt_queued`; `steer_applied` records one joining the running turn and `steer_cancelled` a ceremony step stopped for one. Do not paste payload files into an issue without reviewing them.
 
 The [MCP diagnosis](diagnostics/2026-09-30-tui-mcp.md) and [payload audit](diagnostics/2026-09-30-tui-payloads.md) are examples from a dated investigation, not current health checks.
 

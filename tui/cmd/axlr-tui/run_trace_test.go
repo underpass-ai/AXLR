@@ -21,7 +21,7 @@ func TestRunTraceRecordsStartupPersistenceAndShutdownWithoutSecrets(t *testing.T
 	env := cliEnv(t)
 	path := filepath.Join(t.TempDir(), "trace.jsonl")
 	var output bytes.Buffer
-	code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model", "--trace-file", path}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
+	code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model", "--trace-file", path, "--trace-payloads"}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
 	if code != 0 {
 		t.Fatalf("exit=%d output=%s", code, &output)
 	}
@@ -150,14 +150,14 @@ func TestRunAcceptsRelativeExplicitTraceWithPayloadCapture(t *testing.T) {
 		t.Fatal(err)
 	}
 	var output bytes.Buffer
-	code := run(context.Background(), []string{"--root", t.TempDir(), "--trace-file", relative}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
+	code := run(context.Background(), []string{"--root", t.TempDir(), "--trace-file", relative, "--trace-payloads"}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
 	if code != 0 {
 		t.Fatalf("exit=%d output=%s", code, &output)
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(output.String(), "diagnostics: "+path) || !strings.Contains(output.String(), "payloads: "+path+".payloads-") {
+	if !strings.Contains(output.String(), "diagnostics: "+path) || !strings.Contains(output.String(), "payload capture is on: request and response bodies, prompts and tool results included, are stored in "+path+".payloads-") {
 		t.Fatalf("normalized locations missing: %s", &output)
 	}
 }
@@ -172,7 +172,7 @@ func TestRunReusedTraceGetsUniquePayloadDirectoryPerLaunch(t *testing.T) {
 	})
 	var output bytes.Buffer
 	for i := 0; i < 2; i++ {
-		code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model", "--trace-file", path}, func(key string) string { return env[key] }, func(m tea.Model) error {
+		code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model", "--trace-file", path, "--trace-payloads"}, func(key string) string { return env[key] }, func(m tea.Model) error {
 			a := m.(terminal.AppModel)
 			a.Composer.Input.SetValue("reply")
 			m, cmd := a.Update(terminal.ControlIntent("send"))
@@ -199,9 +199,17 @@ func TestRunReusedTraceGetsUniquePayloadDirectoryPerLaunch(t *testing.T) {
 		if err != nil || len(files) != 2 {
 			t.Fatalf("captures=%v err=%v", files, err)
 		}
-		if !strings.Contains(output.String(), "payloads: "+dir) {
+		for _, file := range files {
+			if info, err := file.Info(); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
+				t.Fatalf("capture %s mode=%v err=%v", file.Name(), info, err)
+			}
+		}
+		if !strings.Contains(output.String(), "are stored in "+dir) {
 			t.Fatal("payload path missing")
 		}
+	}
+	if info, err := os.Stat(path); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
+		t.Fatalf("trace mode=%v err=%v", info, err)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil || bytes.Count(data, []byte(`"stage":"startup"`)) != 2 || bytes.Count(data, []byte(`"stage":"payload_saved"`)) != 4 || bytes.Contains(data, []byte(`"stage":"payload_failed"`)) {
@@ -217,7 +225,7 @@ func TestRunCanDisablePayloadsAndKeepDefaultDiagnostics(t *testing.T) {
 		t.Fatalf("exit=%d output=%s", code, &output)
 	}
 	files, err := os.ReadDir(filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs"))
-	if err != nil || len(files) != 1 || !strings.HasSuffix(files[0].Name(), ".jsonl") || strings.Contains(output.String(), "payloads:") {
+	if err != nil || len(files) != 1 || !strings.HasSuffix(files[0].Name(), ".jsonl") || strings.Contains(output.String(), "payload") {
 		t.Fatalf("files=%v err=%v output=%s", files, err, &output)
 	}
 }
@@ -292,7 +300,8 @@ func TestRunPrunesOldDefaultTracesAndPayloads(t *testing.T) {
 			if traces, _ := filepath.Glob(filepath.Join(logs, "trace-*.jsonl")); len(traces) != want {
 				t.Errorf("traces=%v", traces)
 			}
-			if payloads, _ := filepath.Glob(filepath.Join(logs, "trace-*.jsonl.payloads-*")); len(payloads) != want-1 {
+			// Payload capture is off by default, so this launch adds none.
+			if payloads, _ := filepath.Glob(filepath.Join(logs, "trace-*.jsonl.payloads-*")); len(payloads) != want-2 {
 				t.Errorf("payload directories=%v", payloads)
 			}
 			if strings.Contains(output.String(), "trace-1-2") {
@@ -309,7 +318,7 @@ func TestRunKeepsPayloadsOutsideTheWorkspace(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "trace.jsonl")
 	var output bytes.Buffer
-	code := run(context.Background(), []string{"--root", root, "--trace-file", path}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
+	code := run(context.Background(), []string{"--root", root, "--trace-file", path, "--trace-payloads"}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
 	if code != 0 {
 		t.Fatalf("exit=%d output=%s", code, &output)
 	}
@@ -318,7 +327,55 @@ func TestRunKeepsPayloadsOutsideTheWorkspace(t *testing.T) {
 	}
 	logs := filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs")
 	moved, err := filepath.Glob(filepath.Join(logs, "trace.jsonl.payloads-*"))
-	if err != nil || len(moved) != 1 || !strings.Contains(output.String(), "payloads: "+moved[0]) || !strings.Contains(output.String(), "payloads go to "+logs) {
+	if err != nil || len(moved) != 1 || !strings.Contains(output.String(), "are stored in "+moved[0]) || !strings.Contains(output.String(), "payloads go to "+logs) {
 		t.Fatalf("moved=%v err=%v output=%s", moved, err, &output)
+	}
+}
+
+// Payloads hold whole transcripts (295 MB in the default logs directory on
+// 9 October 2026, 74 MB from one run), so a launch captures them only when
+// asked: trace_payloads in settings.json, or --trace-payloads, which decides
+// for one launch either way. Timing traces are always written.
+func TestRunCapturesPayloadsOnlyWhenAsked(t *testing.T) {
+	for _, tc := range []struct {
+		name, settings string
+		args           []string
+		capture        bool
+	}{
+		{"default", "", nil, false},
+		{"setting on", `{"trace_payloads":true}`, nil, true},
+		{"flag off over setting on", `{"trace_payloads":true}`, []string{"--trace-payloads=false"}, false},
+		{"flag on", "", []string{"--trace-payloads"}, true},
+		{"flag on over setting off", `{"trace_payloads":false}`, []string{"--trace-payloads=true"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := cliEnv(t)
+			if tc.settings != "" {
+				settings := filepath.Join(env["HOME"], ".config", "axlr", "settings.json")
+				if err := os.MkdirAll(filepath.Dir(settings), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(settings, []byte(tc.settings), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var output bytes.Buffer
+			code := run(context.Background(), append([]string{"--root", t.TempDir()}, tc.args...), func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
+			if code != 0 {
+				t.Fatalf("exit=%d output=%s", code, &output)
+			}
+			logs := filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs")
+			traces, _ := filepath.Glob(filepath.Join(logs, "trace-*.jsonl"))
+			payloads, _ := filepath.Glob(filepath.Join(logs, "trace-*.jsonl.payloads-*"))
+			if len(traces) != 1 || (len(payloads) == 1) != tc.capture || len(payloads) > 1 {
+				t.Fatalf("traces=%v payloads=%v", traces, payloads)
+			}
+			if announced := strings.Count(output.String(), "payload capture is on"); announced != len(payloads) {
+				t.Fatalf("announced %d times for %d directories: %s", announced, len(payloads), &output)
+			}
+			if tc.capture && !strings.Contains(output.String(), "are stored in "+payloads[0]) {
+				t.Fatalf("output=%s", &output)
+			}
+		})
 	}
 }
