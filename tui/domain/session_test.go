@@ -405,8 +405,59 @@ func TestInvalidCompletionAndCatalogDoNotChangeHistory(t *testing.T) {
 	if e := s.CompleteAssistant(completion(t, ids...)); e != ErrToolCallLimit {
 		t.Fatal(e)
 	}
-	if len(s.Messages()) != 1 || len(s.Pending()) != 0 {
-		t.Fatal("oversized batch partially accepted")
+	// The oversized answer is kept; none of its calls can run.
+	if len(s.Messages()) != 2+len(ids) || len(s.Pending()) != 0 || s.Status() != StatusInterrupted {
+		t.Fatalf("oversized batch: %d messages, %d pending, %s", len(s.Messages()), len(s.Pending()), s.Status())
+	}
+	for _, record := range s.Export().Activity {
+		if record.Decision != DecisionDeny || record.Outcome == nil || !record.Outcome.IsError {
+			t.Fatalf("a call over the limit was left to run: %+v", record)
+		}
+	}
+}
+
+// At the limit the answer stays in the transcript with its calls answered as
+// not run; resuming restarts the budget from the calls already made, and
+// both states restore from the transcript they keep.
+func TestAnAnswerOverTheCallLimitIsKeptAndResumeRestartsTheBudget(t *testing.T) {
+	for _, ceremony := range []bool{false, true} {
+		s := session(t)
+		must(t, s.BeginTurn("hi", catalog(t)))
+		limit := MaxTurnToolCalls
+		if ceremony {
+			run := CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "repair", Iteration: 1, Compact: true}
+			must(t, s.SetCeremony(run))
+			limit = run.StepCallLimit()
+		}
+		batch := func(prefix string, n int) []string {
+			ids := make([]string, n)
+			for i := range ids {
+				ids[i] = fmt.Sprintf("%s%d", prefix, i)
+			}
+			return ids
+		}
+		first := batch("a", limit-1)
+		must(t, s.CompleteAssistant(completion(t, first...)))
+		for _, id := range first {
+			must(t, s.RecordToolOutcome(axlr.ToolCallID(id), DecisionApprove, ToolOutcome{Content: "ok"}))
+		}
+		if e := s.CompleteAssistant(completion(t, batch("b", 2)...)); e != ErrToolCallLimit {
+			t.Fatalf("ceremony=%v: %v", ceremony, e)
+		}
+		if _, e := RestoreSession(s.Export()); e != nil {
+			t.Fatalf("ceremony=%v: the kept answer does not restore: %v", ceremony, e)
+		}
+		last := s.Export().Activity[len(s.Export().Activity)-1].Outcome
+		if !strings.Contains(string(last.Content), fmt.Sprintf("not run: the turn reached its %d tool-call limit", limit)) {
+			t.Fatalf("ceremony=%v: %q", ceremony, last.Content)
+		}
+		must(t, s.ResumeTurn())
+		if _, e := RestoreSession(s.Export()); e != nil {
+			t.Fatalf("ceremony=%v: a resumed turn does not restore: %v", ceremony, e)
+		}
+		if e := s.CompleteAssistant(completion(t, batch("c", limit)...)); e != nil {
+			t.Fatalf("ceremony=%v: the resumed turn has no budget: %v", ceremony, e)
+		}
 	}
 }
 
