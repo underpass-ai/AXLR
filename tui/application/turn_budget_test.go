@@ -73,7 +73,7 @@ func TestTheModelIsWarnedOnceBeforeTheCallLimit(t *testing.T) {
 		t.Fatal(err)
 	}
 	notes := budgetNotes(s.Messages())
-	want := domain.BudgetNotePrefix + " 2 tool calls left in this turn. Finish the task with what you have, or stop and tell the user what remains; they can continue with a new budget."
+	want := domain.BudgetNotePrefix + " 2 tool calls left of this turn's 10. Finish the task with what you have, or stop and tell the user what remains; the user's next message starts a new budget of 10."
 	if len(notes) != 1 || notes[0] != want {
 		t.Fatalf("notes = %q", notes)
 	}
