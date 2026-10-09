@@ -93,6 +93,12 @@ type CheckRunnerPort interface {
 	Run(ctx context.Context, command domain.CheckCommand) (CheckResult, error)
 }
 
+// ConsoleOutputBytes is the output cap the console asks for when it parses a
+// command's output itself: the runtime's hard limit (hardFileBytes in
+// runtime/config.go). An output still cut there is reported by
+// CheckResult.Truncated and refused, never parsed in part.
+const ConsoleOutputBytes = 1 << 20
+
 type CheckResult struct {
 	// Ran is false when the program never started (not found, timed out,
 	// refused); ExitCode is then meaningless.
@@ -105,6 +111,10 @@ type CheckResult struct {
 	// that are not part of the parsed value. Empty when the runner only has
 	// Output.
 	Stdout string
+	// Truncated is true when the runtime's output cap, which stdout and
+	// stderr share, cut the output: Stdout then lacks its end, so a caller
+	// that parses it must refuse it.
+	Truncated bool
 }
 
 // MemoryPort is KMP as the ceremony driver sees it.

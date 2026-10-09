@@ -25,16 +25,20 @@ type Forge struct{ Checks application.CheckRunnerPort }
 
 var _ application.ForgePort = Forge{}
 
-// run returns the whole stdout of a successful command, for parsing. Failures
-// quote only the tail of stdout and stderr, which is enough to show the model
-// what went wrong.
+// run returns the whole stdout of a successful command, for parsing: it asks
+// the runtime for its whole output limit and refuses an output cut there.
+// Failures quote only the tail of stdout and stderr, which is enough to show
+// the model what went wrong.
 func (f Forge) run(ctx context.Context, program string, args ...string) (string, error) {
-	result, err := f.Checks.Run(ctx, domain.CheckCommand{Program: program, Args: args})
+	result, err := f.Checks.Run(ctx, domain.CheckCommand{Program: program, Args: args, MaxOutput: consoleOutput})
 	if err != nil {
 		return "", err
 	}
 	if !result.Ran || result.ExitCode != 0 {
 		return result.Output, fmt.Errorf("%s %s: exit %d: %s", program, strings.Join(args, " "), result.ExitCode, strings.TrimSpace(result.Output))
+	}
+	if result.Truncated {
+		return "", fmt.Errorf("%s %s: its output was cut at the runtime's %d-byte limit; the console does not parse a partial answer", program, strings.Join(args, " "), consoleOutput)
 	}
 	if result.Stdout != "" {
 		return result.Stdout, nil
