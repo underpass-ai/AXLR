@@ -53,6 +53,9 @@ type UserSettings struct {
 	// LocalModels are OpenAI-compatible servers, such as llama.cpp or vLLM,
 	// offered in /model next to OpenRouter's catalog.
 	LocalModels []LocalModel `json:"local_models,omitempty"`
+	// Models holds OpenRouter request options by exact model id: provider
+	// routing, reasoning and max_tokens (user_settings_models.go).
+	Models map[string]json.RawMessage `json:"models,omitempty"`
 	// Jev enables TypeSafe Jev, an external judgement model; absent or with
 	// both switches off, nothing is sent to TypeSafe.
 	Jev *JevSettings `json:"jev,omitempty"`
@@ -350,7 +353,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies", "plan", "trace_retention_days"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -430,6 +433,9 @@ func (s UserSettings) Validate() error {
 			return fmt.Errorf("settings local_models lists %s twice", local.ID)
 		}
 		localIDs[local.ID] = struct{}{}
+	}
+	if err := s.validateModels(localIDs); err != nil {
+		return err
 	}
 	if profile := s.CeremonyProfile(); profile != "auto" && profile != "standard" && profile != "compact" {
 		return errors.New("settings ceremonies.profile must be auto, standard or compact")
