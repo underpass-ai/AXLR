@@ -48,6 +48,9 @@ type RepairSettings struct {
 	// MaxActive bounds the repair and improvement sessions active in the
 	// registry, whoever started them; zero means DefaultMaxActiveJobs.
 	MaxActive int
+	// Watch bounds the merge queue's wait for one job's checks
+	// (repair.watch_minutes); zero means the ceremony's default.
+	Watch time.Duration
 }
 
 // SelfRepair lets the agent of a running session ask the console to repair
@@ -65,9 +68,11 @@ type SelfRepair struct {
 	// Engine is MADE as the parent console sees it; nil means not connected.
 	Engine   CeremonyEnginePort
 	Settings RepairSettings
-	// Forge reads the jobs' pull requests for /jobs; nil means the panel
-	// cannot refresh them.
+	// Forge reads the jobs' pull requests for /jobs and its merge queue;
+	// nil means neither is available.
 	Forge ForgePort
+	// Sleep spaces the merge queue's reads; nil means a timer.
+	Sleep func(context.Context, time.Duration) error
 	// Build is the console build that detects defects and receives notices.
 	Build string
 	// RunToken names this console launch; a record left running under
@@ -86,6 +91,11 @@ type SelfRepair struct {
 	// unsaved is the record changes the registry refused since Records last
 	// reported them: the registry cannot show those itself.
 	unsaved error
+	// draining is true while the merge queue's goroutine runs; queueCancel
+	// stops it with the console.
+	draining    bool
+	queueCtx    context.Context
+	queueCancel context.CancelFunc
 }
 
 // repairRun is one repair session the console drives in the background.
@@ -556,7 +566,13 @@ func (r *SelfRepair) await(ctx context.Context, run *repairRun, status domain.Re
 	r.update(ctx, run, func(record *domain.RepairRecord) { record.Status, record.Pending = status, pending })
 	r.mu.Lock()
 	run.waiting = true
+	queued := status == domain.RepairAwaitingMerge && !run.record.Queued.IsZero()
 	r.mu.Unlock()
+	if queued {
+		// The person queued this merge: the queue takes it when its turn
+		// comes and its checks are green on an up-to-date branch.
+		r.kickQueue()
+	}
 	defer func() {
 		r.mu.Lock()
 		run.waiting = false
@@ -786,6 +802,11 @@ func (r *SelfRepair) Decide(ctx context.Context, id string, approve bool, reason
 	}
 	select {
 	case run.decisions <- repairDecision{approve: approve, reason: strings.TrimSpace(reason)}:
+		// The run took it: it no longer waits, even before its record
+		// says so, which the merge queue relies on.
+		r.mu.Lock()
+		run.waiting = false
+		r.mu.Unlock()
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -841,6 +862,9 @@ func (r *SelfRepair) Recover(ctx context.Context, id string) error {
 		return fmt.Errorf("open the clone %s: %w", record.Clone, err)
 	}
 	record.Status, record.RunToken, record.Error, record.Pending, record.Notice, record.Notified = domain.RepairRunning, r.RunToken, "", "", "", false
+	// A merge queued before the console stopped is queued again by the
+	// person, who sees the job anew.
+	record.Queued, record.QueueNote = time.Time{}, ""
 	if err := r.save(ctx, &record); err != nil {
 		_ = workbench.Close()
 		return err
@@ -978,6 +1002,9 @@ func (r *SelfRepair) Close() {
 	}
 	r.mu.Lock()
 	r.closed = true
+	if r.queueCancel != nil {
+		r.queueCancel()
+	}
 	runs := make([]*repairRun, 0, len(r.runs))
 	for _, run := range r.runs {
 		runs = append(runs, run)

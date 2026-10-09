@@ -26,6 +26,10 @@ type JobsPanelPort interface {
 	ActiveLimit() int
 	// PullRequestStatus reads the job's pull request from the forge.
 	PullRequestStatus(ctx context.Context, id string) (application.PullRequestStatus, error)
+	// QueueMerge queues the person's approval of the job's merge;
+	// UnqueueMerge takes it back.
+	QueueMerge(ctx context.Context, id string) error
+	UnqueueMerge(ctx context.Context, id string) error
 }
 
 // jobsBriefBytes matches the brief StartJob accepts.
@@ -197,7 +201,7 @@ func (m AppModel) jobsKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 	}
 	record, ok := m.jobsRecord()
 	switch k.String() {
-	case "a", "d", "r", "g":
+	case "a", "d", "r", "g", "m":
 		if !ok {
 			panel.message = m.Theme.T("jobs.nothingSelected")
 			return m, nil
@@ -237,6 +241,20 @@ func (m AppModel) jobsKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 			return m, nil
 		}
 		panel.message = ""
+		return m.loadRepairs(), nil
+	case "m":
+		// m queues the merge, or takes a queued one back while it waits.
+		var err error
+		if record.Status == domain.RepairAwaitingMerge && !record.Queued.IsZero() {
+			err = m.jobsPort().UnqueueMerge(m.lifetime.ctx, record.ID)
+			panel.message = m.Theme.Tf("jobs.unqueued", record.ID)
+		} else {
+			err = m.jobsPort().QueueMerge(m.lifetime.ctx, record.ID)
+			panel.message = m.Theme.Tf("jobs.queuedNow", record.ID)
+		}
+		if err != nil {
+			panel.message = err.Error()
+		}
 		return m.loadRepairs(), nil
 	}
 	// g reads the pull request in the background; renders never do.
@@ -366,6 +384,18 @@ func (m AppModel) jobsCI(record domain.RepairRecord) string {
 	return m.Theme.T("jobs.ci.unknown")
 }
 
+// jobsQueuePlace is the job's place in the merge queue: first is merged
+// first.
+func (m AppModel) jobsQueuePlace(job domain.RepairRecord) int {
+	place := 1
+	for _, record := range m.RepairPanel.Records {
+		if record.ID != job.ID && !record.Queued.IsZero() && record.Status == domain.RepairAwaitingMerge && (record.Queued.Before(job.Queued) || record.Queued.Equal(job.Queued) && record.ID < job.ID) {
+			place++
+		}
+	}
+	return place
+}
+
 // jobsOwner names the console that drives the job, when one should.
 func (m AppModel) jobsOwner(record domain.RepairRecord) string {
 	switch {
@@ -408,6 +438,14 @@ func (m AppModel) jobsBlock(record domain.RepairRecord, selected bool) []string 
 	}
 	if record.Check != "" {
 		lines = append(lines, "    "+theme.Tf("jobs.check", record.Check))
+	}
+	if !record.Queued.IsZero() {
+		switch {
+		case record.Status == domain.RepairInterrupted:
+			lines = append(lines, "    "+theme.T("jobs.queuedStale"))
+		case !record.Status.Terminal():
+			lines = append(lines, "    "+theme.Tf("jobs.queued", m.jobsQueuePlace(record), record.Queued.Local().Format("15:04"), orDash(record.QueueNote)))
+		}
 	}
 	if record.Error != "" {
 		lines = append(lines, "    "+theme.Tf("repairs.error", record.Error))

@@ -75,7 +75,11 @@ type RepairRecord struct {
 	// Check is the last check result the ceremony reported, bounded: the
 	// check command's exit with its last output line, or the verdict on
 	// the pull request's checks.
-	Check         string
+	Check string
+	// Queued is when the person queued the merge on /jobs, zero when it is
+	// not queued; QueueNote is the merge queue's last word about it.
+	Queued        time.Time
+	QueueNote     string
 	PullRequest   int
 	URL, MergeSHA string
 	// Pending describes the decision the person owes while Awaiting.

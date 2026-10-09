@@ -40,6 +40,8 @@ type repairEntry struct {
 	StepAttempt int       `json:"step_attempt,omitempty"`
 	StepLimit   int       `json:"step_limit,omitempty"`
 	Check       string    `json:"check,omitempty"`
+	Queued      time.Time `json:"queued,omitzero"`
+	QueueNote   string    `json:"queue_note,omitempty"`
 	PullRequest int       `json:"pull_request,omitempty"`
 	URL         string    `json:"url,omitempty"`
 	MergeSHA    string    `json:"merge_sha,omitempty"`
@@ -197,12 +199,12 @@ func (r *RepairRegistry) write(ctx context.Context, data []byte) error {
 
 func fromRecord(record domain.RepairRecord) repairEntry {
 	return repairEntry{ID: record.ID, Improvement: record.Improvement, Signature: record.Signature, Repository: record.Repository, Parent: string(record.Parent), Session: string(record.Session), Clone: record.Clone, Brief: record.Brief, Build: record.Build,
-		Status: string(record.Status), Step: record.Step, State: record.State, Instance: record.Instance, StepAttempt: record.StepAttempt, StepLimit: record.StepLimit, Check: record.Check, PullRequest: record.PullRequest, URL: record.URL, MergeSHA: record.MergeSHA, Pending: record.Pending, Memory: record.Memory, Error: record.Error,
+		Status: string(record.Status), Step: record.Step, State: record.State, Instance: record.Instance, StepAttempt: record.StepAttempt, StepLimit: record.StepLimit, Check: record.Check, Queued: record.Queued.UTC(), QueueNote: record.QueueNote, PullRequest: record.PullRequest, URL: record.URL, MergeSHA: record.MergeSHA, Pending: record.Pending, Memory: record.Memory, Error: record.Error,
 		Attempt: record.Attempt, RunToken: record.RunToken, Notice: record.Notice, Notified: record.Notified, Created: record.Created.UTC(), Updated: record.Updated.UTC()}
 }
 
 func toRecord(entry repairEntry) domain.RepairRecord {
 	return domain.RepairRecord{ID: entry.ID, Improvement: entry.Improvement, Signature: entry.Signature, Repository: entry.Repository, Parent: domain.SessionID(entry.Parent), Session: domain.SessionID(entry.Session), Clone: entry.Clone, Brief: entry.Brief, Build: entry.Build,
-		Status: domain.RepairStatus(entry.Status), Step: entry.Step, State: entry.State, Instance: entry.Instance, StepAttempt: entry.StepAttempt, StepLimit: entry.StepLimit, Check: entry.Check, PullRequest: entry.PullRequest, URL: entry.URL, MergeSHA: entry.MergeSHA, Pending: entry.Pending, Memory: entry.Memory, Error: entry.Error,
+		Status: domain.RepairStatus(entry.Status), Step: entry.Step, State: entry.State, Instance: entry.Instance, StepAttempt: entry.StepAttempt, StepLimit: entry.StepLimit, Check: entry.Check, Queued: entry.Queued, QueueNote: entry.QueueNote, PullRequest: entry.PullRequest, URL: entry.URL, MergeSHA: entry.MergeSHA, Pending: entry.Pending, Memory: entry.Memory, Error: entry.Error,
 		Attempt: entry.Attempt, RunToken: entry.RunToken, Notice: entry.Notice, Notified: entry.Notified, Created: entry.Created, Updated: entry.Updated}
 }

@@ -21,6 +21,8 @@ type fakeJobs struct {
 	status    application.PullRequestStatus
 	statusErr error
 	reads     []string
+	queue     []string
+	queueErr  map[string]error
 }
 
 func (f *fakeJobs) StartJob(_ context.Context, parent domain.SessionState, kind, brief string) (domain.RepairRecord, error) {
@@ -31,6 +33,26 @@ func (f *fakeJobs) StartJob(_ context.Context, parent domain.SessionState, kind,
 	record := domain.RepairRecord{ID: "20261009-1000-new-job", Improvement: kind == application.JobImprovement, Signature: "n", Repository: "o/r", Parent: parent.ID, Status: domain.RepairPreparing, Attempt: 1, Created: time.Now()}
 	f.records = append([]domain.RepairRecord{record}, f.records...)
 	return record, nil
+}
+func (f *fakeJobs) QueueMerge(_ context.Context, id string) error {
+	if err := f.queueErr[id]; err != nil {
+		return err
+	}
+	f.queue = append(f.queue, "queue "+id)
+	f.setQueued(id, time.Date(2026, 10, 9, 10, 5, 0, 0, time.Local))
+	return nil
+}
+func (f *fakeJobs) UnqueueMerge(_ context.Context, id string) error {
+	f.queue = append(f.queue, "unqueue "+id)
+	f.setQueued(id, time.Time{})
+	return nil
+}
+func (f *fakeJobs) setQueued(id string, at time.Time) {
+	for i := range f.records {
+		if f.records[i].ID == id {
+			f.records[i].Queued, f.records[i].QueueNote = at, "queued"
+		}
+	}
 }
 func (f *fakeJobs) Live(id string) bool { return f.live[id] }
 func (f *fakeJobs) ActiveLimit() int    { return 2 }
@@ -240,6 +262,36 @@ func TestJobsPanelActsOnTheSelectedJob(t *testing.T) {
 	m = update(m, tea.KeyPressMsg{Code: 'a', Text: "a"})
 	if !strings.Contains(m.View().Content, "repair x is not waiting for a decision") {
 		t.Fatalf("an action's error is shown in the panel:\n%s", m.View().Content)
+	}
+}
+
+func TestJobsPanelQueuesTheSelectedMergeAndShowsItsPlace(t *testing.T) {
+	jobs := &fakeJobs{fakeRepairs: &fakeRepairs{records: jobRecords()}, live: map[string]bool{"20261009-0950-search-matches": true},
+		queueErr: map[string]error{"20261009-0940-edit-fails": errors.New("repair 20261009-0940-edit-fails is owned by another console; queue its merge there")}}
+	m := jobsModel(t, jobs, English)
+	m = update(m, tea.KeyPressMsg{Code: 'm', Text: "m"})
+	if len(jobs.queue) != 1 || jobs.queue[0] != "queue 20261009-0950-search-matches" {
+		t.Fatalf("m queues the selected merge: %v", jobs.queue)
+	}
+	view := m.View().Content
+	for _, want := range []string{"Merge queue #1 since 10:05 · queued", "Queued 20261009-0950-search-matches: it merges in turn", "m merge queue"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("panel lacks %q:\n%s", want, view)
+		}
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'm', Text: "m"})
+	if len(jobs.queue) != 2 || jobs.queue[1] != "unqueue 20261009-0950-search-matches" || strings.Contains(m.View().Content, "Merge queue #1") {
+		t.Fatalf("m takes a waiting merge back: %v", jobs.queue)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	m = update(m, tea.KeyPressMsg{Code: 'm', Text: "m"})
+	if !strings.Contains(m.View().Content, "owned by another console") {
+		t.Fatalf("a refusal is shown in the panel:\n%s", m.View().Content)
+	}
+	jobs.records[2].Queued = time.Date(2026, 10, 9, 9, 0, 0, 0, time.Local)
+	m = update(m, repairEventMsg(application.RepairEvent{Record: jobs.records[2]}))
+	if view := m.View().Content; !strings.Contains(view, "Queued for merge before its console stopped: r recovers it, then m queues it again") {
+		t.Fatalf("an interrupted queued job:\n%s", view)
 	}
 }
 
