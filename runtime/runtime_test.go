@@ -137,6 +137,28 @@ func TestExecDistinguishesExitCodeFromStartFailure(t *testing.T) {
 	}
 }
 
+func TestExecKeepsTheResultWhenABackgroundChildHoldsOutput(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
+	e, err := newTestExecutor(t, Config{Root: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "bg", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","echo started; sleep 30 &"],"timeout_ms":10000}`)})
+	if r.Status != "completed" {
+		t.Fatalf("program that exited 0 reported as %s: %+v", r.Status, r.Error)
+	}
+	out := r.Output.(dto.ExecOutput)
+	if out.ExitCode != 0 || out.Stdout != "started\n" || !out.Truncated {
+		t.Fatalf("%+v", out)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("waited %v for the background child", elapsed)
+	}
+}
+
 func TestReadRejectsEscapedSymlinkAndSplitOffset(t *testing.T) {
 	dir := t.TempDir()
 	outside := t.TempDir()
