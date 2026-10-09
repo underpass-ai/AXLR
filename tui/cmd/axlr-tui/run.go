@@ -468,8 +468,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts, MaxActive: settings.JobsConfiguration().MaxActive, Watch: repairPolicy.WatchDeadline},
 			Forge:     ceremonies.Forge,
 			Build:     buildinfo.Version,
-			RunToken:  hex.EncodeToString(token[:]),
-			Lifetime:  ctx,
+			// The repaired console is built once its checks are green and
+			// installed over this one on request (repair.install: after
+			// the merge, without asking).
+			Candidates:  repairBuilder(getenv),
+			AutoInstall: repairConfiguration.Install,
+			RunToken:    hex.EncodeToString(token[:]),
+			Lifetime:    ctx,
 		}
 		if err := repairs.Reconcile(ctx); err != nil {
 			fmt.Fprintln(stderr, "axlr-tui: repair registry:", err)

@@ -48,6 +48,11 @@ type repairEntry struct {
 	Pending     string    `json:"pending,omitempty"`
 	Memory      string    `json:"memory,omitempty"`
 	Error       string    `json:"error,omitempty"`
+	Candidate   string    `json:"candidate,omitempty"`
+	Version     string    `json:"candidate_version,omitempty"`
+	Revision    string    `json:"candidate_revision,omitempty"`
+	Installed   string    `json:"installed,omitempty"`
+	Backup      string    `json:"backup,omitempty"`
 	Attempt     int       `json:"attempt,omitempty"`
 	RunToken    string    `json:"run_token,omitempty"`
 	Notice      string    `json:"notice,omitempty"`
@@ -200,11 +205,13 @@ func (r *RepairRegistry) write(ctx context.Context, data []byte) error {
 func fromRecord(record domain.RepairRecord) repairEntry {
 	return repairEntry{ID: record.ID, Improvement: record.Improvement, Signature: record.Signature, Repository: record.Repository, Parent: string(record.Parent), Session: string(record.Session), Clone: record.Clone, Brief: record.Brief, Build: record.Build,
 		Status: string(record.Status), Step: record.Step, State: record.State, Instance: record.Instance, StepAttempt: record.StepAttempt, StepLimit: record.StepLimit, Check: record.Check, Queued: record.Queued.UTC(), QueueNote: record.QueueNote, PullRequest: record.PullRequest, URL: record.URL, MergeSHA: record.MergeSHA, Pending: record.Pending, Memory: record.Memory, Error: record.Error,
+		Candidate: record.Candidate, Version: record.CandidateVersion, Revision: record.CandidateRevision, Installed: record.Installed, Backup: record.Backup,
 		Attempt: record.Attempt, RunToken: record.RunToken, Notice: record.Notice, Notified: record.Notified, Created: record.Created.UTC(), Updated: record.Updated.UTC()}
 }
 
 func toRecord(entry repairEntry) domain.RepairRecord {
 	return domain.RepairRecord{ID: entry.ID, Improvement: entry.Improvement, Signature: entry.Signature, Repository: entry.Repository, Parent: domain.SessionID(entry.Parent), Session: domain.SessionID(entry.Session), Clone: entry.Clone, Brief: entry.Brief, Build: entry.Build,
 		Status: domain.RepairStatus(entry.Status), Step: entry.Step, State: entry.State, Instance: entry.Instance, StepAttempt: entry.StepAttempt, StepLimit: entry.StepLimit, Check: entry.Check, Queued: entry.Queued, QueueNote: entry.QueueNote, PullRequest: entry.PullRequest, URL: entry.URL, MergeSHA: entry.MergeSHA, Pending: entry.Pending, Memory: entry.Memory, Error: entry.Error,
+		Candidate: entry.Candidate, CandidateVersion: entry.Version, CandidateRevision: entry.Revision, Installed: entry.Installed, Backup: entry.Backup,
 		Attempt: entry.Attempt, RunToken: entry.RunToken, Notice: entry.Notice, Notified: entry.Notified, Created: entry.Created, Updated: entry.Updated}
 }

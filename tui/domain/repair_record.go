@@ -86,6 +86,13 @@ type RepairRecord struct {
 	Pending string
 	// Memory is the last KMP report the ceremony gave; Error the last failure.
 	Memory, Error string
+	// Candidate is the axlr-tui the console built from the clone once its
+	// checks were green, to try before and after the merge; Version is the
+	// build version it reports and Revision the commit it was built from.
+	Candidate, CandidateVersion, CandidateRevision string
+	// Installed is the executable the candidate replaced on request, and
+	// Backup where the replaced one was kept.
+	Installed, Backup string
 	// Attempt counts repair sessions started for this signature.
 	Attempt int
 	// RunToken names the console launch that owns a running record; a record
