@@ -324,6 +324,16 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.Approval.Details.Viewport, _ = m.Approval.Details.Viewport.Update(wheel)
 		return m, nil, true
 	}
+	if wheel, ok := msg.(tea.MouseWheelMsg); ok && m.overlay != "" && m.overlay != "search" {
+		// The wheel scrolls what is on screen: the overlays drawn from
+		// m.Info scroll it, and the others keep the conversation behind
+		// them still. Search shows the conversation, so it falls through.
+		switch m.overlay {
+		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident":
+			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
+		}
+		return m, nil, true
+	}
 	if !hasIntent {
 		return m, nil, false
 	}
