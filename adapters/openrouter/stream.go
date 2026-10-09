@@ -97,7 +97,21 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		}
 		inactivityTimer.Stop()
 		if bytes.Equal(data, []byte("[DONE]")) {
-			return accumulator.Result()
+			result, err := accumulator.Result()
+			if err != nil {
+				return domain.CompletionResult{}, err
+			}
+			// What the mapper added after the streamed text, the note on an
+			// answer cut by the output limit, is streamed like the text.
+			if streamed := len(accumulator.content); len(result.Message.Content) > streamed {
+				if err := ctx.Err(); err != nil {
+					return domain.CompletionResult{}, err
+				}
+				if err := onText(result.Message.Content[streamed:]); err != nil {
+					return domain.CompletionResult{}, err
+				}
+			}
+			return result, nil
 		}
 		deltas, err := accumulator.Add(data)
 		if err != nil {

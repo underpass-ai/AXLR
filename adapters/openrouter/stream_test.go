@@ -145,6 +145,26 @@ func TestStreamKeepsACutToolCallForAToolError(t *testing.T) {
 	}
 }
 
+// The note on an answer cut by the output limit is streamed like its text,
+// so the live view shows what the session keeps.
+func TestStreamMarksAnAnswerCutByTheOutputLimit(t *testing.T) {
+	wire := streamEvents(`{"choices":[{"index":0,"delta":{"role":"assistant","content":"The three steps are: 1. Back up the"},"finish_reason":"length"}]}`, "[DONE]")
+	body := &trackedStreamBody{Reader: strings.NewReader(wire)}
+	c, _ := streamClient(t, body, 200)
+	var streamed strings.Builder
+	got, err := c.Stream(context.Background(), simpleCompletionRequest(), func(text domain.Text) error {
+		streamed.WriteString(string(text))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "The three steps are: 1. Back up the\n\n" + outputLimitNote
+	if string(got.Message.Content) != want || streamed.String() != want || got.FinishReason != "length" {
+		t.Fatalf("content = %q, streamed = %q, finish = %q", got.Message.Content, streamed.String(), got.FinishReason)
+	}
+}
+
 func TestStreamProviderErrors(t *testing.T) {
 	for _, status := range []int{401, 402, 429, 503} {
 		t.Run(http.StatusText(status), func(t *testing.T) {

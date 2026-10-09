@@ -122,3 +122,25 @@ func TestMapResponseKeepsUnreadableToolArgumentsForAToolError(t *testing.T) {
 		})
 	}
 }
+
+// An answer the output limit cut short (finish_reason "length") says so
+// where the person and the model read it, instead of passing for complete.
+func TestMapResponseMarksAnAnswerCutByTheOutputLimit(t *testing.T) {
+	for _, tc := range []struct{ name, message, finish, want string }{
+		{"cut text", `{"role":"assistant","content":"The three steps are: 1. Back up the"}`, "length", "The three steps are: 1. Back up the\n\n" + outputLimitNote},
+		{"cut before any text", `{"role":"assistant","content":null}`, "length", outputLimitNote},
+		{"complete text", `{"role":"assistant","content":"Done."}`, "stop", "Done."},
+		{"cut after a whole call", `{"role":"assistant","content":"Reading","tool_calls":[{"id":"call_1","type":"function","function":{"name":"read","arguments":"{}"}}]}`, "length", "Reading"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wire, _ := mapFixture(t, `{"choices":[{"message":`+tc.message+`,"finish_reason":"`+tc.finish+`"}]}`)
+			got, err := mapResponse(wire)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(got.Message.Content) != tc.want || string(got.FinishReason) != tc.finish {
+				t.Fatalf("content = %q, finish = %q", got.Message.Content, got.FinishReason)
+			}
+		})
+	}
+}

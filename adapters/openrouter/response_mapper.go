@@ -48,6 +48,14 @@ func mapResponse(wire responseDTO) (domain.CompletionResult, error) {
 		}
 		message.ToolCalls = append(message.ToolCalls, domain.ToolCall{ID: id, Name: name, Arguments: arguments})
 	}
+	// A call cut by the limit says so in its own arguments; whole calls
+	// stand as they are.
+	if choice.FinishReason == "length" && len(message.ToolCalls) == 0 {
+		if message.Content != "" {
+			message.Content += "\n\n"
+		}
+		message.Content += outputLimitNote
+	}
 	if err := message.Validate(); err != nil {
 		return domain.CompletionResult{}, err
 	}
@@ -65,6 +73,10 @@ func mapResponse(wire responseDTO) (domain.CompletionResult, error) {
 	}
 	return result, nil
 }
+
+// outputLimitNote ends an answer the output limit cut short (finish_reason
+// "length"), so neither the person nor the model takes it for complete.
+const outputLimitNote = "[AXLR] The model's output limit cut this answer short."
 
 // malformedArgumentsKey names the object that stands in for a call's
 // arguments when they are not a JSON object. The console's tool resolution
