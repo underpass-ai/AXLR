@@ -426,7 +426,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.submittedPrompt != "" && v.Err != nil {
 			messages := m.Header.State.Messages
-			accepted := len(messages) > m.submittedAt && messages[m.submittedAt].Role == root.RoleUser && string(messages[m.submittedAt].Content) == m.submittedPrompt
+			// StartTurn stores the prompt with console notes appended (a
+			// resumed step, repair notices, the ceremony step), so the
+			// stored message starts with the prompt rather than equals it.
+			accepted := len(messages) > m.submittedAt && messages[m.submittedAt].Role == root.RoleUser && strings.HasPrefix(string(messages[m.submittedAt].Content), m.submittedPrompt)
 			if !accepted {
 				if m.Composer.Input.Value() == "" {
 					m.Composer.Input.SetValue(m.submittedPrompt)
