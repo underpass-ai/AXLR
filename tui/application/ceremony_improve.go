@@ -56,8 +56,9 @@ func (d *CeremonyDriver) improveBrief(ctx context.Context, run *domain.CeremonyR
 	switch {
 	case !status.Ran || status.ExitCode != 0:
 		return nil, "", false, "the console could not read git status in the clone (" + bounded(strings.TrimSpace(status.Output), 300) + "); the brief's check must run before any change", nil
-	case strings.TrimSpace(status.Output) != "":
-		return nil, "", false, "the clone already has changes (" + bounded(strings.TrimRight(status.Output, "\r\n"), 300) + "); the brief's check must run before any change: revert them, then hand back the brief, or send feasible=false with observed", nil
+	case strings.TrimSpace(status.Stdout) != "":
+		// Only stdout lists changes: git may warn on stderr and still exit 0.
+		return nil, "", false, "the clone already has changes (" + bounded(strings.TrimRight(status.Stdout, "\r\n"), 300) + "); the brief's check must run before any change: revert them, then hand back the brief, or send feasible=false with observed", nil
 	}
 	run.Check = command
 	result, err := d.Checks.Run(ctx, command)

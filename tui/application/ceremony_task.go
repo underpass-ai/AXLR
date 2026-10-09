@@ -169,6 +169,17 @@ func (d *CeremonyDriver) gitChanged(ctx context.Context) ([]string, bool, error)
 	return paths, true, nil
 }
 
+// gitAnswer is the trimmed stdout of a git command that exited 0, "" when it
+// did not run or failed: stderr, and the stdout of a failed command (rev-parse
+// echoes HEAD in a repository without commits), are not an answer to record.
+func gitAnswer(ctx context.Context, checks CheckRunnerPort, args ...string) string {
+	result, err := checks.Run(ctx, domain.CheckCommand{Program: "git", Args: args})
+	if err != nil || !result.Ran || result.ExitCode != 0 {
+		return ""
+	}
+	return strings.TrimSpace(result.Stdout)
+}
+
 // changedByTask lists the paths this task changed: in a repository, those
 // git reports whose digest differs from the start; otherwise the scope
 // files whose digest differs.
@@ -346,9 +357,7 @@ func (d *CeremonyDriver) taskHandback(ctx context.Context, s domain.Session, run
 	}
 	revision := ""
 	if task.Git {
-		if rev, err := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"rev-parse", "HEAD"}}); err == nil && rev.Ran {
-			revision = strings.TrimSpace(rev.Output)
-		}
+		revision = gitAnswer(ctx, d.Checks, "rev-parse", "HEAD")
 	}
 	output := map[string]any{"done": true, "changed_files": changed, "revision": revision, "scope_checked_by": "git status"}
 	if !task.Git {

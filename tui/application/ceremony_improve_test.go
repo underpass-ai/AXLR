@@ -158,6 +158,19 @@ func TestImproveBriefRefusesAClonePastItsBaseline(t *testing.T) {
 	}
 }
 
+// A warning git status prints on stderr while exiting 0 is not a change in
+// the clone: the brief's baseline still runs.
+func TestImproveBriefIgnoresGitStatusWarnings(t *testing.T) {
+	d, _, checks, _, s := improveDriver(t, &fakeForge{}, 1)
+	if err := d.Begin(context.Background(), &s, "show the log"); err != nil {
+		t.Fatal(err)
+	}
+	checks.statusStderr = "warning: could not open directory 'build/cache/': Permission denied\n"
+	if r := step(t, d, &s, improveBriefArgs); r["next_step"] != "build" {
+		t.Fatalf("a clean clone with a git warning: %v", r)
+	}
+}
+
 func TestImproveNotFeasibleBlocksWithTheReason(t *testing.T) {
 	d, engine, checks, memory, s := improveDriver(t, &fakeForge{})
 	if err := d.Begin(context.Background(), &s, "show the log"); err != nil {

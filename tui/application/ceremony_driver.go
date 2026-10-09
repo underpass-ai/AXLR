@@ -537,9 +537,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if done.Report == "" || done.SummaryEN == "" {
 			return refuse("integrate needs report and summary_en"), nil
 		}
-		revision, _ := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"rev-parse", "HEAD"}})
-		dirty, _ := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"status", "--porcelain"}})
-		output = map[string]any{"report": done.Report, "summary_en": done.SummaryEN, "revision": strings.TrimSpace(revision.Output), "dirty": strings.TrimSpace(dirty.Output), "integrated": true}
+		revision := gitAnswer(ctx, d.Checks, "rev-parse", "HEAD")
+		dirty := bounded(gitAnswer(ctx, d.Checks, "status", "--porcelain"), 4<<10)
+		output = map[string]any{"report": done.Report, "summary_en": done.SummaryEN, "revision": revision, "dirty": dirty, "integrated": true}
 		report["revision"] = output["revision"]
 		trigger = "integrated"
 	case "red", "green":
