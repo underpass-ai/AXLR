@@ -18,8 +18,10 @@ func (w streamWriter) Write(p []byte) (int, error) {
 	}
 	if w.stderr {
 		_, _ = w.c.stderr.Write(p[:take])
+		w.c.stderrCut = w.c.stderrCut || take < len(p)
 	} else {
 		_, _ = w.c.stdout.Write(p[:take])
+		w.c.stdoutCut = w.c.stdoutCut || take < len(p)
 	}
 	w.c.captured += take
 	w.c.discarded += int64(len(p) - take)

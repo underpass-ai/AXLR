@@ -8,7 +8,7 @@ The distribution locks MADE 0.9.1 in [engines.lock.json](../../distribution/engi
 
 | Route | Setup owner | AXLR preparation |
 |:--|:--|:--|
-| Installed `run-embedded-mcp.sh` launcher | Upstream embedded setup has bootstrapped the intended store and its private configuration | `/mcp` → select `made` → `P` can issue the work grant and publish the three driven definitions |
+| Installed `run-embedded-mcp.sh` launcher | Upstream embedded setup has bootstrapped the intended store and its private configuration | `/mcp` → select `made` → `P` can issue the work grant and publish the eight driven definitions |
 | Direct `made-mcp` binary | Operator supplies store, policy, work identity and cursor key | Operator must issue the work grant and publish the exact definitions |
 | Remote engine | Remote operator owns authorization and definitions | `P` reports remote; it does not administer that engine |
 
@@ -54,14 +54,14 @@ When the console has no active turn or pending calls, select MADE in `/mcp` and 
 
 1. AXLR invokes the embedded launcher with the trusted-host override removed and issues `axlr-default-work-v1` to a work identity. It recognizes existing `axlr-work-…` or `…-axlr-work` identities; a different explicit trusted-host override requires manual operator setup.
 2. If needed, it persists an `axlr-work-…` identity in `mcp.json`. Restart when requested so the running connection uses it.
-3. It verifies the work identity can read definitions and compares the published digests of `axlr_debug` 2.0, `axlr_delivery` 2.0, `axlr_incident` 1.0, `axlr_repair` 1.0 and `axlr_improve` 1.0 with the [shipped pins](../../tui/adapters/ceremonyhost/definitions.go).
+3. It verifies the work identity can read definitions and compares the published digests of `axlr_debug` 2.0, `axlr_delivery` 2.0, `axlr_incident` 1.0, `axlr_repair` 1.0, `axlr_improve` 1.0, `axlr_plan` 1.0, `axlr_task` 1.0 and `axlr_sync` 1.0 with the [shipped pins](../../tui/adapters/ceremonyhost/definitions.go).
 4. It publishes missing definitions with a temporary five-minute install grant, then revokes that grant. Conflicting content under an existing immutable name/version is an error, not an overwrite.
 
 The permanent grant allows running, inspecting and resuming published ceremonies; it excludes guard approval, definition publication and grant administration. Its exact action set lives in [work_grant.go](../../tui/adapters/madesetup/work_grant.go). The setup action itself makes privileged engine calls; a manual MCP policy does not turn those setup calls into individual agent approval dialogs.
 
 Preparation is repeatable for matching identities and definitions. If it partially fails, inspect the displayed error, persisted work identity, published versions and temporary grant before retrying. If revocation failed, the install grant expires after five minutes; report and verify its state rather than assuming it was removed.
 
-`P` installs only the seven driver definitions: debug/delivery **2.0**, and incident, repair, plan, task and sync **1.0**. It also prepares a separate approver identity for the incident and merge approval cards; the work identity cannot approve those guards. The seven **1.0** skill definitions are installed separately on an explicit request. See [ceremonies](../ceremonies.md).
+`P` installs only the eight driver definitions, and of those only the ones the store lacks: debug/delivery **2.0**, and incident, repair, improve, plan, task and sync **1.0**. It also prepares a separate approver identity for the incident and merge approval cards; the work identity cannot approve those guards. See [ceremonies](../ceremonies.md).
 
 ## Direct binary or remote operator setup
 
@@ -101,7 +101,7 @@ Use the same AXLR manifest as above with `command` set to the absolute binary. I
 
 ## Verify actual execution
 
-1. Confirm `made` discovery and work-identity access to the three exact pinned definitions.
+1. Confirm `made` discovery and work-identity access to the eight exact pinned definitions.
 2. Select `/delivery` and send a small reversible task with a meaningful check. Observe a new instance and the brief step.
 3. Review the proposed command. AXLR executes the baseline and subsequent verification itself; build cannot replace the approved command.
 4. Confirm the terminal state, report, command result and revision/dirty evidence. `COMPLETED` and `BLOCKED` both return the console to normal.

@@ -63,7 +63,7 @@ curl -s http://127.0.0.1:8080/v1/chat/completions -H 'content-type: application/
 
 | Symptom | Check | Next action |
 |:--|:--|:--|
-| `/plan` cannot start | MADE is prepared with the seven definitions | Press `P` in `/mcp` again; it publishes `axlr_plan`, `axlr_task` and `axlr_sync` 1.0 |
+| `/plan` cannot start | Whether MADE lacks `axlr_plan`, `axlr_task` or `axlr_sync` 1.0, as a store prepared before they were pinned does | Press `P` in `/mcp` again; it publishes `axlr_plan`, `axlr_task` and `axlr_sync` 1.0 |
 | The plan comes back with defects three times and ends `BLOCKED` | Read the defects on the plan's last hand-back | Give a narrower brief, or let a larger model plan (`plan.model`) |
 | A task ends `BLOCKED` with "the model did not use its tools" | The worker's transcript (the task's session id is on the plans panel) | Usually the server's tool-call parser: try `"stream": false` on the local model |
 | A task ends `BLOCKED` asking for the person's approval | The worker called a tool the approval policy keeps under a card | Workers run without the person; allow that tool, or change the plan |

@@ -15,6 +15,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/mcpclient"
 )
 
 func TestRegisterThirdPartyHTTPServer(t *testing.T) {
@@ -186,6 +187,60 @@ func TestManagerCancelledCallIsNotRetried(t *testing.T) {
 	}
 }
 
+func TestManagerRelaunchesAServerThatDied(t *testing.T) {
+	m, err := NewManager([]Registration{pluginRegistration(t, "flaky", []domain.PluginToolName{"echo", "die"})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if _, err := m.Call(ctx, pluginCall(t, "flaky", "echo", `{"text":"one"}`)); err != nil {
+		t.Fatalf("first echo: %v", err)
+	}
+	if _, err := m.Call(ctx, pluginCall(t, "flaky", "die", `{}`)); err == nil {
+		t.Fatal("call that killed the server succeeded")
+	}
+	result, err := m.Call(ctx, pluginCall(t, "flaky", "echo", `{"text":"again"}`))
+	if err != nil {
+		t.Fatalf("server was not relaunched after it died: %v", err)
+	}
+	if len(result.Content) != 1 || !strings.Contains(string(result.Content[0].Bytes()), "again") {
+		t.Fatalf("relaunched server answered %+v", result)
+	}
+	tools, err := m.ListServer(ctx, "flaky")
+	if err != nil || len(tools) != 2 {
+		t.Fatalf("relaunched server tools: %+v %v", tools, err)
+	}
+}
+
+// A connection the manager never recorded, as left when the deadline expired
+// right after Connect succeeded, is replaced instead of blocking the server.
+func TestManagerReplacesAnUnrecordedSession(t *testing.T) {
+	server := mcp.NewServer(&mcp.Implementation{Name: "remote", Version: "1"}, nil)
+	mcp.AddTool(server, &mcp.Tool{Name: "ping"}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "pong"}}}, nil, nil
+	})
+	httpServer := httptest.NewServer(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return server }, nil))
+	defer httpServer.Close()
+	registration, err := NewRegistration(Manifest{ID: "remote", URL: httpServer.URL, AllowAll: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := NewManager([]Registration{registration})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	if err := m.client.Connect(context.Background(), mcpclient.Server{Name: "remote", URL: httpServer.URL}); err != nil {
+		t.Fatal(err)
+	}
+	tools, err := m.ListServer(context.Background(), "remote")
+	if err != nil || len(tools) != 1 {
+		t.Fatalf("server blocked by an unrecorded session: %+v %v", tools, err)
+	}
+}
+
 func TestManagerPreservesLargeJSONInteger(t *testing.T) {
 	m, err := NewManager([]Registration{pluginRegistration(t, "numbers", []domain.PluginToolName{"number"})})
 	if err != nil {
@@ -353,6 +408,10 @@ func TestPluginHelper(t *testing.T) {
 	})
 	server.AddTool(&mcp.Tool{Name: "large_result", InputSchema: map[string]any{"type": "object"}}, func(_ context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		return &mcp.CallToolResult{Content: []mcp.Content{}, StructuredContent: json.RawMessage(`{"id":9007199254740993}`)}, nil
+	})
+	mcp.AddTool(server, &mcp.Tool{Name: "die"}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		os.Exit(1)
+		return nil, nil, nil
 	})
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		os.Exit(2)

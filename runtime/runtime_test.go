@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -98,6 +99,24 @@ func TestWriteCreateDoesNotClobberAndReplaceChecksDigest(t *testing.T) {
 	}
 }
 
+func TestWriteRejectsPathWithTrailingSeparator(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "notes"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	e, err := newTestExecutor(t, Config{Root: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "w", Tool: "write", Arguments: json.RawMessage(`{"path":"notes/","content":"hello","mode":"create"}`)})
+	if r.Status != "rejected" {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "notes", "notes")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf(`write "notes/" created notes/notes: %v`, err)
+	}
+}
+
 func TestEditRequiresExactlyOneMatch(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a a"), 0600)
@@ -134,6 +153,28 @@ func TestExecDistinguishesExitCodeFromStartFailure(t *testing.T) {
 	r = e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r2", Tool: "exec", Arguments: json.RawMessage(`{"program":"/no/such/program"}`)})
 	if r.Status != "failed" {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestExecKeepsTheResultWhenABackgroundChildHoldsOutput(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
+	e, err := newTestExecutor(t, Config{Root: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "bg", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","args":["-c","echo started; sleep 30 &"],"timeout_ms":10000}`)})
+	if r.Status != "completed" {
+		t.Fatalf("program that exited 0 reported as %s: %+v", r.Status, r.Error)
+	}
+	out := r.Output.(dto.ExecOutput)
+	if out.ExitCode != 0 || out.Stdout != "started\n" || !out.Truncated {
+		t.Fatalf("%+v", out)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Fatalf("waited %v for the background child", elapsed)
 	}
 }
 
@@ -200,6 +241,37 @@ func TestExecTimeoutAndOutputLimit(t *testing.T) {
 	r = e.Execute(ctx, dto.Request{ProtocolVersion: 1, RequestID: "c", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh"}`)})
 	if r.Status != "cancelled" {
 		t.Fatalf("%+v", r)
+	}
+}
+
+func TestExecOutputLimitNeverSplitsACharacter(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
+	e, err := newTestExecutor(t, Config{Root: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, script, stdout string
+		limit, captured      int
+		discarded            int64
+	}{
+		{"limit inside é", `printf 'a\303\251b'`, "a", 2, 1, 3},
+		{"limit after é", `printf 'a\303\251b'`, "aé", 3, 3, 1},
+		{"program ends inside a character", `printf 'a\303'`, "a�", 0, 2, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			args, _ := json.Marshal(dto.ExecArgs{Program: "/bin/sh", Args: []string{"-c", c.script}, MaxOutputBytes: c.limit})
+			r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "u", Tool: "exec", Arguments: args})
+			if r.Status != "completed" {
+				t.Fatalf("%+v", r)
+			}
+			out := r.Output.(dto.ExecOutput)
+			if out.Stdout != c.stdout || out.CapturedBytes != c.captured || out.DiscardedBytes != c.discarded || out.Truncated != (c.discarded > 0) {
+				t.Fatalf("stdout=%q captured=%d discarded=%d truncated=%t", out.Stdout, out.CapturedBytes, out.DiscardedBytes, out.Truncated)
+			}
+		})
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
 	"runtime"
 	"sync"
@@ -188,6 +189,27 @@ func (c *Client) Call(ctx context.Context, ref ToolRef, arguments map[string]any
 	return result, nil
 }
 
+// ConnectionLost reports an error that means the server's session is gone,
+// such as a stdio server that exited; Disconnect lets the next Connect
+// relaunch it.
+func ConnectionLost(err error) bool {
+	return errors.Is(err, mcp.ErrConnectionClosed) || errors.Is(err, io.EOF)
+}
+
+// Disconnect closes and forgets one server's session so it can be connected
+// again. It does nothing when the server has no session.
+func (c *Client) Disconnect(name ServerName) error {
+	c.mu.Lock()
+	session, exists := c.sessions[name]
+	delete(c.sessions, name)
+	delete(c.observers, name)
+	c.mu.Unlock()
+	if !exists {
+		return nil
+	}
+	return closeError(name, session.Close())
+}
+
 func (c *Client) Close() error {
 	c.mu.Lock()
 	if c.closed {
@@ -204,19 +226,26 @@ func (c *Client) Close() error {
 	c.mu.Unlock()
 	var errs []error
 	for name, session := range sessions {
-		if err := session.Close(); err != nil {
-			var exit *exec.ExitError
-			if errors.As(err, &exit) {
-				if runtime.GOOS == "windows" && exit.ExitCode() == 1 {
-					// Closing a stdio transport terminates the Windows child.
-					continue
-				}
-				if status, ok := exit.Sys().(syscall.WaitStatus); ok && (status.Signal() == syscall.SIGTERM || status.Signal() == syscall.SIGKILL) {
-					continue
-				}
-			}
-			errs = append(errs, fmt.Errorf("close MCP server %q: %w", name, err))
+		if err := closeError(name, session.Close()); err != nil {
+			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
+}
+
+func closeError(name ServerName, err error) error {
+	if err == nil {
+		return nil
+	}
+	var exit *exec.ExitError
+	if errors.As(err, &exit) {
+		if runtime.GOOS == "windows" && exit.ExitCode() == 1 {
+			// Closing a stdio transport terminates the Windows child.
+			return nil
+		}
+		if status, ok := exit.Sys().(syscall.WaitStatus); ok && (status.Signal() == syscall.SIGTERM || status.Signal() == syscall.SIGKILL) {
+			return nil
+		}
+	}
+	return fmt.Errorf("close MCP server %q: %w", name, err)
 }

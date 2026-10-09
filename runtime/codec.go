@@ -151,7 +151,7 @@ func Decode(r io.Reader) (dto.Request, error) {
 	if err := strictJSON(b, &req); err != nil {
 		return req, err
 	}
-	_, err = (RequestMapper{MaxReadBytes: hardFileBytes, MaxFileBytes: hardFileBytes, MaxOutputBytes: hardFileBytes, MaxTimeout: hardTimeout}).Map(req)
+	_, err = (RequestMapper{MaxReadBytes: hardFileBytes, MaxFileBytes: hardFileBytes, MaxOutputBytes: hardFileBytes, MaxTimeout: HardTimeout}).Map(req)
 	return req, err
 }
 func MarshalResponse(r dto.Response) ([]byte, error) {

@@ -46,7 +46,7 @@ Compatibility is defined by the [component matrix](plugins.md#codex-plugin-compa
 ## Guarantees and limits
 
 - A built-in KMP or MADE catalogue row identifies the intended engine; a successful MCP discovery establishes connectivity. Verify store, identity and grants separately.
-- Driven ceremonies use pinned `axlr_debug` / `axlr_delivery` **2.0** definitions. The explicitly requested skill catalogue contains seven **1.0** definitions. They are separate execution paths.
+- Driven ceremonies use eight pinned definitions: `axlr_debug` / `axlr_delivery` **2.0** and `axlr_incident`, `axlr_repair`, `axlr_improve`, `axlr_plan`, `axlr_task`, `axlr_sync` **1.0**. The earlier skill catalogue of seven **1.0** definitions was retired on 5 Oct 2026.
 - Automatic ceremony memory uses `ws:<session-id>`, not a stable project identity. Project-wide recall and richer decision links remain explicit KMP work. KMP failure does not roll back a completed MADE step.
 - A work mode constrains AXLR's local file tools and process approval. It does not sandbox programs or classify external MCP side effects. Engine authorization and host approval remain separate.
 - A role in a ceremony does not spawn a worker. Independent review and ownership transfer need real participants and evidence.
