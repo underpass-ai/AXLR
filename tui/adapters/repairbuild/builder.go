@@ -79,7 +79,7 @@ func (b Builder) Build(ctx context.Context, clone, slug string) (application.Rep
 func (b Builder) run(ctx context.Context, dir, program string, args ...string) (string, error) {
 	path, err := repairclone.LookPath(b.Env, program)
 	if err != nil {
-		return "", fmt.Errorf("%s is not on the console's PATH", program)
+		return "", fmt.Errorf("%w: %s is not on the console's PATH", application.ErrNoToolchain, program)
 	}
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Dir, cmd.Env = dir, b.environment()

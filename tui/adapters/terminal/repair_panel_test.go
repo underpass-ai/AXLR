@@ -295,6 +295,8 @@ func TestRepairPanelInstallsTheRepairedConsole(t *testing.T) {
 	merged := awaitingRecord(domain.RepairCompleted)
 	merged.Pending, merged.Build = "", "0.4.1"
 	merged.Candidate, merged.CandidateVersion = "/tmp/repairs/x.axlr-tui", "repair-x-abc123"
+	// Another session asked for it: the console restarted since.
+	merged.Parent = "fedcba9876543210fedcba9876543210"
 	repairs := &fakeRepairs{records: []domain.RepairRecord{merged}}
 	m := repairModel(t, repairs)
 	m = m.openRepairPanel()
@@ -309,6 +311,9 @@ func TestRepairPanelInstallsTheRepairedConsole(t *testing.T) {
 		t.Fatalf("installed=%v notice=%q error=%q", repairs.installed, m.Status.Notice, m.Status.Error)
 	}
 	repairs.records[0].Installed, repairs.records[0].Backup = "/home/me/.local/bin/axlr-tui", "/home/me/.local/bin/axlr-tui.before-repair-x"
+	// Installed, another session's repair leaves the panel; the parent's
+	// own keeps showing both paths.
+	repairs.records[0].Parent = panelParent
 	m = m.refreshRepairPanel()
 	if !strings.Contains(m.View().Content, "previous build kept as") {
 		t.Fatalf("installed paths missing:\n%s", m.View().Content)

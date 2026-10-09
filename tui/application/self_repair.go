@@ -1014,7 +1014,7 @@ func (r *SelfRepair) Status(ctx context.Context, s domain.Session, arguments roo
 			continue
 		}
 		entry := map[string]any{"repair": record.ID, "kind": record.Kind(), "status": record.Status, "repository": record.Repository, "attempt": record.Attempt, "updated": record.Updated.UTC().Format(time.RFC3339)}
-		for key, value := range map[string]string{"step": record.Step, "state": record.State, "instance": record.Instance, "url": record.URL, "merge_sha": record.MergeSHA, "pending": record.Pending, "error": record.Error, "memory": record.Memory, "clone": record.Clone, "session": string(record.Session), "parent": string(record.Parent)} {
+		for key, value := range map[string]string{"step": record.Step, "state": record.State, "instance": record.Instance, "url": record.URL, "merge_sha": record.MergeSHA, "pending": record.Pending, "error": record.Error, "memory": record.Memory, "clone": record.Clone, "session": string(record.Session), "parent": string(record.Parent), "candidate": record.Candidate, "candidate_version": record.CandidateVersion, "installed": record.Installed, "backup": record.Backup} {
 			if value != "" {
 				entry[key] = value
 			}

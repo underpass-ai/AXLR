@@ -91,7 +91,7 @@ func TestBuildReportsFailuresAndClonesWithoutAConsole(t *testing.T) {
 	if _, err := (Builder{Env: hostEnv()}).Build(context.Background(), t.TempDir(), "x"); !errors.Is(err, application.ErrNoCandidate) {
 		t.Fatalf("plain clone = %v", err)
 	}
-	if _, err := (Builder{Env: []string{"PATH=/nonexistent"}}).Build(context.Background(), clone, "x"); err == nil || !strings.Contains(err.Error(), "not on the console's PATH") {
+	if _, err := (Builder{Env: []string{"PATH=/nonexistent"}}).Build(context.Background(), clone, "x"); !errors.Is(err, application.ErrNoToolchain) || !strings.Contains(err.Error(), "not on the console's PATH") {
 		t.Fatalf("no toolchain = %v", err)
 	}
 }

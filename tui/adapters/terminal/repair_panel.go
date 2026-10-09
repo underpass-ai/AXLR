@@ -86,7 +86,8 @@ func (m AppModel) repairRecords() []domain.RepairRecord {
 	}
 	var out []domain.RepairRecord
 	for _, record := range m.RepairPanel.Records {
-		if record.Parent == m.Header.State.ID || record.Session == m.Header.State.ID || record.Status.Awaiting() || record.Status == domain.RepairInterrupted || record.Status == domain.RepairRunning {
+		// A merged repair waiting to be installed stays after a restart.
+		if record.Parent == m.Header.State.ID || record.Session == m.Header.State.ID || record.Status.Awaiting() || record.Status == domain.RepairInterrupted || record.Status == domain.RepairRunning || application.Installable(record) {
 			out = append(out, record)
 		}
 	}

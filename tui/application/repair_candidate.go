@@ -13,6 +13,11 @@ import (
 // such as a repository that is not AXLR; the repair goes on without one.
 var ErrNoCandidate = errors.New("the clone has no axlr-tui to build")
 
+// ErrNoToolchain reports a console that cannot build at all, such as one
+// without go or git on its PATH: the environment's limit, not a defect of
+// the repair, so the merge card stays without a candidate.
+var ErrNoToolchain = errors.New("no toolchain to build the repaired console")
+
 // RepairCandidate is the axlr-tui built from a repair clone: where it is,
 // the version it reports and the commit it was built from.
 type RepairCandidate struct {
@@ -51,6 +56,11 @@ func (r *SelfRepair) buildCandidate(ctx context.Context, run *repairRun) string 
 	candidate, err := r.Candidates.Build(ctx, record.Clone, record.ID)
 	switch {
 	case errors.Is(err, ErrNoCandidate) || ctx.Err() != nil:
+		return ""
+	case errors.Is(err, ErrNoToolchain):
+		r.update(ctx, run, func(record *domain.RepairRecord) {
+			record.Error = "no repaired console was built: " + bounded(err.Error(), 300)
+		})
 		return ""
 	case err != nil:
 		reason := "the repaired axlr-tui does not build: " + bounded(err.Error(), 1500)

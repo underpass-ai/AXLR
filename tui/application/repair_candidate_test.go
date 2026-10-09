@@ -160,3 +160,19 @@ func TestShellQuoteLeavesPlainPathsAlone(t *testing.T) {
 		}
 	}
 }
+
+// A console without the toolchain keeps the merge card, without a
+// candidate and with the reason, instead of declining a green repair.
+func TestRepairWithoutAToolchainKeepsItsMergeCard(t *testing.T) {
+	bench := &mergeWorkbench{}
+	rig := newRepairRig(t, bench)
+	rig.repair.Candidates = &fakeCandidates{buildErr: errors.Join(ErrNoToolchain, errors.New("go is not on the console's PATH"))}
+	out, err := requestRepair(t, rig, recurringFailure(t), validRepairRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := waitStatus(t, rig.registry, out["repair"].(string), domain.RepairAwaitingMerge)
+	if record.Candidate != "" || !strings.Contains(record.Error, "no repaired console was built") || len(bench.snapshot().decisions) != 0 {
+		t.Fatalf("record=%+v decisions=%v", record, bench.snapshot().decisions)
+	}
+}
