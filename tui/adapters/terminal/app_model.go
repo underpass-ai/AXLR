@@ -424,6 +424,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.draft = ""
 			m.draftOperationID = 0
 		}
+		// returned says where a prompt the session did not take went; it
+		// follows the operation's error, which cannot know.
+		returned := ""
 		if m.submittedPrompt != "" && v.Err != nil {
 			messages := m.Header.State.Messages
 			// StartTurn stores the prompt with console notes appended (a
@@ -433,8 +436,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !accepted {
 				if m.Composer.Input.Value() == "" {
 					m.Composer.Input.SetValue(m.submittedPrompt)
+					returned = m.Theme.T("error.promptReturned")
 				} else {
 					m.unsentPrompts = append(m.unsentPrompts, m.submittedPrompt)
+					returned = m.Theme.T("error.promptUnsent")
 				}
 			}
 		}
@@ -454,6 +459,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Error = v.Err.Error()
 			if v.PluginApproval != nil {
 				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
+			}
+			if returned != "" {
+				m.Status.Error += " " + returned
 			}
 		} else if m.draft == "" {
 			m.Status.Error = ""

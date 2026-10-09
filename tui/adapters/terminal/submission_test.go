@@ -132,3 +132,28 @@ func TestAppModelAcceptsAPromptStoredWithConsoleNotes(t *testing.T) {
 		m.zones.Close()
 	}
 }
+
+// A prompt the session did not take goes back to the composer, or to a "Not
+// sent" row when the composer has new text; the error says which, in the
+// person's language, instead of the application guessing.
+func TestAFailedPromptSaysWhereItWent(t *testing.T) {
+	failure := application.NotPreparedError(application.MissingDefinition{Name: "axlr_delivery", Version: "2.0"})
+	for typed, where := range map[string]string{"": "error.promptReturned", "typed while it ran": "error.promptUnsent"} {
+		s := navSession(t)
+		store := submissionStore{}
+		start := application.StartTurnUseCase{Catalog: submissionCatalog{err: failure}, Store: store, Continue: application.ContinueTurnUseCase{Store: store}}
+		m := update(New(Dependencies{Session: &s, Start: start, Monochrome: true, Locale: Spanish}), tea.WindowSizeMsg{Width: 100, Height: 30})
+		m.Composer.Input.SetValue("ship it")
+		n, cmd := m.Update(ControlIntent("send"))
+		m = n.(AppModel)
+		m.Composer.Input.SetValue(typed)
+		m = runUIOperation(m, cmd)
+		if !strings.HasPrefix(m.Status.Error, failure.Error()) || !strings.HasSuffix(m.Status.Error, Translate(Spanish, where)) {
+			t.Fatalf("composer %q: error %q does not say %s", typed, m.Status.Error, where)
+		}
+		if strings.Contains(m.Status.Error, "kept in the composer") {
+			t.Fatalf("the error still claims the composer: %q", m.Status.Error)
+		}
+		m.zones.Close()
+	}
+}

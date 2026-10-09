@@ -40,9 +40,10 @@ func (e notPreparedError) Error() string {
 	if list == "" {
 		list = "the MADE definition"
 	}
+	// Where the person's prompt went is the console's to say: this text
+	// also reaches plan tasks and the model's tool results.
 	return "MADE definition not published: " + list +
-		". Preparing MADE is a one-time setup: open /mcp, select MADE and press p. " +
-		"Your prompt was kept in the composer; send it again after preparing."
+		". Preparing MADE is a one-time setup: open /mcp, select MADE and press p."
 }
 
 func (e notPreparedError) Is(target error) bool {
