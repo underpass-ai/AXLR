@@ -15,7 +15,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/underpass-ai/AXLR/tui/adapters/repairclone"
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
@@ -77,10 +76,7 @@ func (b Builder) Build(ctx context.Context, clone, slug string) (application.Rep
 // run runs program in dir and returns its stdout; a failure quotes the
 // tail of both streams.
 func (b Builder) run(ctx context.Context, dir, program string, args ...string) (string, error) {
-	path, err := repairclone.LookPath(b.Env, program)
-	if err != nil && runtime.GOOS == "windows" {
-		path, err = repairclone.LookPath(b.Env, program+".exe")
-	}
+	path, err := lookPath(b.Env, program, runtime.GOOS)
 	if err != nil {
 		return "", fmt.Errorf("%w: %s is not on the console's PATH", application.ErrNoToolchain, program)
 	}
@@ -99,6 +95,31 @@ func (b Builder) run(ctx context.Context, dir, program string, args ...string) (
 		return "", fmt.Errorf("%s %s: %v: %s", program, strings.Join(args, " "), err, combined)
 	}
 	return stdout.String(), nil
+}
+
+// lookPath finds program on the PATH entry of env. On Windows the entry may
+// be spelled Path, the program ends in .exe and files carry no execute bit.
+func lookPath(env []string, program, goos string) (string, error) {
+	windows := goos == "windows"
+	names := []string{program}
+	if windows && filepath.Ext(program) == "" {
+		names = append(names, program+".exe")
+	}
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || key != "PATH" && !(windows && strings.EqualFold(key, "PATH")) {
+			continue
+		}
+		for _, dir := range filepath.SplitList(value) {
+			for _, name := range names {
+				candidate := filepath.Join(dir, name)
+				if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() && (windows || info.Mode()&0o111 != 0) {
+					return candidate, nil
+				}
+			}
+		}
+	}
+	return "", exec.ErrNotFound
 }
 
 func (b Builder) environment() []string {

@@ -19,7 +19,7 @@ func hostEnv() []string {
 	if runtime.GOOS == "windows" {
 		// Go needs the profile and system variables there; the console
 		// passes them through repairBuilder.
-		return append(os.Environ(), "GOTOOLCHAIN=local", "GOFLAGS=-p=2")
+		return append(os.Environ(), "PATH="+os.Getenv("PATH"), "GOTOOLCHAIN=local", "GOFLAGS=-p=2")
 	}
 	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "GOTOOLCHAIN=local", "GOFLAGS=-p=2"}
 	for _, name := range []string{"GOCACHE", "GOPATH", "GOMODCACHE"} {
@@ -145,5 +145,25 @@ func TestInstallKeepsThePreviousConsoleAndRefusesTwice(t *testing.T) {
 	}
 	if _, err := (Builder{GOOS: "windows"}).Install(context.Background(), application.RepairCandidate{Path: candidate}, "s"); err == nil || !strings.Contains(err.Error(), "Windows") {
 		t.Fatalf("windows = %v", err)
+	}
+}
+
+func TestLookPathFindsWindowsProgramsWithoutExecuteBits(t *testing.T) {
+	dir := t.TempDir()
+	write(t, filepath.Join(dir, "git.exe"), "binary")
+	if got, err := lookPath([]string{"Path=" + dir}, "git", "windows"); err != nil || got != filepath.Join(dir, "git.exe") {
+		t.Fatalf("windows lookPath = %q %v", got, err)
+	}
+	write(t, filepath.Join(dir, "go"), "script")
+	if _, err := lookPath([]string{"PATH=" + dir}, "go", "linux"); err == nil {
+		t.Fatal("a file without an execute bit was accepted")
+	}
+	if err := os.Chmod(filepath.Join(dir, "go"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" {
+		if got, err := lookPath([]string{"Path=" + dir, "PATH=" + dir}, "go", "linux"); err != nil || got != filepath.Join(dir, "go") {
+			t.Fatalf("linux lookPath = %q %v", got, err)
+		}
 	}
 }
