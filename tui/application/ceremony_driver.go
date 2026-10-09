@@ -164,36 +164,53 @@ func (d stepDone) command() (domain.CheckCommand, bool) {
 // user has not approved for this ceremony: the approval card then shows it.
 func stepDoneNeedsApproval(s domain.Session, arguments root.JSONValue) bool {
 	run, live := s.Ceremony()
-	if !live {
-		return false // the driver refuses it without running anything
+	if !live || run.Step == "decompose" {
+		return false // the driver refuses it without running anything; planNeedsApproval reads decompose
 	}
-	// The same decoding as the driver's, so a command the compact profile
-	// recovers from a string still reaches the approval card.
-	done, _, err := decodeStepDoneFor(run, arguments)
-	if err != nil {
-		return false // malformed calls are refused by the driver, not executed
-	}
-	proposed, ok := done.command()
-	if !ok {
-		return false
-	}
-	switch run.Step {
-	case "reproduce", "brief":
-		return !proposed.Equal(run.Check)
-	}
-	return false // steps that run no command ignore it
+	return unapproved(run, approvalChecks(run, arguments))
 }
 
-// planNeedsApproval is true for a decompose hand-back that names commands:
-// the console runs each once while verifying, so the person approves them
-// first, under autonomy too.
+// planNeedsApproval is true for a decompose hand-back that names a command
+// the person has not approved in this ceremony: the console runs each once
+// while verifying, so the person approves them first, under autonomy too.
 func planNeedsApproval(s domain.Session, arguments root.JSONValue) bool {
 	run, live := s.Ceremony()
 	if !live || run.Step != "decompose" {
 		return false
 	}
-	done, err := decodeStepDone(arguments)
-	return err == nil && len(done.planDone.commands()) > 0
+	return unapproved(run, approvalChecks(run, arguments))
+}
+
+// approvalChecks are the commands an axlr_step_done call puts on the
+// approval card: the check command reproduce or brief proposes, every
+// command a decompose names.
+func approvalChecks(run domain.CeremonyRun, arguments root.JSONValue) []domain.CheckCommand {
+	switch run.Step {
+	case "reproduce", "brief":
+		// The same decoding as the driver's, so a command the compact profile
+		// recovers from a string still reaches the approval card.
+		done, _, err := decodeStepDoneFor(run, arguments)
+		if err != nil {
+			return nil // malformed calls are refused by the driver, not executed
+		}
+		if proposed, ok := done.command(); ok {
+			return []domain.CheckCommand{proposed}
+		}
+	case "decompose":
+		if done, err := decodeStepDone(arguments); err == nil {
+			return done.planDone.commands()
+		}
+	}
+	return nil // steps that run no command ignore it
+}
+
+func unapproved(run domain.CeremonyRun, commands []domain.CheckCommand) bool {
+	for _, command := range commands {
+		if !run.Approves(command) {
+			return true
+		}
+	}
+	return false
 }
 
 // Begin starts the ceremony the session's mode names, before the turn that

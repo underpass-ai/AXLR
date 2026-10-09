@@ -29,6 +29,7 @@ type sessionCeremony struct {
 	Fence      string           `json:"fence"`
 	Program    string           `json:"check_program,omitempty"`
 	Args       []string         `json:"check_args,omitempty"`
+	Approved   []sessionCheck   `json:"approved,omitempty"`
 	About      string           `json:"about,omitempty"`
 	Memory     string           `json:"memory,omitempty"`
 	BudgetBase int              `json:"budget_base,omitempty"`
@@ -41,6 +42,13 @@ type sessionCeremony struct {
 	Task       *sessionTask     `json:"task,omitempty"`
 	Incident   *sessionIncident `json:"incident,omitempty"`
 	Repair     *sessionRepair   `json:"repair,omitempty"`
+}
+
+// sessionCheck is a command the person approved; sidecars written before
+// approvals were kept have none.
+type sessionCheck struct {
+	Program string   `json:"program"`
+	Args    []string `json:"args,omitempty"`
 }
 
 type sessionTask struct {
@@ -141,6 +149,9 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 		return nil
 	}
 	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model}
+	for _, command := range record.Approved {
+		run.Approved = append(run.Approved, domain.CheckCommand{Program: command.Program, Args: command.Args})
+	}
 	if t := record.Task; t != nil {
 		run.Task = &domain.TaskRun{Plan: t.Plan, Task: t.Task, Scope: t.Scope, Protect: t.Protect, Check: domain.CheckCommand{Program: t.Program, Args: t.Args}, TestFirst: t.TestFirst, Start: t.Start, Frozen: t.Frozen, Git: t.Git}
 	}
@@ -170,6 +181,9 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 		return nil
 	}
 	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model}
+	for _, command := range run.Approved {
+		record.Approved = append(record.Approved, sessionCheck{Program: command.Program, Args: command.Args})
+	}
 	if t := run.Task; t != nil {
 		record.Task = &sessionTask{Plan: t.Plan, Task: t.Task, Scope: t.Scope, Protect: t.Protect, Program: t.Check.Program, Args: t.Check.Args, TestFirst: t.TestFirst, Start: t.Start, Frozen: t.Frozen, Git: t.Git}
 	}

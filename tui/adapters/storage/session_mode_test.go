@@ -113,6 +113,42 @@ func TestACeremonySidecarWithANewerFieldStillLoads(t *testing.T) {
 	}
 }
 
+// The commands the person approved in a ceremony survive a resume; a
+// sidecar written before they were kept still loads, with none approved
+// beyond its check.
+func TestApprovedCheckCommandsSurviveAResume(t *testing.T) {
+	store, dir := openStore(t)
+	const id = "0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e0e"
+	s, _ := domain.NewSession(id, domain.Workspace(t.TempDir()), "test/model")
+	approved := []domain.CheckCommand{{Program: "go", Args: []string{"test", "./..."}}, {Program: "make"}}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_plan", Version: "1.0", Instance: "axlr-p", Step: "decompose", Iteration: 2, Fence: "f", Approved: approved}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, ok := loaded.Ceremony()
+	if !ok || len(run.Approved) != 2 || !run.Approves(approved[0]) || !run.Approves(approved[1]) || run.Approves(domain.CheckCommand{Program: "go"}) {
+		t.Fatalf("approved commands not restored: %+v", run.Approved)
+	}
+	old := `{"version":1,"definition":"axlr_debug","release":"2.0","instance":"axlr-y","step":"diagnose","iteration":1,"fence":"f","check_program":"python3","check_args":["-m","unittest"]}`
+	if err := os.WriteFile(filepath.Join(dir, id+".ceremony"), []byte(old), 0600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err = store.Load(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, ok = loaded.Ceremony()
+	if !ok || run.Instance != "axlr-y" || run.Approved != nil || !run.Approves(domain.CheckCommand{Program: "python3", Args: []string{"-m", "unittest"}}) {
+		t.Fatalf("a sidecar without approved commands did not load: %+v", run)
+	}
+}
+
 func TestIncidentStateSurvivesAResume(t *testing.T) {
 	store, _ := openStore(t)
 	const id = "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"

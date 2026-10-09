@@ -334,6 +334,67 @@ func TestOnlyANewCheckCommandNeedsTheUser(t *testing.T) {
 	}
 }
 
+// The person approves a check command once per ceremony: a hand-back the
+// driver refuses (here a missing field) loses run.Check, but the same
+// command sent again needs no second card. Another command still does.
+func TestAnApprovedCheckCommandIsNotAskedAgainAfterARefusal(t *testing.T) {
+	incomplete := `{"check_command":{"program":"python3","args":["-m","unittest"]},"expected":"2 hola"}`
+	s, store := pendingCall(t, domain.ModeDebug, "axlr_step_done", incomplete)
+	d := &CeremonyDriver{Engine: &fakeEngine{}, Checks: &fakeChecks{exits: []int{1}}}
+	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "axlr-i", Step: "reproduce", Iteration: 1, Fence: "fence-reproduce"}); err != nil {
+		t.Fatal(err)
+	}
+	stepDone, _ := domain.NewHostToolIdentity(domain.HostOperationStepDone)
+	if approvesInSession(allowEverything{}, s, stepDone, mustObject(t, incomplete)) {
+		t.Fatal("a new check command was approved automatically")
+	}
+	u := ResolveToolUseCase{Store: store, Continue: ContinueTurnUseCase{Store: store, Ceremonies: d}}
+	if err := u.resolveOne(context.Background(), &s, "call-1", domain.DecisionApprove, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if run, live := s.Ceremony(); !live || run.Step != "reproduce" || !run.Check.IsZero() || !s.Export().Activity[0].Outcome.IsError {
+		t.Fatalf("the incomplete hand-back was not refused: %+v", run)
+	}
+	if !approvesInSession(nil, s, stepDone, mustObject(t, reproduceArgs)) {
+		t.Fatal("the command the person approved was asked again")
+	}
+	if approvesInSession(allowEverything{}, s, stepDone, mustObject(t, `{"check_command":{"program":"sh","args":["-c","exit 1"]},"expected":"x","observed":"y"}`)) {
+		t.Fatal("another command was approved automatically")
+	}
+}
+
+// A decompose hand-back the console sends back for a defect keeps the
+// commands the person approved: the next round with the same commands
+// needs no second card. A new command still does.
+func TestApprovedPlanCommandsAreNotAskedAgainAfterADefect(t *testing.T) {
+	d, _, _, _, s := planDriver(t)
+	if err := s.BeginTurn("planifica", append(turnTools(), HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	defective := planArgs(t, strings.Replace(goodTasks, `"line":8`, `"line":3`, 1))
+	handBack := root.ToolCall{ID: "decompose-1", Name: HostStepDoneName, Arguments: mustObject(t, defective)}
+	if err := s.CompleteAssistant(assistant("", handBack)); err != nil {
+		t.Fatal(err)
+	}
+	if !planNeedsApproval(s, handBack.Arguments) {
+		t.Fatal("the plan's commands skipped the approval card")
+	}
+	store := &memoryStore{}
+	u := ResolveToolUseCase{Store: store, Continue: ContinueTurnUseCase{Store: store, Ceremonies: d}}
+	if err := u.resolveOne(context.Background(), &s, "decompose-1", domain.DecisionApprove, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if run, live := s.Ceremony(); !live || run.Step != "decompose" || run.Iteration != 2 {
+		t.Fatalf("the defective plan did not go back to decompose: %+v", run)
+	}
+	if planNeedsApproval(s, mustObject(t, planArgs(t, goodTasks))) {
+		t.Fatal("the commands the person approved were asked again")
+	}
+	if !planNeedsApproval(s, mustObject(t, planArgs(t, strings.Replace(goodTasks, "TestLineCount", "TestLines", 1)))) {
+		t.Fatal("a new command skipped the approval card")
+	}
+}
+
 func TestAcceptedStepUpdatesTheSessionAndRestartsTheBudget(t *testing.T) {
 	s, store := pendingCall(t, domain.ModeDebug, "axlr_step_done", reproduceArgs)
 	engine := &fakeEngine{}
