@@ -23,7 +23,10 @@ const memoryReminderCalls = 5
 
 // memoryReminder is the console's message; it leaves the judgement to the
 // model and says how to decline.
-const memoryReminder = memoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with kmp_write_memory through axlr_call_tool, under the session's exact about (axlr_session shows it), with its source evidence and a stable idempotency key, then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
+const memoryReminder = memoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with axlr_remember (kind, text and its evidence; the console uses the session's exact about and a stable idempotency key), then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
+
+// memoryReminderBridged is the reminder where axlr_remember is not offered.
+const memoryReminderBridged = memoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with kmp_write_memory through axlr_call_tool, under the session's exact about (axlr_session shows it), with its source evidence and a stable idempotency key, then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
 
 // remindMemory starts one console turn when a request ends with durable work
 // and no memory write: models given KMP recall it reliably but record what
@@ -44,7 +47,11 @@ func remindMemory(ctx context.Context, s *domain.Session, u ContinueTurnUseCase,
 		return false, nil
 	}
 	next := *s
-	if err := next.BeginTurn(root.Text(memoryReminder), next.ToolSnapshot()); err != nil {
+	reminder := memoryReminderBridged
+	if _, remembers := findTool(s, HostRememberName); remembers {
+		reminder = memoryReminder
+	}
+	if err := next.BeginTurn(root.Text(reminder), next.ToolSnapshot()); err != nil {
 		return false, err
 	}
 	if err := u.Store.Save(ctx, next); err != nil {
@@ -94,7 +101,7 @@ func personRequest(messages []root.Message) int {
 // needsMemoryReminder reads one request: it was not reminded yet, ran no
 // ceremony step, attempted no memory write (an attempt the person denied
 // counts: they decided), and changed a file or made several local tool calls
-// other than file reads.
+// other than reads, searches and listings.
 func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 	local, changed := 0, false
 	for _, message := range request[1:] {
@@ -106,7 +113,7 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 				local++
 			}
 			switch call.Name {
-			case write, HostStepDoneName:
+			case write, HostStepDoneName, HostRememberName:
 				return false
 			case HostCallToolName:
 				var bridged struct {
@@ -124,7 +131,8 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 }
 
 // countsForMemory reports whether a call counts toward memoryReminderCalls:
-// a local tool call that is not a file read.
+// a local tool call that is not a file read, a search or a listing, which
+// change nothing.
 func countsForMemory(name root.ToolName) bool {
-	return strings.HasPrefix(string(name), "local_") && name != "local_read"
+	return strings.HasPrefix(string(name), "local_") && name != "local_read" && name != "local_search" && name != "local_list"
 }

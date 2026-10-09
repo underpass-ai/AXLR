@@ -159,7 +159,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			outcome, step = result.Outcome, &result
 		} else if tool.Identity.Kind == domain.ToolKindHost {
 			hostCtx, hostSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolExecution, DiagnosticEvent{Bytes: len(toolArgs.Bytes())})
-			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills, Labels: u.Continue.SessionLabels, Repairs: u.Continue.SelfRepair, Judge: u.Continue.Judge.toolPort(), Windows: u.Continue.Windows}).Execute(hostCtx, *s, tool.Identity, toolArgs)
+			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills, Labels: u.Continue.SessionLabels, Repairs: u.Continue.SelfRepair, Judge: u.Continue.Judge.toolPort(), Windows: u.Continue.Windows, Memory: u.Continue.Remember}).Execute(hostCtx, *s, tool.Identity, toolArgs)
 			class := DiagnosticErrorNone
 			if runErr != nil || outcome.IsError {
 				class = DiagnosticErrorTool
@@ -168,6 +168,9 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		} else if tool.Identity.Kind == domain.ToolKindLocal && tool.Identity.LocalOperation == "read" {
 			// A page is sized to what the projection keeps per tool result.
 			outcome, runErr = boundedLocalRead(ctx, u.Tools, tool.Identity, toolArgs, projectionBudget(u.Continue.Windows, *s).ToolResultBytes())
+		} else if tool.Identity.Kind == domain.ToolKindLocal && (tool.Identity.LocalOperation == "search" || tool.Identity.LocalOperation == "list") {
+			// So is a page of matches or entries.
+			outcome, runErr = boundedLocalListing(ctx, u.Tools, tool.Identity, toolArgs, projectionBudget(u.Continue.Windows, *s).ToolResultBytes())
 		} else {
 			if tool.Identity.Kind == domain.ToolKindLocal && tool.Identity.LocalOperation == "exec" && tolerantSession(*s) {
 				toolArgs, _ = normalizeExec(toolArgs)

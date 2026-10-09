@@ -15,6 +15,10 @@ type ClientConfig struct {
 	// Thinking false asks a local server's chat template to turn the
 	// model's thinking off; nil leaves the server's default.
 	Thinking *bool
+	// Models are request options by the exact model id a request names, so
+	// an id with a :nitro suffix is another entry. Only OpenRouter receives
+	// them: a client for another endpoint sends none.
+	Models map[string]ModelOptions
 	// StreamInactivityTimeout limits the wait for headers or the next SSE data event.
 	// Zero uses the one-minute default.
 	StreamInactivityTimeout time.Duration

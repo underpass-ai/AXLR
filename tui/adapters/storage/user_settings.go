@@ -50,9 +50,25 @@ type UserSettings struct {
 	// window is unknown (OpenRouter's) may reach; zero means
 	// domain.DefaultPromptTokens. A local model's window applies instead.
 	PromptTokens int `json:"prompt_tokens,omitempty"`
+	// Engines shares KMP and MADE between consoles (user_settings_engines.go).
+	Engines *EngineSettings `json:"engines,omitempty"`
+	// Sandbox confines local commands (user_settings_sandbox.go); absent
+	// means off.
+	Sandbox *ExecSandboxSettings `json:"exec_sandbox,omitempty"`
+	// Jobs bounds the repair and improvement jobs (user_settings_jobs.go).
+	Jobs *JobsSettings `json:"jobs,omitempty"`
+	// TurnToolCalls is a turn's tool-call budget; zero means
+	// domain.MaxTurnToolCalls (32).
+	TurnToolCalls int `json:"turn_tool_calls,omitempty"`
+	// MaxSessionUSD stops a session's model requests once their known cost
+	// reaches it, in dollars; zero means no limit (user_settings_usage.go).
+	MaxSessionUSD float64 `json:"max_session_usd,omitempty"`
 	// LocalModels are OpenAI-compatible servers, such as llama.cpp or vLLM,
 	// offered in /model next to OpenRouter's catalog.
 	LocalModels []LocalModel `json:"local_models,omitempty"`
+	// Models holds OpenRouter request options by exact model id: provider
+	// routing, reasoning and max_tokens (user_settings_models.go).
+	Models map[string]json.RawMessage `json:"models,omitempty"`
 	// Jev enables TypeSafe Jev, an external judgement model; absent or with
 	// both switches off, nothing is sent to TypeSafe.
 	Jev *JevSettings `json:"jev,omitempty"`
@@ -64,9 +80,19 @@ type UserSettings struct {
 	// an earlier launch's trace and payloads; absent means
 	// DefaultTraceRetentionDays and 0 keeps them forever. A pointer keeps an
 	// explicit 0 when another setting is saved.
-	TraceRetentionDays *int                       `json:"trace_retention_days,omitempty"`
-	Extra              map[string]json.RawMessage `json:"-"`
+	TraceRetentionDays *int `json:"trace_retention_days,omitempty"`
+	// TracePayloads stores redacted request and response bodies beside the
+	// trace by default; --trace-payloads decides for one launch.
+	TracePayloads bool                       `json:"trace_payloads,omitempty"`
+	Extra         map[string]json.RawMessage `json:"-"`
 }
+
+// turn_tool_calls bounds: below 8 a turn cannot read, edit and check; above
+// 256 one turn could spend a session's budget without the person.
+const (
+	minTurnToolCalls = 8
+	maxTurnToolCalls = 256
+)
 
 // DefaultTraceRetentionDays applies when trace_retention_days is absent.
 const DefaultTraceRetentionDays = 30
@@ -83,25 +109,21 @@ func (s UserSettings) TraceRetention() time.Duration {
 	return time.Duration(days) * 24 * time.Hour
 }
 
-// DefaultPlanner is the model that decomposes a brief unless plan.model
-// says otherwise: a large model plans, the session's local model works.
-const DefaultPlanner = "z-ai/glm-5.3-flash"
-
-// PlanSettings is the plan section: Model plans (default DefaultPlanner;
-// "session" uses the session's model) and AutoApprove starts a verified
-// plan without the person (default false).
+// PlanSettings is the plan section: Model plans (default, and "session",
+// the session's model) and AutoApprove starts a verified plan without the
+// person (default false).
 type PlanSettings struct {
 	Model       string `json:"model,omitempty"`
 	AutoApprove bool   `json:"auto_approve,omitempty"`
 }
 
-// Planner is the configured planner with the default applied; empty means
-// the session's model.
+// Planner is the configured planner; empty means the session's model. The
+// default was z-ai/glm-5.3-flash until 9 October 2026: routed by OpenRouter
+// to OpenInference, its decompose request took 138 s, and a remote session
+// already runs a large model. A session on a small local model names a
+// larger planner here.
 func (s UserSettings) Planner() string {
-	if s.Plan == nil || s.Plan.Model == "" {
-		return DefaultPlanner
-	}
-	if s.Plan.Model == "session" {
+	if s.Plan == nil || s.Plan.Model == "session" {
 		return ""
 	}
 	return s.Plan.Model
@@ -350,7 +372,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies", "plan", "trace_retention_days"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox", "engines", "max_session_usd", "jobs"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -415,8 +437,20 @@ func (s UserSettings) Validate() error {
 	if s.PromptTokens != 0 && (s.PromptTokens < domain.MinimumPromptTokens || s.PromptTokens > maxContextTokens) {
 		return fmt.Errorf("settings prompt_tokens must be between %d and %d", domain.MinimumPromptTokens, maxContextTokens)
 	}
+	if err := s.Sandbox.validate(); err != nil {
+		return err
+	}
+	if err := s.Jobs.validate(); err != nil {
+		return err
+	}
+	if s.TurnToolCalls != 0 && (s.TurnToolCalls < minTurnToolCalls || s.TurnToolCalls > maxTurnToolCalls) {
+		return fmt.Errorf("settings turn_tool_calls must be between %d and %d", minTurnToolCalls, maxTurnToolCalls)
+	}
 	if days := s.TraceRetentionDays; days != nil && (*days < 0 || *days > maxTraceRetentionDays) {
 		return fmt.Errorf("settings trace_retention_days must be between 0 and %d", maxTraceRetentionDays)
+	}
+	if err := s.validateSessionBudget(); err != nil {
+		return err
 	}
 	if len(s.LocalModels) > maxLocalModels {
 		return errors.New("settings.json lists too many local models")
@@ -430,6 +464,9 @@ func (s UserSettings) Validate() error {
 			return fmt.Errorf("settings local_models lists %s twice", local.ID)
 		}
 		localIDs[local.ID] = struct{}{}
+	}
+	if err := s.validateModels(localIDs); err != nil {
+		return err
 	}
 	if profile := s.CeremonyProfile(); profile != "auto" && profile != "standard" && profile != "compact" {
 		return errors.New("settings ceremonies.profile must be auto, standard or compact")

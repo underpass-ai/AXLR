@@ -46,6 +46,7 @@ func TestParseWorkModeAcceptsOnlyKnownModes(t *testing.T) {
 func TestModesJudgeWorkspaceChanges(t *testing.T) {
 	write, edit := localTool(t, "write"), localTool(t, "edit")
 	exec, read := localTool(t, "exec"), localTool(t, "read")
+	search, list := localTool(t, "search"), localTool(t, "list")
 	plugin, _ := NewPluginToolIdentity(axlr.PluginRef{PluginID: "kmp", ToolName: "kmp_write_memory"})
 	doc := jsonArgs(t, `{"path":"docs/guide.go","content":"x"}`)
 	readme := jsonArgs(t, `{"path":"README.md","content":"x"}`)
@@ -63,6 +64,12 @@ func TestModesJudgeWorkspaceChanges(t *testing.T) {
 		{ModeReview, edit, readme, VerdictDeny},
 		{ModeReview, exec, jsonArgs(t, `{}`), VerdictAsk},
 		{ModeReview, read, code, VerdictAllow},
+		{ModeReview, search, jsonArgs(t, `{"pattern":"x","path":"wc.py"}`), VerdictAllow},
+		{ModeReview, list, jsonArgs(t, `{"path":"."}`), VerdictAllow},
+		{ModeWriter, search, jsonArgs(t, `{"pattern":"x"}`), VerdictAllow},
+		{ModeWriter, list, jsonArgs(t, `{"recursive":true}`), VerdictAllow},
+		{ModeResearch, search, jsonArgs(t, `{"pattern":"x"}`), VerdictAllow},
+		{ModeResearch, list, jsonArgs(t, `{}`), VerdictAllow},
 		{ModeReview, plugin, jsonArgs(t, `{}`), VerdictAllow},
 		{ModeWriter, write, readme, VerdictAllow},
 		{ModeWriter, edit, doc, VerdictAllow},

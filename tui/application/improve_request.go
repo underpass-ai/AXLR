@@ -113,12 +113,11 @@ func improvementSignature(repository string, calls []citedFailure, description s
 
 // improvementBrief is the brief the improvement session starts with.
 func improvementBrief(s domain.Session, request repairRequest, calls []citedFailure, build string) string {
-	return requestBrief(s, request, calls, build, "Calls that showed the friction, as the origin session saw them:",
-		"Show the improvement missing in this clone with a check that fails before any change; if it already exists or cannot be made safely as a small change, hand back the brief with feasible=false and the reason.")
+	return requestBrief(s, request, calls, build, "Calls that showed the friction, as the origin session saw them:", improvementClosing)
 }
 
 // admitImprovement applies the rules that bound agent-requested
-// improvements: the slot shared with repairs, one per origin session, the
+// improvements: the slots shared with repairs, one per origin session, the
 // cap per build and no duplicate of a running or merged improvement.
 func (r *SelfRepair) admitImprovement(records []domain.RepairRecord, session domain.SessionID, signature string) string {
 	active, started := 0, 0
@@ -145,8 +144,8 @@ func (r *SelfRepair) admitImprovement(records []domain.RepairRecord, session dom
 			started++
 		}
 	}
-	if active >= MaxActiveRepairs {
-		return fmt.Sprintf("another self-repair or improvement is active (%d of %d allowed); wait for it or consult axlr_repair_status", active, MaxActiveRepairs)
+	if limit := r.maxActive(); active >= limit {
+		return fmt.Sprintf("another self-repair or improvement is active (%d of %d allowed by jobs.max_active); wait for it or consult axlr_repair_status", active, limit)
 	}
 	if started >= MaxImprovementsPerBuild {
 		return fmt.Sprintf("this console build already started %d improvements; tell the user, who can start more with axlr-tui --improve \"<brief>\"", started)

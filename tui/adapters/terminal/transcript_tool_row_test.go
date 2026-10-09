@@ -97,3 +97,33 @@ func TestUserRowsHangContinuationLinesUnderTheText(t *testing.T) {
 		t.Fatalf("visual rows %d != lines %d", tr.VisualLineCount(), len(lines))
 	}
 }
+
+// A search row reads as its question, not as a run of argument values.
+func TestSearchAndListRowsReadAsTheirQuestion(t *testing.T) {
+	for _, tc := range []struct {
+		name   root.ToolName
+		args   string
+		locale Locale
+		want   string
+	}{
+		{"local_search", `{"pattern":"func Needle","path":"tui","glob":"*.go","context_lines":2}`, English, `local_search  "func Needle" in tui (*.go) ·`},
+		{"local_search", `{"pattern":"x"}`, Spanish, `local_search  "x" en . ·`},
+		{"local_list", `{"path":"docs","recursive":true}`, English, `local_list  docs, recursive ·`},
+		{"local_list", `{"path":"docs","recursive":true}`, Spanish, `local_list  docs, recursivo ·`},
+		{"local_list", `{}`, English, `local_list  . ·`},
+	} {
+		args, _ := root.NewJSONObject([]byte(tc.args))
+		call := root.ToolCall{ID: "c1", Name: tc.name, Arguments: args}
+		s := domain.SessionState{
+			Messages: []root.Message{{Role: root.RoleUser, Content: "find it"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{call}}},
+			Activity: []domain.PendingTool{{Call: call, Decision: domain.DecisionAutoApprove}},
+		}
+		tr := NewTranscript()
+		tr.SetWidth(120)
+		tr.SetSession(s, "", Theme{ID: domain.ThemeInk, Locale: tc.locale})
+		lines := strings.Split(ansi.Strip(tr.Text()), "\n")
+		if row := lines[len(lines)-1]; !strings.Contains(row, tc.want) {
+			t.Errorf("%s %s: row %q lacks %q", tc.name, tc.args, row, tc.want)
+		}
+	}
+}

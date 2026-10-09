@@ -78,6 +78,11 @@ func (m *AppModel) sizeApproval() {
 // navigation routes modal input before editor input. It never reads a worker's
 // session: all decisions use the UI's last published state.
 func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	if m.overlay == "jobs" && !m.approvalFocus() {
+		if next, cmd, handled := m.jobsInput(msg); handled {
+			return next, cmd, true
+		}
+	}
 	if m.overlay == "changes" && !m.approvalFocus() {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseClickMsg, tea.MouseWheelMsg:
@@ -213,6 +218,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				next, cmd := m.planKey(k)
 				return next, cmd, true
 			}
+			if m.overlay == "usage" && k.String() != "esc" {
+				next, cmd := m.usageKey(k)
+				return next, cmd, true
+			}
 			if m.overlay == "repairs" && (k.String() != "esc" || m.RepairPanel.Reasoning) {
 				next, cmd := m.repairKey(k)
 				return next, cmd, true
@@ -290,7 +299,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next"}
+		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
 		if m.overlay == "sessions" {
 			for i := range m.Picker.Visible() {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
@@ -329,7 +338,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// m.Info scroll it, and the others keep the conversation behind
 		// them still. Search shows the conversation, so it falls through.
 		switch m.overlay {
-		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident":
+		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage":
 			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
 		}
 		return m, nil, true
@@ -347,6 +356,8 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case "made-prepare":
 		next, cmd := m.prepareMADE()
 		return next, cmd, true
+	case "usage":
+		return m.openUsagePanel(), nil, true
 	case "changes":
 		m.Changes.Open(m.Header.State)
 		m.Changes.Resize(m.Layout.Width, m.Layout.Height-1)
@@ -360,6 +371,8 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.overlay = ""
 		cmd := m.copyLatest()
 		return m, cmd, true
+	case "jobs":
+		return m.openJobsPanel(), nil, true
 	case "plugins", "catalog-refresh", "catalog-change", "catalog-marketplace":
 		if m.Busy {
 			m.Status.Error = m.Theme.T("error.pluginsBusy")
@@ -843,8 +856,12 @@ func (m AppModel) overlayView(base string) string {
 	case "repairs":
 		title, subtitle, content := m.repairPanelView()
 		body = m.Theme.Overlay(title, subtitle, content, m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
+	case "jobs":
+		body = m.jobsPanelView()
 	case "sessions":
 		body = m.Picker.View(m.Theme, m.zones, m.prefix, m.Layout.Height-1, m.Layout.Width)
+	case "usage":
+		body = m.usagePanelView()
 	case "search":
 		// Search lives in the main view, in place of the composer.
 		return base

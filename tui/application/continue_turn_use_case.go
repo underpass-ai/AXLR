@@ -32,6 +32,20 @@ type ContinueTurnUseCase struct {
 	// Judge enables TypeSafe Jev; nil, the default, offers no axlr_judge and
 	// runs no final check.
 	Judge *Judge
+	// Calibration learns each model's bytes per prompt token from the
+	// requests it serves; nil measures nothing.
+	Calibration TokenCalibrationPort
+	// Remember writes axlr_remember's memories in KMP; nil, without KMP,
+	// offers no axlr_remember.
+	Remember RememberPort
+	// TurnToolCalls is the turn's tool-call budget (settings'
+	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
+	TurnToolCalls int
+	// Usage keeps each session's ledger of tokens, cost and latency, and
+	// MaxSessionUSD refuses a session's requests once its known cost
+	// reaches it (zero, no limit); nil keeps no ledger (session_usage.go).
+	Usage         SessionUsagePort
+	MaxSessionUSD float64
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {
@@ -71,10 +85,16 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 			return interrupt(err)
 		}
 	}
+	if err := warnCallBudget(ctx, session, u, emit); err != nil {
+		return interrupt(err)
+	}
 	contextCtx, contextSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionContext, DiagnosticEvent{Messages: len(session.Messages()), Tools: len(session.ToolSnapshot())})
 	hostTools := HostTools()
 	if u.Judge.offersTool() {
 		hostTools = append(hostTools, JudgeTool())
+	}
+	if u.offersRemember(*session) {
+		hostTools = append(hostTools, RememberTool())
 	}
 	if err := session.EnsureHostTools(hostTools); err != nil {
 		contextSpan.End(DiagnosticErrorInvalidState)
@@ -132,6 +152,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		// absent from the request while Jev is off.
 		tools = withoutTool(tools, HostJudgeName)
 	}
+	if !u.offersRemember(*session) {
+		tools = withoutTool(tools, HostRememberName)
+	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticContextProjected, SpanID: CurrentDiagnosticSpan(contextCtx), Messages: len(req.Messages), Tools: len(req.Tools), OriginalMessages: projection.OriginalMessages, DroppedMessages: projection.DroppedMessages, OriginalBytes: projection.OriginalBytes, ProjectedBytes: projection.ProjectedBytes, ContextCutIndex: projection.CutIndex})
@@ -141,6 +164,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	contextSpan.End(DiagnosticErrorNone)
+	if err := u.budgetRefusal(ctx, *session); err != nil {
+		return interrupt(err)
+	}
 	if err := emit(Event{Kind: EventStreamStart, MessageCount: len(session.Messages())}); err != nil {
 		return interrupt(err)
 	}
@@ -153,6 +179,8 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	modelCtx = WithToolCallProgress(modelCtx, func(name string, bytes int) {
 		_ = emit(Event{Kind: EventToolCallProgress, ToolCallName: name, ToolCallBytes: bytes})
 	})
+	meter := &usageMeter{started: started}
+	modelCtx = meter.watch(modelCtx)
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderStart, SpanID: CurrentDiagnosticSpan(modelCtx)})
 	}
@@ -164,6 +192,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		if _, err := root.NewText(string(delta)); err != nil {
 			return err
 		}
+		meter.mark()
 		draft.WriteString(string(delta))
 		chunks++
 		bytes += len(delta)
@@ -187,6 +216,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		done := DiagnosticEvent{Stage: DiagnosticProviderDone, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class}
 		if usage := result.Usage; usage != nil {
 			done.PromptTokens, done.CompletionTokens, done.CachedTokens, done.CacheWriteTokens = usage.PromptTokens, usage.CompletionTokens, usage.CachedTokens, usage.CacheWriteTokens
+			done.ReasoningTokens, done.CostUSD = usage.ReasoningTokens, usage.Cost
 		}
 		_ = u.Diagnostics.Record(done)
 	}
@@ -196,11 +226,16 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
 	}
+	u.recordUsage(ctx, *session, req.Model, result, meter, emit)
+	if u.Calibration != nil && result.Usage != nil && result.RequestBytes > 0 {
+		// A measurement that cannot be saved is only one sample lost.
+		_ = u.Calibration.Observe(context.WithoutCancel(ctx), req.Model, result.RequestBytes, result.Usage.PromptTokens)
+	}
 	if len(result.Message.ToolCalls) > 0 && u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolRequested, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: len(result.Message.ToolCalls)})
 	}
 	next := *session
-	if err := next.CompleteAssistant(result); err != nil {
+	if err := next.CompleteAssistantWithin(result, u.turnLimit()); err != nil {
 		// CompleteAssistant can deliberately pause at the call limit: the
 		// answer is kept with its calls answered as not run, so the person
 		// sees it in the transcript instead of a dropped draft.

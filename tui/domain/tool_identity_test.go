@@ -33,3 +33,17 @@ func TestHostToolIdentityIsSeparateFromPluginAndLocalAuthority(t *testing.T) {
 		t.Fatal("plugin authority changed")
 	}
 }
+
+// local_search and local_list are local operations like local_read, never
+// host bookkeeping that runs without the person's approval policy.
+func TestSearchAndListAreLocalOperations(t *testing.T) {
+	for _, operation := range []string{"search", "list"} {
+		id, err := NewLocalToolIdentity(operation)
+		if err != nil || id.Kind != ToolKindLocal || id.LocalOperation != operation || id.Validate() != nil {
+			t.Fatalf("%s: %+v %v", operation, id, err)
+		}
+		if _, err := NewHostToolIdentity(operation); err == nil {
+			t.Fatalf("%s became a host operation", operation)
+		}
+	}
+}

@@ -59,19 +59,36 @@ func mapResponse(wire responseDTO) (domain.CompletionResult, error) {
 	if err := message.Validate(); err != nil {
 		return domain.CompletionResult{}, err
 	}
-	result := domain.CompletionResult{Message: message, FinishReason: domain.FinishReason(choice.FinishReason)}
+	result := domain.CompletionResult{Message: message, FinishReason: domain.FinishReason(choice.FinishReason), Provider: wire.Provider}
 	if wire.Usage != nil {
-		result.Usage = &domain.TokenUsage{
-			PromptTokens:     wire.Usage.PromptTokens,
-			CompletionTokens: wire.Usage.CompletionTokens,
-			TotalTokens:      wire.Usage.TotalTokens,
-		}
-		if details := wire.Usage.PromptTokensDetails; details != nil {
-			result.Usage.CachedTokens = details.CachedTokens
-			result.Usage.CacheWriteTokens = details.CacheWriteTokens
-		}
+		result.Usage = mapUsage(*wire.Usage)
 	}
 	return result, nil
+}
+
+func mapUsage(wire usageDTO) *domain.TokenUsage {
+	usage := &domain.TokenUsage{
+		PromptTokens:     wire.PromptTokens,
+		CompletionTokens: wire.CompletionTokens,
+		TotalTokens:      wire.TotalTokens,
+	}
+	if details := wire.PromptTokensDetails; details != nil {
+		usage.CachedTokens = details.CachedTokens
+		usage.CacheWriteTokens = details.CacheWriteTokens
+	}
+	if details := wire.CompletionTokensDetails; details != nil {
+		usage.ReasoningTokens = details.ReasoningTokens
+	}
+	if wire.Cost != nil {
+		usage.Cost, usage.CostKnown = *wire.Cost, true
+		// With the person's own key, cost is OpenRouter's fee and the
+		// provider bills the inference to that key: the request cost both.
+		// Without it, upstream_inference_cost repeats cost and is not added.
+		if wire.IsBYOK && wire.CostDetails != nil {
+			usage.Cost += wire.CostDetails.UpstreamInferenceCost
+		}
+	}
+	return usage
 }
 
 // outputLimitNote ends an answer the output limit cut short (finish_reason

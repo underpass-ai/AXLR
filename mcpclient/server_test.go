@@ -2,6 +2,8 @@ package mcpclient
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -20,6 +22,10 @@ func TestServerValidate(t *testing.T) {
 		{"bad URL", Server{Name: "x", URL: "ftp://example.com/mcp"}, false},
 		{"URL credential", Server{Name: "x", URL: "https://u:p@example.com/mcp"}, false},
 		{"invalid env", Server{Name: "x", Command: "mcp", Env: []string{"BAD"}}, false},
+		{"socket", Server{Name: "x", Socket: filepath.Join(os.TempDir(), "k.sock")}, true},
+		{"relative socket", Server{Name: "x", Socket: "k.sock"}, false},
+		{"socket and command", Server{Name: "x", Socket: filepath.Join(os.TempDir(), "k.sock"), Command: "mcp"}, false},
+		{"socket with env", Server{Name: "x", Socket: filepath.Join(os.TempDir(), "k.sock"), Env: []string{"A=1"}}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

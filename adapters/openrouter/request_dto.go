@@ -10,6 +10,9 @@ type requestDTO struct {
 	// ChatTemplateKwargs turns a local model's thinking off, as llama.cpp
 	// and vLLM read it.
 	ChatTemplateKwargs map[string]any `json:"chat_template_kwargs,omitempty"`
+	// ModelOptions are the model's configured provider, reasoning and
+	// max_tokens, set only for OpenRouter.
+	ModelOptions
 }
 
 type streamOptionsDTO struct {

@@ -69,7 +69,13 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 			continue
 		}
 		if err := u.Continue.Execute(ctx, s, emit); err != nil {
-			return err
+			if !atCallLimit(err) {
+				return err
+			}
+			resumed, resumeErr := resumeStepAtLimit(ctx, s, u.Continue, emit)
+			if resumeErr != nil || !resumed {
+				return errors.Join(err, resumeErr)
+			}
 		}
 	}
 }

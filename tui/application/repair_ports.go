@@ -97,4 +97,7 @@ type CeremonyProgress struct {
 	Awaiting                          bool
 	Report                            map[string]any
 	Repair                            *domain.RepairRun
+	// StepAttempt and StepLimit are the step's attempt and its bound, as
+	// the footer shows them; StepLimit is zero for an unbounded step.
+	StepAttempt, StepLimit int
 }

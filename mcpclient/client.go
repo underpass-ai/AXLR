@@ -33,7 +33,7 @@ func (c *Client) Connect(ctx context.Context, server Server) error {
 		return err
 	}
 	var observer *rawCallObserver
-	if server.Command != "" {
+	if server.Command != "" || server.Socket != "" {
 		observer = &rawCallObserver{}
 		transport = rawTransport{base: transport, observer: observer}
 	}

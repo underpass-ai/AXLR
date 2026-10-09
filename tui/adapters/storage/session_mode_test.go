@@ -69,7 +69,7 @@ func TestCeremonyRunIsKeptBesideTheSnapshot(t *testing.T) {
 	if err := s.SetMode(domain.ModeDebug); err != nil {
 		t.Fatal(err)
 	}
-	run := domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "axlr-x", Step: "repair", Iteration: 2, Fence: "fence-9", About: "ws:" + id, Check: domain.CheckCommand{Program: "python3", Args: []string{"-m", "unittest"}}, BudgetBase: 7, Reminded: true, Compact: true, StepCall: "call-4", Model: "z-ai/glm-5.3-flash", Plan: &domain.PlanRun{ID: "p-1", Awaiting: "approval", Returns: 1, ReturnReason: "split", Defects: []string{"d"}}, Ledger: []domain.LedgerEntry{{Step: "reproduce", Iteration: 1, Text: "reproduce #1: check python3 -m unittest → exit 1", FirstMessage: 0, LastMessage: 5}}}
+	run := domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "axlr-x", Step: "repair", Iteration: 2, Fence: "fence-9", About: "ws:" + id, Check: domain.CheckCommand{Program: "python3", Args: []string{"-m", "unittest"}}, BudgetBase: 7, Reminded: true, LimitStep: "repair#2", LimitResumes: 1, Compact: true, StepCall: "call-4", Model: "z-ai/glm-5.3-flash", Plan: &domain.PlanRun{ID: "p-1", Awaiting: "approval", Returns: 1, ReturnReason: "split", Defects: []string{"d"}}, Ledger: []domain.LedgerEntry{{Step: "reproduce", Iteration: 1, Text: "reproduce #1: check python3 -m unittest → exit 1", FirstMessage: 0, LastMessage: 5}}}
 	if err := s.SetCeremony(run); err != nil {
 		t.Fatal(err)
 	}

@@ -18,8 +18,11 @@ import (
 )
 
 const (
-	// MaxActiveRepairs bounds how many repair sessions a console runs at once.
-	MaxActiveRepairs = 1
+	// DefaultMaxActiveJobs bounds how many repair and improvement sessions
+	// run at once, across the consoles that share the registry, when
+	// settings.json's jobs.max_active is silent. One at a time made eight
+	// /improve and /repair jobs need eight consoles on 9 October 2026.
+	DefaultMaxActiveJobs = 2
 	// DefaultMaxRepairAttempts bounds how many repair sessions one failure
 	// signature may start before the console asks for a hand-made repair.
 	DefaultMaxRepairAttempts = 2
@@ -42,6 +45,12 @@ type RepairSettings struct {
 	// MaxAttempts bounds repair sessions per failure signature; zero means
 	// DefaultMaxRepairAttempts.
 	MaxAttempts int
+	// MaxActive bounds the repair and improvement sessions active in the
+	// registry, whoever started them; zero means DefaultMaxActiveJobs.
+	MaxActive int
+	// Watch bounds the merge queue's wait for one job's checks
+	// (repair.watch_minutes); zero means the ceremony's default.
+	Watch time.Duration
 }
 
 // SelfRepair lets the agent of a running session ask the console to repair
@@ -59,6 +68,11 @@ type SelfRepair struct {
 	// Engine is MADE as the parent console sees it; nil means not connected.
 	Engine   CeremonyEnginePort
 	Settings RepairSettings
+	// Forge reads the jobs' pull requests for /jobs and its merge queue;
+	// nil means neither is available.
+	Forge ForgePort
+	// Sleep spaces the merge queue's reads; nil means a timer.
+	Sleep func(context.Context, time.Duration) error
 	// Build is the console build that detects defects and receives notices.
 	Build string
 	// RunToken names this console launch; a record left running under
@@ -77,6 +91,11 @@ type SelfRepair struct {
 	// unsaved is the record changes the registry refused since Records last
 	// reported them: the registry cannot show those itself.
 	unsaved error
+	// draining is true while the merge queue's goroutine runs; queueCancel
+	// stops it with the console.
+	draining    bool
+	queueCtx    context.Context
+	queueCancel context.CancelFunc
 }
 
 // repairRun is one repair session the console drives in the background.
@@ -127,6 +146,13 @@ func (r *SelfRepair) maxAttempts() int {
 		return r.Settings.MaxAttempts
 	}
 	return DefaultMaxRepairAttempts
+}
+
+func (r *SelfRepair) maxActive() int {
+	if r.Settings.MaxActive > 0 {
+		return r.Settings.MaxActive
+	}
+	return DefaultMaxActiveJobs
 }
 
 func (r *SelfRepair) configured() error {
@@ -241,7 +267,7 @@ func (r *SelfRepair) Request(ctx context.Context, s domain.Session, arguments ro
 	}
 	brief := repairBrief(s, request, failures, r.Build)
 	record := domain.RepairRecord{Signature: signature, Brief: brief, Attempt: attempts + 1}
-	if err := r.start(ctx, s, records, &record, request.Description); err != nil {
+	if err := r.start(ctx, state, records, &record, request.Description); err != nil {
 		return nil, err
 	}
 	return map[string]any{"accepted": true, "repair": record.ID, "session": record.Session, "clone": record.Clone, "repository": record.Repository, "status": record.Status, "attempt": record.Attempt,
@@ -290,7 +316,7 @@ func (r *SelfRepair) RequestImprovement(ctx context.Context, s domain.Session, a
 		return nil, fmt.Errorf("MADE cannot run the improve ceremony: %w", err)
 	}
 	record := domain.RepairRecord{Improvement: true, Signature: signature, Brief: improvementBrief(s, request, calls, r.Build), Attempt: 1}
-	if err := r.start(ctx, s, records, &record, request.Description); err != nil {
+	if err := r.start(ctx, state, records, &record, request.Description); err != nil {
 		return nil, err
 	}
 	return map[string]any{"accepted": true, "improvement": record.ID, "session": record.Session, "clone": record.Clone, "repository": record.Repository, "status": record.Status,
@@ -299,9 +325,9 @@ func (r *SelfRepair) RequestImprovement(ctx context.Context, s domain.Session, a
 
 // start records a repair or improvement, prepares its clone, creates the
 // session that works there in the matching mode and drives it in the
-// background. The record carries Improvement, Signature, Brief and Attempt.
-func (r *SelfRepair) start(ctx context.Context, s domain.Session, records []domain.RepairRecord, record *domain.RepairRecord, description string) error {
-	state := s.Export()
+// background. The record carries Improvement, Signature, Brief and Attempt;
+// state is the session that asked, whose model the new session uses.
+func (r *SelfRepair) start(ctx context.Context, state domain.SessionState, records []domain.RepairRecord, record *domain.RepairRecord, description string) error {
 	now := r.now()
 	kind, mode, cloneKind := "repair", domain.ModeRepair, ""
 	if record.Improvement {
@@ -396,8 +422,8 @@ func (r *SelfRepair) admit(records []domain.RepairRecord, session domain.Session
 			attempts++
 		}
 	}
-	if active >= MaxActiveRepairs {
-		return fmt.Sprintf("another repair is active (%d of %d allowed); wait for it or consult axlr_repair_status", active, MaxActiveRepairs)
+	if limit := r.maxActive(); active >= limit {
+		return fmt.Sprintf("another repair is active (%d of %d allowed by jobs.max_active); wait for it or consult axlr_repair_status", active, limit)
 	}
 	if attempts >= r.maxAttempts() {
 		return fmt.Sprintf("attempts exhausted: %d repair sessions already ran for this failure; repair it by hand with axlr-tui --repair \"<brief>\"", attempts)
@@ -540,7 +566,13 @@ func (r *SelfRepair) await(ctx context.Context, run *repairRun, status domain.Re
 	r.update(ctx, run, func(record *domain.RepairRecord) { record.Status, record.Pending = status, pending })
 	r.mu.Lock()
 	run.waiting = true
+	queued := status == domain.RepairAwaitingMerge && !run.record.Queued.IsZero()
 	r.mu.Unlock()
+	if queued {
+		// The person queued this merge: the queue takes it when its turn
+		// comes and its checks are green on an up-to-date branch.
+		r.kickQueue()
+	}
 	defer func() {
 		r.mu.Lock()
 		run.waiting = false
@@ -580,6 +612,9 @@ func (r *SelfRepair) conclude(ctx context.Context, run *repairRun, progress Cere
 		}
 		if memory, _ := progress.Report["memory"].(string); memory != "" {
 			record.Memory = memory
+		}
+		if check := checkSummary(progress.Report); check != "" {
+			record.Check = check
 		}
 		if sha, _ := progress.Report["merge_sha"].(string); sha != "" {
 			record.MergeSHA = sha
@@ -634,6 +669,7 @@ func syncRecord(record *domain.RepairRecord, child domain.Session) {
 		return
 	}
 	record.Instance, record.Step = ceremony.Instance, ceremony.Step
+	record.StepAttempt, record.StepLimit = ceremony.Iteration, AttemptLimit(ceremony)
 	if repair := ceremony.Repair; repair != nil && repair.PullRequest > 0 {
 		record.PullRequest, record.URL = repair.PullRequest, repair.URL
 	}
@@ -728,7 +764,10 @@ func (o runObserver) Observe(progress CeremonyProgress) {
 			record.Instance = progress.Instance
 		}
 		if progress.Step != "" {
-			record.Step = progress.Step
+			record.Step, record.StepAttempt, record.StepLimit = progress.Step, progress.StepAttempt, progress.StepLimit
+		}
+		if check := checkSummary(progress.Report); check != "" {
+			record.Check = check
 		}
 		if progress.State != "" {
 			record.State = progress.State
@@ -763,6 +802,11 @@ func (r *SelfRepair) Decide(ctx context.Context, id string, approve bool, reason
 	}
 	select {
 	case run.decisions <- repairDecision{approve: approve, reason: strings.TrimSpace(reason)}:
+		// The run took it: it no longer waits, even before its record
+		// says so, which the merge queue relies on.
+		r.mu.Lock()
+		run.waiting = false
+		r.mu.Unlock()
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -800,8 +844,8 @@ func (r *SelfRepair) Recover(ctx context.Context, id string) error {
 		return fmt.Errorf("repair %s is %s; only an interrupted repair is recovered", id, record.Status)
 	case record.Session == "" || record.Clone == "":
 		return fmt.Errorf("repair %s has no session to recover; it stopped before the clone was ready", id)
-	case active >= MaxActiveRepairs:
-		return fmt.Errorf("another repair is active (%d of %d allowed)", active, MaxActiveRepairs)
+	case active >= r.maxActive():
+		return fmt.Errorf("another repair is active (%d of %d allowed by jobs.max_active)", active, r.maxActive())
 	}
 	r.mu.Lock()
 	_, running := r.runs[id]
@@ -818,6 +862,9 @@ func (r *SelfRepair) Recover(ctx context.Context, id string) error {
 		return fmt.Errorf("open the clone %s: %w", record.Clone, err)
 	}
 	record.Status, record.RunToken, record.Error, record.Pending, record.Notice, record.Notified = domain.RepairRunning, r.RunToken, "", "", "", false
+	// A merge queued before the console stopped is queued again by the
+	// person, who sees the job anew.
+	record.Queued, record.QueueNote = time.Time{}, ""
 	if err := r.save(ctx, &record); err != nil {
 		_ = workbench.Close()
 		return err
@@ -955,6 +1002,9 @@ func (r *SelfRepair) Close() {
 	}
 	r.mu.Lock()
 	r.closed = true
+	if r.queueCancel != nil {
+		r.queueCancel()
+	}
 	runs := make([]*repairRun, 0, len(r.runs))
 	for _, run := range r.runs {
 		runs = append(runs, run)

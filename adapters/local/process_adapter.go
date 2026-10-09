@@ -16,6 +16,8 @@ import (
 type ProcessAdapter struct {
 	Root string
 	Env  []string
+	// Sandbox confines every process; nil runs them unconfined.
+	Sandbox *Sandbox
 }
 
 func (a *ProcessAdapter) Run(ctx context.Context, c domain.ExecCommand) (domain.ExecResult, error) {
@@ -26,13 +28,24 @@ func (a *ProcessAdapter) Run(ctx context.Context, c domain.ExecCommand) (domain.
 	if ctx.Err() != nil {
 		return domain.ExecResult{}, &domain.Fault{Status: "cancelled", Code: "cancelled", Message: "request cancelled before process start"}
 	}
+	if a.Sandbox != nil {
+		if err := a.Sandbox.refusal(); err != nil {
+			return domain.ExecResult{}, err
+		}
+	}
 	program, err := a.resolveProgram(string(c.Program), cwd)
 	if err != nil {
 		return domain.ExecResult{}, err
 	}
+	args := []string(c.Args)
+	if a.Sandbox != nil {
+		if program, args, err = a.Sandbox.wrap(a.Root, cwd, program, args); err != nil {
+			return domain.ExecResult{}, err
+		}
+	}
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(c.Timeout))
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, program, []string(c.Args)...)
+	cmd := exec.CommandContext(runCtx, program, args...)
 	cmd.Dir = cwd
 	cmd.Env = append([]string{}, a.Env...)
 	cmd.Stdin = strings.NewReader(string(c.Stdin))

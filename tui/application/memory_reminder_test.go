@@ -40,6 +40,11 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		commands = append(commands, toolCall(t, fmt.Sprintf("x%d", i), "local_exec", `{}`))
 	}
+	// Searching and listing change nothing, like reading (9 Oct 2026).
+	searches := []root.ToolCall{}
+	for i := 1; i <= 4; i++ {
+		searches = append(searches, toolCall(t, fmt.Sprintf("s%d", i), "local_search", `{"pattern":"x"}`), toolCall(t, fmt.Sprintf("l%d", i), "local_list", `{}`))
+	}
 	for _, tc := range []struct {
 		name    string
 		request []root.Message
@@ -49,6 +54,8 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		{"five commands", memoryRequest(t, commands...), true},
 		{"commands and reads", memoryRequest(t, append([]root.ToolCall{reads[0], reads[1]}, commands[:3]...)...), false},
 		{"eight reads", memoryRequest(t, reads...), false},
+		{"searches and listings", memoryRequest(t, searches...), false},
+		{"commands and searches", memoryRequest(t, append(append([]root.ToolCall{}, searches[:4]...), commands[:4]...)...), false},
 		{"a question", memoryRequest(t, reads[:2]...), false},
 		{"session startup", memoryRequest(t, toolCall(t, "b1", HostSessionName, `{}`), toolCall(t, "b2", HostSkillName, `{}`), toolCall(t, "b3", HostToolsName, `{}`), toolCall(t, "b4", HostCallToolName, `{"name":"kmp_guide","arguments":{}}`), toolCall(t, "b5", HostCallToolName, `{"name":"kmp_wake","arguments":{}}`), toolCall(t, "b6", "kmp_wake", `{}`)), false},
 		{"bridged write", memoryRequest(t, edit, toolCall(t, "w1", HostCallToolName, `{"name":"kmp_write_memory","arguments":{}}`)), false},

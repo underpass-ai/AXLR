@@ -161,7 +161,7 @@ func MarshalResponse(r dto.Response) ([]byte, error) {
 		}
 	}
 	switch r.Tool {
-	case "", "read", "write", "edit", "exec", "plugins.list", "plugins.call":
+	case "", "read", "write", "edit", "exec", "search", "list", "plugins.list", "plugins.call":
 	default:
 		r.Tool = ""
 	}

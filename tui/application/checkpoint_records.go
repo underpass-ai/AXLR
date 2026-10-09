@@ -15,9 +15,9 @@ type turnRecord struct {
 	files  []string
 	memory []map[string]any
 	// worked says the turn wrote a file or made several local calls other
-	// than file reads, the same measure the memory reminder uses; unrecorded
-	// says it did so in a session that uses KMP without an accepted memory
-	// write.
+	// than reads, searches and listings, the same measure the memory
+	// reminder uses; unrecorded says it did so in a session that uses KMP
+	// without an accepted memory write.
 	worked, unrecorded bool
 }
 
@@ -75,6 +75,11 @@ func omittedTurnRecords(original []root.Message, first, cut int) map[int]turnRec
 				// Only a write that happened is on disk to read back.
 				if path := argumentString(call.Arguments, "path"); path != "" && writeSucceeded(results[call.ID]) && !contains(record.files, path) {
 					record.files = append(record.files, path)
+				}
+			}
+			if call.Name == HostRememberName {
+				if about, key, ok := rememberAccepted(results[call.ID]); ok {
+					record.memory = append(record.memory, map[string]any{"about": about, "idempotency_key": key})
 				}
 			}
 			if name, arguments := memoryCall(call); name == "kmp_write_memory" && memoryWriteAccepted(results[call.ID]) {
@@ -151,8 +156,9 @@ func argumentString(arguments root.JSONValue, key string) string {
 	return value
 }
 
-// localCalls counts the local tool calls other than file reads of the
-// person's turn that starts at index, console messages included, up to end.
+// localCalls counts the local tool calls other than reads, searches and
+// listings of the person's turn that starts at index, console messages
+// included, up to end.
 func localCalls(original []root.Message, index, end int) int {
 	count := 0
 	for i := index + 1; i < end; i++ {

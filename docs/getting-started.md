@@ -37,7 +37,7 @@ Useful launch options:
 | `--model provider/model` | Select a model for this launch without opening the catalog |
 | `--lang es` | Show Spanish interface labels; `AXLR_LANG=es` also works |
 | `--session ID` | Restore a saved session in the same workspace |
-| `--trace-payloads=false` | Keep timing diagnostics without saved HTTP bodies |
+| `--trace-payloads` | Also save redacted HTTP request and response bodies for this launch (off by default; `trace_payloads` in settings turns it on for every launch) |
 
 Press `F1` for keyboard help. `Ctrl+P` opens the action palette. AXLR asks before tool calls by default; saved per-tool choices, a server's automatic policy or full autonomy can approve them automatically. `/approvals` shows the saved choices. Review the target and arguments shown in the approval dialog. New sessions start in `/normal`. Use `/writer` for documentation, `/review` for findings, or `/research` for evidence gathering. For a checked implementation or repair, follow the [agent workflow](runbooks/agent-workflow.md) and choose `/delivery` or `/debug` after preparing MADE.
 

@@ -107,10 +107,12 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 	}
 	forcedCut := 0
 	names := map[root.ToolCallID]root.ToolName{}
+	calls := map[root.ToolCallID]root.ToolCall{}
 	results := map[root.ToolCallID]string{}
 	for _, message := range original {
 		for _, call := range message.ToolCalls {
 			names[call.ID] = call.Name
+			calls[call.ID] = call
 		}
 		if message.Role == root.RoleTool {
 			results[message.ToolCallID] = string(message.Content)
@@ -137,6 +139,12 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 				limit, place = turnLimit, turnPlace
 			}
 			exactSchema := names[message.ToolCallID] == "axlr_tools"
+			if i < closedBefore && exactSchema {
+				if stub, ok := closedSchemaResult(calls[message.ToolCallID], string(message.Content)); ok {
+					projected[i].Content = stub
+					continue
+				}
+			}
 			if exactSchema {
 				limit, place = MaxHostResultBytes, excerptHistorical // Exact discovery schemas must remain executable.
 			}

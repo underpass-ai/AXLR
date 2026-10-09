@@ -134,6 +134,7 @@ func (m AppModel) footerStatus() string {
 			parts = append(parts, m.Theme.Tf("footer.cache", m.cached))
 		}
 	}
+	parts = append(parts, m.costParts()...)
 	text := strings.Join(parts, " · ")
 	if m.Theme.Monochrome {
 		return text

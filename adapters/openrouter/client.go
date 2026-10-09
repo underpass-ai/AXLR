@@ -22,6 +22,7 @@ type Client struct {
 	endpoint                string
 	provider                string
 	thinking                *bool
+	models                  map[string]ModelOptions
 	http                    http.Client
 	streamInactivityTimeout time.Duration
 	streamMaxDuration       time.Duration
@@ -58,12 +59,16 @@ func New(config ClientConfig) (*Client, error) {
 	if streamMaxDuration == 0 {
 		streamMaxDuration = defaultStreamMaxDuration
 	}
+	models, err := copyModelOptions(config.Models)
+	if err != nil {
+		return nil, err
+	}
 	client := http.Client{}
 	if config.HTTPClient != nil {
 		client = *config.HTTPClient
 	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{apiKey: strings.TrimSpace(config.APIKey), endpoint: target, provider: provider, thinking: config.Thinking, http: client, streamInactivityTimeout: streamInactivityTimeout, streamMaxDuration: streamMaxDuration}, nil
+	return &Client{apiKey: strings.TrimSpace(config.APIKey), endpoint: target, provider: provider, thinking: config.Thinking, models: models, http: client, streamInactivityTimeout: streamInactivityTimeout, streamMaxDuration: streamMaxDuration}, nil
 }
 
 func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (domain.CompletionResult, error) {
@@ -125,13 +130,24 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	if status, ok := errorBodyStatus(reply.Error); ok {
 		return domain.CompletionResult{}, c.providerError(status)
 	}
-	return mapResponse(reply)
+	result, err := mapResponse(reply)
+	if err != nil {
+		return domain.CompletionResult{}, err
+	}
+	result.RequestBytes = len(body)
+	return result, nil
 }
 
-// body is what the request encodes: marked for the prompt cache when the
-// model and the endpoint support it, the wire request otherwise.
+// body is what the request encodes: for OpenRouter, with the options
+// configured for the model and marked for the prompt cache when the model
+// supports it; the wire request otherwise. Complete and Stream both encode
+// through it.
 func (c *Client) body(wire requestDTO) any {
-	return promptCacheBody(wire, c.endpoint == endpoint)
+	openRouter := c.endpoint == endpoint
+	if openRouter {
+		wire.ModelOptions = c.models[wire.Model]
+	}
+	return promptCacheBody(wire, openRouter)
 }
 
 // authorize sets the bearer header only when a key is configured: a loopback
