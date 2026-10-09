@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/underpass-ai/AXLR/domain"
@@ -25,6 +26,38 @@ type Manager struct {
 	// share, when set, returns the unix socket where a process shared with
 	// other consoles serves a registration; an error launches the command.
 	share func(context.Context, Registration) (string, error)
+	// observer, when set, hears connections and the stderr of the servers
+	// the manager launches.
+	observer Observer
+}
+
+// ConnectionEvent is one change of a server's connection.
+type ConnectionEvent string
+
+const (
+	// Connected: the server answered its initialization; shared tells a
+	// process shared with other consoles from one this manager launched.
+	Connected ConnectionEvent = "connected"
+	// ConnectFailed: the server could not be reached or initialized; the
+	// next operation tries again.
+	ConnectFailed ConnectionEvent = "connect_failed"
+	// ConnectionLost: a connected server went away, such as a stdio server
+	// that exited; the next operation launches it again.
+	ConnectionLost ConnectionEvent = "connection_lost"
+)
+
+// Observer hears the manager's connections by plugin ID. Stderr returns the
+// writer for a stdio server's standard error, or nil to discard it. Calls
+// come from the manager's operations, one at a time, and must not block.
+type Observer interface {
+	PluginConnection(id domain.PluginID, event ConnectionEvent, shared bool, err error)
+	PluginStderr(id domain.PluginID) io.Writer
+}
+
+// SetObserver sets the manager's observer; it is set before the first
+// operation.
+func (m *Manager) SetObserver(observer Observer) {
+	m.observer = observer
 }
 
 // SetShare lets the manager reach a registration through a shared process
@@ -111,13 +144,19 @@ func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
 	_ = m.client.Disconnect(name)
 	r := m.registrations[id]
 	err := errors.New("not shared")
+	shared := false
 	if m.share != nil && r.Manifest.Command != "" {
 		if socket, shareErr := m.share(ctx, r); shareErr == nil {
 			err = m.client.Connect(ctx, mcpclient.Server{Name: name, Socket: socket})
+			shared = err == nil
 		}
 	}
 	if err != nil && ctx.Err() == nil {
-		err = m.client.Connect(ctx, mcpclient.Server{Name: name, Command: r.Manifest.Command, URL: r.Manifest.URL, Args: r.Manifest.Args, Env: r.Env})
+		server := mcpclient.Server{Name: name, Command: r.Manifest.Command, URL: r.Manifest.URL, Args: r.Manifest.Args, Env: r.Env}
+		if m.observer != nil && r.Manifest.Command != "" {
+			server.Stderr = m.observer.PluginStderr(id)
+		}
+		err = m.client.Connect(ctx, server)
 	}
 	if ctx.Err() != nil {
 		if err == nil {
@@ -126,10 +165,18 @@ func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
 		return ctx.Err()
 	}
 	if err != nil {
+		m.observe(id, ConnectFailed, false, err)
 		return err
 	}
 	m.connected[id] = true
+	m.observe(id, Connected, shared, nil)
 	return nil
+}
+
+func (m *Manager) observe(id domain.PluginID, event ConnectionEvent, shared bool, err error) {
+	if m.observer != nil {
+		m.observer.PluginConnection(id, event, shared, err)
+	}
 }
 
 // forgetLost drops the session of a server that has gone away, such as a
@@ -138,6 +185,9 @@ func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
 func (m *Manager) forgetLost(id domain.PluginID, err error) {
 	if !mcpclient.ConnectionLost(err) {
 		return
+	}
+	if m.connected[id] {
+		m.observe(id, ConnectionLost, false, err)
 	}
 	delete(m.connected, id)
 	_ = m.client.Disconnect(mcpclient.ServerName(id))

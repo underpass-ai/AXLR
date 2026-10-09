@@ -376,6 +376,9 @@ func TestPluginHelper(t *testing.T) {
 	if path := os.Getenv("AXLR_START_LOG"); path != "" {
 		_ = os.WriteFile(path, []byte("1\n"), 0600)
 	}
+	if note := os.Getenv("AXLR_STDERR_NOTE"); note != "" {
+		_, _ = os.Stderr.WriteString(note + "\n")
+	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "axlr-plugin-test", Version: "1"}, nil)
 	mcp.AddTool(server, &mcp.Tool{Name: "echo"}, func(_ context.Context, _ *mcp.CallToolRequest, args struct {
 		Text string `json:"text"`

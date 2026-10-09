@@ -258,3 +258,34 @@ func (m *countingStream) Stream(context.Context, root.CompletionRequest, func(ro
 	m.calls++
 	return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "incorrect automatic continuation"}}, nil
 }
+
+// A call that fails inside AXLR's plugin transport is logged with its
+// plugin and tool, and its error names axlr_logs; a definite MCP error is
+// the plugin's answer and is neither.
+func TestToolRunnerLogsTransportFailuresAndNamesTheLog(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "effect")
+	manager := testManager(t, marker)
+	executor, err := runtime.New(runtime.Config{Root: t.TempDir(), Plugins: manager})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer executor.Close()
+	snapshot, err := (ToolCatalog{Plugins: manager}).Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logged []string
+	runner := ToolRunner{Executor: executor, LogFailure: func(line string) { logged = append(logged, line) }}
+	tool := pluginTools(snapshot)[0]
+	out, err := runner.Execute(context.Background(), tool.Identity, jsonValue(t, `{"lose_reply":true}`))
+	if err != nil || !out.IsError || !strings.Contains(string(out.Content), "axlr_logs") {
+		t.Fatalf("lost reply: %+v %v", out, err)
+	}
+	if len(logged) != 1 || !strings.HasPrefix(logged[0], "plugin "+tool.Identity.Plugin.PluginID.String()+" tool echo failed: internal_error: ") {
+		t.Fatalf("logged = %q", logged)
+	}
+	out, err = runner.Execute(context.Background(), tool.Identity, jsonValue(t, `{"n":1}`))
+	if err != nil || !out.IsError || strings.Contains(string(out.Content), "axlr_logs") || len(logged) != 1 {
+		t.Fatalf("definite error: %+v %v logged=%q", out, err, logged)
+	}
+}

@@ -42,6 +42,9 @@ type ContinueTurnUseCase struct {
 	// settings turn them off, offers neither axlr_forge_tool nor
 	// axlr_run_tool.
 	Forge ForgedToolsPort
+	// Logs reads the console's app log for axlr_logs; nil offers no
+	// axlr_logs.
+	Logs AppLogPort
 	// TurnToolCalls is the turn's tool-call budget (settings'
 	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
 	TurnToolCalls int
@@ -103,6 +106,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if u.offersForge(*session) {
 		hostTools = append(hostTools, ForgeTool(), RunTool())
 	}
+	if u.Logs != nil {
+		hostTools = append(hostTools, LogsTool())
+	}
 	if err := session.EnsureHostTools(hostTools); err != nil {
 		contextSpan.End(DiagnosticErrorInvalidState)
 		return interrupt(err)
@@ -161,6 +167,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if !u.offersRemember(*session) {
 		tools = withoutTool(tools, HostRememberName)
+	}
+	if u.Logs == nil {
+		tools = withoutTool(tools, HostLogsName)
 	}
 	if !u.offersForge(*session) {
 		tools = withoutTool(withoutTool(tools, HostForgeToolName), HostRunToolName)

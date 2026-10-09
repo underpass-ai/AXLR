@@ -2,6 +2,7 @@ package mcpclient
 
 import (
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,6 +26,9 @@ type Server struct {
 	URL        string
 	Socket     string
 	HTTPClient *http.Client
+	// Stderr, when set, receives a stdio child's standard error, which is
+	// discarded otherwise. Other transports have none.
+	Stderr io.Writer
 }
 
 func (s Server) Validate() error {
@@ -93,6 +97,10 @@ func (s Server) transport() (mcp.Transport, error) {
 		cmd := exec.Command(s.Command, s.Args...)
 		if s.Env != nil {
 			cmd.Env = append([]string{}, s.Env...)
+		}
+		if s.Stderr != nil {
+			// A grandchild holding the pipe must not keep Wait from returning.
+			cmd.Stderr, cmd.WaitDelay = s.Stderr, time.Second
 		}
 		return &mcp.CommandTransport{Command: cmd, TerminateDuration: time.Second}, nil
 	}
