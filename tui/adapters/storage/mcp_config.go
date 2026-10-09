@@ -119,6 +119,15 @@ func checkMCPConfigFile(path string, info os.FileInfo) error {
 	return nil
 }
 
+// privateLockError names a lock file that failed privateRegular, its mode
+// and the fix, as checkMCPConfigFile does for the configuration itself.
+func privateLockError(kind, path string, info os.FileInfo) error {
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s %s is not a regular file; remove it and start the console again", kind, path)
+	}
+	return fmt.Errorf("%s %s has mode %04o and must not be readable or writable by other accounts; run chmod 600 %s", kind, path, info.Mode().Perm(), path)
+}
+
 func readMCPConfig(path string) (dto.MCPConfig, error) {
 	if !filepath.IsAbs(path) {
 		return dto.MCPConfig{}, errors.New("MCP config path must be absolute")
