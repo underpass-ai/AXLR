@@ -104,22 +104,38 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 			about:   tool.Description,
 		})
 	}
-	summaries := make([]map[string]any, 0, limit)
-	matched := 0
+	// Every term must match. When none does, a tool matching some terms is
+	// still better than nothing: those come back, most terms first, with
+	// partial set (seen on 9 Oct 2026: "ventas total facturado producto csv"
+	// found no tool described as summing units by price per product).
+	selected := make([]discoveryCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
-		text := strings.ToLower(candidate.text)
-		matches := true
-		for _, term := range terms {
-			if !strings.Contains(text, term) {
-				matches = false
-				break
+		if termsMatched(candidate.text, terms) == len(terms) {
+			selected = append(selected, candidate)
+		}
+	}
+	partial := false
+	if len(selected) == 0 && len(terms) > 1 {
+		type ranked struct {
+			candidate discoveryCandidate
+			score     int
+		}
+		var some []ranked
+		for _, candidate := range candidates {
+			if score := termsMatched(candidate.text, terms); score > 0 {
+				some = append(some, ranked{candidate, score})
 			}
 		}
-		if !matches {
-			continue
+		sort.SliceStable(some, func(i, j int) bool { return some[i].score > some[j].score })
+		for _, item := range some {
+			selected = append(selected, item.candidate)
 		}
-		matched++
-		if matched > offset && len(summaries) < limit {
+		partial = len(selected) > 0
+	}
+	matched := len(selected)
+	summaries := make([]map[string]any, 0, limit)
+	for i, candidate := range selected {
+		if i >= offset && len(summaries) < limit {
 			description := []rune(strings.Join(strings.Fields(candidate.about), " "))
 			if len(description) > 160 {
 				description = append(description[:160], '…')
@@ -132,7 +148,23 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 		return nil, errors.New("offset exceeds matching tools")
 	}
 	next := offset + len(summaries)
-	return map[string]any{"tools": summaries, "total_matches": matched, "has_more": next < matched, "next_offset": next}, nil
+	result := map[string]any{"tools": summaries, "total_matches": matched, "has_more": next < matched, "next_offset": next}
+	if partial {
+		result["partial"] = true
+	}
+	return result, nil
+}
+
+// termsMatched counts the lowercase terms text contains.
+func termsMatched(text string, terms []string) int {
+	text = strings.ToLower(text)
+	count := 0
+	for _, term := range terms {
+		if strings.Contains(text, term) {
+			count++
+		}
+	}
+	return count
 }
 
 func hostInteger(args map[string]json.RawMessage, key string, fallback int) (int, error) {

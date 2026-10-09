@@ -43,6 +43,10 @@ func (m AppModel) approvalCard() string {
 		{"autonomy-on", "f", m.Theme.T("approval.hintAutonomy")},
 		{"cancel", "esc", m.Theme.T("footer.cancel")},
 	}
+	if !savesAlwaysAllow(m.Header.State.ToolSnapshot, m.Approval.Pending) {
+		// A host tool has no saved rule of its own.
+		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "always-allow" })
+	}
 	if m.modeAsksForEachCall(m.Approval.Pending) {
 		// The mode decides; neither a saved rule nor autonomy would apply.
 		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "always-allow" || h.zone == "autonomy-on" })

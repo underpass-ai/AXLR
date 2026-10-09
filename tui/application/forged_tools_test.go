@@ -164,8 +164,11 @@ func TestForgeRefusesUnsafeOrIncompleteTools(t *testing.T) {
 		edit func(map[string]any)
 		want string
 	}{
-		"escaping path": {func(a map[string]any) { a["files"] = []any{map[string]any{"path": "../../evil.sh", "content": "x"}} }, "relative to the tool's directory"},
-		"absolute path": {func(a map[string]any) { a["files"] = []any{map[string]any{"path": "/etc/passwd", "content": "x"}} }, "relative to the tool's directory"},
+		"escaping path": {func(a map[string]any) { a["files"] = []any{map[string]any{"path": "../../evil.sh", "content": "x"}} }, "inside the tool's directory"},
+		"absolute path": {func(a map[string]any) { a["files"] = []any{map[string]any{"path": "/etc/passwd", "content": "x"}} }, "inside the tool's directory"},
+		"other tool's path": {func(a map[string]any) {
+			a["files"] = []any{map[string]any{"path": ".axlr/tools/other/main.py", "content": "x"}}
+		}, "inside the tool's directory"},
 		"program path":  {func(a map[string]any) { a["program"] = "/bin/sh" }, "not a path"},
 		"no own file":   {func(a map[string]any) { a["args"] = []any{"-c", "rm -rf ~"} }, "must name one of the tool's files"},
 		"bad name":      {func(a map[string]any) { a["name"] = "Count Words" }, "lowercase"},
@@ -308,5 +311,39 @@ func TestAnApprovedForgedRunReachesTheRuntimeThroughTheResolver(t *testing.T) {
 	}
 	if result := sent.Messages[len(sent.Messages)-1]; result.Role != root.RoleTool || !strings.Contains(string(result.Content), `"stdout":"2\n"`) {
 		t.Fatalf("result = %s", result.Content)
+	}
+}
+
+// Haiku named the file by its workspace path on 9 Oct 2026, three times in a
+// row; that path means the same file.
+func TestForgeAcceptsAFileNamedByItsWorkspacePath(t *testing.T) {
+	forged := &forgedMemory{}
+	var args map[string]any
+	if err := json.Unmarshal([]byte(forgeArguments), &args); err != nil {
+		t.Fatal(err)
+	}
+	args["files"] = []any{map[string]any{"path": ".axlr/tools/word_count/main.py", "content": "print(1)"}}
+	encoded, _ := json.Marshal(args)
+	outcome, err := (HostToolUseCase{Forge: forged}).Execute(context.Background(), turnSession(t), hostIdentity(t, domain.HostOperationForgeTool), object(t, string(encoded)))
+	if err != nil || outcome.IsError || len(forged.tools) != 1 || forged.tools[0].Files["main.py"] == "" {
+		t.Fatalf("outcome = %s, %v, tools %+v", outcome.Content, err, forged.tools)
+	}
+}
+
+func TestAxlrToolsFallsBackToPartialMatches(t *testing.T) {
+	forged := &forgedMemory{}
+	s := turnSession(t)
+	host := HostToolUseCase{Forge: forged}
+	if outcome, _ := host.Execute(context.Background(), s, hostIdentity(t, domain.HostOperationForgeTool), object(t, forgeArguments)); outcome.IsError {
+		t.Fatal(outcome.Content)
+	}
+	tools := hostIdentity(t, domain.HostOperationTools)
+	search, _ := host.Execute(context.Background(), s, tools, object(t, `{"query":"sales count words report"}`))
+	if !strings.Contains(string(search.Content), `"name":"word_count"`) || !strings.Contains(string(search.Content), `"partial":true`) {
+		t.Fatalf("search: %s", search.Content)
+	}
+	none, _ := host.Execute(context.Background(), s, tools, object(t, `{"query":"invoices"}`))
+	if strings.Contains(string(none.Content), "word_count") || strings.Contains(string(none.Content), "partial") {
+		t.Fatalf("search: %s", none.Content)
 	}
 }

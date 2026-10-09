@@ -187,10 +187,14 @@ func validateForge(name, description string, schema json.RawMessage, program str
 	clean := make([]ForgedFile, 0, len(files))
 	seen := map[string]bool{}
 	total := 0
+	own := ForgedToolsDir + "/" + name + "/"
 	for _, file := range files {
-		relative := path.Clean(file.Path)
-		if file.Path == "" || strings.Contains(file.Path, "\\") || path.IsAbs(file.Path) || relative == "." || relative == ".." || strings.HasPrefix(relative, "../") {
-			return nil, fmt.Errorf("file path %q must be relative to the tool's directory", file.Path)
+		// Models name a file by its workspace path as often as by its path
+		// in the tool's directory (seen with claude-haiku-5.5 on 9 Oct
+		// 2026); both mean the same file.
+		relative := path.Clean(strings.TrimPrefix(path.Clean(file.Path), own))
+		if file.Path == "" || strings.Contains(file.Path, "\\") || path.IsAbs(file.Path) || relative == "." || relative == ".." || strings.HasPrefix(relative, "../") || strings.HasPrefix(relative, ForgedToolsDir+"/") {
+			return nil, fmt.Errorf("file path %q must be inside the tool's directory: main.py or %smain.py", file.Path, own)
 		}
 		if seen[relative] {
 			return nil, fmt.Errorf("file path %q is listed twice", file.Path)
@@ -210,12 +214,12 @@ func validateForge(name, description string, schema json.RawMessage, program str
 		if len(arg) > maxForgedArgBytes {
 			return nil, fmt.Errorf("an args item exceeds %d bytes", maxForgedArgBytes)
 		}
-		if relative, ok := strings.CutPrefix(path.Clean(arg), ForgedToolsDir+"/"+name+"/"); ok && seen[relative] {
+		if relative, ok := strings.CutPrefix(path.Clean(arg), own); ok && seen[relative] {
 			names = true
 		}
 	}
 	if !names {
-		return nil, fmt.Errorf("args must name one of the tool's files by its workspace path, such as %s/%s/%s", ForgedToolsDir, name, clean[0].Path)
+		return nil, fmt.Errorf("args must name one of the tool's files by its workspace path, such as %s%s", own, clean[0].Path)
 	}
 	return clean, nil
 }

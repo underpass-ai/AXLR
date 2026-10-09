@@ -17,10 +17,19 @@ When no tool does what a task needs, the model writes one and calls it at once, 
 - **Workspace persistence.** Tool files stay in `.axlr/tools/<name>/` and their registration in this console's state, for later sessions of the same workspace. Committing the files shares the code, not the registration. Re-forging replaces the directory, so no file of an old version lingers.
 - **Ordinary sessions only.** Ceremonies, repairs, improvements, plans and tasks keep their own tool surface. A forged tool's failure is refused as evidence for `axlr_request_repair`: fixing AXLR would not fix it.
 
+## Smoke test (9 Oct 2026, claude-haiku-5.5, live console)
+
+Asked for revenue per product of a CSV "that I will ask for often", the model forged `total_por_producto` unprompted and ran it; asked to add units, it forged it again under the same name and ran it in the same reply; in a new session it found the tool through `axlr_tools`, refused to run it after the file was changed outside AXLR and did not re-forge the changed code blindly; asked to restore it, it wrote a new version that skips and lists invalid rows. Totals checked by hand. Session cost under $0.01, cache 90-97 %. Fixed from what it showed:
+
+- Haiku named the files by their workspace path three times in a row and looped on the refusal, whose example repeated the prefix: both forms are accepted now.
+- The card read "read-only host forge_tool", showed the code as one escaped JSON string and offered an always-allow a host tool cannot save: it now names the tool and what it writes or runs, shows each file as code and offers no always-allow on host cards.
+- A search of five terms found nothing because one term was not in the description: a search with no full match returns partial matches, marked `partial`.
+
 ## Not done
 
 - **Runtime sub-agents** (the talk's second demo: the agent writes two to four specialised agents and calls them). AXLR's child sessions (`UseCaseWorkbench`) need MADE and a ceremony, `Reviewer` is a single generation without a tool loop, and the product contract says a ceremony role does not spawn a worker. A design would need a bounded child loop with a tool subset, its own budget and cost ledger, and a way to show its transcript.
 - **Evals of forged tools.** The talk's evals (goal achieved, right tool and parameters, inter-agent order) map onto Jev and the transcript; nothing scores forged tools yet.
 - **Per-tool always-allow** for one forged tool rather than every `local_exec`.
+- **Restoring a changed tool.** The registry keeps digests, not the code, so a tool changed outside AXLR cannot be put back; the model writes it again.
 - **The run card** shows the tool's name and arguments, not the registered command: the terminal has no access to the registry. Approving a run approves the command the forge card showed; `axlr_tools` with the name shows it again.
 - **Review file changes.** The forge writes through the store, not `local_write`, so its files are not in the file-change panel; the forge card is their review.
