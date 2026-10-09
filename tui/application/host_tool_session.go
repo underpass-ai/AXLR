@@ -17,12 +17,20 @@ type sessionContext struct {
 	PromptCount int              `json:"user_prompt_count"`
 	Title       root.Text        `json:"title"`
 	About       string           `json:"about"`
+	// TitleDeferred says why a proposed title was not stored while the about
+	// sent with it was.
+	TitleDeferred string `json:"title_deferred,omitempty"`
 }
 
+// titleDeferred is the note for a title proposed before the second prompt.
+const titleDeferred = "the title was not stored: define the session title after the second user prompt"
+
+// userPromptCount counts the person's prompts. Console messages, which all
+// start with "[AXLR" ("[AXLR]" and "[AXLR · …]"), are not theirs.
 func userPromptCount(s domain.Session) int {
 	count := 0
 	for _, m := range s.Messages() {
-		if m.Role == root.RoleUser && !strings.HasPrefix(string(m.Content), "[AXLR]") {
+		if m.Role == root.RoleUser && !strings.HasPrefix(string(m.Content), "[AXLR") {
 			count++
 		}
 	}
@@ -43,14 +51,13 @@ func (u HostToolUseCase) sessionContext(ctx context.Context, s domain.Session, a
 		return nil, err
 	}
 	var label domain.SessionLabel
+	deferred := false
 	if raw, ok := args["title"]; ok {
 		if err := json.Unmarshal(raw, &label.Title); err != nil || strings.TrimSpace(string(label.Title)) == "" || strings.IndexFunc(string(label.Title), unicode.IsControl) >= 0 {
 			return nil, errors.New("title must be nonempty single-line text")
 		}
-		if userPromptCount(s) < 2 {
-			return nil, errors.New("define the session title after the second user prompt")
-		}
 		label.Title = root.Text(strings.TrimSpace(string(label.Title)))
+		deferred = userPromptCount(s) < 2
 	}
 	if raw, ok := args["about"]; ok {
 		if err := json.Unmarshal(raw, &label.About); err != nil || label.About == "" {
@@ -60,6 +67,14 @@ func (u HostToolUseCase) sessionContext(ctx context.Context, s domain.Session, a
 	if err := label.Validate(); err != nil {
 		return nil, err
 	}
+	if deferred {
+		// The title waits for the second prompt; an about sent with it is
+		// still the early scope the system prompt asks for.
+		if label.About == "" {
+			return nil, errors.New("define the session title after the second user prompt")
+		}
+		label.Title = ""
+	}
 	if len(args) > 0 {
 		label, err = u.Labels.Initialize(ctx, s.Export().ID, label)
 	} else {
@@ -67,7 +82,11 @@ func (u HostToolUseCase) sessionContext(ctx context.Context, s domain.Session, a
 		labels, err = u.Labels.Load(ctx)
 		label = labels[s.Export().ID]
 	}
-	return sessionContextValue(s, label), err
+	value := sessionContextValue(s, label)
+	if deferred {
+		value.TitleDeferred = titleDeferred
+	}
+	return value, err
 }
 
 // sessionGuidance is the session metadata in the system prompt. It leaves out
