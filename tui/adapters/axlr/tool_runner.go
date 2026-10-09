@@ -20,7 +20,14 @@ type ToolRunner struct {
 	// KMPGuideRoot is the plugin directory of the connected KMP engine,
 	// whose guide assets a store without a guide is synced from.
 	KMPGuideRoot string
+	// LogFailure, when set, records a call that failed inside AXLR or its
+	// plugin transport in the console's app log, whose reader axlr_logs the
+	// failure then names.
+	LogFailure func(string)
 }
+
+// logHint ends the message of a failure the app log recorded.
+const logHint = " (the console log may say more: axlr_logs)"
 
 func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args root.JSONValue) (out domain.ToolOutcome, returnErr error) {
 	ctx, span := application.StartDiagnosticSpan(ctx, r.Diagnostics, application.DiagnosticActionToolExecution, application.DiagnosticEvent{Bytes: len(args.Bytes())})
@@ -70,6 +77,16 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 	// requests establish nonexecution; completed MCP is_error results are definite.
 	if id.Kind == domain.ToolKindPlugin && response.Status == "failed" && response.Error != nil && response.Error.Code == "internal_error" {
 		out.Uncertain = true
+	}
+	if r.LogFailure != nil && response.Error != nil && (response.Error.Code == "internal_error" || response.Status == "timed_out") {
+		target := "local_" + id.LocalOperation
+		if id.Kind == domain.ToolKindPlugin {
+			target = "plugin " + id.Plugin.PluginID.String() + " tool " + id.Plugin.ToolName.String()
+		}
+		r.LogFailure(target + " " + response.Status + ": " + response.Error.Code + ": " + response.Error.Message)
+		failure := *response.Error
+		failure.Message += logHint
+		response.Error = &failure
 	}
 	if plugin, ok := response.Output.(dto.PluginCallOutput); ok {
 		out.IsError = out.IsError || plugin.IsError

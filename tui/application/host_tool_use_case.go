@@ -29,6 +29,8 @@ type HostToolUseCase struct {
 	Forge      ForgedToolsPort
 	Tools      ToolExecutionPort
 	Validation ToolArgumentValidationPort
+	// Logs serves axlr_logs; nil means the console keeps no app log.
+	Logs AppLogPort
 }
 
 // historyPageLimit is the largest encoded axlr_history page that the
@@ -95,6 +97,8 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		}
 	case domain.HostOperationRemember:
 		result, err = u.hostRemember(ctx, session, arguments)
+	case domain.HostOperationLogs:
+		result, err = hostLogs(ctx, u.Logs, arguments)
 	case domain.HostOperationJudge:
 		if u.Judge == nil {
 			err = errors.New("Jev is not enabled in this console")

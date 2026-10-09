@@ -48,6 +48,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	key := getenv("OPENROUTER_API_KEY")
 	var trace application.DiagnosticPort
 	var localKeys []string
+	// The app log copies what the console writes on stderr; a failure is
+	// written to the terminal and logged as an error once.
+	var appLog *diagnostics.AppLog
+	terminalErr := stderr
 	fail := func(err error) int {
 		if trace != nil {
 			_ = trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticOperationFailed, ErrorClass: application.DiagnosticErrorInternal})
@@ -58,7 +62,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 				message = strings.ReplaceAll(message, secret, "[redacted]")
 			}
 		}
-		fmt.Fprintln(stderr, "axlr-tui:", message)
+		appLog.Logf(diagnostics.AppError, "axlr-tui: %s", message)
+		fmt.Fprintln(terminalErr, "axlr-tui:", message)
 		return 1
 	}
 	if ctx.Err() != nil {
@@ -109,6 +114,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 	}()
 	trace = logger
+	appLog, openErr = openAppLog(getenv, key)
+	stderr = teeConsoleNotes(stderr, appLog)
+	if openErr != nil {
+		fmt.Fprintln(stderr, "axlr-tui: app log unavailable:", openErr)
+	} else {
+		defer appLog.Close()
+		fmt.Fprintln(stderr, "axlr-tui: app log:", appLog.Path())
+	}
 	fmt.Fprintln(stderr, "axlr-tui: diagnostics:", tracePath)
 	_ = trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticStartup})
 	defer trace.Record(application.DiagnosticEvent{Stage: application.DiagnosticShutdown})
@@ -168,12 +181,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	fmt.Fprintln(stderr, "axlr-tui: settings:", settingsPath)
 	locals := newLocalModelSetup(settings, getenv)
 	localKeys = locals.secrets
+	appLog.AddSecrets(localKeys...)
 	judge, err := jevJudge(settings.Jev, getenv)
 	if err != nil {
 		return fail(err)
 	}
 	if judge != nil {
 		localKeys = append(localKeys, strings.TrimSpace(getenv("TYPESAFE_API_KEY")))
+		appLog.AddSecrets(strings.TrimSpace(getenv("TYPESAFE_API_KEY")))
 		fmt.Fprintln(stderr, "axlr-tui: Jev enabled: questions and final answers are sent to TypeSafe")
 	}
 	language := settings.Language
@@ -318,6 +333,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
+	if appLog != nil {
+		appLog.AddSecrets(pluginSecrets(registrations)...)
+		manager.SetObserver(pluginLog{log: appLog})
+	}
 	defer manager.Close()
 	configStore := storage.MCPConfigStore{Path: configPath}
 	pluginManager := axlr.NewPluginManager(manager, profiles, configStore.SaveApproval)
@@ -416,7 +435,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
-	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations)}
+	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog)}
 	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}}
 	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
 	if ceremonies != nil {
@@ -462,7 +481,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		repairs = &application.SelfRepair{
 			Registry:  registry,
 			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: stderr},
-			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD},
+			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog},
 			Store:     loggedStore,
 			Engine:    ceremonies.Engine,
 			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts, MaxActive: settings.JobsConfiguration().MaxActive, Watch: repairPolicy.WatchDeadline},
@@ -490,7 +509,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if _, err := rand.Read(token[:]); err != nil {
 			return fail(err)
 		}
-		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD}}
+		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog}}
 		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(token[:]), Lifetime: ctx}
 		if err := planRunner.Reconcile(ctx); err != nil {
 			fmt.Fprintln(stderr, "axlr-tui: plan registry:", err)
@@ -502,6 +521,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
 	// Each session keeps its usage ledger beside its snapshot.
 	continuation.Usage, continuation.MaxSessionUSD = store, settings.MaxSessionUSD
+	continuation.Logs = logReader(appLog)
 	if settings.ForgedToolsEnabled() {
 		// The model forges workspace tools and runs them in the same session.
 		forged, err := storage.NewForgedToolStore(filepath.Join(stateBase, "axlr", "forged-tools"))
@@ -552,6 +572,12 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		MaxSessionUSD:     settings.MaxSessionUSD,
 	})
 	defer app.Close()
+	consoleSession := newID
+	if session != nil {
+		consoleSession = session.Export().ID
+	}
+	appLog.Logf(diagnostics.AppInfo, "console started: build %s, workspace %s, session %s", buildinfo.Version, workspacePath, consoleSession)
+	defer appLog.Logf(diagnostics.AppInfo, "console stopped")
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
 		return fail(err)
 	}

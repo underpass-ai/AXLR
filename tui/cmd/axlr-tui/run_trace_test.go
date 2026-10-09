@@ -101,8 +101,9 @@ func TestRunExplicitTraceDoesNotCreateDefaultTrace(t *testing.T) {
 	if code := run(context.Background(), []string{"--root", t.TempDir(), "--trace-file", path}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output); code != 0 {
 		t.Fatalf("code=%d output=%s", code, &output)
 	}
-	if _, err := os.Stat(filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs")); !os.IsNotExist(err) {
-		t.Fatalf("explicit flag created default logs: %v", err)
+	// The app log stays in the default directory; no trace joins it.
+	if traces, err := filepath.Glob(filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs", "*.jsonl")); err != nil || len(traces) != 0 {
+		t.Fatalf("explicit flag created a default trace: %v %v", traces, err)
 	}
 	if !strings.Contains(output.String(), path) {
 		t.Fatal("explicit trace location was not printed")
@@ -225,7 +226,7 @@ func TestRunCanDisablePayloadsAndKeepDefaultDiagnostics(t *testing.T) {
 		t.Fatalf("exit=%d output=%s", code, &output)
 	}
 	files, err := os.ReadDir(filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs"))
-	if err != nil || len(files) != 1 || !strings.HasSuffix(files[0].Name(), ".jsonl") || strings.Contains(output.String(), "payload") {
+	if err != nil || len(files) != 2 || files[0].Name() != "axlr.log" || !strings.HasSuffix(files[1].Name(), ".jsonl") || strings.Contains(output.String(), "payload") {
 		t.Fatalf("files=%v err=%v output=%s", files, err, &output)
 	}
 }
