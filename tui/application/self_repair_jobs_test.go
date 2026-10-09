@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ func TestStartJobRefusesWhatThePanelCannotStart(t *testing.T) {
 	noModel := parent
 	noModel.Model = ""
 	inClone := parent
-	inClone.Workspace = domain.Workspace(rig.repairsIn + "/x")
+	inClone.Workspace = domain.Workspace(filepath.Join(rig.repairsIn, "x"))
 	for name, tc := range map[string]struct {
 		parent      domain.SessionState
 		kind, brief string
