@@ -101,7 +101,7 @@ func TestConsoleNotesAndPluginEventsReachTheAppLogByPluginID(t *testing.T) {
 }
 
 func TestPluginSecretsAreTheValuesOfSecretLookingVariables(t *testing.T) {
-	registration, err := plugins.NewRegistration(plugins.Manifest{ID: root.PluginID("kmp"), Command: "/bin/true", AllowTools: []root.PluginToolName{"x"}}, []string{"KMP_API_KEY=abcdefgh-123", "KMP_STORE=/data/store", "GITHUB_TOKEN=ghp_secretvalue"})
+	registration, err := plugins.NewRegistration(plugins.Manifest{ID: root.PluginID("kmp"), Command: filepath.Join(t.TempDir(), "kmp-mcp"), AllowTools: []root.PluginToolName{"x"}}, []string{"KMP_API_KEY=abcdefgh-123", "KMP_STORE=/data/store", "GITHUB_TOKEN=ghp_secretvalue"})
 	if err != nil {
 		t.Fatal(err)
 	}
