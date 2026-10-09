@@ -138,25 +138,32 @@ func (d *CeremonyDriver) fileDigest(ctx context.Context, path string) (string, e
 }
 
 // gitChanged lists the workspace paths git reports as changed or new; ok is
-// false when the workspace is not a repository.
+// false when the workspace is not a repository. It parses the whole stdout
+// of the NUL-separated form, never the tail shown to the model: every entry
+// is "XY path", and a rename or copy is followed by its old path, which is
+// skipped. An output the runtime cut is an error, not a shorter list.
 func (d *CeremonyDriver) gitChanged(ctx context.Context) ([]string, bool, error) {
-	result, err := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"status", "--porcelain=v1", "--untracked-files=all"}})
+	result, err := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"status", "--porcelain=v1", "-z", "--untracked-files=all"}, MaxOutput: ConsoleOutputBytes})
 	if err != nil {
 		return nil, false, err
 	}
 	if !result.Ran || result.ExitCode != 0 {
 		return nil, false, nil
 	}
+	if result.Truncated {
+		return nil, false, fmt.Errorf("git status printed more than %d bytes; the task's scope cannot be checked", ConsoleOutputBytes)
+	}
 	var paths []string
-	for _, line := range strings.Split(strings.TrimPrefix(result.Output, "…"), "\n") {
-		if len(line) < 4 {
+	entries := strings.Split(result.Stdout, "\x00")
+	for i := 0; i < len(entries); i++ {
+		entry := entries[i]
+		if len(entry) < 4 {
 			continue
 		}
-		p := strings.TrimSpace(line[3:])
-		if arrow := strings.LastIndex(p, " -> "); arrow >= 0 {
-			p = p[arrow+4:]
+		paths = append(paths, entry[3:])
+		if x, y := entry[0], entry[1]; x == 'R' || x == 'C' || y == 'R' || y == 'C' {
+			i++ // the old path of a rename or copy
 		}
-		paths = append(paths, strings.Trim(p, `"`))
 	}
 	sort.Strings(paths)
 	return paths, true, nil

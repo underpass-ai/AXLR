@@ -23,7 +23,12 @@ func (c *taskChecks) Run(_ context.Context, command domain.CheckCommand) (CheckR
 	c.runs = append(c.runs, line)
 	if command.Program == "git" {
 		if command.Args[0] == "status" {
-			return CheckResult{Ran: true, Output: strings.Join(c.status, "\n")}, nil
+			// git status -z ends every entry with a NUL.
+			var stdout strings.Builder
+			for _, entry := range c.status {
+				stdout.WriteString(entry + "\x00")
+			}
+			return CheckResult{Ran: true, Output: strings.Join(c.status, "\n"), Stdout: stdout.String()}, nil
 		}
 		return CheckResult{Ran: true, Output: "rev123\n"}, nil
 	}
