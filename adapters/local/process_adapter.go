@@ -69,7 +69,8 @@ func (a *ProcessAdapter) Run(ctx context.Context, c domain.ExecCommand) (domain.
 	} else if cmd.ProcessState != nil {
 		code = cmd.ProcessState.ExitCode()
 	}
-	return domain.ExecResult{ExitCode: code, Stdout: strings.ToValidUTF8(capture.stdout.String(), "�"), Stderr: strings.ToValidUTF8(capture.stderr.String(), "�"), CapturedBytes: capture.captured, DiscardedBytes: capture.discarded, Truncated: capture.discarded > 0 || outputCut}, nil
+	stdout, stderr, captured, discarded := capture.finish()
+	return domain.ExecResult{ExitCode: code, Stdout: stdout, Stderr: stderr, CapturedBytes: captured, DiscardedBytes: discarded, Truncated: discarded > 0 || outputCut}, nil
 }
 func (a *ProcessAdapter) workspaceCwd(p string) (string, error) {
 	if p == "" {

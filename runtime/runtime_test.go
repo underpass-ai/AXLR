@@ -225,6 +225,37 @@ func TestExecTimeoutAndOutputLimit(t *testing.T) {
 	}
 }
 
+func TestExecOutputLimitNeverSplitsACharacter(t *testing.T) {
+	if goruntime.GOOS == "windows" {
+		t.Skip("POSIX shell scenario")
+	}
+	e, err := newTestExecutor(t, Config{Root: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		name, script, stdout string
+		limit, captured      int
+		discarded            int64
+	}{
+		{"limit inside é", `printf 'a\303\251b'`, "a", 2, 1, 3},
+		{"limit after é", `printf 'a\303\251b'`, "aé", 3, 3, 1},
+		{"program ends inside a character", `printf 'a\303'`, "a�", 0, 2, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			args, _ := json.Marshal(dto.ExecArgs{Program: "/bin/sh", Args: []string{"-c", c.script}, MaxOutputBytes: c.limit})
+			r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "u", Tool: "exec", Arguments: args})
+			if r.Status != "completed" {
+				t.Fatalf("%+v", r)
+			}
+			out := r.Output.(dto.ExecOutput)
+			if out.Stdout != c.stdout || out.CapturedBytes != c.captured || out.DiscardedBytes != c.discarded || out.Truncated != (c.discarded > 0) {
+				t.Fatalf("stdout=%q captured=%d discarded=%d truncated=%t", out.Stdout, out.CapturedBytes, out.DiscardedBytes, out.Truncated)
+			}
+		})
+	}
+}
+
 func TestExecRejectsOverflowTimeout(t *testing.T) {
 	e, _ := newTestExecutor(t, Config{Root: t.TempDir(), MaxTimeout: time.Minute})
 	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "x", Tool: "exec", Arguments: json.RawMessage(`{"program":"/bin/sh","timeout_ms":9223372036854775807}`)})
