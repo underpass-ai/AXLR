@@ -528,6 +528,8 @@ var enMessages = map[string]string{
 	"transcript.toolAwaiting":              "waiting for approval",
 	"transcript.toolApproved":              "approved by you",
 	"transcript.toolDenied":                "denied",
+	"transcript.toolInvalid":               "invalid arguments, the model retries",
+	"transcript.toolUnknown":               "unknown tool, refused",
 	"transcript.searchIn":                  "\"%s\" in %s", // local search
 	"transcript.listRecursive":             "%s, recursive",
 	"transcript.interruptedDraft":          "interrupted draft: ",
@@ -1083,6 +1085,8 @@ var esMessages = map[string]string{
 	"transcript.toolAwaiting":              "esperando aprobación",
 	"transcript.toolApproved":              "aprobada por ti",
 	"transcript.toolDenied":                "denegada",
+	"transcript.toolInvalid":               "argumentos no válidos, el modelo reintenta",
+	"transcript.toolUnknown":               "herramienta desconocida, rechazada",
 	"transcript.searchIn":                  "\"%s\" en %s", // local search
 	"transcript.listRecursive":             "%s, recursivo",
 	"transcript.interruptedDraft":          "borrador interrumpido: ",

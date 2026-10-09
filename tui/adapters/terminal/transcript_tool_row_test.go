@@ -41,6 +41,8 @@ func TestToolRowMergesCallDecisionAndResult(t *testing.T) {
 		{"automatic approval is silent", toolRowState(domain.DecisionAutoApprove, `{"status":"completed","duration_ms":1400}`, nil), []string{"✓ read", "README.md", "41\u00a0B", "1.4\u00a0s"}, []string{"auto", "approved", "path", "{"}},
 		{"human approval is shown", toolRowState(domain.DecisionApprove, `ok`, nil), []string{"✓ read", "2\u00a0B", "approved by you"}, nil},
 		{"denied", toolRowState(domain.DecisionDeny, "", nil), []string{"✗ read", "denied"}, []string{"✓"}},
+		{"malformed arguments", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "invalid tool invocation rejected: the call's arguments were not a valid JSON object", IsError: true}), []string{"✗ read", "invalid arguments, the model retries"}, []string{"denied"}},
+		{"unknown tool", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: `unknown tool "read" rejected`, IsError: true}), []string{"✗ read", "unknown tool, refused"}, []string{"denied"}},
 		{"failed result", toolRowState(domain.DecisionAutoApprove, `{"status":"failed","duration_ms":4}`, nil), []string{"✗ read", "4\u00a0ms"}, nil},
 		{"error outcome", toolRowState(domain.DecisionAutoApprove, `boom`, &domain.ToolOutcome{IsError: true}), []string{"✗ read"}, nil},
 		{"awaiting approval", toolRowState("", "", nil), []string{"◌ read", "waiting for approval"}, nil},

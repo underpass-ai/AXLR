@@ -38,7 +38,7 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 	case record != nil && record.Decision == domain.DecisionDeny:
 		glyph, tone = theme.Icon("failed"), toneError
 		facts.State = toolDenied
-		details = append(details, theme.T("transcript.toolDenied"))
+		details = append(details, theme.T(deniedLabel(record)))
 	case result != nil:
 		glyph, tone = theme.Icon("done"), toneGood
 		facts.State = toolDone
@@ -189,4 +189,19 @@ func formatDuration(ms int64) string {
 		return fmt.Sprintf("%d\u00a0ms", ms)
 	}
 	return fmt.Sprintf("%.1f\u00a0s", float64(ms)/1000)
+}
+
+// deniedLabel tells a call the console refused, its arguments unreadable or
+// its tool unknown, from one the person or the mode denied: on 9 Oct 2026 a
+// model's malformed JSON read "denied" as if the person had refused it.
+func deniedLabel(record *domain.PendingTool) string {
+	if record.Outcome != nil {
+		switch content := string(record.Outcome.Content); {
+		case strings.HasPrefix(content, "invalid tool invocation rejected: "):
+			return "transcript.toolInvalid"
+		case strings.HasPrefix(content, "unknown tool "):
+			return "transcript.toolUnknown"
+		}
+	}
+	return "transcript.toolDenied"
 }
