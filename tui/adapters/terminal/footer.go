@@ -19,12 +19,21 @@ const maxErrorRows = 3
 // footerView is the main view's last row: clickable key hints on the left
 // and the session state on the right. An error takes the whole row, and up
 // to maxErrorRows rows when it is longer, so its text is not truncated
-// behind the hints.
+// behind the hints. While an operation runs the error sits above the hint
+// row instead, so the activity and its cancel hint stay in view.
 func (m AppModel) footerView() string {
-	width := max(1, m.Layout.Width)
 	if m.Status.Error != "" {
+		if m.Busy {
+			return strings.Join(append(m.errorRows(maxErrorRows-1), m.hintRow()), "\n")
+		}
 		return strings.Join(m.errorRows(maxErrorRows), "\n")
 	}
+	return m.hintRow()
+}
+
+// hintRow is the footer's row of key hints and session state.
+func (m AppModel) hintRow() string {
+	width := max(1, m.Layout.Width)
 	// Hints are in priority order; the narrowest terminals keep the first.
 	hints := []footerHint{{"send", "enter", m.Theme.T("footer.send")}}
 	if m.Busy {

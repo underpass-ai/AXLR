@@ -42,9 +42,11 @@ func (m *AppModel) waitingCommand(next tea.Cmd) tea.Cmd {
 	return tea.Batch(cmds...)
 }
 func (m AppModel) statusView() string {
-	if m.Status.Error != "" {
+	if m.Status.Error != "" && !m.Busy {
 		return m.errorRow()
 	}
+	// While an operation runs the status line keeps its activity and adds
+	// the error after it.
 	status := m.Status
 	status.Waiting = m.providerWaiting
 	status.Executing = m.toolExecuting
