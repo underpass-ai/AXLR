@@ -179,9 +179,10 @@ func TestResolveToolAgentLoopCallCap(t *testing.T) {
 		return assistant("", call(root.ToolCallID(fmt.Sprintf("bad-%d", n)), "unknown")), nil
 	})}}
 	err := u.Execute(context.Background(), &s, "go", nil)
-	// The 33rd answer is kept with its call answered as not run.
+	// The 33rd answer is kept with its call answered as not run, which the
+	// turn's count leaves out.
 	activity := s.Export().Activity
-	if !errors.Is(err, domain.ErrToolCallLimit) || n != 33 || s.Export().TurnCallCount != 33 || s.Status() != domain.StatusInterrupted || len(activity) != 33 || activity[32].Call.ID != "bad-33" || !strings.HasPrefix(string(activity[32].Outcome.Content), "not run") {
+	if !errors.Is(err, domain.ErrToolCallLimit) || n != 33 || s.Export().TurnCallCount != 32 || s.Status() != domain.StatusInterrupted || len(activity) != 33 || activity[32].Call.ID != "bad-33" || !strings.HasPrefix(string(activity[32].Outcome.Content), "not run") {
 		t.Fatalf("cap %d %v %+v", n, err, s.Export())
 	}
 }

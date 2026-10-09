@@ -17,6 +17,72 @@ func BudgetNote(content axlr.Text) bool {
 	return strings.HasPrefix(string(content), BudgetNotePrefix)
 }
 
+// OverBudgetOutcomePrefix opens the result of a call the console did not run
+// because the turn's tool-call budget (or a ceremony step's) was spent: the
+// person denied nothing, so the transcript labels these "over budget".
+const OverBudgetOutcomePrefix = "not run: over the turn's tool-call budget"
+
+// overBudget reports a result RefuseOverBudget or the whole-answer refusal
+// recorded: the turn's count leaves such calls out.
+func overBudget(decision ToolDecision, outcome ToolOutcome) bool {
+	return decision == DecisionDeny && outcome.IsError && strings.HasPrefix(string(outcome.Content), OverBudgetOutcomePrefix)
+}
+
+// overBudgetOutcome tells the model how many calls of its answer ran and
+// what to do with the rest; ran is 0 when the budget was spent before it.
+func overBudgetOutcome(ran, total, limit int) axlr.Text {
+	ranText := fmt.Sprintf("%d of this answer's %d calls ran, in order; this one did not", ran, total)
+	if ran == 0 {
+		ranText = fmt.Sprintf("none of this answer's %d calls ran", total)
+	}
+	return axlr.Text(fmt.Sprintf("%s of %d calls: %s. The turn pauses until a new budget starts (the person's next message or Ctrl+R; a console-driven step continues by itself); then repeat the calls that did not run, at most %d per answer.", OverBudgetOutcomePrefix, limit, ranText, limit))
+}
+
+// HeadOverBudget reports whether the first pending call lies past the
+// current budget: the calls already answered (TurnCallCount counts the
+// pending ones too) have used it up.
+func (s Session) HeadOverBudget(turnLimit int) bool {
+	pending := len(s.Pending())
+	if s.Status() != StatusApproval || pending == 0 {
+		return false
+	}
+	base, limit := s.callBudget(turnLimit)
+	return s.state.TurnCallCount-pending-base >= limit
+}
+
+// RefuseOverBudget answers the first pending call as not run when it lies
+// past the budget, and reports whether it did. Results keep call order, so
+// the overflow of an answer is refused one call at a time, after the calls
+// before it.
+func (s *Session) RefuseOverBudget(turnLimit int) (bool, error) {
+	if !s.HeadOverBudget(turnLimit) {
+		return false, nil
+	}
+	head := s.Pending()[0].Call.ID
+	total, ran := 0, 0
+	for i := len(s.state.Messages) - 1; i >= 0; i-- {
+		if message := s.state.Messages[i]; message.Role == axlr.RoleAssistant && len(message.ToolCalls) > 0 {
+			total = len(message.ToolCalls)
+			for _, call := range message.ToolCalls {
+				if call.ID == head {
+					break
+				}
+				for _, record := range s.state.Activity {
+					if record.Call.ID == call.ID && record.Outcome != nil && !overBudget(record.Decision, *record.Outcome) {
+						ran++
+					}
+				}
+			}
+			break
+		}
+	}
+	_, limit := s.callBudget(turnLimit)
+	if err := s.RecordToolOutcome(head, DecisionDeny, ToolOutcome{Content: overBudgetOutcome(ran, total, limit), IsError: true}); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // CompleteAssistant records the model's answer under the default per-turn
 // budget, MaxTurnToolCalls.
 func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {

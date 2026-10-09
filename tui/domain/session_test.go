@@ -402,17 +402,22 @@ func TestInvalidCompletionAndCatalogDoNotChangeHistory(t *testing.T) {
 	for i := range ids {
 		ids[i] = fmt.Sprint(i)
 	}
-	if e := s.CompleteAssistant(completion(t, ids...)); e != ErrToolCallLimit {
+	if e := s.CompleteAssistant(completion(t, ids...)); e != nil {
 		t.Fatal(e)
 	}
-	// The oversized answer is kept; none of its calls can run.
-	if len(s.Messages()) != 2+len(ids) || len(s.Pending()) != 0 || s.Status() != StatusInterrupted {
-		t.Fatalf("oversized batch: %d messages, %d pending, %s", len(s.Messages()), len(s.Pending()), s.Status())
-	}
-	for _, record := range s.Export().Activity {
-		if record.Decision != DecisionDeny || record.Outcome == nil || !record.Outcome.IsError {
-			t.Fatalf("a call over the limit was left to run: %+v", record)
+	// The oversized answer is kept; the calls that fit wait for their
+	// decisions and the one past the budget is refused at the head.
+	for _, id := range ids[:MaxTurnToolCalls] {
+		if s.HeadOverBudget(MaxTurnToolCalls) {
+			t.Fatalf("call %s within the budget refused", id)
 		}
+		must(t, s.RecordToolOutcome(axlr.ToolCallID(id), DecisionApprove, ToolOutcome{Content: "ok"}))
+	}
+	if refused, e := s.RefuseOverBudget(MaxTurnToolCalls); !refused || e != nil || len(s.Pending()) != 0 {
+		t.Fatalf("a call over the limit was left to run: %v %v", refused, e)
+	}
+	if record := s.Export().Activity[MaxTurnToolCalls]; record.Decision != DecisionDeny || !record.Outcome.IsError {
+		t.Fatalf("over-budget call: %+v", record)
 	}
 }
 
@@ -436,7 +441,7 @@ func TestAnAnswerOverTheCallLimitIsKeptAndResumeRestartsTheBudget(t *testing.T) 
 			}
 			return ids
 		}
-		first := batch("a", limit-1)
+		first := batch("a", limit)
 		must(t, s.CompleteAssistant(completion(t, first...)))
 		for _, id := range first {
 			must(t, s.RecordToolOutcome(axlr.ToolCallID(id), DecisionApprove, ToolOutcome{Content: "ok"}))
@@ -448,7 +453,7 @@ func TestAnAnswerOverTheCallLimitIsKeptAndResumeRestartsTheBudget(t *testing.T) 
 			t.Fatalf("ceremony=%v: the kept answer does not restore: %v", ceremony, e)
 		}
 		last := s.Export().Activity[len(s.Export().Activity)-1].Outcome
-		if !strings.Contains(string(last.Content), fmt.Sprintf("not run: the turn reached its %d tool-call limit", limit)) {
+		if !strings.Contains(string(last.Content), fmt.Sprintf("%s of %d calls", OverBudgetOutcomePrefix, limit)) {
 			t.Fatalf("ceremony=%v: %q", ceremony, last.Content)
 		}
 		must(t, s.ResumeTurn())

@@ -141,13 +141,9 @@ func TestContinueTurnDefersUnknownBehindValidCall(t *testing.T) {
 	}
 }
 func TestContinueTurnCallLimitPersistsPause(t *testing.T) {
-	s := turnSession(t)
-	_ = s.BeginTurn("go", turnTools())
+	s := sessionAtCallLimit(t)
 	store := &memoryStore{}
-	calls := make([]root.ToolCall, domain.MaxTurnToolCalls+1)
-	for i := range calls {
-		calls[i] = call(root.ToolCallID(fmt.Sprintf("call-%d", i)), "read")
-	}
+	calls := []root.ToolCall{call("over-0", "read"), call("over-1", "read")}
 	u := ContinueTurnUseCase{Store: store, Models: streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
 		return assistant("", calls...), nil
 	})}
@@ -159,14 +155,16 @@ func TestContinueTurnCallLimitPersistsPause(t *testing.T) {
 	}
 }
 
-// sessionNearCallLimit is a turn that already made all but one of its calls.
-func sessionNearCallLimit(t *testing.T) domain.Session {
+// sessionAtCallLimit is a turn that already made all of its calls: an
+// answer with calls is refused whole. (With some left, the calls that fit
+// run; see turn_budget_batch_test.go.)
+func sessionAtCallLimit(t *testing.T) domain.Session {
 	t.Helper()
 	s := turnSession(t)
 	if err := s.BeginTurn("go", turnTools()); err != nil {
 		t.Fatal(err)
 	}
-	calls := make([]root.ToolCall, domain.MaxTurnToolCalls-1)
+	calls := make([]root.ToolCall, domain.MaxTurnToolCalls)
 	for i := range calls {
 		calls[i] = call(root.ToolCallID(fmt.Sprintf("c%d", i)), "read")
 	}
@@ -184,7 +182,7 @@ func sessionNearCallLimit(t *testing.T) domain.Session {
 // The answer that crosses the call limit was streamed to the person: it is
 // kept, its calls are answered as not run, and the turn pauses.
 func TestTheAnswerAtTheCallLimitIsKeptWithItsCallsNotRun(t *testing.T) {
-	s := sessionNearCallLimit(t)
+	s := sessionAtCallLimit(t)
 	before := len(s.Messages())
 	store := &memoryStore{}
 	const text = "I found the cause; reading two more files"
@@ -202,12 +200,7 @@ func TestTheAnswerAtTheCallLimitIsKeptWithItsCallsNotRun(t *testing.T) {
 	if err := u.Execute(context.Background(), &s, record); !errors.Is(err, domain.ErrToolCallLimit) {
 		t.Fatalf("limit error: %v", err)
 	}
-	// One call was left, so the request carried the budget note first.
 	messages := s.Messages()
-	if !domain.BudgetNote(messages[before].Content) {
-		t.Fatalf("no budget note before the answer: %+v", messages[before])
-	}
-	before++
 	if s.Status() != domain.StatusInterrupted || len(s.Pending()) != 0 || len(messages) != before+3 || messages[before].Content != text || len(messages[before].ToolCalls) != 2 {
 		t.Fatalf("the streamed answer was dropped: %s %+v", s.Status(), messages[before:])
 	}
@@ -215,7 +208,7 @@ func TestTheAnswerAtTheCallLimitIsKeptWithItsCallsNotRun(t *testing.T) {
 		t.Fatalf("the transcript shown has %d messages, not the kept answer's %d", shown, before+3)
 	}
 	for _, record := range s.Export().Activity[len(s.Export().Activity)-2:] {
-		if record.Decision != domain.DecisionDeny || !record.Outcome.IsError || !strings.Contains(string(record.Outcome.Content), "not run: the turn reached its 32 tool-call limit") {
+		if record.Decision != domain.DecisionDeny || !record.Outcome.IsError || !strings.HasPrefix(string(record.Outcome.Content), domain.OverBudgetOutcomePrefix+" of 32 calls: none of this answer's 2 calls ran") {
 			t.Fatalf("call over the limit: %+v", record)
 		}
 	}
@@ -229,7 +222,7 @@ func TestTheAnswerAtTheCallLimitIsKeptWithItsCallsNotRun(t *testing.T) {
 // gets a new call budget instead of tripping the limit on every answer with
 // two calls (Ctrl+R, and the plan and repair loops that continue a turn).
 func TestResumingAfterTheCallLimitRestartsTheTurnBudget(t *testing.T) {
-	s := sessionNearCallLimit(t)
+	s := sessionAtCallLimit(t)
 	requests := 0
 	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: &memoryStore{}, Models: streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
 		requests++

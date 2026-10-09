@@ -100,15 +100,44 @@ type headAdmission struct {
 	// Validation checks local arguments against their schema; nil leaves
 	// that to the runtime.
 	Validation ToolArgumentValidationPort
+	// TurnLimit is the turn's tool-call budget; zero means
+	// domain.MaxTurnToolCalls.
+	TurnLimit int
 }
 
 func (u ContinueTurnUseCase) admission() headAdmission {
-	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation}
+	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, TurnLimit: u.turnLimit()}
+}
+
+func (a headAdmission) turnLimit() int {
+	if a.TurnLimit > 0 {
+		return a.TurnLimit
+	}
+	return domain.MaxTurnToolCalls
 }
 
 func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, emit func(Event) error) error {
 	for s.Status() == domain.StatusApproval && len(s.Pending()) > 0 {
 		p := s.Pending()[0]
+		// A call past the budget is answered "over budget" before anything
+		// else: no card, no mode verdict, no effect.
+		if s.HeadOverBudget(admit.turnLimit()) {
+			next := *s
+			if _, err := next.RefuseOverBudget(admit.turnLimit()); err != nil {
+				return err
+			}
+			if err := admit.Store.Save(ctx, next); err != nil {
+				return err
+			}
+			*s = next
+			if admit.Trace != nil {
+				_ = admit.Trace.Record(DiagnosticEvent{Stage: DiagnosticToolRejected, SpanID: CurrentDiagnosticSpan(ctx), ToolOrdinal: toolDiagnosticOrdinal(s, p.Call.ID)})
+			}
+			if err := emitTool(s, p.Call.ID, emit); err != nil {
+				return err
+			}
+			continue
+		}
 		tool, args, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), p.Call)
 		if known && resolveErr == nil {
 			verdict, reason := s.Mode().Judge(tool.Identity, args)

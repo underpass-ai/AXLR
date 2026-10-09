@@ -85,8 +85,8 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	started := time.Now()
 
 	tool, toolArgs, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending[0].Call)
-	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation}
-	if !known || resolveErr != nil {
+	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, TurnLimit: u.Continue.turnLimit()}
+	if !known || resolveErr != nil || s.HeadOverBudget(admit.turnLimit()) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
 	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || localArgumentError(u.Validation, tool, toolArgs) != nil {

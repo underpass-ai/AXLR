@@ -37,7 +37,8 @@ func TestTheTurnLimitIsTheConfiguredOne(t *testing.T) {
 	if left, limit := s.CallsLeft(10); left != 1 || limit != 10 {
 		t.Fatalf("left %d of %d", left, limit)
 	}
-	if err := s.CompleteAssistantWithin(completion(t, "b0", "b1"), 10); err != ErrToolCallLimit {
+	must(t, answerCalls(t, &s, 10, "b", 1))
+	if err := s.CompleteAssistantWithin(completion(t, "c0", "c1"), 10); err != ErrToolCallLimit {
 		t.Fatalf("over the configured limit: %v", err)
 	}
 	// A compact step keeps its smaller budget under a larger turn limit, and
@@ -80,8 +81,11 @@ func TestACeremonyStepResumesAtTheLimitTwicePerStep(t *testing.T) {
 	if _, ok, err := s.ResumeStepAtLimit(2); ok || err != nil {
 		t.Fatalf("a streaming turn was resumed: %v", err)
 	}
+	// Spend the step's budget, then answer once more: the whole answer is
+	// refused and the turn pauses.
 	overrun := func(prefix string) {
 		t.Helper()
+		must(t, answerCalls(t, &s, 2, prefix+"a", 2))
 		if err := s.CompleteAssistantWithin(completion(t, prefix+"0", prefix+"1", prefix+"2"), 2); err != ErrToolCallLimit {
 			t.Fatalf("limit: %v", err)
 		}
