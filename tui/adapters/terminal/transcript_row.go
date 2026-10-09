@@ -12,6 +12,10 @@ const (
 	transcriptRowGap
 	// transcriptRowSpeaker names who speaks next in the Editorial layout.
 	transcriptRowSpeaker
+	// transcriptRowDiffRemoved and transcriptRowDiffAdded are the lines an
+	// approval card shows a file edit taking out and putting in.
+	transcriptRowDiffRemoved
+	transcriptRowDiffAdded
 )
 
 // transcriptRow is one conversation entry. The viewport wraps it to the
