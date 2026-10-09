@@ -11,14 +11,23 @@ import (
 // exact, since the shortened form would save little.
 const closedWriteArgumentBytes = 512
 
+// The recover notes of a shortened write: a closed turn's, and the turn in
+// progress's once it no longer fits the model context.
+const (
+	closedWriteRecover    = "The turn has closed and the file on disk holds what this call wrote: local_read it."
+	compactedWriteRecover = "This turn no longer fits the model context, so this call's text was left out; the file on disk holds what it wrote: local_read it."
+)
+
 // closedWriteArguments shortens the arguments of a local_write or local_edit
 // call of a closed turn whose result says it succeeded: the text it wrote is
 // on disk, so the projection keeps the path and the mode and says how many
 // bytes of each text were left out. Session c33e8e86 carried 72 KB of such
 // arguments in its last request, the largest part of the history the
 // projection never shortened. The saved transcript keeps them whole; other
-// calls, and writes that were denied or failed, are returned unchanged.
-func closedWriteArguments(call root.ToolCall, result string) root.JSONValue {
+// calls, and writes that were denied or failed, are returned unchanged. A
+// compacted turn in progress shortens its own writes the same way, with
+// recover saying why.
+func closedWriteArguments(call root.ToolCall, result, recover string) root.JSONValue {
 	var texts []string
 	switch call.Name {
 	case "local_write":
@@ -36,7 +45,7 @@ func closedWriteArguments(call root.ToolCall, result string) root.JSONValue {
 	if json.Unmarshal(raw, &fields) != nil {
 		return call.Arguments
 	}
-	shortened := map[string]any{"recover": "The turn has closed and the file on disk holds what this call wrote: local_read it."}
+	shortened := map[string]any{"recover": recover}
 	for key, value := range fields {
 		omitted := false
 		for _, text := range texts {

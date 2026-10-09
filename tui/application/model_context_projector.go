@@ -110,9 +110,15 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 	for i, message := range original {
 		projected[i] = message
 		projected[i].ToolCalls = append([]root.ToolCall(nil), message.ToolCalls...)
-		if len(starts) > 0 && i < starts[len(starts)-1] {
+		// A turn that wrote large files can outgrow the budget through its
+		// write arguments alone: once compacted, it shortens them too.
+		if closed := len(starts) > 0 && i < starts[len(starts)-1]; closed || turnPlace == excerptCompacted {
+			recover := closedWriteRecover
+			if !closed {
+				recover = compactedWriteRecover
+			}
 			for c, call := range projected[i].ToolCalls {
-				projected[i].ToolCalls[c].Arguments = closedWriteArguments(call, results[call.ID])
+				projected[i].ToolCalls[c].Arguments = closedWriteArguments(call, results[call.ID], recover)
 			}
 		}
 		if message.Role == root.RoleTool {
