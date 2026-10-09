@@ -256,6 +256,10 @@ func (b *streamBody) closeUnderlying() {
 	b.underlyingClose.Do(func() { b.underlyingErr = b.next.Close() })
 }
 
+// errorDrainTimeout bounds the read of an error body the client left unread;
+// past it the capture keeps what arrived.
+var errorDrainTimeout = 500 * time.Millisecond
+
 // Error responses are normally rejected before the provider client reads them.
 // Only this path drains on Close; streaming replies retain their normal flow.
 func (b *streamBody) drainErrorResponse() {
@@ -271,7 +275,7 @@ func (b *streamBody) drainErrorResponse() {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, errorDrainTimeout)
 	stop := context.AfterFunc(ctx, b.closeUnderlying)
 	defer func() { stop(); cancel() }()
 	b.readMu.Lock()

@@ -354,6 +354,12 @@ func TestUnreadErrorDrainIsBoundedAndCancelledWithoutChangingReadBytes(t *testin
 }
 
 func TestErrorDrainCapturesRemainingJSONAfterClientReadAndBoundsOversize(t *testing.T) {
+	// Reading 8 MiB took longer than the 500 ms bound on a slow macOS
+	// runner, which then saved a truncated capture; this test is about
+	// the size bound, not the time bound.
+	previous := errorDrainTimeout
+	errorDrainTimeout = time.Minute
+	t.Cleanup(func() { errorDrainTimeout = previous })
 	for _, oversized := range []bool{false, true} {
 		trace := &traceEvents{}
 		dir := filepath.Join(t.TempDir(), "payloads")
