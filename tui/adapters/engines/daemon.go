@@ -26,8 +26,11 @@ const IdleExit = 30 * time.Second
 const startWait = 5 * time.Second
 
 // Supervisor finds or starts the daemon of an engine spec. Dir holds the
-// sockets and must be private to the user; Executable is the binary whose
-// --engines-serve runs a daemon (the console itself).
+// sockets and must be private to the user; a socket path is limited to 104
+// bytes on macOS (108 on Linux), and $XDG_RUNTIME_DIR/axlr/engines or
+// ~/.local/state/axlr/engines with a 32-character name stay well under it.
+// Executable is the binary whose --engines-serve runs a daemon (the
+// console itself).
 type Supervisor struct {
 	Dir        string
 	Executable string

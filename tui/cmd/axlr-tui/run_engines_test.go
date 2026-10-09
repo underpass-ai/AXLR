@@ -33,11 +33,12 @@ func TestOnlyKMPAndMADECommandsAreShared(t *testing.T) {
 }
 
 func TestEngineSocketsLiveInTheRuntimeDirectory(t *testing.T) {
-	env := map[string]string{"XDG_RUNTIME_DIR": "/run/user/1000"}
-	if got := engineSocketDir(func(k string) string { return env[k] }, "/home/me/.local/state"); got != filepath.Join("/run/user/1000", "axlr", "engines") {
+	runtimeDir, stateBase := t.TempDir(), t.TempDir()
+	env := map[string]string{"XDG_RUNTIME_DIR": runtimeDir}
+	if got := engineSocketDir(func(k string) string { return env[k] }, stateBase); got != filepath.Join(runtimeDir, "axlr", "engines") {
 		t.Fatalf("dir = %s", got)
 	}
-	if got := engineSocketDir(func(string) string { return "" }, "/home/me/.local/state"); got != filepath.Join("/home/me/.local/state", "axlr", "engines") {
+	if got := engineSocketDir(func(string) string { return "relative" }, stateBase); got != filepath.Join(stateBase, "axlr", "engines") {
 		t.Fatalf("fallback dir = %s", got)
 	}
 }
