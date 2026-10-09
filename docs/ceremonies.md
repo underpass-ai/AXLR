@@ -114,7 +114,7 @@ Roles in a definition describe responsibilities and do not spawn agents. Indepen
 1. **Decompose.** The planner splits the brief into 1 to 12 tasks:
    - Each task has an id, a goal, a scope of 1 to 8 paths, up to 8 citations `{path, line, quote}`, a unit check, dependencies, test-first and protected files.
    - The plan as a whole has an end-to-end check, shared interfaces and an English summary.
-   - The planner is `plan.model`: by default `z-ai/glm-5.3-flash`, `session` for the session's model. Without `OPENROUTER_API_KEY` a remote planner falls back to the session model, and the console says so at launch.
+   - The planner is `plan.model`: by default the session's model (`session`). Until 9 October 2026 it was `z-ai/glm-5.3-flash`, whose decompose request took 138 s when OpenRouter routed it to its slowest provider; a session on a small local model names a larger planner here. Without `OPENROUTER_API_KEY` a remote planner falls back to the session model, and the console says so at launch.
    - The commands the hand-back names go through the approval card, under autonomy too, because the console runs each one once while verifying.
 2. **Verify.** The console checks the proposal without a model. Every defect goes back to the planner with the task id; three unverified rounds end the plan `BLOCKED`. It checks:
    - slug ids, unique;

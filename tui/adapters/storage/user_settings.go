@@ -83,25 +83,21 @@ func (s UserSettings) TraceRetention() time.Duration {
 	return time.Duration(days) * 24 * time.Hour
 }
 
-// DefaultPlanner is the model that decomposes a brief unless plan.model
-// says otherwise: a large model plans, the session's local model works.
-const DefaultPlanner = "z-ai/glm-5.3-flash"
-
-// PlanSettings is the plan section: Model plans (default DefaultPlanner;
-// "session" uses the session's model) and AutoApprove starts a verified
-// plan without the person (default false).
+// PlanSettings is the plan section: Model plans (default, and "session",
+// the session's model) and AutoApprove starts a verified plan without the
+// person (default false).
 type PlanSettings struct {
 	Model       string `json:"model,omitempty"`
 	AutoApprove bool   `json:"auto_approve,omitempty"`
 }
 
-// Planner is the configured planner with the default applied; empty means
-// the session's model.
+// Planner is the configured planner; empty means the session's model. The
+// default was z-ai/glm-5.3-flash until 9 October 2026: routed by OpenRouter
+// to OpenInference, its decompose request took 138 s, and a remote session
+// already runs a large model. A session on a small local model names a
+// larger planner here.
 func (s UserSettings) Planner() string {
-	if s.Plan == nil || s.Plan.Model == "" {
-		return DefaultPlanner
-	}
-	if s.Plan.Model == "session" {
+	if s.Plan == nil || s.Plan.Model == "session" {
 		return ""
 	}
 	return s.Plan.Model

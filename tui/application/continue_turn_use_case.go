@@ -32,6 +32,9 @@ type ContinueTurnUseCase struct {
 	// Judge enables TypeSafe Jev; nil, the default, offers no axlr_judge and
 	// runs no final check.
 	Judge *Judge
+	// Calibration learns each model's bytes per prompt token from the
+	// requests it serves; nil measures nothing.
+	Calibration TokenCalibrationPort
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {
@@ -195,6 +198,10 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
+	}
+	if u.Calibration != nil && result.Usage != nil && result.RequestBytes > 0 {
+		// A measurement that cannot be saved is only one sample lost.
+		_ = u.Calibration.Observe(context.WithoutCancel(ctx), req.Model, result.RequestBytes, result.Usage.PromptTokens)
 	}
 	if len(result.Message.ToolCalls) > 0 && u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolRequested, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: len(result.Message.ToolCalls)})

@@ -119,11 +119,20 @@ const (
 // prompt below the minimum gets the default; one that holds the default
 // ceiling or more keeps the default.
 func ContextBudgetForPrompt(tokens int) ContextBudget {
+	return ContextBudgetForPromptAt(tokens, promptBytesPerTokenHundredths)
+}
+
+// ContextBudgetForPromptAt is ContextBudgetForPrompt for a model whose
+// prompt tokens were measured to hold bytesPerToken hundredths of a byte
+// each (see BytesPerToken); a value outside the measured range is clamped
+// to it.
+func ContextBudgetForPromptAt(tokens, bytesPerToken int) ContextBudget {
 	if tokens < MinimumPromptTokens {
 		tokens = DefaultPromptTokens
 	}
+	bytesPerToken = min(max(bytesPerToken, MinimumBytesPerToken), MaximumBytesPerToken)
 	ceiling := DefaultContextBudget()
-	maximum := tokens*promptBytesPerTokenHundredths/100 - promptPrefixReserve
+	maximum := tokens*bytesPerToken/100 - promptPrefixReserve
 	if maximum >= ceiling.maximum {
 		return ceiling
 	}

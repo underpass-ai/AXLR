@@ -125,7 +125,12 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	if status, ok := errorBodyStatus(reply.Error); ok {
 		return domain.CompletionResult{}, c.providerError(status)
 	}
-	return mapResponse(reply)
+	result, err := mapResponse(reply)
+	if err != nil {
+		return domain.CompletionResult{}, err
+	}
+	result.RequestBytes = len(body)
+	return result, nil
 }
 
 // body is what the request encodes: marked for the prompt cache when the
