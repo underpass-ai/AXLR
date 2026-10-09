@@ -56,7 +56,7 @@ The worker also accepts `--plugin` for a one-request MCP call; supply the same s
 
 Run inspection with the same binary, backend and explicit store environment used by the registration. A saved global selection can point at an unrelated project, and `--root` controls AXLR's workspace rather than overriding KMP's store. Pin `KMP_MCP_DATA_DIR` before discovery; do not write until the selected path and a known memory agree.
 
-If `kmp_guide` reports missing guide nodes, stop the AXLR connection and any writer for that embedded store, then synchronize the assets from the matching installed KMP plugin:
+If `kmp_guide` reports missing guide nodes (a new store, as on 8 October 2026), stop the AXLR connection and any writer for that embedded store, then synchronize the assets from the matching installed KMP plugin. AXLR fills in `--plugin-root` in KMP's answer with the directory of the engine it installed, which holds `guide/guide.requests.json`; writes through `axlr_remember` work without the guide meanwhile:
 
 ```bash
 KMP_MCP_BACKEND=embedded KMP_MCP_DATA_DIR=/absolute/path/to/memory \
@@ -67,7 +67,7 @@ This writes guide data to the selected store. Restart AXLR with the same selecti
 
 ## Use memory in a task
 
-1. Discover the exact live schemas through `axlr_tools`, then invoke them through `axlr_call_tool`.
+1. Record with `axlr_remember` (see [memory writes](../console.md#memory-writes)): one call, no guide or schema read. For other KMP verbs, discover the exact live schemas through `axlr_tools`, then invoke them through `axlr_call_tool`.
 2. Start or reuse KMP's guide identity and context. Wake the task's known stable project scope before re-deriving context; keep returned identities and finish relevant pages.
 3. Ask targeted questions, inspect cited evidence and distinguish an evidence-backed answer from `UNKNOWN`. A missing project scope in a confirmed store can be a first-use condition; a protocol or store error is not `UNKNOWN`.
 4. Record decisions, constraints and outcomes with their evidence, rather than copying the conversation. Supply one stable idempotency key per logical write and review any `needs_review` continuation before resuming it. Link decisions with justified relations when the evidence supports them.

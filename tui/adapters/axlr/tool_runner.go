@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/dto"
@@ -16,6 +17,9 @@ import (
 type ToolRunner struct {
 	Executor    *runtime.Executor
 	Diagnostics application.DiagnosticPort
+	// KMPGuideRoot is the plugin directory of the connected KMP engine,
+	// whose guide assets a store without a guide is synced from.
+	KMPGuideRoot string
 }
 
 func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args root.JSONValue) (out domain.ToolOutcome, returnErr error) {
@@ -77,6 +81,25 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 	if err != nil {
 		return domain.ToolOutcome{}, err
 	}
-	out.Content, err = root.NewText(string(content))
+	out.Content, err = root.NewText(r.namedGuideRoot(id, string(content)))
 	return out, err
+}
+
+// namedGuideRoot fills the plugin root into KMP's answer for a store
+// without a guide: it names `kmp-mcp guide sync --plugin-root <plugin-root>`
+// and the console knows which directory that is. The sync must run with
+// the engine stopped, so the console cannot run it for the model.
+func (r ToolRunner) namedGuideRoot(id domain.ToolIdentity, content string) string {
+	if r.KMPGuideRoot == "" || id.Kind != domain.ToolKindPlugin || id.Plugin.PluginID != "kmp" {
+		return content
+	}
+	escaped, err := json.Marshal(r.KMPGuideRoot)
+	if err != nil {
+		return content
+	}
+	// The answer is JSON, which writes < and > as \u003c and \u003e; the
+	// path goes in as a JSON string without its quotes.
+	path := string(escaped[1 : len(escaped)-1])
+	content = strings.ReplaceAll(content, `\u003cplugin-root\u003e`, path)
+	return strings.ReplaceAll(content, "<plugin-root>", path)
 }
