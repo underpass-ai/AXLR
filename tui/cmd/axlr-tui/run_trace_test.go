@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
@@ -218,6 +219,86 @@ func TestRunCanDisablePayloadsAndKeepDefaultDiagnostics(t *testing.T) {
 	files, err := os.ReadDir(filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs"))
 	if err != nil || len(files) != 1 || !strings.HasSuffix(files[0].Name(), ".jsonl") || strings.Contains(output.String(), "payloads:") {
 		t.Fatalf("files=%v err=%v output=%s", files, err, &output)
+	}
+}
+
+// Every launch leaves a trace and a payload directory that holds whole
+// transcripts. Those of earlier launches are deleted at startup once older
+// than trace_retention_days (default 30); 0 keeps them. A trace AXLR did not
+// name, such as one chosen with --trace-file, is never deleted.
+func TestRunPrunesOldDefaultTracesAndPayloads(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		settings string
+		pruned   bool
+	}{
+		{"default retention", "", true},
+		{"pruning disabled", `{"trace_retention_days":0}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := cliEnv(t)
+			logs := filepath.Join(env["XDG_STATE_HOME"], "axlr", "logs")
+			if err := os.MkdirAll(logs, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			old := time.Now().Add(-31 * 24 * time.Hour)
+			oldTrace := filepath.Join(logs, "trace-1-2.jsonl")
+			oldPayloads := filepath.Join(logs, "trace-1-2.jsonl.payloads-3")
+			oldCapture := filepath.Join(oldPayloads, "000001-request.json")
+			explicit := filepath.Join(logs, "mine.jsonl")
+			recent := filepath.Join(logs, "trace-4-5.jsonl")
+			if err := os.Mkdir(oldPayloads, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			for _, path := range []string{oldTrace, oldCapture, explicit, recent} {
+				if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, path := range []string{oldTrace, oldCapture, oldPayloads, explicit} {
+				if err := os.Chtimes(path, old, old); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if tc.settings != "" {
+				settings := filepath.Join(env["HOME"], ".config", "axlr", "settings.json")
+				if err := os.MkdirAll(filepath.Dir(settings), 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(settings, []byte(tc.settings), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var output bytes.Buffer
+			code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model"}, func(key string) string { return env[key] }, func(tea.Model) error { return nil }, &output)
+			if code != 0 {
+				t.Fatalf("exit=%d output=%s", code, &output)
+			}
+			for _, path := range []string{oldTrace, oldPayloads} {
+				if _, err := os.Lstat(path); os.IsNotExist(err) != tc.pruned {
+					t.Errorf("%s: pruned=%v, want %v", filepath.Base(path), os.IsNotExist(err), tc.pruned)
+				}
+			}
+			for _, path := range []string{explicit, recent} {
+				if _, err := os.Lstat(path); err != nil {
+					t.Errorf("%s was deleted: %v", filepath.Base(path), err)
+				}
+			}
+			// This launch's own trace and payload directory are kept.
+			want := 2
+			if !tc.pruned {
+				want = 3
+			}
+			if traces, _ := filepath.Glob(filepath.Join(logs, "trace-*.jsonl")); len(traces) != want {
+				t.Errorf("traces=%v", traces)
+			}
+			if payloads, _ := filepath.Glob(filepath.Join(logs, "trace-*.jsonl.payloads-*")); len(payloads) != want-1 {
+				t.Errorf("payload directories=%v", payloads)
+			}
+			if strings.Contains(output.String(), "trace-1-2") {
+				t.Errorf("pruning wrote to the console: %s", &output)
+			}
+		})
 	}
 }
 

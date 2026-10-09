@@ -10,6 +10,8 @@ import (
 
 // PayloadRecorder saves redacted bodies only, never authorization headers.
 // Each individual capture is bounded; a long session retains every exchange.
+// PruneDefault deletes a directory in the default location at a later
+// launch, once it is older than the retention period.
 type PayloadRecorder struct {
 	directory string
 	secrets   []string

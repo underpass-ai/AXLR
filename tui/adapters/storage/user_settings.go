@@ -59,8 +59,28 @@ type UserSettings struct {
 	// Ceremonies selects the profile of /debug and /delivery.
 	Ceremonies *CeremonySettings `json:"ceremonies,omitempty"`
 	// Plan configures /plan.
-	Plan  *PlanSettings              `json:"plan,omitempty"`
-	Extra map[string]json.RawMessage `json:"-"`
+	Plan *PlanSettings `json:"plan,omitempty"`
+	// TraceRetentionDays is how long the default diagnostics directory keeps
+	// an earlier launch's trace and payloads; absent means
+	// DefaultTraceRetentionDays and 0 keeps them forever. A pointer keeps an
+	// explicit 0 when another setting is saved.
+	TraceRetentionDays *int                       `json:"trace_retention_days,omitempty"`
+	Extra              map[string]json.RawMessage `json:"-"`
+}
+
+// DefaultTraceRetentionDays applies when trace_retention_days is absent.
+const DefaultTraceRetentionDays = 30
+
+const maxTraceRetentionDays = 36500
+
+// TraceRetention is the configured retention with the default applied;
+// zero disables pruning.
+func (s UserSettings) TraceRetention() time.Duration {
+	days := DefaultTraceRetentionDays
+	if s.TraceRetentionDays != nil {
+		days = *s.TraceRetentionDays
+	}
+	return time.Duration(days) * 24 * time.Hour
 }
 
 // DefaultPlanner is the model that decomposes a brief unless plan.model
@@ -330,7 +350,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies", "plan"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies", "plan", "trace_retention_days"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -394,6 +414,9 @@ func (s UserSettings) Validate() error {
 	}
 	if s.PromptTokens != 0 && (s.PromptTokens < domain.MinimumPromptTokens || s.PromptTokens > maxContextTokens) {
 		return fmt.Errorf("settings prompt_tokens must be between %d and %d", domain.MinimumPromptTokens, maxContextTokens)
+	}
+	if days := s.TraceRetentionDays; days != nil && (*days < 0 || *days > maxTraceRetentionDays) {
+		return fmt.Errorf("settings trace_retention_days must be between 0 and %d", maxTraceRetentionDays)
 	}
 	if len(s.LocalModels) > maxLocalModels {
 		return errors.New("settings.json lists too many local models")
