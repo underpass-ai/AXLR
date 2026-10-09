@@ -13,7 +13,7 @@ func TestActionPaletteUsesListSelectionAndFilter(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()
 	m = update(m, ControlIntent("palette"))
-	if len(m.Palette.List.Items()) != 13 {
+	if len(m.Palette.List.Items()) != len(actionItems) {
 		t.Fatal("palette did not load its actions into the list component")
 	}
 	m = update(m, tea.KeyPressMsg{Code: '/'})

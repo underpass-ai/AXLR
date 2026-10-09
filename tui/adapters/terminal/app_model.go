@@ -28,6 +28,7 @@ type AppModel struct {
 	// cached is the share, in percent, of the last request's prompt that the
 	// provider read from its prompt cache; zero without a cache.
 	cached           int
+	cost             costView
 	Status           StatusBar
 	Layout           Layout
 	Theme            Theme
@@ -157,7 +158,7 @@ func New(deps Dependencies) AppModel {
 	}
 	m.refreshTranscript()
 	m.syncApproval()
-	return m.loadRepairs().loadPlans()
+	return m.loadRepairs().loadPlans().loadUsage()
 }
 func (m AppModel) Init() tea.Cmd {
 	repairs := m.subscribeRepairs()
@@ -324,6 +325,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Kind == application.EventState {
 			m.Status.State = v.State
 		}
+		if v.SessionUsage != nil {
+			m = m.observeUsage(*v.SessionUsage, v.BudgetWarning)
+		}
 		if v.Usage != nil {
 			m.tokens = v.Usage.TotalTokens
 			m.cached = 0
@@ -428,6 +432,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.SearchBox = SearchBox{}
 			m.tokens = 0
 			m.cached = 0
+			m = m.loadUsage()
 			m.unsentPrompts = nil
 			m.failures = nil
 			m.resetPromptHistory()
@@ -475,6 +480,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// in the person's language, and keep any error joined to it.
 				m.Status.Error = strings.Replace(m.Status.Error, domain.ErrToolCallLimit.Error(), m.Theme.T("error.toolCallLimit"), 1)
 			}
+			m.Status.Error = m.budgetErrorText(v.Err, m.Status.Error)
 			if returned != "" {
 				m.Status.Error += " " + returned
 			}
@@ -502,6 +508,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
+			m.cost.beginTurn()
 			start := m.deps.Start
 			store := m.deps.Store
 			cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
@@ -554,6 +561,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/copy" {
 				m.Composer.Input.Reset()
 				return m, m.copyLatest()
+			}
+			if command == "/usage" {
+				m.Composer.Input.Reset()
+				return m.openUsagePanel(), nil
 			}
 			if command == "/stop-ceremony" {
 				m.Composer.Input.Reset()
@@ -668,6 +679,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
+			m.cost.beginTurn()
 			m.Composer.Input.Reset()
 			m.Status.Error = ""
 			m.failures = nil

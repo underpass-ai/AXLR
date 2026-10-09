@@ -263,6 +263,7 @@ func (s *SessionStore) Close() error {
 			_ = os.Remove(s.timesPath(id))
 			_ = os.Remove(s.modePath(id))
 			_ = os.Remove(s.ceremonyPath(id))
+			_ = os.Remove(s.usagePath(id))
 			_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))
 		}
 	}

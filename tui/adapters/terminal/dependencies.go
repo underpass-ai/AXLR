@@ -40,4 +40,8 @@ type Dependencies struct {
 	Repairs RepairPanelPort
 	// Plans shows the plans and their tasks; nil without MADE.
 	Plans PlanPanelPort
+	// Usage is the session's usage ledger for the footer's cost and
+	// /usage, where + raises the session's limit by MaxSessionUSD.
+	Usage         application.SessionUsagePort
+	MaxSessionUSD float64
 }

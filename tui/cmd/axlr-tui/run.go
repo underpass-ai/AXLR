@@ -462,7 +462,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		repairs = &application.SelfRepair{
 			Registry:  registry,
 			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: stderr},
-			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox},
+			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD},
 			Store:     loggedStore,
 			Engine:    ceremonies.Engine,
 			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts},
@@ -484,7 +484,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if _, err := rand.Read(token[:]); err != nil {
 			return fail(err)
 		}
-		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox}}
+		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD}}
 		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(token[:]), Lifetime: ctx}
 		if err := planRunner.Reconcile(ctx); err != nil {
 			fmt.Fprintln(stderr, "axlr-tui: plan registry:", err)
@@ -494,6 +494,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		planPanel = planRunner
 	}
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
+	// Each session keeps its usage ledger beside its snapshot.
+	continuation.Usage, continuation.MaxSessionUSD = store, settings.MaxSessionUSD
 	var notices application.RepairNoticesPort
 	if repairs != nil {
 		continuation.SelfRepair = repairs
@@ -528,6 +530,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		InitialDraft:      initialDraft,
 		Repairs:           repairPanelPort(repairs),
 		Plans:             planPanel,
+		Usage:             store,
+		MaxSessionUSD:     settings.MaxSessionUSD,
 	})
 	defer app.Close()
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {

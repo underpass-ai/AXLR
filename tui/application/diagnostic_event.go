@@ -27,11 +27,14 @@ type DiagnosticEvent struct {
 	Bytes               int                `json:"bytes,omitempty"`
 	ElapsedMilliseconds int64              `json:"elapsed_ms,omitempty"`
 	// Token usage the provider reported for a request, with the prompt
-	// tokens it read from and wrote to its prompt cache.
+	// tokens it read from and wrote to its prompt cache, the completion
+	// tokens spent reasoning and the cost in dollars when reported.
 	PromptTokens     int                  `json:"prompt_tokens,omitempty"`
 	CompletionTokens int                  `json:"completion_tokens,omitempty"`
 	CachedTokens     int                  `json:"cached_tokens,omitempty"`
 	CacheWriteTokens int                  `json:"cache_write_tokens,omitempty"`
+	ReasoningTokens  int                  `json:"reasoning_tokens,omitempty"`
+	CostUSD          float64              `json:"cost_usd,omitempty"`
 	Width            int                  `json:"width,omitempty"`
 	Height           int                  `json:"height,omitempty"`
 	ErrorClass       DiagnosticErrorClass `json:"error_class,omitempty"`

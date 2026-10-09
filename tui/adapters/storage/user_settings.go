@@ -58,6 +58,9 @@ type UserSettings struct {
 	// TurnToolCalls is a turn's tool-call budget; zero means
 	// domain.MaxTurnToolCalls (32).
 	TurnToolCalls int `json:"turn_tool_calls,omitempty"`
+	// MaxSessionUSD stops a session's model requests once their known cost
+	// reaches it, in dollars; zero means no limit (user_settings_usage.go).
+	MaxSessionUSD float64 `json:"max_session_usd,omitempty"`
 	// LocalModels are OpenAI-compatible servers, such as llama.cpp or vLLM,
 	// offered in /model next to OpenRouter's catalog.
 	LocalModels []LocalModel `json:"local_models,omitempty"`
@@ -367,7 +370,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox", "engines"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox", "engines", "max_session_usd"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -440,6 +443,9 @@ func (s UserSettings) Validate() error {
 	}
 	if days := s.TraceRetentionDays; days != nil && (*days < 0 || *days > maxTraceRetentionDays) {
 		return fmt.Errorf("settings trace_retention_days must be between 0 and %d", maxTraceRetentionDays)
+	}
+	if err := s.validateSessionBudget(); err != nil {
+		return err
 	}
 	if len(s.LocalModels) > maxLocalModels {
 		return errors.New("settings.json lists too many local models")

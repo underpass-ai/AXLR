@@ -16,6 +16,8 @@ type streamAccumulator struct {
 	finish  string
 	usage   *usageDTO
 	total   int
+	// provider is the upstream OpenRouter names in every chunk.
+	provider string
 }
 
 func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
@@ -45,7 +47,8 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 			} `json:"delta"`
 			FinishReason *string `json:"finish_reason"`
 		} `json:"choices"`
-		Usage *usageDTO `json:"usage"`
+		Usage    *usageDTO `json:"usage"`
+		Provider string    `json:"provider"`
 	}
 	if err := json.Unmarshal(data, &chunk); err != nil {
 		return nil, errors.New("malformed OpenRouter stream chunk")
@@ -112,6 +115,9 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 	if chunk.Usage != nil {
 		a.usage = chunk.Usage
 	}
+	if chunk.Provider != "" {
+		a.provider = chunk.Provider
+	}
 	return deltas, nil
 }
 
@@ -128,5 +134,5 @@ func (a *streamAccumulator) Result() (domain.CompletionResult, error) {
 	for _, index := range indices {
 		message.ToolCalls = append(message.ToolCalls, a.calls[index])
 	}
-	return mapResponse(responseDTO{Choices: []choiceDTO{{Message: message, FinishReason: a.finish}}, Usage: a.usage})
+	return mapResponse(responseDTO{Choices: []choiceDTO{{Message: message, FinishReason: a.finish}}, Usage: a.usage, Provider: a.provider})
 }
