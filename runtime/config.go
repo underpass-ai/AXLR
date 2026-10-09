@@ -3,6 +3,7 @@ package runtime
 import (
 	"time"
 
+	"github.com/underpass-ai/AXLR/adapters/local"
 	"github.com/underpass-ai/AXLR/application"
 )
 
@@ -19,8 +20,10 @@ const (
 const HardTimeout = 5 * time.Minute
 
 type Config struct {
-	Root           string
-	Env            []string
+	Root string
+	Env  []string
+	// Sandbox confines exec; nil runs commands unconfined.
+	Sandbox        *local.Sandbox
 	Plugins        application.PluginToolPort
 	MaxReadBytes   int
 	MaxFileBytes   int

@@ -69,7 +69,12 @@ func New(c Config) (*Executor, error) {
 	}
 	c.Root = path
 	c.Env = append([]string{}, c.Env...)
-	return &Executor{files: files, processes: &local.ProcessAdapter{Root: path, Env: c.Env}, config: c}, nil
+	if c.Sandbox != nil {
+		sandbox := *c.Sandbox
+		sandbox.Writable = append([]string(nil), sandbox.Writable...)
+		c.Sandbox = &sandbox
+	}
+	return &Executor{files: files, processes: &local.ProcessAdapter{Root: path, Env: c.Env, Sandbox: c.Sandbox}, config: c}, nil
 }
 func (e *Executor) Close() error { e.mu.Lock(); defer e.mu.Unlock(); return e.files.Close() }
 
