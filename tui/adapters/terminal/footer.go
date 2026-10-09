@@ -13,13 +13,17 @@ import (
 
 type footerHint struct{ zone, key, label string }
 
+// maxErrorRows bounds the rows a long error takes from the conversation.
+const maxErrorRows = 3
+
 // footerView is the main view's last row: clickable key hints on the left
-// and the session state on the right. An error takes the whole row so its
-// text is never truncated behind the hints.
+// and the session state on the right. An error takes the whole row, and up
+// to maxErrorRows rows when it is longer, so its text is not truncated
+// behind the hints.
 func (m AppModel) footerView() string {
 	width := max(1, m.Layout.Width)
 	if m.Status.Error != "" {
-		return m.errorRow()
+		return strings.Join(m.errorRows(maxErrorRows), "\n")
 	}
 	// Hints are in priority order; the narrowest terminals keep the first.
 	hints := []footerHint{{"send", "enter", m.Theme.T("footer.send")}}
@@ -185,12 +189,41 @@ func formatTokens(n int) string {
 	}
 }
 
-// errorRow gives an error the whole row, in the footer and under overlays.
-func (m AppModel) errorRow() string {
-	width := max(1, m.Layout.Width)
-	text := " " + m.Theme.Icon("error") + " " + singleLine(m.Status.Error)
-	if !m.Theme.Monochrome {
-		text = lipgloss.NewStyle().Foreground(lipgloss.Color(m.Theme.palette().Warning)).Render(text)
+// footerRows is the main view's footer height: one row, or the rows a long
+// error wraps to. The conversation gives up the rows past the first.
+func (m AppModel) footerRows() int {
+	if m.Status.Error == "" || m.overlay == "search" && !m.inlineApproval() {
+		return 1 // search draws its own one-row footer
 	}
-	return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(text, width, "…"))
+	return lipgloss.Height(m.footerView())
+}
+
+// errorRow gives an error the whole row under overlays.
+func (m AppModel) errorRow() string {
+	return m.errorRows(1)[0]
+}
+
+// errorRows wraps an error over at most limit full-width rows, aligned
+// after its icon; the last row is cut with "…" when even those are short.
+func (m AppModel) errorRows(limit int) []string {
+	width := max(1, m.Layout.Width)
+	lead := " " + m.Theme.Icon("error") + " "
+	indent := ansi.StringWidth(lead)
+	room := max(1, width-indent)
+	lines := strings.Split(ansi.Wrap(singleLine(m.Status.Error), room, ""), "\n")
+	if limit = max(1, limit); len(lines) > limit {
+		lines = append(lines[:limit-1], ansi.Truncate(strings.Join(lines[limit-1:], " "), room-1, "")+"…")
+	}
+	rows := make([]string, len(lines))
+	for i, line := range lines {
+		text := lead + strings.TrimRight(line, " ")
+		if i > 0 {
+			text = strings.Repeat(" ", indent) + strings.TrimRight(line, " ")
+		}
+		if !m.Theme.Monochrome {
+			text = lipgloss.NewStyle().Foreground(lipgloss.Color(m.Theme.palette().Warning)).Render(text)
+		}
+		rows[i] = lipgloss.NewStyle().Width(width).Render(ansi.Truncate(text, width, "…"))
+	}
+	return rows
 }

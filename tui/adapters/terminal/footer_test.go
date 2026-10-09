@@ -1,11 +1,13 @@
 package terminal
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	root "github.com/underpass-ai/AXLR/domain"
 )
 
 func TestFooterHintsStateAndTokensFitOneRow(t *testing.T) {
@@ -30,6 +32,52 @@ func TestFooterGivesErrorsTheWholeRow(t *testing.T) {
 	footer := ansi.Strip(m.footerView())
 	if strings.Contains(footer, "enter send") || !strings.Contains(footer, "differs from active workspace /home/a/AXLR") {
 		t.Fatalf("error not shown in full: %q", footer)
+	}
+}
+
+// An error longer than the row wraps over up to three rows, taken from the
+// conversation, so its instruction at the end is read; the screen keeps its
+// height and the cursor stays on the composer.
+func TestFooterWrapsALongErrorInsteadOfCuttingIt(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Composer.Input.SetValue("draft text")
+	m.Status.Error = "MADE definition not published: axlr_delivery 2.0. Preparing MADE is a one-time setup: open /mcp, select MADE and press p. " + Translate(English, "error.promptReturned")
+	v := m.View()
+	lines := strings.Split(ansi.Strip(v.Content), "\n")
+	if len(lines) != m.Layout.Height {
+		t.Fatalf("the view is %d rows; want %d", len(lines), m.Layout.Height)
+	}
+	footer := strings.Join(strings.Fields(strings.Join(lines[len(lines)-3:], " ")), " ")
+	for _, want := range []string{"press p.", "send it again when ready."} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("the error lost %q:\n%s", want, strings.Join(lines[len(lines)-3:], "\n"))
+		}
+	}
+	if v.Cursor == nil || !strings.Contains(lines[v.Cursor.Y], "draft text") {
+		t.Fatal("the cursor left the composer row")
+	}
+	// A click on the conversation still selects the line drawn there.
+	var rows []string
+	for i := range 60 {
+		rows = append(rows, fmt.Sprintf("row %02d", i))
+	}
+	m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleAssistant, Content: root.Text(strings.Join(rows, "\n"))})
+	m.refreshTranscript()
+	lines = strings.Split(ansi.Strip(m.View().Content), "\n")
+	content := strings.Split(ansi.Strip(m.Transcript.Viewport.GetContent()), "\n")
+	for y := 1; y < len(lines); y++ {
+		if !strings.Contains(lines[y], "row ") {
+			continue
+		}
+		point, ok := m.transcriptPoint(4, y)
+		if !ok || strings.TrimSpace(content[point.Line]) != strings.TrimSpace(lines[y]) {
+			t.Fatalf("screen row %d %q maps to line %q", y, lines[y], content[point.Line])
+		}
+	}
+	m.Status.Error = strings.Repeat("very long error ", 60)
+	if footer := strings.Split(m.footerView(), "\n"); len(footer) != 3 || !strings.HasSuffix(strings.TrimRight(ansi.Strip(footer[2]), " "), "…") {
+		t.Fatalf("an error past three rows is not cut on the third: %q", footer)
 	}
 }
 

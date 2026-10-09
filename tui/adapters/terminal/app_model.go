@@ -803,8 +803,9 @@ func (m AppModel) View() tea.View {
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && !m.approvalFocus() && m.overlay == "" {
 		view.Cursor = m.Composer.Input.Cursor()
 		if view.Cursor != nil {
-			// Header and the rule above the composer.
-			view.Cursor.Y += 2 + m.Layout.BodyHeight
+			// Header, the conversation as drawn (a long error takes rows
+			// from it) and the rule above the composer.
+			view.Cursor.Y += 2 + m.Layout.BodyHeight - (m.footerRows() - 1)
 		}
 	}
 	if !m.Layout.TooSmall && m.Layout.Width > 0 && m.overlay == "models" && !m.approvalFocus() {
