@@ -55,6 +55,44 @@ func TestSteeringQueuesWithoutCancellingAndStartsNewUserTurn(t *testing.T) {
 	}
 }
 
+// A message queued during a turn that fails starts the next turn at once:
+// the failure stays in the conversation instead of being cleared before it
+// is ever drawn, and the queued message is still delivered.
+func TestAFailureBeforeAQueuedMessageStaysInTheConversation(t *testing.T) {
+	s := navSession(t)
+	if err := s.BeginTurn("original", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft("partial response"); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	continuation := application.ContinueTurnUseCase{Store: m.deps.Store, Models: navStream{}}
+	m.deps.Start = application.StartTurnUseCase{Catalog: submissionCatalog{}, Store: m.deps.Store, Continue: continuation}
+	m.Busy = true
+	m.providerWaiting = true
+	m.operationID = 1
+	m.cancel = func() {}
+	m.Composer.Input.SetValue("new direction")
+	m = update(m, ControlIntent("send"))
+	next, cmd := m.Update(operationComplete{ID: 1, Session: s, Err: errors.New("provider returned 503")})
+	m = next.(AppModel)
+	if !strings.Contains(m.Transcript.Text(), "provider returned 503") {
+		t.Fatalf("the failure was cleared before it was drawn: error %q", m.Status.Error)
+	}
+	m = drain(t, m, cmd)
+	if messages := m.deps.Session.Messages(); len(messages) != 3 || messages[1].Content != "new direction" {
+		t.Fatalf("the queued message was not delivered: %+v", messages)
+	}
+	if !strings.Contains(m.Transcript.Text(), "provider returned 503") {
+		t.Fatal("the failure note did not outlast the queued turn")
+	}
+	m.Composer.Input.SetValue("next question")
+	if m = update(m, ControlIntent("send")); strings.Contains(m.Transcript.Text(), "provider returned 503") {
+		t.Fatal("the failure note stayed after the person's next message")
+	}
+}
+
 func TestQueuedSteerLeavesTheTurnToTakeIt(t *testing.T) {
 	m := sized()
 	m.Busy = true

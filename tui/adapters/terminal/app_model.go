@@ -93,6 +93,9 @@ type AppModel struct {
 	// closedCancelled marks the operation stopped because the person closed
 	// its panel (the model picker while it loads); likewise not an error.
 	closedCancelled uint64
+	// failures are errors of operations that ended while a message was
+	// queued; the conversation shows them until the person's next message.
+	failures []string
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -426,6 +429,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tokens = 0
 			m.cached = 0
 			m.unsentPrompts = nil
+			m.failures = nil
 			m.resetPromptHistory()
 			m.draft = ""
 			m.draftOperationID = 0
@@ -488,6 +492,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if queued, ok := m.steer.Take(); ok {
 			prompt := queued
+			if v.Err != nil && !errors.Is(v.Err, context.Canceled) {
+				// The queued turn starts now and clears the footer error
+				// before it is drawn: the failure stays in the conversation.
+				// A cancellation is the person's own Esc, not a failure.
+				m.failures = append(m.failures, m.Status.Error)
+			}
 			m.refreshTranscript()
 			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 			m.submittedPrompt = string(prompt)
@@ -660,6 +670,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.submittedAt = len(m.Header.State.Messages)
 			m.Composer.Input.Reset()
 			m.Status.Error = ""
+			m.failures = nil
 			m.draft = ""
 			m.draftOperationID = 0
 			if m.Header.State.Status == domain.StatusInterrupted && m.Header.State.Draft != "" {
@@ -875,5 +886,6 @@ func (m *AppModel) refreshTranscript() {
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
 	}
+	m.Transcript.AppendFailures(m.failures)
 	m.Transcript.AppendQueued(m.steer.Peek())
 }
