@@ -140,6 +140,21 @@ func TestTaskScopeCheckListsARenameByItsNewPath(t *testing.T) {
 	}
 }
 
+// Without -z git quotes a non-ASCII path with octal escapes ("caf\303\251.md")
+// and the parser only trimmed the quotes, so a legitimate scope file read as
+// a change outside the scope and green was refused for good.
+func TestTaskScopeCheckReadsNonASCIIPaths(t *testing.T) {
+	dir := gitRepository(t, nil)
+	writeFile(t, dir, "café.md", "x")
+	writeFile(t, dir, "docs/ñandú \"quoted\".md", "x")
+	d := &CeremonyDriver{Checks: gitDirChecks{dir: dir}, Files: gitDirFiles{dir: dir}}
+	task := &domain.TaskRun{Scope: []string{"café.md", "docs/ñandú \"quoted\".md"}, Git: true, Start: map[string]string{}}
+	changed, err := d.changedByTask(context.Background(), task)
+	if err != nil || strings.Join(changed, "|") != "café.md|docs/ñandú \"quoted\".md" {
+		t.Fatalf("changed %q err=%v, want the two scope files by name", changed, err)
+	}
+}
+
 // truncatedStatus answers git status like the runtime when its output cap
 // cut the answer.
 type truncatedStatus struct{}
