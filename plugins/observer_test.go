@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -68,7 +69,7 @@ func (o *recordingObserver) recorded() []recordedConnection {
 // The observer hears each connection, its loss and a failed launch by
 // plugin ID, and receives the stderr of the servers the manager launches.
 func TestManagerReportsConnectionsAndStderrToItsObserver(t *testing.T) {
-	missing, err := NewRegistration(Manifest{ID: "missing", Command: "/nonexistent/axlr-plugin", AllowTools: []domain.PluginToolName{"echo"}}, nil)
+	missing, err := NewRegistration(Manifest{ID: "missing", Command: filepath.Join(t.TempDir(), "missing-plugin"), AllowTools: []domain.PluginToolName{"echo"}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
