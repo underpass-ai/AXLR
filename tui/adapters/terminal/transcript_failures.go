@@ -14,3 +14,11 @@ func (t *Transcript) AppendFailures(failures []string) {
 	t.renderRows()
 	t.ApplyTheme(t.theme)
 }
+
+// AppendCancelled marks the request the person stopped with Esc, so the
+// conversation does not end as if it were still waiting for the answer.
+func (t *Transcript) AppendCancelled() {
+	t.appendRow(transcriptRow{Label: t.theme.Icon("attention") + " ", LabelTone: toneWarning, Text: t.theme.T("transcript.cancelled"), Kind: transcriptRowPlain, Indent: true})
+	t.renderRows()
+	t.ApplyTheme(t.theme)
+}

@@ -43,6 +43,10 @@ func TestToolRowMergesCallDecisionAndResult(t *testing.T) {
 		{"denied", toolRowState(domain.DecisionDeny, "", nil), []string{"✗ read", "denied"}, []string{"✓"}},
 		{"malformed arguments", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "invalid tool invocation rejected: the call's arguments were not a valid JSON object", IsError: true}), []string{"✗ read", "invalid arguments, the model retries"}, []string{"denied"}},
 		{"unknown tool", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: `unknown tool "read" rejected`, IsError: true}), []string{"✗ read", "unknown tool, refused"}, []string{"denied"}},
+		// On 10 October 2026 all 93 calls of a batch past the turn's budget
+		// read "denied", as if the person had refused each of them.
+		{"over the call budget", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "not run: the turn reached its 32 tool-call limit; send a message to continue", IsError: true}), []string{"✗ read", "over budget"}, []string{"denied"}},
+		{"over the call budget, reworded", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "not run: this call is past the 31 tool-call budget left in this turn; send it again in the next batch", IsError: true}), []string{"✗ read", "over budget"}, []string{"denied"}},
 		{"failed result", toolRowState(domain.DecisionAutoApprove, `{"status":"failed","duration_ms":4}`, nil), []string{"✗ read", "4\u00a0ms"}, nil},
 		{"error outcome", toolRowState(domain.DecisionAutoApprove, `boom`, &domain.ToolOutcome{IsError: true}), []string{"✗ read"}, nil},
 		{"awaiting approval", toolRowState("", "", nil), []string{"◌ read", "waiting for approval"}, nil},

@@ -43,10 +43,12 @@ func (m AppModel) hintRow() string {
 		// Ctrl+R is refused while an operation runs.
 		hints = append(hints, footerHint{"continue", "ctrl+r", m.Theme.T("footer.continue")})
 	}
-	if count := len(m.Changes.records); count > 0 {
-		label := m.Theme.Tf("footer.changes", count)
+	if count := len(m.Changes.files); count > 0 {
+		// Files, as /changes lists them: on 10 October 2026 the hint read
+		// "4 changes" for four edits to two files.
+		label := m.Theme.Tf("changes.files", count)
 		if count == 1 {
-			label = m.Theme.T("changes.oneChange")
+			label = m.Theme.T("changes.oneFile")
 		}
 		hints = append(hints, footerHint{"changes", "ctrl+d", label})
 	}
@@ -55,13 +57,20 @@ func (m AppModel) hintRow() string {
 		// The approval card lists the only keys that work until it is decided.
 		hints = nil
 	}
-	right := m.footerStatus()
+	// On 10 October 2026, at 80 columns, the row kept "enter send" and cut
+	// the session cost ("… $0.0057 turn · $…"). The state and the session
+	// cost come first: hints take only the room left, and the status drops
+	// its token and cache details, then the turn's cost, before it is cut.
+	right := m.footerStatus(statusFull)
+	for detail := statusFull + 1; detail <= statusLeast && ansi.StringWidth(right)+3 > width; detail++ {
+		right = m.footerStatus(detail)
+	}
 	room := width - 2 - ansi.StringWidth(right) - 2
 	var left []string
 	used := 0
 	for _, h := range hints {
 		plain := h.key + " " + h.label
-		if used+ansi.StringWidth(plain)+2 > room && len(left) > 0 {
+		if used+ansi.StringWidth(plain)+2 > room {
 			break
 		}
 		left = append(left, m.zones.Mark(m.prefix+h.zone, m.footerKey(h.key)+m.Theme.Muted(" "+h.label)))
@@ -82,9 +91,17 @@ func (m AppModel) footerKey(key string) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(m.Theme.palette().Text)).Render(key)
 }
 
+// Footer status detail levels, from everything to the state and the
+// session's cost.
+const (
+	statusFull = iota
+	statusNoTokens
+	statusLeast
+)
+
 // footerStatus is the right side: activity first, then the session state and
-// tokens used.
-func (m AppModel) footerStatus() string {
+// tokens used. A higher detail level leaves out what matters least.
+func (m AppModel) footerStatus(detail int) string {
 	status := m.Status
 	status.Waiting, status.Executing, status.ToolName = m.providerWaiting, m.toolExecuting, m.toolName
 	status.PreparingTool, status.PreparingBytes = m.toolCallName, m.toolCallBytes
@@ -128,13 +145,18 @@ func (m AppModel) footerStatus() string {
 	if status.Autonomous {
 		parts = append(parts, m.Theme.T("status.autonomous"))
 	}
-	if m.tokens > 0 {
+	if m.tokens > 0 && detail < statusNoTokens {
 		parts = append(parts, m.Theme.Tf("footer.tokens", formatTokens(m.tokens)))
 		if m.cached > 0 {
 			parts = append(parts, m.Theme.Tf("footer.cache", m.cached))
 		}
 	}
-	parts = append(parts, m.costParts()...)
+	costs := m.costParts()
+	if detail >= statusLeast && len(costs) > 1 {
+		// The turn's cost goes; the session's stays.
+		costs = costs[1:]
+	}
+	parts = append(parts, costs...)
 	text := strings.Join(parts, " · ")
 	if m.Theme.Monochrome {
 		return text

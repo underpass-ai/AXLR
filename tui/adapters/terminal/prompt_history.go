@@ -6,7 +6,7 @@ import root "github.com/underpass-ai/AXLR/domain"
 func (m *AppModel) resetPromptHistory() {
 	m.promptHistory = nil
 	for _, msg := range m.Header.State.Messages {
-		if msg.Role == root.RoleUser {
+		if msg.Role == root.RoleUser && !consoleMemoryReminder(msg.Content) {
 			m.promptHistory = append(m.promptHistory, string(msg.Content))
 		}
 	}

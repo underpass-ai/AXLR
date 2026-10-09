@@ -26,7 +26,7 @@ func TestSlashSuggestionsListMatchingCommands(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	for draft, want := range map[string]string{
-		"/":          "/model,/theme,/mcp,/plugin,/changes,/approvals",
+		"/":          "/model,/theme,/mcp,/plugin,/changes,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/stop-ceremony,/copy,/usage,/exit",
 		"/m":         "/model,/mcp",
 		"/autonomy ": "/autonomy on,/autonomy off",
 		"/autonomy":  "",
@@ -109,5 +109,50 @@ func TestUnknownSlashWordIsNotSentToTheModel(t *testing.T) {
 	}
 	if unknownSlashWord("/home/u/file is broken") || unknownSlashWord("/tmp/x") {
 		t.Fatal("a path or sentence was treated as a command")
+	}
+}
+
+// On 10 October 2026 typing "/" listed six of 24 commands and nothing said
+// more existed; ↓ stopped at the sixth.
+func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m = typeDraft(m, "/")
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, m.Theme.Tf("slash.more", len(slashCommands)-slashSuggestionLimit)) || strings.Contains(view, "/exit") {
+		t.Fatalf("the menu does not say more commands exist:\n%s", view)
+	}
+	for range len(slashCommands) - 1 {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	view = ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "> /exit") || strings.Contains(view, "  /model ") {
+		t.Fatalf("the menu did not scroll to the last command:\n%s", view)
+	}
+	for range 3 {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
+	}
+	view = ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "> /stop-ceremony") || !strings.Contains(view, "/exit") {
+		t.Fatalf("moving up inside the window scrolled it:\n%s", view)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyTab})
+	if got := m.Composer.Input.Value(); got != "/stop-ceremony" {
+		t.Fatalf("Tab completed to %q; want /stop-ceremony", got)
+	}
+}
+
+func TestHelpListsEveryCommand(t *testing.T) {
+	for _, locale := range []Locale{English, Spanish} {
+		theme := Theme{Locale: locale, Monochrome: true}
+		m := sized()
+		view := ansi.Strip(HelpOverlay{}.View(theme, m.zones, m.prefix, 200, 60))
+		m.zones.Close()
+		for _, c := range slashCommands {
+			name, _, _ := strings.Cut(c.name, " ")
+			if !strings.Contains(view, name) {
+				t.Fatalf("%s help omits %s:\n%s", locale, name, view)
+			}
+		}
 	}
 }

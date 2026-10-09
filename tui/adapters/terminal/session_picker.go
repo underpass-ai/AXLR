@@ -200,6 +200,10 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		if p.AllWorkspaces || p.ArchivedView {
 			meta = append(meta, shortenHome(singleLine(string(s.Workspace))))
 		}
+		if i == p.Selected {
+			// What axlr-tui --session takes to resume it from a shell.
+			meta = append(meta, theme.Tf("sessions.id", s.ID))
+		}
 		lines = append(lines, theme.Muted(ansi.Truncate("  "+strings.Join(meta, " · "), innerWidth, "…")))
 	}
 	if len(visible) == 0 {

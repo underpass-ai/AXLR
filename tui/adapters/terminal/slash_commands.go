@@ -43,6 +43,8 @@ var slashCommands = []slashCommand{
 // slashAliases run the same command under another name.
 var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/trabajos": "/jobs"}
 
+// slashSuggestionLimit is how many suggestions the menu shows at once; the
+// selection scrolls the rest into view.
 const slashSuggestionLimit = 6
 
 var slashWord = regexp.MustCompile(`^/[a-z-]+$`)
@@ -65,7 +67,17 @@ func slashSuggestions(draft string) []slashCommand {
 			out = append(out, c)
 		}
 	}
-	return out[:min(len(out), slashSuggestionLimit)]
+	return out
+}
+
+// slashWindow is the first suggestion the menu shows: the previous one
+// while the selection stays inside it, otherwise just enough to reach it.
+// On 10 October 2026 the menu listed six of 24 commands and ↓ stopped at
+// the sixth; the rest were found only by knowing their prefix.
+func slashWindow(top, selected, count int) int {
+	top = min(top, selected)
+	top = max(top, selected-slashSuggestionLimit+1)
+	return max(0, min(top, count-slashSuggestionLimit))
 }
 
 // isSlashCommand reports whether a draft names a local command.
@@ -92,15 +104,19 @@ func unknownSlashWord(draft string) bool {
 }
 
 // slashMenu draws the suggestions to sit on the transcript's last rows,
-// directly above the composer.
+// directly above the composer: the window around the selection, then how
+// many more there are when they do not all fit.
 func (m AppModel) slashMenu(suggestions []slashCommand) []string {
 	width := max(1, m.Layout.Width)
 	nameWidth := 0
 	for _, c := range suggestions {
 		nameWidth = max(nameWidth, len(c.name))
 	}
-	lines := make([]string, 0, len(suggestions))
-	for i, c := range suggestions {
+	top := slashWindow(m.slashTop, m.slashSelected, len(suggestions))
+	shown := suggestions[top:min(len(suggestions), top+slashSuggestionLimit)]
+	lines := make([]string, 0, len(shown)+1)
+	for offset, c := range shown {
+		i := top + offset
 		row := "  " + c.name + strings.Repeat(" ", nameWidth-len(c.name)+3) + m.Theme.T(c.summary)
 		row = ansi.Truncate(row, width, "…")
 		style := lipgloss.NewStyle().Width(width)
@@ -114,6 +130,14 @@ func (m AppModel) slashMenu(suggestions []slashCommand) []string {
 			row = ">" + row[1:]
 		}
 		lines = append(lines, m.zones.Mark(fmt.Sprintf("%sslash-%d", m.prefix, i), style.Render(row)))
+	}
+	if hidden := len(suggestions) - len(shown); hidden > 0 {
+		style := lipgloss.NewStyle().Width(width)
+		if !m.Theme.Monochrome {
+			p := m.Theme.palette()
+			style = style.Background(lipgloss.Color(p.Raised)).Foreground(lipgloss.Color(p.Muted))
+		}
+		lines = append(lines, style.Render(ansi.Truncate("  "+m.Theme.Tf("slash.more", hidden), width, "…")))
 	}
 	return lines
 }
