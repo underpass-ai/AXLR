@@ -22,6 +22,15 @@ type Manager struct {
 	connected     map[domain.PluginID]bool
 	client        *mcpclient.Client
 	closed        bool
+	// share, when set, returns the unix socket where a process shared with
+	// other consoles serves a registration; an error launches the command.
+	share func(context.Context, Registration) (string, error)
+}
+
+// SetShare lets the manager reach a registration through a shared process
+// instead of launching its own; it is set before the first operation.
+func (m *Manager) SetShare(share func(context.Context, Registration) (string, error)) {
+	m.share = share
 }
 
 func NewManager(registrations []Registration) (*Manager, error) {
@@ -101,7 +110,15 @@ func (m *Manager) connect(ctx context.Context, id domain.PluginID) error {
 	// A session the manager never recorded is stale: replace it, do not reuse it.
 	_ = m.client.Disconnect(name)
 	r := m.registrations[id]
-	err := m.client.Connect(ctx, mcpclient.Server{Name: name, Command: r.Manifest.Command, URL: r.Manifest.URL, Args: r.Manifest.Args, Env: r.Env})
+	err := errors.New("not shared")
+	if m.share != nil && r.Manifest.Command != "" {
+		if socket, shareErr := m.share(ctx, r); shareErr == nil {
+			err = m.client.Connect(ctx, mcpclient.Server{Name: name, Socket: socket})
+		}
+	}
+	if err != nil && ctx.Err() == nil {
+		err = m.client.Connect(ctx, mcpclient.Server{Name: name, Command: r.Manifest.Command, URL: r.Manifest.URL, Args: r.Manifest.Args, Env: r.Env})
+	}
 	if ctx.Err() != nil {
 		if err == nil {
 			_ = m.client.Disconnect(name)
