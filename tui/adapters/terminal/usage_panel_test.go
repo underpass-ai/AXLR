@@ -85,8 +85,12 @@ func TestCostInTheFooterAndTheSessionBudget(t *testing.T) {
 	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "Budget: $1.00, $0.50 of it raised for this session · $0.40 left") || strings.Contains(view, "allows another") {
 		t.Fatalf("after the raise:\n%s", view)
 	}
-	// Below 80 % of the raised limit, + changes nothing.
+	// Below 80 % of the raised limit, + changes nothing, even while the
+	// screen still shows the ledger from before the raise.
 	m = update(m, tea.KeyPressMsg{Code: '+', Text: "+"})
+	stale := m
+	stale.cost.ledger.Raised = 0
+	stale = update(stale, tea.KeyPressMsg{Code: '+', Text: "+"})
 	if ledger, _ := store.LoadUsage(context.Background(), s.Export().ID); ledger.Raised != 0.5 {
 		t.Fatalf("raised again below the warning: %+v", ledger)
 	}
@@ -138,9 +142,9 @@ func TestUsagePanelContent(t *testing.T) {
 		"",
 		"Cost: $0.0058",
 		"By provider",
-		"  Relace · 1 requests · $0.0042",
-		"  InferenceNet · 1 requests · $0.0016",
-		"  local/qwen3.8-27b · 1 requests · —",
+		"  Relace · 1 request · $0.0042",
+		"  InferenceNet · 1 request · $0.0016",
+		"  local/qwen3.8-27b · 1 request · —",
 		"",
 		"First byte: average 950ms · max 1.1s",
 		"Whole request: average 17.0s · max 40.0s",

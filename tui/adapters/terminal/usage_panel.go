@@ -118,11 +118,16 @@ func (m AppModel) refreshUsagePanel() AppModel {
 }
 
 // usageKey raises this session's limit on +, while the budget is near or
-// spent, and scrolls otherwise.
+// spent, and scrolls otherwise. The saved ledger decides: a ledger on
+// screen that a running request has not updated yet cannot raise twice.
 func (m AppModel) usageKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 	if k.String() == "+" && m.canRaise() {
 		limit := m.deps.MaxSessionUSD
-		ledger, err := m.deps.Usage.UpdateUsage(m.lifetime.ctx, m.Header.State.ID, func(l *domain.UsageLedger) { l.Raise(limit) })
+		ledger, err := m.deps.Usage.UpdateUsage(m.lifetime.ctx, m.Header.State.ID, func(l *domain.UsageLedger) {
+			if l.Near(limit) {
+				l.Raise(limit)
+			}
+		})
 		if err != nil {
 			m.Status.Error = err.Error()
 			return m, nil
@@ -183,7 +188,11 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme) stri
 		if p.CostRequests > 0 {
 			cost = formatUSD(p.Cost)
 		}
-		lines = append(lines, theme.Tf("usage.provider", singleLine(name), p.Requests, cost))
+		row := theme.Tf("usage.provider", singleLine(name), p.Requests, cost)
+		if p.Requests == 1 {
+			row = theme.Tf("usage.providerOne", singleLine(name), cost)
+		}
+		lines = append(lines, row)
 	}
 	lines = append(lines, "",
 		theme.Tf("usage.firstByte", formatLatency(l.FirstByte.Average(), l.FirstByte.Count), formatLatency(l.FirstByte.Max, l.FirstByte.Count)),
