@@ -540,9 +540,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/repair" && len(m.repairRecords()) > 0 || command == "/improve" && improvementRecords(m.repairRecords()) {
 				// Repairs and improvements the agent requested from this
 				// session, or that wait for the person, are shown before any
-				// mode change.
+				// mode change; n in the panel then selects the mode.
 				m.Composer.Input.Reset()
-				return m.openRepairPanel(), nil
+				m = m.openRepairPanel()
+				m.RepairPanel.mode = slashModes[command]
+				return m, nil
 			}
 			if mode, ok := slashModes[command]; ok {
 				return m.switchMode(mode)

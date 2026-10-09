@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -221,6 +222,41 @@ func TestImprovementsShowTheirKindAndOpenFromImprove(t *testing.T) {
 	}
 	if badge := m.repairBadge(); !strings.HasPrefix(badge, "improvement ") {
 		t.Fatalf("badge %q", badge)
+	}
+}
+
+// /repair and /improve show the records first; n in the panel still starts
+// the mode, however many records exist.
+func TestRepairPanelStartsANewRepairOrImprovementWithN(t *testing.T) {
+	merged := awaitingRecord(domain.RepairCompleted)
+	merged.Improvement, merged.Pending = true, ""
+	elsewhere := awaitingRecord(domain.RepairRunning)
+	elsewhere.Parent, elsewhere.Pending = "1123456789abcdef0123456789abcdef", ""
+	for _, test := range []struct {
+		command string
+		record  domain.RepairRecord
+		mode    domain.WorkMode
+		hint    string
+	}{
+		{"/improve", merged, domain.ModeImprove, "n new improvement"},
+		{"/repair", elsewhere, domain.ModeRepair, "n new repair"},
+	} {
+		m := repairModel(t, &fakeRepairs{records: []domain.RepairRecord{test.record}})
+		store, err := storage.New(t.TempDir())
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.deps.Store = store
+		m.Composer.Input.SetValue(test.command)
+		m = update(m, ControlIntent("send"))
+		if m.overlay != "repairs" || !strings.Contains(m.View().Content, test.hint) {
+			t.Fatalf("%s: overlay %q, hints lack %q:\n%s", test.command, m.overlay, test.hint, m.View().Content)
+		}
+		m = update(m, tea.KeyPressMsg{Code: 'n', Text: "n"})
+		if m.overlay != "" || m.Header.State.Mode != test.mode || m.Status.Error != "" {
+			t.Fatalf("%s then n: overlay %q, mode %q, error %q", test.command, m.overlay, m.Header.State.Mode, m.Status.Error)
+		}
+		store.Close()
 	}
 }
 
