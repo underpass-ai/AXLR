@@ -128,8 +128,11 @@ func (e Engine) Inspect(ctx context.Context, instance string) (application.Cerem
 	}
 	// A live claim of ours survives a crash; its fence is the only way to
 	// finish that step before the lease ends (recovery path
-	// complete_with_original_fence).
-	if resume, err := e.made(ctx, "made_inspect_ceremony_resume", map[string]any{"ceremony_id": instance}); err == nil {
+	// complete_with_original_fence). When MADE cannot say, the view says
+	// so instead of reporting no live claim.
+	if resume, err := e.made(ctx, "made_inspect_ceremony_resume", map[string]any{"ceremony_id": instance}); err != nil {
+		view.LiveErr = fmt.Errorf("live claims of %s unknown: %w", instance, err)
+	} else {
 		claims, _ := resume["claims"].([]any)
 		for _, raw := range claims {
 			claim, _ := raw.(map[string]any)

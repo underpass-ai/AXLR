@@ -85,6 +85,11 @@ type CeremonyView struct {
 	// fence: MADE refuses a second claim while the lease runs, so the
 	// console completes with the original fence instead.
 	Live map[string]string
+	// LiveErr is why Live could not be read: MADE's resume inspection
+	// failed, so whether a claim of the console's own is live is unknown,
+	// and a console step must be neither claimed again nor passed over on
+	// that guess.
+	LiveErr error
 }
 
 // CheckRunnerPort runs one command in the workspace with a time limit and no

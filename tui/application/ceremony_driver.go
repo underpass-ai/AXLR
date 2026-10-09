@@ -710,6 +710,11 @@ func (d *CeremonyDriver) reconcile(ctx context.Context, s domain.Session, run do
 		step = "review" // the draft was handed in; its review never ran
 	}
 	if ok && repairConsoleSteps[step] && run.Repair != nil {
+		if view.LiveErr != nil {
+			// Whether our own claim is live is unknown: claiming the step
+			// again or passing over it would both be guesses.
+			return StepResult{}, errors.Join(cause, view.LiveErr)
+		}
 		if fence := view.Live[step]; fence != "" {
 			// Our own claim is still live: finish the console step with it.
 			run.Step, run.Iteration = step, 1

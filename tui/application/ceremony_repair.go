@@ -557,6 +557,9 @@ func (d *CeremonyDriver) Resume(ctx context.Context, s domain.Session) (StepResu
 	if !ok || !repairConsoleSteps[step] {
 		return StepResult{}, false, nil // a model step: the ordinary path reconciles it
 	}
+	if view.LiveErr != nil {
+		return StepResult{}, false, fmt.Errorf("inspect %s: %w", run.Instance, view.LiveErr)
+	}
 	fence := view.Live[step]
 	if fence == "" && !slices.Contains(view.Claimable, step) {
 		return StepResult{}, false, nil
