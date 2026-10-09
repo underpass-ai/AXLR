@@ -81,16 +81,29 @@ func TestFooterWrapsALongErrorInsteadOfCuttingIt(t *testing.T) {
 	}
 }
 
-func TestFooterCountsOneChangeInTheSingular(t *testing.T) {
-	for locale, plural := range map[Locale]string{English: "1 changes", Spanish: "1 cambios"} {
+func TestFooterCountsOneChangedFileInTheSingular(t *testing.T) {
+	for locale, plural := range map[Locale]string{English: "1 files", Spanish: "1 ficheros"} {
 		m := sized()
 		m.Theme.Locale = locale
 		m.Changes.records = make([]changeRecord, 1)
+		m.Changes.files = make([]changeFile, 1)
 		footer := ansi.Strip(m.footerView())
-		if strings.Contains(footer, plural) || !strings.Contains(footer, "ctrl+d "+Translate(locale, "changes.oneChange")) {
+		if strings.Contains(footer, plural) || !strings.Contains(footer, "ctrl+d "+Translate(locale, "changes.oneFile")) {
 			t.Fatalf("%s footer: %q", locale, footer)
 		}
 		m.zones.Close()
+	}
+}
+
+// On 10 October 2026 the hint read "ctrl+d 4 changes" for four edits to two
+// files, while /changes listed the two files.
+func TestFooterCountsChangedFilesNotEdits(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Changes.records = make([]changeRecord, 4)
+	m.Changes.files = make([]changeFile, 2)
+	if footer := ansi.Strip(m.footerView()); !strings.Contains(footer, "ctrl+d "+m.Theme.Tf("changes.files", 2)) {
+		t.Fatalf("footer: %q", footer)
 	}
 }
 

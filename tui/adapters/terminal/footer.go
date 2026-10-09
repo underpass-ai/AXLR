@@ -43,10 +43,12 @@ func (m AppModel) hintRow() string {
 		// Ctrl+R is refused while an operation runs.
 		hints = append(hints, footerHint{"continue", "ctrl+r", m.Theme.T("footer.continue")})
 	}
-	if count := len(m.Changes.records); count > 0 {
-		label := m.Theme.Tf("footer.changes", count)
+	if count := len(m.Changes.files); count > 0 {
+		// Files, as /changes lists them: on 10 October 2026 the hint read
+		// "4 changes" for four edits to two files.
+		label := m.Theme.Tf("changes.files", count)
 		if count == 1 {
-			label = m.Theme.T("changes.oneChange")
+			label = m.Theme.T("changes.oneFile")
 		}
 		hints = append(hints, footerHint{"changes", "ctrl+d", label})
 	}
