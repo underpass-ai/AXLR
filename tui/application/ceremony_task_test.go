@@ -187,6 +187,61 @@ func TestTaskEndsAtDoneWithoutAnotherModelRequest(t *testing.T) {
 	}
 }
 
+// taskAtGreenHandBack is a task whose green step passed its check, with the
+// model's axlr_step_done waiting as the turn's only call. The hand-back
+// proposes no command, so the agent loop approves it without the person.
+func taskAtGreenHandBack(t *testing.T) (*CeremonyDriver, domain.Session) {
+	t.Helper()
+	d, files, checks, _, s, _ := taskSetup(t, true)
+	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
+	checks.status = append(checks.status, "?? lines_test.go")
+	checks.exits = []int{1}
+	if r := step(t, d, &s, `{"test_files":["lines_test.go"],"expected":"undefined: LineCount"}`); r["next_step"] != "green" {
+		t.Fatalf("red: %v", r)
+	}
+	files.files["lines.go"] = []byte("package textstat\nfunc LineCount(s string) int { return 0 }\n")
+	checks.status = append(checks.status, "?? lines.go")
+	checks.exits = []int{0}
+	if err := s.BeginTurn("go", append(turnTools(), HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	handBack := root.ToolCall{ID: "done", Name: HostStepDoneName, Arguments: mustObject(t, `{"summary":"Added LineCount","summary_en":"LineCount counts lines."}`)}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{handBack}}}); err != nil {
+		t.Fatal(err)
+	}
+	return d, s
+}
+
+// Workers run without the person: a green hand-back proposes no command, so
+// the agent loop approves it itself. The turn still ends at DONE without
+// asking the model again in normal mode with the full tool surface.
+func TestATaskApprovedAutomaticallyEndsAtDoneWithoutAnotherModelRequest(t *testing.T) {
+	d, s := taskAtGreenHandBack(t)
+	modelRequests := 0
+	models := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		modelRequests++
+		return assistant("summary nobody reads"), nil
+	})
+	store := &memoryStore{}
+	u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: store, Ceremonies: d, Models: models}}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if _, live := s.Ceremony(); live || s.Mode() != domain.ModeNormal {
+		t.Fatal("task ceremony still live after DONE")
+	}
+	if modelRequests != 0 {
+		t.Fatalf("model requests after DONE = %d, want 0", modelRequests)
+	}
+	messages := s.Messages()
+	if last := messages[len(messages)-1]; s.Status() != domain.StatusComplete || last.Role != root.RoleAssistant || !strings.Contains(string(last.Content), "outcome is in the plan") {
+		t.Fatalf("turn not closed by the console: %s %+v", s.Status(), last)
+	}
+	if saved := store.states[len(store.states)-1]; saved.Status != domain.StatusComplete {
+		t.Fatalf("closed turn not saved: %s", saved.Status)
+	}
+}
+
 func TestATaskThatCannotBeTestedEndsBlocked(t *testing.T) {
 	d, _, _, plans, s, _ := taskSetup(t, true)
 	if r := step(t, d, &s, `{"untestable":true,"observed":"the behaviour needs a network"}`); r["ceremony"] != "BLOCKED" {
