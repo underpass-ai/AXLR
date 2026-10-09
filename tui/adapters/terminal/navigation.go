@@ -589,6 +589,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}, true
 	case ModelCloseIntent:
 		if m.cancel != nil {
+			// The person closed the picker: the loading it stops is no
+			// failure to report.
+			m.closedCancelled = m.operationID
 			m.cancel()
 		}
 		m.overlay = ""

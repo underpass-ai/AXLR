@@ -89,6 +89,10 @@ type AppModel struct {
 	cancel         context.CancelFunc
 	zones          *zone.Manager
 	prefix         string
+
+	// closedCancelled marks the operation stopped because the person closed
+	// its panel (the model picker while it loads); likewise not an error.
+	closedCancelled uint64
 }
 
 func assistantInMessages(messages []root.Message, start int) bool {
@@ -441,8 +445,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.draft = ""
 			m.draftOperationID = 0
 		}
-		steered := m.steerCancelled == v.ID && errors.Is(v.Err, context.Canceled)
-		m.steerCancelled = 0
+		steered := (m.steerCancelled == v.ID || m.closedCancelled == v.ID) && errors.Is(v.Err, context.Canceled)
+		m.steerCancelled, m.closedCancelled = 0, 0
 		if v.Err != nil && !steered {
 			m.Status.Error = v.Err.Error()
 			if v.PluginApproval != nil {
