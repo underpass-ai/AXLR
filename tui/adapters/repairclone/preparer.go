@@ -4,6 +4,7 @@
 package repairclone
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,17 +33,21 @@ type Preparer struct {
 
 var _ application.RepairClonePort = Preparer{}
 
+// run returns the command's stdout, which is its answer: gh and git print
+// notices on stderr while succeeding, and those must not reach the brief or
+// the base branch. A failure quotes both streams.
 func (p Preparer) run(ctx context.Context, dir, program string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir, cmd.Env = dir, p.Env
 	if path, err := LookPath(p.Env, program); err == nil {
 		cmd.Path = path
 	}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%s %s: %w: %s", program, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%s %s: %w: %s", program, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()+"\n"+stdout.String()))
 	}
-	return string(out), nil
+	return stdout.String(), nil
 }
 
 // Issue reads a GitHub issue as a brief: title, body and URL.
