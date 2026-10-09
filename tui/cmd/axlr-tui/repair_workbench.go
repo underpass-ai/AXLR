@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/underpass-ai/AXLR/adapters/local"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
@@ -45,6 +46,8 @@ type repairWorkbenches struct {
 	calibration application.TokenCalibrationPort
 	// turnToolCalls is settings' turn budget, as in the console's sessions.
 	turnToolCalls int
+	// sandbox confines the workbench's commands as the console's.
+	sandbox *local.Sandbox
 }
 
 // planWorkbenches is application.PlanWorkbenchPort: a workbench rooted at
@@ -66,7 +69,7 @@ func (w planWorkbenches) Open(ctx context.Context, workspace string) (applicatio
 var _ application.RepairWorkbenchPort = repairWorkbenches{}
 
 func (w repairWorkbenches) Open(_ context.Context, clone string) (application.RepairWorkbench, error) {
-	executor, err := runtime.New(runtime.Config{Root: clone, Env: w.env, Plugins: w.manager})
+	executor, err := runtime.New(runtime.Config{Root: clone, Env: w.env, Plugins: w.manager, Sandbox: w.sandbox})
 	if err != nil {
 		return nil, err
 	}
