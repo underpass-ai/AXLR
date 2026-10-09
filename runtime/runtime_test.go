@@ -3,6 +3,7 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -95,6 +96,24 @@ func TestWriteCreateDoesNotClobberAndReplaceChecksDigest(t *testing.T) {
 	b, err := os.ReadFile(filepath.Join(dir, "a.txt"))
 	if err != nil || string(b) != "one" {
 		t.Fatalf("%q %v", b, err)
+	}
+}
+
+func TestWriteRejectsPathWithTrailingSeparator(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "notes"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	e, err := newTestExecutor(t, Config{Root: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "w", Tool: "write", Arguments: json.RawMessage(`{"path":"notes/","content":"hello","mode":"create"}`)})
+	if r.Status != "rejected" {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "notes", "notes")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf(`write "notes/" created notes/notes: %v`, err)
 	}
 }
 

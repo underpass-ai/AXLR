@@ -1,10 +1,18 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"path/filepath"
+	"strings"
+)
 
 type WorkingDirectory string
 
 func NewWorkingDirectory(s string) (WorkingDirectory, error) {
+	// A directory may be named with a trailing separator, unlike a RelativePath.
+	if trimmed := strings.TrimRight(s, "/"+string(filepath.Separator)); trimmed != "" {
+		s = trimmed
+	}
 	if s == "" || s == "." {
 		return ".", nil
 	}
