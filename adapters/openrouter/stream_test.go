@@ -103,16 +103,14 @@ func TestStreamIgnoresDeltasAfterFinish(t *testing.T) {
 
 func TestStreamRejectsIncompleteMalformedAndOversized(t *testing.T) {
 	for name, wire := range map[string]string{
-		"missing finish":       streamEvents(textChunk, "[DONE]"),
-		"missing done":         streamEvents(textChunk, stopChunk),
-		"malformed":            streamEvents("{bad", "[DONE]"),
-		"oversized":            streamEvents(strings.Repeat("x", 1024*1024)),
-		"aggregate":            strings.Repeat(streamEvents(`{"choices":[],"padding":"`+strings.Repeat("x", 512*1024)+`"}`), 17),
-		"incomplete arguments": streamEvents(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"a","type":"function","function":{"name":"read","arguments":"{"}}]},"finish_reason":"tool_calls"}]}`, "[DONE]"),
-		"missing ID":           streamEvents(`{"choices":[{"delta":{"tool_calls":[{"index":0,"type":"function","function":{"name":"read","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`, "[DONE]"),
-		"missing name":         streamEvents(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"a","type":"function","function":{"arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`, "[DONE]"),
-		"nonobject arguments":  streamEvents(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"a","type":"function","function":{"name":"read","arguments":"[]"}}]},"finish_reason":"tool_calls"}]}`, "[DONE]"),
-		"invalid UTF8":         streamEvents(`{"choices":[{"delta":{"content":"` + string([]byte{0xff}) + `"}}]}`),
+		"missing finish": streamEvents(textChunk, "[DONE]"),
+		"missing done":   streamEvents(textChunk, stopChunk),
+		"malformed":      streamEvents("{bad", "[DONE]"),
+		"oversized":      streamEvents(strings.Repeat("x", 1024*1024)),
+		"aggregate":      strings.Repeat(streamEvents(`{"choices":[],"padding":"`+strings.Repeat("x", 512*1024)+`"}`), 17),
+		"missing ID":     streamEvents(`{"choices":[{"delta":{"tool_calls":[{"index":0,"type":"function","function":{"name":"read","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`, "[DONE]"),
+		"missing name":   streamEvents(`{"choices":[{"delta":{"tool_calls":[{"index":0,"id":"a","type":"function","function":{"arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`, "[DONE]"),
+		"invalid UTF8":   streamEvents(`{"choices":[{"delta":{"content":"` + string([]byte{0xff}) + `"}}]}`),
 	} {
 		t.Run(name, func(t *testing.T) {
 			body := &trackedStreamBody{Reader: strings.NewReader(wire)}
@@ -124,6 +122,46 @@ func TestStreamRejectsIncompleteMalformedAndOversized(t *testing.T) {
 				t.Fatalf("requests=%d closed=%v", *calls, body.closed)
 			}
 		})
+	}
+}
+
+// A tool call cut by the output limit completes the stream: the call keeps
+// a valid object that names the cut, for the turn to answer with a tool
+// error, instead of the whole operation failing on invalid JSON.
+func TestStreamKeepsACutToolCallForAToolError(t *testing.T) {
+	wire := streamEvents(
+		`{"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"local_write","arguments":"{\"path\":\"a.go\","}}]}}]}`,
+		`{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"content\":\"package"}}]},"finish_reason":"length"}]}`,
+		"[DONE]")
+	body := &trackedStreamBody{Reader: strings.NewReader(wire)}
+	c, _ := streamClient(t, body, 200)
+	got, err := c.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"axlr_malformed_arguments":{"error":"unexpected end of JSON input","raw_prefix":"{\"path\":\"a.go\",\"content\":\"package","cut_by_output_limit":true}}`
+	if got.FinishReason != "length" || len(got.Message.ToolCalls) != 1 || got.Message.ToolCalls[0].Name != "local_write" || string(got.Message.ToolCalls[0].Arguments.Bytes()) != want {
+		t.Fatalf("result = %+v", got)
+	}
+}
+
+// The note on an answer cut by the output limit is streamed like its text,
+// so the live view shows what the session keeps.
+func TestStreamMarksAnAnswerCutByTheOutputLimit(t *testing.T) {
+	wire := streamEvents(`{"choices":[{"index":0,"delta":{"role":"assistant","content":"The three steps are: 1. Back up the"},"finish_reason":"length"}]}`, "[DONE]")
+	body := &trackedStreamBody{Reader: strings.NewReader(wire)}
+	c, _ := streamClient(t, body, 200)
+	var streamed strings.Builder
+	got, err := c.Stream(context.Background(), simpleCompletionRequest(), func(text domain.Text) error {
+		streamed.WriteString(string(text))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "The three steps are: 1. Back up the\n\n" + outputLimitNote
+	if string(got.Message.Content) != want || streamed.String() != want || got.FinishReason != "length" {
+		t.Fatalf("content = %q, streamed = %q, finish = %q", got.Message.Content, streamed.String(), got.FinishReason)
 	}
 }
 

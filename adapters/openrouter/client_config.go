@@ -18,7 +18,7 @@ type ClientConfig struct {
 	// StreamInactivityTimeout limits the wait for headers or the next SSE data event.
 	// Zero uses the one-minute default.
 	StreamInactivityTimeout time.Duration
-	// StreamMaxDuration limits total stream time, even while data keeps arriving.
-	// Zero uses the five-minute default.
+	// StreamMaxDuration limits total stream time, even while data keeps arriving,
+	// and the whole request of Complete. Zero uses the five-minute default.
 	StreamMaxDuration time.Duration
 }

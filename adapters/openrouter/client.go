@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/underpass-ai/AXLR/domain"
@@ -78,7 +79,22 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not encode OpenRouter request")
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.endpoint, bytes.NewReader(body))
+	// A whole reply has no events to time, so the stream's maximum duration
+	// bounds the request and its body: a server that accepts the request and
+	// never answers does not hold the turn until the person cancels.
+	requestCtx, cancel := context.WithTimeoutCause(ctx, c.streamMaxDuration, &StreamTimeoutError{maximumDuration: true, provider: c.provider})
+	defer cancel()
+	failure := func(err error) error {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		var timeout *StreamTimeoutError
+		if errors.As(context.Cause(requestCtx), &timeout) {
+			return timeout
+		}
+		return err
+	}
+	httpReq, err := http.NewRequestWithContext(requestCtx, http.MethodPost, c.endpoint, bytes.NewReader(body))
 	if err != nil {
 		return domain.CompletionResult{}, errors.New("could not create OpenRouter request")
 	}
@@ -86,18 +102,18 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpResp, err := c.http.Do(httpReq)
 	if err != nil {
-		if ctx.Err() != nil {
-			return domain.CompletionResult{}, ctx.Err()
-		}
-		return domain.CompletionResult{}, &TransportError{Cause: err, Provider: c.provider}
+		return domain.CompletionResult{}, failure(&TransportError{Cause: err, Provider: c.provider})
 	}
-	defer httpResp.Body.Close()
+	var closeOnce sync.Once
+	closeBody := func() { closeOnce.Do(func() { _ = httpResp.Body.Close() }) }
+	stop := context.AfterFunc(requestCtx, closeBody)
+	defer func() { stop(); closeBody() }()
 	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
 		return domain.CompletionResult{}, c.providerError(httpResp.StatusCode)
 	}
 	data, err := io.ReadAll(io.LimitReader(httpResp.Body, maxResponseBytes+1))
 	if err != nil {
-		return domain.CompletionResult{}, &TransportError{Cause: err, Provider: c.provider}
+		return domain.CompletionResult{}, failure(&TransportError{Cause: err, Provider: c.provider})
 	}
 	if len(data) > maxResponseBytes {
 		return domain.CompletionResult{}, errors.New("OpenRouter response exceeds 8 MiB")
@@ -105,6 +121,9 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	var reply responseDTO
 	if err := json.Unmarshal(data, &reply); err != nil {
 		return domain.CompletionResult{}, errors.New("malformed OpenRouter response")
+	}
+	if status, ok := errorBodyStatus(reply.Error); ok {
+		return domain.CompletionResult{}, c.providerError(status)
 	}
 	return mapResponse(reply)
 }

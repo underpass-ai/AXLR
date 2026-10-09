@@ -183,3 +183,41 @@ func TestClientAllowsHistoricalToolResultWithoutCurrentDefinition(t *testing.T) 
 		t.Fatalf("historical or rejected call blocked: %v; HTTP calls = %d", err, calls)
 	}
 }
+
+// OpenRouter answers an error found after it accepted the request with HTTP
+// 200 and the error in the body: the code classifies it as a status would,
+// without leaking the message, and a local server's error names the server.
+func TestClientClassifiesErrorBodyWithStatus200(t *testing.T) {
+	for _, tc := range []struct {
+		endpoint, body, want string
+		status               int
+		category             ProviderErrorCategory
+	}{
+		{"", `{"error":{"code":429,"message":"raw-sensitive-body"}}`, "OpenRouter rate_limited (HTTP 429)", 429, CategoryRateLimited},
+		{"", `{"error":{"message":"raw-sensitive-body"}}`, "OpenRouter provider_failure (HTTP 502)", 502, CategoryProviderFailure},
+		{"http://127.0.0.1:8080/v1/chat/completions", `{"error":{"code":400,"message":"raw-sensitive-body"},"choices":[]}`, "model endpoint 127.0.0.1:8080 invalid_request (HTTP 400)", 400, CategoryInvalidRequest},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			client, err := New(ClientConfig{APIKey: "test-secret", Endpoint: tc.endpoint, HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return testResponse(200, tc.body), nil
+			})}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = client.Complete(context.Background(), simpleCompletionRequest())
+			var providerErr *ProviderError
+			if !errors.As(err, &providerErr) || providerErr.StatusCode != tc.status || providerErr.Category != tc.category || err.Error() != tc.want {
+				t.Fatalf("error = %T %v", err, err)
+			}
+		})
+	}
+	client, err := New(ClientConfig{APIKey: "test-secret", HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return testResponse(200, `{"error":null,"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`), nil
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := client.Complete(context.Background(), simpleCompletionRequest()); err != nil || got.Message.Content != "ok" {
+		t.Fatalf("null error refused: %+v %v", got, err)
+	}
+}

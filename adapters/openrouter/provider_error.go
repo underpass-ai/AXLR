@@ -1,6 +1,9 @@
 package openrouter
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 type ProviderError struct {
 	StatusCode int
@@ -30,4 +33,21 @@ func classifyProviderError(status int) *ProviderError {
 		category = CategoryRateLimited
 	}
 	return &ProviderError{StatusCode: status, Category: category}
+}
+
+// errorBodyStatus reads the error object a provider sends in a body it
+// answered with HTTP 200, in a stream event or a whole reply: its code is
+// the status to classify, 502 when it has none. The message is not kept.
+func errorBodyStatus(raw json.RawMessage) (int, bool) {
+	if len(raw) == 0 || string(raw) == "null" {
+		return 0, false
+	}
+	var provider struct {
+		Code int `json:"code"`
+	}
+	_ = json.Unmarshal(raw, &provider)
+	if provider.Code == 0 {
+		return 502, true
+	}
+	return provider.Code, true
 }

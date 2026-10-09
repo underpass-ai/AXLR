@@ -91,16 +91,34 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		}
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return domain.CompletionResult{}, errors.New("OpenRouter stream ended without [DONE]")
+				return domain.CompletionResult{}, errors.New(c.provider + " stream ended without [DONE]")
 			}
-			return domain.CompletionResult{}, &TransportError{Cause: err}
+			return domain.CompletionResult{}, &TransportError{Cause: err, Provider: c.provider}
 		}
 		inactivityTimer.Stop()
 		if bytes.Equal(data, []byte("[DONE]")) {
-			return accumulator.Result()
+			result, err := accumulator.Result()
+			if err != nil {
+				return domain.CompletionResult{}, err
+			}
+			// What the mapper added after the streamed text, the note on an
+			// answer cut by the output limit, is streamed like the text.
+			if streamed := len(accumulator.content); len(result.Message.Content) > streamed {
+				if err := ctx.Err(); err != nil {
+					return domain.CompletionResult{}, err
+				}
+				if err := onText(result.Message.Content[streamed:]); err != nil {
+					return domain.CompletionResult{}, err
+				}
+			}
+			return result, nil
 		}
 		deltas, err := accumulator.Add(data)
 		if err != nil {
+			var provider *ProviderError
+			if errors.As(err, &provider) && c.provider != providerName {
+				provider.Provider = c.provider
+			}
 			return domain.CompletionResult{}, err
 		}
 		for _, text := range deltas {
