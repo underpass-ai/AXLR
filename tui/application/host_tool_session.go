@@ -16,7 +16,11 @@ type sessionContext struct {
 	Workspace   domain.Workspace `json:"workspace"`
 	PromptCount int              `json:"user_prompt_count"`
 	Title       root.Text        `json:"title"`
-	About       string           `json:"about"`
+	// About is the about the console uses for the session's memory: the
+	// selected one, or by default the workspace's project about, which
+	// AboutIsDefault marks.
+	About          string `json:"about"`
+	AboutIsDefault bool   `json:"about_is_default,omitempty"`
 	// TitleDeferred says why a proposed title was not stored while the about
 	// sent with it was.
 	TitleDeferred string `json:"title_deferred,omitempty"`
@@ -39,7 +43,11 @@ func userPromptCount(s domain.Session) int {
 
 func sessionContextValue(s domain.Session, label domain.SessionLabel) sessionContext {
 	state := s.Export()
-	return sessionContext{ID: state.ID, Workspace: state.Workspace, PromptCount: userPromptCount(s), Title: label.Title, About: label.About}
+	value := sessionContext{ID: state.ID, Workspace: state.Workspace, PromptCount: userPromptCount(s), Title: label.Title, About: label.About}
+	if value.About == "" {
+		value.About, value.AboutIsDefault = defaultAbout(state), true
+	}
+	return value
 }
 
 func (u HostToolUseCase) sessionContext(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error) {
@@ -107,7 +115,13 @@ func sessionContextGuidance(ctx context.Context, s domain.Session, store Session
 	}
 	state := s.Export()
 	label := labels[state.ID]
-	value := sessionGuidance{ID: state.ID, Workspace: state.Workspace, Title: label.Title, About: label.About}
+	// The about is the console's: the model is given it, never left to
+	// derive one. It changes only when an about is selected.
+	about := label.About
+	if about == "" {
+		about = defaultAbout(state)
+	}
+	value := sessionGuidance{ID: state.ID, Workspace: state.Workspace, Title: label.Title, About: about}
 	data, err := json.Marshal(value)
 	if err != nil {
 		return "", err
@@ -120,7 +134,7 @@ func sessionContextGuidance(ctx context.Context, s domain.Session, store Session
 			break
 		}
 	}
-	if value.Title == "" || hasKMP && value.About == "" {
+	if value.Title == "" || hasKMP && label.About == "" {
 		text += "Use the built-in axlr:axlr-session skill at session startup; read it with axlr_skill and reuse it while present. Establish the exact memory scope early. After the second user prompt, define the missing title before your final answer. Follow the skill's bounded inter-about search when KMP is connected.\n"
 	}
 	if hasKMP {

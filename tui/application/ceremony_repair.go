@@ -172,7 +172,7 @@ func (d *CeremonyDriver) beginRepair(ctx context.Context, s *domain.Session, run
 			run.Memory = text
 		}
 		repair.WakeRefs = refs
-		if session, err := d.Memory.Wake(ctx, "ws:"+string(s.Export().ID)); err == nil && session != "" {
+		if session, err := d.Memory.Wake(ctx, sessionAbout(s.Export().ID)); err == nil && session != "" {
 			run.Memory += "\nSession recall: " + bounded(session, 1<<10)
 		}
 	}
