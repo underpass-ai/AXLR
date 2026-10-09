@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -96,6 +97,27 @@ func resumeStepAtLimit(ctx context.Context, s *domain.Session, u ContinueTurnUse
 	}
 	*s = next
 	return true, emitSession(s, emit)
+}
+
+// callBudgetGuidance tells the model the turn's budget before it plans. On
+// 10 October 2026 claude-haiku-5.5, told of the budget only when a fifth was
+// left, sent 93 calls in one answer under a budget of 32. The number is the
+// console's setting, fixed for its lifetime, so the system prompt stays the
+// same from one request to the next.
+func callBudgetGuidance(limit int) string {
+	return fmt.Sprintf("Each turn allows at most %d tool calls, counted from the user's message (a ceremony step may allow fewer). Calls of an answer past the budget do not run and the turn pauses until a new budget starts, so plan large jobs within it.\n", limit)
+}
+
+// pausesOverBudget reports a turn whose last answer ran out of budget part
+// way: its last result is an over-budget refusal and no call is left.
+func pausesOverBudget(s domain.Session, turnLimit int) bool {
+	messages := s.Messages()
+	if len(messages) == 0 {
+		return false
+	}
+	last := messages[len(messages)-1]
+	left, _ := s.CallsLeft(turnLimit)
+	return left <= 0 && last.Role == root.RoleTool && strings.HasPrefix(string(last.Content), domain.OverBudgetOutcomePrefix)
 }
 
 // atCallLimit reports the pause CompleteAssistantWithin makes at the limit.

@@ -47,7 +47,7 @@ func (d *CeremonyDriver) BeginTask(ctx context.Context, s *domain.Session, plan 
 		return err
 	}
 	state := s.Export()
-	about := "ws:" + string(plan.Session)
+	about := sessionAbout(plan.Session)
 	if d.Labels != nil {
 		if labels, err := d.Labels.Load(ctx); err == nil && labels[plan.Session].About != "" {
 			about = labels[plan.Session].About

@@ -58,7 +58,7 @@ func (d *CeremonyDriver) RunSync(ctx context.Context, plan domain.PlanRecord, wa
 			ids = append(ids, t.ID)
 		}
 	}
-	about := "ws:" + string(plan.Session)
+	about := sessionAbout(plan.Session)
 	if d.Labels != nil {
 		if labels, err := d.Labels.Load(ctx); err == nil && labels[plan.Session].About != "" {
 			about = labels[plan.Session].About

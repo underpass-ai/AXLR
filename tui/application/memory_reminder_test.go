@@ -117,7 +117,7 @@ func TestMemoryReminderAndJevEachActOncePerRequest(t *testing.T) {
 			}
 			return assistant("Done, verified."), nil
 		case 4:
-			if !strings.HasPrefix(last, memoryReminderPrefix) {
+			if !strings.HasPrefix(last, MemoryReminderPrefix) {
 				t.Fatalf("fourth request should carry the memory reminder: %q", last)
 			}
 			return assistant("Nothing durable to record: a one-line fix."), nil

@@ -18,6 +18,8 @@ prompt as the display fallback. After the second prompt, define a short title
 in the user's language describing the concrete work, using `axlr_session`
 with `title`. Do it before ending that turn once the task is clear. If the
 topic is still ambiguous, wait for clarification already needed by the task.
+A session still untitled when its second request completes is titled by the
+console from the first two prompts; a title you set first is kept.
 Tool calls and console ceremony reminders are not new conversations.
 
 The tool fills missing fields only. Preserve a title the user assigned with
@@ -31,13 +33,19 @@ recovery and one relevant inter-about comparison. Respect an explicit user
 opt-out. Without a connection, title the session and report the memory step
 as unavailable; do not claim it ran.
 
-Reuse the exact about from session metadata, repository instructions, the user
-or KMP evidence. Abouts are opaque and case-sensitive: `project:AXLR` and
-`project:axlr` differ. Never derive one from the session title or silently change
-a supplied identifier. Save a confirmed scope with `axlr_session` using `about`.
-For genuinely new work with no canonical project scope, use `ws:<session_id>`
-as an explicit session scope, not as proof of a pre-existing project. Do not
-create empty memory merely to make recovery succeed.
+The console supplies the session's about: session metadata and `axlr_session`
+show it, and `axlr_remember` writes there unless you name another. Unless one
+was selected, it is the workspace's project about, which the console derives
+from the workspace root's name (`/home/me/AXLR` gives `project:axlr`) and marks
+`about_is_default`; every session in that workspace gets the same one, so use
+it for recall and records. Abouts are opaque and case-sensitive: `project:AXLR`
+and `project:axlr` differ. Never derive one yourself, from the session title or
+otherwise, or silently change a supplied identifier. When repository
+instructions, the user or KMP evidence name a different canonical scope, save
+it with `axlr_session` using `about`. A default about with no memory yet is a
+new project scope, not proof that nothing was recorded elsewhere; older
+sessions may have recorded under `ws:<session_id>`. Do not create empty memory
+merely to make recovery succeed.
 
 The persisted scope is the session's original binding. If the user explicitly
 chooses another scope during that session, use the supplied identifier for

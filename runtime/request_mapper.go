@@ -153,8 +153,20 @@ func (m RequestMapper) Map(req dto.Request) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if a.TimeoutMS < 0 || a.TimeoutMS > m.MaxTimeout.Milliseconds() {
-			return nil, errors.New("timeout exceeds profile limit")
+		// The refusal states the limit: on 10 October 2026 claude-haiku-5.5,
+		// told only "timeout exceeds profile limit", guessed a new value
+		// and the person approved the same command twice.
+		if a.TimeoutMS < 0 {
+			return nil, errors.New("timeout_ms must not be negative")
+		}
+		if a.TimeoutMS > m.MaxTimeout.Milliseconds() {
+			return nil, fmt.Errorf("timeout_ms %d exceeds the %d ms limit", a.TimeoutMS, m.MaxTimeout.Milliseconds())
+		}
+		if a.MaxOutputBytes < 0 {
+			return nil, errors.New("max_output_bytes must not be negative")
+		}
+		if a.MaxOutputBytes > m.MaxOutputBytes {
+			return nil, fmt.Errorf("max_output_bytes %d exceeds the %d byte limit", a.MaxOutputBytes, m.MaxOutputBytes)
 		}
 		duration := time.Duration(a.TimeoutMS) * time.Millisecond
 		if a.TimeoutMS == 0 {

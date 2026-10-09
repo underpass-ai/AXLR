@@ -92,6 +92,20 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 			return interrupt(err)
 		}
 	}
+	if pausesOverBudget(*session, u.turnLimit()) {
+		// An answer ran the calls that fit and the rest were refused: the
+		// turn pauses at the limit, as one refused whole does, rather than
+		// asking the model again with no call left.
+		next := *session
+		if err := next.PauseTurn(); err != nil {
+			return err
+		}
+		if err := u.Store.Save(context.WithoutCancel(ctx), next); err != nil {
+			return errors.Join(domain.ErrToolCallLimit, err)
+		}
+		*session = next
+		return errors.Join(domain.ErrToolCallLimit, emitSession(session, emit), emit(Event{Kind: EventState, State: next.Status()}))
+	}
 	if err := warnCallBudget(ctx, session, u, emit); err != nil {
 		return interrupt(err)
 	}
@@ -142,6 +156,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	snapshot := session.ToolSnapshot()
 	guidance := modelHostGuidance(session)
+	guidance.Content += root.Text(callBudgetGuidance(u.turnLimit()))
 	_, _, focused := focusedRun(*session)
 	if u.SessionLabels != nil && !focused {
 		text, err := sessionContextGuidance(ctx, *session, u.SessionLabels)
@@ -276,7 +291,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	*session = next
 	// Reject only at the head: tool results must retain model order. Decision
 	// resolution must apply this lookup again as later calls reach the head.
-	if err := rejectUnknown(ctx, session, u.Store, func(Event) error { return nil }, u.Diagnostics); err != nil {
+	if err := rejectUnknown(ctx, session, u.admission(), func(Event) error { return nil }); err != nil {
 		return err
 	}
 	if err := emitSession(session, emit); err != nil {

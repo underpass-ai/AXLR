@@ -56,8 +56,13 @@ func TestSecondExchangeAutomaticallyPersistsTitleInAgentLoop(t *testing.T) {
 		if calls == 1 {
 			return assistant("", root.ToolCall{ID: "set-title", Name: HostSessionName, Arguments: hostJSON(t, `{"title":"Corregir sesiones AXLR","about":"project:AXLR"}`)}), nil
 		}
-		if !strings.Contains(string(req.Messages[0].Content), `"title":"Corregir sesiones AXLR"`) {
-			t.Fatal("new title not reflected in model context")
+		// The title stays out of the system prompt, whose prefix the cache
+		// reuses; axlr_session reports it.
+		if strings.Contains(string(req.Messages[0].Content), "Corregir sesiones AXLR") {
+			t.Fatal("the title changed the system prompt")
+		}
+		if labels.labels[s.Export().ID].Title != "Corregir sesiones AXLR" {
+			t.Fatal("new title not stored")
 		}
 		return assistant("Corregido"), nil
 	})}}

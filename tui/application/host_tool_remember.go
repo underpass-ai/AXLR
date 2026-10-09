@@ -35,7 +35,7 @@ func RememberTool() domain.AvailableTool {
 	schema, _ := root.NewJSONObject([]byte(rememberSchema))
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostRememberName,
-		Description: "Record one durable memory in KMP in one call: kind, text, its evidence and optional links to refs you saw (rel such as supports, depends_on, supersedes, contradicts, corrects, restates or derived_from, and why). The console writes it under the session's exact about unless you name one, labels it with the session and workspace, and derives the idempotency key, so a retry never duplicates it; it needs no kmp_guide or schema read. A write with links returns needs_review with the stored context they touch and writes nothing: check it, then call again with only the continuation to commit, or correct the links. Approved like kmp_write_memory.",
+		Description: "Record one durable memory in KMP in one call: kind, text, its evidence and optional links to refs you saw (rel such as supports, depends_on, supersedes, contradicts, corrects, restates or derived_from, and why). The console writes it under the session's about (the one session metadata and axlr_session show: the selected about, by default the workspace's project about) unless you name one, labels it with the session and workspace, and derives the idempotency key, so a retry never duplicates it; it needs no kmp_guide or schema read. A write with links returns needs_review with the stored context they touch and writes nothing: check it, then call again with only the continuation to commit, or correct the links. Approved like kmp_write_memory.",
 		Parameters:  schema,
 	}}
 }
@@ -64,7 +64,7 @@ type RememberPort interface {
 }
 
 // hostRemember turns axlr_remember's arguments into a request: the
-// session's exact about unless one is named, labels for the session and
+// session's about (memoryAbout) unless one is named, labels for the session and
 // workspace, and a key derived from what is recorded.
 func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Session, arguments root.JSONValue) (any, error) {
 	if u.Memory == nil {
@@ -93,15 +93,9 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	state := session.Export()
 	about := args.About
 	if about == "" {
-		about = "ws:" + string(state.ID)
-		if u.Labels != nil {
-			labels, err := u.Labels.Load(ctx)
-			if err != nil {
-				return nil, err
-			}
-			if selected := labels[state.ID].About; selected != "" {
-				about = selected
-			}
+		var err error
+		if about, _, err = memoryAbout(ctx, u.Labels, state); err != nil {
+			return nil, err
 		}
 	}
 	request := RememberRequest{About: about, Kind: args.Kind, Text: args.Text, Evidence: args.Evidence,

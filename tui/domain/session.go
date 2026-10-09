@@ -2,7 +2,6 @@ package domain
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	axlr "github.com/underpass-ai/AXLR/domain"
@@ -182,7 +181,12 @@ func (s *Session) CompleteAssistantWithin(result axlr.CompletionResult, turnLimi
 		ids[call.ID] = true
 	}
 	base, limit := s.callBudget(turnLimit)
-	over := !s.replaying && len(message.ToolCalls) > 0 && len(message.ToolCalls)+s.state.TurnCallCount-base > limit
+	// With no call left the whole answer is refused at once. When some fit,
+	// they run in order and the rest are refused as each reaches the head
+	// of the queue (RefuseOverBudget): on 10 October 2026 claude-haiku-5.5
+	// sent 93 local_read calls with 31 left, and refusing them all ran none.
+	left := limit - (s.state.TurnCallCount - base)
+	over := !s.replaying && len(message.ToolCalls) > 0 && left <= 0
 	next := s.Export()
 	message.ToolCalls = append([]axlr.ToolCall(nil), message.ToolCalls...)
 	// Arguments are held in the compact form the session store writes, so a
@@ -206,7 +210,7 @@ func (s *Session) CompleteAssistantWithin(result axlr.CompletionResult, turnLimi
 		// calls runs and the turn pauses. Results follow call order, so every
 		// call of this answer is answered, not only those past the limit.
 		capped := Session{state: next}
-		outcome := ToolOutcome{Content: axlr.Text(fmt.Sprintf("not run: the turn reached its %d tool-call limit; send a message to continue", limit)), IsError: true}
+		outcome := ToolOutcome{Content: overBudgetOutcome(0, len(message.ToolCalls), limit), IsError: true}
 		for _, call := range message.ToolCalls {
 			if err := capped.RecordToolOutcome(call.ID, DecisionDeny, outcome); err != nil {
 				return err
@@ -252,6 +256,11 @@ func (s *Session) RecordToolOutcome(id axlr.ToolCallID, decision ToolDecision, o
 	}
 	next.Messages = append(next.Messages, axlr.Message{Role: axlr.RoleTool, ToolCallID: id, Content: outcome.Content})
 	stampLast(&next)
+	if overBudget(decision, outcome) && next.TurnCallCount > 0 {
+		// The turn counts the calls it admitted: a call refused for the
+		// budget leaves the count, live and when a transcript replays.
+		next.TurnCallCount--
+	}
 	if len(pending) == 1 {
 		next.Status = StatusStreaming
 	}
