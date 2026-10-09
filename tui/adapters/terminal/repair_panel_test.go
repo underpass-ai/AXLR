@@ -223,3 +223,27 @@ func TestImprovementsShowTheirKindAndOpenFromImprove(t *testing.T) {
 		t.Fatalf("badge %q", badge)
 	}
 }
+
+// The reason input sits under the panel's content: a resize keeps the two
+// rows the panel and the incident card leave for it.
+func TestTheReasonInputSurvivesAResize(t *testing.T) {
+	repairs := &fakeRepairs{records: []domain.RepairRecord{awaitingRecord(domain.RepairAwaitingMerge)}}
+	m := repairModel(t, repairs)
+	m = update(m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	prompt := strings.TrimSpace(Translate(English, "repairs.reasonPrompt"))
+	if !strings.Contains(m.View().Content, prompt) {
+		t.Fatal("the reason input is not shown")
+	}
+	for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 30}, {Width: 90, Height: 26}} {
+		if m = update(m, size); !m.RepairPanel.Reasoning || !strings.Contains(m.View().Content, prompt) {
+			t.Fatalf("after a resize to %dx%d the reason input is gone:\n%s", size.Width, size.Height, m.View().Content)
+		}
+	}
+
+	card := awaitingModel(t, 0)
+	card = update(card, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	question := strings.TrimSpace(Translate(Spanish, "incident.reasonPrompt"))
+	if card = update(card, tea.WindowSizeMsg{Width: 100, Height: 30}); !strings.Contains(card.View().Content, question) {
+		t.Fatalf("after a resize the incident card lost its reason input:\n%s", card.View().Content)
+	}
+}

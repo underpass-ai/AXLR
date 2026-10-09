@@ -238,6 +238,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.SearchBox.Input.SetCursor(m.SearchBox.Input.Position())
 		m.sizeApproval()
 		infoWidth, infoHeight := OverlayBodySize(v.Width, v.Height-1)
+		if m.overlay == "incident" || m.overlay == "repairs" || m.overlay == "plans" {
+			// These panels keep two rows under their content for the
+			// reason input, as when they opened.
+			infoHeight = max(1, infoHeight-2)
+		}
 		m.Info.SetWidth(infoWidth)
 		m.Info.Viewport.SetHeight(infoHeight)
 		m.Transcript.ApplyTheme(m.Theme)
