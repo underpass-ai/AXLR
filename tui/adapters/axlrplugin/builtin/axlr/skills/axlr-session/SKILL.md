@@ -18,6 +18,8 @@ prompt as the display fallback. After the second prompt, define a short title
 in the user's language describing the concrete work, using `axlr_session`
 with `title`. Do it before ending that turn once the task is clear. If the
 topic is still ambiguous, wait for clarification already needed by the task.
+A session still untitled when its second request completes is titled by the
+console from the first two prompts; a title you set first is kept.
 Tool calls and console ceremony reminders are not new conversations.
 
 The tool fills missing fields only. Preserve a title the user assigned with
