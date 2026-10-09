@@ -66,7 +66,11 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 		details = append(details, theme.T("transcript.toolApproved"))
 	}
 	text := label
-	if args := toolArgumentSummary(call); args != "" {
+	args := toolArgumentSummary(call)
+	if summary, ok := localListingSummary(call, theme); ok {
+		args = summary
+	}
+	if args != "" {
 		text += "  " + args
 	}
 	text += " · " + strings.Join(details, " · ")
@@ -120,6 +124,38 @@ func toolArgumentSummary(call root.ToolCall) string {
 		}
 	}
 	return ansi.Truncate(singleLine(strings.Join(values, " ")), toolRowArgumentWidth, "…")
+}
+
+// localListingSummary reads a search as its question, `"pattern" in path
+// (glob)`, and a listing as its path, where the scalar summary would run
+// pattern, path and glob together.
+func localListingSummary(call root.ToolCall, theme Theme) (string, bool) {
+	if call.Name != "local_search" && call.Name != "local_list" {
+		return "", false
+	}
+	var args struct {
+		Pattern   string `json:"pattern"`
+		Path      string `json:"path"`
+		Glob      string `json:"glob"`
+		Recursive bool   `json:"recursive"`
+	}
+	if json.Unmarshal(call.Arguments.Bytes(), &args) != nil {
+		return "", false
+	}
+	where := args.Path
+	if where == "" {
+		where = "."
+	}
+	summary := where
+	if call.Name == "local_search" {
+		summary = theme.Tf("transcript.searchIn", args.Pattern, where)
+	} else if args.Recursive {
+		summary = theme.Tf("transcript.listRecursive", where)
+	}
+	if args.Glob != "" {
+		summary += " (" + args.Glob + ")"
+	}
+	return ansi.Truncate(singleLine(summary), toolRowArgumentWidth, "…"), true
 }
 
 func durationMS(head string) (int64, bool) {

@@ -94,7 +94,7 @@ func personRequest(messages []root.Message) int {
 // needsMemoryReminder reads one request: it was not reminded yet, ran no
 // ceremony step, attempted no memory write (an attempt the person denied
 // counts: they decided), and changed a file or made several local tool calls
-// other than file reads.
+// other than reads, searches and listings.
 func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 	local, changed := 0, false
 	for _, message := range request[1:] {
@@ -124,7 +124,8 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 }
 
 // countsForMemory reports whether a call counts toward memoryReminderCalls:
-// a local tool call that is not a file read.
+// a local tool call that is not a file read, a search or a listing, which
+// change nothing.
 func countsForMemory(name root.ToolName) bool {
-	return strings.HasPrefix(string(name), "local_") && name != "local_read"
+	return strings.HasPrefix(string(name), "local_") && name != "local_read" && name != "local_search" && name != "local_list"
 }

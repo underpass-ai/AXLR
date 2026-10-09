@@ -181,3 +181,26 @@ func TestCheckpointDoesNotFlagAReadOnlyTurn(t *testing.T) {
 		t.Fatalf("read-only turn: %+v", record)
 	}
 }
+
+// Searching and listing change nothing, so a turn of them alone is not
+// flagged unrecorded either.
+func TestCheckpointDoesNotFlagASearchOnlyTurn(t *testing.T) {
+	messages := []root.Message{
+		{Role: root.RoleUser, Content: "dónde se define el presupuesto"},
+		{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{recordCall(t, "k1", string(HostCallToolName), `{"name":"kmp_wake","arguments":{}}`)}},
+		{Role: root.RoleTool, ToolCallID: "k1", Content: `{"status":"ok"}`},
+	}
+	for i := 0; i < 8; i++ {
+		id, name := fmt.Sprintf("s%d", i), "local_search"
+		if i%2 == 1 {
+			name = "local_list"
+		}
+		messages = append(messages,
+			root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{recordCall(t, id, name, `{"pattern":"budget"}`)}},
+			root.Message{Role: root.RoleTool, ToolCallID: root.ToolCallID(id), Content: `{"matches":[]}`})
+	}
+	messages = append(messages, root.Message{Role: root.RoleAssistant, Content: "en context_budget.go"})
+	if record := omittedTurnRecords(messages, 0, len(messages))[0]; record.worked || record.unrecorded {
+		t.Fatalf("search-only turn: %+v", record)
+	}
+}
