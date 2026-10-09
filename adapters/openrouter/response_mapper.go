@@ -1,7 +1,10 @@
 package openrouter
 
 import (
+	"encoding/json"
 	"errors"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/domain"
 )
@@ -39,7 +42,7 @@ func mapResponse(wire responseDTO) (domain.CompletionResult, error) {
 		if err != nil {
 			return domain.CompletionResult{}, err
 		}
-		arguments, err := domain.NewJSONObject([]byte(call.Function.Arguments))
+		arguments, err := toolArguments(call.Function.Arguments, choice.FinishReason)
 		if err != nil {
 			return domain.CompletionResult{}, err
 		}
@@ -61,4 +64,56 @@ func mapResponse(wire responseDTO) (domain.CompletionResult, error) {
 		}
 	}
 	return result, nil
+}
+
+// malformedArgumentsKey names the object that stands in for a call's
+// arguments when they are not a JSON object. The console's tool resolution
+// (tui/application/host_tool_resolution.go) refuses a call that carries it
+// with the error inside, so the model is told and can send the call again;
+// keep the two names in step.
+const malformedArgumentsKey = "axlr_malformed_arguments"
+
+// malformedArgumentsPrefixBytes bounds the part of unreadable arguments kept
+// to show the model which call it was.
+const malformedArgumentsPrefixBytes = 512
+
+type malformedArgumentsDTO struct {
+	Error            string `json:"error"`
+	RawPrefix        string `json:"raw_prefix"`
+	CutByOutputLimit bool   `json:"cut_by_output_limit,omitempty"`
+}
+
+// toolArguments reads a call's arguments. Empty arguments are the empty
+// object of a call without parameters. Arguments that are not a JSON object,
+// cut short by the output limit or mistyped by the model, would fail the
+// whole operation; they are kept instead as a valid object that names the
+// error, for the turn to answer the call with a tool error.
+func toolArguments(raw string, finish string) (domain.JSONValue, error) {
+	if strings.TrimSpace(raw) == "" {
+		return domain.NewJSONObject([]byte("{}"))
+	}
+	if arguments, err := domain.NewJSONObject([]byte(raw)); err == nil {
+		return arguments, nil
+	}
+	malformed := malformedArgumentsDTO{Error: "arguments must be a JSON object", RawPrefix: utf8Prefix(raw, malformedArgumentsPrefixBytes), CutByOutputLimit: finish == "length"}
+	var value any
+	if err := json.Unmarshal([]byte(raw), &value); err != nil {
+		malformed.Error = err.Error()
+	}
+	encoded, err := json.Marshal(map[string]malformedArgumentsDTO{malformedArgumentsKey: malformed})
+	if err != nil {
+		return domain.JSONValue{}, err
+	}
+	return domain.NewJSONObject(encoded)
+}
+
+// utf8Prefix keeps at most maximum bytes of text on a rune boundary.
+func utf8Prefix(text string, maximum int) string {
+	if len(text) <= maximum {
+		return text
+	}
+	for maximum > 0 && !utf8.RuneStart(text[maximum]) {
+		maximum--
+	}
+	return text[:maximum]
 }
