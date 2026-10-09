@@ -86,7 +86,7 @@ An HTTP manifest uses `"url": "https://host/mcp"` in place of `command` and `arg
 
 ## Persist registrations and approvals
 
-The console reads `$XDG_CONFIG_HOME/axlr/mcp.json`, or `$HOME/.config/axlr/mcp.json`, at startup. The file must be a private regular file (mode `0600`) no larger than 64 KiB. A missing file means no persistent external servers.
+The console reads `$XDG_CONFIG_HOME/axlr/mcp.json`, or `$HOME/.config/axlr/mcp.json`, at startup. The file must be a private regular file (mode `0600`) no larger than 64 KiB; otherwise the console stops and names the file, the requirement it fails and, for its mode, the `chmod 600 <path>` that fixes it. A missing file means no persistent external servers.
 
 ```json
 {
