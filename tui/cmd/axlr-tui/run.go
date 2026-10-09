@@ -271,7 +271,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	var remote localmodels.Client
 	var remoteCatalog application.ModelCatalogPort
 	if key != "" || len(locals.models) == 0 {
-		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP})
+		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP, Models: openRouterModelOptions(settings)})
 		if err != nil {
 			return fail(err)
 		}
