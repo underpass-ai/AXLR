@@ -75,6 +75,12 @@ type SelfRepair struct {
 	Sleep func(context.Context, time.Duration) error
 	// Build is the console build that detects defects and receives notices.
 	Build string
+	// Candidates builds the repaired axlr-tui from a clone once its checks
+	// are green and installs it on request; nil builds nothing.
+	Candidates RepairCandidatePort
+	// AutoInstall installs a merged repair's candidate without the panel's
+	// i (settings' repair.install).
+	AutoInstall bool
 	// RunToken names this console launch; a record left running under
 	// another token belongs to a console that stopped.
 	RunToken string
@@ -414,6 +420,9 @@ func (r *SelfRepair) admit(records []domain.RepairRecord, session domain.Session
 		case domain.RepairInterrupted:
 			return fmt.Sprintf("repair %s for this failure was interrupted; the person recovers it from the /repair panel instead of starting another", record.ID)
 		case domain.RepairCompleted:
+			if record.Build == r.Build && record.Installed != "" {
+				return fmt.Sprintf("already repaired: pull request #%d (%s) merged this failure's fix, and build %s with it is installed at %s, but this console still runs build %s; the person restarts the console instead of repairing again", record.PullRequest, record.URL, record.CandidateVersion, record.Installed, r.Build)
+			}
 			if record.Build == r.Build {
 				return fmt.Sprintf("already repaired: pull request #%d (%s) merged this failure's fix as %s, but this console still runs build %s; update or rebuild AXLR and restart instead of repairing again", record.PullRequest, record.URL, record.MergeSHA, r.Build)
 			}
@@ -510,6 +519,13 @@ func (r *SelfRepair) drive(ctx context.Context, run *repairRun, child domain.Ses
 		}
 		if progress := r.last(run); progress.Terminal {
 			r.conclude(ctx, run, progress)
+			if progress.State == "COMPLETED" {
+				// A merge that did not wait for the person (auto_merge)
+				// builds its candidate now.
+				r.buildCandidate(ctx, run)
+				r.installMerged(ctx, run)
+				r.update(ctx, run, func(record *domain.RepairRecord) { record.Notice = repairNotice(*record, r.Build) })
+			}
 			return
 		}
 		ceremony, live := child.Ceremony()
@@ -520,7 +536,19 @@ func (r *SelfRepair) drive(ctx context.Context, run *repairRun, child domain.Ses
 		case ceremony.AwaitingPerson():
 			pending := "the person's decision on the approval card"
 			if ceremony.Repair != nil {
-				pending = fmt.Sprintf("merge pull request #%d (%s): a approves and merges, d declines with a reason", ceremony.Repair.PullRequest, ceremony.Repair.URL)
+				if reason := r.buildCandidate(ctx, run); reason != "" && CanDecline(ceremony) {
+					// A console that does not build is declined as a red
+					// check would be: the pull request stays open.
+					decideErr := workbench.Decide(ctx, &child, false, reason, nil)
+					if decideErr == nil {
+						continue
+					}
+					// The card stays for the person, with the reason.
+					r.update(ctx, run, func(record *domain.RepairRecord) {
+						record.Error = bounded(reason+"; declining it failed: "+decideErr.Error(), 600)
+					})
+				}
+				pending = r.mergePending(ctx, run, ceremony.Repair.PullRequest, ceremony.Repair.URL)
 			}
 			decision, ok := r.await(ctx, run, domain.RepairAwaitingMerge, pending)
 			if !ok {
@@ -716,7 +744,17 @@ func repairNotice(record domain.RepairRecord, build string) string {
 	switch record.Status {
 	case domain.RepairCompleted:
 		fmt.Fprintf(&text, "[AXLR] %s %s merged pull request #%d (%s) into %s as %s.", label, record.ID, record.PullRequest, record.URL, record.Repository, record.MergeSHA)
-		fmt.Fprintf(&text, " This console still runs build %s, which does not contain %s: update or rebuild AXLR and restart the console before relying on it.", build, change)
+		switch {
+		case record.Installed != "":
+			fmt.Fprintf(&text, " Build %s of %s is installed at %s (the previous one is kept as %s); this console still runs build %s until it restarts: restart it before relying on %s.", record.CandidateVersion, change, record.Installed, record.Backup, build, change)
+		case record.Candidate != "":
+			fmt.Fprintf(&text, " This console still runs build %s, which does not contain %s. The repaired console is built at %s (%s): install it with i on the %s panel, or run it to try, then restart.", build, change, record.Candidate, record.CandidateVersion, panel)
+		default:
+			fmt.Fprintf(&text, " This console still runs build %s, which does not contain %s: update or rebuild AXLR and restart the console before relying on it.", build, change)
+		}
+		if record.Error != "" {
+			fmt.Fprintf(&text, " %s.", strings.TrimSuffix(record.Error, "."))
+		}
 	case domain.RepairBlocked:
 		fmt.Fprintf(&text, "[AXLR] %s %s ended BLOCKED at step %s: %s.", label, record.ID, record.Step, record.Error)
 		if record.URL != "" {
@@ -976,7 +1014,7 @@ func (r *SelfRepair) Status(ctx context.Context, s domain.Session, arguments roo
 			continue
 		}
 		entry := map[string]any{"repair": record.ID, "kind": record.Kind(), "status": record.Status, "repository": record.Repository, "attempt": record.Attempt, "updated": record.Updated.UTC().Format(time.RFC3339)}
-		for key, value := range map[string]string{"step": record.Step, "state": record.State, "instance": record.Instance, "url": record.URL, "merge_sha": record.MergeSHA, "pending": record.Pending, "error": record.Error, "memory": record.Memory, "clone": record.Clone, "session": string(record.Session), "parent": string(record.Parent)} {
+		for key, value := range map[string]string{"step": record.Step, "state": record.State, "instance": record.Instance, "url": record.URL, "merge_sha": record.MergeSHA, "pending": record.Pending, "error": record.Error, "memory": record.Memory, "clone": record.Clone, "session": string(record.Session), "parent": string(record.Parent), "candidate": record.Candidate, "candidate_version": record.CandidateVersion, "installed": record.Installed, "backup": record.Backup} {
 			if value != "" {
 				entry[key] = value
 			}

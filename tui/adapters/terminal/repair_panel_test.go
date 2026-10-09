@@ -17,6 +17,7 @@ type fakeRepairs struct {
 	records   []domain.RepairRecord
 	decisions []string
 	recovered []string
+	installed []string
 	events    chan application.RepairEvent
 	err       error
 }
@@ -37,6 +38,10 @@ func (f *fakeRepairs) Decide(_ context.Context, id string, approve bool, reason 
 }
 func (f *fakeRepairs) Recover(_ context.Context, id string) error {
 	f.recovered = append(f.recovered, id)
+	return f.err
+}
+func (f *fakeRepairs) Install(_ context.Context, id string) error {
+	f.installed = append(f.installed, id)
 	return f.err
 }
 func (f *fakeRepairs) Events() <-chan application.RepairEvent { return f.events }
@@ -281,5 +286,40 @@ func TestTheReasonInputSurvivesAResize(t *testing.T) {
 	question := strings.TrimSpace(Translate(Spanish, "incident.reasonPrompt"))
 	if card = update(card, tea.WindowSizeMsg{Width: 100, Height: 30}); !strings.Contains(card.View().Content, question) {
 		t.Fatalf("after a resize the incident card lost its reason input:\n%s", card.View().Content)
+	}
+}
+
+// A merged repair with a built console shows it and i installs it; one
+// already installed shows where, and i has nothing left to install.
+func TestRepairPanelInstallsTheRepairedConsole(t *testing.T) {
+	merged := awaitingRecord(domain.RepairCompleted)
+	merged.Pending, merged.Build = "", "0.4.1"
+	merged.Candidate, merged.CandidateVersion = "/tmp/repairs/x.axlr-tui", "repair-x-abc123"
+	// Another session asked for it: the console restarted since.
+	merged.Parent = "fedcba9876543210fedcba9876543210"
+	repairs := &fakeRepairs{records: []domain.RepairRecord{merged}}
+	m := repairModel(t, repairs)
+	m = m.openRepairPanel()
+	view := m.View().Content
+	for _, want := range []string{"Repaired console repair-x-abc123", "i installs the repaired console", "i install"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("panel lacks %q:\n%s", want, view)
+		}
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'i', Text: "i"})
+	if len(repairs.installed) != 1 || repairs.installed[0] != merged.ID || m.Status.Notice != Translate(English, "repairs.installedNotice") {
+		t.Fatalf("installed=%v notice=%q error=%q", repairs.installed, m.Status.Notice, m.Status.Error)
+	}
+	repairs.records[0].Installed, repairs.records[0].Backup = "/home/me/.local/bin/axlr-tui", "/home/me/.local/bin/axlr-tui.before-repair-x"
+	// Installed, another session's repair leaves the panel; the parent's
+	// own keeps showing both paths.
+	repairs.records[0].Parent = panelParent
+	m = m.refreshRepairPanel()
+	if !strings.Contains(m.View().Content, "previous build kept as") {
+		t.Fatalf("installed paths missing:\n%s", m.View().Content)
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'i', Text: "i"})
+	if len(repairs.installed) != 1 || m.Status.Error != Translate(English, "repairs.nothingToInstall") {
+		t.Fatalf("installed again: %v %q", repairs.installed, m.Status.Error)
 	}
 }

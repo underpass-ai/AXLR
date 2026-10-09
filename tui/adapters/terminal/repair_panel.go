@@ -18,6 +18,8 @@ type RepairPanelPort interface {
 	Records(ctx context.Context) ([]domain.RepairRecord, error)
 	Decide(ctx context.Context, id string, approve bool, reason string) error
 	Recover(ctx context.Context, id string) error
+	// Install replaces the running console with a merged repair's build.
+	Install(ctx context.Context, id string) error
 	Events() <-chan application.RepairEvent
 }
 
@@ -84,7 +86,8 @@ func (m AppModel) repairRecords() []domain.RepairRecord {
 	}
 	var out []domain.RepairRecord
 	for _, record := range m.RepairPanel.Records {
-		if record.Parent == m.Header.State.ID || record.Session == m.Header.State.ID || record.Status.Awaiting() || record.Status == domain.RepairInterrupted || record.Status == domain.RepairRunning {
+		// A merged repair waiting to be installed stays after a restart.
+		if record.Parent == m.Header.State.ID || record.Session == m.Header.State.ID || record.Status.Awaiting() || record.Status == domain.RepairInterrupted || record.Status == domain.RepairRunning || application.Installable(record) {
 			out = append(out, record)
 		}
 	}
@@ -101,6 +104,17 @@ func actionableRepair(records []domain.RepairRecord) (domain.RepairRecord, bool)
 	}
 	for _, record := range records {
 		if record.Status == domain.RepairInterrupted {
+			return record, true
+		}
+	}
+	return domain.RepairRecord{}, false
+}
+
+// installableRepair is the record i installs: the newest merged repair
+// with a built console not installed yet.
+func installableRepair(records []domain.RepairRecord) (domain.RepairRecord, bool) {
+	for _, record := range records {
+		if application.Installable(record) {
 			return record, true
 		}
 	}
@@ -198,7 +212,15 @@ func repairPanelContent(records []domain.RepairRecord, theme Theme) string {
 		if record.Clone != "" {
 			lines = append(lines, theme.Tf("repairs.clone", record.Clone, orDash(string(record.Session))))
 		}
-		if record.Status == domain.RepairCompleted {
+		if record.Candidate != "" {
+			lines = append(lines, theme.Tf("repairs.candidate", record.CandidateVersion, record.Candidate))
+		}
+		switch {
+		case record.Installed != "":
+			lines = append(lines, theme.Tf("repairs.installed", record.Installed, record.Backup))
+		case application.Installable(record):
+			lines = append(lines, theme.Tf("repairs.installHint", orDash(record.Build)))
+		case record.Status == domain.RepairCompleted:
 			lines = append(lines, theme.Tf("repairs.restart", orDash(record.Build)))
 		}
 		if record.Status == domain.RepairInterrupted {
@@ -268,6 +290,19 @@ func (m AppModel) repairKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 			return m, nil
 		}
 		m.Status.Error = ""
+		return m.refreshRepairPanel(), nil
+	case "i":
+		target, found := installableRepair(m.repairRecords())
+		if !found {
+			m.Status.Error = m.Theme.T("repairs.nothingToInstall")
+			return m, nil
+		}
+		if err := m.deps.Repairs.Install(m.lifetime.ctx, target.ID); err != nil {
+			m.Status.Error = err.Error()
+			return m, nil
+		}
+		m.Status.Error = ""
+		m.Status.Notice = m.Theme.T("repairs.installedNotice")
 		return m.refreshRepairPanel(), nil
 	case "n":
 		// The records are shown before the mode changes; n still starts a

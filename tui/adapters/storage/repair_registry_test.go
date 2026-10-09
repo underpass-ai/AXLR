@@ -33,6 +33,8 @@ func TestRepairRegistryUpsertsAndKeepsUnknownFields(t *testing.T) {
 	record.Status, record.PullRequest, record.URL, record.Notice = domain.RepairCompleted, 7, "https://example.test/pr/7", "merged"
 	record.StepAttempt, record.StepLimit, record.Check = 2, 3, "go test ./... exited 1: FAIL"
 	record.Queued, record.QueueNote = now.Add(time.Minute), "checks green (5 passed); merging"
+	record.Candidate, record.CandidateVersion, record.CandidateRevision = "/r/x.axlr-tui", "repair-x-abc", "abc"
+	record.Installed, record.Backup = "/bin/axlr-tui", "/bin/axlr-tui.before-repair-x"
 	if err := registry.Save(ctx, record); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +46,8 @@ func TestRepairRegistryUpsertsAndKeepsUnknownFields(t *testing.T) {
 	records, err = registry.Load(ctx)
 	if err != nil || len(records) != 2 || records[0].Status != domain.RepairCompleted || records[0].PullRequest != 7 || records[0].Notice != "merged" || !records[0].Created.Equal(now) ||
 		records[0].StepAttempt != 2 || records[0].StepLimit != 3 || records[0].Check != "go test ./... exited 1: FAIL" ||
-		!records[0].Queued.Equal(now.Add(time.Minute)) || records[0].QueueNote != "checks green (5 passed); merging" {
+		!records[0].Queued.Equal(now.Add(time.Minute)) || records[0].QueueNote != "checks green (5 passed); merging" ||
+		records[0].Candidate != "/r/x.axlr-tui" || records[0].CandidateVersion != "repair-x-abc" || records[0].CandidateRevision != "abc" || records[0].Installed != "/bin/axlr-tui" || records[0].Backup != "/bin/axlr-tui.before-repair-x" {
 		t.Fatalf("records: %+v %v", records, err)
 	}
 	if data, _ := os.ReadFile(path); strings.Count(string(data), `"queued"`) != 1 {

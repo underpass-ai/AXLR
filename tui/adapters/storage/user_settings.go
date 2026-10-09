@@ -287,6 +287,9 @@ type RepairSettings struct {
 	About        string `json:"about,omitempty"`
 	Autonomous   *bool  `json:"autonomous,omitempty"`
 	MaxAttempts  int    `json:"max_attempts,omitempty"`
+	// Install replaces the running axlr-tui with the repaired one once its
+	// pull request merges; off by default, when the panel's i does it.
+	Install bool `json:"install,omitempty"`
 }
 
 // AutonomousLocal reports whether an agent-started repair session runs local
@@ -308,7 +311,7 @@ func (s UserSettings) RepairConfiguration() RepairSettings {
 		if s.Repair.Repository != "" {
 			r.Repository = s.Repair.Repository
 		}
-		r.Directory, r.AutoMerge, r.About, r.Autonomous = s.Repair.Directory, s.Repair.AutoMerge, s.Repair.About, s.Repair.Autonomous
+		r.Directory, r.AutoMerge, r.About, r.Autonomous, r.Install = s.Repair.Directory, s.Repair.AutoMerge, s.Repair.About, s.Repair.Autonomous, s.Repair.Install
 		if s.Repair.WatchMinutes > 0 {
 			r.WatchMinutes = s.Repair.WatchMinutes
 		}
