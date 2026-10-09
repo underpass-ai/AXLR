@@ -14,9 +14,10 @@ import (
 const maxCompiledToolSchemas = 256
 const maxToolSchemaBytes = 128 * 1024
 
-// ToolArgumentValidator checks the frozen plugin schema locally, without
-// network access. Compiled schemas are immutable and retained in a bounded
-// cache. Unsupported assertion semantics fail closed rather than being ignored.
+// ToolArgumentValidator checks the frozen tool schema, a plugin's or a local
+// tool's, locally, without network access. Compiled schemas are immutable
+// and retained in a bounded cache. Unsupported assertion semantics fail
+// closed rather than being ignored.
 type ToolArgumentValidator struct {
 	mu      sync.Mutex
 	schemas map[[32]byte]*compiledToolSchema
@@ -30,11 +31,11 @@ func (v *ToolArgumentValidator) Validate(definition root.ToolDefinition, argumen
 		return errors.New("plugin argument validator is unavailable")
 	}
 	if _, err := root.NewJSONObject(arguments.Bytes()); err != nil {
-		return errors.New("plugin arguments must be an object")
+		return errors.New("tool arguments must be an object")
 	}
 	instance, err := strictToolJSON(arguments.Bytes())
 	if err != nil {
-		return fmt.Errorf("invalid plugin arguments: %w", err)
+		return fmt.Errorf("invalid tool arguments: %w", err)
 	}
 	raw := definition.Parameters.Bytes()
 	if len(raw) == 0 || len(raw) > maxToolSchemaBytes {
@@ -66,7 +67,7 @@ func (v *ToolArgumentValidator) Validate(definition root.ToolDefinition, argumen
 		return fmt.Errorf("unsupported argument precision: %w", err)
 	}
 	if err := resolved.resolved.Validate(instance); err != nil {
-		return fmt.Errorf("plugin arguments do not match the registered schema: %w", err)
+		return fmt.Errorf("arguments do not match the tool's schema: %w", err)
 	}
 	return nil
 }

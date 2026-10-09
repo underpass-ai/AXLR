@@ -5,6 +5,7 @@ import (
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/application"
 )
 
 type transcriptRowKind uint8
@@ -80,8 +81,7 @@ func (k transcriptRowKind) isTool() bool {
 
 // consoleMemoryReminder reports the user message the console sends to ask
 // the model to record memory. On 10 October 2026 it was drawn as a prompt,
-// "› [AXLR · memory] KMP is connected…", as if the person had typed it. It
-// matches the literal prefix until the application exports it.
+// "› [AXLR · memory] KMP is connected…", as if the person had typed it.
 func consoleMemoryReminder(content root.Text) bool {
-	return strings.HasPrefix(string(content), "[AXLR · memory]")
+	return strings.HasPrefix(string(content), application.MemoryReminderPrefix)
 }

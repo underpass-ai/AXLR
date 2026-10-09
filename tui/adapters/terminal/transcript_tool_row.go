@@ -215,10 +215,9 @@ func deniedLabel(record *domain.PendingTool) string {
 
 // overCallBudget reports a call the console did not run because the turn's
 // tool-call budget was spent: on 10 October 2026 all 93 calls of a batch
-// past the budget read "denied", as if the person had refused each one. It
-// matches the refusal's text, the old "not run: the turn reached its 32
-// tool-call limit" and its rewording, until the domain exports the prefix
-// to compare with.
+// past the budget read "denied", as if the person had refused each one. A
+// session saved before then carries the older refusal, "not run: the turn
+// reached its 32 tool-call limit", which reads the same way.
 func overCallBudget(content string) bool {
-	return strings.HasPrefix(content, "not run: ") && strings.Contains(content, "tool-call")
+	return strings.HasPrefix(content, domain.OverBudgetOutcomePrefix) || strings.HasPrefix(content, "not run: the turn reached its ")
 }
