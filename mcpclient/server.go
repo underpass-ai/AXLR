@@ -2,9 +2,11 @@ package mcpclient
 
 import (
 	"errors"
+	"net"
 	"net/http"
 	"net/url"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -13,12 +15,15 @@ import (
 
 // Server describes one external MCP server. Env, when set, is the complete
 // environment for a stdio child; nil inherits the host process environment.
+// Socket is a unix socket where a process shared with other clients serves
+// MCP as a stdio child would, one JSON message per line.
 type Server struct {
 	Name       ServerName
 	Command    string
 	Args       []string
 	Env        []string
 	URL        string
+	Socket     string
 	HTTPClient *http.Client
 }
 
@@ -26,9 +31,15 @@ func (s Server) Validate() error {
 	if _, err := NewServerName(s.Name.String()); err != nil {
 		return err
 	}
-	stdio, remote := s.Command != "", s.URL != ""
-	if stdio == remote {
+	stdio, remote, socket := s.Command != "", s.URL != "", s.Socket != ""
+	if btoi(stdio)+btoi(remote)+btoi(socket) != 1 {
 		return errors.New("configure exactly one MCP transport")
+	}
+	if socket {
+		if !filepath.IsAbs(s.Socket) || len(s.Args) != 0 || s.Env != nil || s.HTTPClient != nil {
+			return errors.New("a socket transport needs an absolute path and no command options")
+		}
+		return nil
 	}
 	if stdio {
 		if strings.ContainsRune(s.Command, 0) {
@@ -60,9 +71,23 @@ func (s Server) Validate() error {
 	return nil
 }
 
+func btoi(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
 func (s Server) transport() (mcp.Transport, error) {
 	if err := s.Validate(); err != nil {
 		return nil, err
+	}
+	if s.Socket != "" {
+		conn, err := net.DialTimeout("unix", s.Socket, 5*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		return &mcp.IOTransport{Reader: conn, Writer: conn}, nil
 	}
 	if s.Command != "" {
 		cmd := exec.Command(s.Command, s.Args...)

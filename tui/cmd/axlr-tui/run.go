@@ -42,6 +42,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		fmt.Fprintln(stderr, buildinfo.Version)
 		return 0
 	}
+	if len(args) == 2 && args[0] == engineServeFlag {
+		return serveEngine(ctx, args[1], os.Stdin)
+	}
 	key := getenv("OPENROUTER_API_KEY")
 	var trace application.DiagnosticPort
 	var localKeys []string
@@ -342,6 +345,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("absolute HOME or XDG_STATE_HOME is required for sessions"))
 		}
 		stateBase = filepath.Join(home, ".local", "state")
+	}
+	if settings.SharedEngines() {
+		supervisor, err := engineSupervisor(getenv, stateBase)
+		if err != nil {
+			return fail(err)
+		}
+		shareEngines(ctx, manager, registrations, supervisor, stderr)
 	}
 	// What each model's prompt tokens measured sizes its prompt budget.
 	calibration, err := storage.NewTokenCalibration(filepath.Join(stateBase, "axlr", "bytes-per-token.json"))
