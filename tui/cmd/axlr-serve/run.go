@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -85,7 +86,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	defer executor.Close()
-	client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: &http.Client{Timeout: 60 * time.Second}})
+	client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: modelHTTPClient(60 * time.Second)})
 	if err != nil {
 		fmt.Fprintln(stderr, "axlr-serve: model provider unavailable")
 		return 1
@@ -112,4 +113,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// modelHTTPClient bounds connecting and the wait for the provider's response
+// headers. It sets no Client.Timeout: that would also cover reading the body
+// and cut every streamed answer longer than the bound while tokens still
+// arrive. The adapter's own inactivity and total-duration limits govern the
+// stream.
+func modelHTTPClient(headerTimeout time.Duration) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.ResponseHeaderTimeout = headerTimeout
+	transport.TLSHandshakeTimeout = min(transport.TLSHandshakeTimeout, headerTimeout)
+	transport.DialContext = (&net.Dialer{Timeout: min(30*time.Second, headerTimeout), KeepAlive: 30 * time.Second}).DialContext
+	return &http.Client{Transport: transport}
 }
