@@ -65,6 +65,9 @@ type SelfRepair struct {
 	// Engine is MADE as the parent console sees it; nil means not connected.
 	Engine   CeremonyEnginePort
 	Settings RepairSettings
+	// Forge reads the jobs' pull requests for /jobs; nil means the panel
+	// cannot refresh them.
+	Forge ForgePort
 	// Build is the console build that detects defects and receives notices.
 	Build string
 	// RunToken names this console launch; a record left running under
@@ -254,7 +257,7 @@ func (r *SelfRepair) Request(ctx context.Context, s domain.Session, arguments ro
 	}
 	brief := repairBrief(s, request, failures, r.Build)
 	record := domain.RepairRecord{Signature: signature, Brief: brief, Attempt: attempts + 1}
-	if err := r.start(ctx, s, records, &record, request.Description); err != nil {
+	if err := r.start(ctx, state, records, &record, request.Description); err != nil {
 		return nil, err
 	}
 	return map[string]any{"accepted": true, "repair": record.ID, "session": record.Session, "clone": record.Clone, "repository": record.Repository, "status": record.Status, "attempt": record.Attempt,
@@ -303,7 +306,7 @@ func (r *SelfRepair) RequestImprovement(ctx context.Context, s domain.Session, a
 		return nil, fmt.Errorf("MADE cannot run the improve ceremony: %w", err)
 	}
 	record := domain.RepairRecord{Improvement: true, Signature: signature, Brief: improvementBrief(s, request, calls, r.Build), Attempt: 1}
-	if err := r.start(ctx, s, records, &record, request.Description); err != nil {
+	if err := r.start(ctx, state, records, &record, request.Description); err != nil {
 		return nil, err
 	}
 	return map[string]any{"accepted": true, "improvement": record.ID, "session": record.Session, "clone": record.Clone, "repository": record.Repository, "status": record.Status,
@@ -312,9 +315,9 @@ func (r *SelfRepair) RequestImprovement(ctx context.Context, s domain.Session, a
 
 // start records a repair or improvement, prepares its clone, creates the
 // session that works there in the matching mode and drives it in the
-// background. The record carries Improvement, Signature, Brief and Attempt.
-func (r *SelfRepair) start(ctx context.Context, s domain.Session, records []domain.RepairRecord, record *domain.RepairRecord, description string) error {
-	state := s.Export()
+// background. The record carries Improvement, Signature, Brief and Attempt;
+// state is the session that asked, whose model the new session uses.
+func (r *SelfRepair) start(ctx context.Context, state domain.SessionState, records []domain.RepairRecord, record *domain.RepairRecord, description string) error {
 	now := r.now()
 	kind, mode, cloneKind := "repair", domain.ModeRepair, ""
 	if record.Improvement {
@@ -594,6 +597,9 @@ func (r *SelfRepair) conclude(ctx context.Context, run *repairRun, progress Cere
 		if memory, _ := progress.Report["memory"].(string); memory != "" {
 			record.Memory = memory
 		}
+		if check := checkSummary(progress.Report); check != "" {
+			record.Check = check
+		}
 		if sha, _ := progress.Report["merge_sha"].(string); sha != "" {
 			record.MergeSHA = sha
 		}
@@ -647,6 +653,7 @@ func syncRecord(record *domain.RepairRecord, child domain.Session) {
 		return
 	}
 	record.Instance, record.Step = ceremony.Instance, ceremony.Step
+	record.StepAttempt, record.StepLimit = ceremony.Iteration, AttemptLimit(ceremony)
 	if repair := ceremony.Repair; repair != nil && repair.PullRequest > 0 {
 		record.PullRequest, record.URL = repair.PullRequest, repair.URL
 	}
@@ -741,7 +748,10 @@ func (o runObserver) Observe(progress CeremonyProgress) {
 			record.Instance = progress.Instance
 		}
 		if progress.Step != "" {
-			record.Step = progress.Step
+			record.Step, record.StepAttempt, record.StepLimit = progress.Step, progress.StepAttempt, progress.StepLimit
+		}
+		if check := checkSummary(progress.Report); check != "" {
+			record.Check = check
 		}
 		if progress.State != "" {
 			record.State = progress.State

@@ -78,6 +78,11 @@ func (m *AppModel) sizeApproval() {
 // navigation routes modal input before editor input. It never reads a worker's
 // session: all decisions use the UI's last published state.
 func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
+	if m.overlay == "jobs" && !m.approvalFocus() {
+		if next, cmd, handled := m.jobsInput(msg); handled {
+			return next, cmd, true
+		}
+	}
 	if m.overlay == "changes" && !m.approvalFocus() {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseClickMsg, tea.MouseWheelMsg:
@@ -360,6 +365,8 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.overlay = ""
 		cmd := m.copyLatest()
 		return m, cmd, true
+	case "jobs":
+		return m.openJobsPanel(), nil, true
 	case "plugins", "catalog-refresh", "catalog-change", "catalog-marketplace":
 		if m.Busy {
 			m.Status.Error = m.Theme.T("error.pluginsBusy")
@@ -843,6 +850,8 @@ func (m AppModel) overlayView(base string) string {
 	case "repairs":
 		title, subtitle, content := m.repairPanelView()
 		body = m.Theme.Overlay(title, subtitle, content, m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
+	case "jobs":
+		body = m.jobsPanelView()
 	case "sessions":
 		body = m.Picker.View(m.Theme, m.zones, m.prefix, m.Layout.Height-1, m.Layout.Width)
 	case "search":

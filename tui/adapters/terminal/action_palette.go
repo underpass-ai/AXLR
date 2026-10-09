@@ -34,6 +34,7 @@ var actionItems = []list.Item{
 	actionItem{"cancel", "palette.cancelTitle", "palette.cancelDescription", "c"},
 	actionItem{"updates", "palette.updatesTitle", "palette.updatesDescription", "u"},
 	actionItem{"changes", "palette.changesTitle", "palette.changesDescription", "d"},
+	actionItem{"jobs", "palette.jobsTitle", "palette.jobsDescription", "j"},
 	actionItem{"copy", "palette.copyTitle", "palette.copyDescription", "y"},
 }
 

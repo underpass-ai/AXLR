@@ -68,8 +68,16 @@ type RepairRecord struct {
 	// Step and State mirror the ceremony while it runs; Instance names the
 	// MADE instance once started.
 	Step, State, Instance string
-	PullRequest           int
-	URL, MergeSHA         string
+	// StepAttempt and StepLimit are the current step's attempt and the
+	// bound the console keeps on it; StepLimit is zero for a step the
+	// console does not repeat.
+	StepAttempt, StepLimit int
+	// Check is the last check result the ceremony reported, bounded: the
+	// check command's exit with its last output line, or the verdict on
+	// the pull request's checks.
+	Check         string
+	PullRequest   int
+	URL, MergeSHA string
 	// Pending describes the decision the person owes while Awaiting.
 	Pending string
 	// Memory is the last KMP report the ceremony gave; Error the last failure.

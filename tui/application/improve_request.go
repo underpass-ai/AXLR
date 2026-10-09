@@ -113,8 +113,7 @@ func improvementSignature(repository string, calls []citedFailure, description s
 
 // improvementBrief is the brief the improvement session starts with.
 func improvementBrief(s domain.Session, request repairRequest, calls []citedFailure, build string) string {
-	return requestBrief(s, request, calls, build, "Calls that showed the friction, as the origin session saw them:",
-		"Show the improvement missing in this clone with a check that fails before any change; if it already exists or cannot be made safely as a small change, hand back the brief with feasible=false and the reason.")
+	return requestBrief(s, request, calls, build, "Calls that showed the friction, as the origin session saw them:", improvementClosing)
 }
 
 // admitImprovement applies the rules that bound agent-requested

@@ -31,6 +31,7 @@ func TestRepairRegistryUpsertsAndKeepsUnknownFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	record.Status, record.PullRequest, record.URL, record.Notice = domain.RepairCompleted, 7, "https://example.test/pr/7", "merged"
+	record.StepAttempt, record.StepLimit, record.Check = 2, 3, "go test ./... exited 1: FAIL"
 	if err := registry.Save(ctx, record); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,8 @@ func TestRepairRegistryUpsertsAndKeepsUnknownFields(t *testing.T) {
 		t.Fatal(err)
 	}
 	records, err = registry.Load(ctx)
-	if err != nil || len(records) != 2 || records[0].Status != domain.RepairCompleted || records[0].PullRequest != 7 || records[0].Notice != "merged" || !records[0].Created.Equal(now) {
+	if err != nil || len(records) != 2 || records[0].Status != domain.RepairCompleted || records[0].PullRequest != 7 || records[0].Notice != "merged" || !records[0].Created.Equal(now) ||
+		records[0].StepAttempt != 2 || records[0].StepLimit != 3 || records[0].Check != "go test ./... exited 1: FAIL" {
 		t.Fatalf("records: %+v %v", records, err)
 	}
 	info, err := os.Stat(path)

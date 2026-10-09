@@ -71,6 +71,7 @@ type AppModel struct {
 	IncidentCard      IncidentCard
 	RepairPanel       RepairPanel
 	PlanPanel         PlanPanel
+	JobsPanel         JobsPanel
 	overlay           ControlIntent
 	draft             string
 	submittedPrompt   string
@@ -195,6 +196,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.refreshRepairPanel()
 		m = m.autoOpenRepairPanel()
 		return m, m.subscribeRepairs()
+	case jobsMsg:
+		return m.jobsResult(v), nil
 	case providerWaitTick:
 		if v.OperationID != m.operationID || !m.Busy {
 			return m, nil
@@ -554,6 +557,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/copy" {
 				m.Composer.Input.Reset()
 				return m, m.copyLatest()
+			}
+			if command == "/jobs" {
+				m.Composer.Input.Reset()
+				return m.openJobsPanel(), nil
 			}
 			if command == "/stop-ceremony" {
 				m.Composer.Input.Reset()

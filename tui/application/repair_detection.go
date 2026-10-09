@@ -319,9 +319,15 @@ func repairSignature(repository string, failures []citedFailure) string {
 // model's account plus the exact outcomes it cited, so the repair session
 // reproduces what the origin session saw rather than a paraphrase.
 func repairBrief(s domain.Session, request repairRequest, failures []citedFailure, build string) string {
-	return requestBrief(s, request, failures, build, "Failing calls as the origin session saw them:",
-		"Reproduce the defect in this clone with a command that fails before any change; a failure that cannot be shown here ends the repair blocked.")
+	return requestBrief(s, request, failures, build, "Failing calls as the origin session saw them:", repairClosing)
 }
+
+// repairClosing and improvementClosing end every brief of their kind, the
+// agent's and the person's, with what the first step must show.
+const (
+	repairClosing      = "Reproduce the defect in this clone with a command that fails before any change; a failure that cannot be shown here ends the repair blocked."
+	improvementClosing = "Show the improvement missing in this clone with a check that fails before any change; if it already exists or cannot be made safely as a small change, hand back the brief with feasible=false and the reason."
+)
 
 // requestBrief is the brief a repair or improvement session starts with: the
 // model's account, the evidence and the cited calls, then the closing line.

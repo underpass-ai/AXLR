@@ -456,6 +456,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			Store:     loggedStore,
 			Engine:    ceremonies.Engine,
 			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts, MaxActive: settings.JobsConfiguration().MaxActive},
+			Forge:     ceremonies.Forge,
 			Build:     buildinfo.Version,
 			RunToken:  hex.EncodeToString(token[:]),
 			Lifetime:  ctx,
