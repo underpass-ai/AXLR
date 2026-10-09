@@ -30,7 +30,11 @@ func (m AppModel) footerView() string {
 		hints = append(hints, footerHint{"continue", "ctrl+r", m.Theme.T("footer.continue")})
 	}
 	if count := len(m.Changes.records); count > 0 {
-		hints = append(hints, footerHint{"changes", "ctrl+d", m.Theme.Tf("footer.changes", count)})
+		label := m.Theme.Tf("footer.changes", count)
+		if count == 1 {
+			label = m.Theme.T("changes.oneChange")
+		}
+		hints = append(hints, footerHint{"changes", "ctrl+d", label})
 	}
 	hints = append(hints, footerHint{"palette", "ctrl+p", m.Theme.T("footer.actions")}, footerHint{"help", "f1", m.Theme.T("footer.help")})
 	if m.inlineApproval() {

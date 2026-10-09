@@ -604,7 +604,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			if intent == "autonomy-on" {
 				if settings == nil {
-					return errors.New("approval settings are unavailable")
+					return errors.New(m.Theme.T("error.approvalSettings"))
 				}
 				if err := settings.SetAutonomous(ctx, true); err != nil {
 					return err
@@ -613,11 +613,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			if intent == "always-allow" {
 				if settings == nil {
-					return errors.New("approval settings are unavailable")
+					return errors.New(m.Theme.T("error.approvalSettings"))
 				}
 				tool, _, known, err := application.ResolveToolCall(s.ToolSnapshot(), p.Call)
 				if !known || err != nil {
-					return errors.New("cannot save approval for unknown tool")
+					return errors.New(m.Theme.T("error.approvalUnknownTool"))
 				}
 				if err := settings.Allow(ctx, tool.Identity); err != nil {
 					return err

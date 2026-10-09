@@ -33,6 +33,19 @@ func TestFooterGivesErrorsTheWholeRow(t *testing.T) {
 	}
 }
 
+func TestFooterCountsOneChangeInTheSingular(t *testing.T) {
+	for locale, plural := range map[Locale]string{English: "1 changes", Spanish: "1 cambios"} {
+		m := sized()
+		m.Theme.Locale = locale
+		m.Changes.records = make([]changeRecord, 1)
+		footer := ansi.Strip(m.footerView())
+		if strings.Contains(footer, plural) || !strings.Contains(footer, "ctrl+d "+Translate(locale, "changes.oneChange")) {
+			t.Fatalf("%s footer: %q", locale, footer)
+		}
+		m.zones.Close()
+	}
+}
+
 func TestFormatTokens(t *testing.T) {
 	for n, want := range map[int]string{980: "980", 12_400: "12.4k", 1_250_000: "1.2M"} {
 		if got := formatTokens(n); got != want {

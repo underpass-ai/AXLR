@@ -208,3 +208,15 @@ func TestPluginPolicyRemainsVisibleWhenDiscoveryAfterSaveFails(t *testing.T) {
 		})
 	}
 }
+
+func TestSpanishInstallInputShowsTheSpanishPlaceholder(t *testing.T) {
+	session := navSession(t)
+	m := update(New(Dependencies{Session: &session, Monochrome: true, Locale: Spanish}), tea.WindowSizeMsg{Width: 100, Height: 30})
+	defer m.zones.Close()
+	next, cmd := m.Update(ControlIntent("mcp"))
+	m = runUIOperation(next.(AppModel), cmd)
+	m = update(m, tea.KeyPressMsg{Code: 'i', Text: "i"})
+	if view := m.View().Content; !m.Plugins.installing || !strings.Contains(view, Translate(Spanish, "mcp.manifestPlaceholder")) {
+		t.Fatalf("the install input is not in Spanish:\n%s", view)
+	}
+}
