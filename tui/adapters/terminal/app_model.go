@@ -460,6 +460,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if v.PluginApproval != nil {
 				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
 			}
+			if errors.Is(v.Err, domain.ErrToolCallLimit) {
+				// The turn paused with its answer kept: say how it goes on,
+				// in the person's language, and keep any error joined to it.
+				m.Status.Error = strings.Replace(m.Status.Error, domain.ErrToolCallLimit.Error(), m.Theme.T("error.toolCallLimit"), 1)
+			}
 			if returned != "" {
 				m.Status.Error += " " + returned
 			}
