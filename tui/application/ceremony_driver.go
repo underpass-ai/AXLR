@@ -97,7 +97,7 @@ func (d *CeremonyDriver) observe(run domain.CeremonyRun, state string, report ma
 	if d == nil || d.Observer == nil {
 		return
 	}
-	progress := CeremonyProgress{Instance: run.Instance, Definition: run.Definition, Step: run.Step, State: state, Terminal: terminal, Awaiting: awaiting}
+	progress := CeremonyProgress{Instance: run.Instance, Definition: run.Definition, Step: run.Step, State: state, Terminal: terminal, Awaiting: awaiting, StepAttempt: run.Iteration, StepLimit: AttemptLimit(run)}
 	if report != nil {
 		progress.Report = make(map[string]any, len(report))
 		for key, value := range report {

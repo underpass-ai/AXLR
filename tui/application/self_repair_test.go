@@ -525,6 +525,7 @@ func TestRequestRepairRefusesExternalAndProjectErrors(t *testing.T) {
 
 func TestRequestRepairRefusesDuplicatesRecursionAndExhaustedAttempts(t *testing.T) {
 	rig := newRepairRig(t, &blockingWorkbench{started: make(chan struct{})})
+	rig.repair.Settings.MaxActive = 1
 	parent := recurringFailure(t)
 	out, err := requestRepair(t, rig, parent, validRepairRequest)
 	if err != nil {
@@ -851,5 +852,44 @@ func TestBlockedReasonReadsTheReportAndDefaultsAreUsable(t *testing.T) {
 	}
 	if err := none.Reconcile(context.Background()); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// One active job at a time made eight /improve and /repair jobs need eight
+// consoles on 9 October 2026; jobs.max_active (default 2) bounds them
+// instead, for agent requests, improvements and recoveries alike.
+func TestActiveJobsAreBoundedByJobsMaxActive(t *testing.T) {
+	r := &SelfRepair{Build: "0.4.2"}
+	one := []domain.RepairRecord{{ID: "r1", Parent: "q", Session: "s1", Signature: "other", Status: domain.RepairRunning}}
+	two := append(append([]domain.RepairRecord(nil), one...), domain.RepairRecord{ID: "i1", Improvement: true, Parent: "q2", Session: "s2", Signature: "other2", Status: domain.RepairAwaitingMerge})
+	if got := r.admit(one, "p", "sig"); got != "" {
+		t.Fatalf("a second repair is refused by default: %q", got)
+	}
+	if got := r.admitImprovement(one, "p", "sig"); got != "" {
+		t.Fatalf("a second improvement is refused by default: %q", got)
+	}
+	if got := r.admit(two, "p", "sig"); !strings.Contains(got, "another repair is active (2 of 2 allowed by jobs.max_active)") {
+		t.Fatalf("a third repair: %q", got)
+	}
+	if got := r.admitImprovement(two, "p", "sig"); !strings.Contains(got, "(2 of 2 allowed by jobs.max_active)") {
+		t.Fatalf("a third improvement: %q", got)
+	}
+	r.Settings.MaxActive = 3
+	if got := r.admit(two, "p", "sig"); got != "" {
+		t.Fatalf("max_active 3 refuses a third: %q", got)
+	}
+	r.Settings.MaxActive = 1
+	if got := r.admit(one, "p", "sig"); !strings.Contains(got, "(1 of 1 allowed") {
+		t.Fatalf("max_active 1 admits a second: %q", got)
+	}
+
+	rig := newRepairRig(t, &happyWorkbench{})
+	interrupted := domain.RepairRecord{ID: "c", Signature: "sig3", Repository: "o/r", Parent: "q3", Session: "s3", Clone: rig.repairsIn, Status: domain.RepairInterrupted}
+	rig.registry.records = append(append(rig.registry.records, two...), interrupted)
+	for i := range rig.registry.records {
+		rig.registry.records[i].Repository = "o/r"
+	}
+	if err := rig.repair.Recover(context.Background(), "c"); err == nil || !strings.Contains(err.Error(), "(2 of 2 allowed by jobs.max_active)") {
+		t.Fatalf("recovery past the limit: %v", err)
 	}
 }

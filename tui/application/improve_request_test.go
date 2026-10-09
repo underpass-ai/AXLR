@@ -127,7 +127,7 @@ func TestImprovementAdmissionBoundsHowOftenAgentsAct(t *testing.T) {
 		want    string
 	}{
 		{"repair session", []domain.RepairRecord{{ID: "r1", Session: session, Status: domain.RepairRunning}}, "repair session of r1"},
-		{"shared slot", []domain.RepairRecord{{ID: "r1", Parent: "q", Session: "s1", Status: domain.RepairRunning}}, "another self-repair or improvement is active"},
+		{"shared slots", []domain.RepairRecord{{ID: "r1", Parent: "q", Session: "s1", Status: domain.RepairRunning}, {ID: "r2", Parent: "q", Session: "s2", Status: domain.RepairAwaitingMerge}}, "another self-repair or improvement is active (2 of 2 allowed by jobs.max_active)"},
 		{"one per session", []domain.RepairRecord{{ID: "i1", Improvement: true, Parent: session, Session: "s1", Status: domain.RepairBlocked}}, "at most one improvement per session"},
 		{"duplicate", []domain.RepairRecord{{ID: "i1", Improvement: true, Parent: "q", Session: "s1", Signature: "sig", Build: "0.4.2", Status: domain.RepairAwaitingMerge}}, "duplicate: improvement i1"},
 		{"merged by this build", []domain.RepairRecord{{ID: "i1", Improvement: true, Parent: "q", Session: "s1", Signature: "sig", Build: "0.4.2", Status: domain.RepairCompleted, PullRequest: 9}}, "already improved: pull request #9"},
