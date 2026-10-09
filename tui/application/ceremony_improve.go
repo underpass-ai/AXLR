@@ -15,8 +15,8 @@ import (
 // improveInstructions replace the delivery wording of brief and build: the
 // baseline must fail and build also returns summary_en.
 var improveInstructions = map[string]string{
-	"brief": "Read the clone and settle the improvement. Call axlr_step_done with criteria (observable behaviour), scope and check_command {program, args} (no shell) whose zero exit proves the criteria. The console runs it once before any change: it must exit non-zero, showing the improvement is missing, and the same command must pass after build. If the improvement already exists, or cannot be made safely as a small change, call axlr_step_done with feasible=false and explain why in observed; the console then closes the ceremony as BLOCKED.",
-	"build": "Implement the smallest change that meets the criteria and add a test when it protects real behaviour; in later rounds fix what the previous check output shows, without growing scope. Call axlr_step_done with summary and summary_en, two or three plain English sentences for the pull request and project memory. The console reruns the check command approved in brief, which is fixed for the rest of the ceremony; it must exit zero.",
+	"brief": "Read the clone and settle the improvement. Call axlr_step_done with criteria (observable behaviour), scope and check_command {program, args} (no shell) whose zero exit proves the criteria. The console runs it once before any change: it must exit non-zero, showing the improvement is missing, and the same command must pass after build. A Go test you will add in build fails first through this rule: go test -run naming it exits 0 with \"[no tests to run]\" while it does not exist, which the console counts as missing, never as passing. If the improvement already exists, or cannot be made safely as a small change, call axlr_step_done with feasible=false and explain why in observed; the console then closes the ceremony as BLOCKED.",
+	"build": "Implement the smallest change that meets the criteria and add a test when it protects real behaviour; in later rounds fix what the previous check output shows, without growing scope. Call axlr_step_done with summary and summary_en, two or three plain English sentences for the pull request and project memory. The console reruns the check command approved in brief, which is fixed for the rest of the ceremony; it must exit zero, and a go test run that matches no test (\"[no tests to run]\") does not pass.",
 }
 
 // improveInstruction is repairInstruction for an improvement.
@@ -68,7 +68,9 @@ func (d *CeremonyDriver) improveBrief(ctx context.Context, run *domain.CeremonyR
 	if !result.Ran {
 		return nil, "", false, "the check command did not run (" + result.Output + "); give program and args separately, with a program that exists", nil
 	}
-	missing := result.ExitCode != 0
+	// A Go check naming a test the build will add runs no tests now and
+	// exits 0: that shows the improvement missing too.
+	missing := result.ExitCode != 0 || result.RanNoTests()
 	output = map[string]any{"criteria": done.Criteria, "scope": done.Scope, "missing": missing, "settled": missing}
 	addEvidence(output, report, command, result)
 	switch {

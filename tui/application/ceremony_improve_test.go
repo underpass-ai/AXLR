@@ -158,6 +158,36 @@ func TestImproveBriefRefusesAClonePastItsBaseline(t *testing.T) {
 	}
 }
 
+// noTestsRun is go test -run ^TestLogs$ ./cmd/... before TestLogs exists: it
+// exits 0.
+const noTestsRun = "ok  \tgithub.com/underpass-ai/AXLR/tui/cmd/axlr-serve\t0.010s [no tests to run]\nok  \tgithub.com/underpass-ai/AXLR/tui/cmd/axlr-tui\t0.012s [no tests to run]\n"
+
+// A check naming a Go test that does not exist yet passes vacuously: the
+// brief must count it as the improvement missing (the clone is clean, so the
+// new test cannot exist), and build must not count it as passing.
+func TestImproveCountsAGoCheckThatRanNoTestsAsMissingNotPassing(t *testing.T) {
+	forge := &fakeForge{statuses: []PullRequestStatus{{State: "OPEN", MergeState: "CLEAN", Passed: 3}}}
+	d, _, checks, _, s := improveDriver(t, forge, 0, 0, 0)
+	checks.outputs = []string{noTestsRun, noTestsRun, noTestsRun[:strings.Index(noTestsRun, "\n")+1] + "ok  \tgithub.com/underpass-ai/AXLR/tui/cmd/axlr-tui\t0.412s\n"}
+	if err := d.Begin(context.Background(), &s, "show the log"); err != nil {
+		t.Fatal(err)
+	}
+	if text := Instruction(func() domain.CeremonyRun { run, _ := s.Ceremony(); return run }()); !strings.Contains(text, "[no tests to run]") {
+		t.Fatalf("the brief instruction must say how a new Go test fails first: %s", text)
+	}
+	r := step(t, d, &s, `{"criteria":"axlr logs prints the last lines","scope":"tui/cmd","check_command":{"program":"go","args":["test","-run","^TestLogs$","./cmd/..."]}}`)
+	if r["next_step"] != "build" || r["check"].(map[string]any)["ran_no_tests"] != true {
+		t.Fatalf("a check that ran no tests shows the improvement missing: %v", r)
+	}
+	r = step(t, d, &s, `{"summary":"s","summary_en":"The console prints its log tail."}`)
+	if r["next_step"] != "build" || !strings.Contains(r["feedback"].(string), "ran no tests") {
+		t.Fatalf("a build whose check ran no tests must not pass: %v", r)
+	}
+	if r := step(t, d, &s, `{"summary":"s","summary_en":"The console prints its log tail."}`); r["next_step"] != "decide" {
+		t.Fatalf("a build whose check ran the test passes: %v", r)
+	}
+}
+
 // A warning git status prints on stderr while exiting 0 is not a change in
 // the clone: the brief's baseline still runs.
 func TestImproveBriefIgnoresGitStatusWarnings(t *testing.T) {

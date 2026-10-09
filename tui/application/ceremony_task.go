@@ -251,6 +251,9 @@ func (d *CeremonyDriver) taskRed(ctx context.Context, run *domain.CeremonyRun, d
 		return output, "red_exhausted", false, "", nil
 	}
 	report["feedback"] = "the unit check passes, so the test does not fail yet; make it fail for the missing behaviour"
+	if result.RanNoTests() {
+		report["feedback"] = noTestsFeedback
+	}
 	return output, "", true, "", nil
 }
 
@@ -300,7 +303,7 @@ func (d *CeremonyDriver) taskGreen(ctx context.Context, s domain.Session, run *d
 	if err != nil {
 		return nil, "", false, "", err
 	}
-	green := result.Ran && result.ExitCode == 0
+	green := result.Ran && result.ExitCode == 0 && !result.RanNoTests()
 	output := map[string]any{"green": green, "summary": done.Summary, "summary_en": bounded(done.SummaryEN, 1500)}
 	if len(done.Notes) > 0 {
 		output["notes"] = done.Notes
@@ -319,6 +322,9 @@ func (d *CeremonyDriver) taskGreen(ctx context.Context, s domain.Session, run *d
 		return output, "green_exhausted", false, "", nil
 	}
 	report["feedback"] = "the unit check still fails; fix what its output shows"
+	if result.RanNoTests() {
+		report["feedback"] = noTestsFeedback
+	}
 	return output, "", true, "", nil
 }
 

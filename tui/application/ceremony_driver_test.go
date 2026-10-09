@@ -95,6 +95,9 @@ type fakeChecks struct {
 	// git, when set, answers the other git commands (rev-parse HEAD in a
 	// repository without commits, say).
 	git *CheckResult
+	// outputs is what the next check commands print, one per run; "tail"
+	// once it is empty.
+	outputs []string
 }
 
 func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckResult, error) {
@@ -115,7 +118,11 @@ func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckR
 	if exit == -1 {
 		return CheckResult{ExitCode: -1, Output: "program not found"}, nil
 	}
-	return CheckResult{Ran: true, ExitCode: exit, Output: "tail"}, nil
+	output := "tail"
+	if len(f.outputs) > 0 {
+		output, f.outputs = f.outputs[0], f.outputs[1:]
+	}
+	return CheckResult{Ran: true, ExitCode: exit, Output: output, Stdout: output}, nil
 }
 
 type fakeMemory struct {

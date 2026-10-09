@@ -18,6 +18,8 @@ type taskChecks struct {
 	runs   []string
 	// rev, when set, answers git rev-parse HEAD.
 	rev *CheckResult
+	// output, when set, is what the unit check prints.
+	output string
 }
 
 func (c *taskChecks) Run(_ context.Context, command domain.CheckCommand) (CheckResult, error) {
@@ -40,6 +42,9 @@ func (c *taskChecks) Run(_ context.Context, command domain.CheckCommand) (CheckR
 	exit := 0
 	if len(c.exits) > 0 {
 		exit, c.exits = c.exits[0], c.exits[1:]
+	}
+	if c.output != "" {
+		return CheckResult{Ran: true, ExitCode: exit, Output: c.output, Stdout: c.output}, nil
 	}
 	return CheckResult{Ran: true, ExitCode: exit, Output: "FAIL lines_test.go: undefined: LineCount"}, nil
 }
@@ -123,6 +128,25 @@ func TestTaskHandbackRecordsNoRevisionWithoutACommit(t *testing.T) {
 	handback := engine.completed[len(engine.completed)-1]
 	if task := plans.records[0].Tasks[0]; handback["revision"] != "" || task.Handback == nil || task.Handback.Revision != "" {
 		t.Fatalf("revision in MADE %q, in the registry %+v", handback["revision"], task.Handback)
+	}
+}
+
+// A unit check whose -run pattern matches no test exits 0: it neither shows
+// the new test failing at red nor proves the task at green.
+func TestTaskUnitCheckThatRanNoTestsIsNeitherRedNorGreen(t *testing.T) {
+	d, files, checks, _, s, _ := taskSetup(t, true)
+	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
+	checks.status = append(checks.status, "?? lines_test.go")
+	checks.exits, checks.output = []int{0}, "testing: warning: no tests to run\nPASS\nok  \tx/textstat\t0.003s\n"
+	if r := step(t, d, &s, `{"test_files":["lines_test.go"],"expected":"undefined: LineCount"}`); r["next_step"] != "red" || !strings.Contains(r["feedback"].(string), "ran no tests") {
+		t.Fatalf("red with no test run: %v", r)
+	}
+	g, gfiles, gchecks, _, gs, _ := taskSetup(t, false)
+	gfiles.files["lines.go"] = []byte("package textstat\nfunc LineCount(s string) int { return 0 }\n")
+	gchecks.status = append(gchecks.status, "?? lines.go")
+	gchecks.exits, gchecks.output = []int{0}, "ok  \tx/textstat\t0.003s [no tests to run]\n"
+	if r := step(t, g, &gs, `{"summary":"Added LineCount","summary_en":"LineCount counts lines."}`); r["next_step"] != "green" || !strings.Contains(r["feedback"].(string), "ran no tests") {
+		t.Fatalf("green with no test run: %v", r)
 	}
 }
 

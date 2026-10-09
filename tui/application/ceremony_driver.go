@@ -511,7 +511,7 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		if err != nil {
 			return StepResult{}, err
 		}
-		passed := result.Ran && result.ExitCode == 0
+		passed := result.Ran && result.ExitCode == 0 && !result.RanNoTests()
 		field, success, exhausted := "repaired", "repaired", "repair_exhausted"
 		if run.Step == "build" {
 			field, success, exhausted = "verified", "verified", "build_exhausted"
@@ -531,6 +531,8 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 			report["feedback"] = "the check command still fails; fix what its output shows"
 			if !result.Ran {
 				report["feedback"] = "the check command did not run: " + result.Output
+			} else if result.RanNoTests() {
+				report["feedback"] = noTestsFeedback
 			}
 		}
 	case "integrate":
@@ -807,6 +809,9 @@ func (d *CeremonyDriver) record(ctx context.Context, s domain.Session, run domai
 
 func addEvidence(output, report map[string]any, command domain.CheckCommand, result CheckResult) {
 	evidence := map[string]any{"program": command.Program, "args": command.Args, "exit_code": result.ExitCode, "output_tail": result.Output}
+	if result.RanNoTests() {
+		evidence["ran_no_tests"] = true
+	}
 	output["check"] = evidence
 	report["check"] = evidence
 }
