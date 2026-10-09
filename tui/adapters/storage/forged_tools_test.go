@@ -18,7 +18,7 @@ func forgedTool(name string) application.ForgedTool {
 
 func TestForgedToolStoreRegistersReplacesAndVerifies(t *testing.T) {
 	workspace := t.TempDir()
-	store := &ForgedToolStore{Now: func() time.Time { return time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC) }}
+	store := &ForgedToolStore{Dir: t.TempDir(), Now: func() time.Time { return time.Date(2026, 10, 9, 12, 0, 0, 0, time.UTC) }}
 	ctx := context.Background()
 	stored, replaced, err := store.Forge(ctx, workspace, forgedTool("echo_it"), []application.ForgedFile{{Path: "run.sh", Content: "cat"}, {Path: "lib/old.sh", Content: "old"}})
 	if err != nil || replaced || stored.ForgedAt != "2026-10-09T12:00:00Z" || len(stored.Files) != 2 {
@@ -56,8 +56,8 @@ func TestForgedToolStoreRegistersReplacesAndVerifies(t *testing.T) {
 	}
 }
 
-// Only Forge registers a tool: a directory written beside the registry is
-// not one.
+// Only Forge registers a tool: a directory planted beside the tools, or a
+// registry that arrives with a checkout, is not one.
 func TestForgedToolStoreDoesNotScanDirectories(t *testing.T) {
 	workspace := t.TempDir()
 	dir := filepath.Join(workspace, ".axlr", "tools", "planted")
@@ -67,33 +67,60 @@ func TestForgedToolStoreDoesNotScanDirectories(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "run.sh"), []byte("echo planted"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	listed, err := (&ForgedToolStore{}).List(context.Background(), workspace)
+	checkout := `{"version":1,"workspace":"` + workspace + `","tools":[{"name":"planted","description":"d","input_schema":{"type":"object"},"program":"sh","args":[".axlr/tools/planted/run.sh"],"files":{"run.sh":"x"}}]}`
+	if err := os.WriteFile(filepath.Join(workspace, ".axlr", "tools", "registry.json"), []byte(checkout), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewForgedToolStore(filepath.Join(t.TempDir(), "forged"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed, err := store.List(context.Background(), workspace)
 	if err != nil || len(listed) != 0 {
 		t.Fatalf("list = %+v, %v", listed, err)
 	}
 }
 
-func TestForgedToolStoreRefusesADamagedRegistryAndAnEscapingWorkspace(t *testing.T) {
-	workspace := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(workspace, ".axlr", "tools"), 0o755); err != nil {
+func TestForgedToolStoreKeepsAPrivateRegistryPerWorkspace(t *testing.T) {
+	store, err := NewForgedToolStore(filepath.Join(t.TempDir(), "forged"))
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(workspace, ".axlr", "tools", "registry.json"), []byte(`{"version":2,"tools":[]}`), 0o644); err != nil {
+	first, second := t.TempDir(), t.TempDir()
+	if _, _, err := store.Forge(context.Background(), first, forgedTool("only_here"), []application.ForgedFile{{Path: "run.sh", Content: "x"}}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := (&ForgedToolStore{}).List(context.Background(), workspace); err == nil {
-		t.Fatal("a registry of another version was read")
+	if listed, _ := store.List(context.Background(), second); len(listed) != 0 {
+		t.Fatalf("another workspace sees %+v", listed)
 	}
-	if _, err := (&ForgedToolStore{}).List(context.Background(), "relative"); err == nil {
+	info, err := os.Stat(store.registry(first))
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("registry %v, %v", info, err)
+	}
+	// A damaged registry, or one of another workspace, is refused, not read.
+	for _, text := range []string{`{"version":2,"workspace":"` + first + `","tools":[]}`, `{"version":1,"workspace":"` + second + `","tools":[]}`} {
+		if err := os.WriteFile(store.registry(first), []byte(text), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.List(context.Background(), first); err == nil {
+			t.Fatalf("read %s", text)
+		}
+	}
+	if _, err := store.List(context.Background(), "relative"); err == nil {
 		t.Fatal("a relative workspace was opened")
 	}
-	// .axlr pointing outside the workspace is not followed.
-	outside := t.TempDir()
-	linked := t.TempDir()
+	if _, err := NewForgedToolStore("relative"); err == nil {
+		t.Fatal("a relative state directory was accepted")
+	}
+}
+
+func TestForgedToolStoreDoesNotWriteThroughASymlinkOutOfTheWorkspace(t *testing.T) {
+	outside, linked := t.TempDir(), t.TempDir()
 	if err := os.Symlink(outside, filepath.Join(linked, ".axlr")); err != nil {
 		t.Skip("symlinks unavailable:", err)
 	}
-	if _, _, err := (&ForgedToolStore{}).Forge(context.Background(), linked, forgedTool("escape"), []application.ForgedFile{{Path: "run.sh", Content: "x"}}); err == nil {
+	store := &ForgedToolStore{Dir: t.TempDir()}
+	if _, _, err := store.Forge(context.Background(), linked, forgedTool("escape"), []application.ForgedFile{{Path: "run.sh", Content: "x"}}); err == nil {
 		t.Fatal("forged through a symlink out of the workspace")
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {

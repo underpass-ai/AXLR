@@ -3,12 +3,12 @@ package storage
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -30,21 +30,36 @@ const (
 )
 
 type forgedToolsRecord struct {
-	Version int                      `json:"version"`
-	Tools   []application.ForgedTool `json:"tools"`
+	Version   int                      `json:"version"`
+	Workspace string                   `json:"workspace"`
+	Tools     []application.ForgedTool `json:"tools"`
 }
 
-// ForgedToolStore keeps each workspace's forged tools under
-// <workspace>/.axlr/tools: one directory per tool and registry.json, which
-// only Forge writes. Every access goes through os.Root, so neither a path nor
-// a symlink reaches outside the workspace.
+// ForgedToolStore keeps each workspace's forged tools: their files under
+// <workspace>/.axlr/tools/<name>, written through os.Root so neither a path
+// nor a symlink reaches outside the workspace, and their registry in Dir,
+// the console's private state, one file per workspace. Only Forge writes the
+// registry, so files that arrive with a checkout or are planted in the
+// workspace are never registered tools.
 type ForgedToolStore struct {
-	mu sync.Mutex
+	Dir string
+	mu  sync.Mutex
 	// Now stamps forged_at; nil uses time.Now.
 	Now func() time.Time
 }
 
 var _ application.ForgedToolsPort = (*ForgedToolStore)(nil)
+
+// NewForgedToolStore keeps the registries in dir, created owner-only.
+func NewForgedToolStore(dir string) (*ForgedToolStore, error) {
+	if !filepath.IsAbs(dir) {
+		return nil, errors.New("forged tools directory must be absolute")
+	}
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, err
+	}
+	return &ForgedToolStore{Dir: dir}, nil
+}
 
 func (s *ForgedToolStore) List(ctx context.Context, workspace string) ([]application.ForgedTool, error) {
 	s.mu.Lock()
@@ -52,12 +67,7 @@ func (s *ForgedToolStore) List(ctx context.Context, workspace string) ([]applica
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	root, err := openWorkspace(workspace)
-	if err != nil {
-		return nil, err
-	}
-	defer root.Close()
-	record, err := readForged(root)
+	record, err := s.read(workspace)
 	if err != nil {
 		return nil, err
 	}
@@ -70,15 +80,15 @@ func (s *ForgedToolStore) Forge(ctx context.Context, workspace string, tool appl
 	if err := ctx.Err(); err != nil {
 		return application.ForgedTool{}, false, err
 	}
+	record, err := s.read(workspace)
+	if err != nil {
+		return application.ForgedTool{}, false, err
+	}
 	root, err := openWorkspace(workspace)
 	if err != nil {
 		return application.ForgedTool{}, false, err
 	}
 	defer root.Close()
-	record, err := readForged(root)
-	if err != nil {
-		return application.ForgedTool{}, false, err
-	}
 	replaced := false
 	kept := record.Tools[:0]
 	for _, existing := range record.Tools {
@@ -116,7 +126,14 @@ func (s *ForgedToolStore) Forge(ctx context.Context, workspace string, tool appl
 	tool.ForgedAt = now().UTC().Format(time.RFC3339)
 	record.Tools = append(kept, tool)
 	sort.Slice(record.Tools, func(i, j int) bool { return record.Tools[i].Name < record.Tools[j].Name })
-	if err := writeForged(root, record); err != nil {
+	data, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return application.ForgedTool{}, false, err
+	}
+	if len(data) > maxForgedRegistryBytes {
+		return application.ForgedTool{}, false, fmt.Errorf("the registry of forged tools would exceed %d bytes", maxForgedRegistryBytes)
+	}
+	if err := writePrivateFile(ctx, s.registry(workspace), ".forged-*", append(data, '\n')); err != nil {
 		return application.ForgedTool{}, false, err
 	}
 	return tool, replaced, nil
@@ -156,50 +173,41 @@ func openWorkspace(workspace string) (*os.Root, error) {
 	return os.OpenRoot(workspace)
 }
 
-func registryPath() string { return path.Join(application.ForgedToolsDir, "registry.json") }
+// registry is the workspace's registry file, named by a digest of its
+// absolute path.
+func (s *ForgedToolStore) registry(workspace string) string {
+	sum := sha256.Sum256([]byte(filepath.Clean(workspace)))
+	return filepath.Join(s.Dir, hex.EncodeToString(sum[:16])+".json")
+}
 
-func readForged(root *os.Root) (forgedToolsRecord, error) {
-	data, err := root.ReadFile(registryPath())
+func (s *ForgedToolStore) read(workspace string) (forgedToolsRecord, error) {
+	if !filepath.IsAbs(workspace) {
+		return forgedToolsRecord{}, errors.New("workspace must be absolute")
+	}
+	if !filepath.IsAbs(s.Dir) {
+		return forgedToolsRecord{}, errors.New("forged tools directory must be absolute")
+	}
+	empty := forgedToolsRecord{Version: forgedToolsVersion, Workspace: filepath.Clean(workspace)}
+	file, err := os.Open(s.registry(workspace))
 	if errors.Is(err, fs.ErrNotExist) {
-		return forgedToolsRecord{Version: forgedToolsVersion}, nil
+		return empty, nil
 	}
 	if err != nil {
 		return forgedToolsRecord{}, err
 	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, maxForgedRegistryBytes+1))
+	if err != nil {
+		return forgedToolsRecord{}, err
+	}
 	if len(data) > maxForgedRegistryBytes {
-		return forgedToolsRecord{}, fmt.Errorf("%s exceeds %d bytes", registryPath(), maxForgedRegistryBytes)
+		return forgedToolsRecord{}, fmt.Errorf("the registry of forged tools exceeds %d bytes", maxForgedRegistryBytes)
 	}
 	var record forgedToolsRecord
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&record); err != nil || record.Version != forgedToolsVersion {
-		return forgedToolsRecord{}, fmt.Errorf("%s is not a version %d registry of forged tools", registryPath(), forgedToolsVersion)
+	if err := decoder.Decode(&record); err != nil || record.Version != forgedToolsVersion || record.Workspace != empty.Workspace {
+		return forgedToolsRecord{}, fmt.Errorf("%s is not a version %d registry of this workspace's forged tools", s.registry(workspace), forgedToolsVersion)
 	}
 	return record, nil
-}
-
-// writeForged replaces the registry atomically: a reader sees the old file or
-// the new one.
-func writeForged(root *os.Root, record forgedToolsRecord) error {
-	data, err := json.MarshalIndent(record, "", "  ")
-	if err != nil {
-		return err
-	}
-	if len(data) > maxForgedRegistryBytes {
-		return fmt.Errorf("%s would exceed %d bytes", registryPath(), maxForgedRegistryBytes)
-	}
-	if err := root.MkdirAll(application.ForgedToolsDir, 0o755); err != nil {
-		return err
-	}
-	var entropy [8]byte
-	_, _ = rand.Read(entropy[:])
-	temp := path.Join(application.ForgedToolsDir, ".registry-"+hex.EncodeToString(entropy[:]))
-	if err := root.WriteFile(temp, append(data, '\n'), 0o644); err != nil {
-		return err
-	}
-	if err := root.Rename(temp, registryPath()); err != nil {
-		_ = root.Remove(temp)
-		return err
-	}
-	return nil
 }

@@ -269,3 +269,44 @@ func TestAForgedToolFailureIsNotEvidenceOfADefectOfAXLR(t *testing.T) {
 		t.Fatalf("refusal = %q", refusal)
 	}
 }
+
+// The approved call goes through the resolver, which hands the continuation's
+// forged tools, the local runtime and the validator to the host tools.
+func TestAnApprovedForgedRunReachesTheRuntimeThroughTheResolver(t *testing.T) {
+	forged := &forgedMemory{}
+	s := turnSession(t)
+	if _, err := (HostToolUseCase{Forge: forged}).Execute(context.Background(), s, hostIdentity(t, domain.HostOperationForgeTool), object(t, forgeArguments)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("count the words", append(turnTools(), RunTool())); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteAssistant(assistant("", root.ToolCall{ID: "call-1", Name: HostRunToolName, Arguments: object(t, `{"name":"word_count","arguments":{"text":"one two"}}`)})); err != nil {
+		t.Fatal(err)
+	}
+	var ran domain.ToolIdentity
+	var stdin string
+	tools := toolFunc(func(_ context.Context, id domain.ToolIdentity, args root.JSONValue) (domain.ToolOutcome, error) {
+		var command struct{ Stdin string }
+		_ = json.Unmarshal(args.Bytes(), &command)
+		ran, stdin = id, command.Stdin
+		return domain.ToolOutcome{Content: `{"status":"completed","output":{"exit_code":0,"stdout":"2\n"}}`}, nil
+	})
+	validated := false
+	store := &memoryStore{}
+	var sent root.CompletionRequest
+	u := ResolveToolUseCase{Store: store, Tools: tools, Validation: argumentValidationFunc(func(root.ToolDefinition, root.JSONValue) error { validated = true; return nil }),
+		Continue: ContinueTurnUseCase{Store: store, Forge: forged, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			sent = req
+			return assistant("two words"), nil
+		})}}
+	if err := u.Execute(context.Background(), &s, "call-1", domain.DecisionApprove, nil); err != nil {
+		t.Fatal(err)
+	}
+	if ran != localIdentity("exec") || stdin != `{"text":"one two"}` || !validated {
+		t.Fatalf("ran %+v with stdin %q, validated %v", ran, stdin, validated)
+	}
+	if result := sent.Messages[len(sent.Messages)-1]; result.Role != root.RoleTool || !strings.Contains(string(result.Content), `"stdout":"2\n"`) {
+		t.Fatalf("result = %s", result.Content)
+	}
+}

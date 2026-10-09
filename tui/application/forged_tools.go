@@ -21,8 +21,9 @@ import (
 const (
 	HostForgeToolName root.ToolName = "axlr_forge_tool"
 	HostRunToolName   root.ToolName = "axlr_run_tool"
-	// ForgedToolsDir is where a workspace keeps its forged tools, one
-	// directory per tool, beside the registry only axlr_forge_tool writes.
+	// ForgedToolsDir is where a workspace keeps its forged tools' files, one
+	// directory per tool; the registry, which only axlr_forge_tool writes,
+	// lives in the console's state.
 	ForgedToolsDir = ".axlr/tools"
 )
 
@@ -64,8 +65,9 @@ type ForgedFile struct {
 }
 
 // ForgedToolsPort keeps a workspace's forged tools. Only Forge registers a
-// tool: a file written another way into ForgedToolsDir is never one, and
-// Verify refuses a tool whose files changed since it was forged.
+// tool: a file written another way into ForgedToolsDir, or brought by a
+// checkout, is never one, and Verify refuses a tool whose files changed
+// since it was forged.
 type ForgedToolsPort interface {
 	List(ctx context.Context, workspace string) ([]ForgedTool, error)
 	// Forge replaces the tool's directory with files, fills Files and

@@ -27,7 +27,11 @@ func TestAForgedToolRunsAtOnceThroughTheRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer executor.Close()
-	host := application.HostToolUseCase{Forge: &storage.ForgedToolStore{}, Tools: ToolRunner{Executor: executor}, Validation: NewToolArgumentValidator()}
+	store, err := storage.NewForgedToolStore(filepath.Join(t.TempDir(), "forged"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	host := application.HostToolUseCase{Forge: store, Tools: ToolRunner{Executor: executor}, Validation: NewToolArgumentValidator()}
 	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(workspace), "model")
 	if err != nil {
 		t.Fatal(err)
@@ -41,8 +45,8 @@ func TestAForgedToolRunsAtOnceThroughTheRuntime(t *testing.T) {
 	if err != nil || forged.IsError {
 		t.Fatalf("forge = %+v, %v", forged, err)
 	}
-	if _, err := os.Stat(filepath.Join(workspace, ".axlr", "tools", "registry.json")); err != nil {
-		t.Fatalf("registry not written: %v", err)
+	if _, err := os.Stat(filepath.Join(workspace, ".axlr", "tools", "count_letters", "count.sh")); err != nil {
+		t.Fatalf("tool file not written: %v", err)
 	}
 
 	listed, err := host.Execute(context.Background(), session, tools, jsonValue(t, `{"query":"letters"}`))

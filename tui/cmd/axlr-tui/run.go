@@ -499,7 +499,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	continuation.Usage, continuation.MaxSessionUSD = store, settings.MaxSessionUSD
 	if settings.ForgedToolsEnabled() {
 		// The model forges workspace tools and runs them in the same session.
-		continuation.Forge = &storage.ForgedToolStore{}
+		forged, err := storage.NewForgedToolStore(filepath.Join(stateBase, "axlr", "forged-tools"))
+		if err != nil {
+			return fail(err)
+		}
+		continuation.Forge = forged
 	}
 	if _, kmp := activeEngineCommands["kmp"]; kmp {
 		// axlr_remember writes the model's memories in one call.
