@@ -95,6 +95,12 @@ type AppModel struct {
 	closedCancelled uint64
 }
 
+// turnRunning reports whether the busy operation is a turn, which takes a
+// queued message; other operations (updates, lists, preparation) do not.
+func (m AppModel) turnRunning() bool {
+	return m.submittedPrompt != "" || m.Header.State.Status == domain.StatusStreaming || m.Header.State.Status == domain.StatusApproval || m.toolExecuting || m.providerWaiting
+}
+
 func assistantInMessages(messages []root.Message, start int) bool {
 	for i := len(messages) - 1; i >= start; i-- {
 		if messages[i].Role == root.RoleAssistant {
@@ -613,7 +619,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return changed, cmd
 			}
-			if m.Busy && command != "" && (m.submittedPrompt != "" || m.Header.State.Status == domain.StatusStreaming || m.Header.State.Status == domain.StatusApproval || m.toolExecuting || m.providerWaiting) {
+			if m.Busy && command != "" && m.turnRunning() {
 				message := m.Composer.Input.Value()
 				m.rememberPrompt(message)
 				m.steer.Add(message)
@@ -625,7 +631,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// takes it after its next tool step, or it starts the next turn.
 				return m, nil
 			}
-			if m.Busy || strings.TrimSpace(m.Composer.Input.Value()) == "" {
+			if strings.TrimSpace(m.Composer.Input.Value()) == "" {
+				return m, nil
+			}
+			if m.Busy {
+				// An operation that is not a turn runs (an update, MADE
+				// preparation, a list): the draft stays, and the person
+				// learns why it was not sent.
+				m.Status.Notice = m.Theme.T("notice.operationRunning")
 				return m, nil
 			}
 			if m.Header.State.ID == "" {

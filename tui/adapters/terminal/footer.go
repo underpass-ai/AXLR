@@ -26,7 +26,8 @@ func (m AppModel) footerView() string {
 	if m.Busy {
 		hints = append(hints, footerHint{"cancel", "esc", m.Theme.T("footer.cancel")})
 	}
-	if m.Header.State.Status == domain.StatusInterrupted || m.Header.State.Status == domain.StatusStreaming {
+	if !m.Busy && (m.Header.State.Status == domain.StatusInterrupted || m.Header.State.Status == domain.StatusStreaming) {
+		// Ctrl+R is refused while an operation runs.
 		hints = append(hints, footerHint{"continue", "ctrl+r", m.Theme.T("footer.continue")})
 	}
 	if count := len(m.Changes.records); count > 0 {
@@ -164,6 +165,10 @@ func (m AppModel) activityLabel(status StatusBar) string {
 			}
 		}
 		return indicator + " " + label + " · " + fmt.Sprintf("%ds", int(time.Since(m.providerWaitStarted).Seconds()))
+	case m.Busy && !m.turnRunning():
+		// An update, MADE preparation or a list runs: say so instead of
+		// "idle". No clock ticks for it, so the indicator is the still one.
+		return m.Theme.Icon("waiting") + " " + m.Theme.T("status.working")
 	}
 	return ""
 }
