@@ -40,10 +40,15 @@ func TestMain(m *testing.M) {
 }
 
 // shortDir is a private directory with a short path: a socket path is
-// limited to about 104 bytes.
+// limited to 104 bytes on macOS, whose $TMPDIR alone takes about 49, so
+// the test falls back to /tmp when the socket would not fit.
 func shortDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("", "axe")
+	parent := ""
+	if len(os.TempDir())+len("/axe0123456789/engines/")+len(Spec{}.key())+len(".sock.lock") > 100 {
+		parent = "/tmp"
+	}
+	dir, err := os.MkdirTemp(parent, "axe")
 	if err != nil {
 		t.Fatal(err)
 	}
