@@ -107,6 +107,15 @@ type AppModel struct {
 
 // turnRunning reports whether the busy operation is a turn, which takes a
 // queued message; other operations (updates, lists, preparation) do not.
+// quit ends the console and hands the session it showed to deps.Quit.
+func (m AppModel) quit() (tea.Model, tea.Cmd) {
+	m.zones.Close()
+	if m.deps.Quit != nil {
+		m.deps.Quit(m.Header.State)
+	}
+	return m, tea.Quit
+}
+
 func (m AppModel) turnRunning() bool {
 	return m.submittedPrompt != "" || m.Header.State.Status == domain.StatusStreaming || m.Header.State.Status == domain.StatusApproval || m.toolExecuting || m.providerWaiting
 }
@@ -559,8 +568,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.Busy {
 					return m.Update(ControlIntent("cancel"))
 				}
-				m.zones.Close()
-				return m, tea.Quit
+				return m.quit()
 			}
 			if unknownSlashWord(command) {
 				m.Status.Error = m.Theme.Tf("error.unknownCommand", command)
@@ -763,8 +771,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.Busy {
 				return m.Update(ControlIntent("cancel"))
 			}
-			m.zones.Close()
-			return m, tea.Quit
+			return m.quit()
 		case "pgup":
 			m.Transcript.Viewport.PageUp()
 			return m, nil

@@ -301,7 +301,7 @@ Open a session with `Ctrl+O` or start with:
 /tmp/axlr-tui --root "$PWD" --session 0123456789abcdef0123456789abcdef
 ```
 
-The workspace must match the saved one. The saved model is restored without a catalog request; an accompanying `--model` must match it. An interrupted session loads without executing pending calls. Use `Ctrl+R` to continue explicitly; pending tools follow the current approval policy. Partial output remains an interrupted draft outside valid model history.
+The `Ctrl+O` panel shows the selected session's id on its second line, and quitting a session with messages (`/exit`, `Ctrl+C`) prints `axlr-tui: resume with: axlr-tui --session <id>` on stderr, with the session's cost when it has one. The workspace must match the saved one. The saved model is restored without a catalog request; an accompanying `--model` must match it. An interrupted session loads without executing pending calls. Use `Ctrl+R` to continue explicitly; pending tools follow the current approval policy. Partial output remains an interrupted draft outside valid model history.
 
 ## Diagnostics and privacy
 

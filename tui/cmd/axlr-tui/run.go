@@ -539,6 +539,12 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		continuation.SelfRepair = repairs
 		notices = repairs
 	}
+	// shown is the session on screen when the console ends: the one it
+	// opened, or the one the person had switched to when they quit.
+	var shown domain.SessionState
+	if session != nil {
+		shown = session.Export()
+	}
 	app := terminal.New(terminal.Dependencies{
 		Context:           ctx,
 		Diagnostics:       trace,
@@ -570,8 +576,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Plans:             planPanel,
 		Usage:             store,
 		MaxSessionUSD:     settings.MaxSessionUSD,
+		Quit:              func(state domain.SessionState) { shown = state },
 	})
 	defer app.Close()
+	defer func() { printResumeHint(stderr, shown, store) }()
 	consoleSession := newID
 	if session != nil {
 		consoleSession = session.Export().ID
@@ -582,6 +590,23 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		return fail(err)
 	}
 	return 0
+}
+
+// printResumeHint tells the person how to come back to a session with
+// messages, and what it has cost. On 10 October 2026 /exit left only the
+// log, diagnostics and settings paths, and the 32-hex id --session needs
+// was shown nowhere.
+func printResumeHint(stderr io.Writer, state domain.SessionState, usage application.SessionUsagePort) {
+	if state.ID == "" || len(state.Messages) == 0 {
+		return
+	}
+	cost := ""
+	if usage != nil {
+		if ledger, err := usage.LoadUsage(context.Background(), state.ID); err == nil && ledger.CostRequests > 0 {
+			cost = fmt.Sprintf(" (session cost $%.4f)", ledger.Cost)
+		}
+	}
+	fmt.Fprintf(stderr, "axlr-tui: resume with: axlr-tui --session %s%s\n", state.ID, cost)
 }
 
 // The local executor needs PATH to resolve commands, but receives no other
