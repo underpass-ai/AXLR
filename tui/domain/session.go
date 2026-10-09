@@ -156,7 +156,11 @@ func (s *Session) Steer(prompt axlr.Text) error {
 	s.state = next
 	return nil
 }
-func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
+
+// CompleteAssistantWithin records the model's answer; turnLimit is the
+// turn's tool-call budget (settings' turn_tool_calls), which a compact
+// ceremony step lowers to its own.
+func (s *Session) CompleteAssistantWithin(result axlr.CompletionResult, turnLimit int) error {
 	if s.Status() != StatusStreaming {
 		return errors.New("assistant completion requires streaming state")
 	}
@@ -177,11 +181,7 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 		}
 		ids[call.ID] = true
 	}
-	base, limit := s.state.FinishedBudgetBase, MaxTurnToolCalls
-	if s.state.Ceremony != nil {
-		base = max(base, s.state.Ceremony.BudgetBase)
-		limit = s.state.Ceremony.StepCallLimit()
-	}
+	base, limit := s.callBudget(turnLimit)
 	over := !s.replaying && len(message.ToolCalls) > 0 && len(message.ToolCalls)+s.state.TurnCallCount-base > limit
 	next := s.Export()
 	message.ToolCalls = append([]axlr.ToolCall(nil), message.ToolCalls...)

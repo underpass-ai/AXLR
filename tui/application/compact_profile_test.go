@@ -163,7 +163,7 @@ func TestCompactDeliveryKeepsALedgerAndStartsEachStepFromIt(t *testing.T) {
 	if err := s.BeginTurn("fix WordCount", append(turnTools(), HostTools()...)); err != nil {
 		t.Fatal(err)
 	}
-	if run, _ := s.Ceremony(); !run.Compact || run.StepCallLimit() != domain.CompactStepCalls {
+	if run, _ := s.Ceremony(); !run.Compact || run.StepCallLimit(domain.MaxTurnToolCalls) != domain.CompactStepCalls {
 		t.Fatalf("begin: %+v", run)
 	}
 	// The model reads, then hands back the brief with a string command.

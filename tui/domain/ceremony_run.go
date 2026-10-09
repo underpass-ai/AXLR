@@ -49,6 +49,10 @@ type CeremonyRun struct {
 	// Reminded is true once the console reminded the model that this step
 	// is still open; it reminds once per claimed step.
 	Reminded bool
+	// LimitStep names the step and attempt ("step#iteration") whose budget
+	// the console restarted at the call limit, LimitResumes how many times.
+	LimitStep    string
+	LimitResumes int
 	// Incident is the incident ceremony's state; nil for other ceremonies.
 	Incident *IncidentRun
 	// Repair is the repair ceremony's state; nil for other ceremonies.
@@ -88,12 +92,13 @@ type LedgerEntry struct {
 // CompactStepCalls is the compact profile's tool-call budget per step.
 const CompactStepCalls = 16
 
-// StepCallLimit is the tool-call budget of one step of this run.
-func (r CeremonyRun) StepCallLimit() int {
+// StepCallLimit is the tool-call budget of one step of this run, given the
+// turn's: a compact step keeps its smaller one.
+func (r CeremonyRun) StepCallLimit(turnLimit int) int {
 	if r.Compact {
-		return CompactStepCalls
+		return min(CompactStepCalls, turnLimit)
 	}
-	return MaxTurnToolCalls
+	return turnLimit
 }
 
 // MaxApprovedChecks bounds Approved; the oldest approvals go first.

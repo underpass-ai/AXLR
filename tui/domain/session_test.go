@@ -427,7 +427,7 @@ func TestAnAnswerOverTheCallLimitIsKeptAndResumeRestartsTheBudget(t *testing.T) 
 		if ceremony {
 			run := CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "repair", Iteration: 1, Compact: true}
 			must(t, s.SetCeremony(run))
-			limit = run.StepCallLimit()
+			limit = run.StepCallLimit(MaxTurnToolCalls)
 		}
 		batch := func(prefix string, n int) []string {
 			ids := make([]string, n)
