@@ -455,7 +455,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox},
 			Store:     loggedStore,
 			Engine:    ceremonies.Engine,
-			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts},
+			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts, MaxActive: settings.JobsConfiguration().MaxActive},
 			Build:     buildinfo.Version,
 			RunToken:  hex.EncodeToString(token[:]),
 			Lifetime:  ctx,

@@ -53,6 +53,8 @@ type UserSettings struct {
 	// Sandbox confines local commands (user_settings_sandbox.go); absent
 	// means off.
 	Sandbox *ExecSandboxSettings `json:"exec_sandbox,omitempty"`
+	// Jobs bounds the repair and improvement jobs (user_settings_jobs.go).
+	Jobs *JobsSettings `json:"jobs,omitempty"`
 	// TurnToolCalls is a turn's tool-call budget; zero means
 	// domain.MaxTurnToolCalls (32).
 	TurnToolCalls int `json:"turn_tool_calls,omitempty"`
@@ -365,7 +367,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox", "jobs"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -431,6 +433,9 @@ func (s UserSettings) Validate() error {
 		return fmt.Errorf("settings prompt_tokens must be between %d and %d", domain.MinimumPromptTokens, maxContextTokens)
 	}
 	if err := s.Sandbox.validate(); err != nil {
+		return err
+	}
+	if err := s.Jobs.validate(); err != nil {
 		return err
 	}
 	if s.TurnToolCalls != 0 && (s.TurnToolCalls < minTurnToolCalls || s.TurnToolCalls > maxTurnToolCalls) {

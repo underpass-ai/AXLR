@@ -18,8 +18,11 @@ import (
 )
 
 const (
-	// MaxActiveRepairs bounds how many repair sessions a console runs at once.
-	MaxActiveRepairs = 1
+	// DefaultMaxActiveJobs bounds how many repair and improvement sessions
+	// run at once, across the consoles that share the registry, when
+	// settings.json's jobs.max_active is silent. One at a time made eight
+	// /improve and /repair jobs need eight consoles on 9 October 2026.
+	DefaultMaxActiveJobs = 2
 	// DefaultMaxRepairAttempts bounds how many repair sessions one failure
 	// signature may start before the console asks for a hand-made repair.
 	DefaultMaxRepairAttempts = 2
@@ -42,6 +45,9 @@ type RepairSettings struct {
 	// MaxAttempts bounds repair sessions per failure signature; zero means
 	// DefaultMaxRepairAttempts.
 	MaxAttempts int
+	// MaxActive bounds the repair and improvement sessions active in the
+	// registry, whoever started them; zero means DefaultMaxActiveJobs.
+	MaxActive int
 }
 
 // SelfRepair lets the agent of a running session ask the console to repair
@@ -127,6 +133,13 @@ func (r *SelfRepair) maxAttempts() int {
 		return r.Settings.MaxAttempts
 	}
 	return DefaultMaxRepairAttempts
+}
+
+func (r *SelfRepair) maxActive() int {
+	if r.Settings.MaxActive > 0 {
+		return r.Settings.MaxActive
+	}
+	return DefaultMaxActiveJobs
 }
 
 func (r *SelfRepair) configured() error {
@@ -396,8 +409,8 @@ func (r *SelfRepair) admit(records []domain.RepairRecord, session domain.Session
 			attempts++
 		}
 	}
-	if active >= MaxActiveRepairs {
-		return fmt.Sprintf("another repair is active (%d of %d allowed); wait for it or consult axlr_repair_status", active, MaxActiveRepairs)
+	if limit := r.maxActive(); active >= limit {
+		return fmt.Sprintf("another repair is active (%d of %d allowed by jobs.max_active); wait for it or consult axlr_repair_status", active, limit)
 	}
 	if attempts >= r.maxAttempts() {
 		return fmt.Sprintf("attempts exhausted: %d repair sessions already ran for this failure; repair it by hand with axlr-tui --repair \"<brief>\"", attempts)
@@ -800,8 +813,8 @@ func (r *SelfRepair) Recover(ctx context.Context, id string) error {
 		return fmt.Errorf("repair %s is %s; only an interrupted repair is recovered", id, record.Status)
 	case record.Session == "" || record.Clone == "":
 		return fmt.Errorf("repair %s has no session to recover; it stopped before the clone was ready", id)
-	case active >= MaxActiveRepairs:
-		return fmt.Errorf("another repair is active (%d of %d allowed)", active, MaxActiveRepairs)
+	case active >= r.maxActive():
+		return fmt.Errorf("another repair is active (%d of %d allowed by jobs.max_active)", active, r.maxActive())
 	}
 	r.mu.Lock()
 	_, running := r.runs[id]
