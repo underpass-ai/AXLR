@@ -111,10 +111,18 @@ func (p Preparer) Prepare(ctx context.Context, request application.RepairCloneRe
 	}
 	// The marker is the clone's, not the repository's: keep it out of the
 	// repair commit without touching the repository's own ignore file.
+	// A clone where that fails is refused: the marker would otherwise reach
+	// the pull request.
 	exclude := filepath.Join(clone, ".git", "info", "exclude")
-	if file, err := os.OpenFile(exclude, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
-		_, _ = fmt.Fprintln(file, application.RepairMarker)
-		_ = file.Close()
+	file, err := os.OpenFile(exclude, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err == nil {
+		_, err = fmt.Fprintln(file, application.RepairMarker)
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	if err != nil {
+		return application.RepairClone{}, fmt.Errorf("exclude %s from the clone's commits: %w", application.RepairMarker, err)
 	}
 	return application.RepairClone{Path: clone, Base: marker.Base}, nil
 }

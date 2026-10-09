@@ -25,6 +25,11 @@ type Forge struct{ Checks application.CheckRunnerPort }
 
 var _ application.ForgePort = Forge{}
 
+// stageArgs stage every change in the clone except its repair marker. The
+// preparer also lists the marker in .git/info/exclude; the pathspec keeps it
+// out of the commit even where that did not hold.
+var stageArgs = []string{"add", "-A", "--", ".", ":(exclude)" + application.RepairMarker}
+
 // run returns the whole stdout of a successful command, for parsing: it asks
 // the runtime for its whole output limit and refuses an output cut there.
 // Failures quote only the tail of stdout and stderr, which is enough to show
@@ -55,7 +60,7 @@ func (f Forge) Propose(ctx context.Context, p application.RepairProposal) (appli
 			return application.PullRequest{}, err
 		}
 	}
-	if _, err := f.run(ctx, "git", "add", "-A"); err != nil {
+	if _, err := f.run(ctx, "git", stageArgs...); err != nil {
 		return application.PullRequest{}, err
 	}
 	staged, _ := f.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"diff", "--cached", "--quiet"}})
