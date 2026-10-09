@@ -36,6 +36,9 @@ const (
 	// HostOperationJudge asks TypeSafe Jev, an external judgement model, one
 	// question; offered only when settings enable it.
 	HostOperationJudge = "judge"
+	// HostOperationRemember records one memory in KMP in one call; it is
+	// judged and approved as the kmp_write_memory it performs.
+	HostOperationRemember = "remember"
 )
 
 func NewLocalToolIdentity(operation string) (ToolIdentity, error) {
@@ -57,7 +60,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember:
 			return nil
 		}
 	case ToolKindLocal:

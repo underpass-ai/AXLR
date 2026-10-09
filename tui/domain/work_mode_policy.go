@@ -24,6 +24,10 @@ var documentExtensions = map[string]bool{".md": true, ".mdx": true, ".txt": true
 // Judge applies the mode to a resolved call. Plugin and host tools are not
 // workspace changes and stay under their own approval policy.
 func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict, string) {
+	if id.Kind == ToolKindHost && id.LocalOperation == HostOperationRemember {
+		// axlr_remember is a kmp_write_memory: refused where that is.
+		id = MemoryWriteIdentity
+	}
 	if (m == ModeIncident || m.ForgesPullRequest() || m == ModePlan || m == ModeTask) && id.Kind == ToolKindPlugin && id.Plugin.PluginID == "kmp" && id.Plugin.ToolName == "kmp_write_memory" {
 		if m == ModePlan || m == ModeTask {
 			return VerdictDeny, "plan and task modes: the console records the plan, each hand-back and each sync in KMP; do not write project memory yourself"
@@ -68,6 +72,10 @@ func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict,
 	}
 	return VerdictAllow, ""
 }
+
+// MemoryWriteIdentity is KMP's kmp_write_memory, which axlr_remember
+// performs.
+var MemoryWriteIdentity = ToolIdentity{Kind: ToolKindPlugin, Plugin: axlr.PluginRef{PluginID: "kmp", ToolName: "kmp_write_memory"}}
 
 // HidesWriteTools reports modes whose model never sees write tools at all.
 func (m WorkMode) HidesWriteTools() bool { return m == ModeReview }
