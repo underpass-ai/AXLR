@@ -41,6 +41,8 @@ type repairWorkbenches struct {
 	// writes and the ceremony profile.
 	plans   application.PlanRegistryPort
 	compact func(root.ModelID) bool
+	// calibration learns bytes per prompt token from these sessions too.
+	calibration application.TokenCalibrationPort
 }
 
 // planWorkbenches is application.PlanWorkbenchPort: a workbench rooted at
@@ -79,7 +81,7 @@ func (w repairWorkbenches) Open(_ context.Context, clone string) (application.Re
 	driver.RepairPolicy = w.policy
 	driver.Plans, driver.Compact = w.plans, w.compact
 	approval := application.RepairToolPolicy{Next: w.approval, AutonomousLocal: w.autonomous}
-	continuation := application.ContinueTurnUseCase{Validation: w.validator, Models: w.models, Windows: w.windows, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver}
+	continuation := application.ContinueTurnUseCase{Validation: w.validator, Models: w.models, Windows: w.windows, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver, Calibration: w.calibration}
 	catalog := axlr.ToolCatalog{Plugins: w.manager, Diagnostics: w.trace, Profiles: w.profiles}
 	return &application.UseCaseWorkbench{
 		Start:    application.StartTurnUseCase{Catalog: catalog, Store: w.store, Continue: continuation, Tools: runner, Approval: approval},

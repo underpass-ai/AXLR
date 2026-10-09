@@ -135,3 +135,28 @@ func TestWindowsBudgetLocalModelsByWindowAndRemoteOnesByPrompt(t *testing.T) {
 		t.Fatalf("remote model under a large cap = %+v", got)
 	}
 }
+
+type calibrated map[root.ModelID]int
+
+func (c calibrated) BytesPerToken(id root.ModelID) (int, bool) {
+	hundredths, ok := c[id]
+	return hundredths, ok
+}
+
+func TestWindowsBudgetARemoteModelAtItsMeasuredBytesPerToken(t *testing.T) {
+	w := Windows{Local: map[root.ModelID]domain.ContextWindow{"local/qwen": 65536}, Calibration: calibrated{"z-ai/glm-5.3-flash": 420, "local/qwen": 420}}
+	if got := w.ContextBudget("z-ai/glm-5.3-flash"); got != domain.ContextBudgetForPromptAt(domain.DefaultPromptTokens, 420) || got.MaximumBytes() <= domain.ContextBudgetForPrompt(domain.DefaultPromptTokens).MaximumBytes() {
+		t.Fatalf("calibrated remote budget = %+v", got)
+	}
+	if got := w.ContextBudget("anthropic/claude-haiku-5.5"); got != domain.ContextBudgetForPrompt(domain.DefaultPromptTokens) {
+		t.Fatalf("uncalibrated remote budget = %+v", got)
+	}
+	// A local model's server holds its window: its budget is the window's.
+	if got := w.ContextBudget("local/qwen"); got != domain.ContextBudgetForWindow(65536) {
+		t.Fatalf("local budget = %+v", got)
+	}
+	w.Cap = 32768
+	if got := w.ContextBudget("z-ai/glm-5.3-flash"); got.MaximumBytes() != domain.ContextBudgetForWindow(32768).MaximumBytes() {
+		t.Fatalf("capped calibrated budget = %+v", got)
+	}
+}

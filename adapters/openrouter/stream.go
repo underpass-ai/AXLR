@@ -111,6 +111,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 					return domain.CompletionResult{}, err
 				}
 			}
+			result.RequestBytes = len(body)
 			return result, nil
 		}
 		deltas, err := accumulator.Add(data)
