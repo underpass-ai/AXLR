@@ -4,6 +4,7 @@ import (
 	"bytes"
 	tea "charm.land/bubbletea/v2"
 	"encoding/json"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"strings"
 )
@@ -20,8 +21,14 @@ type ApprovalDialog struct {
 func NewApprovalDialog(p domain.PendingTool, target string, _ ...Locale) ApprovalDialog {
 	var args bytes.Buffer
 	_ = json.Indent(&args, p.Call.Arguments.Bytes(), "", "  ")
+	content := args.String()
+	if p.Call.Name == application.HostForgeToolName {
+		if readable, ok := forgeCard(p.Call.Arguments.Bytes()); ok {
+			content = readable
+		}
+	}
 	d := ApprovalDialog{Pending: p, Target: target, Details: NewTranscript()}
-	d.Details.SetContent(args.String())
+	d.Details.SetContent(content)
 	d.Details.Viewport.GotoTop()
 	return d
 }

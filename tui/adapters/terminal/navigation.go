@@ -49,8 +49,13 @@ func (m *AppModel) syncApproval() {
 			target = m.Theme.Tf("approval.pluginTarget", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
 		case domain.ToolKindHost:
 			target = m.Theme.Tf("approval.hostTarget", tool.Identity.LocalOperation)
-			if tool.Identity.LocalOperation == domain.HostOperationStepDone {
+			switch tool.Identity.LocalOperation {
+			case domain.HostOperationStepDone:
 				target = m.Theme.T("approval.checkCommand")
+			case domain.HostOperationForgeTool:
+				target = m.Theme.Tf("approval.forgeTarget", forgedName(p.Call.Arguments.Bytes()))
+			case domain.HostOperationRunTool:
+				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()), m.Header.State.Workspace)
 			}
 		}
 	}
@@ -197,6 +202,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			if (intent == "always-allow" || intent == "autonomy-on") && m.modeAsksForEachCall(m.Approval.Pending) {
 				intent = "" // not offered: the mode keeps this call under approval
+			}
+			if intent == "always-allow" && !savesAlwaysAllow(m.Header.State.ToolSnapshot, m.Approval.Pending) {
+				intent = "" // not offered: a host tool has no saved rule
 			}
 			if k.String() == "esc" || k.String() == "ctrl+c" {
 				intent = "cancel"

@@ -24,6 +24,11 @@ type HostToolUseCase struct {
 	Windows ModelContextWindowPort
 	// Memory serves axlr_remember; nil without KMP.
 	Memory RememberPort
+	// Forge keeps the workspace's forged tools, which Tools runs as
+	// local_exec after Validation checks their arguments; nil offers none.
+	Forge      ForgedToolsPort
+	Tools      ToolExecutionPort
+	Validation ToolArgumentValidationPort
 }
 
 // historyPageLimit is the largest encoded axlr_history page that the
@@ -50,11 +55,23 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 	if identity.Kind != domain.ToolKindHost {
 		return hostFailure(errors.New("not a host tool")), nil
 	}
+	if identity.LocalOperation == domain.HostOperationRunTool {
+		// The runtime's envelope is the result, as for local_exec.
+		return u.hostRun(ctx, session, arguments)
+	}
 	var result any
 	var err error
 	switch identity.LocalOperation {
 	case domain.HostOperationTools:
-		result, err = hostDiscover(session.ToolSnapshot(), arguments)
+		var forged []ForgedTool
+		if u.Forge != nil {
+			forged, err = u.Forge.List(ctx, string(session.Export().Workspace))
+		}
+		if err == nil {
+			result, err = hostDiscover(session.ToolSnapshot(), forged, arguments)
+		}
+	case domain.HostOperationForgeTool:
+		result, err = u.hostForge(ctx, session, arguments)
 	case domain.HostOperationHistory:
 		result, err = hostHistory(session.Messages(), arguments, u.historyPageLimit(session))
 	case domain.HostOperationSkill:

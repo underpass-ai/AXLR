@@ -39,6 +39,12 @@ const (
 	// HostOperationRemember records one memory in KMP in one call; it is
 	// judged and approved as the kmp_write_memory it performs.
 	HostOperationRemember = "remember"
+	// HostOperationForgeTool writes a workspace tool the model designs at
+	// runtime; it is judged and approved as the local write it performs.
+	HostOperationForgeTool = "forge_tool"
+	// HostOperationRunTool runs a forged tool; it is judged and approved as
+	// the local exec it performs.
+	HostOperationRunTool = "run_tool"
 )
 
 func NewLocalToolIdentity(operation string) (ToolIdentity, error) {
@@ -60,7 +66,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember, HostOperationForgeTool, HostOperationRunTool:
 			return nil
 		}
 	case ToolKindLocal:

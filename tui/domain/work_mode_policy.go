@@ -43,7 +43,20 @@ func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict,
 		}
 		return VerdictDeny, "incident mode: the console records the approved postmortem in KMP after the person approves it; do not write project memory yourself"
 	}
-	if m == "" || m == ModeNormal || m.StartsCeremony() || m == ModeTask || id.Kind != ToolKindLocal {
+	if m == "" || m == ModeNormal || m.StartsCeremony() || m == ModeTask {
+		return VerdictAllow, ""
+	}
+	if id.Kind == ToolKindHost && id.LocalOperation == HostOperationForgeTool {
+		// Forging writes code into the workspace, which no restricted
+		// mode allows.
+		return VerdictDeny, string(m) + " mode does not forge tools"
+	}
+	if id.Kind == ToolKindHost && id.LocalOperation == HostOperationRunTool {
+		// A forged tool is a program: the person decides each run, as for
+		// local_exec.
+		return VerdictAsk, ""
+	}
+	if id.Kind != ToolKindLocal {
 		return VerdictAllow, ""
 	}
 	switch id.LocalOperation {
