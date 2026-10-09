@@ -78,6 +78,9 @@ func (b Builder) Build(ctx context.Context, clone, slug string) (application.Rep
 // tail of both streams.
 func (b Builder) run(ctx context.Context, dir, program string, args ...string) (string, error) {
 	path, err := repairclone.LookPath(b.Env, program)
+	if err != nil && runtime.GOOS == "windows" {
+		path, err = repairclone.LookPath(b.Env, program+".exe")
+	}
 	if err != nil {
 		return "", fmt.Errorf("%w: %s is not on the console's PATH", application.ErrNoToolchain, program)
 	}

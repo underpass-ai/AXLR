@@ -16,6 +16,11 @@ import (
 // hostEnv is the restricted environment plus the Go settings the console
 // passes, so the test builds with the host's caches and offline.
 func hostEnv() []string {
+	if runtime.GOOS == "windows" {
+		// Go needs the profile and system variables there; the console
+		// passes them through repairBuilder.
+		return append(os.Environ(), "GOTOOLCHAIN=local", "GOFLAGS=-p=2")
+	}
 	env := []string{"PATH=" + os.Getenv("PATH"), "HOME=" + os.Getenv("HOME"), "GOTOOLCHAIN=local", "GOFLAGS=-p=2"}
 	for _, name := range []string{"GOCACHE", "GOPATH", "GOMODCACHE"} {
 		if value := os.Getenv(name); value != "" {
@@ -100,7 +105,10 @@ func TestInstallKeepsThePreviousConsoleAndRefusesTwice(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("installing is refused on Windows")
 	}
-	dir := t.TempDir()
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	target := filepath.Join(dir, "axlr-tui")
 	write(t, target, "old build")
 	if err := os.Chmod(target, 0o755); err != nil {

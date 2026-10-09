@@ -61,7 +61,7 @@ func TestMergedRepairBuildsTriesAndInstallsTheRepairedConsole(t *testing.T) {
 	}
 	id := out["repair"].(string)
 	record := waitStatus(t, rig.registry, id, domain.RepairAwaitingMerge)
-	if record.Candidate != record.Clone+".axlr-tui" || record.CandidateVersion != "repair-"+id+"-abc123" || !strings.Contains(record.Pending, "try repair-"+id+"-abc123 first: "+record.Clone+".axlr-tui --root "+string(parent.Export().Workspace)) {
+	if record.Candidate != record.Clone+".axlr-tui" || record.CandidateVersion != "repair-"+id+"-abc123" || !strings.Contains(record.Pending, "try repair-"+id+"-abc123 first: "+shellQuote(record.Clone+".axlr-tui")+" --root "+shellQuote(string(parent.Export().Workspace))) {
 		t.Fatalf("merge card: %+v", record)
 	}
 	if err := rig.repair.Install(context.Background(), id); err == nil || !strings.Contains(err.Error(), "only a merged repair is installed") {
