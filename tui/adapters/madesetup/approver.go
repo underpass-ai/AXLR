@@ -46,7 +46,7 @@ func (a *Approver) ApproveGuard(ctx context.Context, instance, guard string) err
 		}
 		work := environment(made.Env)[hostIdentityKey]
 		if !isWorkIdentity(work) {
-			return errors.New("MADE has no AXLR work identity; prepare it with /mcp → P")
+			return errors.New("MADE has no AXLR work identity; prepare it: open /mcp, select MADE and press p")
 		}
 		approver := server(made, append(without(made.Env, hostIdentityKey), hostIdentityKey+"="+approverIdentity(work)))
 		call := a.Call

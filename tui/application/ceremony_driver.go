@@ -296,7 +296,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 	}
 	if s.Mode() == domain.ModeIncident {
 		if d.Files == nil || d.Reviewer == nil || d.Approver == nil {
-			return errors.New("the incident ceremony needs workspace files, a reviewer and the approver; prepare MADE with /mcp → P")
+			return errors.New("the incident ceremony needs workspace files, a reviewer and the approver; prepare MADE: open /mcp, select MADE and press p")
 		}
 		// The model would otherwise spend a command creating it.
 		if err := d.Files.MakeDir(ctx, incidentDir); err != nil {

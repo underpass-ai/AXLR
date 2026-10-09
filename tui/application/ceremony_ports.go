@@ -11,7 +11,7 @@ import (
 
 // ErrCeremonyNotPrepared means the pinned 2.0 definition is not published in
 // the connected MADE store; only the explicit /mcp → P action publishes it.
-var ErrCeremonyNotPrepared = errors.New("prepare MADE first: /mcp → P")
+var ErrCeremonyNotPrepared = errors.New("prepare MADE first: open /mcp, select MADE and press p")
 
 // MissingDefinition is a pinned MADE definition the connected store does not
 // publish yet.

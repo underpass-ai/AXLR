@@ -126,7 +126,7 @@ func (d *CeremonyDriver) beginRepair(ctx context.Context, s *domain.Session, run
 		kind, clone, launch = "improvement", "an improvement clone", `axlr-tui --improve "<improvement brief or #issue>"`
 	}
 	if d.Files == nil || d.Forge == nil {
-		return nil, fmt.Errorf("the %s ceremony needs workspace files and a forge; prepare MADE with /mcp → P", kind)
+		return nil, fmt.Errorf("the %s ceremony needs workspace files and a forge; prepare MADE: open /mcp, select MADE and press p", kind)
 	}
 	data, found, err := d.Files.Read(ctx, RepairMarker, 16<<10)
 	if err != nil {
@@ -521,7 +521,7 @@ func (d *CeremonyDriver) awaitMerge(run domain.CeremonyRun, report map[string]an
 func (d *CeremonyDriver) approveMerge(ctx context.Context, s domain.Session, run domain.CeremonyRun) (StepResult, error) {
 	r := run.Repair
 	if d.Approver == nil {
-		return StepResult{}, errors.New("the approver identity is not configured; prepare MADE with /mcp → P")
+		return StepResult{}, errors.New("the approver identity is not configured; prepare MADE: open /mcp, select MADE and press p")
 	}
 	if r.Decided == "decline" {
 		return StepResult{}, errors.New("MADE already recorded the decline; the ceremony ends blocked")
