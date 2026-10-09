@@ -515,6 +515,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		InitialDraft:      initialDraft,
 		Repairs:           repairPanelPort(repairs),
 		Plans:             planPanel,
+		Usage:             store,
+		MaxSessionUSD:     settings.MaxSessionUSD,
 	})
 	defer app.Close()
 	if err = launch(app); err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
