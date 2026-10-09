@@ -194,7 +194,10 @@ func (s *Server) runDirectCall(id string) {
 	}
 	call.Result = &result
 	call.Revision++
-	if s.calls.Save(call) == nil {
-		_ = s.audit.Append(auditRecord{Principal: actor, RequestID: call.DecisionRequestID, Action: "tool_call.result", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID})
+	// The result record is synced before the outcome becomes visible. If either
+	// write fails the call stays running, and restart recovery marks it uncertain.
+	if s.audit.Append(auditRecord{Principal: actor, RequestID: call.DecisionRequestID, Action: "tool_call.result", Tool: call.Tool, Decision: call.Decision, Status: call.Status, CallID: call.ID}) != nil {
+		return
 	}
+	_ = s.calls.Save(call)
 }
