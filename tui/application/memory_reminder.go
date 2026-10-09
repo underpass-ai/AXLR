@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -135,54 +136,39 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 	return changed || local >= memoryReminderCalls
 }
 
-// memoryAnswerPhrases are what a final answer says when the model already
-// decided about recording, in English and Spanish, lower case with straight
-// apostrophes. On 10 October 2026 claude-haiku-5.5 ended with "I did not
-// record anything in KMP…" and was reminded anyway; it then recorded a
-// low-value success_path, one extra request. Each phrase names recording
-// itself, so "fixed the record type" or "el registro de errores" do not
-// match. A model that ends without mentioning memory is still reminded.
-var memoryAnswerPhrases = []string{
-	// Declined.
-	"did not record", "didn't record", "do not record", "don't record", "won't record", "will not record",
-	"not recording", "nothing to record", "nothing worth recording", "nothing durable to record", "no need to record",
-	"nothing to remember", "nothing to save in kmp", "nothing to store in kmp",
-	"no registré", "no he registrado", "no registro nada", "nada que registrar", "nada que guardar",
-	"no guardé", "no he guardado",
-	// Recorded.
-	"recorded in kmp", "recorded it in kmp", "recorded this in kmp", "recorded in memory", "recorded in project memory",
-	"recorded a memory", "saved to kmp", "saved in kmp",
-	"stored in kmp", "wrote to kmp", "written to kmp",
-	"registrado en kmp", "registré en kmp", "lo registré", "registrado en la memoria", "guardado en kmp", "guardé en kmp",
-}
-
-// memoryAnchors are words one of which the answer must also contain: this
-// workspace records traces and payloads too, and "the payload recorder did
-// not record the body" or "no hay nada que guardar, el fichero ya está
-// actualizado" are not about memory.
-var memoryAnchors = []string{"kmp", "memory", "memoria", "remember", "durable", "duradero"}
-
 // answerAddressesMemory reports whether a final answer already says what
-// it recorded in KMP, or that it recorded nothing.
+// it recorded in KMP, or that it recorded nothing: one of its sentences
+// names memory and a recording verb. On 10 October 2026 claude-haiku-5.5
+// ended with "I did not record anything in KMP…" and was reminded anyway;
+// it then recorded a low-value success_path, one extra request. A list of
+// set phrases missed the next answer ("I didn't write a KMP memory
+// either"), so the check reads sentences rather than phrases. Identifiers
+// (kmp_write_memory, memory_reminder.go) are left out first, so an answer
+// about the memory code itself does not count; a model that ends without
+// mentioning memory is still reminded.
 func answerAddressesMemory(answer root.Text) bool {
 	text := strings.ToLower(strings.ReplaceAll(string(answer), "’", "'"))
-	anchored := false
-	for _, anchor := range memoryAnchors {
-		anchored = anchored || strings.Contains(text, anchor)
-	}
-	if !anchored {
-		return false
-	}
 	if strings.Contains(text, "axlr_remember") && strings.Contains(text, "recorded") {
 		return true
 	}
-	for _, phrase := range memoryAnswerPhrases {
-		if strings.Contains(text, phrase) {
+	for _, sentence := range memorySentence.Split(memoryIdentifier.ReplaceAllString(text, " "), -1) {
+		if memoryAnchor.MatchString(sentence) && memoryVerb.MatchString(sentence) {
 			return true
 		}
 	}
 	return false
 }
+
+var (
+	memorySentence   = regexp.MustCompile(`[.!?;:\n]+(\s|$)`)
+	memoryIdentifier = regexp.MustCompile(`\S*[_/]\S*|\S+\.(go|md|json)\b`)
+	// memoryAnchor names memory itself: this workspace also records traces
+	// and payloads, and "the payload recorder did not record the body" or
+	// "no hay nada que guardar, el fichero ya está actualizado" are not
+	// about memory.
+	memoryAnchor = regexp.MustCompile(`\b(kmp|memory|memories|memoria|remember|durable|duradero)\b`)
+	memoryVerb   = regexp.MustCompile(`\b(record|records|recorded|recording|write|wrote|written|writing|save|saved|saving|store|stored|storing|remember|remembered|registr[a-z]*)\b|\bguard(é|ado|ada|ar|o)`)
+)
 
 // countsForMemory reports whether a call counts toward memoryReminderCalls:
 // a local tool call that is not a file read, a search or a listing, which

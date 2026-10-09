@@ -23,7 +23,11 @@ func TestAnswerThatAddressesRecordingIsNotReminded(t *testing.T) {
 		{"No he registrado nada en KMP: era un cambio menor.", true},
 		{"No hay nada que registrar en la memoria del proyecto.", true},
 		{"Lo registré en KMP con la salida del test como evidencia.", true},
+		// Its answer on the integration branch, which the phrase list missed.
+		{"I didn't run anything, as you asked. I didn't write a KMP memory either, since this was a comment edit and settled no decision.", true},
+		{"Nada que guardar en KMP.", true},
 		{"Done: the parser splits on whitespace.", false},
+		{"I changed kmp_write_memory's schema in memory_reminder.go and wrote a test.", false},
 		{"Fixed the record type in parser.go; tests pass.", false},
 		{"He corregido el registro de errores en el parser.", false},
 		{"The payload recorder did not record the stream body because the reader closed early; fixed in payload_recorder.go.", false},
