@@ -6,7 +6,9 @@ import (
 	"fmt"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"strings"
 	"testing"
+	"time"
 )
 
 type executionFunc func(context.Context, domain.ToolIdentity, root.JSONValue) (domain.ToolOutcome, error)
@@ -177,7 +179,9 @@ func TestResolveToolAgentLoopCallCap(t *testing.T) {
 		return assistant("", call(root.ToolCallID(fmt.Sprintf("bad-%d", n)), "unknown")), nil
 	})}}
 	err := u.Execute(context.Background(), &s, "go", nil)
-	if !errors.Is(err, domain.ErrToolCallLimit) || n != 33 || s.Export().TurnCallCount != 32 || s.Status() != domain.StatusInterrupted {
+	// The 33rd answer is kept with its call answered as not run.
+	activity := s.Export().Activity
+	if !errors.Is(err, domain.ErrToolCallLimit) || n != 33 || s.Export().TurnCallCount != 33 || s.Status() != domain.StatusInterrupted || len(activity) != 33 || activity[32].Call.ID != "bad-33" || !strings.HasPrefix(string(activity[32].Outcome.Content), "not run") {
 		t.Fatalf("cap %d %v %+v", n, err, s.Export())
 	}
 }
@@ -241,5 +245,58 @@ func TestResolveToolUncertainAdapterOutcomePauses(t *testing.T) {
 	}
 	if s.Status() != domain.StatusInterrupted || s.Export().Activity[0].Outcome.Content != "timed out" {
 		t.Fatal("lost uncertain adapter result")
+	}
+}
+
+// The last step's hand-back closes the ceremony inside its turn; the closing
+// answer then gets a full call budget, not what the last step left of its
+// own.
+func TestTheAnswerAfterTheLastStepHasAFullCallBudget(t *testing.T) {
+	d := &CeremonyDriver{Engine: &fakeEngine{}, Checks: &fakeChecks{exits: []int{1, 0}}, Now: func() time.Time { return time.Unix(1, 0) }}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range []string{reproduceArgs, `{"root_cause":"r","evidence":"e","proposed_fix":"f"}`, `{"summary":"fixed"}`} {
+		step(t, d, &s, args)
+	}
+	if run, _ := s.Ceremony(); run.Step != "integrate" {
+		t.Fatalf("step %s", run.Step)
+	}
+	if err := s.BeginTurn("integra", append(turnTools(), HostTools()...)); err != nil {
+		t.Fatal(err)
+	}
+	// The integrate step reads twenty files before handing back.
+	var reads []root.ToolCall
+	for i := 0; i < 20; i++ {
+		reads = append(reads, call(root.ToolCallID(fmt.Sprintf("r%d", i)), "read"))
+	}
+	if err := s.CompleteAssistant(assistant("", reads...)); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range reads {
+		if err := s.RecordToolOutcome(c.ID, domain.DecisionApprove, domain.ToolOutcome{Content: "ok"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	handBack := root.ToolCall{ID: "done", Name: HostStepDoneName, Arguments: mustObject(t, `{"report":"hecho","summary_en":"Fixed."}`)}
+	if err := s.CompleteAssistant(assistant("", handBack)); err != nil {
+		t.Fatal(err)
+	}
+	store := &memoryStore{}
+	u := ResolveToolUseCase{Store: store, Continue: ContinueTurnUseCase{Store: store, Ceremonies: d}}
+	if err := u.resolveOne(context.Background(), &s, "done", domain.DecisionApprove, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if _, live := s.Ceremony(); live || s.Status() != domain.StatusStreaming {
+		t.Fatalf("ceremony not finished: %s", s.Status())
+	}
+	closing := make([]root.ToolCall, domain.MaxTurnToolCalls)
+	for i := range closing {
+		closing[i] = call(root.ToolCallID(fmt.Sprintf("c%d", i)), "read")
+	}
+	if err := s.CompleteAssistant(assistant("", closing...)); err != nil {
+		state := s.Export()
+		t.Fatalf("the closing answer inherited the last step's calls (turn %d, base %d): %v", state.TurnCallCount, state.FinishedBudgetBase, err)
 	}
 }

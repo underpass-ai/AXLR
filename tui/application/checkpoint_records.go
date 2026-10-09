@@ -72,7 +72,8 @@ func omittedTurnRecords(original []root.Message, first, cut int) map[int]turnRec
 			}
 			switch call.Name {
 			case "local_write", "local_edit":
-				if path := argumentString(call.Arguments, "path"); path != "" && !contains(record.files, path) {
+				// Only a write that happened is on disk to read back.
+				if path := argumentString(call.Arguments, "path"); path != "" && writeSucceeded(results[call.ID]) && !contains(record.files, path) {
 					record.files = append(record.files, path)
 				}
 			}

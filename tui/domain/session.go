@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	axlr "github.com/underpass-ai/AXLR/domain"
@@ -181,12 +182,7 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 		base = max(base, s.state.Ceremony.BudgetBase)
 		limit = s.state.Ceremony.StepCallLimit()
 	}
-	if !s.replaying && len(message.ToolCalls)+s.state.TurnCallCount-base > limit {
-		next := s.Export()
-		next.Status = StatusInterrupted
-		s.state = next
-		return ErrToolCallLimit
-	}
+	over := !s.replaying && len(message.ToolCalls) > 0 && len(message.ToolCalls)+s.state.TurnCallCount-base > limit
 	next := s.Export()
 	message.ToolCalls = append([]axlr.ToolCall(nil), message.ToolCalls...)
 	// Arguments are held in the compact form the session store writes, so a
@@ -204,6 +200,21 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 	for _, call := range message.ToolCalls {
 		next.Activity = append(next.Activity, PendingTool{Call: call})
 		next.Status = StatusApproval
+	}
+	if over {
+		// The answer was streamed to the person, so it stays; none of its
+		// calls runs and the turn pauses. Results follow call order, so every
+		// call of this answer is answered, not only those past the limit.
+		capped := Session{state: next}
+		outcome := ToolOutcome{Content: axlr.Text(fmt.Sprintf("not run: the turn reached its %d tool-call limit; send a message to continue", limit)), IsError: true}
+		for _, call := range message.ToolCalls {
+			if err := capped.RecordToolOutcome(call.ID, DecisionDeny, outcome); err != nil {
+				return err
+			}
+		}
+		capped.state.Status = StatusInterrupted
+		s.state = capped.state
+		return ErrToolCallLimit
 	}
 	s.state = next
 	return nil
@@ -346,7 +357,10 @@ func (s *Session) FinishToolExecution(id axlr.ToolCallID, outcome ToolOutcome) e
 }
 
 // ResumeTurn is an explicit recovery action. Pending calls return to approval;
-// completed tool effects are never replayed.
+// completed tool effects are never replayed. Like a steered message, it is
+// the person's word to go on, so it restarts the turn's call budget: a turn
+// paused at the limit, or retried by the console, gets a new one instead of
+// tripping the limit again.
 func (s *Session) ResumeTurn() error {
 	if s.Status() != StatusInterrupted {
 		return errors.New("resume requires interrupted turn")
@@ -358,5 +372,6 @@ func (s *Session) ResumeTurn() error {
 		next.Status = StatusApproval
 	}
 	s.state = next
+	s.RestartTurnBudget()
 	return nil
 }

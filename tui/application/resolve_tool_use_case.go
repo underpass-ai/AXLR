@@ -149,7 +149,11 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		var outcome domain.ToolOutcome
 		var runErr error
 		var step *StepResult
+		var approved []domain.CheckCommand
 		if tool.Identity.Kind == domain.ToolKindHost && tool.Identity.LocalOperation == domain.HostOperationStepDone {
+			if run, live := s.Ceremony(); live && decision == domain.DecisionApprove {
+				approved = approvalChecks(run, toolArgs)
+			}
 			var result StepResult
 			result, runErr = u.Continue.Ceremonies.StepDone(ctx, *s, toolArgs)
 			outcome, step = result.Outcome, &result
@@ -201,6 +205,14 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			}
 			if step.Accepted {
 				next.RestartTurnBudget()
+			}
+		}
+		// The person approved the card's commands: the same commands need no
+		// second card in this ceremony, whether the step was accepted or not.
+		if run, live := next.Ceremony(); live && len(approved) > 0 {
+			run.Approve(approved...)
+			if err := next.SetCeremony(run); err != nil {
+				return errors.Join(runErr, err)
 			}
 		}
 		if runErr != nil {

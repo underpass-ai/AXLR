@@ -201,13 +201,15 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	next := *session
 	if err := next.CompleteAssistant(result); err != nil {
-		// CompleteAssistant can deliberately pause at the call limit.
+		// CompleteAssistant can deliberately pause at the call limit: the
+		// answer is kept with its calls answered as not run, so the person
+		// sees it in the transcript instead of a dropped draft.
 		if next.Status() == domain.StatusInterrupted {
 			if saveErr := u.Store.Save(context.WithoutCancel(ctx), next); saveErr != nil {
 				return errors.Join(err, saveErr)
 			}
 			*session = next
-			return errors.Join(err, emit(Event{Kind: EventState, State: next.Status()}))
+			return errors.Join(err, emitSession(session, emit), emit(Event{Kind: EventState, State: next.Status()}))
 		}
 		return interrupt(err)
 	}

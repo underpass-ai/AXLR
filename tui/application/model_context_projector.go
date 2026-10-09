@@ -91,24 +91,43 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 	// A result that cannot be represented safely is fatal in the active turn.
 	// Closed turns can instead be omitted atomically and retrieved from history.
 	starts := make([]int, 0)
+	// Only the person's next request closes a turn's writes. A console
+	// message ("[AXLR…") or one steered into the running turn (it follows a
+	// tool result) does not: shortening the writes before it would rewrite
+	// messages a prefix cache already holds, and in a ceremony the open
+	// step's own writes.
+	closedBefore := 0
 	for i, message := range original {
 		if message.Role == root.RoleUser {
 			starts = append(starts, i)
+			if !strings.HasPrefix(string(message.Content), "[AXLR") && (i == 0 || original[i-1].Role != root.RoleTool) {
+				closedBefore = i
+			}
 		}
 	}
 	forcedCut := 0
 	names := map[root.ToolCallID]root.ToolName{}
+	results := map[root.ToolCallID]string{}
 	for _, message := range original {
 		for _, call := range message.ToolCalls {
 			names[call.ID] = call.Name
+		}
+		if message.Role == root.RoleTool {
+			results[message.ToolCallID] = string(message.Content)
 		}
 	}
 	for i, message := range original {
 		projected[i] = message
 		projected[i].ToolCalls = append([]root.ToolCall(nil), message.ToolCalls...)
-		if len(starts) > 0 && i < starts[len(starts)-1] {
+		// A turn that wrote large files can outgrow the budget through its
+		// write arguments alone: once compacted, it shortens them too.
+		if closed := i < closedBefore; closed || turnPlace == excerptCompacted {
+			recover := closedWriteRecover
+			if !closed {
+				recover = compactedWriteRecover
+			}
 			for c, call := range projected[i].ToolCalls {
-				projected[i].ToolCalls[c].Arguments = closedWriteArguments(call)
+				projected[i].ToolCalls[c].Arguments = closedWriteArguments(call, results[call.ID], recover)
 			}
 		}
 		if message.Role == root.RoleTool {

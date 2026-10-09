@@ -35,6 +35,10 @@ type CeremonyRun struct {
 	// Check is the command the user approved for this instance; zero until a
 	// step proposes one.
 	Check CheckCommand
+	// Approved holds every command the person approved on a step's card in
+	// this instance, accepted or refused, so the same command is not asked
+	// again: run.Check is kept only when a step is accepted.
+	Approved []CheckCommand
 	// About is the exact scope used for initial recall and original MADE inputs.
 	About string
 	// Memory is the bounded wake text captured when the ceremony began.
@@ -90,6 +94,28 @@ func (r CeremonyRun) StepCallLimit() int {
 		return CompactStepCalls
 	}
 	return MaxTurnToolCalls
+}
+
+// MaxApprovedChecks bounds Approved; the oldest approvals go first.
+const MaxApprovedChecks = 32
+
+// Approves is true when the person already approved command in this
+// instance: it is the run's check or one they approved on a card.
+func (r CeremonyRun) Approves(command CheckCommand) bool {
+	return command.Equal(r.Check) || slices.ContainsFunc(r.Approved, command.Equal)
+}
+
+// Approve records commands the person approved on a step's card.
+func (r *CeremonyRun) Approve(commands ...CheckCommand) {
+	for _, command := range commands {
+		if command.IsZero() || r.Approves(command) {
+			continue
+		}
+		r.Approved = append(r.Approved, CheckCommand{Program: command.Program, Args: append([]string(nil), command.Args...)})
+	}
+	if len(r.Approved) > MaxApprovedChecks {
+		r.Approved = append([]CheckCommand(nil), r.Approved[len(r.Approved)-MaxApprovedChecks:]...)
+	}
 }
 
 // AwaitingPerson is true while the console waits for the person's decision:
@@ -237,6 +263,13 @@ func (r CeremonyRun) Validate() error {
 
 func (r CeremonyRun) clone() CeremonyRun {
 	r.Check.Args = append([]string(nil), r.Check.Args...)
+	if r.Approved != nil {
+		approved := make([]CheckCommand, len(r.Approved))
+		for i, command := range r.Approved {
+			approved[i] = CheckCommand{Program: command.Program, Args: append([]string(nil), command.Args...)}
+		}
+		r.Approved = approved
+	}
 	if r.Incident != nil {
 		incident := *r.Incident
 		incident.Findings = append([]string(nil), incident.Findings...)
