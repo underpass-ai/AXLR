@@ -25,8 +25,8 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 		// the merge) stay with the person, so the request itself needs no
 		// card. A judgement
 		// asks Jev a question the person enabled in settings and changes
-		// nothing.
-		return id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationRequestImprovement || id.LocalOperation == domain.HostOperationJudge
+		// nothing. The console's log is read-only.
+		return id.LocalOperation == domain.HostOperationLogs || id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationRequestImprovement || id.LocalOperation == domain.HostOperationJudge
 	}
 	return policy != nil && policy.AutoApproves(id)
 }

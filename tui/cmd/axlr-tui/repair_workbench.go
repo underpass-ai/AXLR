@@ -11,6 +11,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
+	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -52,6 +53,9 @@ type repairWorkbenches struct {
 	// limits each one's cost on its own.
 	usage         application.SessionUsagePort
 	maxSessionUSD float64
+	// appLog records their failed calls and serves axlr_logs, as the
+	// console's.
+	appLog *diagnostics.AppLog
 }
 
 // planWorkbenches is application.PlanWorkbenchPort: a workbench rooted at
@@ -77,7 +81,7 @@ func (w repairWorkbenches) Open(_ context.Context, clone string) (application.Re
 	if err != nil {
 		return nil, err
 	}
-	runner := axlr.ToolRunner{Executor: executor, Diagnostics: w.trace}
+	runner := axlr.ToolRunner{Executor: executor, Diagnostics: w.trace, LogFailure: failureLogger(w.appLog)}
 	driver := ceremonyDriver(w.registrations, runner, w.labels)
 	if driver == nil {
 		_ = executor.Close()
@@ -90,7 +94,7 @@ func (w repairWorkbenches) Open(_ context.Context, clone string) (application.Re
 	driver.RepairPolicy = w.policy
 	driver.Plans, driver.Compact = w.plans, w.compact
 	approval := application.RepairToolPolicy{Next: w.approval, AutonomousLocal: w.autonomous}
-	continuation := application.ContinueTurnUseCase{Validation: w.validator, Models: w.models, Windows: w.windows, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver, Calibration: w.calibration, TurnToolCalls: w.turnToolCalls, Usage: w.usage, MaxSessionUSD: w.maxSessionUSD}
+	continuation := application.ContinueTurnUseCase{Validation: w.validator, Models: w.models, Windows: w.windows, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver, Calibration: w.calibration, TurnToolCalls: w.turnToolCalls, Usage: w.usage, MaxSessionUSD: w.maxSessionUSD, Logs: logReader(w.appLog)}
 	catalog := axlr.ToolCatalog{Plugins: w.manager, Diagnostics: w.trace, Profiles: w.profiles}
 	return &application.UseCaseWorkbench{
 		Start:    application.StartTurnUseCase{Catalog: catalog, Store: w.store, Continue: continuation, Tools: runner, Approval: approval},
