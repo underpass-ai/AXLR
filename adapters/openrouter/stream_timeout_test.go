@@ -191,3 +191,50 @@ func TestStreamMaximumDurationBoundsNonTextFrames(t *testing.T) {
 		t.Fatalf("err=%v, frames=%d; expected duration cap after continued frames", err, frames.Load())
 	}
 }
+
+// A local model configured with "stream": false is served by Complete: the
+// stream's maximum duration bounds it too, whether the server never answers
+// or never finishes the body, so a hung server does not hold the turn.
+func TestCompleteTimesOutAfterMaximumDuration(t *testing.T) {
+	reader, writer := io.Pipe()
+	defer writer.Close()
+	for name, transport := range map[string]roundTripFunc{
+		"no headers": func(req *http.Request) (*http.Response, error) {
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		},
+		"endless body": func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: 200, Body: reader, Header: make(http.Header)}, nil
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client, err := New(ClientConfig{Endpoint: "http://127.0.0.1:8000/v1/chat/completions", HTTPClient: &http.Client{Transport: transport}, StreamMaxDuration: 50 * time.Millisecond})
+			if err != nil {
+				t.Fatal(err)
+			}
+			done := make(chan error, 1)
+			go func() {
+				_, err := client.Complete(context.Background(), simpleCompletionRequest())
+				done <- err
+			}()
+			err = awaitStreamError(t, done)
+			assertStreamTimedOut(t, err)
+			if err.Error() != "model endpoint 127.0.0.1:8000 stream maximum duration exceeded" {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	client, err := New(ClientConfig{APIKey: "k", HTTPClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+		cancel()
+		<-req.Context().Done()
+		return nil, req.Context().Err()
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var timeout *StreamTimeoutError
+	if _, err := client.Complete(ctx, simpleCompletionRequest()); !errors.Is(err, context.Canceled) || errors.As(err, &timeout) {
+		t.Fatalf("cancelled completion = %T %v", err, err)
+	}
+}
