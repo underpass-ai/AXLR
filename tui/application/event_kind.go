@@ -11,4 +11,5 @@ const (
 	EventStreamStart          EventKind = "stream_start"
 	EventState                EventKind = "state"
 	EventToolActivity         EventKind = "tool_activity"
+	EventUsage                EventKind = "usage"
 )
