@@ -124,3 +124,35 @@ func TestThinkingOffReachesTheChatTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A local server's broken stream is reported as that server's failure, not
+// OpenRouter's: an unterminated body, a cut event and an error event.
+func TestStreamFailuresNameTheEndpoint(t *testing.T) {
+	for name, tc := range map[string]struct{ body, want string }{
+		"no [DONE]":   {streamEvents(textChunk, stopChunk), "model endpoint 127.0.0.1:8080 stream ended without [DONE]"},
+		"cut event":   {"data: " + textChunk, "model endpoint 127.0.0.1:8080 transport failure"},
+		"error event": {streamEvents(textChunk, `{"error":{"code":503,"message":"overloaded"}}`), "model endpoint 127.0.0.1:8080 provider_failure (HTTP 503)"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			client, err := New(ClientConfig{Endpoint: "http://127.0.0.1:8080/v1/chat/completions", HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return testResponse(200, tc.body), nil
+			})}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = client.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil })
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("error = %v, want %q", err, tc.want)
+			}
+		})
+	}
+	openRouter, err := New(ClientConfig{APIKey: "k", HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return testResponse(200, streamEvents(textChunk, stopChunk)), nil
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := openRouter.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil }); err == nil || err.Error() != "OpenRouter stream ended without [DONE]" {
+		t.Fatalf("OpenRouter error = %v", err)
+	}
+}

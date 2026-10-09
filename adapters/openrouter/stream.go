@@ -91,9 +91,9 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		}
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return domain.CompletionResult{}, errors.New("OpenRouter stream ended without [DONE]")
+				return domain.CompletionResult{}, errors.New(c.provider + " stream ended without [DONE]")
 			}
-			return domain.CompletionResult{}, &TransportError{Cause: err}
+			return domain.CompletionResult{}, &TransportError{Cause: err, Provider: c.provider}
 		}
 		inactivityTimer.Stop()
 		if bytes.Equal(data, []byte("[DONE]")) {
@@ -101,6 +101,10 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		}
 		deltas, err := accumulator.Add(data)
 		if err != nil {
+			var provider *ProviderError
+			if errors.As(err, &provider) && c.provider != providerName {
+				provider.Provider = c.provider
+			}
 			return domain.CompletionResult{}, err
 		}
 		for _, text := range deltas {
