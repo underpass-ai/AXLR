@@ -106,6 +106,9 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	if err := json.Unmarshal(data, &reply); err != nil {
 		return domain.CompletionResult{}, errors.New("malformed OpenRouter response")
 	}
+	if status, ok := errorBodyStatus(reply.Error); ok {
+		return domain.CompletionResult{}, c.providerError(status)
+	}
 	return mapResponse(reply)
 }
 

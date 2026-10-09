@@ -50,15 +50,8 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 	if err := json.Unmarshal(data, &chunk); err != nil {
 		return nil, errors.New("malformed OpenRouter stream chunk")
 	}
-	if len(chunk.Error) > 0 && string(chunk.Error) != "null" {
-		var provider struct {
-			Code int `json:"code"`
-		}
-		_ = json.Unmarshal(chunk.Error, &provider)
-		if provider.Code == 0 {
-			provider.Code = 502
-		}
-		return nil, classifyProviderError(provider.Code)
+	if status, ok := errorBodyStatus(chunk.Error); ok {
+		return nil, classifyProviderError(status)
 	}
 	if chunk.Choices == nil {
 		return nil, errors.New("OpenRouter stream chunk has no choices")
