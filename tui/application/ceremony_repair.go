@@ -154,9 +154,9 @@ func (d *CeremonyDriver) beginRepair(ctx context.Context, s *domain.Session, run
 	if improve {
 		branch, prefix = "improve/", "Improve: "
 	}
-	repair := &domain.RepairRun{Improvement: improve, Repository: marker.Repository, Base: marker.Base, Slug: marker.Slug, Branch: branch + marker.Slug, Title: bounded(prefix+strings.TrimSpace(title), 72)}
+	repair := &domain.RepairRun{Improvement: improve, Repository: marker.Repository, Base: marker.Base, Slug: marker.Slug, Branch: branch + marker.Slug, Title: titleWithin(prefix, strings.TrimSpace(title))}
 	if repair.Title == prefix {
-		repair.Title = bounded(prefix+strings.ReplaceAll(marker.Slug, "-", " "), 72)
+		repair.Title = titleWithin(prefix, strings.ReplaceAll(marker.Slug, "-", " "))
 	}
 	run.About = about
 	run.Repair = repair
@@ -270,7 +270,7 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 			trailer = "Improved-by"
 		}
 		pr, err := d.Forge.Propose(ctx, RepairProposal{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Number: r.PullRequest,
-			Title: r.Title, Body: repairBody(run), Trailer: fmt.Sprintf("%s: AXLR %s %s %s", trailer, run.Definition, run.Version, run.Instance)})
+			Title: proposalTitle(*r), Body: repairBody(run), Trailer: fmt.Sprintf("%s: AXLR %s %s %s", trailer, run.Definition, run.Version, run.Instance)})
 		if err != nil {
 			if ctx.Err() != nil {
 				return StepResult{}, err
@@ -426,6 +426,55 @@ func (d *CeremonyDriver) sleep(ctx context.Context, wait time.Duration) error {
 	}
 }
 
+// maxTitleBytes bounds a pull request title, its ellipsis included.
+const maxTitleBytes = 72
+
+// proposalTitle is the pull request title: the ceremony's prefix and the
+// first sentence of summary_en, which says what changed; before build or
+// repair returned one, the title taken from the brief.
+func proposalTitle(r domain.RepairRun) string {
+	prefix := "Repair: "
+	if r.Improvement {
+		prefix = "Improve: "
+	}
+	if sentence := firstSentence(r.Summary); sentence != "" {
+		return titleWithin(prefix, sentence)
+	}
+	return r.Title
+}
+
+// firstSentence is text up to its first sentence end (". ", "! ", "? " or a
+// line break), without the closing mark.
+func firstSentence(text string) string {
+	text = strings.TrimSpace(text)
+	end := len(text)
+	for i := 0; i < len(text); i++ {
+		if text[i] == '\n' || (text[i] == '.' || text[i] == '!' || text[i] == '?') && (i+1 == len(text) || text[i+1] == ' ') {
+			end = i
+			break
+		}
+	}
+	return strings.TrimSpace(text[:end])
+}
+
+// titleWithin is prefix+text within maxTitleBytes: a longer one is cut at
+// the last word boundary that leaves room for the ellipsis, or inside the
+// word when the first word alone does not fit.
+func titleWithin(prefix, text string) string {
+	title := prefix + text
+	if len(title) <= maxTitleBytes {
+		return title
+	}
+	const ellipsis = "…"
+	limit := maxTitleBytes - len(ellipsis)
+	cut := strings.LastIndex(title[:limit+1], " ")
+	if cut <= len(prefix) {
+		for cut = limit; cut > 0 && !utf8Start(title[cut]); cut-- {
+		}
+	}
+	return strings.TrimRight(title[:cut], " ,;:-") + ellipsis
+}
+
 // repairBody is the pull request description: what the ceremony knows, named
 // as the console's work so nobody mistakes it for a hand-written change.
 func repairBody(run domain.CeremonyRun) string {
@@ -556,6 +605,9 @@ func (d *CeremonyDriver) Resume(ctx context.Context, s domain.Session) (StepResu
 	step, ok := stateSteps[view.State]
 	if !ok || !repairConsoleSteps[step] {
 		return StepResult{}, false, nil // a model step: the ordinary path reconciles it
+	}
+	if view.LiveErr != nil {
+		return StepResult{}, false, fmt.Errorf("inspect %s: %w", run.Instance, view.LiveErr)
 	}
 	fence := view.Live[step]
 	if fence == "" && !slices.Contains(view.Claimable, step) {

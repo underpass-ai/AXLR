@@ -138,28 +138,46 @@ func (d *CeremonyDriver) fileDigest(ctx context.Context, path string) (string, e
 }
 
 // gitChanged lists the workspace paths git reports as changed or new; ok is
-// false when the workspace is not a repository.
+// false when the workspace is not a repository. It parses the whole stdout
+// of the NUL-separated form, never the tail shown to the model: every entry
+// is "XY path", and a rename or copy is followed by its old path, which is
+// skipped. An output the runtime cut is an error, not a shorter list.
 func (d *CeremonyDriver) gitChanged(ctx context.Context) ([]string, bool, error) {
-	result, err := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"status", "--porcelain=v1", "--untracked-files=all"}})
+	result, err := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"status", "--porcelain=v1", "-z", "--untracked-files=all"}, MaxOutput: ConsoleOutputBytes})
 	if err != nil {
 		return nil, false, err
 	}
 	if !result.Ran || result.ExitCode != 0 {
 		return nil, false, nil
 	}
+	if result.Truncated {
+		return nil, false, fmt.Errorf("git status printed more than %d bytes; the task's scope cannot be checked", ConsoleOutputBytes)
+	}
 	var paths []string
-	for _, line := range strings.Split(strings.TrimPrefix(result.Output, "…"), "\n") {
-		if len(line) < 4 {
+	entries := strings.Split(result.Stdout, "\x00")
+	for i := 0; i < len(entries); i++ {
+		entry := entries[i]
+		if len(entry) < 4 {
 			continue
 		}
-		p := strings.TrimSpace(line[3:])
-		if arrow := strings.LastIndex(p, " -> "); arrow >= 0 {
-			p = p[arrow+4:]
+		paths = append(paths, entry[3:])
+		if x, y := entry[0], entry[1]; x == 'R' || x == 'C' || y == 'R' || y == 'C' {
+			i++ // the old path of a rename or copy
 		}
-		paths = append(paths, strings.Trim(p, `"`))
 	}
 	sort.Strings(paths)
 	return paths, true, nil
+}
+
+// gitAnswer is the trimmed stdout of a git command that exited 0, "" when it
+// did not run or failed: stderr, and the stdout of a failed command (rev-parse
+// echoes HEAD in a repository without commits), are not an answer to record.
+func gitAnswer(ctx context.Context, checks CheckRunnerPort, args ...string) string {
+	result, err := checks.Run(ctx, domain.CheckCommand{Program: "git", Args: args})
+	if err != nil || !result.Ran || result.ExitCode != 0 {
+		return ""
+	}
+	return strings.TrimSpace(result.Stdout)
 }
 
 // changedByTask lists the paths this task changed: in a repository, those
@@ -233,6 +251,9 @@ func (d *CeremonyDriver) taskRed(ctx context.Context, run *domain.CeremonyRun, d
 		return output, "red_exhausted", false, "", nil
 	}
 	report["feedback"] = "the unit check passes, so the test does not fail yet; make it fail for the missing behaviour"
+	if result.RanNoTests() {
+		report["feedback"] = noTestsFeedback
+	}
 	return output, "", true, "", nil
 }
 
@@ -282,7 +303,7 @@ func (d *CeremonyDriver) taskGreen(ctx context.Context, s domain.Session, run *d
 	if err != nil {
 		return nil, "", false, "", err
 	}
-	green := result.Ran && result.ExitCode == 0
+	green := result.Ran && result.ExitCode == 0 && !result.RanNoTests()
 	output := map[string]any{"green": green, "summary": done.Summary, "summary_en": bounded(done.SummaryEN, 1500)}
 	if len(done.Notes) > 0 {
 		output["notes"] = done.Notes
@@ -301,6 +322,9 @@ func (d *CeremonyDriver) taskGreen(ctx context.Context, s domain.Session, run *d
 		return output, "green_exhausted", false, "", nil
 	}
 	report["feedback"] = "the unit check still fails; fix what its output shows"
+	if result.RanNoTests() {
+		report["feedback"] = noTestsFeedback
+	}
 	return output, "", true, "", nil
 }
 
@@ -339,9 +363,7 @@ func (d *CeremonyDriver) taskHandback(ctx context.Context, s domain.Session, run
 	}
 	revision := ""
 	if task.Git {
-		if rev, err := d.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"rev-parse", "HEAD"}}); err == nil && rev.Ran {
-			revision = strings.TrimSpace(rev.Output)
-		}
+		revision = gitAnswer(ctx, d.Checks, "rev-parse", "HEAD")
 	}
 	output := map[string]any{"done": true, "changed_files": changed, "revision": revision, "scope_checked_by": "git status"}
 	if !task.Git {
@@ -351,7 +373,10 @@ func (d *CeremonyDriver) taskHandback(ctx context.Context, s domain.Session, run
 		if record, err := d.planRecord(ctx, task.Plan); err == nil {
 			if t, ok := record.Task(task.Task); ok && t.Handback != nil {
 				t.Handback.Changed, t.Handback.Revision = changed, revision
-				_ = d.Plans.Save(ctx, record)
+				if err := d.Plans.Save(context.WithoutCancel(ctx), record); err != nil {
+					// MADE still records them in the step output below.
+					report["registry"] = "the plan registry did not save this task's changed files and revision: " + bounded(err.Error(), 300)
+				}
 			}
 		}
 	}
@@ -366,8 +391,10 @@ func (d *CeremonyDriver) taskHandback(ctx context.Context, s domain.Session, run
 	return d.enter(ctx, s, run, state, output, report)
 }
 
-// finishTask records a task's terminal state in the registry and memory.
-func (d *CeremonyDriver) finishTask(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output map[string]any) string {
+// finishTask records a task's terminal state in the registry and memory. A
+// registry that refuses the outcome is an error: the task would stay running
+// there, and a restarted console would reset it to pending and run it again.
+func (d *CeremonyDriver) finishTask(ctx context.Context, s domain.Session, run domain.CeremonyRun, state string, output map[string]any) (string, error) {
 	task := run.Task
 	status, reason := domain.TaskDone, ""
 	if state != "DONE" {
@@ -385,12 +412,14 @@ func (d *CeremonyDriver) finishTask(ctx context.Context, s domain.Session, run d
 				t.Status, t.Reason, t.Instance, t.Step, t.Session = status, reason, run.Instance, run.Step, s.Export().ID
 				handback, wave = t.Handback, t.Wave
 				record.Updated = d.now()
-				_ = d.Plans.Save(ctx, record)
+				if err := d.Plans.Save(context.WithoutCancel(ctx), record); err != nil {
+					return "", fmt.Errorf("record task %s of plan %s as %s: %w", task.Task, task.Plan, strings.ToLower(string(status)), err)
+				}
 			}
 		}
 	}
 	if d.Memory == nil {
-		return "not recorded: KMP is not connected"
+		return "not recorded: KMP is not connected", nil
 	}
 	labels := map[string][]string{"ceremony": {run.Definition}, "plan": {task.Plan}, "task": {task.Task}, "wave": {fmt.Sprint(wave)}, "session": {string(s.Export().ID)}, "ws": {string(s.Export().Workspace)}}
 	kind, summary := "observation", fmt.Sprintf("Task %s of plan %s %s.", task.Task, task.Plan, strings.ToLower(string(status)))
@@ -411,9 +440,9 @@ func (d *CeremonyDriver) finishTask(ctx context.Context, s domain.Session, run d
 		}
 	}
 	if _, err := d.Memory.RecordLinked(ctx, run.About, labels, MemoryRecord{ID: run.Instance + "-handback", Kind: kind, Summary: summary, Evidence: evidence}); err != nil {
-		return "not recorded: " + bounded(err.Error(), 300)
+		return "not recorded: " + bounded(err.Error(), 300), nil
 	}
-	return "recorded in " + run.About
+	return "recorded in " + run.About, nil
 }
 
 // TaskPrompt is the worker's first message: the context pack and the notes

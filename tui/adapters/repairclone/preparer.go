@@ -4,6 +4,7 @@
 package repairclone
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,17 +33,21 @@ type Preparer struct {
 
 var _ application.RepairClonePort = Preparer{}
 
+// run returns the command's stdout, which is its answer: gh and git print
+// notices on stderr while succeeding, and those must not reach the brief or
+// the base branch. A failure quotes both streams.
 func (p Preparer) run(ctx context.Context, dir, program string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, program, args...)
 	cmd.Dir, cmd.Env = dir, p.Env
 	if path, err := LookPath(p.Env, program); err == nil {
 		cmd.Path = path
 	}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("%s %s: %w: %s", program, strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("%s %s: %w: %s", program, strings.Join(args, " "), err, strings.TrimSpace(stderr.String()+"\n"+stdout.String()))
 	}
-	return string(out), nil
+	return stdout.String(), nil
 }
 
 // Issue reads a GitHub issue as a brief: title, body and URL.
@@ -106,10 +111,18 @@ func (p Preparer) Prepare(ctx context.Context, request application.RepairCloneRe
 	}
 	// The marker is the clone's, not the repository's: keep it out of the
 	// repair commit without touching the repository's own ignore file.
+	// A clone where that fails is refused: the marker would otherwise reach
+	// the pull request.
 	exclude := filepath.Join(clone, ".git", "info", "exclude")
-	if file, err := os.OpenFile(exclude, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600); err == nil {
-		_, _ = fmt.Fprintln(file, application.RepairMarker)
-		_ = file.Close()
+	file, err := os.OpenFile(exclude, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err == nil {
+		_, err = fmt.Fprintln(file, application.RepairMarker)
+		if closeErr := file.Close(); err == nil {
+			err = closeErr
+		}
+	}
+	if err != nil {
+		return application.RepairClone{}, fmt.Errorf("exclude %s from the clone's commits: %w", application.RepairMarker, err)
 	}
 	return application.RepairClone{Path: clone, Base: marker.Base}, nil
 }

@@ -173,7 +173,7 @@ func TestRepairRunsToAutomaticMergeAndRecordsCauseAndOutcome(t *testing.T) {
 	if len(outcome.Links) != 1 || outcome.Links[0].Ref != "project:axlr-repair-lab:entry:error_path:"+memory.records[0].ID || outcome.Links[0].Rel != "follows" {
 		t.Fatalf("outcome link: %+v", outcome.Links)
 	}
-	if forge.proposals[0].Title != "Repair: hola sale 1" {
+	if forge.proposals[0].Title != "Repair: The splitter now splits on any whitespace" {
 		t.Fatalf("title: %q", forge.proposals[0].Title)
 	}
 	if labels := memory.labels[len(memory.labels)-1]; labels["pull_request"][0] != "7" || labels["repair"][0] != "20261005-0200-hola-sale-1" {
@@ -439,6 +439,39 @@ func TestRepairResumeReusesALiveWatchClaim(t *testing.T) {
 		if strings.HasPrefix(call, "claim watch") {
 			t.Fatalf("the watch must not be claimed again: %v", engine.calls[before:])
 		}
+	}
+}
+
+// When MADE cannot say whether the console's own claim is live, a console
+// step is neither resumed as if there were none nor silently skipped: the
+// error reaches the person, and nothing is claimed or forged.
+func TestRepairResumeAndReconcileStopWhenLiveClaimsAreUnknown(t *testing.T) {
+	forge := &fakeForge{statuses: []PullRequestStatus{{State: "OPEN", MergeState: "CLEAN", Passed: 3}}}
+	d, engine, _, _, s := repairDriver(t, forge, 1, 0)
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, reproduceArgs)
+	step(t, d, &s, `{"root_cause":"c","evidence":"e","proposed_fix":"f"}`)
+	// The console died inside the watch; MADE refuses another claim while
+	// ours lives, and its resume inspection fails.
+	engine.view = CeremonyView{State: "WATCH", LiveErr: errors.New("made_inspect_ceremony_resume: journal is being compacted"), Outputs: map[string]map[string]any{"propose": {"pull_request": float64(7)}}}
+	before := len(engine.calls)
+	if _, ok, err := d.Resume(context.Background(), s); err == nil || !strings.Contains(err.Error(), "journal is being compacted") || ok {
+		t.Fatalf("resume: ok=%v err=%v", ok, err)
+	}
+	engine.failCompletes = 1
+	result, err := d.StepDone(context.Background(), s, mustObject(t, `{"summary":"s","summary_en":"e"}`))
+	if err == nil || !strings.Contains(err.Error(), "step is not in progress") || !strings.Contains(err.Error(), "journal is being compacted") || result.Accepted {
+		t.Fatalf("reconcile: %+v %v", result, err)
+	}
+	for _, call := range engine.calls[before:] {
+		if strings.HasPrefix(call, "claim watch") {
+			t.Fatalf("the watch must not be claimed on a guess: %v", engine.calls[before:])
+		}
+	}
+	if forge.merged || len(forge.proposals) != 0 {
+		t.Fatalf("the forge must not act: %+v", forge)
 	}
 }
 

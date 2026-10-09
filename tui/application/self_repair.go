@@ -74,6 +74,9 @@ type SelfRepair struct {
 	events chan RepairEvent
 	closed bool
 	wg     sync.WaitGroup
+	// unsaved is the record changes the registry refused since Records last
+	// reported them: the registry cannot show those itself.
+	unsaved error
 }
 
 // repairRun is one repair session the console drives in the background.
@@ -164,12 +167,28 @@ func (r *SelfRepair) publish(record domain.RepairRecord) {
 
 // save persists the record and tells the watchers. The write outlives a
 // cancelled caller: a record that says running after the console stopped
-// would hide an interrupted repair.
+// would hide an interrupted repair. A change the registry refuses is not
+// published as if it were saved: it is kept for Records to report, and the
+// watchers are told to reload what the registry holds, so they do.
 func (r *SelfRepair) save(ctx context.Context, record *domain.RepairRecord) error {
 	record.Updated = r.now()
-	err := r.Registry.Save(context.WithoutCancel(ctx), *record)
+	ctx = context.WithoutCancel(ctx)
+	if err := r.Registry.Save(ctx, *record); err != nil {
+		err = fmt.Errorf("repair %s: the registry did not save its latest change: %w", record.ID, err)
+		r.mu.Lock()
+		r.unsaved = errors.Join(r.unsaved, err)
+		r.mu.Unlock()
+		if stored, loadErr := r.Registry.Load(ctx); loadErr == nil {
+			for _, candidate := range stored {
+				if candidate.ID == record.ID {
+					r.publish(candidate)
+				}
+			}
+		}
+		return err
+	}
 	r.publish(*record)
-	return err
+	return nil
 }
 
 // Request is the axlr_request_repair host tool: validate, refuse what is not
@@ -302,8 +321,7 @@ func (r *SelfRepair) start(ctx context.Context, s domain.Session, records []doma
 	if err != nil {
 		record.Status, record.Error = domain.RepairFailed, bounded("clone: "+err.Error(), 600)
 		record.Notice = repairNotice(*record, r.Build)
-		_ = r.save(ctx, record)
-		return fmt.Errorf("the clone could not be prepared, so no %s session started: %w", kind, err)
+		return errors.Join(fmt.Errorf("the clone could not be prepared, so no %s session started: %w", kind, err), r.save(ctx, record))
 	}
 	record.Clone = clone.Path
 	childID, err := r.newID()
@@ -346,8 +364,7 @@ func (r *SelfRepair) about() string {
 func (r *SelfRepair) fail(ctx context.Context, record *domain.RepairRecord, err error) error {
 	record.Status, record.Error = domain.RepairFailed, bounded(err.Error(), 600)
 	record.Notice = repairNotice(*record, r.Build)
-	_ = r.save(ctx, record)
-	return err
+	return errors.Join(err, r.save(ctx, record))
 }
 
 // admit applies the duplicate, recursion, concurrency and attempt rules.
@@ -419,7 +436,7 @@ func (r *SelfRepair) update(ctx context.Context, run *repairRun, change func(*do
 	change(&run.record)
 	record := run.record
 	r.mu.Unlock()
-	_ = r.save(ctx, &record)
+	_ = r.save(ctx, &record) // a refusal is kept for Records to report
 	r.mu.Lock()
 	run.record.Updated = record.Updated
 	r.mu.Unlock()
@@ -836,11 +853,24 @@ func (r *SelfRepair) Reconcile(ctx context.Context) error {
 	return nil
 }
 
-// Records lists every repair, newest first.
+// Records lists every repair, newest first. It also reports, once, the record
+// changes the registry refused since the last call, so the panel shows them.
 func (r *SelfRepair) Records(ctx context.Context) ([]domain.RepairRecord, error) {
 	if r == nil || r.Registry == nil {
 		return nil, nil
 	}
+	r.mu.Lock()
+	unsaved := r.unsaved
+	r.unsaved = nil
+	r.mu.Unlock()
+	records, err := r.records(ctx)
+	if err != nil {
+		return nil, errors.Join(err, unsaved)
+	}
+	return records, unsaved
+}
+
+func (r *SelfRepair) records(ctx context.Context) ([]domain.RepairRecord, error) {
 	records, err := r.Registry.Load(ctx)
 	if err != nil {
 		return nil, err
@@ -888,7 +918,7 @@ func (r *SelfRepair) Status(ctx context.Context, s domain.Session, arguments roo
 			return nil, errors.New("repair must be a nonempty repair ID")
 		}
 	}
-	records, err := r.Records(ctx)
+	records, err := r.records(ctx)
 	if err != nil {
 		return nil, err
 	}

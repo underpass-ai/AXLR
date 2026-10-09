@@ -89,17 +89,27 @@ func (f *fakeEngine) Inspect(context.Context, string) (CeremonyView, error) {
 type fakeChecks struct {
 	exits []int
 	runs  []domain.CheckCommand
-	// status is what git status --porcelain prints: a clean clone by default.
-	status string
+	// status is what git status --porcelain prints: a clean clone by default;
+	// statusStderr is what it adds on stderr while still exiting 0.
+	status, statusStderr string
+	// git, when set, answers the other git commands (rev-parse HEAD in a
+	// repository without commits, say).
+	git *CheckResult
+	// outputs is what the next check commands print, one per run; "tail"
+	// once it is empty.
+	outputs []string
 }
 
 func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckResult, error) {
 	f.runs = append(f.runs, command)
 	if command.Program == "git" && len(command.Args) > 0 && command.Args[0] == "status" {
-		return CheckResult{Ran: true, Output: f.status}, nil
+		return CheckResult{Ran: true, Output: f.status + f.statusStderr, Stdout: f.status}, nil
 	}
 	if command.Program == "git" {
-		return CheckResult{Ran: true, Output: "abc123\n"}, nil
+		if f.git != nil {
+			return *f.git, nil
+		}
+		return CheckResult{Ran: true, Output: "abc123\n", Stdout: "abc123\n"}, nil
 	}
 	exit := 0
 	if len(f.exits) > 0 {
@@ -108,7 +118,11 @@ func (f *fakeChecks) Run(_ context.Context, command domain.CheckCommand) (CheckR
 	if exit == -1 {
 		return CheckResult{ExitCode: -1, Output: "program not found"}, nil
 	}
-	return CheckResult{Ran: true, ExitCode: exit, Output: "tail"}, nil
+	output := "tail"
+	if len(f.outputs) > 0 {
+		output, f.outputs = f.outputs[0], f.outputs[1:]
+	}
+	return CheckResult{Ran: true, ExitCode: exit, Output: output, Stdout: output}, nil
 }
 
 type fakeMemory struct {
@@ -218,6 +232,32 @@ func TestDebugCeremonyRunsEndToEndOnConsoleChecks(t *testing.T) {
 	reproduced := engine.completed[0]
 	if reproduced["reproduced"] != true || reproduced["settled"] != true {
 		t.Fatalf("console did not set the guard fields: %v", reproduced)
+	}
+}
+
+// unbornHead is git rev-parse HEAD in a repository without commits: it
+// echoes the argument on stdout, explains on stderr and exits 128.
+var unbornHead = CheckResult{Ran: true, ExitCode: 128, Stdout: "HEAD\n",
+	Output: "HEAD\nfatal: ambiguous argument 'HEAD': unknown revision or path not in the working tree.\nUse '--' to separate paths from revisions, like this:\n'git <command> [<revision>...] -- [<file>...]'\n"}
+
+// Integrate records git's answer as evidence only when git answered: a
+// failed rev-parse, or a warning git status printed on stderr, is not a
+// revision or a dirty file.
+func TestIntegrateRecordsOnlyWhatGitAnswered(t *testing.T) {
+	engine := &fakeEngine{}
+	checks := &fakeChecks{exits: []int{1, 0}, git: &unbornHead, statusStderr: "warning: could not open directory 'cache/': Permission denied\n"}
+	d := &CeremonyDriver{Engine: engine, Checks: checks, Now: func() time.Time { return time.Unix(1, 0) }}
+	s := debugSession(t)
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range []string{reproduceArgs, `{"root_cause":"r","evidence":"e","proposed_fix":"f"}`, `{"summary":"fixed"}`} {
+		step(t, d, &s, args)
+	}
+	r := step(t, d, &s, `{"report":"hecho","summary_en":"Fixed."}`)
+	integrated := engine.completed[len(engine.completed)-1]
+	if r["ceremony"] != "COMPLETED" || integrated["revision"] != "" || integrated["dirty"] != "" || r["revision"] != "" {
+		t.Fatalf("integrate recorded revision %q and dirty %q", integrated["revision"], integrated["dirty"])
 	}
 }
 

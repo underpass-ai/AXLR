@@ -16,6 +16,10 @@ type taskChecks struct {
 	status []string
 	exits  []int
 	runs   []string
+	// rev, when set, answers git rev-parse HEAD.
+	rev *CheckResult
+	// output, when set, is what the unit check prints.
+	output string
 }
 
 func (c *taskChecks) Run(_ context.Context, command domain.CheckCommand) (CheckResult, error) {
@@ -23,13 +27,24 @@ func (c *taskChecks) Run(_ context.Context, command domain.CheckCommand) (CheckR
 	c.runs = append(c.runs, line)
 	if command.Program == "git" {
 		if command.Args[0] == "status" {
-			return CheckResult{Ran: true, Output: strings.Join(c.status, "\n")}, nil
+			// git status -z ends every entry with a NUL.
+			var stdout strings.Builder
+			for _, entry := range c.status {
+				stdout.WriteString(entry + "\x00")
+			}
+			return CheckResult{Ran: true, Output: strings.Join(c.status, "\n"), Stdout: stdout.String()}, nil
 		}
-		return CheckResult{Ran: true, Output: "rev123\n"}, nil
+		if c.rev != nil {
+			return *c.rev, nil
+		}
+		return CheckResult{Ran: true, Output: "rev123\n", Stdout: "rev123\n"}, nil
 	}
 	exit := 0
 	if len(c.exits) > 0 {
 		exit, c.exits = c.exits[0], c.exits[1:]
+	}
+	if c.output != "" {
+		return CheckResult{Ran: true, ExitCode: exit, Output: c.output, Stdout: c.output}, nil
 	}
 	return CheckResult{Ran: true, ExitCode: exit, Output: "FAIL lines_test.go: undefined: LineCount"}, nil
 }
@@ -90,6 +105,48 @@ func TestATaskRunsRedGreenAndHandsBack(t *testing.T) {
 	task := plans.records[0].Tasks[0]
 	if task.Status != domain.TaskDone || task.Handback == nil || task.Handback.Notes[0].Text != "LineCount ignores a final newline" || strings.Join(task.Handback.Changed, ",") != "lines.go,lines_test.go" || task.Handback.Revision != "rev123" {
 		t.Fatalf("hand-back: %+v %+v", task, task.Handback)
+	}
+}
+
+// In a repository without commits git rev-parse HEAD fails; its stdout and
+// stderr ("HEAD\nfatal: ambiguous argument 'HEAD'…") are not a revision for
+// MADE, the plan registry or KMP.
+func TestTaskHandbackRecordsNoRevisionWithoutACommit(t *testing.T) {
+	d, files, checks, plans, s, _ := taskSetup(t, true)
+	checks.rev = &unbornHead
+	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
+	checks.status = append(checks.status, "?? lines_test.go")
+	checks.exits = []int{1}
+	step(t, d, &s, `{"test_files":["lines_test.go"],"expected":"undefined: LineCount"}`)
+	files.files["lines.go"] = []byte("package textstat\nfunc LineCount(s string) int { return 0 }\n")
+	checks.status = append(checks.status, "?? lines.go")
+	checks.exits = []int{0}
+	if r := step(t, d, &s, `{"summary":"Added LineCount","summary_en":"LineCount counts lines."}`); r["ceremony"] != "DONE" {
+		t.Fatalf("green: %v", r)
+	}
+	engine := d.Engine.(*fakeEngine)
+	handback := engine.completed[len(engine.completed)-1]
+	if task := plans.records[0].Tasks[0]; handback["revision"] != "" || task.Handback == nil || task.Handback.Revision != "" {
+		t.Fatalf("revision in MADE %q, in the registry %+v", handback["revision"], task.Handback)
+	}
+}
+
+// A unit check whose -run pattern matches no test exits 0: it neither shows
+// the new test failing at red nor proves the task at green.
+func TestTaskUnitCheckThatRanNoTestsIsNeitherRedNorGreen(t *testing.T) {
+	d, files, checks, _, s, _ := taskSetup(t, true)
+	files.files["lines_test.go"] = []byte("package textstat\nfunc TestLineCount(t *testing.T) { LineCount(\"\") }\n")
+	checks.status = append(checks.status, "?? lines_test.go")
+	checks.exits, checks.output = []int{0}, "testing: warning: no tests to run\nPASS\nok  \tx/textstat\t0.003s\n"
+	if r := step(t, d, &s, `{"test_files":["lines_test.go"],"expected":"undefined: LineCount"}`); r["next_step"] != "red" || !strings.Contains(r["feedback"].(string), "ran no tests") {
+		t.Fatalf("red with no test run: %v", r)
+	}
+	g, gfiles, gchecks, _, gs, _ := taskSetup(t, false)
+	gfiles.files["lines.go"] = []byte("package textstat\nfunc LineCount(s string) int { return 0 }\n")
+	gchecks.status = append(gchecks.status, "?? lines.go")
+	gchecks.exits, gchecks.output = []int{0}, "ok  \tx/textstat\t0.003s [no tests to run]\n"
+	if r := step(t, g, &gs, `{"summary":"Added LineCount","summary_en":"LineCount counts lines."}`); r["next_step"] != "green" || !strings.Contains(r["feedback"].(string), "ran no tests") {
+		t.Fatalf("green with no test run: %v", r)
 	}
 }
 
