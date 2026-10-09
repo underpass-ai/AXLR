@@ -139,6 +139,29 @@ func TestCheckpointFlagsNothingUnrecordedWithoutMemory(t *testing.T) {
 	}
 }
 
+// files_written tells the model the file on disk holds the write: a write
+// the person denied, the mode refused or the runtime failed is not listed.
+func TestCheckpointListsOnlyTheWritesThatSucceeded(t *testing.T) {
+	write := func(id, path string) root.ToolCall {
+		return recordCall(t, id, "local_write", `{"path":"`+path+`","content":"package x","mode":"create"}`)
+	}
+	original := []root.Message{
+		{Role: root.RoleUser, Content: "write them"},
+		{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{write("w1", "denied.go"), write("w2", "failed.go"), write("w3", "refused.go"), write("w4", "uncertain.go"), write("w5", "written.go")}},
+		{Role: root.RoleTool, ToolCallID: "w1", Content: "tool call denied by user"},
+		{Role: root.RoleTool, ToolCallID: "w2", Content: `{"protocol_version":1,"tool":"write","status":"failed","error":{"code":"io_error","message":"read-only file system"}}`},
+		{Role: root.RoleTool, ToolCallID: "w3", Content: "invalid tool invocation rejected: the review mode does not write files"},
+		{Role: root.RoleTool, ToolCallID: "w4", Content: "tool execution failed; effect unknown: context canceled"},
+		{Role: root.RoleTool, ToolCallID: "w5", Content: `{"protocol_version":1,"tool":"write","status":"completed","error":null,"output":{"bytes":9}}`},
+		{Role: root.RoleAssistant, Content: "one written"},
+		{Role: root.RoleUser, Content: "next"},
+	}
+	files, _ := omittedTurnRecords(original, 0, 8)[0].fields()["files_written"].([]string)
+	if strings.Join(files, ",") != "written.go" {
+		t.Fatalf("files_written = %v", files)
+	}
+}
+
 // A turn that only read files did no work worth recording, as the memory
 // reminder counts it, even in a session that uses KMP.
 func TestCheckpointDoesNotFlagAReadOnlyTurn(t *testing.T) {

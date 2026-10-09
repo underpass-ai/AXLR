@@ -98,9 +98,13 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 	}
 	forcedCut := 0
 	names := map[root.ToolCallID]root.ToolName{}
+	results := map[root.ToolCallID]string{}
 	for _, message := range original {
 		for _, call := range message.ToolCalls {
 			names[call.ID] = call.Name
+		}
+		if message.Role == root.RoleTool {
+			results[message.ToolCallID] = string(message.Content)
 		}
 	}
 	for i, message := range original {
@@ -108,7 +112,7 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 		projected[i].ToolCalls = append([]root.ToolCall(nil), message.ToolCalls...)
 		if len(starts) > 0 && i < starts[len(starts)-1] {
 			for c, call := range projected[i].ToolCalls {
-				projected[i].ToolCalls[c].Arguments = closedWriteArguments(call)
+				projected[i].ToolCalls[c].Arguments = closedWriteArguments(call, results[call.ID])
 			}
 		}
 		if message.Role == root.RoleTool {

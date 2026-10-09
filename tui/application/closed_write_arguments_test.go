@@ -58,6 +58,31 @@ func TestProjectionShortensWriteArgumentsOfClosedTurnsOnly(t *testing.T) {
 	}
 }
 
+// The shortened form says the file on disk holds what the call wrote: a
+// closed turn's write that was denied or failed keeps its arguments, the
+// only copy of that text.
+func TestProjectionKeepsTheArgumentsOfAWriteThatDidNotHappen(t *testing.T) {
+	content := strings.Repeat("línea de código\n", 200)
+	results := []root.Text{"tool call denied by user", `{"protocol_version":1,"tool":"write","status":"failed","error":{"code":"io_error","message":"disk full"}}`}
+	for _, result := range results {
+		write := recordCall(t, "w1", "local_write", `{"path":"a.go","content":`+quoteJSON(content)+`,"mode":"create"}`)
+		original := []root.Message{
+			{Role: root.RoleUser, Content: "escribe"},
+			{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{write}},
+			{Role: root.RoleTool, ToolCallID: "w1", Content: result},
+			{Role: root.RoleAssistant, Content: "no se pudo"},
+			{Role: root.RoleUser, Content: "otra"},
+		}
+		projection, err := NewDefaultModelContextProjector().Project(original)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := string(projection.Messages[1].ToolCalls[0].Arguments.Bytes()); got != string(write.Arguments.Bytes()) {
+			t.Fatalf("%.30q: a write that did not happen was shortened to %s", result, got)
+		}
+	}
+}
+
 func quoteJSON(text string) string {
 	encoded, _ := json.Marshal(text)
 	return string(encoded)

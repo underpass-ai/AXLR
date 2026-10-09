@@ -12,12 +12,13 @@ import (
 const closedWriteArgumentBytes = 512
 
 // closedWriteArguments shortens the arguments of a local_write or local_edit
-// call of a closed turn: the text it wrote is on disk, so the projection keeps
-// the path and the mode and says how many bytes of each text were left out.
-// Session c33e8e86 carried 72 KB of such arguments in its last request, the
-// largest part of the history the projection never shortened. The saved
-// transcript keeps them whole; other calls are returned unchanged.
-func closedWriteArguments(call root.ToolCall) root.JSONValue {
+// call of a closed turn whose result says it succeeded: the text it wrote is
+// on disk, so the projection keeps the path and the mode and says how many
+// bytes of each text were left out. Session c33e8e86 carried 72 KB of such
+// arguments in its last request, the largest part of the history the
+// projection never shortened. The saved transcript keeps them whole; other
+// calls, and writes that were denied or failed, are returned unchanged.
+func closedWriteArguments(call root.ToolCall, result string) root.JSONValue {
 	var texts []string
 	switch call.Name {
 	case "local_write":
@@ -28,7 +29,7 @@ func closedWriteArguments(call root.ToolCall) root.JSONValue {
 		return call.Arguments
 	}
 	raw := call.Arguments.Bytes()
-	if len(raw) < closedWriteArgumentBytes {
+	if len(raw) < closedWriteArgumentBytes || !writeSucceeded(result) {
 		return call.Arguments
 	}
 	var fields map[string]json.RawMessage
@@ -60,4 +61,20 @@ func closedWriteArguments(call root.ToolCall) root.JSONValue {
 		return call.Arguments
 	}
 	return arguments
+}
+
+// writeSucceeded reads a local_write or local_edit result: a runtime
+// envelope without an error whose status, when present, is completed. A
+// denied, refused or uncertain call's plain text is not, nor is a failure.
+func writeSucceeded(result string) bool {
+	value, err := decodeContextJSON([]byte(result))
+	if err != nil {
+		return false
+	}
+	envelope, ok := value.(map[string]any)
+	if !ok || envelope["error"] != nil {
+		return false
+	}
+	status, present := envelope["status"]
+	return !present || status == "completed"
 }
