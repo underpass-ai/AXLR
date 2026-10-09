@@ -22,6 +22,8 @@ type HostToolUseCase struct {
 	// Windows bounds an axlr_history page to the projection's tool result
 	// budget for the session's model; nil keeps MaxHistoryReadBytes.
 	Windows ModelContextWindowPort
+	// Memory serves axlr_remember; nil without KMP.
+	Memory RememberPort
 }
 
 // historyPageLimit is the largest encoded axlr_history page that the
@@ -74,6 +76,8 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		default:
 			result, err = u.Repairs.Status(ctx, session, arguments)
 		}
+	case domain.HostOperationRemember:
+		result, err = u.hostRemember(ctx, session, arguments)
 	case domain.HostOperationJudge:
 		if u.Judge == nil {
 			err = errors.New("Jev is not enabled in this console")

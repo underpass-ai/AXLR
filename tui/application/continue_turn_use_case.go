@@ -35,6 +35,9 @@ type ContinueTurnUseCase struct {
 	// Calibration learns each model's bytes per prompt token from the
 	// requests it serves; nil measures nothing.
 	Calibration TokenCalibrationPort
+	// Remember writes axlr_remember's memories in KMP; nil, without KMP,
+	// offers no axlr_remember.
+	Remember RememberPort
 	// TurnToolCalls is the turn's tool-call budget (settings'
 	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
 	TurnToolCalls int
@@ -84,6 +87,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	hostTools := HostTools()
 	if u.Judge.offersTool() {
 		hostTools = append(hostTools, JudgeTool())
+	}
+	if u.offersRemember(*session) {
+		hostTools = append(hostTools, RememberTool())
 	}
 	if err := session.EnsureHostTools(hostTools); err != nil {
 		contextSpan.End(DiagnosticErrorInvalidState)
@@ -140,6 +146,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		// A session that once had Jev keeps axlr_judge in its snapshot; it is
 		// absent from the request while Jev is off.
 		tools = withoutTool(tools, HostJudgeName)
+	}
+	if !u.offersRemember(*session) {
+		tools = withoutTool(tools, HostRememberName)
 	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
 	if u.Diagnostics != nil {

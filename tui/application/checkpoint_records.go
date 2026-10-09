@@ -77,6 +77,11 @@ func omittedTurnRecords(original []root.Message, first, cut int) map[int]turnRec
 					record.files = append(record.files, path)
 				}
 			}
+			if call.Name == HostRememberName {
+				if about, key, ok := rememberAccepted(results[call.ID]); ok {
+					record.memory = append(record.memory, map[string]any{"about": about, "idempotency_key": key})
+				}
+			}
 			if name, arguments := memoryCall(call); name == "kmp_write_memory" && memoryWriteAccepted(results[call.ID]) {
 				written := map[string]any{}
 				for _, key := range []string{"about", "idempotency_key"} {

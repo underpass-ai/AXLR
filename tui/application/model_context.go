@@ -78,7 +78,11 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		case "kmp":
 			pluginGuidance.WriteString("KMP is Underpass graph-temporal agent memory. It recovers stored evidence and records decisions, constraints and outcomes. Recover relevant project context before re-deriving it; UNKNOWN is a valid answer. Read only the brief entry of kmp_guide initially, and request a specific extended topic only when needed for the current operation. Reuse the KMP agent and context identity and the guidance already present in this conversation; do not initialize a fresh agent, fetch all guide topics or reread them every turn. Use explicit project scope and evidence.\n")
 			if modelRecordsMemory(*s) {
-				pluginGuidance.WriteString("Record what the work settles: before your final answer, when the task settled a decision, constraint, fix or outcome worth reusing, write it with kmp_write_memory under the session's exact about, with its source evidence and a stable idempotency key, as kmp_guide describes, and say what you recorded. Never record transcripts, guesses or facts nothing settled.\n")
+				if _, remembers := findTool(s, HostRememberName); remembers {
+					pluginGuidance.WriteString("Record what the work settles: before your final answer, when the task settled a decision, constraint, fix or outcome worth reusing, write it with axlr_remember (kind, text, its source evidence and optional links; the console supplies the session's exact about and the idempotency key, and it needs no kmp_guide), and say what you recorded. Never record transcripts, guesses or facts nothing settled.\n")
+				} else {
+					pluginGuidance.WriteString("Record what the work settles: before your final answer, when the task settled a decision, constraint, fix or outcome worth reusing, write it with kmp_write_memory under the session's exact about, with its source evidence and a stable idempotency key, as kmp_guide describes, and say what you recorded. Never record transcripts, guesses or facts nothing settled.\n")
+				}
 			}
 		case "made":
 			pluginGuidance.WriteString("MADE is Underpass's engine for agentic ceremonies: structured procedures, working sessions, review loops and human approval. It is available through the registered MADE MCP tools. Discover existing ceremonies and their required transitions through its tools; never invent ceremony results or approvals.\n")

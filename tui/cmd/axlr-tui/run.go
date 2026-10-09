@@ -416,7 +416,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
-	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace}
+	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations)}
 	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}}
 	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
 	if ceremonies != nil {
@@ -494,6 +494,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		planPanel = planRunner
 	}
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
+	if _, kmp := activeEngineCommands["kmp"]; kmp {
+		// axlr_remember writes the model's memories in one call.
+		continuation.Remember = ceremonyhost.Memory{Tools: runner}
+	}
 	var notices application.RepairNoticesPort
 	if repairs != nil {
 		continuation.SelfRepair = repairs

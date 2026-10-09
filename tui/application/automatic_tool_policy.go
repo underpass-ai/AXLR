@@ -7,6 +7,10 @@ import (
 
 // Discovery and current-session bookkeeping are intrinsic. Wrappers retain target approval.
 func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity) bool {
+	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationRemember {
+		// It writes KMP memory: approved as kmp_write_memory would be.
+		return policy != nil && policy.AutoApproves(domain.MemoryWriteIdentity)
+	}
 	if id.Kind == domain.ToolKindHost {
 		// A repair or improvement request starts a separate session the
 		// console validates and drives; its own approvals (the check command,
