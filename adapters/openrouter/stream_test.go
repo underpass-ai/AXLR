@@ -125,6 +125,29 @@ func TestStreamRejectsIncompleteMalformedAndOversized(t *testing.T) {
 	}
 }
 
+// The id and name of a tool call arrive once in OpenAI's stream; a provider
+// that repeats them in every chunk must not get "call_1call_1" back. Only
+// the arguments are fragments.
+func TestStreamToolCallRepeatedIDAndNameAreNotConcatenated(t *testing.T) {
+	wire := streamEvents(
+		`{"choices":[{"index":0,"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read","arguments":"{\"path\":"}}]}}]}`,
+		`{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1","type":"function","function":{"name":"read","arguments":"\"a\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		"[DONE]")
+	body := &trackedStreamBody{Reader: strings.NewReader(wire)}
+	c, _ := streamClient(t, body, 200)
+	got, err := c.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Message.ToolCalls) != 1 {
+		t.Fatalf("calls = %+v", got.Message.ToolCalls)
+	}
+	call := got.Message.ToolCalls[0]
+	if call.ID != "call_1" || call.Name != "read" || string(call.Arguments.Bytes()) != `{"path":"a"}` {
+		t.Fatalf("id=%q name=%q arguments=%s", call.ID, call.Name, call.Arguments.Bytes())
+	}
+}
+
 // A tool call cut by the output limit completes the stream: the call keeps
 // a valid object that names the cut, for the turn to answer with a tool
 // error, instead of the whole operation failing on invalid JSON.
