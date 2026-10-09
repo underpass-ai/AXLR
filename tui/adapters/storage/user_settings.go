@@ -64,8 +64,11 @@ type UserSettings struct {
 	// an earlier launch's trace and payloads; absent means
 	// DefaultTraceRetentionDays and 0 keeps them forever. A pointer keeps an
 	// explicit 0 when another setting is saved.
-	TraceRetentionDays *int                       `json:"trace_retention_days,omitempty"`
-	Extra              map[string]json.RawMessage `json:"-"`
+	TraceRetentionDays *int `json:"trace_retention_days,omitempty"`
+	// TracePayloads stores redacted request and response bodies beside the
+	// trace by default; --trace-payloads decides for one launch.
+	TracePayloads bool                       `json:"trace_payloads,omitempty"`
+	Extra         map[string]json.RawMessage `json:"-"`
 }
 
 // DefaultTraceRetentionDays applies when trace_retention_days is absent.
@@ -346,7 +349,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies", "plan", "trace_retention_days"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break

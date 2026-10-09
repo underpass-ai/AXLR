@@ -66,7 +66,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	modelFlag := flags.String("model", "", "OpenRouter model ID (optional; choose with /model)")
 	langFlag := flags.String("lang", "", "interface language: en or es (overrides AXLR_LANG and settings.json)")
 	traceFlag := flags.String("trace-file", "", "privacy-safe JSONL diagnostics (default a private file under $XDG_STATE_HOME/axlr/logs)")
-	tracePayloads := flags.Bool("trace-payloads", true, "capture redacted request/response bodies in a private per-run directory")
+	tracePayloads := flags.Bool("trace-payloads", false, "capture redacted request/response bodies, prompts and tool results included, in a private per-run directory (default: trace_payloads in settings.json, else off)")
 	sessionFlag := flags.String("session", "", "saved session ID")
 	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
 	repairFlag := flags.String("repair", "", "start a repair of the configured repository in a fresh clone: a failure brief or #issue")
@@ -237,7 +237,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	var payloadDirectory string
 	if trace != nil {
 		var payloads *diagnostics.PayloadRecorder
-		if *tracePayloads {
+		if capturePayloads(flags, *tracePayloads, settings) {
 			payloadParent, note, parentErr := payloadParent(workspacePath, tracePath, getenv)
 			if parentErr != nil {
 				return fail(parentErr)
@@ -255,7 +255,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 				_ = os.Remove(payloadDirectory)
 				return fail(err)
 			}
-			fmt.Fprintln(stderr, "axlr-tui: payloads:", payloadDirectory)
+			fmt.Fprintln(stderr, "axlr-tui: payload capture is on: request and response bodies, prompts and tool results included, are stored in", payloadDirectory)
 		}
 		transport = diagnostics.Transport{Next: transport, Trace: trace, Payloads: payloads, Endpoints: locals.endpoints}
 	}
