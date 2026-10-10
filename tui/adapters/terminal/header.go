@@ -12,7 +12,12 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-type Header struct{ State domain.SessionState }
+type Header struct {
+	State domain.SessionState
+	// SandboxOff marks a configured exec sandbox that does not confine
+	// local commands.
+	SandboxOff bool
+}
 
 const (
 	headerPluginLimit = 3
@@ -26,7 +31,16 @@ func (h Header) View(width int, theme Theme) string {
 	if h.State.ID == "" {
 		model = theme.T("header.chooseModel")
 	}
-	left := " " + theme.Accent(theme.Icon("brand")+" AXLR") + "  " + model + theme.Muted("  "+shortenHome(singleLine(string(h.State.Workspace))))
+	left := " " + theme.Accent(theme.Icon("brand")+" AXLR") + "  " + model
+	if h.SandboxOff {
+		// Before the path, which a narrow row cuts first.
+		marker := theme.Icon("attention") + " " + theme.T("header.sandboxOff")
+		if !theme.Monochrome {
+			marker = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.palette().Warning)).Render(marker)
+		}
+		left += "  " + marker
+	}
+	left += theme.Muted("  " + shortenHome(singleLine(string(h.State.Workspace))))
 	right := ""
 	plugins := sessionPlugins(h.State)
 	for i, id := range plugins {

@@ -72,6 +72,11 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 			prompt = root.Text(string(prompt) + "\n\n" + notice)
 		}
 	}
+	// A ceremony the person stopped since the last prompt is told once,
+	// on this prompt; a mode that starts a new ceremony makes it moot.
+	if stopped := next.TakeStoppedCeremony(); stopped != "" && !next.Mode().StartsCeremony() {
+		prompt = root.Text(string(prompt) + "\n\n" + StoppedCeremonyNote(stopped))
+	}
 	began := false
 	if _, live := next.Ceremony(); next.Mode().StartsCeremony() && !live {
 		// The ceremony starts before the turn so its first step instruction

@@ -41,6 +41,15 @@ type SessionState struct {
 	// against calls the steps already paid for, and the one a resume
 	// restarted. It lives for one turn.
 	FinishedBudgetBase int
+	// StoppedCeremony is the definition of a ceremony the person stopped
+	// since the last prompt, "" when none: the next prompt tells the model
+	// once. Finishing the ceremony and returning to normal mode keep it.
+	// The session store keeps it beside the snapshot, so a console
+	// restarted between the stop and the next prompt still tells the model.
+	StoppedCeremony string
+	// ConsoleLines are lines shown to the person between messages and
+	// never sent to the model, such as a finished plan's outcome.
+	ConsoleLines []ConsoleLine
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -75,6 +84,9 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 		if err = state.Ceremony.Validate(); err != nil {
 			return Session{}, err
 		}
+	}
+	if err = validateConsoleLines(state.ConsoleLines, len(state.Messages)); err != nil {
+		return Session{}, err
 	}
 	previous := 0
 	for _, archived := range state.ArchivedDrafts {
@@ -171,6 +183,13 @@ func cloneState(state SessionState) SessionState {
 	state.ToolSnapshot = append([]AvailableTool(nil), state.ToolSnapshot...)
 	state.Activity = append([]PendingTool(nil), state.Activity...)
 	state.ArchivedDrafts = append([]ArchivedDraft(nil), state.ArchivedDrafts...)
+	if state.ConsoleLines != nil {
+		lines := make([]ConsoleLine, len(state.ConsoleLines))
+		for i, line := range state.ConsoleLines {
+			lines[i] = line.clone()
+		}
+		state.ConsoleLines = lines
+	}
 	state.MessageTimes = append([]time.Time(nil), state.MessageTimes...)
 	if state.Ceremony != nil {
 		run := state.Ceremony.clone()

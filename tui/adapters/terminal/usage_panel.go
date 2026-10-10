@@ -43,7 +43,7 @@ func (m AppModel) loadUsage() AppModel {
 func (m AppModel) observeUsage(ledger domain.UsageLedger, warn bool) AppModel {
 	m.cost.ledger = ledger
 	if warn {
-		m.Status.Notice = m.Theme.Tf("notice.budgetWarning", formatUSD(ledger.Cost), formatBudget(ledger.Limit(m.deps.MaxSessionUSD)))
+		m.Status.Notice = m.Theme.Tf("notice.budgetWarning", FormatUSD(ledger.Cost), formatBudget(ledger.Limit(m.deps.MaxSessionUSD)))
 	}
 	return m.refreshUsagePanel()
 }
@@ -54,28 +54,39 @@ func (m AppModel) costParts() []string {
 	var parts []string
 	ledger := m.cost.ledger
 	if ledger.CostRequests > m.cost.turnRequests {
-		parts = append(parts, m.Theme.Tf("footer.costTurn", formatUSD(ledger.Cost-m.cost.turnCost)))
+		parts = append(parts, m.Theme.Tf("footer.costTurn", FormatUSD(ledger.Cost-m.cost.turnCost)))
 	}
 	if ledger.CostRequests > 0 {
-		parts = append(parts, m.Theme.Tf("footer.costSession", formatUSD(ledger.Cost)))
+		parts = append(parts, m.Theme.Tf("footer.costSession", FormatUSD(ledger.Cost)))
 	}
 	return parts
 }
 
-// formatUSD shows what was spent, with four decimals below a cent:
-// $0.0031, $0.21, $14.13.
-func formatUSD(v float64) string {
-	if v < 0.01 {
-		return fmt.Sprintf("$%.4f", v)
+// FormatUSD is how the console writes an amount of money, spent or a limit:
+// below a dollar up to four decimals with trailing zeros dropped but two
+// kept ($0.012, $0.0147, $0.50, $0.21), from a dollar on two ($14.13). On
+// 10 October 2026 a $0.012 budget read "$0.01" everywhere, "past 80 % of
+// its $0.01 budget" and "Budget: $0.02" for $0.024, while the exit hint
+// wrote $0.0147 with its own format; the launcher's exit hint uses this.
+func FormatUSD(v float64) string {
+	if v >= 1 || v <= -1 {
+		return fmt.Sprintf("$%.2f", v)
 	}
-	return fmt.Sprintf("$%.2f", v)
+	text := strings.TrimRight(fmt.Sprintf("%.4f", v), "0")
+	if decimals := len(text) - strings.IndexByte(text, '.') - 1; decimals < 2 {
+		text += strings.Repeat("0", 2-decimals)
+	}
+	if text == "-0.00" {
+		text = "0.00"
+	}
+	return "$" + text
 }
 
-// formatBudget shows a limit or what is left of it in cents, $0.00 when
-// nothing is left, and like formatUSD below a cent.
+// formatBudget shows a limit or what is left of it like FormatUSD, $0.00
+// when nothing is left.
 func formatBudget(v float64) string {
 	if v > 0 {
-		return formatUSD(v)
+		return FormatUSD(v)
 	}
 	return "$0.00"
 }
@@ -161,7 +172,7 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme) stri
 		"",
 	}
 	if l.CostRequests > 0 {
-		lines = append(lines, theme.Tf("usage.cost", formatUSD(l.Cost)))
+		lines = append(lines, theme.Tf("usage.cost", FormatUSD(l.Cost)))
 	} else {
 		lines = append(lines, theme.T("usage.costUnknown"))
 	}
@@ -186,7 +197,7 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme) stri
 		p := l.Providers[name]
 		cost := "—"
 		if p.CostRequests > 0 {
-			cost = formatUSD(p.Cost)
+			cost = FormatUSD(p.Cost)
 		}
 		row := theme.Tf("usage.provider", singleLine(name), p.Requests, cost)
 		if p.Requests == 1 {

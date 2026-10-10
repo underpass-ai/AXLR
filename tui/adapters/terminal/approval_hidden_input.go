@@ -34,6 +34,17 @@ func (m AppModel) hiddenInputWarning(p domain.PendingTool) string {
 	return ""
 }
 
+// execCardCommand is a known local exec call's command line, for the top
+// of its card; empty for any other call.
+func (m AppModel) execCardCommand(p domain.PendingTool) string {
+	tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
+	if !known || err != nil || tool.Identity.Kind != domain.ToolKindLocal || tool.Identity.LocalOperation != "exec" {
+		return ""
+	}
+	command, _ := execCommand(p.Call.Arguments.Bytes())
+	return command
+}
+
 // modeAsksForEachCall is true when the session's mode, not the user's
 // approval settings, keeps this call under approval; "always allow" would
 // then only add a global rule the mode ignores until it leaves.

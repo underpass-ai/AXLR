@@ -88,6 +88,26 @@ func TestAnOpenStepWithoutATurnCanBeStoppedByThePerson(t *testing.T) {
 	if _, idle := OpenStepIdle(s); idle {
 		t.Fatal("a stopped ceremony is still reported open")
 	}
+	// The stop survives the return to normal mode and the next prompt, and
+	// only that one, tells the model (10 Oct 2026: it called
+	// axlr_step_done again after a /stop-ceremony).
+	if s.Mode() != domain.ModeNormal || s.Export().StoppedCeremony != "axlr_delivery" {
+		t.Fatalf("mode %s, stopped %q", s.Mode(), s.Export().StoppedCeremony)
+	}
+	var lasts []string
+	u := StartTurnUseCase{Catalog: &catalogStub{}, Store: store, Continue: ContinueTurnUseCase{Store: store, Models: streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		lasts = append(lasts, string(r.Messages[len(r.Messages)-1].Content))
+		return assistant("ok"), nil
+	})}}
+	for _, prompt := range []root.Text{"what does HardTimeout do?", "and the sandbox?"} {
+		if err := u.Execute(context.Background(), &s, prompt, ignoreEvent); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := "what does HardTimeout do?\n\n[AXLR] The person stopped the axlr_delivery ceremony; do not resume it or call axlr_step_done unless asked."
+	if len(lasts) != 2 || lasts[0] != want || lasts[1] != "and the sandbox?" || s.Export().StoppedCeremony != "" {
+		t.Fatalf("prompts %q", lasts)
+	}
 }
 
 func TestSelfRepairAndSelfImprovementKeepTheirOwnNudges(t *testing.T) {

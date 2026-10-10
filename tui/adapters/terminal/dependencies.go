@@ -44,6 +44,9 @@ type Dependencies struct {
 	// /usage, where + raises the session's limit by MaxSessionUSD.
 	Usage         application.SessionUsagePort
 	MaxSessionUSD float64
+	// Sandbox is the exec sandbox the launch found; the header marks one
+	// that is configured but does not confine commands.
+	Sandbox SandboxStatus
 	// Quit receives the session shown when the person quits (/exit,
 	// Ctrl+C), so the launcher can say how to resume it.
 	Quit func(domain.SessionState)

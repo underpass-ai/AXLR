@@ -111,6 +111,11 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 		records[string(s.Activity[i].Call.ID)] = &s.Activity[i]
 	}
 	clock := transcriptNow()
+	lines := 0
+	for lines < len(s.ConsoleLines) && s.ConsoleLines[lines].AfterMessage == 0 {
+		t.appendRow(consoleLineRow(s.ConsoleLines[lines], theme))
+		lines++
+	}
 	for index, m := range s.Messages {
 		var at time.Time
 		if index < len(s.MessageTimes) {
@@ -134,6 +139,10 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
 			t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, Markdown: true})
 			archived++
+		}
+		for lines < len(s.ConsoleLines) && s.ConsoleLines[lines].AfterMessage == index+1 {
+			t.appendRow(consoleLineRow(s.ConsoleLines[lines], theme))
+			lines++
 		}
 	}
 	if s.Draft != "" {

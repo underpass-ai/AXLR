@@ -20,7 +20,9 @@ type Executor struct {
 	files     *local.FileAdapter
 	processes *local.ProcessAdapter
 	config    Config
-	mu        sync.Mutex
+	// roots are the workspace root resolved and as configured.
+	roots []string
+	mu    sync.Mutex
 }
 
 func New(c Config) (*Executor, error) {
@@ -48,6 +50,10 @@ func New(c Config) (*Executor, error) {
 			return nil, errors.New("invalid child environment")
 		}
 	}
+	configured, err := filepath.Abs(c.Root)
+	if err != nil {
+		return nil, err
+	}
 	path, err := filepath.EvalSymlinks(c.Root)
 	if err != nil {
 		return nil, err
@@ -74,7 +80,11 @@ func New(c Config) (*Executor, error) {
 		sandbox.Writable = append([]string(nil), sandbox.Writable...)
 		c.Sandbox = &sandbox
 	}
-	return &Executor{files: files, processes: &local.ProcessAdapter{Root: path, Env: c.Env, Sandbox: c.Sandbox}, config: c}, nil
+	roots := []string{path}
+	if configured != path {
+		roots = append(roots, configured)
+	}
+	return &Executor{files: files, processes: &local.ProcessAdapter{Root: path, Env: c.Env, Sandbox: c.Sandbox}, config: c, roots: roots}, nil
 }
 func (e *Executor) Close() error { e.mu.Lock(); defer e.mu.Unlock(); return e.files.Close() }
 
@@ -84,7 +94,7 @@ func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 	defer e.mu.Unlock()
 	start := time.Now()
 	r := dto.Response{ProtocolVersion: ProtocolVersion, RequestID: req.RequestID, Tool: req.Tool, StartedAt: start.UTC(), Status: "completed"}
-	mapper := RequestMapper{MaxReadBytes: e.config.MaxReadBytes, MaxFileBytes: e.config.MaxFileBytes, MaxOutputBytes: e.config.MaxOutputBytes, MaxTimeout: e.config.MaxTimeout}
+	mapper := RequestMapper{MaxReadBytes: e.config.MaxReadBytes, MaxFileBytes: e.config.MaxFileBytes, MaxOutputBytes: e.config.MaxOutputBytes, MaxTimeout: e.config.MaxTimeout, Roots: e.roots}
 	command, err := mapper.Map(req)
 	var result any
 	listingBytes := 0

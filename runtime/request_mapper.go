@@ -3,6 +3,7 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/underpass-ai/AXLR/domain"
@@ -14,6 +15,12 @@ type RequestMapper struct {
 	MaxFileBytes   int
 	MaxOutputBytes int
 	MaxTimeout     time.Duration
+	// Roots are the absolute forms of the workspace root (as configured
+	// and with symlinks resolved): an absolute exec cwd under one of them
+	// is mapped to its relative form. Without roots an absolute cwd is
+	// refused, unless deferAbsoluteCwd leaves it to a mapper that has them.
+	Roots            []string
+	deferAbsoluteCwd bool
 }
 
 func (m RequestMapper) Map(req dto.Request) (any, error) {
@@ -141,7 +148,7 @@ func (m RequestMapper) Map(req dto.Request) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		cwd, err := domain.NewWorkingDirectory(a.Cwd)
+		cwd, err := m.workingDirectory(a.Cwd)
 		if err != nil {
 			return nil, err
 		}
@@ -278,4 +285,34 @@ func (m RequestMapper) listingBytes(n int) (domain.ByteLimit, error) {
 		n = min(defaultListingBytes, m.MaxReadBytes)
 	}
 	return domain.NewByteLimit(n, m.MaxReadBytes)
+}
+
+// workingDirectory maps an exec cwd. On 10 October 2026 a plan worker passed
+// the workspace's absolute path as cwd and was refused with "invalid working
+// directory"; the next call, without cwd, worked. An absolute cwd inside the
+// workspace now stands for its relative form, the root itself for ".". The
+// domain type stays relative: only this mapper knows the root.
+func (m RequestMapper) workingDirectory(cwd string) (domain.WorkingDirectory, error) {
+	if filepath.IsAbs(cwd) {
+		if m.deferAbsoluteCwd {
+			return ".", nil
+		}
+		rel, ok := insideRoots(filepath.Clean(cwd), m.Roots)
+		if !ok {
+			return "", errors.New("cwd must be inside the workspace (relative to its root)")
+		}
+		cwd = rel
+	}
+	return domain.NewWorkingDirectory(cwd)
+}
+
+// insideRoots is path relative to the first root that contains it.
+func insideRoots(path string, roots []string) (string, bool) {
+	for _, root := range roots {
+		rel, err := filepath.Rel(root, path)
+		if err == nil && (rel == "." || filepath.IsLocal(rel)) {
+			return rel, true
+		}
+	}
+	return "", false
 }

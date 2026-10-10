@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -13,8 +14,9 @@ import (
 )
 
 // SessionPicker lists saved sessions newest first. By default it shows the
-// active workspace's sessions that have messages; Tab widens it to every
-// workspace and typing filters by title.
+// active workspace's sessions that have messages, without the sessions a
+// plan's tasks ran in; Tab widens it to every workspace, then lists the plan
+// tasks' sessions, then the archived ones, and typing filters by title.
 type SessionPicker struct {
 	Items         []domain.SessionSummary
 	Selected      int
@@ -22,8 +24,14 @@ type SessionPicker struct {
 	AllWorkspaces bool
 	// ArchivedView lists only archived sessions, from every workspace.
 	ArchivedView bool
-	Query        string
-	Labels       map[domain.SessionID]domain.SessionLabel
+	// TasksView lists only the sessions plan tasks ran in, from every
+	// workspace; the other views leave them out.
+	TasksView bool
+	// Tasks names the plan task each worker session ran, from the plan
+	// registry.
+	Tasks  map[domain.SessionID]planTaskRef
+	Query  string
+	Labels map[domain.SessionID]domain.SessionLabel
 	// Renaming edits the selected session's title in place of the search.
 	Renaming   bool
 	RenameText string
@@ -34,10 +42,51 @@ const (
 	SessionArchiveIntent ControlIntent = "session-archive"
 )
 
-// Title is the user's title for a session, or its first prompt.
+// planTaskRef is the plan task a worker session ran.
+type planTaskRef struct {
+	Task, Plan string
+	Status     domain.TaskStatus
+}
+
+// planTaskTitle reads a worker session's first prompt, its context pack:
+// "Task <id> of plan <plan>, wave <n>: …". It finds the task sessions of a
+// plan the registry no longer lists.
+var planTaskTitle = regexp.MustCompile(`^Task ([a-z0-9][a-z0-9-]*) of plan ([a-z0-9][a-z0-9-]*), wave \d+`)
+
+// planTaskSessions maps each plan task's worker session to its task.
+func planTaskSessions(records []domain.PlanRecord) map[domain.SessionID]planTaskRef {
+	tasks := map[domain.SessionID]planTaskRef{}
+	for _, plan := range records {
+		for _, task := range plan.Tasks {
+			if task.Session != "" {
+				tasks[task.Session] = planTaskRef{Task: task.ID, Plan: plan.ID, Status: task.Status}
+			}
+		}
+	}
+	return tasks
+}
+
+// planTask reports the plan task a session ran, if it is a worker session.
+func (p SessionPicker) planTask(s domain.SessionSummary) (planTaskRef, bool) {
+	if ref, ok := p.Tasks[s.ID]; ok {
+		return ref, true
+	}
+	if match := planTaskTitle.FindStringSubmatch(string(s.Title)); match != nil {
+		return planTaskRef{Task: match[1], Plan: match[2]}, true
+	}
+	return planTaskRef{}, false
+}
+
+// Title is the user's title for a session, or its first prompt. A plan
+// task's session is named by its task and plan: on 10 October 2026 its
+// title was the whole context pack, "Task buildinfo-short of plan
+// add-a-func-dce953, wave 1: Add func Short() string … and cover it …".
 func (p SessionPicker) Title(s domain.SessionSummary) string {
 	if label := p.Labels[s.ID]; label.Title != "" {
 		return singleLine(string(label.Title))
+	}
+	if ref, ok := p.planTask(s); ok {
+		return singleLine("task " + ref.Task + " · plan " + ref.Plan)
 	}
 	return singleLine(string(s.Title))
 }
@@ -56,7 +105,10 @@ func (p SessionPicker) Visible() []domain.SessionSummary {
 		if s.MessageCount == 0 || p.Labels[s.ID].Archived != p.ArchivedView {
 			continue
 		}
-		if !p.ArchivedView && !p.AllWorkspaces && s.Workspace != p.Workspace {
+		if _, task := p.planTask(s); !p.ArchivedView && task != p.TasksView {
+			continue
+		}
+		if !p.ArchivedView && !p.TasksView && !p.AllWorkspaces && s.Workspace != p.Workspace {
 			continue
 		}
 		if query != "" && !strings.Contains(strings.ToLower(p.Title(s)), query) {
@@ -120,12 +172,15 @@ func (p *SessionPicker) key(key, text string) bool {
 	case "down":
 		p.Selected = min(max(0, len(p.Visible())-1), p.Selected+1)
 	case "tab":
-		// This workspace → every workspace → archived → this workspace.
+		// This workspace → every workspace → plan tasks → archived → this
+		// workspace.
 		switch {
 		case p.ArchivedView:
 			p.ArchivedView, p.AllWorkspaces = false, false
+		case p.TasksView:
+			p.TasksView, p.ArchivedView = false, true
 		case p.AllWorkspaces:
-			p.ArchivedView = true
+			p.TasksView = true
 		default:
 			p.AllWorkspaces = true
 		}
@@ -197,7 +252,10 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		if s.Status == domain.StatusInterrupted || s.Status == domain.StatusApproval {
 			meta = append(meta, theme.T("status."+string(s.Status)))
 		}
-		if p.AllWorkspaces || p.ArchivedView {
+		if ref, ok := p.planTask(s); ok && ref.Status != "" {
+			meta = append(meta, theme.T("plans.task."+string(ref.Status)))
+		}
+		if p.AllWorkspaces || p.ArchivedView || p.TasksView {
 			meta = append(meta, shortenHome(singleLine(string(s.Workspace))))
 		}
 		if i == p.Selected {
@@ -211,6 +269,8 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		switch {
 		case p.ArchivedView:
 			empty = theme.T("sessions.emptyArchived")
+		case p.TasksView:
+			empty = theme.T("sessions.emptyTasks")
 		case !p.AllWorkspaces:
 			empty = theme.T("sessions.emptyHere")
 		}
@@ -220,6 +280,8 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 	switch {
 	case p.ArchivedView:
 		scope = theme.T("sessions.scopeArchived")
+	case p.TasksView:
+		scope = theme.T("sessions.scopeTasks")
 	case p.AllWorkspaces:
 		scope = theme.T("sessions.scopeAll")
 	}

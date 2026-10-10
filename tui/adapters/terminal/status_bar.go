@@ -33,6 +33,11 @@ func (s StatusBar) View(w int) string {
 		state = domain.StatusIdle
 	}
 	text := Translate(s.Locale, "status.prefix") + Translate(s.Locale, "status."+string(state))
+	if s.Notice != "" {
+		// Under an overlay this row is the only status: a notice such as
+		// "press Ctrl+C again to quit" must show there too.
+		text = s.Notice + " | " + text
+	}
 	if s.Autonomous {
 		text += " | " + Translate(s.Locale, "status.autonomous")
 	}

@@ -107,17 +107,17 @@ func TestCostInTheFooterAndTheSessionBudget(t *testing.T) {
 	}
 }
 
-// Under a cent the cost keeps four decimals, and a session whose requests
+// Below a dollar the cost keeps up to four decimals, and a session whose requests
 // reported no cost, a local model's, shows none rather than $0.
 func TestFooterCostFormatAndLanguage(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()
 	m.cost = costView{ledger: domain.UsageLedger{Requests: 9, Cost: 0.2131, CostRequests: 8}, turnCost: 0.21, turnRequests: 7}
-	if got := footerText(m); !strings.HasSuffix(got, "idle · $0.0031 turn · $0.21 session") {
+	if got := footerText(m); !strings.HasSuffix(got, "idle · $0.0031 turn · $0.2131 session") {
 		t.Fatalf("english: %q", got)
 	}
 	m.Theme.Locale = Spanish
-	if got := footerText(m); !strings.HasSuffix(got, "$0.0031 turno · $0.21 sesión") {
+	if got := footerText(m); !strings.HasSuffix(got, "$0.0031 turno · $0.2131 sesión") {
 		t.Fatalf("spanish: %q", got)
 	}
 	m.cost = costView{ledger: domain.UsageLedger{Requests: 4}}
@@ -149,7 +149,7 @@ func TestUsagePanelContent(t *testing.T) {
 		"First byte: average 950ms · max 1.1s",
 		"Whole request: average 17.0s · max 40.0s",
 		"",
-		"Budget: $1.00 · $0.99 left",
+		"Budget: $1.00 · $0.9942 left",
 	}, "\n")
 	if got != want {
 		t.Fatalf("panel:\n%s\nwant:\n%s", got, want)
@@ -173,5 +173,26 @@ func TestThePaletteOpensUsage(t *testing.T) {
 	m = update(m, tea.KeyPressMsg{Code: '$', Text: "$"})
 	if m.overlay != "usage" {
 		t.Fatalf("overlay %q", m.overlay)
+	}
+}
+
+// On 10 October 2026 a $0.012 budget read "$0.01" in the warning, the
+// refusal and the panel, and "Budget: $0.02" after + for $0.024, while the
+// exit hint wrote $0.0147: every amount now has the same precision.
+func TestAmountsKeepTheirPrecisionBelowADollar(t *testing.T) {
+	for value, want := range map[float64]string{0.012: "$0.012", 0.0147: "$0.0147", 0.5: "$0.50", 0.21: "$0.21", 0.024: "$0.024", 0.0111: "$0.0111", 0: "$0.00", 0.00001: "$0.00", 0.99996: "$1.00", 1: "$1.00", 14.126: "$14.13"} {
+		if got := FormatUSD(value); got != want {
+			t.Errorf("FormatUSD(%v) = %q, want %q", value, got, want)
+		}
+	}
+	m := sized()
+	defer m.zones.Close()
+	m.deps.MaxSessionUSD = 0.012
+	m = m.observeUsage(domain.UsageLedger{Requests: 3, Cost: 0.0111, CostRequests: 3}, true)
+	if want := Translatef(English, "notice.budgetWarning", "$0.0111", "$0.012"); m.Status.Notice != want {
+		t.Fatalf("warning %q, want %q", m.Status.Notice, want)
+	}
+	if got := usageContent(domain.UsageLedger{Cost: 0.0111, CostRequests: 3, Raised: 0.012}, 0.012, Theme{Locale: English}); !strings.Contains(got, "$0.024") {
+		t.Fatalf("a raised $0.012 budget does not read $0.024:\n%s", got)
 	}
 }

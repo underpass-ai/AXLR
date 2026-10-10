@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -42,7 +43,11 @@ func (a *FileAdapter) Read(c domain.ReadCommand) (domain.ReadResult, error) {
 	if offset > info.Size() {
 		return domain.ReadResult{}, domain.Reject("invalid_offset", "offset is beyond end of file")
 	}
-	if offset < info.Size() {
+	// Only an offset the caller chose can split a character: at offset 0 a
+	// leading continuation byte means the file is not text, which the
+	// checks below say (10 Oct 2026: a binary file read without an offset
+	// was refused as "offset splits a UTF-8 character").
+	if offset > 0 && offset < info.Size() {
 		var one [1]byte
 		if _, err = f.ReadAt(one[:], offset); err != nil {
 			return domain.ReadResult{}, fileError(err)
@@ -60,10 +65,10 @@ func (a *FileAdapter) Read(c domain.ReadCommand) (domain.ReadResult, error) {
 	for pos < n && pos < max {
 		r, size := utf8.DecodeRune(buf[pos:n])
 		if r == utf8.RuneError && size == 1 {
-			return domain.ReadResult{}, domain.Reject("invalid_text", "file contains invalid UTF-8")
+			return domain.ReadResult{}, domain.Reject("invalid_text", notText(c.Path, "invalid UTF-8", info.Size()))
 		}
 		if r == 0 {
-			return domain.ReadResult{}, domain.Reject("invalid_text", "file contains binary data")
+			return domain.ReadResult{}, domain.Reject("invalid_text", notText(c.Path, "binary data", info.Size()))
 		}
 		if pos+size > max {
 			break
@@ -106,7 +111,7 @@ func (a *FileAdapter) Load(path domain.RelativePath, max int) (domain.FileSnapsh
 		return domain.FileSnapshot{}, domain.Reject("file_too_large", "file exceeds editable limit")
 	}
 	if _, err := domain.NewText(string(b)); err != nil {
-		return domain.FileSnapshot{}, domain.Reject("invalid_text", "file contains binary or invalid UTF-8 data")
+		return domain.FileSnapshot{}, domain.Reject("invalid_text", notText(path, "binary data or invalid UTF-8", int64(len(b))))
 	}
 	return domain.FileSnapshot{Content: b, Permissions: domain.NewFilePermissions(uint32(info.Mode().Perm()))}, nil
 }
@@ -168,7 +173,23 @@ func (a *FileAdapter) publish(path domain.RelativePath, content []byte, mode os.
 	return nil
 }
 
+// notText says why a file cannot be read or edited as text.
+func notText(path domain.RelativePath, problem string, size int64) string {
+	return fmt.Sprintf("%s is not UTF-8 text: %s (%d bytes)", path, problem, size)
+}
+
+// pathEscapes is the text of the error os.Root returns when a path, through
+// a symlink or "..", leads out of the root; the error value is unexported.
+const pathEscapes = "path escapes from parent"
+
 func fileError(err error) error {
+	// On 10 Oct 2026 a symlink to /etc/hostname was refused with Go's own
+	// "openat host-link: path escapes from parent", as a filesystem_error
+	// the console counts as a fault of AXLR itself.
+	var pathErr *os.PathError
+	if errors.As(err, &pathErr) && pathErr.Err != nil && pathErr.Err.Error() == pathEscapes {
+		return domain.Reject("invalid_path", pathErr.Path+" leads outside the workspace")
+	}
 	if errors.Is(err, os.ErrNotExist) {
 		return domain.Fail("not_found", "file or directory not found")
 	}

@@ -54,10 +54,15 @@ func TestAModeThatAsksDoesNotOfferToStopAsking(t *testing.T) {
 	if m.Busy || len(m.deps.Session.Pending()) != 1 {
 		t.Fatal("l still acted under a mode that asks for each call")
 	}
+	// On 10 October 2026, under full autonomy, git status raised a card in
+	// review mode and nothing said why.
+	if view := ansi.Strip(update(m, tea.WindowSizeMsg{Width: 80, Height: 24}).View().Content); !strings.Contains(view, "review mode asks before every command") {
+		t.Fatalf("the card does not say the mode asks:\n%s", view)
+	}
 	normal := execApprovalModel(t, domain.ModeNormal, `{"program":"python3","args":["-m","unittest"]}`)
 	defer normal.zones.Close()
-	if !strings.Contains(ansi.Strip(normal.View().Content), "l always") {
-		t.Fatal("normal mode lost always-allow")
+	if view := ansi.Strip(normal.View().Content); !strings.Contains(view, "l always") || strings.Contains(view, "asks before every command") {
+		t.Fatal("normal mode lost always-allow or says a mode asks")
 	}
 }
 

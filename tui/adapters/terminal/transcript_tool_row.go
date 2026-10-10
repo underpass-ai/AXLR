@@ -74,6 +74,8 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 	args := toolArgumentSummary(call)
 	if summary, ok := localListingSummary(call, theme); ok {
 		args = summary
+	} else if summary, ok := localExecSummary(call); ok {
+		args = summary
 	}
 	if args != "" {
 		text += "  " + args
