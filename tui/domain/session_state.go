@@ -44,8 +44,8 @@ type SessionState struct {
 	// StoppedCeremony is the definition of a ceremony the person stopped
 	// since the last prompt, "" when none: the next prompt tells the model
 	// once. Finishing the ceremony and returning to normal mode keep it.
-	// The session store does not persist it yet, so a console restarted
-	// between the stop and the next prompt does not tell the model.
+	// The session store keeps it beside the snapshot, so a console
+	// restarted between the stop and the next prompt still tells the model.
 	StoppedCeremony string
 	// ConsoleLines are lines shown to the person between messages and
 	// never sent to the model, such as a finished plan's outcome.
