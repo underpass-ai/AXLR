@@ -450,6 +450,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.Sessions != nil {
 			m.Picker = NewSessionPicker(*v.Sessions, m.Header.State.Workspace)
+			m.Picker.Tasks = planTaskSessions(m.PlanPanel.Records)
 			if m.deps.SessionLabels != nil {
 				if labels, err := m.deps.SessionLabels.Load(m.lifetime.ctx); err == nil {
 					m.Picker.Labels = labels
