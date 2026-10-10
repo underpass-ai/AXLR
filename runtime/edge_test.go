@@ -59,6 +59,11 @@ func TestWriteAndEditRejectInvalidPreconditionsWithoutMutating(t *testing.T) {
 			t.Fatalf("%s %s: %+v", tc.tool, tc.args, r)
 		}
 	}
+	// The refusal names the field and where its digest comes from (10 Oct 2026).
+	r := invoke(t, e, "write", cases[0].args)
+	if want := "replace requires expected_sha256: pass the content_sha256 of a local_read of a"; r.Error.Message != want {
+		t.Fatalf("replace without a digest: %q, want %q", r.Error.Message, want)
+	}
 	b, _ := os.ReadFile(filepath.Join(dir, "a"))
 	if string(b) != "alpha" {
 		t.Fatalf("file changed to %q", b)

@@ -22,7 +22,10 @@ func (u WriteUseCase) Execute(c domain.WriteCommand) (domain.WriteResult, error)
 		}
 	case domain.ReplaceMode:
 		if c.ExpectedDigest == "" {
-			return domain.WriteResult{}, domain.Reject("invalid_arguments", "replace requires a SHA-256 precondition")
+			// On 10 October 2026 a plan worker sent replace without the
+			// digest and, told only that a precondition was missing, fell
+			// back to local_edit: the message names the field and its source.
+			return domain.WriteResult{}, domain.Reject("invalid_arguments", "replace requires expected_sha256: pass the content_sha256 of a local_read of "+string(c.Path))
 		}
 		snapshot, err := u.Files.Load(c.Path, u.MaxFileBytes)
 		if err != nil {
