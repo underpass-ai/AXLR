@@ -97,6 +97,17 @@ func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Ti
 	s.Mode = mode
 	s.Ceremony = ceremony
 	notes.apply(&s)
+	restored, err := restoreState(s, preserveActive)
+	if err != nil && len(s.ConsoleLines) > 0 {
+		// Console lines that no longer fit the transcript are dropped
+		// rather than the session: they are only ever shown.
+		s.ConsoleLines = nil
+		return restoreState(s, preserveActive)
+	}
+	return restored, err
+}
+
+func restoreState(s domain.SessionState, preserveActive bool) (domain.Session, error) {
 	if preserveActive {
 		return domain.RestoreSessionActive(s)
 	}

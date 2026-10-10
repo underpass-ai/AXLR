@@ -7,13 +7,16 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 const sessionConsoleVersion = 1
 
-const maxSessionConsoleBytes = 64 << 10
+// maxSessionConsoleBytes holds a long session's plan outcomes; a larger file is
+// ignored, which loses the lines, not the session.
+const maxSessionConsoleBytes = 1 << 20
 
 // sessionConsole is what the console keeps for the person beside the
 // snapshot, in <id>.console, for the same reason as <id>.mode: the snapshot
@@ -23,21 +26,80 @@ type sessionConsole struct {
 	// StoppedCeremony is the ceremony the person stopped since the last
 	// prompt; the next prompt tells the model.
 	StoppedCeremony string `json:"stopped_ceremony,omitempty"`
+	// Lines are the console lines shown between messages, such as a
+	// finished plan's outcome; files written before them have none.
+	Lines []sessionConsoleLine `json:"lines,omitempty"`
+}
+
+type sessionConsoleLine struct {
+	AfterMessage int                 `json:"after_message"`
+	At           time.Time           `json:"at"`
+	Plan         *sessionPlanOutcome `json:"plan,omitempty"`
+}
+
+type sessionPlanOutcome struct {
+	ID        string               `json:"id"`
+	Status    string               `json:"status"`
+	Tasks     int                  `json:"tasks"`
+	Done      int                  `json:"done"`
+	Blocked   int                  `json:"blocked"`
+	Skipped   int                  `json:"skipped"`
+	Syncs     []sessionSyncVerdict `json:"syncs,omitempty"`
+	Changed   []string             `json:"changed,omitempty"`
+	CostUSD   float64              `json:"cost_usd,omitempty"`
+	CostKnown bool                 `json:"cost_known,omitempty"`
+}
+
+type sessionSyncVerdict struct {
+	Wave    int    `json:"wave"`
+	Verdict string `json:"verdict"`
 }
 
 // consoleNotes is the part of a session's state <id>.console holds.
 type consoleNotes struct {
 	StoppedCeremony string
+	Lines           []domain.ConsoleLine
 }
 
-func (n consoleNotes) empty() bool { return n.StoppedCeremony == "" }
+func (n consoleNotes) empty() bool { return n.StoppedCeremony == "" && len(n.Lines) == 0 }
 
 func notesOf(state domain.SessionState) consoleNotes {
-	return consoleNotes{StoppedCeremony: state.StoppedCeremony}
+	return consoleNotes{StoppedCeremony: state.StoppedCeremony, Lines: state.ConsoleLines}
 }
 
 func (n consoleNotes) apply(state *domain.SessionState) {
 	state.StoppedCeremony = n.StoppedCeremony
+	state.ConsoleLines = n.Lines
+}
+
+func encodeConsoleLines(lines []domain.ConsoleLine) []sessionConsoleLine {
+	var out []sessionConsoleLine
+	for _, line := range lines {
+		record := sessionConsoleLine{AfterMessage: line.AfterMessage, At: line.At}
+		if p := line.Plan; p != nil {
+			record.Plan = &sessionPlanOutcome{ID: p.PlanID, Status: string(p.Status), Tasks: p.Tasks, Done: p.Done, Blocked: p.Blocked, Skipped: p.Skipped, Changed: p.Changed, CostUSD: p.CostUSD, CostKnown: p.CostKnown}
+			for _, sync := range p.Syncs {
+				record.Plan.Syncs = append(record.Plan.Syncs, sessionSyncVerdict{Wave: sync.Wave, Verdict: sync.Verdict})
+			}
+		}
+		out = append(out, record)
+	}
+	return out
+}
+
+func decodeConsoleLines(records []sessionConsoleLine) []domain.ConsoleLine {
+	var out []domain.ConsoleLine
+	for _, record := range records {
+		line := domain.ConsoleLine{AfterMessage: record.AfterMessage, At: record.At}
+		if p := record.Plan; p != nil {
+			line.Plan = &domain.PlanOutcome{PlanID: p.ID, Status: domain.PlanStatus(p.Status), Tasks: p.Tasks, Done: p.Done, Blocked: p.Blocked, Skipped: p.Skipped, Changed: p.Changed, CostUSD: p.CostUSD, CostKnown: p.CostKnown}
+			for _, sync := range p.Syncs {
+				line.Plan.Syncs = append(line.Plan.Syncs, domain.SyncVerdict{Wave: sync.Wave, Verdict: sync.Verdict})
+			}
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 func (s *SessionStore) consolePath(id domain.SessionID) string {
@@ -62,7 +124,7 @@ func (s *SessionStore) readConsole(id domain.SessionID) consoleNotes {
 	if json.NewDecoder(bytes.NewReader(data)).Decode(&record) != nil || record.Version != sessionConsoleVersion {
 		return consoleNotes{}
 	}
-	return consoleNotes{StoppedCeremony: record.StoppedCeremony}
+	return consoleNotes{StoppedCeremony: record.StoppedCeremony, Lines: decodeConsoleLines(record.Lines)}
 }
 
 func (s *SessionStore) writeConsole(id domain.SessionID, notes consoleNotes) error {
@@ -72,7 +134,7 @@ func (s *SessionStore) writeConsole(id domain.SessionID, notes consoleNotes) err
 		}
 		return nil
 	}
-	data, err := json.Marshal(sessionConsole{Version: sessionConsoleVersion, StoppedCeremony: notes.StoppedCeremony})
+	data, err := json.Marshal(sessionConsole{Version: sessionConsoleVersion, StoppedCeremony: notes.StoppedCeremony, Lines: encodeConsoleLines(notes.Lines)})
 	if err != nil {
 		return err
 	}

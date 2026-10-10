@@ -82,6 +82,9 @@ type AppModel struct {
 	// steer holds what the person wrote while the operation ran; the running
 	// turn takes it after a tool step, or it starts the next turn.
 	steer *steerQueue
+	// pendingPlanOutcomes are finished plans of the open session whose
+	// outcome waits for the session to be between turns.
+	pendingPlanOutcomes []domain.PlanRecord
 	// steerCancelled marks the operation the console stopped for a queued
 	// message, so its cancellation is not reported as an error.
 	steerCancelled uint64
@@ -179,12 +182,16 @@ func New(deps Dependencies) AppModel {
 	}
 	m.refreshTranscript()
 	m.syncApproval()
-	return m.loadRepairs().loadPlans().loadUsage()
+	m = m.loadRepairs().loadPlans().loadUsage()
+	return m.queueUnreportedPlans()
 }
 func (m AppModel) Init() tea.Cmd {
 	repairs := m.subscribeRepairs()
 	if plans := m.subscribePlans(); plans != nil {
 		repairs = tea.Batch(repairs, plans)
+	}
+	if len(m.pendingPlanOutcomes) > 0 {
+		repairs = tea.Batch(func() tea.Msg { return planOutcomesMsg{} }, repairs)
 	}
 	if m.Theme.Monochrome {
 		return repairs
@@ -208,7 +215,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case planEventMsg:
 		m = m.loadPlans()
 		m = m.refreshPlanPanel()
-		return m, m.subscribePlans()
+		m = m.queuePlanOutcomes(v.Plan)
+		record := m.recordPlanOutcomes()
+		return m, tea.Batch(record, m.subscribePlans())
+	case planOutcomesMsg:
+		return m, m.recordPlanOutcomes()
 	case repairEventMsg:
 		// A repair session changed: reread the registry, redraw the panel,
 		// open it when a decision waits and nothing else is on screen, and
@@ -471,6 +482,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetPromptHistory()
 			m.draft = ""
 			m.draftOperationID = 0
+			m.pendingPlanOutcomes = nil
+			m = m.loadPlans().queueUnreportedPlans()
 		}
 		// returned says where a prompt the session did not take went; it
 		// follows the operation's error, which cannot know.
@@ -538,6 +551,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.steer.Peek() == "" && !m.inlineApproval() {
 			m = m.autoOpenIncidentCard()
 			m = m.autoOpenRepairPanel()
+		}
+		if record := m.recordPlanOutcomes(); record != nil {
+			// A queued prompt starts when the outcome is recorded.
+			return m, record
 		}
 		if queued, ok := m.steer.Take(); ok {
 			prompt := queued

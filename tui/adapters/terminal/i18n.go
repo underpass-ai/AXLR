@@ -558,6 +558,9 @@ var enMessages = map[string]string{
 	"transcript.toolUnknown":               "unknown tool, refused",
 	"transcript.toolOverBudget":            "over budget",
 	"transcript.memoryReminder":            "console: asked the model to record memory",
+	"transcript.planOutcome":               "console: plan %s ended %s · %d/%d tasks done, %d blocked, %d skipped · sync %s · changed: %s · %s",
+	"transcript.planCost":                  "task sessions cost %s",
+	"transcript.planCostUnknown":           "task sessions' cost unknown",
 	"transcript.searchIn":                  "\"%s\" in %s", // local search
 	"transcript.listRecursive":             "%s, recursive",
 	"transcript.interruptedDraft":          "interrupted draft: ",
@@ -1148,6 +1151,9 @@ var esMessages = map[string]string{
 	"transcript.toolUnknown":               "herramienta desconocida, rechazada",
 	"transcript.toolOverBudget":            "fuera de presupuesto",
 	"transcript.memoryReminder":            "consola: pidió al modelo que guarde memoria",
+	"transcript.planOutcome":               "consola: el plan %s terminó %s · %d/%d tareas hechas, %d bloqueadas, %d omitidas · sync %s · cambió: %s · %s",
+	"transcript.planCost":                  "las sesiones de tarea costaron %s",
+	"transcript.planCostUnknown":           "coste de las sesiones de tarea desconocido",
 	"transcript.searchIn":                  "\"%s\" en %s", // local search
 	"transcript.listRecursive":             "%s, recursivo",
 	"transcript.interruptedDraft":          "borrador interrumpido: ",

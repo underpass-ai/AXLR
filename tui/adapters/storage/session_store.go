@@ -280,5 +280,5 @@ func (s *SessionStore) isEmpty(id domain.SessionID) bool {
 		return false
 	}
 	state := session.Export()
-	return len(state.Messages) == 0 && state.Draft == "" && len(state.Activity) == 0 && len(state.ArchivedDrafts) == 0
+	return len(state.Messages) == 0 && state.Draft == "" && len(state.Activity) == 0 && len(state.ArchivedDrafts) == 0 && len(state.ConsoleLines) == 0
 }
