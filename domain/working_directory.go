@@ -18,7 +18,7 @@ func NewWorkingDirectory(s string) (WorkingDirectory, error) {
 	}
 	p, err := NewRelativePath(s)
 	if err != nil {
-		return "", errors.New("invalid working directory")
+		return "", errors.New("cwd must be a path relative to the workspace root")
 	}
 	return WorkingDirectory(p), nil
 }

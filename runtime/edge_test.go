@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/dto"
 )
 
@@ -247,5 +248,54 @@ func TestDecodeRejectsDuplicateAndCaseVariantFields(t *testing.T) {
 		if _, err := Decode(strings.NewReader(raw)); err == nil {
 			t.Fatalf("accepted %s", raw)
 		}
+	}
+}
+
+// On 10 Oct 2026 a plan worker passed the workspace's absolute path as
+// local_exec cwd and was refused with "invalid working directory".
+func TestExecMapsAnAbsoluteCwdInsideTheWorkspace(t *testing.T) {
+	root := t.TempDir()
+	mapper := RequestMapper{MaxReadBytes: hardFileBytes, MaxFileBytes: hardFileBytes, MaxOutputBytes: hardFileBytes, MaxTimeout: HardTimeout, Roots: []string{root}}
+	exec := func(cwd string) (any, error) {
+		args, _ := json.Marshal(map[string]any{"program": "go", "cwd": cwd})
+		return mapper.Map(dto.Request{ProtocolVersion: 1, RequestID: "cwd", Tool: "exec", Arguments: args})
+	}
+	for cwd, want := range map[string]string{
+		root:                                    ".",
+		root + string(filepath.Separator):       ".",
+		filepath.Join(root, "sub", "dir"):       filepath.Join("sub", "dir"),
+		filepath.Join(root, "sub", "..", "sub"): "sub",
+		"sub":                                   "sub",
+		"":                                      ".",
+	} {
+		command, err := exec(cwd)
+		if err != nil {
+			t.Fatalf("%q: %v", cwd, err)
+		}
+		if got := string(command.(domain.ExecCommand).Cwd); got != want {
+			t.Fatalf("%q mapped to %q, want %q", cwd, got, want)
+		}
+	}
+	for cwd, want := range map[string]string{
+		filepath.Dir(root):                 "cwd must be inside the workspace (relative to its root)",
+		filepath.Join(root, "..", "other"): "cwd must be inside the workspace (relative to its root)",
+		root + "-sibling":                  "cwd must be inside the workspace (relative to its root)",
+		"../other":                         "cwd must be a path relative to the workspace root",
+	} {
+		if _, err := exec(cwd); err == nil || err.Error() != want {
+			t.Fatalf("%q: %v, want %q", cwd, err, want)
+		}
+	}
+	// Without roots, as when a request is only decoded, the executor decides.
+	if _, err := (RequestMapper{MaxTimeout: HardTimeout}).Map(dto.Request{ProtocolVersion: 1, RequestID: "cwd", Tool: "exec", Arguments: json.RawMessage(`{"program":"go","cwd":"` + filepath.ToSlash(root) + `"}`)}); err == nil && filepath.IsAbs(filepath.ToSlash(root)) {
+		t.Fatal("a mapper without roots must refuse an absolute cwd")
+	}
+	if goruntime.GOOS == "windows" {
+		return
+	}
+	e, _ := newTestExecutor(t, Config{Root: root, Env: []string{"PATH=/bin:/usr/bin"}})
+	r := invoke(t, e, "exec", `{"program":"sh","args":["-c","printf ok"],"cwd":"`+root+`"}`)
+	if r.Status != "completed" || r.Output.(dto.ExecOutput).Stdout != "ok" {
+		t.Fatalf("absolute workspace cwd: %+v %+v", r, r.Error)
 	}
 }
