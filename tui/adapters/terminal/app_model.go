@@ -99,6 +99,10 @@ type AppModel struct {
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
+	// quitArmedAt is when an idle Ctrl+C asked for a second one to quit,
+	// zero when none waits; quitArm tells its disarming tick from older ones.
+	quitArmedAt time.Time
+	quitArm     uint64
 	// cancelledAt is one more than the number of messages when the person's
 	// Esc stopped a turn (zero for none): the conversation marks it until a
 	// message follows or another operation runs.
@@ -213,6 +217,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.subscribeRepairs()
 	case jobsMsg:
 		return m.jobsResult(v), nil
+	case quitDisarm:
+		if v.arm == m.quitArm && !m.quitArmedAt.IsZero() {
+			m.quitArmedAt = time.Time{}
+			if m.Status.Notice == m.Theme.T("notice.quitAgain") {
+				m.Status.Notice = ""
+			}
+		}
+		return m, nil
 	case providerWaitTick:
 		if v.OperationID != m.operationID || !m.Busy {
 			return m, nil
@@ -734,6 +746,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyPressMsg:
 		m.Status.Notice = ""
+		if v.String() != "ctrl+c" {
+			// Any other key disarms a first Ctrl+C.
+			m.quitArmedAt = time.Time{}
+		}
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
 			switch v.String() {
 			case "up":
@@ -771,7 +787,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.Busy {
 				return m.Update(ControlIntent("cancel"))
 			}
-			return m.quit()
+			return m.quitKey()
 		case "pgup":
 			m.Transcript.Viewport.PageUp()
 			return m, nil

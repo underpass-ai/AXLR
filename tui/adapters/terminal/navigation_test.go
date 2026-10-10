@@ -5,6 +5,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"context"
 	"errors"
+	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -319,9 +320,16 @@ func TestNavigationHelpQuitMatchesBinding(t *testing.T) {
 	s := navSession(t)
 	m := navModel(t, &s)
 	m = update(m, ControlIntent("help"))
+	m = update(m, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if m.overlay != "help" || !strings.Contains(ansi.Strip(m.View().Content), "press Ctrl+C again to quit") {
+		t.Fatalf("the first Ctrl+C under help does not ask for a second one:\n%s", ansi.Strip(m.View().Content))
+	}
 	_, c := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	if c == nil {
 		t.Fatal("documented quit key swallowed")
+	}
+	if _, ok := c().(tea.QuitMsg); !ok {
+		t.Fatal("a second Ctrl+C under help did not quit")
 	}
 }
 func TestNavigationSearchResizeKeepsQueryInBounds(t *testing.T) {
