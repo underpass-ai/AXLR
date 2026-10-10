@@ -211,6 +211,7 @@ func TestHostRememberReadsEvidenceLinesAndArrays(t *testing.T) {
 	}
 	for arguments, want := range map[string]string{
 		`{"kind":"constraint","text":"t","evidence":"runtime/config.go:37 const HardTimeout = 5 * time.Minute\ngo test ./runtime/ ok"}`: "runtime/config.go:37 const HardTimeout = 5 * time.Minute|go test ./runtime/ ok",
+		`{"kind":"constraint","text":"t","evidence":"one\\ntwo"}`:                                                                       "one|two",
 		`{"kind":"constraint","text":"t","evidence":"  one \r\n\n\n two\n"}`:                                                            "one|two",
 		`{"kind":"constraint","text":"t","evidence":["a", " ", "b "]}`:                                                                  "a|b",
 	} {

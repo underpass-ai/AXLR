@@ -132,6 +132,11 @@ func rememberEvidence(raw json.RawMessage) ([]string, error) {
 	var lines []string
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
+		if !strings.Contains(text, "\n") {
+			// On 10 October 2026 claude-haiku-5.5 escaped the example's
+			// line break once more and sent a backslash and an n.
+			text = strings.ReplaceAll(text, `\n`, "\n")
+		}
 		lines = strings.Split(text, "\n")
 	} else if err := json.Unmarshal(raw, &lines); err != nil {
 		return nil, errors.New("axlr_remember evidence must be a string with one item per line")
