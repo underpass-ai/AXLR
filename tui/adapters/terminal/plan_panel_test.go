@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -75,5 +76,78 @@ func TestPlanCardShowsTheTaskTable(t *testing.T) {
 		if !strings.Contains(content, want) {
 			t.Fatalf("card lacks %q:\n%s", want, content)
 		}
+	}
+}
+
+func planModel(t *testing.T, plans PlanPanelPort) AppModel {
+	t.Helper()
+	session, err := domain.NewSession(panelParent, testWorkspace(), "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { store.Close() })
+	return update(New(Dependencies{Session: &session, Store: store, Monochrome: true, Plans: plans}), tea.WindowSizeMsg{Width: 120, Height: 40})
+}
+
+func runSlash(m AppModel, command string) AppModel {
+	m.Composer.Input.SetValue(command)
+	return update(m, ControlIntent("send"))
+}
+
+// On 10 October 2026, after a plan had run green, /plan set plan mode
+// without a word, and the next prompt, a memory question, became a brief.
+func TestPlanWithNoPlanRunningShowsThePlansAndArmsOnlyOnN(t *testing.T) {
+	m := planModel(t, &fakePlans{})
+	defer m.zones.Close()
+	m = runSlash(m, "/plan")
+	if m.overlay != "plans" || m.Header.State.Mode == domain.ModePlan {
+		t.Fatalf("/plan with no plans set mode %q, overlay %q", m.Header.State.Mode, m.overlay)
+	}
+	if view := m.View().Content; !strings.Contains(view, "No plans yet") {
+		t.Fatalf("the empty panel does not say how to start one:\n%s", view)
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'n', Text: "n"})
+	if m.overlay != "" || m.Header.State.Mode != domain.ModePlan || m.Status.Notice != m.Theme.T("notice.planArmed") {
+		t.Fatalf("n did not arm plan mode and say so: mode %q, notice %q", m.Header.State.Mode, m.Status.Notice)
+	}
+	if footer := m.footerView(); !strings.Contains(footer, "your next prompt is the brief") {
+		t.Fatalf("the footer does not say the next prompt is the brief: %q", footer)
+	}
+}
+
+func TestThePlansPanelShowsRecentPlansWithTheirOutcome(t *testing.T) {
+	done := samplePlan(domain.PlanDone)
+	done.ID, done.Brief = "add-a-func-dce953", "add buildinfo.Short() with a table test"
+	done.Tasks = []domain.PlanTask{{ID: "buildinfo-short", Wave: 1, Status: domain.TaskDone, Handback: &domain.TaskHandback{Changed: []string{"buildinfo/version.go", "buildinfo/version_test.go"}}}}
+	done.Syncs = []domain.SyncRecord{{Wave: 1, Verdict: "SYNCED", Rounds: 1}}
+	older := samplePlan(domain.PlanDeclined)
+	older.ID, older.Updated = "older-plan", done.Updated.Add(-time.Hour)
+	m := planModel(t, &fakePlans{records: []domain.PlanRecord{older, done}})
+	defer m.zones.Close()
+	m = runSlash(m, "/plan")
+	view := m.View().Content
+	for _, want := range []string{"add-a-func-dce953 · done", "brief: add buildinfo.Short()", "changed buildinfo/version.go, buildinfo/version_test.go", "sync wave 1 · SYNCED", "older-plan · declined"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("panel lacks %q:\n%s", want, view)
+		}
+	}
+	if strings.Index(view, "add-a-func-dce953") > strings.Index(view, "older-plan") {
+		t.Fatalf("the newest plan is not first:\n%s", view)
+	}
+	if m.Header.State.Mode == domain.ModePlan {
+		t.Fatal("opening the panel armed plan mode")
+	}
+}
+
+func TestPlanWithoutAPlanRunnerArmsPlanModeAndSaysSo(t *testing.T) {
+	m := planModel(t, nil)
+	defer m.zones.Close()
+	m = runSlash(m, "/plan")
+	if m.Header.State.Mode != domain.ModePlan || m.Status.Notice != m.Theme.T("notice.planArmed") {
+		t.Fatalf("mode %q, notice %q", m.Header.State.Mode, m.Status.Notice)
 	}
 }

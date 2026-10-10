@@ -25,7 +25,7 @@ func TestAnEditCardShowsTheReplacementAsADiff(t *testing.T) {
 	d := NewApprovalDialog(p, "target", Theme{Monochrome: true})
 	d.Details.SetWidth(80)
 	text := d.Details.Text()
-	for _, want := range []string{"tui/config.go", "-     if !ok {", "-         return err", "+         return fmt.Errorf(\"%s: %w\", path, err)"} {
+	for _, want := range []string{"tui/config.go", "      if !ok {", "-         return err", "+         return fmt.Errorf(\"%s: %w\", path, err)", "      }"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("edit card lacks %q:\n%s", want, text)
 		}
@@ -33,8 +33,32 @@ func TestAnEditCardShowsTheReplacementAsADiff(t *testing.T) {
 	if strings.Contains(text, `\n`) || strings.Contains(text, `\t`) || strings.Contains(text, "old_text") || strings.Contains(text, "\t") {
 		t.Fatalf("edit card still shows escaped JSON:\n%s", text)
 	}
-	if d.Details.VisualLineCount() < 7 {
+	if strings.Contains(text, "-     if !ok {") || strings.Contains(text, "+     }") {
+		t.Fatalf("edit card marks unchanged lines as changed:\n%s", text)
+	}
+	if d.Details.VisualLineCount() < 5 {
 		t.Fatalf("edit card has %d lines", d.Details.VisualLineCount())
+	}
+}
+
+// On 10 October 2026 an edit of "// comment\nconst X" to "// other\nconst X"
+// drew the unchanged const line as "-" and as "+".
+func TestAnEditCardDrawsUnchangedLinesOnceAsContext(t *testing.T) {
+	p := pendingCall(t, "local_edit", `{"path":"a.go","old_text":"// comment\nconst X = 1","new_text":"// other\nconst X = 1"}`)
+	d := NewApprovalDialog(p, "target", Theme{Monochrome: true})
+	d.Details.SetWidth(80)
+	text := d.Details.Text()
+	if strings.Count(text, "const X = 1") != 1 || strings.Contains(text, "- const") || strings.Contains(text, "+ const") {
+		t.Fatalf("the unchanged line is not context:\n%s", text)
+	}
+	for _, want := range []string{"- // comment", "+ // other"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("edit card lacks %q:\n%s", want, text)
+		}
+	}
+	deletion := NewApprovalDialog(pendingCall(t, "local_edit", `{"path":"a.go","old_text":"gone\nalso gone","new_text":""}`), "target", Theme{Monochrome: true})
+	if text := deletion.Details.Text(); !strings.Contains(text, "- gone") || !strings.Contains(text, "- also gone") || strings.Contains(text, "+ ") {
+		t.Fatalf("a deletion is not all removed lines:\n%s", text)
 	}
 }
 

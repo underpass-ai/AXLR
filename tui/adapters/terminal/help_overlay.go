@@ -3,12 +3,15 @@ package terminal
 import (
 	"strings"
 
+	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
 )
 
-type HelpOverlay struct{}
+// HelpOverlay lists the keys and commands; Notice, such as an exec sandbox
+// that does not confine commands, leads it.
+type HelpOverlay struct{ Notice string }
 
-func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, height int) string {
+func (h HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, height int) string {
 	rows := []string{
 		theme.Accent(theme.T("help.write")),
 		theme.T("help.sendFull"),
@@ -32,7 +35,12 @@ func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, heig
 		theme.T("help.modelSelect"),
 		theme.T("help.themeOptions"),
 	}
-	if _, body := OverlayBodySize(width, height); body < len(rows) {
+	inner, body := OverlayBodySize(width, height)
+	var notice []string
+	if h.Notice != "" {
+		notice = append(strings.Split(ansi.Wrap(h.Notice, max(1, inner), ""), "\n"), "")
+	}
+	if body < len(notice)+len(rows) {
 		// The full list no longer fits once it names every command.
 		rows = []string{
 			theme.T("help.sendShort"),
@@ -48,6 +56,7 @@ func (HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, heig
 			theme.T("help.quitShort"),
 		}
 	}
+	rows = append(notice, rows...)
 	footer := z.Mark(prefix+"close", "["+theme.T("common.close")+"]")
 	return theme.Overlay(theme.T("palette.helpTitle"), theme.T("help.subtitle"), strings.Join(rows, "\n"), footer, width, height)
 }

@@ -47,9 +47,14 @@ func (m AppModel) approvalCard() string {
 		// A host tool has no saved rule of its own.
 		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "always-allow" })
 	}
+	note := ""
 	if m.modeAsksForEachCall(m.Approval.Pending) {
 		// The mode decides; neither a saved rule nor autonomy would apply.
 		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "always-allow" || h.zone == "autonomy-on" })
+		// On 10 October 2026, in review mode under full autonomy, git
+		// status and git diff each raised a card without l or f, and
+		// nothing said why: the card now says the mode asks.
+		note = m.Theme.Tf("approval.modeAsks", m.Theme.T("mode."+string(m.Header.State.Mode)))
 	}
 	var actions []string
 	for _, h := range hints {
@@ -59,7 +64,10 @@ func (m AppModel) approvalCard() string {
 		return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(s, width, "…"))
 	}
 	if m.Theme.editorial() {
-		return m.approvalSheet(details, hints)
+		return m.approvalSheet(details, hints, note)
+	}
+	if note != "" {
+		actions = append(actions, m.Theme.Muted("· "+note))
 	}
 	return strings.Join([]string{rule, line(title), details.View(), line(" " + strings.Join(actions, "   "))}, "\n")
 }
@@ -101,7 +109,7 @@ func (m AppModel) inlineApproval() bool {
 
 // approvalSheet is the Editorial card: a raised sheet instead of a warning
 // rule, titled with what AXLR wants to do. Same rows, same keys.
-func (m AppModel) approvalSheet(details Transcript, hints []footerHint) string {
+func (m AppModel) approvalSheet(details Transcript, hints []footerHint, note string) string {
 	width := max(1, m.Layout.Width)
 	sheet := lipgloss.NewStyle().Width(width)
 	if !m.Theme.Monochrome {
@@ -122,6 +130,9 @@ func (m AppModel) approvalSheet(details Transcript, hints []footerHint) string {
 	var actions []string
 	for _, h := range hints {
 		actions = append(actions, m.zones.Mark(m.prefix+h.zone, h.key+" "+h.label))
+	}
+	if note != "" {
+		actions = append(actions, "· "+note)
 	}
 	rows = append(rows, row("  "+strings.Join(actions, "   ")))
 	return strings.Join(rows, "\n")

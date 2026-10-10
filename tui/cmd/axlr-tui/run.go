@@ -348,7 +348,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
-	sandbox, err := execSandbox(ctx, settings.ExecSandbox(), exec.LookPath, stderr)
+	sandbox, sandboxUnavailable, err := execSandbox(ctx, settings.ExecSandbox(), exec.LookPath, stderr)
 	if err != nil {
 		return fail(err)
 	}
@@ -576,6 +576,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Plans:             planPanel,
 		Usage:             store,
 		MaxSessionUSD:     settings.MaxSessionUSD,
+		Sandbox:           terminal.SandboxStatus{Mode: settings.ExecSandbox().Mode, Unavailable: sandboxUnavailable},
 		Quit:              func(state domain.SessionState) { shown = state },
 	})
 	defer app.Close()
@@ -603,7 +604,7 @@ func printResumeHint(stderr io.Writer, state domain.SessionState, usage applicat
 	cost := ""
 	if usage != nil {
 		if ledger, err := usage.LoadUsage(context.Background(), state.ID); err == nil && ledger.CostRequests > 0 {
-			cost = fmt.Sprintf(" (session cost $%.4f)", ledger.Cost)
+			cost = fmt.Sprintf(" (session cost %s)", terminal.FormatUSD(ledger.Cost))
 		}
 	}
 	fmt.Fprintf(stderr, "axlr-tui: resume with: axlr-tui --session %s%s\n", state.ID, cost)

@@ -107,11 +107,51 @@ func TestSessionPickerRenamesArchivesAndCyclesScopes(t *testing.T) {
 	}
 	p.Key("tab", "")
 	p.Key("tab", "")
+	if !p.TasksView || p.ArchivedView || ids(p.Visible()) != "" {
+		t.Fatalf("plan tasks view = %v %s", p.TasksView, ids(p.Visible()))
+	}
+	p.Key("tab", "")
 	if !p.ArchivedView || ids(p.Visible()) != "new" {
 		t.Fatalf("archived view = %v %s", p.ArchivedView, ids(p.Visible()))
 	}
 	p.Key("tab", "")
-	if p.ArchivedView || p.AllWorkspaces {
+	if p.ArchivedView || p.AllWorkspaces || p.TasksView {
 		t.Fatal("Tab did not return to this workspace")
+	}
+}
+
+// On 10 October 2026 Ctrl+O listed a plan's worker session next to the
+// person's, titled by its context pack; a plan of 12 tasks adds 12 rows.
+func TestPlanTaskSessionsHaveTheirOwnScope(t *testing.T) {
+	now := time.Now()
+	here := domain.Workspace("/w/here")
+	p := NewSessionPicker([]domain.SessionSummary{
+		{ID: "mine", Workspace: here, Model: "m", Title: "add buildinfo.Short()", MessageCount: 9, UpdatedAt: now.Add(-time.Hour)},
+		{ID: "worker", Workspace: here, Model: "m", Title: "Task buildinfo-short of plan add-a-func-dce953, wave 1: Add func Short() string and cover it with a table test", MessageCount: 12, UpdatedAt: now},
+		{ID: "pruned", Workspace: here, Model: "m", Title: "Task docs of plan older-plan, wave 2: Document it", MessageCount: 4, UpdatedAt: now.Add(-2 * time.Hour)},
+	}, here)
+	p.Tasks = planTaskSessions([]domain.PlanRecord{{ID: "add-a-func-dce953", Tasks: []domain.PlanTask{{ID: "buildinfo-short", Session: "worker", Status: domain.TaskDone}}}})
+	if got := ids(p.Visible()); got != "mine" {
+		t.Fatalf("this workspace lists plan task sessions: %s", got)
+	}
+	p.Key("tab", "")
+	if got := ids(p.Visible()); got != "mine" {
+		t.Fatalf("every workspace lists plan task sessions: %s", got)
+	}
+	p.Key("tab", "")
+	if got := ids(p.Visible()); !p.TasksView || got != "worker,pruned" {
+		t.Fatalf("plan tasks scope = %s", got)
+	}
+	theme := Theme{Monochrome: true}
+	z := zone.New()
+	defer z.Close()
+	view := ansi.Strip(p.view(theme, z, "", 30, 100, now))
+	for _, want := range []string{"task buildinfo-short · plan add-a-func-dce953", "task docs · plan older-plan", "done", "plan tasks"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("plan tasks view lacks %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "Add func Short()") {
+		t.Fatalf("a task session is still titled by its context pack:\n%s", view)
 	}
 }
