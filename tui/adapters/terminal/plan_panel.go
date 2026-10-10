@@ -3,9 +3,12 @@ package terminal
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -72,15 +75,11 @@ func (m AppModel) activePlans() []domain.PlanRecord {
 
 func (m AppModel) openPlanPanel() AppModel {
 	m = m.loadPlans()
-	if len(m.PlanPanel.Records) == 0 {
-		m.Status.Error = m.Theme.T("plans.nothing")
-		return m
-	}
 	m.Info = NewTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(max(1, h-2))
-	m.Info.SetContent(planPanelContent(m.PlanPanel.Records, m.Theme))
+	m.Info.SetContent(planPanelContent(m.PlanPanel.Records, m.Theme, time.Now()))
 	m.Info.Viewport.GotoTop()
 	m.overlay = "plans"
 	m.Status.Error = ""
@@ -93,12 +92,21 @@ func (m AppModel) refreshPlanPanel() AppModel {
 	}
 	m = m.loadPlans()
 	offset := m.Info.Viewport.YOffset()
-	m.Info.SetContent(planPanelContent(m.PlanPanel.Records, m.Theme))
+	m.Info.SetContent(planPanelContent(m.PlanPanel.Records, m.Theme, time.Now()))
 	m.Info.Viewport.SetYOffset(offset)
 	return m
 }
 
-func planPanelContent(records []domain.PlanRecord, theme Theme) string {
+// planPanelContent lists the newest plans first: each one's status, tasks
+// and syncs, and the files each finished task changed. On 10 October 2026 a
+// plan that had run green left no trace once it ended: not its outcome nor
+// the files it changed.
+func planPanelContent(records []domain.PlanRecord, theme Theme, now time.Time) string {
+	if len(records) == 0 {
+		return theme.T("plans.nothing")
+	}
+	records = append([]domain.PlanRecord(nil), records...)
+	sort.SliceStable(records, func(i, j int) bool { return records[i].Updated.After(records[j].Updated) })
 	var lines []string
 	for i, plan := range records {
 		if i >= 8 {
@@ -107,7 +115,14 @@ func planPanelContent(records []domain.PlanRecord, theme Theme) string {
 		if i > 0 {
 			lines = append(lines, "")
 		}
-		lines = append(lines, theme.Tf("plans.row", plan.ID, theme.T("plans.status."+string(plan.Status)), len(plan.Tasks), plan.Waves))
+		row := theme.Tf("plans.row", plan.ID, theme.T("plans.status."+string(plan.Status)), len(plan.Tasks), plan.Waves)
+		if when := relativeTime(plan.Updated, now, theme); when != "" {
+			row += " · " + when
+		}
+		lines = append(lines, row)
+		if brief := singleLine(plan.Brief); brief != "" {
+			lines = append(lines, theme.Tf("plans.brief", ansi.Truncate(brief, 100, "…")))
+		}
 		if plan.Error != "" {
 			lines = append(lines, "  "+plan.Error)
 		}
@@ -126,6 +141,9 @@ func planPanelContent(records []domain.PlanRecord, theme Theme) string {
 				}
 				for _, q := range t.Handback.Questions {
 					lines = append(lines, theme.Tf("plans.question", q))
+				}
+				if len(t.Handback.Changed) > 0 {
+					lines = append(lines, theme.Tf("plans.changed", strings.Join(t.Handback.Changed, ", ")))
 				}
 			}
 		}
@@ -155,10 +173,20 @@ func (m AppModel) planKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		return m, nil
 	case "n":
 		m.overlay = ""
-		return m.switchMode(domain.ModePlan)
+		return m.armPlanMode()
 	}
 	m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 	return m, nil
+}
+
+// armPlanMode sets plan mode for the next prompt and says so: the next
+// prompt becomes a plan's brief, whatever it asks.
+func (m AppModel) armPlanMode() (AppModel, tea.Cmd) {
+	m, cmd := m.switchMode(domain.ModePlan)
+	if m.Status.Error == "" {
+		m.Status.Notice = m.Theme.T("notice.planArmed")
+	}
+	return m, cmd
 }
 
 // planBadge is the footer's word about a running plan:

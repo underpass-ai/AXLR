@@ -626,11 +626,17 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m.openIncidentCard(), nil
 				}
 			}
-			if command == "/plan" && len(m.activePlans()) > 0 {
-				// A plan that runs or was interrupted is shown first; n in
-				// the panel starts a new one.
+			if command == "/plan" && m.deps.Plans != nil {
+				// The plans are shown first, the running or interrupted
+				// ones and the recent ones with their outcome; n in the
+				// panel arms plan mode for a new brief. On 10 October 2026
+				// /plan with no plan running set plan mode silently, and the
+				// next prompt, a question, became a brief.
 				m.Composer.Input.Reset()
 				return m.openPlanPanel(), nil
+			}
+			if command == "/plan" {
+				return m.armPlanMode()
 			}
 			if command == "/repair" && len(m.repairRecords()) > 0 || command == "/improve" && improvementRecords(m.repairRecords()) {
 				// Repairs and improvements the agent requested from this
