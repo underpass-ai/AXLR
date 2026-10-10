@@ -121,15 +121,19 @@ func cancelStalled(ctx context.Context, s *domain.Session, u ContinueTurnUseCase
 }
 
 // StopCeremony is the person's /stop-ceremony: the live ceremony is
-// cancelled in MADE and the session returns to normal mode.
+// cancelled in MADE and the session returns to normal mode. The model learns
+// of it with the next prompt (StoppedCeremonyNote).
 func (u StartTurnUseCase) StopCeremony(ctx context.Context, session *domain.Session, emit func(Event) error) error {
 	if session == nil || u.Store == nil || u.Continue.Ceremonies == nil {
 		return errors.New("stopping needs a session and a connected ceremony driver")
 	}
 	next := *session
+	run, _ := next.Ceremony()
 	if err := u.Continue.Ceremonies.StopCeremony(ctx, &next, "stopped by the person"); err != nil {
 		return err
 	}
+	// The stop starts no turn; the next prompt tells the model.
+	next.NoteStoppedCeremony(run.Definition)
 	if u.Continue.Diagnostics != nil {
 		_ = u.Continue.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticCeremonyStalled})
 	}
@@ -152,4 +156,10 @@ func OpenStepIdle(s domain.Session) (domain.CeremonyRun, bool) {
 		return run, true
 	}
 	return domain.CeremonyRun{}, false
+}
+
+// StoppedCeremonyNote is the console note the next prompt carries after the
+// person stopped a ceremony.
+func StoppedCeremonyNote(definition string) string {
+	return "[AXLR] The person stopped the " + definition + " ceremony; do not resume it or call axlr_step_done unless asked."
 }

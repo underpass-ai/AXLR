@@ -41,6 +41,12 @@ type SessionState struct {
 	// against calls the steps already paid for, and the one a resume
 	// restarted. It lives for one turn.
 	FinishedBudgetBase int
+	// StoppedCeremony is the definition of a ceremony the person stopped
+	// since the last prompt, "" when none: the next prompt tells the model
+	// once. Finishing the ceremony and returning to normal mode keep it.
+	// The session store does not persist it yet, so a console restarted
+	// between the stop and the next prompt does not tell the model.
+	StoppedCeremony string
 }
 
 // RestoreSession validates transcript and activity together without executing work.

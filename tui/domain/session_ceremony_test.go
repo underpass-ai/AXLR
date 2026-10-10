@@ -152,3 +152,25 @@ func TestTheAnswerAfterALongCeremonyIsNotCountedAgainstItsSteps(t *testing.T) {
 		t.Fatalf("the turn after the ceremony hit the limit: %v", err)
 	}
 }
+
+func TestAStoppedCeremonyOutlivesItsFinishAndIsTakenOnce(t *testing.T) {
+	s := idleSession(t)
+	if err := s.SetMode(ModeDebug); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetCeremony(debugRun()); err != nil {
+		t.Fatal(err)
+	}
+	s.NoteStoppedCeremony("axlr_debug")
+	s.FinishCeremony()
+	if s.Mode() != ModeNormal || s.Export().StoppedCeremony != "axlr_debug" {
+		t.Fatalf("after finish: mode %s, stopped %q", s.Mode(), s.Export().StoppedCeremony)
+	}
+	restored, err := RestoreSession(s.Export())
+	if err != nil || restored.Export().StoppedCeremony != "axlr_debug" {
+		t.Fatalf("restore: %v %q", err, restored.Export().StoppedCeremony)
+	}
+	if s.TakeStoppedCeremony() != "axlr_debug" || s.TakeStoppedCeremony() != "" {
+		t.Fatal("a stopped ceremony must be taken exactly once")
+	}
+}

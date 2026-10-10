@@ -42,3 +42,19 @@ func (s *Session) RestartTurnBudget() {
 	}
 	s.state.FinishedBudgetBase = s.state.TurnCallCount
 }
+
+// NoteStoppedCeremony records that the person stopped the ceremony named by
+// definition, so the next prompt can tell the model. On 10 October 2026 the
+// model, never told of a /stop-ceremony, called axlr_step_done again on the
+// next prompt and asked whether to retry once the ceremony restarted.
+func (s *Session) NoteStoppedCeremony(definition string) {
+	s.state.StoppedCeremony = definition
+}
+
+// TakeStoppedCeremony returns the ceremony the person stopped since the last
+// prompt and forgets it, so the model is told once.
+func (s *Session) TakeStoppedCeremony() string {
+	definition := s.state.StoppedCeremony
+	s.state.StoppedCeremony = ""
+	return definition
+}
