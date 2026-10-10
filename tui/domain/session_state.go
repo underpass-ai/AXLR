@@ -47,6 +47,9 @@ type SessionState struct {
 	// The session store does not persist it yet, so a console restarted
 	// between the stop and the next prompt does not tell the model.
 	StoppedCeremony string
+	// ConsoleLines are lines shown to the person between messages and
+	// never sent to the model, such as a finished plan's outcome.
+	ConsoleLines []ConsoleLine
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -81,6 +84,9 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 		if err = state.Ceremony.Validate(); err != nil {
 			return Session{}, err
 		}
+	}
+	if err = validateConsoleLines(state.ConsoleLines, len(state.Messages)); err != nil {
+		return Session{}, err
 	}
 	previous := 0
 	for _, archived := range state.ArchivedDrafts {
@@ -177,6 +183,13 @@ func cloneState(state SessionState) SessionState {
 	state.ToolSnapshot = append([]AvailableTool(nil), state.ToolSnapshot...)
 	state.Activity = append([]PendingTool(nil), state.Activity...)
 	state.ArchivedDrafts = append([]ArchivedDraft(nil), state.ArchivedDrafts...)
+	if state.ConsoleLines != nil {
+		lines := make([]ConsoleLine, len(state.ConsoleLines))
+		for i, line := range state.ConsoleLines {
+			lines[i] = line.clone()
+		}
+		state.ConsoleLines = lines
+	}
 	state.MessageTimes = append([]time.Time(nil), state.MessageTimes...)
 	if state.Ceremony != nil {
 		run := state.Ceremony.clone()
