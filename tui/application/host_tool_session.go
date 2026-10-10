@@ -16,7 +16,11 @@ type sessionContext struct {
 	Workspace   domain.Workspace `json:"workspace"`
 	PromptCount int              `json:"user_prompt_count"`
 	Title       root.Text        `json:"title"`
-	About       string           `json:"about"`
+	// About is the about the console uses for the session's memory: the
+	// selected one, or by default the workspace's project about, which
+	// AboutIsDefault marks.
+	About          string `json:"about"`
+	AboutIsDefault bool   `json:"about_is_default,omitempty"`
 	// TitleDeferred says why a proposed title was not stored while the about
 	// sent with it was.
 	TitleDeferred string `json:"title_deferred,omitempty"`
@@ -39,7 +43,11 @@ func userPromptCount(s domain.Session) int {
 
 func sessionContextValue(s domain.Session, label domain.SessionLabel) sessionContext {
 	state := s.Export()
-	return sessionContext{ID: state.ID, Workspace: state.Workspace, PromptCount: userPromptCount(s), Title: label.Title, About: label.About}
+	value := sessionContext{ID: state.ID, Workspace: state.Workspace, PromptCount: userPromptCount(s), Title: label.Title, About: label.About}
+	if value.About == "" {
+		value.About, value.AboutIsDefault = defaultAbout(state), true
+	}
+	return value
 }
 
 func (u HostToolUseCase) sessionContext(ctx context.Context, s domain.Session, arguments root.JSONValue) (any, error) {
@@ -90,13 +98,14 @@ func (u HostToolUseCase) sessionContext(ctx context.Context, s domain.Session, a
 }
 
 // sessionGuidance is the session metadata in the system prompt. It leaves out
-// user_prompt_count, which axlr_session still reports: a value that changes
-// every turn would change the prompt's prefix, and a prefix cache reuses
-// nothing after the first changed token.
+// user_prompt_count and the title, which axlr_session still reports: a value
+// that changes during the session would change the prompt's prefix, and a
+// prefix cache reuses nothing after the first changed token. Setting the
+// title broke the cache at message 0 on 8 October 2026; since 10 October the
+// console also sets it itself (titleUntitled).
 type sessionGuidance struct {
 	ID        domain.SessionID `json:"session_id"`
 	Workspace domain.Workspace `json:"workspace"`
-	Title     root.Text        `json:"title"`
 	About     string           `json:"about"`
 }
 
@@ -107,7 +116,13 @@ func sessionContextGuidance(ctx context.Context, s domain.Session, store Session
 	}
 	state := s.Export()
 	label := labels[state.ID]
-	value := sessionGuidance{ID: state.ID, Workspace: state.Workspace, Title: label.Title, About: label.About}
+	// The about is the console's: the model is given it, never left to
+	// derive one. It changes only when an about is selected.
+	about := label.About
+	if about == "" {
+		about = defaultAbout(state)
+	}
+	value := sessionGuidance{ID: state.ID, Workspace: state.Workspace, About: about}
 	data, err := json.Marshal(value)
 	if err != nil {
 		return "", err
@@ -120,9 +135,9 @@ func sessionContextGuidance(ctx context.Context, s domain.Session, store Session
 			break
 		}
 	}
-	if value.Title == "" || hasKMP && value.About == "" {
-		text += "Use the built-in axlr:axlr-session skill at session startup; read it with axlr_skill and reuse it while present. Establish the exact memory scope early. After the second user prompt, define the missing title before your final answer. Follow the skill's bounded inter-about search when KMP is connected.\n"
-	}
+	// The same words whatever the labels hold, so a title or an about set
+	// during the session leaves the prompt unchanged.
+	text += "Use the built-in axlr:axlr-session skill at session startup; read it with axlr_skill and reuse it while present. Use the about above for memory unless a different canonical scope is established. After the second user prompt, if axlr_session shows no title, define one before your final answer; otherwise the console titles the session from the first two prompts. Follow the skill's bounded inter-about search when KMP is connected.\n"
 	if hasKMP {
 		text += "After the second user prompt clarifies the task, follow axlr:axlr-session for one relevant inter-about comparison unless its result already exists in this session. Reuse existing comparison results; a title or scope alone does not prove the search ran.\n"
 	}

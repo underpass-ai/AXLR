@@ -600,7 +600,7 @@ func (s *UserSettingsStore) update(ctx context.Context, change func(*UserSetting
 		return err
 	}
 	if !privateRegular(info) {
-		return errors.New("settings lock must be a private regular file")
+		return privateLockError("settings lock", s.Path+".lock", info)
 	}
 	for {
 		if err := ctx.Err(); err != nil {

@@ -42,6 +42,10 @@ func (t Theme) rowText(kind transcriptRowKind) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text)).Bold(true)
 	case transcriptRowAssistant, transcriptRowGap:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Text))
+	case transcriptRowDiffRemoved:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.DiffRemoved))
+	case transcriptRowDiffAdded:
+		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Good))
 	default:
 		return lipgloss.NewStyle().Foreground(lipgloss.Color(p.Muted))
 	}

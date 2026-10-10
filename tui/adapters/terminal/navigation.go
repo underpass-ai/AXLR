@@ -60,8 +60,9 @@ func (m *AppModel) syncApproval() {
 		}
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
-		m.Approval = NewApprovalDialog(p, target, m.Theme.Locale)
+		m.Approval = NewApprovalDialog(p, target, m.Theme)
 		if warning := m.hiddenInputWarning(p); warning != "" {
+			// Only an exec call warns, and its card is JSON text.
 			m.Approval.Details.SetContent(warning + "\n\n" + m.Approval.Details.Text())
 			m.Approval.Details.Viewport.GotoTop()
 		}

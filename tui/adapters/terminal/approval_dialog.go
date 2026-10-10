@@ -17,8 +17,9 @@ type ApprovalDialog struct {
 }
 
 // NewApprovalDialog's details are the call's arguments; the card and the
-// unknown-tool dialog show the tool and its target in their own title.
-func NewApprovalDialog(p domain.PendingTool, target string, _ ...Locale) ApprovalDialog {
+// unknown-tool dialog show the tool and its target in their own title. A
+// file edit or write is laid out as the change it makes (fileChangeRows).
+func NewApprovalDialog(p domain.PendingTool, target string, theme Theme) ApprovalDialog {
 	var args bytes.Buffer
 	_ = json.Indent(&args, p.Call.Arguments.Bytes(), "", "  ")
 	content := args.String()
@@ -28,7 +29,12 @@ func NewApprovalDialog(p domain.PendingTool, target string, _ ...Locale) Approva
 		}
 	}
 	d := ApprovalDialog{Pending: p, Target: target, Details: NewTranscript()}
-	d.Details.SetContent(content)
+	d.Details.theme = theme
+	if rows, ok := fileChangeRows(p.Call.Name, p.Call.Arguments.Bytes(), theme); ok {
+		d.Details.setRows(rows)
+	} else {
+		d.Details.SetContent(content)
+	}
 	d.Details.Viewport.GotoTop()
 	return d
 }

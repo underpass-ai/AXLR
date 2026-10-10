@@ -1,6 +1,12 @@
 package terminal
 
-import "time"
+import (
+	"strings"
+	"time"
+
+	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/application"
+)
 
 type transcriptRowKind uint8
 
@@ -12,6 +18,10 @@ const (
 	transcriptRowGap
 	// transcriptRowSpeaker names who speaks next in the Editorial layout.
 	transcriptRowSpeaker
+	// transcriptRowDiffRemoved and transcriptRowDiffAdded are the lines an
+	// approval card shows a file edit taking out and putting in.
+	transcriptRowDiffRemoved
+	transcriptRowDiffAdded
 )
 
 // transcriptRow is one conversation entry. The viewport wraps it to the
@@ -67,4 +77,11 @@ const (
 
 func (k transcriptRowKind) isTool() bool {
 	return k == transcriptRowPlain || k == transcriptRowMemory
+}
+
+// consoleMemoryReminder reports the user message the console sends to ask
+// the model to record memory. On 10 October 2026 it was drawn as a prompt,
+// "› [AXLR · memory] KMP is connected…", as if the person had typed it.
+func consoleMemoryReminder(content root.Text) bool {
+	return strings.HasPrefix(string(content), application.MemoryReminderPrefix)
 }

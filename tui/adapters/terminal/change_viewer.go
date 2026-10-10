@@ -126,7 +126,7 @@ func changeRecords(state domain.SessionState) []changeRecord {
 		record.Tool, _ = toolCallPresentation(state, a.Call)
 		if index, ok := resultAt[a.Call.ID]; ok {
 			for _, m := range state.Messages[:index] {
-				if m.Role == root.RoleUser {
+				if m.Role == root.RoleUser && !consoleMemoryReminder(m.Content) {
 					record.Turn++
 				}
 			}

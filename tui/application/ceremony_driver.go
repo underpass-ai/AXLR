@@ -227,7 +227,12 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		return err
 	}
 	state := s.Export()
-	about := "ws:" + string(state.ID)
+	// A ceremony keeps the session's own about unless one was selected
+	// (decision 2 of the ceremony driver design): a plan's tasks and syncs
+	// wake the planner session's about for that plan's notes alone, which a
+	// project about would dilute. The model's own memory defaults to the
+	// project about instead (memoryAbout).
+	about := sessionAbout(state.ID)
 	if d.Labels != nil {
 		labels, err := d.Labels.Load(ctx)
 		if err != nil {

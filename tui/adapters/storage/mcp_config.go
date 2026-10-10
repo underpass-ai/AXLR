@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -101,6 +102,32 @@ func LoadMCPConfiguration(path string, getenv func(string) string) (MCPConfigura
 	return MCPConfiguration{Registrations: registrations, Profiles: profiles}, nil
 }
 
+// checkMCPConfigFile names the path, the first failing requirement and the
+// fix: a regular file, private permissions (no group or other access) and a
+// size within maxMCPConfigBytes. On 10 October 2026 a mcp.json copied under
+// umask 002 (mode 0664) stopped the console with one sentence that named
+// neither the file nor which of the three requirements it failed.
+func checkMCPConfigFile(path string, info os.FileInfo) error {
+	switch {
+	case !info.Mode().IsRegular():
+		return fmt.Errorf("MCP config %s is not a regular file; replace it with a regular file of mode 0600", path)
+	case !privateRegular(info):
+		return fmt.Errorf("MCP config %s has mode %04o and must not be readable or writable by other accounts; run chmod 600 %s", path, info.Mode().Perm(), path)
+	case info.Size() > maxMCPConfigBytes:
+		return fmt.Errorf("MCP config %s is %d bytes; the limit is %d bytes (64 KiB)", path, info.Size(), maxMCPConfigBytes)
+	}
+	return nil
+}
+
+// privateLockError names a lock file that failed privateRegular, its mode
+// and the fix, as checkMCPConfigFile does for the configuration itself.
+func privateLockError(kind, path string, info os.FileInfo) error {
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s %s is not a regular file; remove it and start the console again", kind, path)
+	}
+	return fmt.Errorf("%s %s has mode %04o and must not be readable or writable by other accounts; run chmod 600 %s", kind, path, info.Mode().Perm(), path)
+}
+
 func readMCPConfig(path string) (dto.MCPConfig, error) {
 	if !filepath.IsAbs(path) {
 		return dto.MCPConfig{}, errors.New("MCP config path must be absolute")
@@ -111,15 +138,17 @@ func readMCPConfig(path string) (dto.MCPConfig, error) {
 		return dto.MCPConfig{}, nil
 	}
 	if err != nil {
-		return dto.MCPConfig{}, err
+		// Windows refuses to open a directory before the check below can
+		// say what is wrong; the path at least says which file.
+		return dto.MCPConfig{}, fmt.Errorf("open MCP config %s: %w", path, err)
 	}
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil {
 		return dto.MCPConfig{}, err
 	}
-	if !privateRegular(info) || info.Size() > maxMCPConfigBytes {
-		return dto.MCPConfig{}, errors.New("MCP config must be a private regular file of at most 64 KiB")
+	if err := checkMCPConfigFile(path, info); err != nil {
+		return dto.MCPConfig{}, err
 	}
 	data, err := io.ReadAll(io.LimitReader(file, maxMCPConfigBytes+1))
 	if err != nil {

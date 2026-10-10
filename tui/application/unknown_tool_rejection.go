@@ -47,3 +47,17 @@ func rejectUnknownCall(ctx context.Context, s *domain.Session, store SessionStor
 	}
 	return nil
 }
+
+// localArgumentError checks a local tool's arguments against its schema
+// before the card: on 10 October 2026 claude-haiku-5.5 sent local_exec
+// timeout_ms 600000, the person approved it and the runtime then refused
+// it. Plugin arguments are still validated when the call is resolved.
+func localArgumentError(validation ToolArgumentValidationPort, tool domain.AvailableTool, arguments root.JSONValue) error {
+	if validation == nil || tool.Identity.Kind != domain.ToolKindLocal {
+		return nil
+	}
+	if err := validation.Validate(tool.Definition, arguments); err != nil {
+		return fmt.Errorf("%s: %w", tool.Definition.Name, err)
+	}
+	return nil
+}

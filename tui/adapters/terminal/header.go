@@ -41,6 +41,12 @@ func (h Header) View(width int, theme Theme) string {
 		right += mark + theme.Muted(" "+ansi.Truncate(id, headerPluginWidth, "…")+"  ")
 	}
 	gap := width - ansi.StringWidth(left) - ansi.StringWidth(right)
+	if brand := " " + theme.Icon("brand") + " AXLR  " + model; gap < 2 && width-ansi.StringWidth(right)-2 >= ansi.StringWidth(brand) {
+		// On 10 October 2026, at 80 columns, a long workspace path pushed
+		// "● kmp ● made" off the row: the path is cut instead.
+		left = ansi.Truncate(left, width-ansi.StringWidth(right)-2, "…")
+		gap = width - ansi.StringWidth(left) - ansi.StringWidth(right)
+	}
 	if gap < 2 {
 		return lipgloss.NewStyle().Width(max(1, width)).Render(ansi.Truncate(left, max(1, width), "…"))
 	}

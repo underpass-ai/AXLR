@@ -28,7 +28,19 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 		// nothing. The console's log is read-only.
 		return id.LocalOperation == domain.HostOperationLogs || id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationRequestImprovement || id.LocalOperation == domain.HostOperationJudge
 	}
+	if readsWorkspace(id) {
+		// On 10 October 2026, with autonomy off, every local_search and
+		// local_read of claude-haiku-5.5 raised a card, so a "where is X"
+		// question cost several keypresses before the model could look.
+		// Reading changes nothing; approvesInMode still asks the mode first.
+		return true
+	}
 	return policy != nil && policy.AutoApproves(id)
+}
+
+// readsWorkspace reports the local tools that only read the workspace.
+func readsWorkspace(id domain.ToolIdentity) bool {
+	return id.Kind == domain.ToolKindLocal && (id.LocalOperation == "read" || id.LocalOperation == "search" || id.LocalOperation == "list")
 }
 
 // approvesInSession adds the session's ceremony to approvesInMode: a step

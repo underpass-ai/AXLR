@@ -49,7 +49,7 @@ func (allowEverything) AutoApproves(domain.ToolIdentity) bool { return true }
 
 func TestReviewModeRejectsWritesWithAModelVisibleReason(t *testing.T) {
 	s, store := pendingCall(t, domain.ModeReview, "local_write", `{"path":"wc.py","content":"x"}`)
-	if err := rejectUnknown(context.Background(), &s, store, ignoreEvent, nil); err != nil {
+	if err := rejectUnknown(context.Background(), &s, headAdmission{Store: store}, ignoreEvent); err != nil {
 		t.Fatal(err)
 	}
 	activity := s.Export().Activity
@@ -61,7 +61,7 @@ func TestReviewModeRejectsWritesWithAModelVisibleReason(t *testing.T) {
 
 func TestWriterModeLetsDocumentsThrough(t *testing.T) {
 	s, store := pendingCall(t, domain.ModeWriter, "local_write", `{"path":"docs/usage.md","content":"x"}`)
-	if err := rejectUnknown(context.Background(), &s, store, ignoreEvent, nil); err != nil {
+	if err := rejectUnknown(context.Background(), &s, headAdmission{Store: store}, ignoreEvent); err != nil {
 		t.Fatal(err)
 	}
 	if len(s.Pending()) != 1 {
@@ -71,7 +71,7 @@ func TestWriterModeLetsDocumentsThrough(t *testing.T) {
 
 func TestWriterModeRejectsNonDocumentWritesWithAModelVisibleReason(t *testing.T) {
 	s, store := pendingCall(t, domain.ModeWriter, "local_write", `{"path":"wc.py","content":"x"}`)
-	if err := rejectUnknown(context.Background(), &s, store, ignoreEvent, nil); err != nil {
+	if err := rejectUnknown(context.Background(), &s, headAdmission{Store: store}, ignoreEvent); err != nil {
 		t.Fatal(err)
 	}
 	activity := s.Export().Activity
@@ -83,7 +83,7 @@ func TestWriterModeRejectsNonDocumentWritesWithAModelVisibleReason(t *testing.T)
 
 func TestWriterModeRejectsPathTraversalOutOfDocs(t *testing.T) {
 	s, store := pendingCall(t, domain.ModeWriter, "local_write", `{"path":"docs/../wc.py","content":"x"}`)
-	if err := rejectUnknown(context.Background(), &s, store, ignoreEvent, nil); err != nil {
+	if err := rejectUnknown(context.Background(), &s, headAdmission{Store: store}, ignoreEvent); err != nil {
 		t.Fatal(err)
 	}
 	activity := s.Export().Activity

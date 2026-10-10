@@ -43,9 +43,12 @@ func (s *memoryStore) Save(ctx context.Context, v domain.Session) error {
 func (s *memoryStore) Load(context.Context, domain.SessionID) (domain.Session, error) {
 	return domain.Session{}, errors.New("not used")
 }
+
+// turnTools offers one generic tool, "read", that waits for the person's
+// decision: its identity is local exec, since workspace reads need no card.
 func turnTools() []domain.AvailableTool {
 	schema, _ := root.NewJSONObject([]byte(`{"type":"object"}`))
-	id, _ := domain.NewLocalToolIdentity("read")
+	id, _ := domain.NewLocalToolIdentity("exec")
 	return []domain.AvailableTool{{Definition: root.ToolDefinition{Name: "read", Parameters: schema}, Identity: id}}
 }
 func turnSession(t *testing.T) domain.Session {

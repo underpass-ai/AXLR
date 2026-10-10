@@ -45,6 +45,7 @@ type AppModel struct {
 	Changes          ChangeViewer
 	memoryActive     bool
 	slashSelected    int
+	slashTop         int
 	// lastClick, lastClickAt and clickCount tell a double or triple click
 	// on the transcript from separate clicks.
 	lastClick           Selection
@@ -98,10 +99,23 @@ type AppModel struct {
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
+	// cancelledAt is one more than the number of messages when the person's
+	// Esc stopped a turn (zero for none): the conversation marks it until a
+	// message follows or another operation runs.
+	cancelledAt int
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
 // queued message; other operations (updates, lists, preparation) do not.
+// quit ends the console and hands the session it showed to deps.Quit.
+func (m AppModel) quit() (tea.Model, tea.Cmd) {
+	m.zones.Close()
+	if m.deps.Quit != nil {
+		m.deps.Quit(m.Header.State)
+	}
+	return m, tea.Quit
+}
+
 func (m AppModel) turnRunning() bool {
 	return m.submittedPrompt != "" || m.Header.State.Status == domain.StatusStreaming || m.Header.State.Status == domain.StatusApproval || m.toolExecuting || m.providerWaiting
 }
@@ -348,6 +362,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
 		}
+		wasTurn := m.turnRunning()
 		if m.cancel != nil {
 			m.cancel()
 		}
@@ -473,8 +488,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		steered := (m.steerCancelled == v.ID || m.closedCancelled == v.ID) && errors.Is(v.Err, context.Canceled)
 		m.steerCancelled, m.closedCancelled = 0, 0
-		if v.Err != nil && !steered {
-			m.Status.Error = v.Err.Error()
+		m.cancelledAt = 0
+		if cancelled := errors.Is(v.Err, context.Canceled) && !steered; cancelled && v.Err.Error() == context.Canceled.Error() && v.PluginApproval == nil {
+			// On 10 October 2026 Esc left "! context canceled" across the
+			// footer, hiding the state and the cost: the person's own Esc
+			// is not an error, so it is said in the footer's state instead.
+			m.Status.Error = ""
+			m.Status.Notice = strings.TrimSpace(m.Theme.T("status.cancelled") + " " + returned)
+			if status := v.Session.Status(); wasTurn || status == domain.StatusStreaming || status == domain.StatusInterrupted || status == domain.StatusApproval {
+				m.cancelledAt = len(m.Header.State.Messages) + 1
+			}
+		} else if v.Err != nil && !steered {
+			m.Status.Error = strings.Replace(v.Err.Error(), context.Canceled.Error(), m.Theme.T("status.cancelled"), 1)
 			if v.PluginApproval != nil {
 				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
 			}
@@ -543,8 +568,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.Busy {
 					return m.Update(ControlIntent("cancel"))
 				}
-				m.zones.Close()
-				return m, tea.Quit
+				return m.quit()
 			}
 			if unknownSlashWord(command) {
 				m.Status.Error = m.Theme.Tf("error.unknownCommand", command)
@@ -714,9 +738,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch v.String() {
 			case "up":
 				m.slashSelected = max(0, min(m.slashSelected, len(suggestions)-1)-1)
+				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions))
 				return m, nil
 			case "down":
 				m.slashSelected = min(len(suggestions)-1, m.slashSelected+1)
+				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions))
 				return m, nil
 			case "tab":
 				m.Composer.Input.SetValue(suggestions[min(m.slashSelected, len(suggestions)-1)].name)
@@ -745,8 +771,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.Busy {
 				return m.Update(ControlIntent("cancel"))
 			}
-			m.zones.Close()
-			return m, tea.Quit
+			return m.quit()
 		case "pgup":
 			m.Transcript.Viewport.PageUp()
 			return m, nil
@@ -812,7 +837,8 @@ func (m AppModel) View() tea.View {
 		body := m.mainTranscript()
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
 			lines := strings.Split(body, "\n")
-			menu := m.slashMenu(suggestions[:min(len(suggestions), len(lines))])
+			menu := m.slashMenu(suggestions)
+			menu = menu[max(0, len(menu)-len(lines)):]
 			body = strings.Join(append(lines[:len(lines)-len(menu)], menu...), "\n")
 		}
 		content = lipgloss.JoinVertical(lipgloss.Left, m.Header.View(m.Layout.Width, m.Theme), body, composer, footer)
@@ -906,5 +932,8 @@ func (m *AppModel) refreshTranscript() {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
 	}
 	m.Transcript.AppendFailures(m.failures)
+	if m.cancelledAt == len(m.Header.State.Messages)+1 && !m.Busy {
+		m.Transcript.AppendCancelled()
+	}
 	m.Transcript.AppendQueued(m.steer.Peek())
 }

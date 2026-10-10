@@ -112,6 +112,21 @@ func TestAppLogWriterSplitsLinesAndTailFilters(t *testing.T) {
 	}
 }
 
+// A plugin's start-up banner art is not worth a log entry; its text is.
+func TestAppLogWriterDropsBannerArt(t *testing.T) {
+	log, err := OpenAppLog(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer := log.Writer(AppInfo, "plugin kmp stderr: ")
+	_, _ = writer.Write([]byte("██╗  ██╗███╗   ███╗██████╗\n██║ ██╔╝████╗ ████║██╔══██╗   Kernel Memory Protocol\n  ╚═╝  ╚═╝╚═╝     ╚═╝╚═╝\nkmp-mcp: using embedded backend\n"))
+	log.Close()
+	all, _, err := TailAppLog(log.Path(), 10, nil)
+	if err != nil || len(all) != 1 || !strings.HasSuffix(all[0].Line, "plugin kmp stderr: kmp-mcp: using embedded backend") {
+		t.Fatalf("entries = %+v, err = %v", all, err)
+	}
+}
+
 // A tail reads a bounded end of each file and skips the line it began in.
 func TestTailAppLogReadsABoundedEnd(t *testing.T) {
 	path := filepath.Join(t.TempDir(), AppLogName)

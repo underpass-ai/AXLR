@@ -29,7 +29,7 @@ func acquireMCPConfigLock(ctx context.Context, path string) (func(), error) {
 	}
 	if !privateRegular(info) {
 		release()
-		return nil, errors.New("MCP config lock must be a private regular file")
+		return nil, privateLockError("MCP config lock", path+".lock", info)
 	}
 	for {
 		if err := ctx.Err(); err != nil {

@@ -3,16 +3,19 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"regexp"
 	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// memoryReminderPrefix opens the console's reminder to record what a request
+// MemoryReminderPrefix opens the console's reminder to record what a request
 // settled in KMP. A request that already received it is not reminded again,
-// so the reminder costs at most one extra model turn per request.
-const memoryReminderPrefix = "[AXLR · memory]"
+// so the reminder costs at most one extra model turn per request. The
+// reminder is a user message the console wrote, not the person: the
+// transcript shows messages with this prefix as a console line.
+const MemoryReminderPrefix = "[AXLR · memory]"
 
 // memoryReminderCalls is how many local tool calls make a request worth
 // recording when it changed no file. File reads do not count, since a request
@@ -23,10 +26,10 @@ const memoryReminderCalls = 5
 
 // memoryReminder is the console's message; it leaves the judgement to the
 // model and says how to decline.
-const memoryReminder = memoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with axlr_remember (kind, text and its evidence; the console uses the session's exact about and a stable idempotency key), then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
+const memoryReminder = MemoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with axlr_remember (kind, text and its evidence; the console uses the session's exact about and a stable idempotency key), then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
 
 // memoryReminderBridged is the reminder where axlr_remember is not offered.
-const memoryReminderBridged = memoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with kmp_write_memory through axlr_call_tool, under the session's exact about (axlr_session shows it), with its source evidence and a stable idempotency key, then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
+const memoryReminderBridged = MemoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with kmp_write_memory through axlr_call_tool, under the session's exact about (axlr_session shows it), with its source evidence and a stable idempotency key, then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
 
 // remindMemory starts one console turn when a request ends with durable work
 // and no memory write: models given KMP recall it reliably but record what
@@ -40,6 +43,9 @@ func remindMemory(ctx context.Context, s *domain.Session, u ContinueTurnUseCase,
 	write, _, _ := memoryWriteTool(s.ToolSnapshot())
 	messages := s.Messages()
 	if len(messages) == 0 || messages[len(messages)-1].Role != root.RoleAssistant || len(messages[len(messages)-1].ToolCalls) > 0 {
+		return false, nil
+	}
+	if answerAddressesMemory(messages[len(messages)-1].Content) {
 		return false, nil
 	}
 	start := personRequest(messages)
@@ -105,7 +111,7 @@ func personRequest(messages []root.Message) int {
 func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 	local, changed := 0, false
 	for _, message := range request[1:] {
-		if message.Role == root.RoleUser && strings.HasPrefix(string(message.Content), memoryReminderPrefix) {
+		if message.Role == root.RoleUser && strings.HasPrefix(string(message.Content), MemoryReminderPrefix) {
 			return false
 		}
 		for _, call := range message.ToolCalls {
@@ -129,6 +135,40 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 	}
 	return changed || local >= memoryReminderCalls
 }
+
+// answerAddressesMemory reports whether a final answer already says what
+// it recorded in KMP, or that it recorded nothing: one of its sentences
+// names memory and a recording verb. On 10 October 2026 claude-haiku-5.5
+// ended with "I did not record anything in KMP…" and was reminded anyway;
+// it then recorded a low-value success_path, one extra request. A list of
+// set phrases missed the next answer ("I didn't write a KMP memory
+// either"), so the check reads sentences rather than phrases. Identifiers
+// (kmp_write_memory, memory_reminder.go) are left out first, so an answer
+// about the memory code itself does not count; a model that ends without
+// mentioning memory is still reminded.
+func answerAddressesMemory(answer root.Text) bool {
+	text := strings.ToLower(strings.ReplaceAll(string(answer), "’", "'"))
+	if strings.Contains(text, "axlr_remember") && strings.Contains(text, "recorded") {
+		return true
+	}
+	for _, sentence := range memorySentence.Split(memoryIdentifier.ReplaceAllString(text, " "), -1) {
+		if memoryAnchor.MatchString(sentence) && memoryVerb.MatchString(sentence) {
+			return true
+		}
+	}
+	return false
+}
+
+var (
+	memorySentence   = regexp.MustCompile(`[.!?;:\n]+(\s|$)`)
+	memoryIdentifier = regexp.MustCompile(`\S*[_/]\S*|\S+\.(go|md|json)\b`)
+	// memoryAnchor names memory itself: this workspace also records traces
+	// and payloads, and "the payload recorder did not record the body" or
+	// "no hay nada que guardar, el fichero ya está actualizado" are not
+	// about memory.
+	memoryAnchor = regexp.MustCompile(`\b(kmp|memory|memories|memoria|remember|durable|duradero)\b`)
+	memoryVerb   = regexp.MustCompile(`\b(record|records|recorded|recording|write|wrote|written|writing|save|saved|saving|store|stored|storing|remember|remembered|registr[a-z]*)\b|\bguard(é|ado|ada|ar|o)`)
+)
 
 // countsForMemory reports whether a call counts toward memoryReminderCalls:
 // a local tool call that is not a file read, a search or a listing, which

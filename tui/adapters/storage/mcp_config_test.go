@@ -92,6 +92,49 @@ func TestLoadMCPConfigRejectsUnsafeOrInvalidFile(t *testing.T) {
 	}
 }
 
+func TestLoadMCPConfigErrorNamesPathAndSpecificReason(t *testing.T) {
+	dir := t.TempDir()
+	none := func(string) string { return "" }
+	expect := func(t *testing.T, path, reason string) {
+		t.Helper()
+		_, err := LoadMCPConfig(path, none)
+		if err == nil {
+			t.Fatalf("%s accepted", reason)
+		}
+		if !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), reason) {
+			t.Fatalf("error %q must name %s and say %q", err, path, reason)
+		}
+	}
+	t.Run("not a regular file", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			// Opening a directory fails first there, with the OS's reason.
+			expect(t, dir, "open MCP config")
+			return
+		}
+		expect(t, dir, "is not a regular file")
+	})
+	t.Run("size", func(t *testing.T) {
+		path := filepath.Join(dir, "large.json")
+		if err := os.WriteFile(path, make([]byte, maxMCPConfigBytes+1), 0600); err != nil {
+			t.Fatal(err)
+		}
+		expect(t, path, "bytes; the limit is")
+	})
+	if runtime.GOOS != "windows" {
+		t.Run("mode", func(t *testing.T) {
+			path := filepath.Join(dir, "public.json")
+			if err := os.WriteFile(path, []byte(`{"version":1,"plugins":[]}`), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(path, 0644); err != nil {
+				t.Fatal(err)
+			}
+			expect(t, path, "has mode 0644")
+			expect(t, path, "chmod 600 "+path)
+		})
+	}
+}
+
 func TestLoadMCPConfigRejectsFIFOWithoutBlocking(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Windows has no POSIX FIFO")

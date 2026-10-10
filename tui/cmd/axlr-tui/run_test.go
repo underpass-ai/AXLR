@@ -384,7 +384,7 @@ func TestRunLaunchFailureWaitsForCancelledStreamAndPersistsInterruption(t *testi
 	}
 }
 
-func TestRunStartsApprovesLocalReadAndContinues(t *testing.T) {
+func TestRunStartsRunsLocalReadWithoutACardAndContinues(t *testing.T) {
 	env := cliEnv(t)
 	workspace := t.TempDir()
 	os.WriteFile(filepath.Join(workspace, "note"), []byte("local content"), 0600)
@@ -414,11 +414,7 @@ func TestRunStartsApprovesLocalReadAndContinues(t *testing.T) {
 		a.Composer.Input.SetValue("read note")
 		m, cmd := a.Update(terminal.ControlIntent("send"))
 		a = drain(t, m, cmd)
-		if a.Header.State.Status != domain.StatusApproval || calls != 1 {
-			t.Fatalf("approval missing: %+v", a.Status)
-		}
-		m, cmd = a.Update(terminal.ControlIntent("approve"))
-		a = drain(t, m, cmd)
+		// A workspace read needs no card, autonomy off included.
 		if a.Status.Error != "" || a.Header.State.Status != domain.StatusComplete || calls != 2 {
 			t.Fatalf("%+v calls=%d", a.Status, calls)
 		}

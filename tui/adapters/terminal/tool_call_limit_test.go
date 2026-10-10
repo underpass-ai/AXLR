@@ -47,13 +47,31 @@ func TestTheToolCallLimitSaysHowToContinueAndCtrlRContinues(t *testing.T) {
 	m.Theme.Locale = Spanish
 	requests := 0
 	continuation := application.ContinueTurnUseCase{Store: m.deps.Store, Models: overLimitStream{&requests}}
-	m.deps.Start = application.StartTurnUseCase{Catalog: readToolCatalog{}, Store: m.deps.Store, Continue: continuation}
-	m.deps.Agent = application.AgentTurnUseCase{Continue: continuation}
+	m.deps.Start = application.StartTurnUseCase{Catalog: readToolCatalog{}, Store: m.deps.Store, Continue: continuation, Tools: navTool{}}
+	m.deps.Agent = application.AgentTurnUseCase{Continue: continuation, Tools: navTool{}}
 	m.Composer.Input.SetValue("find the cause")
 	next, cmd := m.Update(ControlIntent("send"))
 	m = drain(t, next.(AppModel), cmd)
 	if s.Status() != domain.StatusInterrupted || !strings.Contains(m.Transcript.Text(), "I found the cause") {
 		t.Fatalf("the turn did not pause with its answer kept: %s", s.Status())
+	}
+	// Reads need no card, so the calls that fit the budget ran and only the
+	// one past it was refused, labelled as over budget rather than denied.
+	ran, refused := 0, 0
+	for _, msg := range s.Messages() {
+		switch {
+		case msg.Role != root.RoleTool:
+		case strings.HasPrefix(string(msg.Content), domain.OverBudgetOutcomePrefix):
+			refused++
+		default:
+			ran++
+		}
+	}
+	if ran != domain.MaxTurnToolCalls || refused != 1 {
+		t.Fatalf("ran %d and refused %d of %d calls", ran, refused, domain.MaxTurnToolCalls+1)
+	}
+	if text := m.Transcript.Text(); !strings.Contains(text, Translate(Spanish, "transcript.toolOverBudget")) {
+		t.Fatalf("the refused call is not labelled over budget:\n%s", text)
 	}
 	if want := Translate(Spanish, "error.toolCallLimit"); m.Status.Error != want {
 		t.Fatalf("footer error %q; want %q", m.Status.Error, want)

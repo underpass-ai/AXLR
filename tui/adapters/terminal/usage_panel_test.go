@@ -33,7 +33,7 @@ func sendPrompt(t *testing.T, m AppModel, prompt string) AppModel {
 	return drain(t, next.(AppModel), cmd)
 }
 
-func footerText(m AppModel) string { return ansi.Strip(m.footerStatus()) }
+func footerText(m AppModel) string { return ansi.Strip(m.footerStatus(statusFull)) }
 
 // The footer adds the turn's and the session's cost; past 80 % of
 // max_session_usd the person is told once, at the limit the next request is

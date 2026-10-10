@@ -49,6 +49,23 @@ func TestSessionPickerShowsThisWorkspaceNewestFirstWithoutEmptySessions(t *testi
 	}
 }
 
+// On 10 October 2026 resuming needed --session <32-hex id>, which neither
+// the exit nor this panel showed.
+func TestSessionPickerShowsTheSelectedSessionsID(t *testing.T) {
+	now := time.Date(2026, 10, 1, 18, 0, 0, 0, time.Local)
+	z := zone.New()
+	defer z.Close()
+	id := domain.SessionID("0123456789abcdef0123456789abcdef")
+	p := NewSessionPicker([]domain.SessionSummary{
+		{ID: id, Workspace: "/w", Model: "m", Title: "first", MessageCount: 2, UpdatedAt: now},
+		{ID: "fedcba9876543210fedcba9876543210", Workspace: "/w", Model: "m", Title: "second", MessageCount: 2, UpdatedAt: now.Add(-time.Hour)},
+	}, "/w")
+	view := ansi.Strip(p.view(Theme{Monochrome: true}, z, "p", 30, 90, now))
+	if !strings.Contains(view, string(id)) || strings.Contains(view, "fedcba98") {
+		t.Fatalf("the selected session's id is not on its line alone:\n%s", view)
+	}
+}
+
 func TestSessionPickerViewShowsTitleAgeGroupAndState(t *testing.T) {
 	now := time.Date(2026, 10, 1, 18, 0, 0, 0, time.Local)
 	z := zone.New()
