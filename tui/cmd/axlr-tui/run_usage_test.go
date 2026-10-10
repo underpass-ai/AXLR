@@ -41,12 +41,12 @@ func TestRunKeepsTheSessionCostAndItsBudget(t *testing.T) {
 			a = drain(t, next, cmd)
 		}
 		send("hello")
-		if view := ansi.Strip(a.View().Content); !strings.Contains(view, "$0.0020 turn · $0.0020 session") {
+		if view := ansi.Strip(a.View().Content); !strings.Contains(view, "$0.002 turn · $0.002 session") {
 			t.Fatalf("view:\n%s", view)
 		}
 		send("again")
 		id = string(a.Header.State.ID)
-		if !strings.Contains(a.Status.Error, "This session reached its $0.0010 budget (max_session_usd)") || requests != 1 {
+		if !strings.Contains(a.Status.Error, "This session reached its $0.001 budget (max_session_usd)") || requests != 1 {
 			t.Fatalf("requests %d, error %q", requests, a.Status.Error)
 		}
 		return nil

@@ -24,7 +24,7 @@ func TestAt80ColumnsTheFooterKeepsTheStateAndTheSessionCost(t *testing.T) {
 		if ansi.StringWidth(footer) != width || strings.Contains(footer, "…") {
 			t.Fatalf("width %d: footer is cut: %q", width, footer)
 		}
-		for _, want := range []string{m.Theme.T("status.idle"), m.Theme.Tf("footer.costSession", "$0.05")} {
+		for _, want := range []string{m.Theme.T("status.idle"), m.Theme.Tf("footer.costSession", "$0.0531")} {
 			if !strings.Contains(footer, want) {
 				t.Fatalf("width %d: footer lost %q: %q", width, want, footer)
 			}

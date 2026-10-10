@@ -603,7 +603,7 @@ func printResumeHint(stderr io.Writer, state domain.SessionState, usage applicat
 	cost := ""
 	if usage != nil {
 		if ledger, err := usage.LoadUsage(context.Background(), state.ID); err == nil && ledger.CostRequests > 0 {
-			cost = fmt.Sprintf(" (session cost $%.4f)", ledger.Cost)
+			cost = fmt.Sprintf(" (session cost %s)", terminal.FormatUSD(ledger.Cost))
 		}
 	}
 	fmt.Fprintf(stderr, "axlr-tui: resume with: axlr-tui --session %s%s\n", state.ID, cost)
