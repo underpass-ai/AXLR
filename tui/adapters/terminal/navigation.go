@@ -61,9 +61,18 @@ func (m *AppModel) syncApproval() {
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
+		// An exec card leads with the command as it will run, above its
+		// JSON: the arguments array reads as a command line, not a list.
+		var lead []string
 		if warning := m.hiddenInputWarning(p); warning != "" {
-			// Only an exec call warns, and its card is JSON text.
-			m.Approval.Details.SetContent(warning + "\n\n" + m.Approval.Details.Text())
+			lead = append(lead, warning)
+		}
+		if command := m.execCardCommand(p); command != "" {
+			lead = append(lead, "$ "+command)
+		}
+		if len(lead) > 0 {
+			// Only an exec call leads this way, and its card is JSON text.
+			m.Approval.Details.SetContent(strings.Join(lead, "\n") + "\n\n" + m.Approval.Details.Text())
 			m.Approval.Details.Viewport.GotoTop()
 		}
 	}
