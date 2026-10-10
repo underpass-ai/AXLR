@@ -28,6 +28,11 @@ func NewApprovalDialog(p domain.PendingTool, target string, theme Theme) Approva
 			content = readable
 		}
 	}
+	if p.Call.Name == application.HostStepDoneName {
+		if uses, ok := stepDoneCommands(p.Call.Arguments.Bytes()); ok {
+			content = checkCommandsCard(uses, content, theme)
+		}
+	}
 	d := ApprovalDialog{Pending: p, Target: target, Details: NewTranscript()}
 	d.Details.theme = theme
 	if rows, ok := fileChangeRows(p.Call.Name, p.Call.Arguments.Bytes(), theme); ok {

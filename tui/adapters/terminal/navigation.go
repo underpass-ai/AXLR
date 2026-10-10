@@ -52,6 +52,9 @@ func (m *AppModel) syncApproval() {
 			switch tool.Identity.LocalOperation {
 			case domain.HostOperationStepDone:
 				target = m.Theme.T("approval.checkCommand")
+				if uses, _ := stepDoneCommands(p.Call.Arguments.Bytes()); len(uses) > 1 {
+					target = m.Theme.Tf("approval.checkCommands", len(uses))
+				}
 			case domain.HostOperationForgeTool:
 				target = m.Theme.Tf("approval.forgeTarget", forgedName(p.Call.Arguments.Bytes()))
 			case domain.HostOperationRunTool:
