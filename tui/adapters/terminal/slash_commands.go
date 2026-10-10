@@ -105,7 +105,7 @@ func unknownSlashWord(draft string) bool {
 
 // slashMenu draws the suggestions to sit on the transcript's last rows,
 // directly above the composer: the window around the selection, then how
-// many more there are when they do not all fit.
+// many are above and below it when they do not all fit.
 func (m AppModel) slashMenu(suggestions []slashCommand) []string {
 	width := max(1, m.Layout.Width)
 	nameWidth := 0
@@ -131,13 +131,25 @@ func (m AppModel) slashMenu(suggestions []slashCommand) []string {
 		}
 		lines = append(lines, m.zones.Mark(fmt.Sprintf("%sslash-%d", m.prefix, i), style.Render(row)))
 	}
-	if hidden := len(suggestions) - len(shown); hidden > 0 {
+	// On 10 October 2026 the last row read "↑↓ 18 more" whichever part of
+	// the list was in view: it now counts what is above and below.
+	above, below := top, len(suggestions)-top-len(shown)
+	more := ""
+	switch {
+	case above > 0 && below > 0:
+		more = m.Theme.Tf("slash.aboveBelow", above, below)
+	case above > 0:
+		more = m.Theme.Tf("slash.above", above)
+	case below > 0:
+		more = m.Theme.Tf("slash.more", below)
+	}
+	if more != "" {
 		style := lipgloss.NewStyle().Width(width)
 		if !m.Theme.Monochrome {
 			p := m.Theme.palette()
 			style = style.Background(lipgloss.Color(p.Raised)).Foreground(lipgloss.Color(p.Muted))
 		}
-		lines = append(lines, style.Render(ansi.Truncate("  "+m.Theme.Tf("slash.more", hidden), width, "…")))
+		lines = append(lines, style.Render(ansi.Truncate("  "+more, width, "…")))
 	}
 	return lines
 }

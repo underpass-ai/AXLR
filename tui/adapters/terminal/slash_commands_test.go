@@ -129,6 +129,10 @@ func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
 	if !strings.Contains(view, "> /exit") || strings.Contains(view, "  /model ") {
 		t.Fatalf("the menu did not scroll to the last command:\n%s", view)
 	}
+	// On 10 October 2026 the count read "↑↓ 18 more" wherever the list was.
+	if above := len(slashCommands) - slashSuggestionLimit; !strings.Contains(view, m.Theme.Tf("slash.above", above)) || strings.Contains(view, "below") {
+		t.Fatalf("at the end the menu does not count what is above:\n%s", view)
+	}
 	for range 3 {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	}
@@ -136,9 +140,18 @@ func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
 	if !strings.Contains(view, "> /stop-ceremony") || !strings.Contains(view, "/exit") {
 		t.Fatalf("moving up inside the window scrolled it:\n%s", view)
 	}
+	for range 6 {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
+	}
+	view = ansi.Strip(m.View().Content)
+	top := slashWindow(m.slashTop, m.slashSelected, len(slashCommands))
+	if want := m.Theme.Tf("slash.aboveBelow", top, len(slashCommands)-top-slashSuggestionLimit); !strings.Contains(view, want) {
+		t.Fatalf("in the middle the menu does not count both sides (%q):\n%s", want, view)
+	}
+	want := slashCommands[m.slashSelected].name
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyTab})
-	if got := m.Composer.Input.Value(); got != "/stop-ceremony" {
-		t.Fatalf("Tab completed to %q; want /stop-ceremony", got)
+	if got := m.Composer.Input.Value(); got != want {
+		t.Fatalf("Tab completed to %q; want %s", got, want)
 	}
 }
 
