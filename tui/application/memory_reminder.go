@@ -107,8 +107,17 @@ func personRequest(messages []root.Message) int {
 // needsMemoryReminder reads one request: it was not reminded yet, ran no
 // ceremony step, attempted no memory write (an attempt the person denied
 // counts: they decided), and changed a file or made several local tool calls
-// other than reads, searches and listings.
+// other than reads, searches and listings. A write counts as a change only
+// when its result says it completed: on 10 October 2026 the person denied
+// the only local_edit of a request and the console still reminded the model
+// that the request "did real work".
 func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
+	results := map[root.ToolCallID]string{}
+	for _, message := range request {
+		if message.Role == root.RoleTool {
+			results[message.ToolCallID] = string(message.Content)
+		}
+	}
 	local, changed := 0, false
 	for _, message := range request[1:] {
 		if message.Role == root.RoleUser && strings.HasPrefix(string(message.Content), MemoryReminderPrefix) {
@@ -129,7 +138,7 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 					return false
 				}
 			case "local_write", "local_edit":
-				changed = true
+				changed = changed || writeSucceeded(results[call.ID])
 			}
 		}
 	}

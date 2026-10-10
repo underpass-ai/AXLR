@@ -22,8 +22,22 @@ func memoryRequest(t *testing.T, calls ...root.ToolCall) []root.Message {
 	request := []root.Message{{Role: root.RoleUser, Content: "fix the parser"}}
 	if len(calls) > 0 {
 		request = append(request, root.Message{Role: root.RoleAssistant, ToolCalls: calls})
+		for _, call := range calls {
+			request = append(request, root.Message{Role: root.RoleTool, ToolCallID: call.ID, Content: `{"status":"completed","output":{}}`})
+		}
 	}
 	return append(request, root.Message{Role: root.RoleAssistant, Content: "done"})
+}
+
+// withResult replaces the result of one call in a request.
+func withResult(request []root.Message, id root.ToolCallID, content root.Text) []root.Message {
+	out := append([]root.Message(nil), request...)
+	for i := range out {
+		if out[i].Role == root.RoleTool && out[i].ToolCallID == id {
+			out[i].Content = content
+		}
+	}
+	return out
 }
 
 func toolCall(t *testing.T, id string, name root.ToolName, arguments string) root.ToolCall {
@@ -51,6 +65,12 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		want    bool
 	}{
 		{"a file change", memoryRequest(t, edit), true},
+		// A denied, failed or cancelled write changed nothing (10 Oct 2026).
+		{"a denied edit", withResult(memoryRequest(t, edit), "e1", "tool call denied by user"), false},
+		{"a failed edit", withResult(memoryRequest(t, edit), "e1", `{"status":"failed","error":{"code":"invalid_arguments","message":"x"}}`), false},
+		{"a cancelled edit", withResult(memoryRequest(t, edit), "e1", "tool call cancelled"), false},
+		{"an edit without a result", []root.Message{{Role: root.RoleUser, Content: "fix the parser"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{edit}}, {Role: root.RoleAssistant, Content: "done"}}, false},
+		{"a denied and a completed write", withResult(memoryRequest(t, edit, toolCall(t, "w2", "local_write", `{}`)), "e1", "tool call denied by user"), true},
 		{"five commands", memoryRequest(t, commands...), true},
 		{"commands and reads", memoryRequest(t, append([]root.ToolCall{reads[0], reads[1]}, commands[:3]...)...), false},
 		{"eight reads", memoryRequest(t, reads...), false},
