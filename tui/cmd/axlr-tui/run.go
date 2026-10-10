@@ -348,7 +348,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
-	sandbox, err := execSandbox(ctx, settings.ExecSandbox(), exec.LookPath, stderr)
+	sandbox, sandboxUnavailable, err := execSandbox(ctx, settings.ExecSandbox(), exec.LookPath, stderr)
 	if err != nil {
 		return fail(err)
 	}
@@ -576,6 +576,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Plans:             planPanel,
 		Usage:             store,
 		MaxSessionUSD:     settings.MaxSessionUSD,
+		Sandbox:           terminal.SandboxStatus{Mode: settings.ExecSandbox().Mode, Unavailable: sandboxUnavailable},
 		Quit:              func(state domain.SessionState) { shown = state },
 	})
 	defer app.Close()

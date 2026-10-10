@@ -769,7 +769,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 			m.Info.SetWidth(w)
 			m.Info.Viewport.SetHeight(h)
-			m.Info.SetContent(infoContentLocale(m.Header.State, m.Theme.Locale))
+			content := infoContentLocale(m.Header.State, m.Theme.Locale)
+			if note := m.deps.Sandbox.sandboxInfo(m.Theme); note != "" {
+				content = note + "\n\n" + content
+			}
+			m.Info.SetContent(content)
 			m.Info.Viewport.GotoTop()
 		} else if intent == "approvals" {
 			m.Info = NewTranscript()

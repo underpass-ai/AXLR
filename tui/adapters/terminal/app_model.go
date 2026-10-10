@@ -167,6 +167,8 @@ func New(deps Dependencies) AppModel {
 	if m.Header.State.ID == "" {
 		m.Header.State.Workspace = deps.Workspace
 	}
+	m.Header.SandboxOff = deps.Sandbox.Off()
+	m.Help.Notice = deps.Sandbox.sandboxInfo(m.Theme)
 	m.Status.State = m.Header.State.Status
 	m.Status.Locale = m.Theme.Locale
 	if deps.ApprovalSettings != nil {
