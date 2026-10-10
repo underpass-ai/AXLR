@@ -138,7 +138,9 @@ func readMCPConfig(path string) (dto.MCPConfig, error) {
 		return dto.MCPConfig{}, nil
 	}
 	if err != nil {
-		return dto.MCPConfig{}, err
+		// Windows refuses to open a directory before the check below can
+		// say what is wrong; the path at least says which file.
+		return dto.MCPConfig{}, fmt.Errorf("open MCP config %s: %w", path, err)
 	}
 	defer file.Close()
 	info, err := file.Stat()

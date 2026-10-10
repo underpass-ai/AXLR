@@ -106,6 +106,11 @@ func TestLoadMCPConfigErrorNamesPathAndSpecificReason(t *testing.T) {
 		}
 	}
 	t.Run("not a regular file", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			// Opening a directory fails first there, with the OS's reason.
+			expect(t, dir, "open MCP config")
+			return
+		}
 		expect(t, dir, "is not a regular file")
 	})
 	t.Run("size", func(t *testing.T) {

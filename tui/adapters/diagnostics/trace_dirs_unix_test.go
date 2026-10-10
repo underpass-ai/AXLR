@@ -63,6 +63,11 @@ func TestUnsafeDiagnosticDirectoryErrorNamesPathModeAndFix(t *testing.T) {
 			if err == nil {
 				t.Fatal("unsafe diagnostic directory accepted")
 			}
+			// macOS reaches its temporary directories through /var, a link
+			// to /private/var; the error names the resolved directory.
+			if resolved, err := filepath.EvalSymlinks(offending); err == nil {
+				offending = resolved
+			}
 			for _, want := range []string{offending + " ", "mode " + tc.mode, tc.fix + " " + offending} {
 				if !strings.Contains(err.Error()+" ", want) {
 					t.Fatalf("error %q does not contain %q", err, want)
