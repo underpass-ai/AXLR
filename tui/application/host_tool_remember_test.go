@@ -193,3 +193,53 @@ func TestClosedTurnsLeaveExactSchemasOut(t *testing.T) {
 		t.Fatal("a listing, the open turn's schema or the saved transcript changed")
 	}
 }
+
+// On 10 Oct 2026 claude-haiku-5.5 wrote the evidence array as repeated keys
+// with bare text, twice out of two: evidence is now one string, an item per
+// line, and an array is still read.
+func TestHostRememberReadsEvidenceLinesAndArrays(t *testing.T) {
+	s := rememberSession(t, domain.ModeNormal)
+	labels := &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{s.Export().ID: {About: "project:AXLR"}}}
+	recorder := &rememberRecorder{answer: map[string]any{"accepted": true}}
+	u := HostToolUseCase{Memory: recorder, Labels: labels}
+	run := func(arguments string) domain.ToolOutcome {
+		outcome, err := u.Execute(context.Background(), s, rememberIdentity(t), mustObject(t, arguments))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return outcome
+	}
+	for arguments, want := range map[string]string{
+		`{"kind":"constraint","text":"t","evidence":"runtime/config.go:37 const HardTimeout = 5 * time.Minute\ngo test ./runtime/ ok"}`: "runtime/config.go:37 const HardTimeout = 5 * time.Minute|go test ./runtime/ ok",
+		`{"kind":"constraint","text":"t","evidence":"  one \r\n\n\n two\n"}`:                                                            "one|two",
+		`{"kind":"constraint","text":"t","evidence":["a", " ", "b "]}`:                                                                  "a|b",
+	} {
+		if outcome := run(arguments); outcome.IsError {
+			t.Fatalf("%s: %s", arguments, outcome.Content)
+		}
+		if got := strings.Join(recorder.requests[len(recorder.requests)-1].Evidence, "|"); got != want {
+			t.Fatalf("%s: evidence %q, want %q", arguments, got, want)
+		}
+	}
+	nine := strings.Repeat("e\n", 9)
+	long := strings.Repeat("é", 1001)
+	for arguments, want := range map[string]string{
+		`{"kind":"constraint","text":"t","evidence":"\n \n"}`:                                        "one to 8 non-empty lines, got 0",
+		`{"kind":"constraint","text":"t","evidence":"` + strings.ReplaceAll(nine, "\n", `\n`) + `"}`: "one to 8 non-empty lines, got 9",
+		`{"kind":"constraint","text":"t","evidence":"ok\n` + long + `"}`:                             "line 2 has 1001 characters",
+		`{"kind":"constraint","text":"t","evidence":{"a":1}}`:                                        "must be a string with one item per line",
+		`{"kind":"constraint","text":"t","evidence":[]}`:                                             "one to 8 non-empty lines, got 0",
+	} {
+		if outcome := run(arguments); !outcome.IsError || !strings.Contains(string(outcome.Content), want) {
+			t.Fatalf("%.80s: %s, want %q", arguments, outcome.Content, want)
+		}
+	}
+	// The example in the description is a valid call.
+	description := string(RememberTool().Definition.Description)
+	start := strings.Index(description, "Example: ") + len("Example: ")
+	end := strings.Index(description[start:], "}. ") + 1
+	var example map[string]any
+	if err := json.Unmarshal([]byte(description[start:start+end]), &example); err != nil || example["evidence"] == nil {
+		t.Fatalf("example %q: %v", description[start:start+end], err)
+	}
+}

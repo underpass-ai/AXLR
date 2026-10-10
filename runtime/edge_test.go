@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/dto"
 )
 
@@ -41,6 +42,39 @@ func TestReadEmptyFileInvalidTextAndMissingPath(t *testing.T) {
 	}
 }
 
+// On 10 Oct 2026 a binary file whose first byte was a UTF-8 continuation
+// byte was refused as "offset splits a UTF-8 character" although no offset
+// was given, and a symlink leaving the workspace with Go's own error text.
+func TestReadNamesBinaryFilesAndEscapingSymlinks(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "blob.bin"), []byte{0x80, 0x01, 0xfe, 'a'}, 0600)
+	os.WriteFile(filepath.Join(dir, "nul.bin"), []byte{'a', 0, 'b'}, 0600)
+	os.WriteFile(filepath.Join(dir, "split"), []byte("aé"), 0600)
+	e, _ := newTestExecutor(t, Config{Root: dir})
+	for _, tc := range []struct{ args, code, message string }{
+		{`{"path":"blob.bin"}`, "invalid_text", "blob.bin is not UTF-8 text: invalid UTF-8 (4 bytes)"},
+		{`{"path":"nul.bin"}`, "invalid_text", "nul.bin is not UTF-8 text: binary data (3 bytes)"},
+		{`{"path":"split","offset_bytes":2}`, "invalid_offset", "offset splits a UTF-8 character"},
+	} {
+		r := invoke(t, e, "read", tc.args)
+		if r.Error == nil || r.Error.Code != tc.code || r.Error.Message != tc.message {
+			t.Fatalf("%s: %+v", tc.args, r.Error)
+		}
+	}
+	if goruntime.GOOS == "windows" {
+		return // creating a symlink needs a privilege there
+	}
+	outside := filepath.Join(t.TempDir(), "hostname")
+	os.WriteFile(outside, []byte("host\n"), 0600)
+	if err := os.Symlink(outside, filepath.Join(dir, "host-link")); err != nil {
+		t.Fatal(err)
+	}
+	r := invoke(t, e, "read", `{"path":"host-link"}`)
+	if r.Status != "rejected" || r.Error == nil || r.Error.Code != "invalid_path" || r.Error.Message != "host-link leads outside the workspace" {
+		t.Fatalf("escaping symlink: %+v %+v", r, r.Error)
+	}
+}
+
 func TestWriteAndEditRejectInvalidPreconditionsWithoutMutating(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a"), []byte("alpha"), 0600)
@@ -58,6 +92,11 @@ func TestWriteAndEditRejectInvalidPreconditionsWithoutMutating(t *testing.T) {
 		if r.Error == nil || r.Error.Code != tc.code {
 			t.Fatalf("%s %s: %+v", tc.tool, tc.args, r)
 		}
+	}
+	// The refusal names the field and where its digest comes from (10 Oct 2026).
+	r := invoke(t, e, "write", cases[0].args)
+	if want := "replace requires expected_sha256: pass the content_sha256 of a local_read of a"; r.Error.Message != want {
+		t.Fatalf("replace without a digest: %q, want %q", r.Error.Message, want)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "a"))
 	if string(b) != "alpha" {
@@ -209,5 +248,54 @@ func TestDecodeRejectsDuplicateAndCaseVariantFields(t *testing.T) {
 		if _, err := Decode(strings.NewReader(raw)); err == nil {
 			t.Fatalf("accepted %s", raw)
 		}
+	}
+}
+
+// On 10 Oct 2026 a plan worker passed the workspace's absolute path as
+// local_exec cwd and was refused with "invalid working directory".
+func TestExecMapsAnAbsoluteCwdInsideTheWorkspace(t *testing.T) {
+	root := t.TempDir()
+	mapper := RequestMapper{MaxReadBytes: hardFileBytes, MaxFileBytes: hardFileBytes, MaxOutputBytes: hardFileBytes, MaxTimeout: HardTimeout, Roots: []string{root}}
+	exec := func(cwd string) (any, error) {
+		args, _ := json.Marshal(map[string]any{"program": "go", "cwd": cwd})
+		return mapper.Map(dto.Request{ProtocolVersion: 1, RequestID: "cwd", Tool: "exec", Arguments: args})
+	}
+	for cwd, want := range map[string]string{
+		root:                                    ".",
+		root + string(filepath.Separator):       ".",
+		filepath.Join(root, "sub", "dir"):       filepath.Join("sub", "dir"),
+		filepath.Join(root, "sub", "..", "sub"): "sub",
+		"sub":                                   "sub",
+		"":                                      ".",
+	} {
+		command, err := exec(cwd)
+		if err != nil {
+			t.Fatalf("%q: %v", cwd, err)
+		}
+		if got := string(command.(domain.ExecCommand).Cwd); got != want {
+			t.Fatalf("%q mapped to %q, want %q", cwd, got, want)
+		}
+	}
+	for cwd, want := range map[string]string{
+		filepath.Dir(root):                 "cwd must be inside the workspace (relative to its root)",
+		filepath.Join(root, "..", "other"): "cwd must be inside the workspace (relative to its root)",
+		root + "-sibling":                  "cwd must be inside the workspace (relative to its root)",
+		"../other":                         "cwd must be a path relative to the workspace root",
+	} {
+		if _, err := exec(cwd); err == nil || err.Error() != want {
+			t.Fatalf("%q: %v, want %q", cwd, err, want)
+		}
+	}
+	// Without roots, as when a request is only decoded, the executor decides.
+	if _, err := (RequestMapper{MaxTimeout: HardTimeout}).Map(dto.Request{ProtocolVersion: 1, RequestID: "cwd", Tool: "exec", Arguments: json.RawMessage(`{"program":"go","cwd":"` + filepath.ToSlash(root) + `"}`)}); err == nil && filepath.IsAbs(filepath.ToSlash(root)) {
+		t.Fatal("a mapper without roots must refuse an absolute cwd")
+	}
+	if goruntime.GOOS == "windows" {
+		return
+	}
+	e, _ := newTestExecutor(t, Config{Root: root, Env: []string{"PATH=/bin:/usr/bin"}})
+	r := invoke(t, e, "exec", `{"program":"sh","args":["-c","printf ok"],"cwd":"`+root+`"}`)
+	if r.Status != "completed" || r.Output.(dto.ExecOutput).Stdout != "ok" {
+		t.Fatalf("absolute workspace cwd: %+v %+v", r, r.Error)
 	}
 }

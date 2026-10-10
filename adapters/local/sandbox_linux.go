@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -48,7 +49,29 @@ func ProbeSandbox(ctx context.Context, s Sandbox) error {
 		if len(detail) > 300 {
 			detail = detail[:300]
 		}
+		if appArmorRestrictsUserNamespaces() {
+			return fmt.Errorf("bwrap cannot create a sandbox here: %s (%v %s)", appArmorUserNamespaces, err, detail)
+		}
 		return fmt.Errorf("bwrap cannot create a sandbox here: %v %s", err, detail)
 	}
 	return nil
+}
+
+// appArmorUserNamespaces names the cause and the fix when Ubuntu's AppArmor
+// refuses bwrap. On 10 October 2026 the console QA ran on such a machine
+// and the probe reported only bwrap's symptom ("loopback: Failed
+// RTM_NEWADDR: Operation not permitted", or "setting up uid map: Permission
+// denied" with the network on).
+const appArmorUserNamespaces = "Ubuntu's AppArmor blocks unprivileged user namespaces (kernel.apparmor_restrict_unprivileged_userns=1); add an AppArmor profile for /usr/bin/bwrap or set that sysctl to 0"
+
+// readAppArmorUserNamespaces reads the sysctl that makes AppArmor refuse
+// unprivileged user namespaces; a test replaces it.
+var readAppArmorUserNamespaces = func() ([]byte, error) {
+	return os.ReadFile("/proc/sys/kernel/apparmor_restrict_unprivileged_userns")
+}
+
+// appArmorRestrictsUserNamespaces reports whether that sysctl reads 1.
+func appArmorRestrictsUserNamespaces() bool {
+	value, err := readAppArmorUserNamespaces()
+	return err == nil && strings.TrimSpace(string(value)) == "1"
 }
