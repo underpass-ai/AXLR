@@ -131,6 +131,8 @@ type AppModel struct {
 	// failureOperation records a failed turn's console line; its end keeps
 	// the footer's error.
 	failureOperation uint64
+	// allowed holds the commands allowed with S for the session on screen.
+	allowed *commandAllows
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -174,6 +176,7 @@ func New(deps Dependencies) AppModel {
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
 	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}, pasted: map[string]bool{}}
+	m.withCommandAllows()
 	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()
 	m.Changes.Theme = m.Theme
@@ -508,6 +511,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mention.stale = true
 		}
 		if switched {
+			// Commands allowed with S belong to the session they were
+			// allowed in.
+			m.allowed.reset()
 			m.mention = mentionState{}
 			m.overlay = ""
 			m.SearchBox = SearchBox{}

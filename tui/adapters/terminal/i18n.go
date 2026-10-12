@@ -391,7 +391,7 @@ var enMessages = map[string]string{
 	"slash.more":                           "↓ %d more",
 	"slash.above":                          "↑ %d above",
 	"slash.aboveBelow":                     "↑ %d above · ↓ %d below",
-	"help.approveFull":                     "A once · Shift+A every pending call · L always allow tool · F full autonomy · D deny · ↑↓ inspect",
+	"help.approveFull":                     "A once · Shift+A every pending call · S this exact command for the session · L always allow tool · F full autonomy · D deny · ↑↓ inspect",
 	"help.pluginReview":                    "/mcp: A/Enter approval · /plugin: Tab browse · Enter install",
 	"catalog.title":                        "Plugins · AXLR",
 	"catalog.search":                       "Search AXLR plugins (/)",
@@ -751,6 +751,7 @@ var enMessages = map[string]string{
 	"approval.execOutput":     "output up to %s",
 	"approval.execStdin":      "stdin:",
 	"approval.hintApproveAll": "approve all %d",
+	"approval.hintSession":    "allow this command in this session",
 }
 
 var esMessages = map[string]string{
@@ -1080,7 +1081,7 @@ var esMessages = map[string]string{
 	"slash.more":                           "↓ %d más",
 	"slash.above":                          "↑ %d arriba",
 	"slash.aboveBelow":                     "↑ %d arriba · ↓ %d abajo",
-	"help.approveFull":                     "A una vez · Mayús+A todas las pendientes · L permitir herramienta · F autonomía completa · D denegar · ↑↓ inspeccionar",
+	"help.approveFull":                     "A una vez · Mayús+A todas las pendientes · S este comando exacto en la sesión · L permitir herramienta · F autonomía completa · D denegar · ↑↓ inspeccionar",
 	"help.pluginReview":                    "/mcp: A/Enter aprobación · /plugin: Tab catálogo · Enter instalar",
 	"catalog.title":                        "Plugins · AXLR",
 	"catalog.search":                       "Buscar plugins de AXLR (/)",
@@ -1440,4 +1441,5 @@ var esMessages = map[string]string{
 	"approval.execOutput":     "salida hasta %s",
 	"approval.execStdin":      "stdin:",
 	"approval.hintApproveAll": "aprobar las %d",
+	"approval.hintSession":    "permitir este comando en esta sesión",
 }

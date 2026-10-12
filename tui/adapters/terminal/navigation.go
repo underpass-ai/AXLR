@@ -233,6 +233,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if strings.ToLower(k.String()) == "f" {
 				intent = "autonomy-on"
 			}
+			if strings.ToLower(k.String()) == "s" && m.execCardCommand(m.Approval.Pending) != "" {
+				intent = "allow-session"
+			}
 			if intent == ControlIntent(domain.DecisionAutoApprove) {
 				intent = "always-allow"
 			}
@@ -364,7 +367,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "approve-all", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
+		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "approve-all", "allow-session", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
 		if m.overlay == "sessions" {
 			m.Picker.Deleting = false
 			if m.Picker.ShowsNew() && m.zones.Get(m.prefix+"session-new").InBounds(mouse) {
@@ -422,7 +425,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	if !hasIntent {
 		return m, nil, false
 	}
-	if m.approvalFocus() && intent != "approve" && intent != "approve-all" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
+	if m.approvalFocus() && intent != "approve" && intent != "approve-all" && intent != "allow-session" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
 		return m, nil, true
 	}
 	switch intent {
@@ -705,12 +708,20 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case "approve-all":
 		next, cmd := m.approveAll()
 		return next, cmd, true
-	case "approve", "always-allow", "autonomy-on", "deny":
+	case "approve", "always-allow", "autonomy-on", "deny", "allow-session":
 		if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() {
 			return m, nil, true
 		}
 		p, _ := m.pending()
 		decision := m.Approval.Intent(intent)
+		if intent == "allow-session" {
+			// This exact command runs from now on in this session without
+			// a card; this call is approved like A.
+			if m.execCardCommand(p) == "" || !m.allowed.allow(m.Header.State.ID, p.Call.Arguments) {
+				return m, nil, true
+			}
+			decision = domain.DecisionApprove
+		}
 		m.resumeTurnClock()
 		resolve := m.deps.Resolve
 		settings := m.deps.ApprovalSettings

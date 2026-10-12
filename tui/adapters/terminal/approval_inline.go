@@ -33,18 +33,20 @@ func (m AppModel) approvalCard() string {
 	}
 	rule := warn(strings.Repeat("─", width))
 	title := " " + warn(m.Theme.Icon("attention")+" "+m.Theme.T("approval.title")) + "  " + m.Approval.Target
-	if m.Approval.Details.VisualLineCount() > m.approvalDetailRows() {
-		title += m.Theme.Muted("  " + m.Theme.T("approval.scroll"))
-	}
 	details := m.Approval.Details
 	details.Gutter = (width - details.Viewport.Width()) / 2
 	hints := []footerHint{
 		{"approve", "a", m.Theme.T("approval.hintApprove")},
 		{"approve-all", "A", m.Theme.Tf("approval.hintApproveAll", m.pendingCalls())},
+		{"allow-session", "s", m.Theme.T("approval.hintSession")},
 		{"always-allow", "l", m.Theme.T("approval.hintAlways")},
 		{"deny", "d", m.Theme.T("approval.hintDeny")},
 		{"autonomy-on", "f", m.Theme.T("approval.hintAutonomy")},
 		{"cancel", "esc", m.Theme.T("footer.cancel")},
+	}
+	if m.execCardCommand(m.Approval.Pending) == "" {
+		// Only a local command is allowed exactly for the session.
+		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "allow-session" })
 	}
 	if m.pendingCalls() < 2 {
 		// Shift+A approves the calls queued behind this one.
@@ -74,7 +76,11 @@ func (m AppModel) approvalCard() string {
 		return m.approvalSheet(details, hints, note)
 	}
 	if note != "" {
-		actions = append(actions, m.Theme.Muted("· "+note))
+		// On the title's row: the keys' row is full with S offered.
+		title += m.Theme.Muted("  · " + note)
+	}
+	if m.Approval.Details.VisualLineCount() > m.approvalDetailRows() {
+		title += m.Theme.Muted("  " + m.Theme.T("approval.scroll"))
 	}
 	return strings.Join([]string{rule, line(title), details.View(), line(" " + strings.Join(actions, "   "))}, "\n")
 }
