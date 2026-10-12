@@ -2,8 +2,6 @@ package application
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -144,11 +142,7 @@ func (r *SelfRepair) newID() (domain.SessionID, error) {
 	if r.NewID != nil {
 		return r.NewID()
 	}
-	var random [16]byte
-	if _, err := rand.Read(random[:]); err != nil {
-		return "", err
-	}
-	return domain.NewSessionID(hex.EncodeToString(random[:]))
+	return NewRandomSessionID()
 }
 
 func (r *SelfRepair) maxAttempts() int {

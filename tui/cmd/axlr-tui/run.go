@@ -77,6 +77,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	traceFlag := flags.String("trace-file", "", "privacy-safe JSONL diagnostics (default a private file under $XDG_STATE_HOME/axlr/logs)")
 	tracePayloads := flags.Bool("trace-payloads", false, "capture redacted request/response bodies, prompts and tool results included, in a private per-run directory (default: trace_payloads in settings.json, else off)")
 	sessionFlag := flags.String("session", "", "saved session ID")
+	var continueFlag bool
+	flags.BoolVar(&continueFlag, "c", false, "continue the workspace's most recent session (same as --continue)")
+	flags.BoolVar(&continueFlag, "continue", false, "continue the workspace's most recent session, not archived and not a plan task")
 	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
 	repairFlag := flags.String("repair", "", "start a repair of the configured repository in a fresh clone: a failure brief or #issue")
 	improveFlag := flags.String("improve", "", "start an improvement of the configured repository in a fresh clone: an improvement brief or #issue; the merge waits for you")
@@ -94,6 +97,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if flags.NArg() != 0 {
 		return fail(errors.New("positional arguments are not accepted"))
 	}
+	if continueFlag {
+		switch {
+		case *sessionFlag != "":
+			return fail(errors.New("--continue resumes the most recent session; it cannot be combined with --session"))
+		case *repairFlag != "" || *improveFlag != "":
+			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
+		}
+	}
+	// resuming is a launch that opens a saved session rather than a new one.
+	resuming := *sessionFlag != "" || continueFlag
 	tracePath := *traceFlag
 	var logger *diagnostics.FileLogger
 	var openErr error
@@ -164,7 +177,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		selected, loadErr := legacyModel.Load(ctx)
 		if loadErr == nil {
 			initialSettings.Model = string(selected)
-		} else if *modelFlag == "" && *sessionFlag == "" {
+		} else if *modelFlag == "" && !resuming {
 			fmt.Fprintln(stderr, "axlr-tui: ignoring invalid saved model preference")
 		}
 	} else if statErr != nil {
@@ -396,7 +409,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	preferences := settingsStore.ModelPreference()
 	uiStore := settingsStore.UIPreference()
 	uiPreferences := settings.UIPreferences()
-	if *modelFlag == "" && *sessionFlag == "" {
+	if *modelFlag == "" && !resuming {
 		model = root.ModelID(settings.Model)
 	}
 	store, err := storage.New(filepath.Join(stateBase, "axlr", "sessions"))
@@ -411,8 +424,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	var session *domain.Session
 	var newID domain.SessionID
-	if *sessionFlag != "" {
+	if resuming {
 		id, e := domain.NewSessionID(*sessionFlag)
+		if continueFlag {
+			id, e = application.LatestSessionUseCase{Store: loggedStore, Labels: sessionLabels}.Execute(ctx, workspace)
+		}
 		if e != nil {
 			return fail(e)
 		}
@@ -425,11 +441,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("saved session workspace/model differ from --root/--model"))
 		}
 	} else {
-		var random [16]byte
-		if _, err = rand.Read(random[:]); err != nil {
+		if newID, err = application.NewRandomSessionID(); err != nil {
 			return fail(err)
 		}
-		newID, _ = domain.NewSessionID(hex.EncodeToString(random[:]))
 		if model != "" {
 			created, createErr := (application.CreateSessionUseCase{Store: loggedStore}).Execute(ctx, newID, workspace, model)
 			if createErr != nil {

@@ -2,8 +2,6 @@ package application
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"regexp"
@@ -76,11 +74,7 @@ func (r *PlanRunner) newID() (domain.SessionID, error) {
 	if r.NewID != nil {
 		return r.NewID()
 	}
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return "", err
-	}
-	return domain.NewSessionID(hex.EncodeToString(raw[:]))
+	return NewRandomSessionID()
 }
 
 // Events delivers plan changes to the panel; a full buffer drops events,

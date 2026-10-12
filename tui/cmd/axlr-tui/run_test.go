@@ -465,3 +465,42 @@ func TestRunRefusesConflictingLaunchClones(t *testing.T) {
 		}
 	}
 }
+
+// -c opens the workspace's most recent session; it refuses a workspace
+// without one and the flags that pick another session.
+func TestRunContinueOpensTheMostRecentSession(t *testing.T) {
+	env := cliEnv(t)
+	workspace := t.TempDir()
+	ctx := context.Background()
+	store, _ := storage.New(filepath.Join(env["XDG_STATE_HOME"], "axlr", "sessions"))
+	for _, id := range []domain.SessionID{"0123456789abcdef0123456789abcdef", "fedcba9876543210fedcba9876543210"} {
+		s, _ := domain.NewSession(id, domain.Workspace(canonicalWorkspace(t, workspace)), "test/model")
+		if err := s.BeginTurn(root.Text("hello"), nil); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.Save(ctx, s); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	store.Close()
+	getenv := func(k string) string { return env[k] }
+	var out bytes.Buffer
+	opened := domain.SessionID("")
+	if code := run(ctx, []string{"--root", workspace, "-c"}, getenv, func(m tea.Model) error {
+		opened = m.(terminal.AppModel).Header.State.ID
+		return nil
+	}, &out); code != 0 || opened != "fedcba9876543210fedcba9876543210" {
+		t.Fatalf("code %d opened %q: %s", code, opened, &out)
+	}
+	for _, args := range [][]string{
+		{"--root", t.TempDir(), "--continue"},
+		{"--root", workspace, "-c", "--session", "0123456789abcdef0123456789abcdef"},
+		{"--root", workspace, "-c", "--repair", "x"},
+	} {
+		out.Reset()
+		if code := run(ctx, args, getenv, func(tea.Model) error { t.Fatal("launched"); return nil }, &out); code == 0 || out.Len() == 0 {
+			t.Fatalf("%v: code %d %s", args, code, &out)
+		}
+	}
+}
