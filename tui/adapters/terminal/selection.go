@@ -262,7 +262,7 @@ func (m *AppModel) copySelection() tea.Cmd {
 	if strings.TrimSpace(text) == "" {
 		return nil
 	}
-	m.Status.Notice = m.Theme.Tf("status.copied", strings.Count(text, "\n")+1)
+	m.Status.Notice = copiedNotice(m.Theme, text)
 	return copyToClipboard(text)
 }
 
@@ -288,10 +288,16 @@ func (m *AppModel) copyLatest() tea.Cmd {
 		return nil
 	}
 	m.Status.Error = ""
-	m.Status.Notice = m.Theme.Tf("status.copied", strings.Count(text, "\n")+1)
+	m.Status.Notice = copiedNotice(m.Theme, text)
 	return copyToClipboard(text)
 }
 
 func (m *AppModel) clearSelection() {
 	m.Transcript.Selection = Selection{}
+}
+
+// copiedNotice says how many lines a copy took.
+func copiedNotice(theme Theme, text string) string {
+	lines := strings.Count(text, "\n") + 1
+	return theme.Tn("status.copied", lines, lines)
 }

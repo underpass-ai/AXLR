@@ -475,7 +475,7 @@ func (v ChangeViewer) detailHeader() string {
 	case record != nil:
 		what = v.Theme.Tf("changes.stepOf", v.rows[v.selected].Step+1, len(file.Steps)) + " · " + v.stepLabel(*record)
 	case len(file.Steps) > 1:
-		what = v.Theme.Tf("changes.netOf", len(file.Steps))
+		what = v.Theme.Tn("changes.netOf", len(file.Steps), len(file.Steps))
 	case len(file.Steps) == 1:
 		what = v.stepLabel(v.records[file.Steps[0]])
 	}
@@ -516,7 +516,7 @@ func (t Theme) reviewLine(text, color string) string {
 
 // countLine reads "2 files · 3 changes", with singular forms.
 func (v ChangeViewer) countLine() string {
-	files, changes := v.Theme.Tf("changes.files", len(v.files)), v.Theme.Tf("changes.changes", len(v.records))
+	files, changes := v.Theme.Tn("changes.files", len(v.files), len(v.files)), v.Theme.Tn("changes.changes", len(v.records), len(v.records))
 	if len(v.files) == 1 {
 		files = v.Theme.T("changes.oneFile")
 	}

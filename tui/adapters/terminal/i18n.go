@@ -53,6 +53,17 @@ func Translatef(locale Locale, label string, args ...any) string {
 func (t Theme) T(label string) string               { return Translate(t.Locale, label) }
 func (t Theme) Tf(label string, args ...any) string { return Translatef(t.Locale, label, args...) }
 
+// Tn formats a count string: label+"One" when n is 1 and that singular
+// exists, label otherwise; args are the format's arguments, n among them.
+// On 12 October 2026 the console read "1 tasks in 1 waves" and "Copied 1
+// lines".
+func (t Theme) Tn(label string, n int, args ...any) string {
+	if _, ok := enMessages[label+"One"]; ok && n == 1 {
+		label += "One"
+	}
+	return Translatef(t.Locale, label, args...)
+}
+
 var enMessages = map[string]string{
 	"palette.updatesTitle":                 "Update engines",
 	"palette.updatesDescription":           "Update the local MADE and KMP packages connected to AXLR",
@@ -174,7 +185,7 @@ var enMessages = map[string]string{
 	"plan.declinePrompt":                   "Why is the plan declined? ",
 	"plan.reasonRequired":                  "Say why",
 	"plan.cardUnreadable":                  "The plan cannot be read: %s",
-	"plan.cardHeader":                      "Plan %s · %d tasks in %d waves · planned by %s · run by %s",
+	"plan.cardHeader":                      "Plan %s · %s in %s · planned by %s · run by %s",
 	"plan.cardE2E":                         "End-to-end check: %s (baseline exit %d)",
 	"plan.cardReturns":                     "Returns left: %d",
 	"plan.cardTestFirst":                   "test first",
@@ -189,11 +200,11 @@ var enMessages = map[string]string{
 	"plans.changed":                        "    changed %s",
 	"notice.planArmed":                     "plan mode: your next prompt is the brief · /normal to leave",
 	"plans.nothingInterrupted":             "No plan is interrupted",
-	"plans.row":                            "%s · %s · %d tasks in %d waves",
+	"plans.row":                            "%s · %s · %s in %s",
 	"plans.taskRow":                        "  wave %d · %s · %s",
 	"plans.note":                           "    note from %s to %s: %s",
 	"plans.question":                       "    question: %s",
-	"plans.syncRow":                        "  sync wave %d · %s · %d rounds",
+	"plans.syncRow":                        "  sync wave %d · %s",
 	"plans.badge":                          "plan %s · wave %d/%d · %s",
 	"plans.badgeSync":                      "plan %s · sync",
 	"plans.status.decomposing":             "planning",
@@ -558,7 +569,7 @@ var enMessages = map[string]string{
 	"transcript.toolUnknown":               "unknown tool, refused",
 	"transcript.toolOverBudget":            "over budget",
 	"transcript.memoryReminder":            "console: asked the model to record memory",
-	"transcript.planOutcome":               "console: plan %s ended %s · %d/%d tasks done, %d blocked, %d skipped · sync %s · changed: %s · %s",
+	"transcript.planOutcome":               "console: plan %s finished: %s · %d/%d tasks done, %d blocked, %d skipped · sync %s · changed: %s · %s",
 	"transcript.planCost":                  "task sessions cost %s",
 	"transcript.planCostUnknown":           "task sessions' cost unknown",
 	"transcript.searchIn":                  "\"%s\" in %s", // local search
@@ -646,14 +657,30 @@ var enMessages = map[string]string{
 	"error.workspaceMismatch":              "This session belongs to %s (open: %s). Start AXLR there with: axlr-tui --root %[1]s",
 
 	// qa3 terminal bugs
-	"notice.autonomyOn":        "Full autonomy is on: tools run without asking · /autonomy off to ask again",
-	"notice.autonomyOff":       "Full autonomy is off: each tool asks before it runs · /autonomy on to stop asking",
-	"plans.taskSession":        " · session %s",
-	"notice.nothingToCancel":   "Nothing to cancel: no turn or operation is running",
-	"notice.nothingToContinue": "Nothing to continue: the session is not interrupted or waiting on a call",
-	"notice.continueBusy":      "Cannot continue while an operation is running",
-	"notice.sessionsBusy":      "Sessions open once the current operation finishes",
-	"transcript.toolQueued":    "queued",
+	"notice.autonomyOn":         "Full autonomy is on: tools run without asking · /autonomy off to ask again",
+	"notice.autonomyOff":        "Full autonomy is off: each tool asks before it runs · /autonomy on to stop asking",
+	"plans.taskSession":         " · session %s",
+	"notice.nothingToCancel":    "Nothing to cancel: no turn or operation is running",
+	"notice.nothingToContinue":  "Nothing to continue: the session is not interrupted or waiting on a call",
+	"notice.continueBusy":       "Cannot continue while an operation is running",
+	"notice.sessionsBusy":       "Sessions open once the current operation finishes",
+	"transcript.toolQueued":     "queued",
+	"count.tasks":               "%d tasks",
+	"count.tasksOne":            "%d task",
+	"count.waves":               "%d waves",
+	"count.wavesOne":            "%d wave",
+	"plans.syncRounds":          " · %d rounds",
+	"plans.syncRoundsOne":       " · %d round",
+	"status.copiedOne":          "Copied %d line",
+	"changes.filesOne":          "%d file",
+	"changes.changesOne":        "%d change",
+	"changes.netOfOne":          "net change of %d step",
+	"sessions.messagesOne":      "%d message",
+	"sessions.daysAgoOne":       "%d day ago",
+	"approval.moreLinesOne":     "… %d more line",
+	"approval.stdinWarningOne":  "runs %d line of code from stdin; read \"stdin\" below before approving",
+	"plugins.connectedCountOne": "Connected · %d tool",
+	"plugins.rowCountOne":       "%s %s · %d tool",
 }
 
 var esMessages = map[string]string{
@@ -777,7 +804,7 @@ var esMessages = map[string]string{
 	"plan.declinePrompt":                   "¿Por qué se rechaza el plan? ",
 	"plan.reasonRequired":                  "Di por qué",
 	"plan.cardUnreadable":                  "No se puede leer el plan: %s",
-	"plan.cardHeader":                      "Plan %s · %d tareas en %d olas · planificado por %s · ejecutado por %s",
+	"plan.cardHeader":                      "Plan %s · %s en %s · planificado por %s · ejecutado por %s",
 	"plan.cardE2E":                         "Check de extremo a extremo: %s (salida base %d)",
 	"plan.cardReturns":                     "Devoluciones restantes: %d",
 	"plan.cardTestFirst":                   "test primero",
@@ -792,11 +819,11 @@ var esMessages = map[string]string{
 	"plans.changed":                        "    cambió %s",
 	"notice.planArmed":                     "modo plan: tu siguiente mensaje es el encargo · /normal para salir",
 	"plans.nothingInterrupted":             "No hay ningún plan interrumpido",
-	"plans.row":                            "%s · %s · %d tareas en %d olas",
+	"plans.row":                            "%s · %s · %s en %s",
 	"plans.taskRow":                        "  ola %d · %s · %s",
 	"plans.note":                           "    nota de %s para %s: %s",
 	"plans.question":                       "    pregunta: %s",
-	"plans.syncRow":                        "  sync de la ola %d · %s · %d rondas",
+	"plans.syncRow":                        "  sync de la ola %d · %s",
 	"plans.badge":                          "plan %s · ola %d/%d · %s",
 	"plans.badgeSync":                      "plan %s · sync",
 	"plans.status.decomposing":             "planificando",
@@ -1161,7 +1188,7 @@ var esMessages = map[string]string{
 	"transcript.toolUnknown":               "herramienta desconocida, rechazada",
 	"transcript.toolOverBudget":            "fuera de presupuesto",
 	"transcript.memoryReminder":            "consola: pidió al modelo que guarde memoria",
-	"transcript.planOutcome":               "consola: el plan %s terminó %s · %d/%d tareas hechas, %d bloqueadas, %d omitidas · sync %s · cambió: %s · %s",
+	"transcript.planOutcome":               "consola: el plan %s terminó: %s · %d/%d tareas hechas · bloqueadas: %d · omitidas: %d · sync %s · cambió: %s · %s",
 	"transcript.planCost":                  "las sesiones de tarea costaron %s",
 	"transcript.planCostUnknown":           "coste de las sesiones de tarea desconocido",
 	"transcript.searchIn":                  "\"%s\" en %s", // local search
@@ -1249,12 +1276,28 @@ var esMessages = map[string]string{
 	"error.workspaceMismatch":              "Esta sesión es de %s (abierto: %s). Arranca AXLR allí con: axlr-tui --root %[1]s",
 
 	// qa3 terminal bugs
-	"notice.autonomyOn":        "Autonomía completa activada: las herramientas no preguntan · /autonomy off para volver a preguntar",
-	"notice.autonomyOff":       "Autonomía completa desactivada: cada herramienta pregunta antes · /autonomy on para no preguntar",
-	"plans.taskSession":        " · sesión %s",
-	"notice.nothingToCancel":   "Nada que cancelar: no hay ningún turno ni operación en curso",
-	"notice.nothingToContinue": "Nada que continuar: la sesión no está interrumpida ni esperando una llamada",
-	"notice.continueBusy":      "No se puede continuar mientras se ejecuta una operación",
-	"notice.sessionsBusy":      "Las sesiones se abren cuando termine la operación en curso",
-	"transcript.toolQueued":    "en cola",
+	"notice.autonomyOn":         "Autonomía completa activada: las herramientas no preguntan · /autonomy off para volver a preguntar",
+	"notice.autonomyOff":        "Autonomía completa desactivada: cada herramienta pregunta antes · /autonomy on para no preguntar",
+	"plans.taskSession":         " · sesión %s",
+	"notice.nothingToCancel":    "Nada que cancelar: no hay ningún turno ni operación en curso",
+	"notice.nothingToContinue":  "Nada que continuar: la sesión no está interrumpida ni esperando una llamada",
+	"notice.continueBusy":       "No se puede continuar mientras se ejecuta una operación",
+	"notice.sessionsBusy":       "Las sesiones se abren cuando termine la operación en curso",
+	"transcript.toolQueued":     "en cola",
+	"count.tasks":               "%d tareas",
+	"count.tasksOne":            "%d tarea",
+	"count.waves":               "%d olas",
+	"count.wavesOne":            "%d ola",
+	"plans.syncRounds":          " · %d rondas",
+	"plans.syncRoundsOne":       " · %d ronda",
+	"status.copiedOne":          "Copiada %d línea",
+	"changes.filesOne":          "%d archivo",
+	"changes.changesOne":        "%d cambio",
+	"changes.netOfOne":          "cambio total de %d paso",
+	"sessions.messagesOne":      "%d mensaje",
+	"sessions.daysAgoOne":       "hace %d día",
+	"approval.moreLinesOne":     "… %d línea más",
+	"approval.stdinWarningOne":  "ejecuta %d línea de código por stdin; lee \"stdin\" abajo antes de aprobar",
+	"plugins.connectedCountOne": "Conectado · %d herramienta",
+	"plugins.rowCountOne":       "%s %s · %d herramienta",
 }

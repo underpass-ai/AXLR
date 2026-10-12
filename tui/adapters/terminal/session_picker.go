@@ -244,7 +244,7 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 			head = theme.Selected(theme.Icon("user") + " " + head)
 		}
 		lines = append(lines, z.Mark(fmt.Sprintf("%ssession-%d", prefix, i), head))
-		count := theme.Tf("sessions.messages", s.MessageCount)
+		count := theme.Tn("sessions.messages", s.MessageCount, s.MessageCount)
 		if s.MessageCount == 1 {
 			count = theme.T("sessions.oneMessage")
 		}
@@ -321,7 +321,8 @@ func relativeTime(t, now time.Time, theme Theme) string {
 	case d < 48*time.Hour:
 		return theme.T("sessions.oneDayAgo")
 	case d < 7*24*time.Hour:
-		return theme.Tf("sessions.daysAgo", int(d.Hours()/24))
+		days := int(d.Hours() / 24)
+		return theme.Tn("sessions.daysAgo", days, days)
 	default:
 		return t.Local().Format("2006-01-02")
 	}

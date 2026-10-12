@@ -115,7 +115,7 @@ func planPanelContent(records []domain.PlanRecord, theme Theme, now time.Time) s
 		if i > 0 {
 			lines = append(lines, "")
 		}
-		row := theme.Tf("plans.row", plan.ID, theme.T("plans.status."+string(plan.Status)), len(plan.Tasks), plan.Waves)
+		row := theme.Tf("plans.row", plan.ID, theme.T("plans.status."+string(plan.Status)), theme.Tn("count.tasks", len(plan.Tasks), len(plan.Tasks)), theme.Tn("count.waves", plan.Waves, plan.Waves))
 		if when := relativeTime(plan.Updated, now, theme); when != "" {
 			row += " · " + when
 		}
@@ -153,7 +153,12 @@ func planPanelContent(records []domain.PlanRecord, theme Theme, now time.Time) s
 			}
 		}
 		for _, s := range plan.Syncs {
-			lines = append(lines, theme.Tf("plans.syncRow", s.Wave, s.Verdict, s.Rounds))
+			row := theme.Tf("plans.syncRow", s.Wave, s.Verdict)
+			if s.Rounds > 0 {
+				// "0 rounds" said nothing on 12 October 2026.
+				row += theme.Tn("plans.syncRounds", s.Rounds, s.Rounds)
+			}
+			lines = append(lines, row)
 		}
 	}
 	return strings.Join(lines, "\n")

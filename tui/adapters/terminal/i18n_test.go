@@ -69,7 +69,7 @@ func TestLiteralTranslationLabelsExist(t *testing.T) {
 			}
 			index := 0
 			switch name {
-			case "T", "Tf":
+			case "T", "Tf", "Tn":
 			case "Translate", "Translatef":
 				index = 1
 			default:
@@ -222,5 +222,35 @@ func TestLocalizedListFiltering(t *testing.T) {
 			}
 		}
 		zones.Close()
+	}
+}
+
+// On 12 October 2026 the console read "1 tasks in 1 waves", "Copied 1
+// lines" and their Spanish twins; a count of one takes the singular.
+func TestCountsOfOneReadInTheSingular(t *testing.T) {
+	for label := range enMessages {
+		base, ok := strings.CutSuffix(label, "One")
+		if !ok {
+			continue
+		}
+		if _, ok := enMessages[base]; !ok {
+			t.Fatalf("singular %s has no plural %s", label, base)
+		}
+	}
+	for _, c := range []struct {
+		locale    Locale
+		got, want string
+	}{
+		{English, Theme{Locale: English}.Tn("count.tasks", 1, 1) + " in " + Theme{Locale: English}.Tn("count.waves", 1, 1), "1 task in 1 wave"},
+		{English, Theme{Locale: English}.Tn("count.tasks", 2, 2), "2 tasks"},
+		{Spanish, Theme{Locale: Spanish}.Tn("count.tasks", 1, 1) + " en " + Theme{Locale: Spanish}.Tn("count.waves", 1, 1), "1 tarea en 1 ola"},
+		{English, copiedNotice(Theme{Locale: English}, "one line"), "Copied 1 line"},
+		{Spanish, copiedNotice(Theme{Locale: Spanish}, "una línea"), "Copiada 1 línea"},
+		{Spanish, copiedNotice(Theme{Locale: Spanish}, "a\nb"), "Copiadas 2 líneas"},
+		{English, Theme{Locale: English}.Tn("plugins.rowCount", 1, "●", "docs", 1), "● docs · 1 tool"},
+	} {
+		if c.got != c.want {
+			t.Fatalf("%s: %q, want %q", c.locale, c.got, c.want)
+		}
 	}
 }
