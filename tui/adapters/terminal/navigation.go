@@ -723,6 +723,19 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, cmd, true
 	case "cancel":
 		if m.cancel != nil {
+			// A queued message comes back to the composer, ahead of any
+			// draft, instead of starting the next turn: on 12 October 2026
+			// Esc cancelled the step and the queued message started at once.
+			if queued, ok := m.steer.Take(); ok {
+				value := string(queued)
+				if draft := m.Composer.Input.Value(); strings.TrimSpace(draft) != "" {
+					value += "\n\n" + draft
+				}
+				m.Composer.Input.SetValue(value)
+				m.resizeComposer()
+				m.queueReturned = m.operationID
+				m.refreshTranscript()
+			}
 			m.cancel()
 			return m, nil, true
 		}

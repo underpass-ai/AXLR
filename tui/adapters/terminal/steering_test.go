@@ -171,3 +171,37 @@ func TestTheFooterOffersContinueOnlyWhenNothingRuns(t *testing.T) {
 		t.Fatalf("continue not offered for a stopped stream: %q", footer)
 	}
 }
+
+// On 12 October 2026 Esc with a message queued cancelled the step and the
+// queued message started a new turn at once: it could not be unqueued or
+// edited. It now comes back to the composer, ahead of any draft.
+func TestEscReturnsAQueuedMessageToTheComposer(t *testing.T) {
+	s := navSession(t)
+	if err := s.BeginTurn("original", nil); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	m.Busy = true
+	m.providerWaiting = true
+	m.operationID = 1
+	cancelled := false
+	m.cancel = func() { cancelled = true }
+	m.Composer.Input.SetValue("queued words")
+	m = update(m, ControlIntent("send"))
+	m.Composer.Input.SetValue("a draft")
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	if !cancelled || m.steer.Peek() != "" || m.Composer.Input.Value() != "queued words\n\na draft" {
+		t.Fatalf("cancelled=%v queue=%q composer=%q", cancelled, m.steer.Peek(), m.Composer.Input.Value())
+	}
+	if strings.Contains(m.Transcript.View(), m.Theme.T("transcript.queued")) {
+		t.Fatal("the message is still shown as queued")
+	}
+	next, cmd := m.Update(operationComplete{ID: 1, Session: s, Err: context.Canceled})
+	m = next.(AppModel)
+	if cmd != nil || m.Busy || len(m.Header.State.Messages) != 1 {
+		t.Fatalf("a new turn started: busy=%v messages=%d", m.Busy, len(m.Header.State.Messages))
+	}
+	if !strings.Contains(m.Status.Notice, m.Theme.T("status.cancelled")) || !strings.Contains(m.Status.Notice, m.Theme.T("notice.queueReturned")) {
+		t.Fatalf("notice = %q", m.Status.Notice)
+	}
+}

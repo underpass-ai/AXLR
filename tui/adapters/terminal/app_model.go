@@ -105,6 +105,9 @@ type AppModel struct {
 	// exitCancelled is the operation /exit cancelled; its end says how to
 	// quit instead of a bare "Cancelled".
 	exitCancelled uint64
+	// queueReturned is the operation whose Esc put the queued message back
+	// in the composer; its end says so.
+	queueReturned uint64
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
@@ -540,6 +543,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.exitCancelled == v.ID {
 				m.Status.Notice = strings.TrimSpace(m.Theme.T("notice.exitCancelled") + " " + returned)
 			}
+			if m.queueReturned == v.ID {
+				m.Status.Notice += " · " + m.Theme.T("notice.queueReturned")
+			}
 			if status := v.Session.Status(); wasTurn || status == domain.StatusStreaming || status == domain.StatusInterrupted || status == domain.StatusApproval {
 				m.cancelledAt = len(m.Header.State.Messages) + 1
 			}
@@ -560,7 +566,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.draft == "" {
 			m.Status.Error = ""
 		}
-		m.exitCancelled = 0
+		m.exitCancelled, m.queueReturned = 0, 0
 		if v.Fresh && v.Err == nil {
 			m.Status.Notice = m.Theme.T("notice.newStarted")
 		}

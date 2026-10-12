@@ -726,6 +726,7 @@ var enMessages = map[string]string{
 	"export.failed":              "Not exported: %s",
 	"export.done":                "Exported to %s",
 	"editor.failed":              "Editor: %s · the draft is unchanged",
+	"notice.queueReturned":       "your queued message is back in the composer; Enter sends it",
 }
 
 var esMessages = map[string]string{
@@ -1390,4 +1391,5 @@ var esMessages = map[string]string{
 	"export.failed":              "No se ha exportado: %s",
 	"export.done":                "Exportada a %s",
 	"editor.failed":              "Editor: %s · el borrador no ha cambiado",
+	"notice.queueReturned":       "tu mensaje en cola ha vuelto al editor; Enter lo envía",
 }
