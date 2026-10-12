@@ -102,6 +102,9 @@ type AppModel struct {
 	// catalogOperation is the model picker's catalog load, the only
 	// operation closing the picker may cancel.
 	catalogOperation uint64
+	// exitCancelled is the operation /exit cancelled; its end says how to
+	// quit instead of a bare "Cancelled".
+	exitCancelled uint64
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
@@ -527,6 +530,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// is not an error, so it is said in the footer's state instead.
 			m.Status.Error = ""
 			m.Status.Notice = strings.TrimSpace(m.Theme.T("status.cancelled") + " " + returned)
+			if m.exitCancelled == v.ID {
+				m.Status.Notice = strings.TrimSpace(m.Theme.T("notice.exitCancelled") + " " + returned)
+			}
 			if status := v.Session.Status(); wasTurn || status == domain.StatusStreaming || status == domain.StatusInterrupted || status == domain.StatusApproval {
 				m.cancelledAt = len(m.Header.State.Messages) + 1
 			}
@@ -547,6 +553,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.draft == "" {
 			m.Status.Error = ""
 		}
+		m.exitCancelled = 0
 		if v.ModelSelection && v.Err == nil && v.PreferenceErr != nil {
 			m.Status.Error = m.Theme.T("error.modelDefault")
 		}
@@ -607,6 +614,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			command, _ = isSlashCommand(command)
 			if command == "/exit" {
 				if m.Busy {
+					// The first /exit stops the work; on 12 October 2026 it
+					// stayed in the composer and the next Enter quit.
+					m.Composer.Input.Reset()
+					m.exitCancelled = m.operationID
+					m.Status.Notice = m.Theme.T("notice.exitCancelled")
 					return m.Update(ControlIntent("cancel"))
 				}
 				return m.quit()
