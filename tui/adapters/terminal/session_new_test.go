@@ -151,6 +151,13 @@ func TestCtrlDeleteDeletesASessionAfterConfirmation(t *testing.T) {
 	if m.Picker.Deleting || len(m.Picker.Visible()) != 2 {
 		t.Fatal("n did not keep the session")
 	}
+	// Enter is "any other key": it keeps the session and opens nothing.
+	m = update(m, ctrlDel)
+	n, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = n.(AppModel)
+	if cmd != nil || m.Busy || m.Picker.Deleting || m.overlay != "sessions" || len(m.Picker.Visible()) != 2 {
+		t.Fatalf("Enter while confirming: busy=%v deleting=%v overlay=%q", m.Busy, m.Picker.Deleting, m.overlay)
+	}
 	m = update(m, ctrlDel)
 	m = update(m, tea.KeyPressMsg{Code: 'y', Text: "y"})
 	if len(m.Picker.Visible()) != 1 || m.Status.Notice != m.Theme.Tf("sessions.deleted", "the other one") {

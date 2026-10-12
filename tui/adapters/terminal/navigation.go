@@ -306,10 +306,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
 					m.Picker.Page = m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width)
-					if k.String() == "enter" && !m.Picker.Renaming && m.Picker.NewSelected() {
+					// Enter while renaming or confirming a delete is the
+					// picker's: it saves the title, or keeps the session.
+					if k.String() == "enter" && !m.Picker.Renaming && !m.Picker.Deleting && m.Picker.NewSelected() {
 						intent = NewSessionIntent
 						hasIntent = true
-					} else if k.String() == "enter" && !m.Picker.Renaming {
+					} else if k.String() == "enter" && !m.Picker.Renaming && !m.Picker.Deleting {
 						intent = "open-session"
 						hasIntent = true
 					} else if picked := m.Picker.Key(k.String(), k.Text); picked != "" {
@@ -362,6 +364,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
 		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
 		if m.overlay == "sessions" {
+			m.Picker.Deleting = false
 			if m.Picker.ShowsNew() && m.zones.Get(m.prefix+"session-new").InBounds(mouse) {
 				intent = NewSessionIntent
 				hasIntent = true
