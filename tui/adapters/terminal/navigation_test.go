@@ -217,9 +217,17 @@ func TestNavigationSwitchRejectsDifferentWorkspace(t *testing.T) {
 	if current, ok := m.Picker.Current(); !ok || current.ID != other.Export().ID {
 		t.Fatal("Tab did not show every workspace")
 	}
+	// The row says it belongs elsewhere, and Enter says how to open it
+	// without starting a load that fails.
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, m.Theme.Tf("sessions.elsewhere", string(testWorkspace())+"-other")) {
+		t.Fatalf("no other-workspace marker:\n%s", view)
+	}
 	n, c = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m = drain(t, n.(AppModel), c)
-	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "axlr-tui --root "+string(testWorkspace())+"-other") {
+	if c != nil || n.(AppModel).Busy {
+		t.Fatal("Enter on another workspace's session started an operation")
+	}
+	m = n.(AppModel)
+	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "axlr-tui --root "+string(testWorkspace())+"-other --session "+string(other.Export().ID)) || m.overlay != "sessions" {
 		t.Fatalf("workspace compatibility not enforced or not explained: %q", m.Status.Error)
 	}
 }

@@ -719,6 +719,8 @@ var enMessages = map[string]string{
 	"sessions.deleteUnavailable": "Deleting sessions is not available in this console",
 	"sessions.deleteFailed":      "Not deleted: %s",
 	"sessions.deleted":           "Deleted “%s”",
+	"sessions.elsewhere":         "↗ other workspace %s",
+	"sessions.elsewhereOpen":     "That session belongs to another workspace; open it with: axlr-tui --root %s --session %s",
 }
 
 var esMessages = map[string]string{
@@ -1376,4 +1378,6 @@ var esMessages = map[string]string{
 	"sessions.deleteUnavailable": "Esta consola no puede borrar sesiones",
 	"sessions.deleteFailed":      "No se ha borrado: %s",
 	"sessions.deleted":           "Borrada «%s»",
+	"sessions.elsewhere":         "↗ otro espacio de trabajo %s",
+	"sessions.elsewhereOpen":     "Esa sesión es de otro espacio de trabajo; ábrela con: axlr-tui --root %s --session %s",
 }

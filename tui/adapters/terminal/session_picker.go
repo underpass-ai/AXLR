@@ -416,7 +416,10 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		if query := strings.ToLower(strings.TrimSpace(p.Query)); query != "" && !strings.Contains(strings.ToLower(title), query) {
 			meta = append(meta, theme.T("sessions.contentMatch"))
 		}
-		if p.AllWorkspaces || p.ArchivedView || p.TasksView {
+		if s.Workspace != p.Workspace {
+			// It opens only in its own workspace: Enter says how.
+			meta = append([]string{theme.Tf("sessions.elsewhere", shortenHome(singleLine(string(s.Workspace))))}, meta...)
+		} else if p.AllWorkspaces || p.ArchivedView || p.TasksView {
 			meta = append(meta, shortenHome(singleLine(string(s.Workspace))))
 		}
 		if i == p.Selected && !p.NewSelected() {

@@ -827,6 +827,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		id := selected.ID
+		if m.Header.State.Workspace != "" && selected.Workspace != m.Header.State.Workspace {
+			// On 12 October 2026 Enter on another workspace's session ran a
+			// load that failed; it now says at once how to open it.
+			m.Status.Error = m.Theme.Tf("sessions.elsewhereOpen", shortenHome(singleLine(string(selected.Workspace))), id)
+			return m, nil, true
+		}
 		if id == m.Header.State.ID {
 			// The open session is already on screen: Enter on its row
 			// closes the picker instead of reloading it behind the list.
