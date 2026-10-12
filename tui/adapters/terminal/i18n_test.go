@@ -254,3 +254,58 @@ func TestCountsOfOneReadInTheSingular(t *testing.T) {
 		}
 	}
 }
+
+// The 12 October 2026 QA found the Spanish copy mixing fichero/archivo,
+// check/comprobación, brief/encargo, mergeada/fusionada, saltada/omitida and
+// two names for full autonomy, and the slash menu cutting descriptions that
+// repeated the command ("jobs: every…").
+func TestCopyUsesOneTermPerThing(t *testing.T) {
+	for label, spanish := range esMessages {
+		lower := strings.ToLower(spanish)
+		for _, word := range []string{"fichero", "check", "brief", "merge", "saltad", "autonomía total"} {
+			if strings.Contains(lower, word) {
+				t.Errorf("es %s uses %q: %q", label, word, spanish)
+			}
+		}
+	}
+	for _, c := range []struct {
+		locale      Locale
+		label, want string
+	}{
+		{Spanish, "help.sendFull", "Esc cancelar · / comandos"},
+		{Spanish, "help.approveFull", "↑↓ inspeccionar"},
+		{Spanish, "approval.hintAutonomy", "autonomía completa"},
+		{Spanish, "models.count", "Modelos"},
+		{English, "transcript.toolOverBudget", "over the call limit"},
+		{English, "error.toolCallLimit", "continue with a new call allowance"},
+		{English, "help.sendFull", "Enter send (queued while working)"},
+		{English, "sessions.searchHint", "type to filter by title"},
+	} {
+		if got := Translate(c.locale, c.label); !strings.Contains(got, c.want) {
+			t.Errorf("%s %s = %q, want it to contain %q", c.locale, c.label, got, c.want)
+		}
+	}
+	prefix := regexp.MustCompile(`^[\p{L}-]+: `)
+	for _, c := range slashCommands {
+		for _, locale := range []Locale{English, Spanish} {
+			summary := Translate(locale, c.summary)
+			if ansi.StringWidth(summary) > 50 || prefix.MatchString(summary) {
+				t.Errorf("%s %s description %q is longer than 50 cells or repeats the command", locale, c.name, summary)
+			}
+		}
+	}
+}
+
+func TestTheArchivedScopeSaysCtrlXRestores(t *testing.T) {
+	theme := Theme{Monochrome: true}
+	m := sized()
+	defer m.zones.Close()
+	p := NewSessionPicker(nil, testWorkspace())
+	if view := ansi.Strip(p.View(theme, m.zones, m.prefix, 20, 140)); !strings.Contains(view, "0 sessions") || !strings.Contains(view, "Ctrl+X archive ·") {
+		t.Fatalf("hint:\n%s", view)
+	}
+	p.ArchivedView = true
+	if view := ansi.Strip(p.View(theme, m.zones, m.prefix, 20, 140)); !strings.Contains(view, "Ctrl+X archive / restore") {
+		t.Fatalf("archived hint:\n%s", view)
+	}
+}

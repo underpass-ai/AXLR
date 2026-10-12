@@ -286,10 +286,12 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		scope = theme.T("sessions.scopeAll")
 	}
 	footer := z.Mark(prefix+"close", "["+theme.T("common.close")+"]")
-	hint := theme.Tf("sessions.hint", len(visible), scope)
-	if len(visible) == 1 {
-		hint = theme.Tf("sessions.hintOne", scope)
+	// Ctrl+X restores an archived session, so the archived scope says so.
+	archive := theme.T("sessions.archiveVerb")
+	if p.ArchivedView {
+		archive = theme.T("sessions.archiveVerbArchived")
 	}
+	hint := theme.Tf("sessions.hint", theme.Tn("count.sessions", len(visible), len(visible)), scope, archive)
 	return theme.Overlay(theme.T("sessions.title"), hint, strings.Join(lines, "\n"), footer, width, height)
 }
 
