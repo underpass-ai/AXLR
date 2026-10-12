@@ -147,6 +147,9 @@ type AppModel struct {
 	// /usage. Both are this console's, from the ledger's totals.
 	turnCosts map[int]turnUsage
 	turnLog   []turnUsage
+	// bottomLines is how long the conversation was when it last showed its
+	// bottom; see scroll_pill.go.
+	bottomLines int
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -333,6 +336,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.Transcript.Viewport.SetYOffset(offset)
 		}
+		// Rewrapped lines are not new ones.
+		m.bottomLines = m.Transcript.VisualLineCount()
 		m.Composer.Input.SetWidth(max(1, v.Width))
 		m.resizeComposer()
 		m.SearchBox.Input.SetWidth(max(1, v.Width-18))
@@ -915,7 +920,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "pgdown":
 			m.Transcript.Viewport.PageDown()
+			m.markBottom()
 			return m, nil
+		case "ctrl+end":
+			m.jumpBottom()
+			return m, nil
+		case "ctrl+home":
+			m.Transcript.Viewport.GotoTop()
+			return m, nil
+		case "end":
+			if m.overlay == "" && m.Composer.Input.Value() == "" {
+				// End belongs to the composer while it holds a draft.
+				m.jumpBottom()
+				return m, nil
+			}
 		}
 	case tea.MouseClickMsg:
 		if v.Button == tea.MouseLeft {
@@ -923,6 +941,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.zones.Get(m.prefix + id).InBounds(v) {
 					return m.Update(ControlIntent(id))
 				}
+			}
+			if _, away := m.newLines(); away && m.zones.Get(m.prefix+"jump-bottom").InBounds(v) {
+				m.jumpBottom()
+				return m, nil
 			}
 			if m.mentionActive() {
 				for i, path := range m.mentionMatches() {
@@ -959,6 +981,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		var cmd tea.Cmd
 		m.Transcript.Viewport, cmd = m.Transcript.Viewport.Update(v)
+		m.markBottom()
 		return m, cmd
 	}
 	var cmd tea.Cmd
@@ -999,6 +1022,8 @@ func (m AppModel) View() tea.View {
 			menu = m.slashMenu(suggestions)
 		} else if m.mentionActive() {
 			menu = m.mentionMenu()
+		} else if m.overlay == "" {
+			menu = m.scrollPill()
 		}
 		if len(menu) > 0 {
 			lines := strings.Split(body, "\n")
@@ -1090,6 +1115,8 @@ func (m *AppModel) refreshTranscript() {
 		// New rows move the lines a finished selection pointed at.
 		m.clearSelection()
 	}
+	m.markBottom()
+	defer m.markBottom()
 	m.Changes.SetSession(m.Header.State)
 	m.Transcript.Pastes = m.pasted
 	m.Transcript.TurnCosts = m.turnCostLines()

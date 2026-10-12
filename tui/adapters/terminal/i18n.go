@@ -377,7 +377,7 @@ var enMessages = map[string]string{
 	"approvals.list":                       "Always allowed tools",
 	"approvals.empty":                      "No saved tools",
 	"help.shortcuts":                       "Ctrl+P actions · Ctrl+O sessions · Ctrl+F search",
-	"help.views":                           "PgUp/PgDn scroll · mouse wheel scrolls too",
+	"help.views":                           "PgUp/PgDn scroll · mouse wheel scrolls too · End (empty composer) or Ctrl+End the end · Ctrl+Home the start",
 	"help.copy":                            "/copy copies the last reply, /copy code its last code block, /copy N the N-th · drag over the conversation to copy · Shift+drag selects with the terminal",
 	"status.copied":                        "Copied %d lines",
 	"error.nothingToCopy":                  "Nothing to copy yet",
@@ -783,6 +783,9 @@ var enMessages = map[string]string{
 	"error.codeBlockRange":        "The last reply has %d code blocks: /copy 1 to /copy %[1]d, or /copy code for the last",
 	"error.codeBlockRangeOne":     "The last reply has %d code block: /copy 1 or /copy code",
 	"status.copiedBlock":          "Code block %d of %d",
+	"scroll.pill":                 "↓ more below · End",
+	"scroll.pillNew":              "↓ %d new lines · End",
+	"scroll.pillNewOne":           "↓ %d new line · End",
 }
 
 var esMessages = map[string]string{
@@ -1098,7 +1101,7 @@ var esMessages = map[string]string{
 	"approvals.list":                       "Herramientas permitidas siempre",
 	"approvals.empty":                      "No hay herramientas guardadas",
 	"help.shortcuts":                       "Ctrl+P acciones · Ctrl+O sesiones · Ctrl+F buscar",
-	"help.views":                           "PgUp/PgDn desplazar · también con la rueda del ratón",
+	"help.views":                           "PgUp/PgDn desplazar · también con la rueda del ratón · End (editor vacío) o Ctrl+End al final · Ctrl+Home al principio",
 	"help.copy":                            "/copy copia la última respuesta, /copy code su último bloque de código, /copy N el N-ésimo · arrastra sobre la conversación para copiar · Shift+arrastrar selecciona con el terminal",
 	"status.copied":                        "Copiadas %d líneas",
 	"error.nothingToCopy":                  "Todavía no hay nada que copiar",
@@ -1504,4 +1507,7 @@ var esMessages = map[string]string{
 	"error.codeBlockRange":        "La última respuesta tiene %d bloques de código: de /copy 1 a /copy %[1]d, o /copy code para el último",
 	"error.codeBlockRangeOne":     "La última respuesta tiene %d bloque de código: /copy 1 o /copy code",
 	"status.copiedBlock":          "Bloque de código %d de %d",
+	"scroll.pill":                 "↓ hay más abajo · End",
+	"scroll.pillNew":              "↓ %d líneas nuevas · End",
+	"scroll.pillNewOne":           "↓ %d línea nueva · End",
 }

@@ -34,7 +34,8 @@ The model picker filters to text models that support tools. Typing filters by ev
 | `Ctrl+O` | Open a saved session |
 | `Ctrl+F` | Search the current conversation as drawn: the footer counts every occurrence (`2/5`), the current one is marked apart from the others and scrolled into view; Enter or ↓ goes to the next, ↑ or Shift+Enter to the previous, and keys that leave the query as it is keep the place |
 | `Ctrl+R` | Explicitly continue an interrupted turn |
-| `PgUp` / `PgDn`, mouse wheel | Scroll the conversation |
+| `PgUp` / `PgDn`, mouse wheel | Scroll the conversation. While it is not at its end, a row above the composer says so, `↓ 12 new lines · End`, counting the lines added since it left the end; a click on it, `End` with an empty composer (with a draft End moves its cursor) or `Ctrl+End` go back to the end |
+| `Ctrl+Home` | Go to the start of the conversation |
 | `F1` | Show in-app help |
 | `Esc` | Drop a selection, close an overlay or cancel the active turn; the footer then says “Cancelled” beside the session state and cost, and the conversation ends with “Cancelled by you” until the next message |
 | `Ctrl+C` | Cancel active work; when idle the first press clears a non-empty draft (↑ brings it back) or says “press Ctrl+C again to quit”, and a second press within two seconds quits |
