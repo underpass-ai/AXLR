@@ -33,8 +33,12 @@ type SessionPicker struct {
 	Query  string
 	Labels map[domain.SessionID]domain.SessionLabel
 	// Renaming edits the selected session's title in place of the search.
-	Renaming   bool
-	RenameText string
+	// RenameSelected marks the old title as selected, as F2 leaves it: the
+	// first character typed replaces it. On 12 October 2026 F2 put the
+	// cursor after the old title and typing appended to it.
+	Renaming       bool
+	RenameText     string
+	RenameSelected bool
 }
 
 const (
@@ -131,28 +135,40 @@ func (p SessionPicker) Current() (domain.SessionSummary, bool) {
 // to persist something: a new title or an archive toggle.
 func (p *SessionPicker) Key(key, text string) ControlIntent {
 	if p.Renaming {
+		selected := p.RenameSelected
+		p.RenameSelected = false
 		switch key {
 		case "enter":
 			p.Renaming = false
 			return SessionRenameIntent
 		case "esc":
 			p.Renaming = false
+		case "ctrl+u":
+			p.RenameText = ""
 		case "backspace":
-			if p.RenameText != "" {
+			if selected {
+				p.RenameText = ""
+			} else if p.RenameText != "" {
 				_, size := utf8.DecodeLastRuneInString(p.RenameText)
 				p.RenameText = p.RenameText[:len(p.RenameText)-size]
 			}
 		default:
-			if text != "" && !strings.ContainsAny(text, "\r\n\t") && utf8.RuneCountInString(p.RenameText) < domain.MaxSessionTitleRunes {
-				p.RenameText += text
+			if text == "" || strings.ContainsAny(text, "\r\n\t") {
+				// Another key (an arrow, End) keeps the title and drops the
+				// selection, so typing then appends.
+				return ""
 			}
+			if selected {
+				p.RenameText = ""
+			}
+			p.insertRename(text)
 		}
 		return ""
 	}
 	switch key {
 	case "f2":
 		if current, ok := p.Current(); ok {
-			p.Renaming, p.RenameText = true, p.Title(current)
+			p.Renaming, p.RenameText, p.RenameSelected = true, p.Title(current), true
 		}
 		return ""
 	case "ctrl+x":
@@ -163,6 +179,17 @@ func (p *SessionPicker) Key(key, text string) ControlIntent {
 	}
 	p.key(key, text)
 	return ""
+}
+
+// insertRename adds typed or pasted text to the new title, up to the
+// title's limit.
+func (p *SessionPicker) insertRename(text string) {
+	for _, r := range text {
+		if utf8.RuneCountInString(p.RenameText) >= domain.MaxSessionTitleRunes {
+			return
+		}
+		p.RenameText += string(r)
+	}
 }
 
 func (p *SessionPicker) key(key, text string) bool {
@@ -214,7 +241,15 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		search = theme.Muted(theme.Icon("search") + " " + theme.T("sessions.searchHint"))
 	}
 	if p.Renaming {
-		search = theme.Accent(theme.T("sessions.renamePrompt")) + " " + p.RenameText + theme.Accent("▏") + theme.Muted("  "+theme.T("sessions.renameHint"))
+		title := p.RenameText + theme.Accent("▏")
+		if p.RenameSelected && p.RenameText != "" {
+			title = theme.Selected(p.RenameText)
+			if theme.Monochrome {
+				// Without colour the selection is bracketed.
+				title = "[" + p.RenameText + "]"
+			}
+		}
+		search = theme.Accent(theme.T("sessions.renamePrompt")) + " " + title + theme.Muted("  "+theme.T("sessions.renameHint"))
 	}
 	lines = append(lines, search, "")
 	// Two rows per session plus a blank, after the search row and up to three group labels.

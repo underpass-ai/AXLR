@@ -90,6 +90,8 @@ func TestSessionPickerRenamesArchivesAndCyclesScopes(t *testing.T) {
 	if p.Key("f2", "") != "" || !p.Renaming || p.RenameText != "¿qué ceremonias tienes?" {
 		t.Fatalf("F2 did not start renaming: %+v", p)
 	}
+	// An arrow keeps the selected title for editing at its end.
+	p.Key("right", "")
 	p.Key("backspace", "")
 	p.Key("!", "!")
 	if p.RenameText != "¿qué ceremonias tienes!" {
@@ -153,5 +155,32 @@ func TestPlanTaskSessionsHaveTheirOwnScope(t *testing.T) {
 	}
 	if strings.Contains(view, "Add func Short()") {
 		t.Fatalf("a task session is still titled by its context pack:\n%s", view)
+	}
+}
+
+// On 12 October 2026 F2 prefilled the old title with the cursor at its end,
+// and typing appended ("…responde solo okQA buildinfo").
+func TestRenamingStartsWithTheOldTitleSelected(t *testing.T) {
+	p := pickerFixture(time.Now())
+	p.Key("f2", "")
+	view := ansi.Strip(p.View(Theme{Monochrome: true}, zone.New(), "", 30, 100))
+	if !p.RenameSelected || !strings.Contains(view, "[¿qué ceremonias tienes?]") {
+		t.Fatalf("the old title is not shown selected:\n%s", view)
+	}
+	for _, r := range "QA buildinfo" {
+		p.Key(string(r), string(r))
+	}
+	if p.RenameText != "QA buildinfo" || p.RenameSelected {
+		t.Fatalf("typing did not replace the title: %q", p.RenameText)
+	}
+	p.Key("ctrl+u", "")
+	if p.RenameText != "" || !p.Renaming {
+		t.Fatalf("Ctrl+U did not clear the title: %q", p.RenameText)
+	}
+	p.Key("esc", "")
+	p.Key("f2", "")
+	p.Key("backspace", "")
+	if p.RenameText != "" {
+		t.Fatalf("Backspace on the selected title left %q", p.RenameText)
 	}
 }
