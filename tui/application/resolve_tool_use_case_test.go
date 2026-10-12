@@ -301,3 +301,26 @@ func TestTheAnswerAfterTheLastStepHasAFullCallBudget(t *testing.T) {
 		t.Fatalf("the closing answer inherited the last step's calls (turn %d, base %d): %v", state.TurnCallCount, state.FinishedBudgetBase, err)
 	}
 }
+
+// A denial with a reason tells the model why in the call's result, on one
+// bounded line; without one it stays the bare denial.
+func TestDenyTellsTheModelWhy(t *testing.T) {
+	for _, tc := range []struct{ reason, want string }{
+		{"", "tool call denied by user"},
+		{"  keep the old\n text  ", "tool call denied by user: keep the old text"},
+		{strings.Repeat("x", MaxDenyReasonRunes+10), "tool call denied by user: " + strings.Repeat("x", MaxDenyReasonRunes-1) + "…"},
+	} {
+		s := queued(t, call("a", "read"), call("b", "read"))
+		store := &memoryStore{}
+		u := ResolveToolUseCase{Store: store}
+		if err := u.Deny(context.Background(), &s, "a", tc.reason, nil); err != nil {
+			t.Fatal(err)
+		}
+		if got := string(s.Export().Activity[0].Outcome.Content); got != tc.want || s.Export().Activity[0].Decision != domain.DecisionDeny {
+			t.Fatalf("result %q, want %q", got, tc.want)
+		}
+		if u.denyReason != "" {
+			t.Fatal("the reason stuck to the use case")
+		}
+	}
+}

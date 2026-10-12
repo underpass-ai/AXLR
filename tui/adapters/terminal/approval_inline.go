@@ -12,10 +12,12 @@ import (
 const approvalCardChrome = 3
 
 // approvalDetailRows is how many argument rows the inline card shows: all of
-// them when they fit, otherwise a third of the screen (3–10 rows) that the
-// arrows and wheel scroll.
+// them when they fit, otherwise what keeps the whole card within 60 % of
+// the screen (at least 3 rows), which the arrows and wheel scroll. On 12
+// October 2026 the card stopped at ten rows with thirty free, so a
+// 12-line diff needed scrolling.
 func (m AppModel) approvalDetailRows() int {
-	limit := min(10, max(3, (m.Layout.Height-approvalCardChrome-2)/3))
+	limit := max(3, m.Layout.Height*3/5-approvalCardChrome)
 	return max(1, min(m.Approval.Details.VisualLineCount(), limit))
 }
 
@@ -31,17 +33,24 @@ func (m AppModel) approvalCard() string {
 	}
 	rule := warn(strings.Repeat("─", width))
 	title := " " + warn(m.Theme.Icon("attention")+" "+m.Theme.T("approval.title")) + "  " + m.Approval.Target
-	if m.Approval.Details.VisualLineCount() > m.approvalDetailRows() {
-		title += m.Theme.Muted("  " + m.Theme.T("approval.scroll"))
-	}
 	details := m.Approval.Details
 	details.Gutter = (width - details.Viewport.Width()) / 2
 	hints := []footerHint{
 		{"approve", "a", m.Theme.T("approval.hintApprove")},
+		{"approve-all", "A", m.Theme.Tf("approval.hintApproveAll", m.pendingCalls())},
+		{"allow-session", "s", m.Theme.T("approval.hintSession")},
 		{"always-allow", "l", m.Theme.T("approval.hintAlways")},
 		{"deny", "d", m.Theme.T("approval.hintDeny")},
 		{"autonomy-on", "f", m.Theme.T("approval.hintAutonomy")},
 		{"cancel", "esc", m.Theme.T("footer.cancel")},
+	}
+	if m.execCardCommand(m.Approval.Pending) == "" {
+		// Only a local command is allowed exactly for the session.
+		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "allow-session" })
+	}
+	if m.pendingCalls() < 2 {
+		// Shift+A approves the calls queued behind this one.
+		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "approve-all" })
 	}
 	if !savesAlwaysAllow(m.Header.State.ToolSnapshot, m.Approval.Pending) {
 		// A host tool has no saved rule of its own.
@@ -63,13 +72,26 @@ func (m AppModel) approvalCard() string {
 	line := func(s string) string {
 		return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(s, width, "…"))
 	}
+	if m.denying {
+		// The reason takes the keys' row; its keys go on the title's.
+		hints = nil
+		note = m.Theme.T("approval.denyHints")
+	}
 	if m.Theme.editorial() {
 		return m.approvalSheet(details, hints, note)
 	}
 	if note != "" {
-		actions = append(actions, m.Theme.Muted("· "+note))
+		// On the title's row: the keys' row is full with S offered.
+		title += m.Theme.Muted("  · " + note)
 	}
-	return strings.Join([]string{rule, line(title), details.View(), line(" " + strings.Join(actions, "   "))}, "\n")
+	if m.Approval.Details.VisualLineCount() > m.approvalDetailRows() {
+		title += m.Theme.Muted("  " + m.Theme.T("approval.scroll"))
+	}
+	keys := line(" " + strings.Join(actions, "   "))
+	if m.denying {
+		keys = line(" " + m.denyInput.View())
+	}
+	return strings.Join([]string{rule, line(title), details.View(), keys}, "\n")
 }
 
 // mainTranscript is the conversation sized to the rows the composer or the
@@ -138,5 +160,8 @@ func (m AppModel) approvalSheet(details Transcript, hints []footerHint, note str
 		actions = append(actions, "· "+note)
 	}
 	rows = append(rows, row("  "+strings.Join(actions, "   ")))
+	if m.denying {
+		rows[len(rows)-1] = row("  " + ansi.Strip(m.denyInput.View()))
+	}
 	return strings.Join(rows, "\n")
 }

@@ -81,6 +81,9 @@ func (s *Session) ChangeModel(model axlr.ModelID) error {
 	return nil
 }
 
+// ID is the session's identity.
+func (s Session) ID() SessionID { return s.state.ID }
+
 func (s Session) Mode() WorkMode {
 	if s.state.Mode == "" {
 		return ModeNormal

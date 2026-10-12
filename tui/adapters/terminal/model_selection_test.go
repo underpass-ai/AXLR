@@ -199,6 +199,8 @@ func TestModelSelectionBusyAndPendingPriority(t *testing.T) {
 	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "call", Name: "read", Arguments: args}}}})
 	m.Header.State = s.Export()
 	m.syncApproval()
+	// The card's bell is not the picker's doing.
+	m, _ = m.signal(nil)
 	n, cmd = m.Update(ControlIntent("models"))
 	m = n.(AppModel)
 	if cmd != nil || m.overlay == "models" || !m.approvalFocus() {
@@ -318,7 +320,8 @@ func TestModelSelectionBareScreenLongWorkspaceAtMinimumWidth(t *testing.T) {
 	if !strings.Contains(view, "Type /model to choose a model") {
 		t.Fatalf("bare screen hides selection guidance: %q", view)
 	}
-	if !strings.Contains(view, "/home/") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
+	// A short row keeps the path's last segment, not its head.
+	if !strings.Contains(view, "…/long") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
 		t.Fatalf("workspace missing or screen overflows: %q", view)
 	}
 }

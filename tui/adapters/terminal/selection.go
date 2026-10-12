@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -290,6 +291,19 @@ func (m *AppModel) copyLatest() tea.Cmd {
 			return cmd
 		}
 	}
+	text := m.lastReply()
+	if text == "" {
+		m.Status.Error = m.Theme.T("error.nothingToCopy")
+		return nil
+	}
+	m.Status.Error = ""
+	m.Status.Notice = copiedNotice(m.Theme, text)
+	return copyToClipboard(text)
+}
+
+// lastReply is the last reply as the model wrote it: the streaming draft,
+// the last assistant message, or an interrupted draft.
+func (m AppModel) lastReply() string {
 	text := m.draft
 	for i := len(m.Header.State.Messages) - 1; i >= 0 && text == ""; i-- {
 		if msg := m.Header.State.Messages[i]; msg.Role == root.RoleAssistant && msg.Content != "" {
@@ -299,12 +313,52 @@ func (m *AppModel) copyLatest() tea.Cmd {
 	if text == "" {
 		text = string(m.Header.State.Draft)
 	}
-	if text == "" {
-		m.Status.Error = m.Theme.T("error.nothingToCopy")
+	return text
+}
+
+// codeBlocks are a reply's fenced code blocks, each without its fences.
+func codeBlocks(reply string) []string {
+	var blocks []string
+	var block []string
+	fenced := false
+	for _, line := range strings.Split(reply, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			if fenced {
+				blocks = append(blocks, strings.Join(block, "\n"))
+				block = nil
+			}
+			fenced = !fenced
+			continue
+		}
+		if fenced {
+			block = append(block, line)
+		}
+	}
+	return blocks
+}
+
+// copyCode serves "/copy code" (the last code block of the last reply) and
+// "/copy N" (its N-th). On 12 October 2026 /copy copied the whole reply and
+// a drag took a wrapped block's rows apart.
+func (m *AppModel) copyCode(which string) tea.Cmd {
+	blocks := codeBlocks(m.lastReply())
+	m.Status.Notice = ""
+	if len(blocks) == 0 {
+		m.Status.Error = m.Theme.T("error.noCodeBlock")
 		return nil
 	}
+	n := len(blocks)
+	if which != "code" {
+		parsed, err := strconv.Atoi(which)
+		if err != nil || parsed < 1 || parsed > len(blocks) {
+			m.Status.Error = m.Theme.Tn("error.codeBlockRange", len(blocks), len(blocks))
+			return nil
+		}
+		n = parsed
+	}
+	text := blocks[n-1]
 	m.Status.Error = ""
-	m.Status.Notice = copiedNotice(m.Theme, text)
+	m.Status.Notice = m.Theme.Tf("status.copiedBlock", n, len(blocks)) + " · " + copiedNotice(m.Theme, text)
 	return copyToClipboard(text)
 }
 

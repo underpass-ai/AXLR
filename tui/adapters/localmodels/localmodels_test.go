@@ -160,3 +160,20 @@ func TestWindowsBudgetARemoteModelAtItsMeasuredBytesPerToken(t *testing.T) {
 		t.Fatalf("capped calibrated budget = %+v", got)
 	}
 }
+
+func TestPromptCeilingIsTheWindowOrThePromptBudget(t *testing.T) {
+	w := Windows{Local: map[root.ModelID]domain.ContextWindow{"local/qwen": 65536}}
+	if got := w.PromptCeiling("local/qwen"); got != 65536 {
+		t.Fatalf("local %d", got)
+	}
+	if got := w.PromptCeiling("anthropic/claude-haiku-5.5"); got != domain.DefaultPromptTokens {
+		t.Fatalf("remote %d", got)
+	}
+	w.Prompt, w.Cap = 100000, 32768
+	if got := w.PromptCeiling("anthropic/claude-haiku-5.5"); got != 32768 {
+		t.Fatalf("capped %d", got)
+	}
+	if got := w.PromptCeiling("local/qwen"); got != 32768 {
+		t.Fatalf("capped local %d", got)
+	}
+}

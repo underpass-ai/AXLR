@@ -55,9 +55,10 @@ func TestSteeringQueuesWithoutCancellingAndStartsNewUserTurn(t *testing.T) {
 	}
 }
 
-// A message queued during a turn that fails starts the next turn at once:
-// the failure stays in the conversation instead of being cleared before it
-// is ever drawn, and the queued message is still delivered.
+// A message queued during a turn that fails starts once the failure is
+// recorded: the failure stays in the conversation as a console line,
+// before the queued turn and after the person's next message, and the
+// queued message is still delivered.
 func TestAFailureBeforeAQueuedMessageStaysInTheConversation(t *testing.T) {
 	s := navSession(t)
 	if err := s.BeginTurn("original", nil); err != nil {
@@ -77,19 +78,20 @@ func TestAFailureBeforeAQueuedMessageStaysInTheConversation(t *testing.T) {
 	m = update(m, ControlIntent("send"))
 	next, cmd := m.Update(operationComplete{ID: 1, Session: s, Err: errors.New("provider returned 503")})
 	m = next.(AppModel)
-	if !strings.Contains(m.Transcript.Text(), "provider returned 503") {
-		t.Fatalf("the failure was cleared before it was drawn: error %q", m.Status.Error)
+	if !m.Busy || m.Status.Error != "provider returned 503" || len(m.deps.Session.Messages()) != 1 {
+		t.Fatalf("the failure is not being recorded before the queued turn: busy %v, error %q", m.Busy, m.Status.Error)
 	}
 	m = drain(t, m, cmd)
 	if messages := m.deps.Session.Messages(); len(messages) != 3 || messages[1].Content != "new direction" {
 		t.Fatalf("the queued message was not delivered: %+v", messages)
 	}
-	if !strings.Contains(m.Transcript.Text(), "provider returned 503") {
-		t.Fatal("the failure note did not outlast the queued turn")
+	lines := m.deps.Session.ConsoleLines()
+	if len(lines) != 1 || lines[0].Failure == nil || lines[0].AfterMessage != 1 || !strings.Contains(m.Transcript.Text(), "provider returned 503") {
+		t.Fatalf("the failure is not in the conversation: %+v", lines)
 	}
 	m.Composer.Input.SetValue("next question")
-	if m = update(m, ControlIntent("send")); strings.Contains(m.Transcript.Text(), "provider returned 503") {
-		t.Fatal("the failure note stayed after the person's next message")
+	if m = update(m, ControlIntent("send")); !strings.Contains(m.Transcript.Text(), "provider returned 503") {
+		t.Fatal("the failure line went with the person's next message")
 	}
 }
 

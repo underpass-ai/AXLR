@@ -27,7 +27,7 @@ func TestSlashSuggestionsListMatchingCommands(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	for draft, want := range map[string]string{
-		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/stop-ceremony,/copy,/export,/usage,/exit",
+		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/undo,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/stop-ceremony,/copy,/export,/usage,/exit",
 		"/m":         "/model,/mcp,/improve,/theme,/autonomy on,/autonomy off,/normal,/stop-ceremony",
 		"/trab":      "/jobs",
 		"/ceremony":  "/stop-ceremony",
@@ -284,7 +284,7 @@ func TestSlashCommandsIgnoreCaseAndSpacingAndNeverSendTheirText(t *testing.T) {
 		}
 	})
 	t.Run("other commands with text show their usage", func(t *testing.T) {
-		for draft, usage := range map[string]string{"/copy extra": "/copy", "/usage now": "/usage", "/autonomy maybe": "/autonomy [on|off]", "/plan add a thing": "/plan"} {
+		for draft, usage := range map[string]string{"/copy extra": "/copy [code|N]", "/usage now": "/usage", "/autonomy maybe": "/autonomy [on|off]", "/plan add a thing": "/plan"} {
 			session := navSession(t)
 			m, _ := selectionModel(t, &session)
 			m.Composer.Input.SetValue(draft)

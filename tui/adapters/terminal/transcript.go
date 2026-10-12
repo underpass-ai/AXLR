@@ -38,7 +38,10 @@ type Transcript struct {
 	expandedFor domain.SessionID
 	// Pastes are the long pastes sent from this console: a prompt shows
 	// each as its token, which a click opens.
-	Pastes      map[string]bool
+	Pastes map[string]bool
+	// TurnCosts are the dim lines under finished turns, by the number of
+	// messages each ended after.
+	TurnCosts   map[int]string
 	rowLines    map[int]int
 	visualIndex []int
 }
@@ -172,9 +175,27 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			t.appendRow(transcriptRow{Text: theme.T("role."+string(m.Role)) + ": " + string(m.Content), Kind: transcriptRowPlain})
 		}
 		for _, c := range m.ToolCalls {
-			row := toolRow(s, c, records[string(c.ID)], results[string(c.ID)], theme)
+			record, result := records[string(c.ID)], results[string(c.ID)]
+			row := toolRow(s, c, record, result, theme)
 			row.At = at
+			if theme.editorial() {
+				// Editorial sums finished runs up in one line.
+				t.appendRow(row)
+				continue
+			}
+			// A click on the row opens what the call returned under it.
+			row.Note, row.Wrap = toolNoteKey(c.ID), true
 			t.appendRow(row)
+			if t.expanded[row.Note] {
+				for _, line := range toolResultRows(s, c, record, result, theme) {
+					line.Note = row.Note
+					t.rows = append(t.rows, line)
+				}
+			}
+		}
+		if line, ok := t.TurnCosts[index+1]; ok {
+			// Under the turn's last reply, without a gap.
+			t.rows = append(t.rows, transcriptRow{Label: "  ", Text: line, Kind: transcriptRowConsole, Indent: true})
 		}
 		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
 			t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, Markdown: true})
@@ -244,11 +265,12 @@ func (t *Transcript) renderRows() {
 			}
 		}
 		clean := Sanitize(row.Text)
+		var hangs []int
 		if row.Markdown {
-			clean = renderMarkdownWidth(clean, t.theme, t.Viewport.Width())
+			clean, hangs = renderMarkdownHangs(clean, t.theme, t.Viewport.Width())
 		}
 		label := Sanitize(row.Label)
-		if width := t.Viewport.Width(); row.Note != "" && !strings.Contains(clean, "\n") && width > 0 {
+		if width := t.Viewport.Width(); row.Note != "" && !row.Wrap && !strings.Contains(clean, "\n") && width > 0 {
 			// A folded console note stays one line at any width.
 			clean = ansi.Truncate(clean, max(1, width-ansi.StringWidth(label)), "…")
 		}
@@ -271,6 +293,10 @@ func (t *Transcript) renderRows() {
 		for i := range strings.Count(clean, "\n") + 1 {
 			kinds[line+i] = row.Kind
 			indents[line+i] = indent
+			if i < len(hangs) && hangs[i] > 0 {
+				// A code line wraps under its own indentation.
+				indents[line+i] = indent + hangs[i]
+			}
 			rowLines[line+i] = index
 		}
 		line += strings.Count(clean, "\n") + 1

@@ -19,10 +19,14 @@ type costView struct {
 	ledger       domain.UsageLedger
 	turnCost     float64
 	turnRequests int
+	// turnAll and turnTokens are the ledger's requests and tokens then,
+	// for the turn's line under its reply.
+	turnAll, turnTokens int
 }
 
 func (c *costView) beginTurn() {
 	c.turnCost, c.turnRequests = c.ledger.Cost, c.ledger.CostRequests
+	c.turnAll, c.turnTokens = c.ledger.Requests, c.ledger.PromptTokens+c.ledger.CompletionTokens
 }
 
 // loadUsage reads the ledger of the session on screen, so the session's
@@ -48,16 +52,20 @@ func (m AppModel) observeUsage(ledger domain.UsageLedger, warn bool) AppModel {
 	return m.refreshUsagePanel()
 }
 
-// costParts is the footer's turn and session cost; absent while no request
-// reported one.
-func (m AppModel) costParts() []string {
+// costParts is the footer's turn and session cost, absent while no request
+// reported one, and the session's unmetered requests, whose cost the total
+// leaves out; withTurn false leaves the turn's cost out.
+func (m AppModel) costParts(withTurn bool) []string {
 	var parts []string
 	ledger := m.cost.ledger
-	if ledger.CostRequests > m.cost.turnRequests {
+	if withTurn && ledger.CostRequests > m.cost.turnRequests {
 		parts = append(parts, m.Theme.Tf("footer.costTurn", FormatUSD(ledger.Cost-m.cost.turnCost)))
 	}
 	if ledger.CostRequests > 0 {
 		parts = append(parts, m.Theme.Tf("footer.costSession", FormatUSD(ledger.Cost)))
+	}
+	if ledger.Unmetered > 0 {
+		parts = append(parts, m.Theme.Tf("footer.unmetered", ledger.Unmetered))
 	}
 	return parts
 }
@@ -112,7 +120,7 @@ func (m AppModel) openUsagePanel() AppModel {
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)
-	m.Info.SetContent(usageContent(m.cost.ledger, m.deps.MaxSessionUSD, m.Theme))
+	m.Info.SetContent(usageContent(m.cost.ledger, m.deps.MaxSessionUSD, m.Theme, m.turnLog...))
 	m.Info.Viewport.GotoTop()
 	m.overlay = "usage"
 	return m
@@ -123,7 +131,7 @@ func (m AppModel) refreshUsagePanel() AppModel {
 		return m
 	}
 	offset := m.Info.Viewport.YOffset()
-	m.Info.SetContent(usageContent(m.cost.ledger, m.deps.MaxSessionUSD, m.Theme))
+	m.Info.SetContent(usageContent(m.cost.ledger, m.deps.MaxSessionUSD, m.Theme, m.turnLog...))
 	m.Info.Viewport.SetYOffset(offset)
 	return m
 }
@@ -161,16 +169,21 @@ func (m AppModel) usagePanelView() string {
 
 // usageContent is the /usage panel: requests, tokens, cost in total and by
 // provider (most expensive first), latency and the budget.
-func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme) string {
+func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme, turns ...turnUsage) string {
 	if l.Requests == 0 {
 		return theme.T("usage.empty") + "\n\n" + budgetLines(l, maxSessionUSD, theme)
 	}
-	lines := []string{
-		theme.Tf("usage.requests", l.Requests, l.CostRequests),
+	lines := []string{theme.Tf("usage.requests", l.Requests, l.CostRequests)}
+	if l.Unmetered > 0 {
+		// Cancelled or failed requests the provider may have billed: the
+		// cost below leaves them out.
+		lines = append(lines, theme.Tn("usage.unmetered", l.Unmetered, l.Unmetered))
+	}
+	lines = append(lines,
 		theme.Tf("usage.prompt", formatTokens(l.PromptTokens), formatTokens(l.CachedTokens), formatTokens(l.CacheWriteTokens)),
 		theme.Tf("usage.completion", formatTokens(l.CompletionTokens), formatTokens(l.ReasoningTokens)),
 		"",
-	}
+	)
 	if l.CostRequests > 0 {
 		lines = append(lines, theme.Tf("usage.cost", FormatUSD(l.Cost)))
 	} else {
@@ -209,6 +222,10 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme) stri
 		theme.Tf("usage.firstByte", formatLatency(l.FirstByte.Average(), l.FirstByte.Count), formatLatency(l.FirstByte.Max, l.FirstByte.Count)),
 		theme.Tf("usage.total", formatLatency(l.Total.Average(), l.Total.Count), formatLatency(l.Total.Max, l.Total.Count)),
 		"", budgetLines(l, maxSessionUSD, theme))
+	if turns := turnLogLines(turns, theme); len(turns) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, turns...)
+	}
 	return strings.Join(lines, "\n")
 }
 

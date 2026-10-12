@@ -261,5 +261,8 @@ func consoleLineText(line domain.ConsoleLine) string {
 		}
 		return "Restored " + strings.Join(files, ", ")
 	}
+	if f := line.Failure; f != nil {
+		return "Failed: " + f.Message
+	}
 	return ""
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -17,6 +18,25 @@ type ResolveToolUseCase struct {
 	Store       SessionStorePort
 	Continue    ContinueTurnUseCase
 	Diagnostics DiagnosticPort
+	// denyReason is what Deny tells the model with the denial.
+	denyReason string
+}
+
+// MaxDenyReasonRunes bounds the reason a denial carries to the model.
+const MaxDenyReasonRunes = 500
+
+// Deny denies the first pending call and tells the model why in the call's
+// result, "tool call denied by user: <reason>", so it can change course
+// instead of guessing; on 12 October 2026 a bare denial left the model
+// asking "should I change the text?". An empty reason is a bare denial.
+// The reason is one line, at most MaxDenyReasonRunes.
+func (u ResolveToolUseCase) Deny(ctx context.Context, s *domain.Session, id root.ToolCallID, reason string, emit func(Event) error) error {
+	reason = strings.Join(strings.Fields(reason), " ")
+	if runes := []rune(reason); len(runes) > MaxDenyReasonRunes {
+		reason = string(runes[:MaxDenyReasonRunes-1]) + "…"
+	}
+	u.denyReason = reason
+	return u.Execute(ctx, s, id, domain.DecisionDeny, emit)
 }
 
 func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) error {
@@ -122,7 +142,11 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	}
 	next := *s
 	if decision == domain.DecisionDeny {
-		if err := next.RecordToolOutcome(id, decision, domain.ToolOutcome{Content: "tool call denied by user", IsError: true}); err != nil {
+		denial := "tool call denied by user"
+		if u.denyReason != "" {
+			denial += ": " + u.denyReason
+		}
+		if err := next.RecordToolOutcome(id, decision, domain.ToolOutcome{Content: root.Text(denial), IsError: true}); err != nil {
 			return err
 		}
 		if err := u.Store.Save(ctx, next); err != nil {

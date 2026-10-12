@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -126,6 +127,37 @@ type AppModel struct {
 	// Esc stopped a turn (zero for none): the conversation marks it until a
 	// message follows or another operation runs.
 	cancelledAt int
+	// turnStarted is when the running turn began; see turn_clock.go.
+	turnStarted time.Time
+	// failureOperation records a failed turn's console line; its end keeps
+	// the footer's error.
+	failureOperation uint64
+	// allowed holds the commands allowed with S for the session on screen.
+	allowed *commandAllows
+	// denying is set while the card asks for the reason of a denial, typed
+	// in denyInput; see approval_deny_reason.go.
+	denying   bool
+	denyInput textinput.Model
+	// restoreOperation is a restore from Ctrl+D or /undo; its end says what
+	// went back. undoAsking waits for the key that answers /undo.
+	restoreOperation uint64
+	undoAsking       bool
+	// turnCosts are the finished turns' usage by the number of messages
+	// each ended after, drawn under them; turnLog the last ones, for
+	// /usage. Both are this console's, from the ledger's totals.
+	turnCosts map[int]turnUsage
+	turnLog   []turnUsage
+	// bottomLines is how long the conversation was when it last showed its
+	// bottom; see scroll_pill.go.
+	bottomLines int
+	// Notifications and the terminal's title; see notify.go. turnDone
+	// marks a long turn that just ended; titleLabel is the session's title.
+	turnDone      bool
+	lastAttention string
+	titleReady    bool
+	lastTitle     string
+	titleLabel    string
+	quitting      bool
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -135,6 +167,11 @@ func (m AppModel) quit() (tea.Model, tea.Cmd) {
 	m.zones.Close()
 	if m.deps.Quit != nil {
 		m.deps.Quit(m.Header.State)
+	}
+	m.quitting = true
+	if m.titleReady {
+		// The title the console found comes back.
+		return m, tea.Sequence(tea.Raw(titleRestore), tea.Quit)
 	}
 	return m, tea.Quit
 }
@@ -169,6 +206,7 @@ func New(deps Dependencies) AppModel {
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
 	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}, pasted: map[string]bool{}}
+	m.withCommandAllows()
 	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()
 	m.Changes.Theme = m.Theme
@@ -186,6 +224,7 @@ func New(deps Dependencies) AppModel {
 	if m.Header.State.ID == "" {
 		m.Header.State.Workspace = deps.Workspace
 	}
+	m.loadTitleLabel()
 	m.Header.SandboxOff = deps.Sandbox.Off()
 	m.Help.Notice = deps.Sandbox.sandboxInfo(m.Theme)
 	m.Status.State = m.Header.State.Status
@@ -209,6 +248,12 @@ func (m AppModel) Init() tea.Cmd {
 	if len(m.pendingPlanOutcomes) > 0 {
 		repairs = tea.Batch(func() tea.Msg { return planOutcomesMsg{} }, repairs)
 	}
+	if git := m.readGitState(); git != nil {
+		repairs = tea.Batch(repairs, git)
+	}
+	if os.Getenv("TERM") != "dumb" {
+		repairs = tea.Batch(repairs, startTitle())
+	}
 	if m.Theme.Monochrome {
 		return repairs
 	}
@@ -217,9 +262,20 @@ func (m AppModel) Init() tea.Cmd {
 	}
 	return tea.Batch(tea.RequestBackgroundColor, repairs)
 }
+
+// Update handles a message, then rings and sets the terminal's title as
+// what it changed asks.
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.handle(msg)
+	return next.(AppModel).signal(cmd)
+}
+
+func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionUpdate, application.DiagnosticEvent{OperationID: m.operationID})
 	defer span.End(application.DiagnosticErrorNone)
+	if k, ok := msg.(tea.KeyPressMsg); ok && m.undoAsking {
+		return m.answerUndo(k)
+	}
 	if next, cmd, handled := m.navigation(msg); handled {
 		return next, cmd
 	}
@@ -250,6 +306,18 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.editorResult(v), nil
 	case workspaceFilesMsg:
 		return m.filesLoaded(v), nil
+	case titleReadyMsg:
+		m.titleReady = true
+		return m, nil
+	case gitStateMsg:
+		if v.Workspace == m.Header.State.Workspace {
+			m.Header.Git = nil
+			if v.Err == nil {
+				state := v.State
+				m.Header.Git = &state
+			}
+		}
+		return m, nil
 	case quitDisarm:
 		if v.arm == m.quitArm && !m.quitArmedAt.IsZero() {
 			m.quitArmedAt = time.Time{}
@@ -308,6 +376,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.Transcript.Viewport.SetYOffset(offset)
 		}
+		// Rewrapped lines are not new ones.
+		m.bottomLines = m.Transcript.VisualLineCount()
 		m.Composer.Input.SetWidth(max(1, v.Width))
 		m.resizeComposer()
 		m.SearchBox.Input.SetWidth(max(1, v.Width-18))
@@ -392,7 +462,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.observeUsage(*v.SessionUsage, v.BudgetWarning)
 		}
 		if v.Usage != nil {
-			m.tokens = v.Usage.TotalTokens
+			// The last request's prompt, against what the console lets a
+			// prompt reach.
+			m.tokens = v.Usage.PromptTokens
 			m.cached = 0
 			if v.Usage.PromptTokens > 0 {
 				m.cached = 100 * v.Usage.CachedTokens / v.Usage.PromptTokens
@@ -407,6 +479,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case operationComplete:
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
+		}
+		if !v.gitRead && m.turnRunning() {
+			// A turn may have committed or switched branches: the header
+			// reads the workspace's Git state again.
+			v.gitRead = true
+			next, cmd := m.Update(v)
+			return next, tea.Batch(cmd, next.(AppModel).readGitState())
 		}
 		wasTurn := m.turnRunning()
 		if m.cancel != nil {
@@ -499,15 +578,22 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switched := oldID != m.Header.State.ID
 		if wasTurn {
-			// The turn may have written files: the @ menu lists them again.
+			// The turn may have written files: the @ menu lists them again;
+			// it may have titled the session.
 			m.mention.stale = true
+			m.loadTitleLabel()
 		}
 		if switched {
+			// Commands allowed with S belong to the session they were
+			// allowed in.
+			m.allowed.reset()
 			m.mention = mentionState{}
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
 			m.tokens = 0
 			m.cached = 0
+			m.turnCosts, m.turnLog = nil, nil
+			m.loadTitleLabel()
 			m = m.loadUsage()
 			m.unsentPrompts = nil
 			m.failures = nil
@@ -538,6 +624,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.submittedPrompt = ""
 		m.Status.State = v.Session.Status()
+		if switched || v.Session.Status() != domain.StatusApproval {
+			// A card keeps the turn's clock running; an end stops it.
+			if elapsed := m.stopTurnClock(); elapsed > 0 && !switched {
+				m.finishTurnUsage(len(v.Session.Export().Messages), elapsed)
+				// A long turn rings at its end, unless the person stopped it.
+				m.turnDone = elapsed >= notifyAfter && !errors.Is(v.Err, context.Canceled)
+			}
+		}
 		if m.deps.ApprovalSettings != nil {
 			m.Status.Autonomous = m.deps.ApprovalSettings.Autonomous()
 		}
@@ -549,7 +643,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		steered := (m.steerCancelled == v.ID || m.closedCancelled == v.ID) && errors.Is(v.Err, context.Canceled)
 		m.steerCancelled, m.closedCancelled = 0, 0
 		m.cancelledAt = 0
-		if cancelled := errors.Is(v.Err, context.Canceled) && !steered; cancelled && v.Err.Error() == context.Canceled.Error() && v.PluginApproval == nil {
+		// The end of recording a failed turn's line keeps the turn's error
+		// in the footer, saved or not.
+		recorded := m.failureOperation == v.ID
+		m.failureOperation = 0
+		var failed *domain.TurnFailure
+		if cancelled := errors.Is(v.Err, context.Canceled) && !steered && !recorded; cancelled && v.Err.Error() == context.Canceled.Error() && v.PluginApproval == nil {
 			// On 10 October 2026 Esc left "! context canceled" across the
 			// footer, hiding the state and the cost: the person's own Esc
 			// is not an error, so it is said in the footer's state instead.
@@ -564,7 +663,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if status := v.Session.Status(); wasTurn || status == domain.StatusStreaming || status == domain.StatusInterrupted || status == domain.StatusApproval {
 				m.cancelledAt = len(m.Header.State.Messages) + 1
 			}
-		} else if v.Err != nil && !steered {
+		} else if v.Err != nil && !steered && !recorded {
 			m.Status.Error = strings.Replace(v.Err.Error(), context.Canceled.Error(), m.Theme.T("status.cancelled"), 1)
 			if v.PluginApproval != nil {
 				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
@@ -575,13 +674,24 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Status.Error = strings.Replace(m.Status.Error, domain.ErrToolCallLimit.Error(), m.Theme.T("error.toolCallLimit"), 1)
 			}
 			m.Status.Error = m.budgetErrorText(v.Err, m.Status.Error)
+			m.Status.Error = m.withProviderHint(v.Err, m.Status.Error)
+			if failure, ok := turnFailure(v.Err); ok && wasTurn && returned == "" {
+				// The transcript keeps the failure once the footer moves on.
+				failed = &failure
+			}
 			if returned != "" {
 				m.Status.Error += " " + returned
 			}
-		} else if m.draft == "" {
+		} else if m.draft == "" && !recorded {
 			m.Status.Error = ""
 		}
 		m.exitCancelled, m.queueReturned = 0, 0
+		if v.ID == m.restoreOperation {
+			m.restoreOperation = 0
+			if v.Err == nil {
+				m.Status.Notice = m.restoredNotice(v.Session.Export())
+			}
+		}
 		if v.Fresh && v.Err == nil {
 			m.Status.Notice = m.Theme.T("notice.newStarted")
 		}
@@ -598,6 +708,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.steer.Peek() == "" && !m.inlineApproval() {
 			m = m.autoOpenIncidentCard()
 			m = m.autoOpenRepairPanel()
+		}
+		if failed != nil {
+			if record := m.recordTurnFailure(*failed); record != nil {
+				// A queued prompt starts when the line is recorded.
+				return m, record
+			}
 		}
 		if record := m.recordPlanOutcomes(); record != nil {
 			// A queued prompt starts when the outcome is recorded.
@@ -616,6 +732,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
 			m.cost.beginTurn()
+			m.startTurnClock()
 			start := m.deps.Start
 			store := m.deps.Store
 			cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
@@ -682,6 +799,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/approvals" {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("approvals"))
+			}
+			if command == "/undo" {
+				return m.askUndo()
 			}
 			if command == "/copy" {
 				m.Composer.Input.Reset()
@@ -852,7 +972,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		case "pgdown":
 			m.Transcript.Viewport.PageDown()
+			m.markBottom()
 			return m, nil
+		case "ctrl+end":
+			m.jumpBottom()
+			return m, nil
+		case "ctrl+home":
+			m.Transcript.Viewport.GotoTop()
+			return m, nil
+		case "end":
+			if m.overlay == "" && m.Composer.Input.Value() == "" {
+				// End belongs to the composer while it holds a draft.
+				m.jumpBottom()
+				return m, nil
+			}
 		}
 	case tea.MouseClickMsg:
 		if v.Button == tea.MouseLeft {
@@ -860,6 +993,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.zones.Get(m.prefix + id).InBounds(v) {
 					return m.Update(ControlIntent(id))
 				}
+			}
+			if _, away := m.newLines(); away && m.zones.Get(m.prefix+"jump-bottom").InBounds(v) {
+				m.jumpBottom()
+				return m, nil
 			}
 			if m.mentionActive() {
 				for i, path := range m.mentionMatches() {
@@ -896,6 +1033,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.MouseWheelMsg:
 		var cmd tea.Cmd
 		m.Transcript.Viewport, cmd = m.Transcript.Viewport.Update(v)
+		m.markBottom()
 		return m, cmd
 	}
 	var cmd tea.Cmd
@@ -936,6 +1074,8 @@ func (m AppModel) View() tea.View {
 			menu = m.slashMenu(suggestions)
 		} else if m.mentionActive() {
 			menu = m.mentionMenu()
+		} else if m.overlay == "" {
+			menu = m.scrollPill()
 		}
 		if len(menu) > 0 {
 			lines := strings.Split(body, "\n")
@@ -1027,8 +1167,11 @@ func (m *AppModel) refreshTranscript() {
 		// New rows move the lines a finished selection pointed at.
 		m.clearSelection()
 	}
+	m.markBottom()
+	defer m.markBottom()
 	m.Changes.SetSession(m.Header.State)
 	m.Transcript.Pastes = m.pasted
+	m.Transcript.TurnCosts = m.turnCostLines()
 	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
@@ -1086,6 +1229,7 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	m.submittedPrompt = string(prompt)
 	m.submittedAt = len(m.Header.State.Messages)
 	m.cost.beginTurn()
+	m.startTurnClock()
 	m.Composer.Input.Reset()
 	m.Status.Error = ""
 	m.failures = nil
@@ -1119,6 +1263,9 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 		return changed, cmd
 	case command == "/export":
 		return m.exportSession(text)
+	case command == "/copy" && (strings.EqualFold(text, "code") || strings.Trim(text, "0123456789") == ""):
+		m.Composer.Input.Reset()
+		return m, m.copyCode(strings.ToLower(text))
 	case slashPromptModes[command]:
 		changed, cmd := m.switchMode(slashModes[command])
 		if changed.Status.Error != "" {

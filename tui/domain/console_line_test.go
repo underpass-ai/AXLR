@@ -85,3 +85,41 @@ func TestAPlanOutcomeIsAConsoleLineOutsideTheModelsHistory(t *testing.T) {
 		t.Fatal("a console line was added during a turn")
 	}
 }
+
+// A failed request leaves a console line that survives a restore; it needs
+// a message on one line, and is refused during a turn.
+func TestATurnFailureIsAConsoleLine(t *testing.T) {
+	s := idleSession(t)
+	if err := s.BeginTurn("hola", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.AddTurnFailure(TurnFailure{Message: "OpenRouter invalid_request (HTTP 400): not a valid model ID"}); err == nil {
+		t.Fatal("a failure was added during a turn")
+	}
+	if err := s.InterruptDraft(""); err != nil {
+		t.Fatal(err)
+	}
+	messages := s.Messages()
+	failure := TurnFailure{Message: "OpenRouter invalid_request (HTTP 400): not a valid model ID", Hint: "choose_model"}
+	if err := s.AddTurnFailure(failure); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range []TurnFailure{{}, {Message: " "}, {Message: "two\nlines"}, {Message: string(make([]rune, MaxTurnFailureRunes+1))}} {
+		if err := s.AddTurnFailure(bad); err == nil {
+			t.Fatalf("added %q", bad.Message)
+		}
+	}
+	lines := s.ConsoleLines()
+	if !reflect.DeepEqual(s.Messages(), messages) || len(lines) != 1 || lines[0].AfterMessage != 1 || *lines[0].Failure != failure {
+		t.Fatalf("lines %+v", lines)
+	}
+	restored, err := RestoreSession(s.Export())
+	if err != nil || !reflect.DeepEqual(restored.ConsoleLines(), lines) {
+		t.Fatalf("restore: %v", err)
+	}
+	two := s.Export()
+	two.ConsoleLines[0].Plan = &PlanOutcome{PlanID: "add-a-func-dce953", Status: PlanDone}
+	if _, err := RestoreSession(two); err == nil {
+		t.Fatal("a line with two kinds was restored")
+	}
+}

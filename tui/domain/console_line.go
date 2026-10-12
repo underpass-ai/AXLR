@@ -17,9 +17,11 @@ type ConsoleLine struct {
 	AfterMessage int
 	At           time.Time
 	// Plan is the outcome of a plan the session started; Restore is files
-	// the person put back to an earlier snapshot. A line carries one.
+	// the person put back to an earlier snapshot; Failure is a turn that
+	// failed, such as a model request the provider refused. A line carries one.
 	Plan    *PlanOutcome
 	Restore *FileRestore
+	Failure *TurnFailure
 }
 
 // PlanOutcome is what a finished plan left, as the session that planned it
@@ -105,6 +107,10 @@ func (l ConsoleLine) clone() ConsoleLine {
 		restore := l.Restore.clone()
 		l.Restore = &restore
 	}
+	if l.Failure != nil {
+		failure := *l.Failure
+		l.Failure = &failure
+	}
 	return l
 }
 
@@ -132,19 +138,30 @@ func (s *Session) AddPlanOutcome(outcome PlanOutcome) (bool, error) {
 }
 
 // validateConsoleLines checks lines restored with a transcript of messages
-// messages: each anchored inside it, in order, and carrying one outcome or
-// one restore.
+// messages: each anchored inside it, in order, and carrying exactly one
+// outcome, restore or turn failure.
 func validateConsoleLines(lines []ConsoleLine, messages int) error {
 	previous := 0
 	for _, line := range lines {
-		if line.AfterMessage < previous || line.AfterMessage > messages || (line.Plan == nil) == (line.Restore == nil) {
+		kinds := 0
+		for _, set := range []bool{line.Plan != nil, line.Restore != nil, line.Failure != nil} {
+			if set {
+				kinds++
+			}
+		}
+		if line.AfterMessage < previous || line.AfterMessage > messages || kinds != 1 {
 			return errors.New("console line is not anchored in the transcript")
 		}
-		if line.Plan != nil {
-			if err := line.Plan.validate(); err != nil {
-				return err
-			}
-		} else if err := line.Restore.validate(); err != nil {
+		var err error
+		switch {
+		case line.Plan != nil:
+			err = line.Plan.validate()
+		case line.Restore != nil:
+			err = line.Restore.validate()
+		default:
+			err = line.Failure.validate()
+		}
+		if err != nil {
 			return err
 		}
 		previous = line.AfterMessage

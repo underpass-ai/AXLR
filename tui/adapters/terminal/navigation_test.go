@@ -121,8 +121,11 @@ func TestNavigationRestoreRequiresExplicitContinue(t *testing.T) {
 	s.InterruptDraft("partial")
 	m := navModel(t, &s)
 	m.deps.Agent = application.AgentTurnUseCase{Continue: application.ContinueTurnUseCase{Store: m.deps.Store, Models: navStream{}}}
-	if m.Init() != nil || m.Busy {
+	// Init only saves the terminal's title before setting it.
+	if msg := m.Init()(); m.Busy || msg == nil {
 		t.Fatal("load executed")
+	} else if _, ok := msg.(tea.BatchMsg); ok {
+		t.Fatalf("init does more than save the title: %T", msg)
 	}
 	if !strings.Contains(m.View().Content, "ctrl+r continue") {
 		t.Fatal("no explicit continuation")

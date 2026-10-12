@@ -44,7 +44,9 @@ func (m *AppModel) syncApproval() {
 	if tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call); known && err == nil {
 		switch tool.Identity.Kind {
 		case domain.ToolKindLocal:
-			target = m.Theme.Tf("approval.localTarget", tool.Identity.LocalOperation, m.Header.State.Workspace)
+			// Local tools work in the workspace, which the header names; a
+			// command elsewhere in it shows its cwd on the card.
+			target = m.Theme.Tf("approval.localTarget", tool.Identity.LocalOperation)
 		case domain.ToolKindPlugin:
 			target = m.Theme.Tf("approval.pluginTarget", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
 		case domain.ToolKindHost:
@@ -58,24 +60,21 @@ func (m *AppModel) syncApproval() {
 			case domain.HostOperationForgeTool:
 				target = m.Theme.Tf("approval.forgeTarget", forgedName(p.Call.Arguments.Bytes()))
 			case domain.HostOperationRunTool:
-				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()), m.Header.State.Workspace)
+				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()))
 			}
 		}
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
-		// An exec card leads with the command as it will run, above its
-		// JSON: the arguments array reads as a command line, not a list.
-		var lead []string
-		if warning := m.hiddenInputWarning(p); warning != "" {
-			lead = append(lead, warning)
-		}
+		// A reason being typed was for another call.
+		m.denying = false
+		// An exec card is the command as it will run, not its JSON: the
+		// arguments array reads as a command line, not a list.
 		if command := m.execCardCommand(p); command != "" {
-			lead = append(lead, "$ "+command)
-		}
-		if len(lead) > 0 {
-			// Only an exec call leads this way, and its card is JSON text.
-			m.Approval.Details.SetContent(strings.Join(lead, "\n") + "\n\n" + m.Approval.Details.Text())
+			if warning := m.hiddenInputWarning(p); warning != "" {
+				command = warning + "\n\n" + command
+			}
+			m.Approval.Details.SetContent(command)
 			m.Approval.Details.Viewport.GotoTop()
 		}
 	}
@@ -181,6 +180,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	if paste, ok := msg.(tea.PasteMsg); ok {
 		if m.approvalFocus() {
+			if m.denying {
+				m.denyInput, _ = m.denyInput.Update(paste)
+			}
 			return m, nil, true
 		}
 		if m.overlay == "search" {
@@ -226,10 +228,21 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.clearSelection()
 			return m, nil, true
 		}
+		if m.approvalFocus() && m.denying {
+			return m.denyReasonKey(k)
+		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
+			if k.String() == "A" && m.pendingCalls() > 1 {
+				// Shift+A approves the card's call and those queued behind
+				// it; with one call it is A.
+				intent = "approve-all"
+			}
 			if strings.ToLower(k.String()) == "f" {
 				intent = "autonomy-on"
+			}
+			if strings.ToLower(k.String()) == "s" && m.execCardCommand(m.Approval.Pending) != "" {
+				intent = "allow-session"
 			}
 			if intent == ControlIntent(domain.DecisionAutoApprove) {
 				intent = "always-allow"
@@ -362,7 +375,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
+		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "approve-all", "allow-session", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
 		if m.overlay == "sessions" {
 			m.Picker.Deleting = false
 			if m.Picker.ShowsNew() && m.zones.Get(m.prefix+"session-new").InBounds(mouse) {
@@ -420,7 +433,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	if !hasIntent {
 		return m, nil, false
 	}
-	if m.approvalFocus() && intent != "approve" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
+	if m.approvalFocus() && intent != "approve" && intent != "approve-all" && intent != "allow-session" && intent != "deny-send" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
 		return m, nil, true
 	}
 	switch intent {
@@ -432,6 +445,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return next, cmd, true
 	case "usage":
 		return m.openUsagePanel(), nil, true
+	case "changes-restore":
+		next, cmd := m.restoreChange()
+		return next, cmd, true
 	case "changes":
 		m.Changes.Open(m.Header.State)
 		m.Changes.Resize(m.Layout.Width, m.Layout.Height-1)
@@ -700,12 +716,33 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		m.overlay = ""
 		return m, nil, true
-	case "approve", "always-allow", "autonomy-on", "deny":
+	case "approve-all":
+		next, cmd := m.approveAll()
+		return next, cmd, true
+	case "approve", "always-allow", "autonomy-on", "deny", "allow-session", "deny-send":
 		if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() {
 			return m, nil, true
 		}
+		if intent == "deny" {
+			// D asks first for the reason the model is told.
+			return m.askDenyReason(), nil, true
+		}
 		p, _ := m.pending()
 		decision := m.Approval.Intent(intent)
+		reason := ""
+		if intent == "deny-send" {
+			decision, reason = domain.DecisionDeny, strings.TrimSpace(m.denyInput.Value())
+			m.denying = false
+		}
+		if intent == "allow-session" {
+			// This exact command runs from now on in this session without
+			// a card; this call is approved like A.
+			if m.execCardCommand(p) == "" || !m.allowed.allow(m.Header.State.ID, p.Call.Arguments) {
+				return m, nil, true
+			}
+			decision = domain.DecisionApprove
+		}
+		m.resumeTurnClock()
 		resolve := m.deps.Resolve
 		settings := m.deps.ApprovalSettings
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
@@ -730,6 +767,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					return err
 				}
 				decision = domain.DecisionApprove
+			}
+			if decision == domain.DecisionDeny {
+				return resolve.Deny(ctx, s, p.Call.ID, reason, emit)
 			}
 			return resolve.Execute(ctx, s, p.Call.ID, decision, emit)
 		})
@@ -770,6 +810,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		m.overlay = ""
+		m.resumeTurnClock()
 		u := application.SessionControlUseCase{Store: m.deps.Store, Agent: m.deps.Agent}
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			return u.Resume(ctx, s, emit)
