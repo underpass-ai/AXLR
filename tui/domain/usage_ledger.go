@@ -24,6 +24,23 @@ type UsageSample struct {
 	// when none was seen; Total is the whole request.
 	FirstByte time.Duration
 	Total     time.Duration
+	// Unmetered marks a request that was cancelled or failed after the
+	// provider may have started billing it, and reported no usage: its
+	// tokens are estimates (EstimatedTokens) and its cost is unknown.
+	Unmetered bool
+}
+
+// EstimatedTokens is how many tokens bytes hold at hundredths of a byte per
+// token, rounded up; the default prompt ratio when hundredths is not
+// positive. It sizes an unmetered request.
+func EstimatedTokens(bytes, hundredths int) int {
+	if bytes <= 0 {
+		return 0
+	}
+	if hundredths <= 0 {
+		hundredths = DefaultBytesPerTokenHundredths
+	}
+	return (bytes*100 + hundredths - 1) / hundredths
 }
 
 // UsageLedger is a session's running account of its model requests:
@@ -40,6 +57,12 @@ type UsageLedger struct {
 	// Cost sums the CostRequests that reported a cost.
 	Cost         float64
 	CostRequests int
+	// Unmetered counts the requests cancelled or failed without a usage
+	// report, which the provider may still have billed: their tokens are
+	// estimates and their cost is missing from Cost. On 12 October 2026 an
+	// essay cancelled after ten seconds of streaming left the session's
+	// cost where it was.
+	Unmetered int
 	Providers    map[string]ProviderUsage
 	FirstByte    LatencyStats
 	Total        LatencyStats
@@ -126,6 +149,9 @@ func (l *UsageLedger) Record(s UsageSample, maxSessionUSD float64) bool {
 	l.ReasoningTokens += s.ReasoningTokens
 	l.FirstByte.add(s.FirstByte)
 	l.Total.add(s.Total)
+	if s.Unmetered {
+		l.Unmetered++
+	}
 	if l.Providers == nil {
 		l.Providers = map[string]ProviderUsage{}
 	}

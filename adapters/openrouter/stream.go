@@ -15,6 +15,8 @@ import (
 
 // Stream emits validated text deltas and returns only a completed assistant message.
 // A callback error terminates the stream immediately and is returned unchanged.
+// A request that fails once sent returns its RequestBytes, and its Provider
+// when the stream named one, beside the error; never a message.
 func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onText func(domain.Text) error) (domain.CompletionResult, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.CompletionResult{}, err
@@ -62,53 +64,59 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	c.authorize(httpReq)
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "text/event-stream")
+	var accumulator streamAccumulator
+	// sent is what a request that failed once it was sent reports: the size
+	// of its body and who served it, so the console can account for a
+	// request the provider may bill although no usage arrived.
+	sent := func() domain.CompletionResult {
+		return domain.CompletionResult{RequestBytes: len(body), Provider: accumulator.provider}
+	}
 	response, err := c.http.Do(httpReq)
 	if err != nil {
 		if cause := streamError(); cause != nil {
-			return domain.CompletionResult{}, cause
+			return sent(), cause
 		}
-		return domain.CompletionResult{}, &TransportError{Cause: err, Provider: c.provider}
+		return sent(), &TransportError{Cause: err, Provider: c.provider}
 	}
 	var closeOnce sync.Once
 	closeBody := func() { closeOnce.Do(func() { _ = response.Body.Close() }) }
 	stop := context.AfterFunc(streamCtx, closeBody)
 	defer func() { stop(); closeBody() }()
 	if cause := streamError(); cause != nil {
-		return domain.CompletionResult{}, cause
+		return sent(), cause
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return domain.CompletionResult{}, c.providerError(response.StatusCode, errorResponseMessage(response.Body))
+		return sent(), c.providerError(response.StatusCode, errorResponseMessage(response.Body))
 	}
 	decoder := newSSEDecoder(response.Body)
-	var accumulator streamAccumulator
 	for {
 		if cause := streamError(); cause != nil {
-			return domain.CompletionResult{}, cause
+			return sent(), cause
 		}
 		data, err := decoder.Next()
 		if cause := streamError(); cause != nil {
-			return domain.CompletionResult{}, cause
+			return sent(), cause
 		}
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				return domain.CompletionResult{}, errors.New(c.provider + " stream ended without [DONE]")
+				return sent(), errors.New(c.provider + " stream ended without [DONE]")
 			}
-			return domain.CompletionResult{}, &TransportError{Cause: err, Provider: c.provider}
+			return sent(), &TransportError{Cause: err, Provider: c.provider}
 		}
 		inactivityTimer.Stop()
 		if bytes.Equal(data, []byte("[DONE]")) {
 			result, err := accumulator.Result()
 			if err != nil {
-				return domain.CompletionResult{}, err
+				return sent(), err
 			}
 			// What the mapper added after the streamed text, the note on an
 			// answer cut by the output limit, is streamed like the text.
 			if streamed := len(accumulator.content); len(result.Message.Content) > streamed {
 				if err := ctx.Err(); err != nil {
-					return domain.CompletionResult{}, err
+					return sent(), err
 				}
 				if err := onText(result.Message.Content[streamed:]); err != nil {
-					return domain.CompletionResult{}, err
+					return sent(), err
 				}
 			}
 			result.RequestBytes = len(body)
@@ -123,14 +131,14 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 				}
 				provider.withoutKey(c.apiKey)
 			}
-			return domain.CompletionResult{}, err
+			return sent(), err
 		}
 		for _, text := range deltas {
 			if err := ctx.Err(); err != nil {
-				return domain.CompletionResult{}, err
+				return sent(), err
 			}
 			if err := onText(text); err != nil {
-				return domain.CompletionResult{}, err
+				return sent(), err
 			}
 		}
 		inactivityTimer.Reset(c.streamInactivityTimeout)

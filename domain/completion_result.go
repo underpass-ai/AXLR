@@ -6,7 +6,9 @@ type CompletionResult struct {
 	Usage        *TokenUsage
 	// RequestBytes is the size of the request body the adapter sent; zero
 	// when unknown. With Usage.PromptTokens it measures how many bytes a
-	// prompt token of this model holds.
+	// prompt token of this model holds. A request that failed once sent
+	// reports it beside the error, with Provider when known, so its cost
+	// can be accounted for although no usage arrived.
 	RequestBytes int
 	// Provider names who served the request when the endpoint says, such as
 	// the upstream OpenRouter routed to; empty otherwise.
