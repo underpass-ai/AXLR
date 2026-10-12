@@ -284,7 +284,7 @@ func TestSlashCommandsIgnoreCaseAndSpacingAndNeverSendTheirText(t *testing.T) {
 		}
 	})
 	t.Run("other commands with text show their usage", func(t *testing.T) {
-		for draft, usage := range map[string]string{"/copy extra": "/copy", "/usage now": "/usage", "/autonomy maybe": "/autonomy [on|off]", "/plan add a thing": "/plan"} {
+		for draft, usage := range map[string]string{"/copy extra": "/copy [code|N]", "/usage now": "/usage", "/autonomy maybe": "/autonomy [on|off]", "/plan add a thing": "/plan"} {
 			session := navSession(t)
 			m, _ := selectionModel(t, &session)
 			m.Composer.Input.SetValue(draft)

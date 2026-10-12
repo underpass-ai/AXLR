@@ -378,7 +378,7 @@ var enMessages = map[string]string{
 	"approvals.empty":                      "No saved tools",
 	"help.shortcuts":                       "Ctrl+P actions · Ctrl+O sessions · Ctrl+F search",
 	"help.views":                           "PgUp/PgDn scroll · mouse wheel scrolls too",
-	"help.copy":                            "/copy copies the last reply · drag over the conversation to copy · Shift+drag selects with the terminal",
+	"help.copy":                            "/copy copies the last reply, /copy code its last code block, /copy N the N-th · drag over the conversation to copy · Shift+drag selects with the terminal",
 	"status.copied":                        "Copied %d lines",
 	"error.nothingToCopy":                  "Nothing to copy yet",
 	"slash.copy":                           "copy the last reply or the selection",
@@ -779,6 +779,10 @@ var enMessages = map[string]string{
 	"usage.turns":                 "Last turns in this console",
 	"usage.turn":                  "  %s · %d requests · %s tok · %s · %s",
 	"usage.turnOne":               "  %s · %d request · %s tok · %s · %s",
+	"error.noCodeBlock":           "The last reply has no code block",
+	"error.codeBlockRange":        "The last reply has %d code blocks: /copy 1 to /copy %[1]d, or /copy code for the last",
+	"error.codeBlockRangeOne":     "The last reply has %d code block: /copy 1 or /copy code",
+	"status.copiedBlock":          "Code block %d of %d",
 }
 
 var esMessages = map[string]string{
@@ -1095,7 +1099,7 @@ var esMessages = map[string]string{
 	"approvals.empty":                      "No hay herramientas guardadas",
 	"help.shortcuts":                       "Ctrl+P acciones · Ctrl+O sesiones · Ctrl+F buscar",
 	"help.views":                           "PgUp/PgDn desplazar · también con la rueda del ratón",
-	"help.copy":                            "/copy copia la última respuesta · arrastra sobre la conversación para copiar · Shift+arrastrar selecciona con el terminal",
+	"help.copy":                            "/copy copia la última respuesta, /copy code su último bloque de código, /copy N el N-ésimo · arrastra sobre la conversación para copiar · Shift+arrastrar selecciona con el terminal",
 	"status.copied":                        "Copiadas %d líneas",
 	"error.nothingToCopy":                  "Todavía no hay nada que copiar",
 	"slash.copy":                           "copiar la última respuesta o la selección",
@@ -1496,4 +1500,8 @@ var esMessages = map[string]string{
 	"usage.turns":                 "Últimos turnos en esta consola",
 	"usage.turn":                  "  %s · %d peticiones · %s tok · %s · %s",
 	"usage.turnOne":               "  %s · %d petición · %s tok · %s · %s",
+	"error.noCodeBlock":           "La última respuesta no tiene bloques de código",
+	"error.codeBlockRange":        "La última respuesta tiene %d bloques de código: de /copy 1 a /copy %[1]d, o /copy code para el último",
+	"error.codeBlockRangeOne":     "La última respuesta tiene %d bloque de código: /copy 1 o /copy code",
+	"status.copiedBlock":          "Bloque de código %d de %d",
 }

@@ -265,8 +265,9 @@ func (t *Transcript) renderRows() {
 			}
 		}
 		clean := Sanitize(row.Text)
+		var hangs []int
 		if row.Markdown {
-			clean = renderMarkdownWidth(clean, t.theme, t.Viewport.Width())
+			clean, hangs = renderMarkdownHangs(clean, t.theme, t.Viewport.Width())
 		}
 		label := Sanitize(row.Label)
 		if width := t.Viewport.Width(); row.Note != "" && !row.Wrap && !strings.Contains(clean, "\n") && width > 0 {
@@ -292,6 +293,10 @@ func (t *Transcript) renderRows() {
 		for i := range strings.Count(clean, "\n") + 1 {
 			kinds[line+i] = row.Kind
 			indents[line+i] = indent
+			if i < len(hangs) && hangs[i] > 0 {
+				// A code line wraps under its own indentation.
+				indents[line+i] = indent + hangs[i]
+			}
 			rowLines[line+i] = index
 		}
 		line += strings.Count(clean, "\n") + 1
