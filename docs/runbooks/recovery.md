@@ -42,4 +42,4 @@ Stop writers or use each engine's supported online backup. Do not copy only a li
 
 Restore to an isolated workspace/account first, keep original data intact, and verify paths, permissions, versions and store identities. Start a single writer, inspect sessions and engine state, and perform read-only recall/discovery before allowing effects. A restore rehearsal succeeds when the expected session and known engine records are readable and no interrupted operation has been silently replayed.
 
-For HTTP idempotency, SSE reconnect and `uncertain` direct calls, use [service operations](service.md). For a real responsibility transfer, use the [handoff contract](../ceremonies.md#handoff-contract).
+For HTTP idempotency, SSE reconnect and `uncertain` direct calls, use [service operations](service.md).

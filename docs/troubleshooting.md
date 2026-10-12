@@ -24,7 +24,7 @@ Start with the visible symptom, then use the relevant check. AXLR prints startup
 | KMP returns unrelated context or no guide | Check the selected store and matching guide assets | Follow [KMP verification](runbooks/kmp.md#verify-guide-and-store-selection) before writing |
 | A restored session is interrupted | Confirm the workspace matches the saved session | Press `Ctrl+R` to continue; AXLR does not run pending tools merely by loading it |
 | Session is locked | Another console may have the same session open | Close the other writer or choose another session; do not delete the lock while it is active |
-| No transcript text appears while waiting | Open the activity view with `Tab` | Reasoning, tool preparation and network waits have separate indicators; traces separate these timings |
+| No transcript text appears while waiting | Watch the footer: it names the phase (waiting for the model, reasoning, preparing tools, running a tool) with its seconds | Reasoning, tool preparation and network waits have separate indicators; traces separate these timings |
 | Active model context still exceeds its budget | Check prompt, arguments and discovery schema sizes after automatic result compaction | Use smaller source pages and a new scoped turn; full history remains saved |
 | HTTP service is live but not ready | Inspect both adapter endpoints, TLS identities and discovery | Use [service operations](runbooks/service.md); readiness does not make a model completion |
 | API revision or idempotency conflict | Reload the current resource and compare the original request | A changed decision needs a new key and the current revision; reconnecting SSE does not require a new turn |
