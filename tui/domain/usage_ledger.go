@@ -63,9 +63,9 @@ type UsageLedger struct {
 	// essay cancelled after ten seconds of streaming left the session's
 	// cost where it was.
 	Unmetered int
-	Providers    map[string]ProviderUsage
-	FirstByte    LatencyStats
-	Total        LatencyStats
+	Providers map[string]ProviderUsage
+	FirstByte LatencyStats
+	Total     LatencyStats
 	// Raised is what the person allowed beyond max_session_usd for this
 	// session, in dollars.
 	Raised float64
