@@ -39,12 +39,13 @@ var slashCommands = []slashCommand{
 	{"/jobs", "slash.jobs"},
 	{"/stop-ceremony", "slash.stopCeremony"},
 	{"/copy", "slash.copy"},
+	{"/export", "slash.export"},
 	{"/usage", "slash.usage"},
 	{"/exit", "slash.exit"},
 }
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export"}
 
 // slashSuggestionMax is how many suggestions the menu shows at once on a
 // screen tall enough; the selection scrolls the rest into view. On 12
@@ -197,7 +198,7 @@ var slashPromptModes = map[string]bool{"/normal": true, "/review": true, "/write
 
 // slashUsages are how the commands that take text are written; any other
 // command takes none.
-var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]"}
+var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]"}
 
 func slashUsage(command string) string {
 	if usage, ok := slashUsages[command]; ok {

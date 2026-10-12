@@ -664,6 +664,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m, m.copyLatest()
 			}
+			if command == "/export" {
+				return m.exportSession("")
+			}
 			if command == "/usage" {
 				m.Composer.Input.Reset()
 				return m.openUsagePanel(), nil
@@ -1052,6 +1055,8 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 			changed.Models.Input.SetValue(text)
 		}
 		return changed, cmd
+	case command == "/export":
+		return m.exportSession(text)
 	case slashPromptModes[command]:
 		changed, cmd := m.switchMode(slashModes[command])
 		if changed.Status.Error != "" {

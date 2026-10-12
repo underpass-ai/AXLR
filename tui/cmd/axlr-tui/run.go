@@ -592,6 +592,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Search:            application.SearchSessionUseCase{},
 		Store:             loggedStore,
 		DeleteSession:     store,
+		ExportFiles:       storage.ExportFiles{},
 		Session:           session,
 		Monochrome:        getenv("NO_COLOR") != "" || getenv("TERM") == "dumb",
 		InitialDraft:      initialDraft,

@@ -712,7 +712,7 @@ var enMessages = map[string]string{
 	"notice.newNoModel":          "Choose a model with /model first: it starts the session",
 	"notice.newAlready":          "This session is still empty: type a prompt",
 	"notice.newStarted":          "New session · Ctrl+O reopens the previous one",
-	"help.commandsSession":       "/new new session (/clear) · Ctrl+O reopen one",
+	"help.commandsSession":       "/new new session (/clear) · /export [path] save as Markdown · Ctrl+O reopen one",
 	"sessions.contentMatch":      "found in the conversation",
 	"sessions.deleteConfirm":     "Delete “%s” for good? y deletes · any other key keeps it",
 	"sessions.deleteOpen":        "The open session cannot be deleted: open another one first",
@@ -721,6 +721,10 @@ var enMessages = map[string]string{
 	"sessions.deleted":           "Deleted “%s”",
 	"sessions.elsewhere":         "↗ other workspace %s",
 	"sessions.elsewhereOpen":     "That session belongs to another workspace; open it with: axlr-tui --root %s --session %s",
+	"slash.export":               "save the session as Markdown",
+	"export.unavailable":         "Export is not available in this console",
+	"export.failed":              "Not exported: %s",
+	"export.done":                "Exported to %s",
 }
 
 var esMessages = map[string]string{
@@ -1371,7 +1375,7 @@ var esMessages = map[string]string{
 	"notice.newNoModel":          "Elige antes un modelo con /model: él empieza la sesión",
 	"notice.newAlready":          "Esta sesión sigue vacía: escribe un mensaje",
 	"notice.newStarted":          "Sesión nueva · Ctrl+O vuelve a abrir la anterior",
-	"help.commandsSession":       "/new sesión nueva (/nueva, /clear) · Ctrl+O abrir otra",
+	"help.commandsSession":       "/new sesión nueva (/nueva, /clear) · /export [ruta] guardar en Markdown · Ctrl+O abrir otra",
 	"sessions.contentMatch":      "encontrado en la conversación",
 	"sessions.deleteConfirm":     "¿Borrar «%s» para siempre? y la borra · otra tecla la conserva",
 	"sessions.deleteOpen":        "La sesión abierta no se puede borrar: abre antes otra",
@@ -1380,4 +1384,8 @@ var esMessages = map[string]string{
 	"sessions.deleted":           "Borrada «%s»",
 	"sessions.elsewhere":         "↗ otro espacio de trabajo %s",
 	"sessions.elsewhereOpen":     "Esa sesión es de otro espacio de trabajo; ábrela con: axlr-tui --root %s --session %s",
+	"slash.export":               "guardar la sesión en Markdown",
+	"export.unavailable":         "Esta consola no puede exportar",
+	"export.failed":              "No se ha exportado: %s",
+	"export.done":                "Exportada a %s",
 }

@@ -27,7 +27,7 @@ func TestSlashSuggestionsListMatchingCommands(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	for draft, want := range map[string]string{
-		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/stop-ceremony,/copy,/usage,/exit",
+		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/stop-ceremony,/copy,/export,/usage,/exit",
 		"/m":         "/model,/mcp,/improve,/theme,/autonomy on,/autonomy off,/normal,/stop-ceremony",
 		"/trab":      "/jobs",
 		"/ceremony":  "/stop-ceremony",
@@ -155,7 +155,7 @@ func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	}
 	view = ansi.Strip(m.View().Content)
-	if !strings.Contains(view, "> /stop-ceremony") || !strings.Contains(view, "/exit") {
+	if !strings.Contains(view, "> "+slashCommands[len(slashCommands)-4].name+" ") || !strings.Contains(view, "/exit") {
 		t.Fatalf("moving up inside the window scrolled it:\n%s", view)
 	}
 	for range limit {

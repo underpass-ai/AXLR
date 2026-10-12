@@ -29,7 +29,7 @@ func (ExportFiles) Create(ctx context.Context, path string, data []byte) error {
 	}
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if errors.Is(err, os.ErrExist) {
-		return fmt.Errorf("%s already exists; export to another path", path)
+		return exportExists{path}
 	}
 	if err != nil {
 		return err
@@ -41,3 +41,13 @@ func (ExportFiles) Create(ctx context.Context, path string, data []byte) error {
 	}
 	return file.Close()
 }
+
+// exportExists refuses an export over an existing file; it is an
+// os.ErrExist, so a default name can be tried again with a suffix.
+type exportExists struct{ path string }
+
+func (e exportExists) Error() string {
+	return fmt.Sprintf("%s already exists; export to another path", e.path)
+}
+
+func (exportExists) Unwrap() error { return os.ErrExist }

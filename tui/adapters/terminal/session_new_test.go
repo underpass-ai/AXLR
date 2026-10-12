@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -168,3 +169,43 @@ func TestCtrlDeleteDeletesASessionAfterConfirmation(t *testing.T) {
 }
 
 func must1[T any](v T, _ bool) T { return v }
+
+// On 12 October 2026 /copy, the last reply, was the only way to take a
+// conversation out of the console.
+func TestExportWritesTheSessionAsMarkdown(t *testing.T) {
+	s := usedSession(t)
+	m, _ := selectionModel(t, &s)
+	files := map[string]string{}
+	m.deps.ExportFiles = exportRecorder(files)
+	m.Composer.Input.SetValue("/export")
+	m = update(m, ControlIntent("send"))
+	if len(files) != 1 || m.Composer.Input.Value() != "" || m.Status.Error != "" {
+		t.Fatalf("/export: files=%d draft=%q error=%q", len(files), m.Composer.Input.Value(), m.Status.Error)
+	}
+	for path, text := range files {
+		if !strings.Contains(path, ".axlr") || !strings.Contains(text, "earlier") || m.Status.Notice != m.Theme.Tf("export.done", shortenHome(path)) {
+			t.Fatalf("default export %s: notice=%q\n%s", path, m.Status.Notice, text)
+		}
+	}
+	m.Composer.Input.SetValue("/export notes/out.md")
+	m = update(m, ControlIntent("send"))
+	want := filepath.Join(string(testWorkspace()), "notes", "out.md")
+	if _, ok := files[want]; !ok || m.Busy || len(m.Header.State.Messages) != 2 {
+		t.Fatalf("/export notes/out.md wrote %v", files)
+	}
+	empty := navSession(t)
+	m, _ = selectionModel(t, &empty)
+	m.deps.ExportFiles = exportRecorder(files)
+	m.Composer.Input.SetValue("/export")
+	m = update(m, ControlIntent("send"))
+	if !strings.Contains(m.Status.Error, "nothing to export") || m.Composer.Input.Value() != "/export" {
+		t.Fatalf("empty session: error=%q", m.Status.Error)
+	}
+}
+
+type exportRecorder map[string]string
+
+func (e exportRecorder) Create(_ context.Context, path string, data []byte) error {
+	e[path] = string(data)
+	return nil
+}
