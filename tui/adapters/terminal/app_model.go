@@ -794,11 +794,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch v.String() {
 		case "up":
-			if m.overlay == "" && (m.historyIndex < len(m.promptHistory) || m.Composer.Input.Line() == 0) && m.previousPrompt() {
+			// Like a shell, Up changes entry only from the first line, so a
+			// recalled multi-line prompt can be walked up line by line.
+			if m.overlay == "" && m.Composer.Input.Line() == 0 && m.previousPrompt() {
 				return m, nil
 			}
 		case "down":
-			if m.overlay == "" && m.historyIndex < len(m.promptHistory) && m.nextPrompt() {
+			if m.overlay == "" && m.historyIndex < len(m.promptHistory) && m.Composer.Input.Line() >= m.Composer.Input.LineCount()-1 && m.nextPrompt() {
 				return m, nil
 			}
 		case "enter":
