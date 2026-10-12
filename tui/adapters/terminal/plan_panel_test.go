@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -149,5 +150,19 @@ func TestPlanWithoutAPlanRunnerArmsPlanModeAndSaysSo(t *testing.T) {
 	m = runSlash(m, "/plan")
 	if m.Header.State.Mode != domain.ModePlan || m.Status.Notice != m.Theme.T("notice.planArmed") {
 		t.Fatalf("mode %q, notice %q", m.Header.State.Mode, m.Status.Notice)
+	}
+}
+
+// docs/troubleshooting.md tells the person to find a task's session in the
+// plans panel; on 12 October 2026 the panel never showed it.
+func TestThePlansPanelShowsEachTasksSession(t *testing.T) {
+	plan := samplePlan(domain.PlanRunning)
+	plan.Tasks[0].Session = "89abcdef0123456789abcdef01234567"
+	for _, locale := range []Locale{English, Spanish} {
+		content := ansi.Strip(planPanelContent([]domain.PlanRecord{plan}, Theme{Locale: locale, Monochrome: true}, time.Now()))
+		want := Translatef(locale, "plans.taskSession", "89abcdef")
+		if !strings.Contains(content, want) || strings.Contains(content, "89abcdef0") {
+			t.Fatalf("%s: the task's short session id is missing:\n%s", locale, content)
+		}
 	}
 }

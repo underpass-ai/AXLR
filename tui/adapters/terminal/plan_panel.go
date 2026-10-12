@@ -134,6 +134,11 @@ func planPanelContent(records []domain.PlanRecord, theme Theme, now time.Time) s
 			if t.Reason != "" {
 				detail += " · " + t.Reason
 			}
+			if t.Session != "" {
+				// troubleshooting.md tells the person to find a task's
+				// session here; the short form matches the picker's.
+				detail += theme.Tf("plans.taskSession", shortSessionID(t.Session))
+			}
 			lines = append(lines, theme.Tf("plans.taskRow", t.Wave, t.ID, detail))
 			if t.Handback != nil {
 				for _, note := range t.Handback.Notes {
@@ -208,4 +213,10 @@ func (m AppModel) planBadge() string {
 		return m.Theme.Tf("plans.badge", plan.ID, wave, plan.Waves, current)
 	}
 	return ""
+}
+
+// shortSessionID is the first eight hex digits of a session id, enough to
+// tell sessions apart in a list and to find them in Ctrl+O.
+func shortSessionID(id domain.SessionID) string {
+	return string(id[:min(len(id), 8)])
 }
