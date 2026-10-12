@@ -77,7 +77,12 @@ func TestNavigationPaletteHelpAndInfo(t *testing.T) {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: 'h', Text: "h"})
-	if !strings.Contains(m.View().Content, "Shift+Enter") || !strings.Contains(m.View().Content, "approve") {
+	if !strings.Contains(m.View().Content, "Shift+Enter") {
+		t.Fatal(m.View().Content)
+	}
+	// At 20 rows the help scrolls to its last rows.
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnd})
+	if !strings.Contains(m.View().Content, "Approvals and catalogs") {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
@@ -416,5 +421,52 @@ func TestOpeningAnotherSessionShowsItsLastMessage(t *testing.T) {
 	}
 	if m.Transcript.Viewport.YOffset() == 0 || !m.Transcript.Viewport.AtBottom() {
 		t.Fatalf("the opened session is not at its last message: offset %d", m.Transcript.Viewport.YOffset())
+	}
+}
+
+// On 12 October 2026 F1 at 15 rows lost its last rows (approve, quit,
+// copy) and could not scroll; F1 again did not close it.
+func TestHelpScrollsWhenItDoesNotFitAndF1ClosesIt(t *testing.T) {
+	s := navSession(t)
+	m := navModel(t, &s)
+	m = update(m, tea.WindowSizeMsg{Width: 80, Height: 15})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "help" {
+		t.Fatalf("F1 did not open the help: %q", m.overlay)
+	}
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "↓") || !strings.Contains(view, "more") || strings.Contains(view, "Ctrl+C twice") {
+		t.Fatalf("the help does not say more rows follow:\n%s", view)
+	}
+	if lipgloss.Height(m.View().Content) > 15 {
+		t.Fatal("the help is taller than the screen")
+	}
+	for range 40 {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	view = ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "/theme: I icons") || !strings.Contains(view, "above") || strings.Contains(view, "more") {
+		t.Fatalf("↓ did not reach the last rows:\n%s", view)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyPgUp})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyHome})
+	if m.Help.Top != 0 {
+		t.Fatalf("Home left the help at row %d", m.Help.Top)
+	}
+	m = update(m, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	if m.Help.Top != 3 {
+		t.Fatalf("the wheel moved the help to row %d", m.Help.Top)
+	}
+	m = update(m, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	if m.Help.Top != 0 {
+		t.Fatalf("the wheel moved the help back to row %d", m.Help.Top)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "" {
+		t.Fatalf("F1 did not close the help: %q", m.overlay)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "help" || m.Help.Top != 0 {
+		t.Fatalf("the help reopened at row %d", m.Help.Top)
 	}
 }

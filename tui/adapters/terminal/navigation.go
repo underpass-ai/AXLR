@@ -253,6 +253,17 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				next, cmd := m.repairKey(k)
 				return next, cmd, true
 			}
+			if m.overlay == "help" {
+				if delta, ok := helpScrollKeys[k.String()]; ok {
+					m.Help.Scroll(m.Theme, m.Layout.Width, m.Layout.Height-1, delta)
+					return m, nil, true
+				}
+				if k.String() == "f1" {
+					// F1 opens the help and F1 closes it.
+					m.overlay = ""
+					return m, nil, true
+				}
+			}
 			if k.String() == "esc" {
 				if m.overlay == "sessions" && m.Picker.Renaming {
 					m.Picker.Key(k.String(), k.Text)
@@ -367,6 +378,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		switch m.overlay {
 		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage":
 			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
+		case "help":
+			delta := 3
+			if wheel.Button == tea.MouseWheelUp {
+				delta = -3
+			}
+			m.Help.Scroll(m.Theme, m.Layout.Width, m.Layout.Height-1, delta)
 		}
 		return m, nil, true
 	}
@@ -784,6 +801,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.overlay = intent
 		return m, nil, true
 	case "help", "info", "approvals":
+		m.Help.Top = 0
 		if intent == "info" {
 			m.Info = NewTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
@@ -978,3 +996,6 @@ func (m AppModel) paletteAction(intent ControlIntent) (tea.Model, tea.Cmd, bool)
 	}
 	return m.navigation(intent)
 }
+
+// helpScrollKeys move the help list when it is taller than the overlay.
+var helpScrollKeys = map[string]int{"up": -1, "k": -1, "down": 1, "j": 1, "pgup": -10, "pgdown": 10, "home": -1 << 20, "end": 1 << 20}

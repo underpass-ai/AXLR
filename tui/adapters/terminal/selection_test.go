@@ -199,6 +199,7 @@ func TestHelpExplainsCopying(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 30}, {Width: 70, Height: 30}, {Width: 55, Height: 30}, {Width: 70, Height: 18}} {
 		m := update(sized(), size)
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyEnd})
 		if content := m.View().Content; !strings.Contains(content, "/copy") {
 			t.Fatalf("%dx%d help omits copying:\n%s", size.Width, size.Height, content)
 		}

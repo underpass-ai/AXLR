@@ -8,10 +8,16 @@ import (
 )
 
 // HelpOverlay lists the keys and commands; Notice, such as an exec sandbox
-// that does not confine commands, leads it.
-type HelpOverlay struct{ Notice string }
+// that does not confine commands, leads it. Top is the first row shown when
+// the list is taller than the overlay: on 12 October 2026 F1 at 15 rows lost
+// its last rows (approve, quit, copy) and could not scroll to them.
+type HelpOverlay struct {
+	Notice string
+	Top    int
+}
 
-func (h HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, height int) string {
+// rows is the whole help, notice first, wrapped to the overlay's width.
+func (h HelpOverlay) rows(theme Theme, inner int) []string {
 	rows := []string{
 		theme.Accent(theme.T("help.write")),
 		theme.T("help.sendFull"),
@@ -35,28 +41,45 @@ func (h HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, he
 		theme.T("help.modelSelect"),
 		theme.T("help.themeOptions"),
 	}
-	inner, body := OverlayBodySize(width, height)
-	var notice []string
 	if h.Notice != "" {
-		notice = append(strings.Split(ansi.Wrap(h.Notice, max(1, inner), ""), "\n"), "")
+		rows = append(append(strings.Split(ansi.Wrap(h.Notice, max(1, inner), ""), "\n"), ""), rows...)
 	}
-	if body < len(notice)+len(rows) {
-		// The full list no longer fits once it names every command.
-		rows = []string{
-			theme.T("help.sendShort"),
-			theme.T("help.commandsModelTheme"),
-			theme.T("help.changes"),
-			theme.T("help.commandsMCPPlugins"),
-			theme.T("help.commandsUpdate"),
-			theme.T("help.commandsShort"),
-			theme.T("help.shortcuts"),
-			theme.T("help.views"),
-			theme.T("help.copyShort"),
-			theme.T("help.approveShort"),
-			theme.T("help.quitShort"),
+	return rows
+}
+
+// window is the first row shown and how many rows fit with the marker row
+// that counts what is above and below.
+func (h HelpOverlay) window(total, body int) (top, shown int) {
+	if total <= body {
+		return 0, total
+	}
+	shown = max(1, body-1)
+	return max(0, min(h.Top, total-shown)), shown
+}
+
+// Scroll moves the list by delta rows within what the overlay can show.
+func (h *HelpOverlay) Scroll(theme Theme, width, height, delta int) {
+	inner, body := OverlayBodySize(width, height)
+	total := len(h.rows(theme, inner))
+	top, shown := h.window(total, body)
+	h.Top = max(0, min(top+delta, total-shown))
+}
+
+func (h HelpOverlay) View(theme Theme, z *zone.Manager, prefix string, width, height int) string {
+	inner, body := OverlayBodySize(width, height)
+	rows := h.rows(theme, inner)
+	if top, shown := h.window(len(rows), body); shown < len(rows) {
+		above, below := top, len(rows)-top-shown
+		rows = rows[top : top+shown]
+		marker := theme.Tf("slash.more", below)
+		switch {
+		case above > 0 && below > 0:
+			marker = theme.Tf("slash.aboveBelow", above, below)
+		case above > 0:
+			marker = theme.Tf("slash.above", above)
 		}
+		rows = append(rows, theme.Muted(marker))
 	}
-	rows = append(notice, rows...)
 	footer := z.Mark(prefix+"close", "["+theme.T("common.close")+"]")
 	return theme.Overlay(theme.T("palette.helpTitle"), theme.T("help.subtitle"), strings.Join(rows, "\n"), footer, width, height)
 }
