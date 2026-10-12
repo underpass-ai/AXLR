@@ -199,6 +199,8 @@ func TestModelSelectionBusyAndPendingPriority(t *testing.T) {
 	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "call", Name: "read", Arguments: args}}}})
 	m.Header.State = s.Export()
 	m.syncApproval()
+	// The card's bell is not the picker's doing.
+	m, _ = m.signal(nil)
 	n, cmd = m.Update(ControlIntent("models"))
 	m = n.(AppModel)
 	if cmd != nil || m.overlay == "models" || !m.approvalFocus() {

@@ -601,6 +601,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		MaxSessionUSD:     settings.MaxSessionUSD,
 		PromptCeiling:     locals.windows.PromptCeiling,
 		GitState:          terminal.ReadGitState,
+		Notify:            settings.NotifyMode(),
 		Sandbox:           terminal.SandboxStatus{Mode: settings.ExecSandbox().Mode, Unavailable: sandboxUnavailable},
 		Quit:              func(state domain.SessionState) { shown = state },
 	})

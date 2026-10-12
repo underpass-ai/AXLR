@@ -56,6 +56,9 @@ type Dependencies struct {
 	// GitState reads the workspace's branch for the header; nil shows
 	// none.
 	GitState func(context.Context, domain.Workspace) (GitState, error)
+	// Notify is the notify setting: NotifyBell (also for ""), NotifyOSC or
+	// NotifyOff.
+	Notify string
 	// Sandbox is the exec sandbox the launch found; the header marks one
 	// that is configured but does not confine commands.
 	Sandbox SandboxStatus

@@ -150,6 +150,14 @@ type AppModel struct {
 	// bottomLines is how long the conversation was when it last showed its
 	// bottom; see scroll_pill.go.
 	bottomLines int
+	// Notifications and the terminal's title; see notify.go. turnDone
+	// marks a long turn that just ended; titleLabel is the session's title.
+	turnDone      bool
+	lastAttention string
+	titleReady    bool
+	lastTitle     string
+	titleLabel    string
+	quitting      bool
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -159,6 +167,11 @@ func (m AppModel) quit() (tea.Model, tea.Cmd) {
 	m.zones.Close()
 	if m.deps.Quit != nil {
 		m.deps.Quit(m.Header.State)
+	}
+	m.quitting = true
+	if m.titleReady {
+		// The title the console found comes back.
+		return m, tea.Sequence(tea.Raw(titleRestore), tea.Quit)
 	}
 	return m, tea.Quit
 }
@@ -211,6 +224,7 @@ func New(deps Dependencies) AppModel {
 	if m.Header.State.ID == "" {
 		m.Header.State.Workspace = deps.Workspace
 	}
+	m.loadTitleLabel()
 	m.Header.SandboxOff = deps.Sandbox.Off()
 	m.Help.Notice = deps.Sandbox.sandboxInfo(m.Theme)
 	m.Status.State = m.Header.State.Status
@@ -237,6 +251,7 @@ func (m AppModel) Init() tea.Cmd {
 	if git := m.readGitState(); git != nil {
 		repairs = tea.Batch(repairs, git)
 	}
+	repairs = tea.Batch(repairs, startTitle())
 	if m.Theme.Monochrome {
 		return repairs
 	}
@@ -245,7 +260,15 @@ func (m AppModel) Init() tea.Cmd {
 	}
 	return tea.Batch(tea.RequestBackgroundColor, repairs)
 }
+
+// Update handles a message, then rings and sets the terminal's title as
+// what it changed asks.
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	next, cmd := m.handle(msg)
+	return next.(AppModel).signal(cmd)
+}
+
+func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionUpdate, application.DiagnosticEvent{OperationID: m.operationID})
 	defer span.End(application.DiagnosticErrorNone)
 	if k, ok := msg.(tea.KeyPressMsg); ok && m.undoAsking {
@@ -281,6 +304,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.editorResult(v), nil
 	case workspaceFilesMsg:
 		return m.filesLoaded(v), nil
+	case titleReadyMsg:
+		m.titleReady = true
+		return m, nil
 	case gitStateMsg:
 		if v.Workspace == m.Header.State.Workspace {
 			m.Header.Git = nil
@@ -550,8 +576,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switched := oldID != m.Header.State.ID
 		if wasTurn {
-			// The turn may have written files: the @ menu lists them again.
+			// The turn may have written files: the @ menu lists them again;
+			// it may have titled the session.
 			m.mention.stale = true
+			m.loadTitleLabel()
 		}
 		if switched {
 			// Commands allowed with S belong to the session they were
@@ -563,6 +591,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.tokens = 0
 			m.cached = 0
 			m.turnCosts, m.turnLog = nil, nil
+			m.loadTitleLabel()
 			m = m.loadUsage()
 			m.unsentPrompts = nil
 			m.failures = nil
@@ -597,6 +626,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// A card keeps the turn's clock running; an end stops it.
 			if elapsed := m.stopTurnClock(); elapsed > 0 && !switched {
 				m.finishTurnUsage(len(v.Session.Export().Messages), elapsed)
+				// A long turn rings at its end, unless the person stopped it.
+				m.turnDone = elapsed >= notifyAfter && !errors.Is(v.Err, context.Canceled)
 			}
 		}
 		if m.deps.ApprovalSettings != nil {

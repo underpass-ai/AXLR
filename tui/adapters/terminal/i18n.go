@@ -786,6 +786,11 @@ var enMessages = map[string]string{
 	"scroll.pill":                 "↓ more below · End",
 	"scroll.pillNew":              "↓ %d new lines · End",
 	"scroll.pillNewOne":           "↓ %d new line · End",
+	"title.idle":                  "ready",
+	"title.working":               "working",
+	"title.waiting":               "waiting for you",
+	"title.failed":                "error",
+	"notify.turnDone":             "the turn ended",
 }
 
 var esMessages = map[string]string{
@@ -1510,4 +1515,9 @@ var esMessages = map[string]string{
 	"scroll.pill":                 "↓ hay más abajo · End",
 	"scroll.pillNew":              "↓ %d líneas nuevas · End",
 	"scroll.pillNewOne":           "↓ %d línea nueva · End",
+	"title.idle":                  "lista",
+	"title.working":               "trabajando",
+	"title.waiting":               "te espera",
+	"title.failed":                "error",
+	"notify.turnDone":             "el turno ha terminado",
 }
