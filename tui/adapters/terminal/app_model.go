@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -133,6 +134,10 @@ type AppModel struct {
 	failureOperation uint64
 	// allowed holds the commands allowed with S for the session on screen.
 	allowed *commandAllows
+	// denying is set while the card asks for the reason of a denial, typed
+	// in denyInput; see approval_deny_reason.go.
+	denying   bool
+	denyInput textinput.Model
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a

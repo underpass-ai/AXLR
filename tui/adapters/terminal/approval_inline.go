@@ -72,6 +72,11 @@ func (m AppModel) approvalCard() string {
 	line := func(s string) string {
 		return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(s, width, "…"))
 	}
+	if m.denying {
+		// The reason takes the keys' row; its keys go on the title's.
+		hints = nil
+		note = m.Theme.T("approval.denyHints")
+	}
 	if m.Theme.editorial() {
 		return m.approvalSheet(details, hints, note)
 	}
@@ -82,7 +87,11 @@ func (m AppModel) approvalCard() string {
 	if m.Approval.Details.VisualLineCount() > m.approvalDetailRows() {
 		title += m.Theme.Muted("  " + m.Theme.T("approval.scroll"))
 	}
-	return strings.Join([]string{rule, line(title), details.View(), line(" " + strings.Join(actions, "   "))}, "\n")
+	keys := line(" " + strings.Join(actions, "   "))
+	if m.denying {
+		keys = line(" " + m.denyInput.View())
+	}
+	return strings.Join([]string{rule, line(title), details.View(), keys}, "\n")
 }
 
 // mainTranscript is the conversation sized to the rows the composer or the
@@ -151,5 +160,8 @@ func (m AppModel) approvalSheet(details Transcript, hints []footerHint, note str
 		actions = append(actions, "· "+note)
 	}
 	rows = append(rows, row("  "+strings.Join(actions, "   ")))
+	if m.denying {
+		rows[len(rows)-1] = row("  " + ansi.Strip(m.denyInput.View()))
+	}
 	return strings.Join(rows, "\n")
 }

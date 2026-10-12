@@ -66,6 +66,8 @@ func (m *AppModel) syncApproval() {
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
+		// A reason being typed was for another call.
+		m.denying = false
 		// An exec card is the command as it will run, not its JSON: the
 		// arguments array reads as a command line, not a list.
 		if command := m.execCardCommand(p); command != "" {
@@ -178,6 +180,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	if paste, ok := msg.(tea.PasteMsg); ok {
 		if m.approvalFocus() {
+			if m.denying {
+				m.denyInput, _ = m.denyInput.Update(paste)
+			}
 			return m, nil, true
 		}
 		if m.overlay == "search" {
@@ -222,6 +227,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			// Esc first drops a copied selection; a second Esc cancels work.
 			m.clearSelection()
 			return m, nil, true
+		}
+		if m.approvalFocus() && m.denying {
+			return m.denyReasonKey(k)
 		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
@@ -425,7 +433,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	if !hasIntent {
 		return m, nil, false
 	}
-	if m.approvalFocus() && intent != "approve" && intent != "approve-all" && intent != "allow-session" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
+	if m.approvalFocus() && intent != "approve" && intent != "approve-all" && intent != "allow-session" && intent != "deny-send" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
 		return m, nil, true
 	}
 	switch intent {
@@ -708,12 +716,21 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case "approve-all":
 		next, cmd := m.approveAll()
 		return next, cmd, true
-	case "approve", "always-allow", "autonomy-on", "deny", "allow-session":
+	case "approve", "always-allow", "autonomy-on", "deny", "allow-session", "deny-send":
 		if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() {
 			return m, nil, true
 		}
+		if intent == "deny" {
+			// D asks first for the reason the model is told.
+			return m.askDenyReason(), nil, true
+		}
 		p, _ := m.pending()
 		decision := m.Approval.Intent(intent)
+		reason := ""
+		if intent == "deny-send" {
+			decision, reason = domain.DecisionDeny, strings.TrimSpace(m.denyInput.Value())
+			m.denying = false
+		}
 		if intent == "allow-session" {
 			// This exact command runs from now on in this session without
 			// a card; this call is approved like A.
@@ -747,6 +764,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					return err
 				}
 				decision = domain.DecisionApprove
+			}
+			if decision == domain.DecisionDeny {
+				return resolve.Deny(ctx, s, p.Call.ID, reason, emit)
 			}
 			return resolve.Execute(ctx, s, p.Call.ID, decision, emit)
 		})

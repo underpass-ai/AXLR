@@ -77,7 +77,11 @@ func TestEditorialApprovalIsASheetWithClickableActions(t *testing.T) {
 	if !strings.Contains(plain, "AXLR wants to run local write") || strings.Contains(plain, "Confirm tool") || !strings.Contains(plain, "a approve") {
 		t.Fatalf("sheet missing:\n%s", plain)
 	}
-	n, c := click(t, m, "deny")
+	n, _ := click(t, m, "deny")
+	if m = n.(AppModel); !m.denying || !strings.Contains(ansi.Strip(m.View().Content), "Deny · reason for the model") {
+		t.Fatalf("the sheet does not ask for the reason:\n%s", ansi.Strip(m.View().Content))
+	}
+	n, c := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m = drain(t, n.(AppModel), c)
 	if m.deps.Session.Export().Activity[0].Decision != domain.DecisionDeny {
 		t.Fatal("sheet action is not clickable")
