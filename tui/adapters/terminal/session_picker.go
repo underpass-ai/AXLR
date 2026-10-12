@@ -46,6 +46,9 @@ type SessionPicker struct {
 	// Page is how many sessions the overlay shows at once, for PgUp and
 	// PgDn; the root sets it from the screen's height.
 	Page int
+	// Deleting asks to confirm deleting the selected session: y deletes it,
+	// any other key keeps it.
+	Deleting bool
 	// content holds each session's prompts and replies, lowercased.
 	content map[domain.SessionID]string
 }
@@ -91,6 +94,7 @@ func (p SessionPicker) NewSelected() bool { return p.OnNew && p.ShowsNew() }
 const (
 	SessionRenameIntent  ControlIntent = "session-rename"
 	SessionArchiveIntent ControlIntent = "session-archive"
+	SessionDeleteIntent  ControlIntent = "session-delete"
 )
 
 // planTaskRef is the plan task a worker session ran.
@@ -199,6 +203,13 @@ func (p SessionPicker) Current() (domain.SessionSummary, bool) {
 // Key handles the picker's own keys. It returns an intent when the root has
 // to persist something: a new title or an archive toggle.
 func (p *SessionPicker) Key(key, text string) ControlIntent {
+	if p.Deleting {
+		p.Deleting = false
+		if strings.ToLower(key) == "y" {
+			return SessionDeleteIntent
+		}
+		return ""
+	}
 	if p.Renaming {
 		selected := p.RenameSelected
 		p.RenameSelected = false
@@ -240,6 +251,9 @@ func (p *SessionPicker) Key(key, text string) ControlIntent {
 		if _, ok := p.Current(); ok {
 			return SessionArchiveIntent
 		}
+		return ""
+	case "ctrl+delete":
+		_, p.Deleting = p.Current()
 		return ""
 	}
 	p.key(key, text)
@@ -330,6 +344,9 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 	search := theme.Muted(theme.Icon("search")+" ") + p.Query
 	if p.Query == "" {
 		search = theme.Muted(theme.Icon("search") + " " + theme.T("sessions.searchHint"))
+	}
+	if current, ok := p.Current(); ok && p.Deleting {
+		search = theme.Accent(theme.Tf("sessions.deleteConfirm", ansi.Truncate(p.Title(current), 40, "…")))
 	}
 	if p.Renaming {
 		title := p.RenameText + theme.Accent("▏")

@@ -117,3 +117,54 @@ func TestTheSessionPickerOffersANewSessionFirst(t *testing.T) {
 		t.Fatal("the new-session row stays while filtering")
 	}
 }
+
+// On 12 October 2026 Ctrl+O could only archive. Ctrl+Del deletes the
+// selected session after a y, and never the open one.
+func TestCtrlDeleteDeletesASessionAfterConfirmation(t *testing.T) {
+	open := usedSession(t)
+	m, store := selectionModel(t, &open)
+	m.deps.DeleteSession = store
+	other, err := domain.NewSession("fedcba9876543210fedcba9876543210", testWorkspace(), "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := other.BeginTurn("the other one", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []domain.Session{open, other} {
+		if err := store.Save(context.Background(), s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	n, cmd := m.Update(tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl})
+	m = drain(t, n.(AppModel), cmd)
+	for m.Picker.Title(must1(m.Picker.Current())) != "the other one" {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	ctrlDel := tea.KeyPressMsg{Code: tea.KeyDelete, Mod: tea.ModCtrl}
+	m = update(m, ctrlDel)
+	if !m.Picker.Deleting || !strings.Contains(ansi.Strip(m.View().Content), "the other one") {
+		t.Fatal("Ctrl+Del did not ask to confirm")
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'n', Text: "n"})
+	if m.Picker.Deleting || len(m.Picker.Visible()) != 2 {
+		t.Fatal("n did not keep the session")
+	}
+	m = update(m, ctrlDel)
+	m = update(m, tea.KeyPressMsg{Code: 'y', Text: "y"})
+	if len(m.Picker.Visible()) != 1 || m.Status.Notice != m.Theme.Tf("sessions.deleted", "the other one") {
+		t.Fatalf("y did not delete: visible=%d notice=%q error=%q", len(m.Picker.Visible()), m.Status.Notice, m.Status.Error)
+	}
+	if list, _ := store.List(context.Background()); len(list) != 1 {
+		t.Fatalf("%d sessions saved after the delete", len(list))
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyHome})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	m = update(m, ctrlDel)
+	m = update(m, tea.KeyPressMsg{Code: 'y', Text: "y"})
+	if m.Status.Error != m.Theme.T("sessions.deleteOpen") || len(m.Picker.Visible()) != 1 {
+		t.Fatalf("the open session: error=%q", m.Status.Error)
+	}
+}
+
+func must1[T any](v T, _ bool) T { return v }

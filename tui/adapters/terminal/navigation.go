@@ -270,7 +270,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 			}
 			if k.String() == "esc" {
-				if m.overlay == "sessions" && m.Picker.Renaming {
+				if m.overlay == "sessions" && (m.Picker.Renaming || m.Picker.Deleting) {
 					m.Picker.Key(k.String(), k.Text)
 					return m, nil, true
 				}
@@ -794,6 +794,32 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		m.Picker.Labels[current.ID] = label
 		m.Picker.Selected = min(m.Picker.Selected, max(0, len(m.Picker.Visible())-1))
+		return m, nil, true
+	case SessionDeleteIntent:
+		current, ok := m.Picker.Current()
+		switch {
+		case !ok:
+			return m, nil, true
+		case current.ID == m.Header.State.ID:
+			m.Status.Error = m.Theme.T("sessions.deleteOpen")
+			return m, nil, true
+		case m.deps.DeleteSession == nil:
+			m.Status.Error = m.Theme.T("sessions.deleteUnavailable")
+			return m, nil, true
+		}
+		if err := m.deps.DeleteSession.Delete(m.lifetime.ctx, current.ID); err != nil {
+			m.Status.Error = m.Theme.Tf("sessions.deleteFailed", err.Error())
+			return m, nil, true
+		}
+		for i, item := range m.Picker.Items {
+			if item.ID == current.ID {
+				m.Picker.Items = append(m.Picker.Items[:i:i], m.Picker.Items[i+1:]...)
+				break
+			}
+		}
+		m.Picker.Selected = min(m.Picker.Selected, max(0, len(m.Picker.Visible())-1))
+		m.Status.Error = ""
+		m.Status.Notice = m.Theme.Tf("sessions.deleted", singleLine(m.Picker.Title(current)))
 		return m, nil, true
 	case "open-session":
 		selected, ok := m.Picker.Current()
