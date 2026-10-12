@@ -46,8 +46,11 @@ type PlanRunner struct {
 	Store     SessionStorePort
 	Workbench PlanWorkbenchPort
 	// RunToken names this console launch; a plan found running under
-	// another token was interrupted.
+	// another token whose console no longer holds it was interrupted.
 	RunToken string
+	// Liveness tells whether another launch still holds its token; nil
+	// takes every other launch for stopped.
+	Liveness RunLivenessPort
 	Lifetime context.Context
 	Now      func() time.Time
 	NewID    func() (domain.SessionID, error)
@@ -130,6 +133,9 @@ func (r *PlanRunner) Start(ctx context.Context, planID string) error {
 	if record.Status != domain.PlanReady && record.Status != domain.PlanInterrupted {
 		return fmt.Errorf("plan %s is %s, not ready", planID, record.Status)
 	}
+	if record.Status == domain.PlanInterrupted && record.RunToken != r.RunToken && ownerAlive(r.Liveness, record.RunToken, r.RunToken) {
+		return fmt.Errorf("plan %s was started by another console that is still open; resume it there", planID)
+	}
 	lifetime := r.Lifetime
 	if lifetime == nil {
 		lifetime = context.Background()
@@ -165,14 +171,15 @@ func (r *PlanRunner) Start(ctx context.Context, planID string) error {
 	return nil
 }
 
-// Reconcile marks plans a stopped console left running as interrupted.
+// Reconcile marks plans a stopped console left running as interrupted; a
+// plan another open console is running is left to it.
 func (r *PlanRunner) Reconcile(ctx context.Context) error {
 	records, err := r.Plans.Load(ctx)
 	if err != nil {
 		return err
 	}
 	for _, record := range records {
-		if record.Status == domain.PlanRunning && record.RunToken != r.RunToken {
+		if record.Status == domain.PlanRunning && !ownerAlive(r.Liveness, record.RunToken, r.RunToken) {
 			record.Status, record.Error, record.Updated = domain.PlanInterrupted, "the console that ran it stopped; start it again from /plan", r.now()
 			for i := range record.Tasks {
 				if record.Tasks[i].Status == domain.TaskRunning {
@@ -293,7 +300,9 @@ func (r *PlanRunner) run(ctx context.Context, id string) {
 		}
 	}
 	r.update(ctx, id, func(p *domain.PlanRecord) {
-		p.Status = domain.PlanDone
+		// An error written while it ran, such as another console's
+		// reconcile, no longer describes a plan that reached its end.
+		p.Status, p.Error = domain.PlanDone, ""
 		for _, t := range p.Tasks {
 			if t.Status != domain.TaskDone {
 				p.Status = domain.PlanPartial

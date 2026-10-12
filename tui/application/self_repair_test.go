@@ -893,3 +893,27 @@ func TestActiveJobsAreBoundedByJobsMaxActive(t *testing.T) {
 		t.Fatalf("recovery past the limit: %v", err)
 	}
 }
+
+// The jobs another open console drives are left to it: a second launch
+// neither marks them interrupted nor recovers them.
+func TestReconcileAndRecoverLeaveTheJobsOfAnOpenConsole(t *testing.T) {
+	registry := &fakeRegistry{records: []domain.RepairRecord{
+		{ID: "theirs", Signature: "s", Repository: "o/r", Parent: "0123456789abcdef0123456789abcdef", Status: domain.RepairAwaitingMerge, RunToken: "console-a", Session: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+		{ID: "gone", Signature: "t", Repository: "o/r", Parent: "0123456789abcdef0123456789abcdef", Status: domain.RepairRunning, RunToken: "console-gone", Session: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+		{ID: "paused", Signature: "u", Repository: "o/r", Parent: "0123456789abcdef0123456789abcdef", Status: domain.RepairInterrupted, RunToken: "console-a", Session: "cccccccccccccccccccccccccccccccc", Clone: "/clone"},
+	}}
+	rig := newRepairRig(t, &blockingWorkbench{started: make(chan struct{})})
+	repair := &SelfRepair{Registry: registry, Clones: rig.clones, Workbench: rig.benches, Store: rig.store, Engine: rig.engine, Settings: rig.repair.Settings, RunToken: "console-b", Build: "b", Liveness: liveRuns{"console-a": true}}
+	t.Cleanup(repair.Close)
+	if err := repair.Reconcile(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	theirs, _ := registry.find("theirs")
+	gone, _ := registry.find("gone")
+	if theirs.Status != domain.RepairAwaitingMerge || theirs.Error != "" || gone.Status != domain.RepairInterrupted {
+		t.Fatalf("reconciled %+v %+v", theirs, gone)
+	}
+	if err := repair.Recover(context.Background(), "paused"); err == nil || !strings.Contains(err.Error(), "another console") {
+		t.Fatalf("recovered the job of an open console: %v", err)
+	}
+}

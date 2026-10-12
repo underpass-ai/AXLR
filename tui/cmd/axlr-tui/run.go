@@ -368,6 +368,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		stateBase = filepath.Join(home, ".local", "state")
 	}
+	// The launch holds its run token for its lifetime, before any reconcile:
+	// the plans and jobs recorded under another token are taken for a
+	// stopped console's only when that console no longer holds its own.
+	var runToken [8]byte
+	if _, err := rand.Read(runToken[:]); err != nil {
+		return fail(err)
+	}
+	runLock, err := storage.HoldRun(filepath.Join(stateBase, "axlr", "runs"), hex.EncodeToString(runToken[:]))
+	if err != nil {
+		return fail(err)
+	}
+	defer runLock.Close()
 	if settings.SharedEngines() {
 		supervisor, err := engineSupervisor(getenv, stateBase)
 		if err != nil {
@@ -477,10 +489,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if repairsDirectory == "" {
 			repairsDirectory = filepath.Join(dataBase, "axlr", "repairs")
 		}
-		var token [8]byte
-		if _, err := rand.Read(token[:]); err != nil {
-			return fail(err)
-		}
 		repairs = &application.SelfRepair{
 			Registry:  registry,
 			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: stderr},
@@ -495,7 +503,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			// the merge, without asking).
 			Candidates:  repairBuilder(getenv),
 			AutoInstall: repairConfiguration.Install,
-			RunToken:    hex.EncodeToString(token[:]),
+			RunToken:    hex.EncodeToString(runToken[:]),
+			Liveness:    runLock,
 			Lifetime:    ctx,
 		}
 		if err := repairs.Reconcile(ctx); err != nil {
@@ -508,12 +517,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	var planRunner *application.PlanRunner
 	var planPanel terminal.PlanPanelPort
 	if ceremonies != nil && ceremonies.Plans != nil {
-		var token [8]byte
-		if _, err := rand.Read(token[:]); err != nil {
-			return fail(err)
-		}
 		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog}}
-		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(token[:]), Lifetime: ctx}
+		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(runToken[:]), Liveness: runLock, Lifetime: ctx}
 		if err := planRunner.Reconcile(ctx); err != nil {
 			fmt.Fprintln(stderr, "axlr-tui: plan registry:", err)
 		}
