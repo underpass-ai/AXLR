@@ -61,3 +61,36 @@ func TestHeaderShortensThePathBeforeThePlugins(t *testing.T) {
 		t.Fatalf("short path %q", got)
 	}
 }
+
+// The header's logo is each letter of "AXLR" on a tile of its wordmark
+// colour; a monochrome terminal writes it.
+func TestHeaderLogoTilesEachLetterInItsWordmarkColour(t *testing.T) {
+	brand := Theme{ID: domain.ThemeInk}.Brand()
+	if got := ansi.Strip(brand); got != " A  X  L  R " {
+		t.Fatalf("logo reads %q", got)
+	}
+	for _, sgr := range []string{"48;2;184;92;56m", "48;2;217;123;45m", "48;2;107;74;46m", "48;2;201;176;140m"} {
+		if !strings.Contains(brand, sgr) {
+			t.Fatalf("logo %q lacks tile %q", brand, sgr)
+		}
+	}
+	if got := (Theme{Monochrome: true}).Brand(); got != ">> AXLR" {
+		t.Fatalf("monochrome logo is %q", got)
+	}
+}
+
+// A wide row labels the model and the workspace; a short one drops the
+// labels before it cuts plugin names.
+func TestHeaderLabelsTheModelAndTheWorkspace(t *testing.T) {
+	s := domain.SessionState{ID: "0123456789abcdef0123456789abcdef", Model: "z-ai/glm", Workspace: "/srv/ws"}
+	if view := ansi.Strip(Header{State: s}.View(100, Theme{Monochrome: true})); !strings.Contains(view, "model: z-ai/glm  workspace: /srv/ws") {
+		t.Fatalf("header %q lacks the labels", view)
+	}
+	es := Theme{Monochrome: true, Locale: Spanish}
+	if view := ansi.Strip(Header{State: s}.View(100, es)); !strings.Contains(view, "modelo: z-ai/glm  espacio de trabajo: /srv/ws") {
+		t.Fatalf("header %q lacks the Spanish labels", view)
+	}
+	if view := ansi.Strip(Header{State: s}.View(30, Theme{Monochrome: true})); strings.Contains(view, "model:") || !strings.Contains(view, "z-ai/glm  /srv/ws") {
+		t.Fatalf("short header %q kept the labels", view)
+	}
+}

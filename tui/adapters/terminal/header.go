@@ -26,26 +26,29 @@ const (
 	headerPluginWidth = 14
 )
 
-// View is one row: brand, model and workspace on the left; the plugins whose
-// tools this session can call on the right. The workspace is written from
+// View is one row: brand, "model:" and "workspace:" on the left; the
+// plugins whose tools this session can call on the right. The workspace is written from
 // the home directory (~/…) with its Git branch (⎇ main, * when tracked
 // files changed). On 12 October 2026 a header at 80 columns read
 // "/tmp/c…" and plugin names were cut ("● microsoft-doc…") with room to
 // spare: when the row is short the path keeps its last segments
-// ("…/scratchpad/ws") and plugin names are cut only after that.
+// ("…/scratchpad/ws"), then the labels go, and plugin names are cut only
+// after that.
 func (h Header) View(width int, theme Theme) string {
 	model := singleLine(string(h.State.Model))
+	labelled := theme.Muted(theme.T("header.model")+" ") + model
 	if h.State.ID == "" {
 		model = theme.T("header.chooseModel")
+		labelled = model
 	}
-	brand := " " + theme.Accent(theme.Icon("brand")+" AXLR") + "  " + model
+	marker := ""
 	if h.SandboxOff {
 		// Before the path, which a narrow row cuts first.
-		marker := theme.Icon("attention") + " " + theme.T("header.sandboxOff")
+		marker = theme.Icon("attention") + " " + theme.T("header.sandboxOff")
 		if !theme.Monochrome {
 			marker = lipgloss.NewStyle().Foreground(lipgloss.Color(theme.palette().Warning)).Render(marker)
 		}
-		brand += "  " + marker
+		marker = "  " + marker
 	}
 	path := shortenHome(singleLine(string(h.State.Workspace)))
 	branch := ""
@@ -56,23 +59,35 @@ func (h Header) View(width int, theme Theme) string {
 		}
 	}
 	plugins := sessionPlugins(h.State)
-	// From the most to the least detail: the whole path, then its last two
-	// segments, then its last one, then cut plugin names.
+	// From the most to the least detail: "model:" and "workspace:" with the
+	// whole path, then its last two segments, then its last one; the same
+	// without the labels; then cut plugin names.
 	type layout struct {
-		path  string
-		limit int
+		labels bool
+		path   string
+		limit  int
 	}
-	layouts := []layout{{path, 0}, {pathTail(path, 2), 0}, {pathTail(path, 1), 0}, {pathTail(path, 1), headerPluginWidth}}
+	var layouts []layout
+	for _, labels := range []bool{true, false} {
+		for _, p := range []string{path, pathTail(path, 2), pathTail(path, 1)} {
+			layouts = append(layouts, layout{labels, p, 0})
+		}
+	}
+	layouts = append(layouts, layout{false, pathTail(path, 1), headerPluginWidth})
 	var left, right string
 	for _, l := range layouts {
-		left = brand + theme.Muted("  "+l.path+branch)
+		brand, workspace := " "+theme.Brand()+"  "+model+marker, ""
+		if l.labels {
+			brand, workspace = " "+theme.Brand()+"  "+labelled+marker, theme.T("header.workspace")+" "
+		}
+		left = brand + theme.Muted("  "+workspace+l.path+branch)
 		right = headerPlugins(plugins, l.limit, theme)
 		if ansi.StringWidth(left)+ansi.StringWidth(right)+2 <= width {
 			break
 		}
 	}
 	gap := width - ansi.StringWidth(left) - ansi.StringWidth(right)
-	if plain := " " + theme.Icon("brand") + " AXLR  " + model; gap < 2 && width-ansi.StringWidth(right)-2 >= ansi.StringWidth(plain) {
+	if plain := " " + ansi.Strip(theme.Brand()) + "  " + model; gap < 2 && width-ansi.StringWidth(right)-2 >= ansi.StringWidth(plain) {
 		// On 10 October 2026, at 80 columns, a long workspace path pushed
 		// "● kmp ● made" off the row: the path is cut instead.
 		left = ansi.Truncate(left, width-ansi.StringWidth(right)-2, "…")
