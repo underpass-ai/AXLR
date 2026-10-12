@@ -366,7 +366,7 @@ var enMessages = map[string]string{
 	"help.write":                           "Write",
 	"help.navigate":                        "Navigate",
 	"help.approvals":                       "Approvals and catalogs",
-	"help.sendFull":                        "Enter send (queued while working) · Shift+Enter new line · ↑↓ user history · Esc cancel · / commands",
+	"help.sendFull":                        "Enter send (queued while working) · Shift+Enter, Ctrl+J or Alt+Enter new line · Ctrl+G edit in $EDITOR · ↑↓ user history · Esc cancel · / commands",
 	"help.commandsModelTheme":              "/model models · /theme appearance · /usage cost and budget",
 	"help.commandsMCPPlugins":              "/mcp servers · /plugin packages · /autonomy on|off · /approvals",
 	"approvals.title":                      "Approved tools",
@@ -725,6 +725,7 @@ var enMessages = map[string]string{
 	"export.unavailable":         "Export is not available in this console",
 	"export.failed":              "Not exported: %s",
 	"export.done":                "Exported to %s",
+	"editor.failed":              "Editor: %s · the draft is unchanged",
 }
 
 var esMessages = map[string]string{
@@ -1029,7 +1030,7 @@ var esMessages = map[string]string{
 	"help.write":                           "Escribir",
 	"help.navigate":                        "Navegar",
 	"help.approvals":                       "Aprobaciones y catálogos",
-	"help.sendFull":                        "Enter enviar (en cola mientras trabaja) · Shift+Enter nueva línea · ↑↓ historial del usuario · Esc cancelar · / comandos",
+	"help.sendFull":                        "Enter enviar (en cola mientras trabaja) · Shift+Enter, Ctrl+J o Alt+Enter nueva línea · Ctrl+G editar en $EDITOR · ↑↓ historial del usuario · Esc cancelar · / comandos",
 	"help.commandsModelTheme":              "/model modelos · /theme apariencia · /usage coste y presupuesto",
 	"help.commandsMCPPlugins":              "/mcp servidores · /plugin paquetes · /autonomy on|off · /approvals",
 	"approvals.title":                      "Herramientas aprobadas",
@@ -1388,4 +1389,5 @@ var esMessages = map[string]string{
 	"export.unavailable":         "Esta consola no puede exportar",
 	"export.failed":              "No se ha exportado: %s",
 	"export.done":                "Exportada a %s",
+	"editor.failed":              "Editor: %s · el borrador no ha cambiado",
 }

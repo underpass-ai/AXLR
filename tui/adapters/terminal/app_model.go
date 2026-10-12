@@ -236,6 +236,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.subscribeRepairs()
 	case jobsMsg:
 		return m.jobsResult(v), nil
+	case editorDone:
+		return m.editorResult(v), nil
 	case quitDisarm:
 		if v.arm == m.quitArm && !m.quitArmedAt.IsZero() {
 			m.quitArmedAt = time.Time{}
@@ -804,6 +806,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			return m.Update(m.Composer.Intent(v))
+		case "ctrl+g":
+			if m.overlay == "" {
+				return m.editDraft()
+			}
 		case "esc":
 			if m.Transcript.Selection.Set {
 				m.clearSelection()

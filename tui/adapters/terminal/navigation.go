@@ -334,7 +334,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			case "ctrl+o":
 				intent = "sessions"
 			case "ctrl+d":
-				intent = "changes"
+				// With a draft, Ctrl+D deletes forward in the composer; on 12
+				// October 2026 it opened Changes in the middle of a prompt.
+				if m.Composer.Input.Value() == "" {
+					intent = "changes"
+				}
 			case "f1":
 				intent = "help"
 			case "ctrl+r":
