@@ -742,6 +742,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		id := selected.ID
+		if id == m.Header.State.ID {
+			// The open session is already on screen: Enter on its row
+			// closes the picker instead of reloading it behind the list.
+			m.overlay = ""
+			return m, nil, true
+		}
 		store := m.deps.Store
 		workspace := m.Header.State.Workspace
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {

@@ -344,3 +344,32 @@ func TestNavigationSearchResizeKeepsQueryInBounds(t *testing.T) {
 		t.Fatalf("resize query=%d width=%d cursor=%+v view=%s", len(m.SearchBox.Input.Value()), lipgloss.Width(v.Content), v.Cursor, v.Content)
 	}
 }
+
+// On 12 October 2026 Enter on the open session's row in Ctrl+O left the
+// picker open with no message while the session reloaded behind it.
+func TestEnterOnTheOpenSessionClosesThePickerWithoutReloading(t *testing.T) {
+	s := navSession(t)
+	if err := s.BeginTurn("saved prompt", nil); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	if err := m.deps.Store.Save(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	n, cmd := m.Update(ControlIntent("sessions"))
+	m = drain(t, n.(AppModel), cmd)
+	if m.overlay != "sessions" {
+		t.Fatalf("picker not open: %q", m.overlay)
+	}
+	if selected, ok := m.Picker.Current(); !ok || selected.ID != m.Header.State.ID {
+		t.Fatal("the open session is not the selected row")
+	}
+	n, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = n.(AppModel)
+	if cmd != nil || m.Busy {
+		t.Fatal("Enter on the open session reloaded it")
+	}
+	if m.overlay != "" {
+		t.Fatalf("the picker stayed open: %q", m.overlay)
+	}
+}
