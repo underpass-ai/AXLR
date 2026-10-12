@@ -109,6 +109,8 @@ func (t Theme) Icon(kind string) string {
 		switch kind {
 		case "memory":
 			return "[MEM]"
+		case "console":
+			return "~"
 		case "connected":
 			return "[OK]"
 		case "waiting":
@@ -152,6 +154,8 @@ func (t Theme) Icon(kind string) string {
 	switch kind {
 	case "memory":
 		return "◇"
+	case "console":
+		return "⟲"
 	case "connected":
 		return "●"
 	case "waiting":

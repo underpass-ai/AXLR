@@ -262,6 +262,11 @@ func (m *AppModel) endSelection(release tea.MouseReleaseMsg) tea.Cmd {
 	m.Transcript.Selection.Active = false
 	if m.clickCount == 1 && s.Anchor == s.Head {
 		m.clearSelection()
+		// A click on a console note opens or folds its full text.
+		if key, ok := m.Transcript.NoteAt(s.Anchor.Line); ok {
+			m.Transcript.ToggleNote(key)
+			m.refreshTranscript()
+		}
 		return nil
 	}
 	return m.copySelection()
