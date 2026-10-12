@@ -104,3 +104,45 @@ func TestTheForgeCardShowsWhatItWritesAsCode(t *testing.T) {
 		t.Fatalf("run card: %s", run.Approval.Target)
 	}
 }
+
+// An exec card is the command as it runs, with cwd, timeout, output limit
+// and stdin only when the call sets them, and no JSON repeating it; the
+// title names the tool without the workspace path. On 12 October 2026 the
+// card showed "$ go vet ./buildinfo/..." and the same arguments as JSON
+// under a title that repeated the absolute workspace path.
+func TestTheExecCardShowsTheCommandOnce(t *testing.T) {
+	m := execApprovalModel(t, domain.ModeNormal, `{"program":"go","args":["vet","./buildinfo/..."]}`)
+	defer m.zones.Close()
+	if got := m.Approval.Details.Text(); got != "$ go vet ./buildinfo/..." {
+		t.Fatalf("card %q", got)
+	}
+	if m.Approval.Target != "local exec" {
+		t.Fatalf("title %q", m.Approval.Target)
+	}
+	full := execApprovalModel(t, domain.ModeNormal, `{"program":"python3","args":["-"],"cwd":"tools","timeout_ms":120000,"max_output_bytes":2048,"stdin":"print(1)\nprint(2)\n"}`)
+	defer full.zones.Close()
+	want := "! runs 2 lines of code from stdin; read \"stdin\" below before approving\n\n$ python3 -\nin tools\ntimeout 120.0 s\noutput up to 2.0 KB\nstdin:\n  print(1)\n  print(2)"
+	if got := full.Approval.Details.Text(); got != want {
+		t.Fatalf("card\n%q\nwant\n%q", got, want)
+	}
+	odd := execApprovalModel(t, domain.ModeNormal, `{"program":"ls","args":[],"env":{"A":"1"}}`)
+	defer odd.zones.Close()
+	if got := odd.Approval.Details.Text(); !strings.HasPrefix(got, "$ ls\n\n{") || !strings.Contains(got, `"env"`) {
+		t.Fatalf("unknown field hidden: %q", got)
+	}
+}
+
+// The card may take 60 % of the screen before its details scroll.
+func TestTheApprovalCardGrowsToSixtyPercent(t *testing.T) {
+	m := execApprovalModel(t, domain.ModeNormal, `{"program":"python3","args":["-"],"stdin":"`+strings.Repeat(`print(1)\n`, 40)+`"}`)
+	defer m.zones.Close()
+	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 50})
+	if rows := m.approvalDetailRows(); rows != 27 {
+		t.Fatalf("detail rows %d at 50 rows", rows)
+	}
+	if card := lipglossHeight(m.approvalCard()); card != 30 {
+		t.Fatalf("card height %d", card)
+	}
+}
+
+func lipglossHeight(s string) int { return strings.Count(s, "\n") + 1 }

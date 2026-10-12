@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"bytes"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -35,15 +36,58 @@ func (m AppModel) hiddenInputWarning(p domain.PendingTool) string {
 	return ""
 }
 
-// execCardCommand is a known local exec call's command line, for the top
-// of its card; empty for any other call.
+// execCardCommand is a known local exec call's card: the command line as a
+// shell would read it, then the working directory, timeout, output limit
+// and stdin only when the call sets them. On 12 October 2026 an exec card
+// showed "$ go vet ./buildinfo/..." and then the same arguments again as
+// JSON. A call with fields local_exec does not have keeps its JSON below.
+// Empty for any other call.
 func (m AppModel) execCardCommand(p domain.PendingTool) string {
 	tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
 	if !known || err != nil || tool.Identity.Kind != domain.ToolKindLocal || tool.Identity.LocalOperation != "exec" {
 		return ""
 	}
-	command, _ := execCommand(p.Call.Arguments.Bytes())
-	return command
+	var call struct {
+		Program        string   `json:"program"`
+		Args           []string `json:"args"`
+		Cwd            string   `json:"cwd"`
+		Stdin          string   `json:"stdin"`
+		TimeoutMS      int64    `json:"timeout_ms"`
+		MaxOutputBytes int      `json:"max_output_bytes"`
+	}
+	raw := p.Call.Arguments.Bytes()
+	if json.Unmarshal(raw, &call) != nil || strings.TrimSpace(call.Program) == "" {
+		return ""
+	}
+	lines := []string{"$ " + singleLine(formatCommand(call.Program, call.Args))}
+	if cwd := strings.TrimSpace(call.Cwd); cwd != "" && cwd != "." && cwd != "./" {
+		lines = append(lines, m.Theme.Tf("approval.execCwd", singleLine(cwd)))
+	}
+	if call.TimeoutMS > 0 && call.TimeoutMS != execDefaultTimeoutMS {
+		lines = append(lines, m.Theme.Tf("approval.execTimeout", formatDuration(call.TimeoutMS)))
+	}
+	if call.MaxOutputBytes > 0 {
+		lines = append(lines, m.Theme.Tf("approval.execOutput", formatBytes(call.MaxOutputBytes)))
+	}
+	if call.Stdin != "" {
+		lines = append(lines, m.Theme.T("approval.execStdin"))
+		for _, line := range strings.Split(strings.TrimRight(call.Stdin, "\n"), "\n") {
+			lines = append(lines, "  "+line)
+		}
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) == nil {
+		for key := range fields {
+			switch key {
+			case "program", "args", "cwd", "stdin", "timeout_ms", "max_output_bytes":
+			default:
+				var indented bytes.Buffer
+				_ = json.Indent(&indented, raw, "", "  ")
+				return strings.Join(lines, "\n") + "\n\n" + indented.String()
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // modeAsksForEachCall is true when the session's mode, not the user's

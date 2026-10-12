@@ -44,7 +44,9 @@ func (m *AppModel) syncApproval() {
 	if tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call); known && err == nil {
 		switch tool.Identity.Kind {
 		case domain.ToolKindLocal:
-			target = m.Theme.Tf("approval.localTarget", tool.Identity.LocalOperation, m.Header.State.Workspace)
+			// Local tools work in the workspace, which the header names; a
+			// command elsewhere in it shows its cwd on the card.
+			target = m.Theme.Tf("approval.localTarget", tool.Identity.LocalOperation)
 		case domain.ToolKindPlugin:
 			target = m.Theme.Tf("approval.pluginTarget", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
 		case domain.ToolKindHost:
@@ -58,24 +60,19 @@ func (m *AppModel) syncApproval() {
 			case domain.HostOperationForgeTool:
 				target = m.Theme.Tf("approval.forgeTarget", forgedName(p.Call.Arguments.Bytes()))
 			case domain.HostOperationRunTool:
-				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()), m.Header.State.Workspace)
+				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()))
 			}
 		}
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
-		// An exec card leads with the command as it will run, above its
-		// JSON: the arguments array reads as a command line, not a list.
-		var lead []string
-		if warning := m.hiddenInputWarning(p); warning != "" {
-			lead = append(lead, warning)
-		}
+		// An exec card is the command as it will run, not its JSON: the
+		// arguments array reads as a command line, not a list.
 		if command := m.execCardCommand(p); command != "" {
-			lead = append(lead, "$ "+command)
-		}
-		if len(lead) > 0 {
-			// Only an exec call leads this way, and its card is JSON text.
-			m.Approval.Details.SetContent(strings.Join(lead, "\n") + "\n\n" + m.Approval.Details.Text())
+			if warning := m.hiddenInputWarning(p); warning != "" {
+				command = warning + "\n\n" + command
+			}
+			m.Approval.Details.SetContent(command)
 			m.Approval.Details.Viewport.GotoTop()
 		}
 	}

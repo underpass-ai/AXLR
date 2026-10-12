@@ -12,10 +12,12 @@ import (
 const approvalCardChrome = 3
 
 // approvalDetailRows is how many argument rows the inline card shows: all of
-// them when they fit, otherwise a third of the screen (3–10 rows) that the
-// arrows and wheel scroll.
+// them when they fit, otherwise what keeps the whole card within 60 % of
+// the screen (at least 3 rows), which the arrows and wheel scroll. On 12
+// October 2026 the card stopped at ten rows with thirty free, so a
+// 12-line diff needed scrolling.
 func (m AppModel) approvalDetailRows() int {
-	limit := min(10, max(3, (m.Layout.Height-approvalCardChrome-2)/3))
+	limit := max(3, m.Layout.Height*3/5-approvalCardChrome)
 	return max(1, min(m.Approval.Details.VisualLineCount(), limit))
 }
 
