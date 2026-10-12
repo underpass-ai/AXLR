@@ -196,3 +196,33 @@ func TestAmountsKeepTheirPrecisionBelowADollar(t *testing.T) {
 		t.Fatalf("a raised $0.012 budget does not read $0.024:\n%s", got)
 	}
 }
+
+// A cancelled or failed request the provider may have billed is counted as
+// unmetered: the footer adds "+N unmetered" after the session's cost, and
+// /usage says how many the total leaves out. The narrowest footer drops the
+// turn's cost and keeps both.
+func TestUnmeteredRequestsAreShown(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.cost = costView{ledger: domain.UsageLedger{Requests: 5, Cost: 0.0213, CostRequests: 3, Unmetered: 2}, turnCost: 0.02, turnRequests: 2}
+	if got := footerText(m); !strings.HasSuffix(got, "$0.0013 turn · $0.0213 session · +2 unmetered") {
+		t.Fatalf("footer: %q", got)
+	}
+	if got := strings.Join(m.costParts(false), " · "); got != "$0.0213 session · +2 unmetered" {
+		t.Fatalf("least detail: %q", got)
+	}
+	m.cost = costView{ledger: domain.UsageLedger{Requests: 1, Unmetered: 1}}
+	if got := footerText(m); !strings.HasSuffix(got, "idle · +1 unmetered") {
+		t.Fatalf("only unmetered: %q", got)
+	}
+	got := usageContent(domain.UsageLedger{Requests: 3, CostRequests: 2, Cost: 0.01, Unmetered: 1}, 0, Theme{Locale: English})
+	if !strings.Contains(got, "Requests: 3, 2 with a reported cost\nUnmetered: 1 cancelled or failed request without a usage report; its cost is not in the total\nPrompt tokens") {
+		t.Fatalf("/usage:\n%s", got)
+	}
+	if got := usageContent(domain.UsageLedger{Requests: 4, Unmetered: 2}, 0, Theme{Locale: Spanish}); !strings.Contains(got, "Sin medir: 2 peticiones canceladas o fallidas") {
+		t.Fatalf("spanish /usage:\n%s", got)
+	}
+	if got := usageContent(domain.UsageLedger{Requests: 4}, 0, Theme{Locale: English}); strings.Contains(got, "Unmetered") {
+		t.Fatalf("unmetered line without any:\n%s", got)
+	}
+}

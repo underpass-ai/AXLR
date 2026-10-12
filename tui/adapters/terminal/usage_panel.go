@@ -48,16 +48,20 @@ func (m AppModel) observeUsage(ledger domain.UsageLedger, warn bool) AppModel {
 	return m.refreshUsagePanel()
 }
 
-// costParts is the footer's turn and session cost; absent while no request
-// reported one.
-func (m AppModel) costParts() []string {
+// costParts is the footer's turn and session cost, absent while no request
+// reported one, and the session's unmetered requests, whose cost the total
+// leaves out; withTurn false leaves the turn's cost out.
+func (m AppModel) costParts(withTurn bool) []string {
 	var parts []string
 	ledger := m.cost.ledger
-	if ledger.CostRequests > m.cost.turnRequests {
+	if withTurn && ledger.CostRequests > m.cost.turnRequests {
 		parts = append(parts, m.Theme.Tf("footer.costTurn", FormatUSD(ledger.Cost-m.cost.turnCost)))
 	}
 	if ledger.CostRequests > 0 {
 		parts = append(parts, m.Theme.Tf("footer.costSession", FormatUSD(ledger.Cost)))
+	}
+	if ledger.Unmetered > 0 {
+		parts = append(parts, m.Theme.Tf("footer.unmetered", ledger.Unmetered))
 	}
 	return parts
 }
@@ -165,12 +169,17 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme) stri
 	if l.Requests == 0 {
 		return theme.T("usage.empty") + "\n\n" + budgetLines(l, maxSessionUSD, theme)
 	}
-	lines := []string{
-		theme.Tf("usage.requests", l.Requests, l.CostRequests),
+	lines := []string{theme.Tf("usage.requests", l.Requests, l.CostRequests)}
+	if l.Unmetered > 0 {
+		// Cancelled or failed requests the provider may have billed: the
+		// cost below leaves them out.
+		lines = append(lines, theme.Tn("usage.unmetered", l.Unmetered, l.Unmetered))
+	}
+	lines = append(lines,
 		theme.Tf("usage.prompt", formatTokens(l.PromptTokens), formatTokens(l.CachedTokens), formatTokens(l.CacheWriteTokens)),
 		theme.Tf("usage.completion", formatTokens(l.CompletionTokens), formatTokens(l.ReasoningTokens)),
 		"",
-	}
+	)
 	if l.CostRequests > 0 {
 		lines = append(lines, theme.Tf("usage.cost", FormatUSD(l.Cost)))
 	} else {

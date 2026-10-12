@@ -736,6 +736,11 @@ var enMessages = map[string]string{
 	"mention.none":               "No matching file · Esc closes",
 	"mention.hint":               "Tab or Enter inserts the path · Esc closes · Ctrl+R lists again",
 	"mention.truncated":          "first %d entries",
+
+	// qa3 qol view
+	"footer.unmetered":   "+%d unmetered",
+	"usage.unmetered":    "Unmetered: %d cancelled or failed requests without a usage report; their cost is not in the total",
+	"usage.unmeteredOne": "Unmetered: %d cancelled or failed request without a usage report; its cost is not in the total",
 }
 
 var esMessages = map[string]string{
@@ -1410,4 +1415,9 @@ var esMessages = map[string]string{
 	"mention.none":               "Ningún archivo coincide · Esc cierra",
 	"mention.hint":               "Tab o Enter inserta la ruta · Esc cierra · Ctrl+R vuelve a listar",
 	"mention.truncated":          "primeras %d entradas",
+
+	// qa3 qol view
+	"footer.unmetered":   "+%d sin medir",
+	"usage.unmetered":    "Sin medir: %d peticiones canceladas o fallidas sin informe de uso; su coste no está en el total",
+	"usage.unmeteredOne": "Sin medir: %d petición cancelada o fallida sin informe de uso; su coste no está en el total",
 }

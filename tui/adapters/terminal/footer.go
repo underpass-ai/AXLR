@@ -151,12 +151,8 @@ func (m AppModel) footerStatus(detail int) string {
 			parts = append(parts, m.Theme.Tf("footer.cache", m.cached))
 		}
 	}
-	costs := m.costParts()
-	if detail >= statusLeast && len(costs) > 1 {
-		// The turn's cost goes; the session's stays.
-		costs = costs[1:]
-	}
-	parts = append(parts, costs...)
+	// At the least detail the turn's cost goes; the session's stays.
+	parts = append(parts, m.costParts(detail < statusLeast)...)
 	text := strings.Join(parts, " · ")
 	if m.Theme.Monochrome {
 		return text
