@@ -32,7 +32,16 @@ func TestTokenCalibrationLearnsAndPersistsEachModel(t *testing.T) {
 	if err := first.Observe(ctx, "z-ai/glm-5.3-flash", 42000, 10000); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := first.BytesPerToken("z-ai/glm-5.3-flash"); !ok || got != 420 {
+	// The console that asked before the fifth request keeps the default for
+	// the launch; a console that asks now applies the measured ratio.
+	if _, ok := first.BytesPerToken("z-ai/glm-5.3-flash"); ok {
+		t.Fatal("the default applied first moved mid-launch")
+	}
+	fresh, err := NewTokenCalibration(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := fresh.BytesPerToken("z-ai/glm-5.3-flash"); !ok || got != 420 {
 		t.Fatalf("ratio = %d %v", got, ok)
 	}
 	// A request too small to measure writes nothing.
