@@ -211,6 +211,16 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if k.String() == "ctrl+c" && !m.approvalFocus() {
 			return m, nil, false
 		}
+		if k.String() == "ctrl+r" && m.mentionActive() {
+			// Ctrl+R lists the workspace again while the @ menu is open.
+			return m, m.loadFiles(true), true
+		}
+		if k.String() == "esc" && m.mentionActive() {
+			// Esc closes the @ menu for this mention; a second one cancels.
+			_, line, start, _ := m.mentionToken()
+			m.mention.dismissed = m.mentionKey(line, start)
+			return m, nil, true
+		}
 		if k.String() == "esc" && m.overlay == "" && !m.approvalFocus() && m.Transcript.Selection.Set {
 			// Esc first drops a copied selection; a second Esc cancels work.
 			m.clearSelection()

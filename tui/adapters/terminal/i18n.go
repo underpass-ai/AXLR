@@ -712,7 +712,7 @@ var enMessages = map[string]string{
 	"notice.newNoModel":          "Choose a model with /model first: it starts the session",
 	"notice.newAlready":          "This session is still empty: type a prompt",
 	"notice.newStarted":          "New session · Ctrl+O reopens the previous one",
-	"help.commandsSession":       "/new new session (/clear) · /export [path] save as Markdown · Ctrl+O reopen one",
+	"help.commandsSession":       "@ insert a file's path · /new new session (/clear) · /export [path] save as Markdown · Ctrl+O reopen one",
 	"sessions.contentMatch":      "found in the conversation",
 	"sessions.deleteConfirm":     "Delete “%s” for good? y deletes · any other key keeps it",
 	"sessions.deleteOpen":        "The open session cannot be deleted: open another one first",
@@ -731,6 +731,11 @@ var enMessages = map[string]string{
 	"paste.tokenOne":             "[pasted %d line · %s]",
 	"paste.folded":               "[%d lines · %s]",
 	"paste.foldedOne":            "[%d line · %s]",
+	"mention.loading":            "Listing the workspace's files…",
+	"mention.failed":             "Could not list the workspace: %s",
+	"mention.none":               "No matching file · Esc closes",
+	"mention.hint":               "Tab or Enter inserts the path · Esc closes · Ctrl+R lists again",
+	"mention.truncated":          "first %d entries",
 }
 
 var esMessages = map[string]string{
@@ -1381,7 +1386,7 @@ var esMessages = map[string]string{
 	"notice.newNoModel":          "Elige antes un modelo con /model: él empieza la sesión",
 	"notice.newAlready":          "Esta sesión sigue vacía: escribe un mensaje",
 	"notice.newStarted":          "Sesión nueva · Ctrl+O vuelve a abrir la anterior",
-	"help.commandsSession":       "/new sesión nueva (/nueva, /clear) · /export [ruta] guardar en Markdown · Ctrl+O abrir otra",
+	"help.commandsSession":       "@ insertar la ruta de un archivo · /new sesión nueva (/nueva, /clear) · /export [ruta] guardar en Markdown · Ctrl+O abrir otra",
 	"sessions.contentMatch":      "encontrado en la conversación",
 	"sessions.deleteConfirm":     "¿Borrar «%s» para siempre? y la borra · otra tecla la conserva",
 	"sessions.deleteOpen":        "La sesión abierta no se puede borrar: abre antes otra",
@@ -1400,4 +1405,9 @@ var esMessages = map[string]string{
 	"paste.tokenOne":             "[pegada %d línea · %s]",
 	"paste.folded":               "[%d líneas · %s]",
 	"paste.foldedOne":            "[%d línea · %s]",
+	"mention.loading":            "Listando los archivos del espacio de trabajo…",
+	"mention.failed":             "No se pudo listar el espacio de trabajo: %s",
+	"mention.none":               "Ningún archivo coincide · Esc cierra",
+	"mention.hint":               "Tab o Enter inserta la ruta · Esc cierra · Ctrl+R vuelve a listar",
+	"mention.truncated":          "primeras %d entradas",
 }

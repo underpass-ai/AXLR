@@ -113,6 +113,8 @@ type AppModel struct {
 	// folds.
 	pastes []pastedText
 	pasted map[string]bool
+	// mention is the @ menu of workspace files.
+	mention mentionState
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
@@ -246,6 +248,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.jobsResult(v), nil
 	case editorDone:
 		return m.editorResult(v), nil
+	case workspaceFilesMsg:
+		return m.filesLoaded(v), nil
 	case quitDisarm:
 		if v.arm == m.quitArm && !m.quitArmedAt.IsZero() {
 			m.quitArmedAt = time.Time{}
@@ -494,7 +498,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.overlay = "sessions"
 		}
 		switched := oldID != m.Header.State.ID
+		if wasTurn {
+			// The turn may have written files: the @ menu lists them again.
+			m.mention.stale = true
+		}
 		if switched {
+			m.mention = mentionState{}
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
 			m.tokens = 0
@@ -789,6 +798,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Any other key disarms a first Ctrl+C.
 			m.quitArmedAt = time.Time{}
 		}
+		if m.mentionActive() {
+			if next, cmd, handled := m.mentionKeyPress(v); handled {
+				return next, cmd
+			}
+		}
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
 			switch v.String() {
 			case "up":
@@ -847,6 +861,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m.Update(ControlIntent(id))
 				}
 			}
+			if m.mentionActive() {
+				for i, path := range m.mentionMatches() {
+					if m.zones.Get(fmt.Sprintf("%smention-%d", m.prefix, i)).InBounds(v) {
+						m.insertMention(path)
+						return m, nil
+					}
+				}
+			}
 			suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value()))
 			for i := range suggestions {
 				if m.zones.Get(fmt.Sprintf("%sslash-%d", m.prefix, i)).InBounds(v) {
@@ -881,8 +903,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.Composer, cmd = m.Composer.Update(msg)
 	if m.Composer.Input.Value() != before {
 		m.slashSelected = 0
+		m.mention.selected, m.mention.top = 0, 0
 	}
 	m.resizeComposer()
+	if m.mentionActive() {
+		if load := m.loadFiles(false); load != nil {
+			cmd = tea.Batch(cmd, load)
+		}
+	}
 	return m, cmd
 }
 func (m AppModel) View() tea.View {
@@ -903,9 +931,14 @@ func (m AppModel) View() tea.View {
 			composer, footer = m.searchArea(), m.searchFooter()
 		}
 		body := m.mainTranscript()
+		var menu []string
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
+			menu = m.slashMenu(suggestions)
+		} else if m.mentionActive() {
+			menu = m.mentionMenu()
+		}
+		if len(menu) > 0 {
 			lines := strings.Split(body, "\n")
-			menu := m.slashMenu(suggestions)
 			menu = menu[max(0, len(menu)-len(lines)):]
 			body = strings.Join(append(lines[:len(lines)-len(menu)], menu...), "\n")
 		}
