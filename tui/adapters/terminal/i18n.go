@@ -341,7 +341,7 @@ var enMessages = map[string]string{
 	"common.cancel":                        "Cancel · Esc",
 	"sessions.title":                       "Saved sessions",
 	"sessions.empty":                       "No saved sessions",
-	"sessions.searchHint":                  "type to filter by title",
+	"sessions.searchHint":                  "type to filter by title or conversation",
 	"sessions.emptyHere":                   "No sessions with messages in this workspace · Tab shows every workspace",
 	"sessions.scopeHere":                   "this workspace",
 	"sessions.scopeAll":                    "every workspace",
@@ -713,6 +713,7 @@ var enMessages = map[string]string{
 	"notice.newAlready":      "This session is still empty: type a prompt",
 	"notice.newStarted":      "New session · Ctrl+O reopens the previous one",
 	"help.commandsSession":   "/new new session (/clear) · Ctrl+O reopen one",
+	"sessions.contentMatch":  "found in the conversation",
 }
 
 var esMessages = map[string]string{
@@ -992,7 +993,7 @@ var esMessages = map[string]string{
 	"common.cancel":                        "Cancelar · Esc",
 	"sessions.title":                       "Sesiones guardadas",
 	"sessions.empty":                       "No hay sesiones guardadas",
-	"sessions.searchHint":                  "escribe para filtrar por título",
+	"sessions.searchHint":                  "escribe para filtrar por título o conversación",
 	"sessions.emptyHere":                   "No hay sesiones con mensajes en este espacio · Tab muestra todos",
 	"sessions.scopeHere":                   "este espacio",
 	"sessions.scopeAll":                    "todos los espacios",
@@ -1364,4 +1365,5 @@ var esMessages = map[string]string{
 	"notice.newAlready":      "Esta sesión sigue vacía: escribe un mensaje",
 	"notice.newStarted":      "Sesión nueva · Ctrl+O vuelve a abrir la anterior",
 	"help.commandsSession":   "/new sesión nueva (/nueva, /clear) · Ctrl+O abrir otra",
+	"sessions.contentMatch":  "encontrado en la conversación",
 }

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -361,5 +362,25 @@ func TestSessionStoreKeepsMessageTimesBesideTheSnapshot(t *testing.T) {
 	must(t, err)
 	if len(got.Export().MessageTimes) != 0 || len(got.Export().Messages) != 1 {
 		t.Fatal("a session without times did not load")
+	}
+}
+
+// The session picker's filter searches what was said, not only the first
+// prompt; the text a summary carries for it is bounded.
+func TestSessionSummaryCarriesBoundedConversationText(t *testing.T) {
+	store, _ := openStore(t)
+	s := fixture(t)
+	must(t, s.BeginTurn("first prompt", nil))
+	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "the reply mentions zebras"}})
+	must(t, store.Save(context.Background(), s))
+	list, e := store.List(context.Background())
+	must(t, e)
+	if len(list) != 1 || list[0].Text != "first prompt\nthe reply mentions zebras" {
+		t.Fatalf("summary text = %q", list[0].Text)
+	}
+	long := []root.Message{{Role: root.RoleUser, Content: root.Text(strings.Repeat("ñ", domain.MaxSummaryTextBytes))}, {Role: root.RoleAssistant, Content: "never reached"}}
+	text := summaryText(long)
+	if len(text) > domain.MaxSummaryTextBytes || !utf8.ValidString(string(text)) || strings.Contains(string(text), "never") {
+		t.Fatalf("bounded text: %d bytes, valid %v", len(text), utf8.ValidString(string(text)))
 	}
 }

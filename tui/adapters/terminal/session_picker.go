@@ -46,6 +46,8 @@ type SessionPicker struct {
 	// Page is how many sessions the overlay shows at once, for PgUp and
 	// PgDn; the root sets it from the screen's height.
 	Page int
+	// content holds each session's prompts and replies, lowercased.
+	content map[domain.SessionID]string
 }
 
 // PageSize is how many sessions fit in an overlay of this size: two rows
@@ -143,7 +145,12 @@ func (p SessionPicker) Title(s domain.SessionSummary) string {
 func NewSessionPicker(items []domain.SessionSummary, workspace domain.Workspace) SessionPicker {
 	sorted := append([]domain.SessionSummary(nil), items...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt.After(sorted[j].UpdatedAt) })
-	return SessionPicker{Items: sorted, Workspace: workspace}
+	// Lowered once, not on every key of the filter.
+	content := make(map[domain.SessionID]string, len(sorted))
+	for _, s := range sorted {
+		content[s.ID] = strings.ToLower(string(s.Text))
+	}
+	return SessionPicker{Items: sorted, Workspace: workspace, content: content}
 }
 
 // Visible is the filtered list the selection and clicks index into.
@@ -160,12 +167,22 @@ func (p SessionPicker) Visible() []domain.SessionSummary {
 		if !p.ArchivedView && !p.TasksView && !p.AllWorkspaces && s.Workspace != p.Workspace {
 			continue
 		}
-		if query != "" && !strings.Contains(strings.ToLower(p.Title(s)), query) {
+		if query != "" && !strings.Contains(strings.ToLower(p.Title(s)), query) && !p.contentMatches(s, query) {
 			continue
 		}
 		visible = append(visible, s)
 	}
 	return visible
+}
+
+// contentMatches reports a session whose prompts and replies contain the
+// lowercased query. On 12 October 2026 the filter matched titles only.
+func (p SessionPicker) contentMatches(s domain.SessionSummary, query string) bool {
+	text, ok := p.content[s.ID]
+	if !ok {
+		text = strings.ToLower(string(s.Text))
+	}
+	return strings.Contains(text, query)
 }
 
 func (p SessionPicker) Current() (domain.SessionSummary, bool) {
@@ -378,6 +395,9 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		}
 		if ref, ok := p.planTask(s); ok && ref.Status != "" {
 			meta = append(meta, theme.T("plans.task."+string(ref.Status)))
+		}
+		if query := strings.ToLower(strings.TrimSpace(p.Query)); query != "" && !strings.Contains(strings.ToLower(title), query) {
+			meta = append(meta, theme.T("sessions.contentMatch"))
 		}
 		if p.AllWorkspaces || p.ArchivedView || p.TasksView {
 			meta = append(meta, shortenHome(singleLine(string(s.Workspace))))

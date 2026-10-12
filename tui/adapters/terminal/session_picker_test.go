@@ -243,3 +243,20 @@ func TestSessionPickerPagesAndTakesPastes(t *testing.T) {
 		t.Fatalf("page = %d", m.Picker.Page)
 	}
 }
+
+// On 12 October 2026 the filter matched titles only: a session was found
+// by its first prompt or not at all.
+func TestSessionPickerFiltersByConversation(t *testing.T) {
+	p := NewSessionPicker([]domain.SessionSummary{
+		{ID: "a", Workspace: "/w", Title: "first", Text: "first\nWe chose the Zebra plan", MessageCount: 2},
+		{ID: "b", Workspace: "/w", Title: "second", Text: "second\nnothing here", MessageCount: 2},
+	}, "/w")
+	p.Paste("zebra")
+	if got := ids(p.Visible()); got != "a" {
+		t.Fatalf("filtering by content listed %q", got)
+	}
+	view := ansi.Strip(p.View(Theme{Monochrome: true}, zone.New(), "", 30, 100))
+	if !strings.Contains(view, Theme{}.T("sessions.contentMatch")) {
+		t.Fatalf("a content match is not marked:\n%s", view)
+	}
+}
