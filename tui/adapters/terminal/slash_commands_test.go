@@ -83,6 +83,17 @@ func TestEnterOnBareAutonomyLeavesAutonomyUnchanged(t *testing.T) {
 	if m.Composer.Input.Value() != "" || m.Status.Error != "" {
 		t.Fatalf("bare /autonomy not handled: draft=%q error=%q", m.Composer.Input.Value(), m.Status.Error)
 	}
+	// On 12 October 2026 bare /autonomy cleared the composer and said nothing.
+	if m.Status.Notice != m.Theme.T("notice.autonomyOff") || !strings.Contains(ansi.Strip(m.View().Content), "Full autonomy is off") {
+		t.Fatalf("bare /autonomy did not say the state: %q", m.Status.Notice)
+	}
+	m = typeDraft(m, "/autonomy on")
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = typeDraft(m, "/autonomy")
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !settings.Autonomous() || m.Status.Notice != m.Theme.T("notice.autonomyOn") {
+		t.Fatalf("bare /autonomy after on said %q", m.Status.Notice)
+	}
 }
 
 func TestExitAndQuitCloseTheConsole(t *testing.T) {

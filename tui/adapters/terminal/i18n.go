@@ -644,6 +644,10 @@ var enMessages = map[string]string{
 	"error.pluginUnavailable":              "plugin management unavailable",
 	"error.sessionStoreUnavailable":        "session store unavailable",
 	"error.workspaceMismatch":              "This session belongs to %s (open: %s). Start AXLR there with: axlr-tui --root %[1]s",
+
+	// qa3 terminal bugs
+	"notice.autonomyOn":  "Full autonomy is on: tools run without asking · /autonomy off to ask again",
+	"notice.autonomyOff": "Full autonomy is off: each tool asks before it runs · /autonomy on to stop asking",
 }
 
 var esMessages = map[string]string{
@@ -1237,4 +1241,8 @@ var esMessages = map[string]string{
 	"error.pluginUnavailable":              "gestión de plugins no disponible",
 	"error.sessionStoreUnavailable":        "almacenamiento de sesiones no disponible",
 	"error.workspaceMismatch":              "Esta sesión es de %s (abierto: %s). Arranca AXLR allí con: axlr-tui --root %[1]s",
+
+	// qa3 terminal bugs
+	"notice.autonomyOn":  "Autonomía completa activada: las herramientas no preguntan · /autonomy off para volver a preguntar",
+	"notice.autonomyOff": "Autonomía completa desactivada: cada herramienta pregunta antes · /autonomy on para no preguntar",
 }

@@ -687,6 +687,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.Status.Autonomous = settings.Autonomous()
 				m.Status.Error = ""
+				if command == "/autonomy" {
+					// Bare /autonomy changes nothing: it says which way it is set.
+					m.Status.Notice = m.Theme.T("notice.autonomyOff")
+					if m.Status.Autonomous {
+						m.Status.Notice = m.Theme.T("notice.autonomyOn")
+					}
+				}
 				m.Composer.Input.Reset()
 				return m, nil
 			}
