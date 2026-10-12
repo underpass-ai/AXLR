@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -47,23 +48,24 @@ var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/pl
 // selection scrolls the rest into view.
 const slashSuggestionLimit = 6
 
-var slashWord = regexp.MustCompile(`^/[a-z-]+$`)
+var slashWord = regexp.MustCompile(`^/[a-zA-Z-]+$`)
 
 // slashSuggestions lists the commands a single-line draft starting with "/"
-// could complete to. A draft that is already an exact command, or that
-// carries text after a space other than a command's own argument, gets none:
-// Enter runs a complete command as typed, never a suggestion it is a prefix
-// of (bare /autonomy is not /autonomy on).
+// could complete to, whatever its case. A draft that is already an exact
+// command, or that carries text after a space other than a command's own
+// argument, gets none: Enter runs a complete command as typed, never a
+// suggestion it is a prefix of (bare /autonomy is not /autonomy on).
 func slashSuggestions(draft string) []slashCommand {
 	if !strings.HasPrefix(draft, "/") || strings.Contains(draft, "\n") {
 		return nil
 	}
-	if _, exact := isSlashCommand(draft); exact {
+	if _, args, known := parseSlash(draft); known && args == "" && !strings.HasSuffix(draft, " ") {
 		return nil
 	}
+	lower := strings.ToLower(draft)
 	var out []slashCommand
 	for _, c := range slashCommands {
-		if strings.HasPrefix(c.name, draft) && c.name != draft {
+		if strings.HasPrefix(c.name, lower) && c.name != lower {
 			out = append(out, c)
 		}
 	}
@@ -80,27 +82,73 @@ func slashWindow(top, selected, count int) int {
 	return max(0, min(top, count-slashSuggestionLimit))
 }
 
-// isSlashCommand reports whether a draft names a local command.
-func isSlashCommand(draft string) (string, bool) {
-	if alias, ok := slashAliases[draft]; ok {
-		draft = alias
+// parseSlash reads a draft as a local command: its first word, lowercased
+// and with aliases resolved, and the text after it. /autonomy takes on or
+// off as part of its name. A draft that names no command comes back as
+// typed with known false. On 12 October 2026 "/Usage", "/autonomy ON" and
+// "/autonomy  on" matched nothing and were sent to the model as paid
+// prompts.
+func parseSlash(draft string) (command, args string, known bool) {
+	draft = strings.TrimSpace(draft)
+	if !strings.HasPrefix(draft, "/") {
+		return draft, "", false
 	}
-	if draft == "/autonomy" {
-		return draft, true
+	word, rest := draft, ""
+	if i := strings.IndexFunc(draft, unicode.IsSpace); i >= 0 {
+		word, rest = draft[:i], strings.TrimSpace(draft[i:])
+	}
+	word = strings.ToLower(word)
+	if alias, ok := slashAliases[word]; ok {
+		word = alias
+	}
+	if word == "/autonomy" {
+		switch strings.ToLower(strings.Join(strings.Fields(rest), " ")) {
+		case "on":
+			return "/autonomy on", "", true
+		case "off":
+			return "/autonomy off", "", true
+		}
+		return word, rest, true
 	}
 	for _, c := range slashCommands {
-		if c.name == draft {
-			return draft, true
+		if c.name == word {
+			return word, rest, true
 		}
 	}
-	return draft, false
+	return draft, "", false
+}
+
+// isSlashCommand reports whether a draft is exactly a local command, and
+// its normalised name.
+func isSlashCommand(draft string) (string, bool) {
+	command, args, known := parseSlash(draft)
+	return command, known && args == ""
 }
 
 // unknownSlashWord is a lone "/word" that names no command: almost always a
-// mistyped command, never worth a model turn.
+// mistyped command, never worth a model turn. "/tmp/foo explain" is a
+// prompt.
 func unknownSlashWord(draft string) bool {
-	_, known := isSlashCommand(draft)
-	return !known && slashWord.MatchString(draft)
+	_, _, known := parseSlash(draft)
+	return !known && slashWord.MatchString(strings.TrimSpace(draft))
+}
+
+// slashPromptModes are the work modes that take a prompt after them:
+// "/review the auth module" selects review and sends "the auth module".
+var slashPromptModes = map[string]bool{"/normal": true, "/review": true, "/writer": true, "/research": true, "/debug": true, "/delivery": true, "/incident": true}
+
+// slashUsages are how the commands that take text are written; any other
+// command takes none.
+var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]"}
+
+func slashUsage(command string) string {
+	if usage, ok := slashUsages[command]; ok {
+		return usage
+	}
+	if slashPromptModes[command] {
+		return command + " [prompt]"
+	}
+	return command
 }
 
 // slashMenu draws the suggestions to sit on the transcript's last rows,
