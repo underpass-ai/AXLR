@@ -761,11 +761,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch v.String() {
 			case "up":
 				m.slashSelected = max(0, min(m.slashSelected, len(suggestions)-1)-1)
-				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions))
+				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions), m.slashLimit())
 				return m, nil
 			case "down":
 				m.slashSelected = min(len(suggestions)-1, m.slashSelected+1)
-				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions))
+				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions), m.slashLimit())
 				return m, nil
 			case "tab":
 				m.Composer.Input.SetValue(suggestions[min(m.slashSelected, len(suggestions)-1)].name)

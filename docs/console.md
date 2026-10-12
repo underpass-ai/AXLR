@@ -11,7 +11,7 @@ The model picker filters to text models that support tools. Typing filters by ev
 | Control | Action |
 |:--|:--|
 | `Enter` / `Shift+Enter` | Send / insert a newline |
-| `/` | List every command that starts with what you typed, six at a time; ↑↓ scroll the list and select, Tab completes, Enter runs the selected one |
+| `/` | List the commands that match what you typed, up to twelve at a time (fewer on a short screen): those whose name starts with it, then those with an alias that does, then those whose name or alias contains it (`/trab` finds `/jobs` through `/trabajos`). Each row shows the command's aliases dim after its name; ↑↓ scroll the list and select, Tab completes, Enter runs the selected one |
 | `/model` | Choose a model |
 | `/normal`, `/review`, `/writer`, `/research` | Choose direct work and its local tool policy (aliases `/revisar`, `/escritor`, `/investigar`) |
 | `/stop-ceremony` | Cancel the running ceremony in MADE and return to normal mode (alias `/parar`); see [a step the model will not hand back](ceremonies.md#a-step-the-model-will-not-hand-back) |
