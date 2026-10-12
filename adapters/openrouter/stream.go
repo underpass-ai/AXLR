@@ -77,7 +77,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		return domain.CompletionResult{}, cause
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return domain.CompletionResult{}, c.providerError(response.StatusCode)
+		return domain.CompletionResult{}, c.providerError(response.StatusCode, errorResponseMessage(response.Body))
 	}
 	decoder := newSSEDecoder(response.Body)
 	var accumulator streamAccumulator
@@ -117,8 +117,11 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		deltas, err := accumulator.Add(data)
 		if err != nil {
 			var provider *ProviderError
-			if errors.As(err, &provider) && c.provider != providerName {
-				provider.Provider = c.provider
+			if errors.As(err, &provider) {
+				if c.provider != providerName {
+					provider.Provider = c.provider
+				}
+				provider.withoutKey(c.apiKey)
 			}
 			return domain.CompletionResult{}, err
 		}

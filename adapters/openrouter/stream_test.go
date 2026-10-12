@@ -202,7 +202,13 @@ func TestStreamProviderErrors(t *testing.T) {
 				c, calls := streamClient(t, body, httpStatus)
 				_, err := c.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil })
 				var pe *ProviderError
-				if !errors.As(err, &pe) || pe.StatusCode != status || pe.Category != classifyProviderError(status).Category || strings.Contains(err.Error(), "sensitive") || *calls != 1 || !body.closed {
+				// A body that is not JSON gives no message; an error event's
+				// message is kept.
+				want := ""
+				if mid {
+					want = "sensitive"
+				}
+				if !errors.As(err, &pe) || pe.StatusCode != status || pe.Category != classifyProviderError(status).Category || pe.Message != want || *calls != 1 || !body.closed {
 					t.Fatalf("err=%v requests=%d closed=%v", err, *calls, body.closed)
 				}
 			}

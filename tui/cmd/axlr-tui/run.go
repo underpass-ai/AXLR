@@ -439,7 +439,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog)}
-	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}}
+	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}, LogFailure: failureLogger(appLog)}
 	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
 	if ceremonies != nil {
 		ceremonies.Compact = compactProfile(settings.CeremonyProfile(), locals.windows)
