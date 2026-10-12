@@ -569,6 +569,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			models, err = catalog.Execute(ctx)
 			return err
 		})
+		m.catalogOperation = m.operationID
 		return m, func() tea.Msg {
 			msg := cmd()
 			if done, ok := msg.(operationComplete); ok {
@@ -628,9 +629,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return msg
 		}, true
 	case ModelCloseIntent:
-		if m.cancel != nil {
+		if m.cancel != nil && m.Busy && m.operationID == m.catalogOperation {
 			// The person closed the picker: the loading it stops is no
-			// failure to report.
+			// failure to report. Another operation, such as plan outcomes
+			// recording once the catalog arrived, keeps running.
 			m.closedCancelled = m.operationID
 			m.cancel()
 		}

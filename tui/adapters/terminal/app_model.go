@@ -99,6 +99,9 @@ type AppModel struct {
 	// closedCancelled marks the operation stopped because the person closed
 	// its panel (the model picker while it loads); likewise not an error.
 	closedCancelled uint64
+	// catalogOperation is the model picker's catalog load, the only
+	// operation closing the picker may cancel.
+	catalogOperation uint64
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string

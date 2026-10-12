@@ -163,3 +163,34 @@ func TestSwitchingToASessionShowsThePlansThatEndedWhileItWasClosed(t *testing.T)
 		t.Fatalf("transcript of %s:\n%s", m.Header.State.ID, m.Transcript.Text())
 	}
 }
+
+// The 12 October 2026 audit found that Esc in /model cancelled whatever
+// operation ran, not only the catalog load: when the load ended, the queued
+// plan outcomes started recording while the picker stayed open, and Esc
+// then cancelled the recording, losing the outcomes.
+func TestEscInTheModelPickerCancelsOnlyTheCatalogLoad(t *testing.T) {
+	plans := &fakePlans{records: []domain.PlanRecord{finishedPlan(domain.PlanDone)}}
+	m, _ := planningModel(t, plans)
+	m.deps.Models = application.ListModelsUseCase{Catalog: modelCatalogStub{}}
+	next, load := m.Update(ControlIntent("models"))
+	m = next.(AppModel)
+	// The plan ends while the catalog loads: its outcome waits.
+	next, cmd := m.Update(planEventMsg(application.PlanEvent{Plan: plans.records[0]}))
+	m = next.(AppModel)
+	if cmd != nil || len(m.pendingPlanOutcomes) != 1 {
+		t.Fatalf("the outcome did not wait for the catalog: %d", len(m.pendingPlanOutcomes))
+	}
+	next, record := m.Update(load())
+	m = next.(AppModel)
+	if record == nil || !m.Busy || m.overlay != "models" {
+		t.Fatalf("the outcome did not start recording behind the open picker: busy=%v overlay=%q", m.Busy, m.overlay)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	if m.overlay != "" {
+		t.Fatalf("Esc did not close the picker: %q", m.overlay)
+	}
+	m = drain(t, m, record)
+	if m.Status.Error != "" || !strings.Contains(m.Transcript.Text(), outcomeLine) {
+		t.Fatalf("Esc in the picker lost the plan outcome (error %q):\n%s", m.Status.Error, m.Transcript.Text())
+	}
+}
