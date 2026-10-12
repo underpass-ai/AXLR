@@ -126,6 +126,8 @@ type AppModel struct {
 	// Esc stopped a turn (zero for none): the conversation marks it until a
 	// message follows or another operation runs.
 	cancelledAt int
+	// turnStarted is when the running turn began; see turn_clock.go.
+	turnStarted time.Time
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -538,6 +540,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.submittedPrompt = ""
 		m.Status.State = v.Session.Status()
+		if switched || v.Session.Status() != domain.StatusApproval {
+			// A card keeps the turn's clock running; an end stops it.
+			m.stopTurnClock()
+		}
 		if m.deps.ApprovalSettings != nil {
 			m.Status.Autonomous = m.deps.ApprovalSettings.Autonomous()
 		}
@@ -616,6 +622,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.submittedPrompt = string(prompt)
 			m.submittedAt = len(m.Header.State.Messages)
 			m.cost.beginTurn()
+			m.startTurnClock()
 			start := m.deps.Start
 			store := m.deps.Store
 			cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
@@ -1086,6 +1093,7 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	m.submittedPrompt = string(prompt)
 	m.submittedAt = len(m.Header.State.Messages)
 	m.cost.beginTurn()
+	m.startTurnClock()
 	m.Composer.Input.Reset()
 	m.Status.Error = ""
 	m.failures = nil

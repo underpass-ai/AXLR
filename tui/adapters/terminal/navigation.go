@@ -706,6 +706,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		p, _ := m.pending()
 		decision := m.Approval.Intent(intent)
+		m.resumeTurnClock()
 		resolve := m.deps.Resolve
 		settings := m.deps.ApprovalSettings
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
@@ -770,6 +771,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		m.overlay = ""
+		m.resumeTurnClock()
 		u := application.SessionControlUseCase{Store: m.deps.Store, Agent: m.deps.Agent}
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			return u.Resume(ctx, s, emit)

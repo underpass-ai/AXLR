@@ -162,6 +162,9 @@ func (m AppModel) footerStatus(detail int) string {
 
 func (m AppModel) statusActivity(status StatusBar) string {
 	activity := m.activityLabel(status)
+	if clock := m.turnClock(); activity != "" && clock != "" {
+		activity += " · " + clock
+	}
 	if activity != "" && m.steer.Peek() != "" {
 		activity += " · " + m.Theme.T("status.queued")
 	}

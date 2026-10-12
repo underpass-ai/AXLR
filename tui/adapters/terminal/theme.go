@@ -131,6 +131,8 @@ func (t Theme) Icon(kind string) string {
 			return "+"
 		case "failed":
 			return "x"
+		case "timer":
+			return "t"
 		}
 	}
 	if t.Icons == domain.IconsNerd {
@@ -178,6 +180,8 @@ func (t Theme) Icon(kind string) string {
 		return "✓"
 	case "failed":
 		return "✗"
+	case "timer":
+		return "⏱"
 	}
 	return "•"
 }
