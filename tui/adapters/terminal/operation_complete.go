@@ -12,7 +12,9 @@ type operationComplete struct {
 	PreferenceErr  error
 	// DefaultSaved reports a model selection that also became the default
 	// for new sessions.
-	DefaultSaved     bool
+	DefaultSaved bool
+	// Fresh reports the new session /new started.
+	Fresh            bool
 	Session          domain.Session
 	Err              error
 	Sessions         *[]domain.SessionSummary

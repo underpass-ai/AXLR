@@ -39,7 +39,20 @@ type SessionPicker struct {
 	Renaming       bool
 	RenameText     string
 	RenameSelected bool
+	// NewRow offers "＋ New session" above the sessions, and OnNew puts the
+	// selection on it.
+	NewRow bool
+	OnNew  bool
 }
+
+// ShowsNew reports whether the new-session row is listed: in the
+// workspace scopes and while nothing is typed in the filter.
+func (p SessionPicker) ShowsNew() bool {
+	return p.NewRow && !p.ArchivedView && !p.TasksView && strings.TrimSpace(p.Query) == ""
+}
+
+// NewSelected reports the selection on the new-session row.
+func (p SessionPicker) NewSelected() bool { return p.OnNew && p.ShowsNew() }
 
 const (
 	SessionRenameIntent  ControlIntent = "session-rename"
@@ -124,6 +137,9 @@ func (p SessionPicker) Visible() []domain.SessionSummary {
 }
 
 func (p SessionPicker) Current() (domain.SessionSummary, bool) {
+	if p.NewSelected() {
+		return domain.SessionSummary{}, false
+	}
 	visible := p.Visible()
 	if p.Selected < 0 || p.Selected >= len(visible) {
 		return domain.SessionSummary{}, false
@@ -193,12 +209,23 @@ func (p *SessionPicker) insertRename(text string) {
 }
 
 func (p *SessionPicker) key(key, text string) bool {
+	if !p.ShowsNew() {
+		p.OnNew = false
+	}
 	switch key {
 	case "up":
+		if p.Selected == 0 && p.ShowsNew() {
+			p.OnNew = true
+		}
 		p.Selected = max(0, p.Selected-1)
 	case "down":
+		if p.OnNew {
+			p.OnNew = false
+			break
+		}
 		p.Selected = min(max(0, len(p.Visible())-1), p.Selected+1)
 	case "tab":
+		p.OnNew = false
 		// This workspace → every workspace → plan tasks → archived → this
 		// workspace.
 		switch {
@@ -252,8 +279,26 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		search = theme.Accent(theme.T("sessions.renamePrompt")) + " " + title + theme.Muted("  "+theme.T("sessions.renameHint"))
 	}
 	lines = append(lines, search, "")
-	// Two rows per session plus a blank, after the search row and up to three group labels.
+	// Two rows per session plus a blank, after the search row and up to
+	// three group labels, and the new-session row with its blank.
 	page := max(1, (bodyHeight-5)/3)
+	if p.ShowsNew() {
+		plus := "＋"
+		if theme.Monochrome || theme.Icons == domain.IconsASCII {
+			plus = "+"
+		}
+		row := plus + " " + theme.T("sessions.new")
+		switch {
+		case !p.OnNew:
+			row = "  " + row
+		case theme.Monochrome:
+			row = theme.Selected(row)
+		default:
+			row = theme.Selected(theme.Icon("user") + " " + row)
+		}
+		lines = append(lines, z.Mark(prefix+"session-new", row), "")
+		page = max(1, (bodyHeight-7)/3)
+	}
 	start := max(0, p.Selected-page+1)
 	start = min(start, max(0, len(visible)-page))
 	end := min(len(visible), start+page)
@@ -271,7 +316,7 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		head := ansi.Truncate(title, max(1, body-ansi.StringWidth(when)-2), "…")
 		head += strings.Repeat(" ", max(2, body-ansi.StringWidth(head)-ansi.StringWidth(when))) + theme.Muted(when)
 		switch {
-		case i != p.Selected:
+		case i != p.Selected || p.NewSelected():
 			head = "  " + head
 		case theme.Monochrome:
 			head = theme.Selected(head)
@@ -293,7 +338,7 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		if p.AllWorkspaces || p.ArchivedView || p.TasksView {
 			meta = append(meta, shortenHome(singleLine(string(s.Workspace))))
 		}
-		if i == p.Selected {
+		if i == p.Selected && !p.NewSelected() {
 			// What axlr-tui --session takes to resume it from a shell.
 			meta = append(meta, theme.Tf("sessions.id", s.ID))
 		}

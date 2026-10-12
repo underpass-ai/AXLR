@@ -16,6 +16,7 @@ type slashCommand struct{ name, summary string }
 // slashCommands is every command the composer runs locally instead of
 // sending to the model, in the order the suggestions list them.
 var slashCommands = []slashCommand{
+	{"/new", "slash.new"},
 	{"/model", "slash.model"},
 	{"/theme", "slash.theme"},
 	{"/mcp", "slash.mcp"},
@@ -43,7 +44,7 @@ var slashCommands = []slashCommand{
 }
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/trabajos": "/jobs"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new"}
 
 // slashSuggestionMax is how many suggestions the menu shows at once on a
 // screen tall enough; the selection scrolls the rest into view. On 12

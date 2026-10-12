@@ -55,7 +55,7 @@ func TestActionPaletteKeepsKeyboardShortcutsAndTheme(t *testing.T) {
 		t.Fatal("palette shortcut stopped working")
 	}
 	m = update(m, ControlIntent("palette"))
-	m.Palette.List.Select(6)
+	m.Palette.List.Select(7)
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.overlay != "help" {
 		t.Fatal("enter did not activate selected list row")

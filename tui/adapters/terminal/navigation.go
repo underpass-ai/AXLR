@@ -290,7 +290,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "info", "approvals", "updates", "made-setup":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
-					if k.String() == "enter" && !m.Picker.Renaming {
+					if k.String() == "enter" && !m.Picker.Renaming && m.Picker.NewSelected() {
+						intent = NewSessionIntent
+						hasIntent = true
+					} else if k.String() == "enter" && !m.Picker.Renaming {
 						intent = "open-session"
 						hasIntent = true
 					} else if picked := m.Picker.Key(k.String(), k.Text); picked != "" {
@@ -339,9 +342,13 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
 		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
 		if m.overlay == "sessions" {
+			if m.Picker.ShowsNew() && m.zones.Get(m.prefix+"session-new").InBounds(mouse) {
+				intent = NewSessionIntent
+				hasIntent = true
+			}
 			for i := range m.Picker.Visible() {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
-					m.Picker.Selected = i
+					m.Picker.Selected, m.Picker.OnNew = i, false
 					intent = "open-session"
 					hasIntent = true
 					break
@@ -811,6 +818,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return nil
 		})
 		return m, cmd, true
+	case NewSessionIntent:
+		next, cmd := m.newSession()
+		return next, cmd, true
 	case "palette":
 		m.Palette = NewActionPalette(m.Theme.Locale)
 		m.overlay = intent

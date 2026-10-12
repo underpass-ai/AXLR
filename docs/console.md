@@ -12,6 +12,7 @@ The model picker filters to text models that support tools. Typing filters by ev
 |:--|:--|
 | `Enter` / `Shift+Enter` | Send / insert a newline |
 | `/` | List the commands that match what you typed, up to twelve at a time (fewer on a short screen): those whose name starts with it, then those with an alias that does, then those whose name or alias contains it (`/trab` finds `/jobs` through `/trabajos`). Each row shows the command's aliases dim after its name; ↑↓ scroll the list and select, Tab completes, Enter runs the selected one |
+| `/new` (aliases `/nueva`, `/clear`) | Start an empty session in this workspace with the session's model, in normal mode; the previous one stays in `Ctrl+O`. Refused while a turn or operation runs or a tool call waits for a decision, with the reason in the footer. Also **New session** in the action palette (`N`) and the first row of `Ctrl+O`, which keep the composer's draft |
 | `/model` | Choose a model |
 | `/normal`, `/review`, `/writer`, `/research` | Choose direct work and its local tool policy (aliases `/revisar`, `/escritor`, `/investigar`) |
 | `/stop-ceremony` | Cancel the running ceremony in MADE and return to normal mode (alias `/parar`); see [a step the model will not hand back](ceremonies.md#a-step-the-model-will-not-hand-back) |
@@ -308,7 +309,7 @@ Open a session with `Ctrl+O` or start with:
 /tmp/axlr-tui --root "$PWD" -c
 ```
 
-The `Ctrl+O` panel lists this workspace's sessions newest first; Tab widens it to every workspace, then to plan tasks' sessions, then to the archived ones, and typing filters by title. F2 renames the selected session: the old title starts selected, so the first character typed replaces it (an arrow keeps it for editing, Ctrl+U clears it), Enter saves and an empty title restores the first prompt. Ctrl+X archives or restores it.
+The `Ctrl+O` panel lists this workspace's sessions newest first, under a first row **＋ New session** (↑ from the newest session, then Enter) that does what `/new` does; Tab widens it to every workspace, then to plan tasks' sessions, then to the archived ones, and typing filters by title. F2 renames the selected session: the old title starts selected, so the first character typed replaces it (an arrow keeps it for editing, Ctrl+U clears it), Enter saves and an empty title restores the first prompt. Ctrl+X archives or restores it.
 
 The `Ctrl+O` panel shows the selected session's id on its second line, and quitting a session with messages (`/exit`, `Ctrl+C`) prints `axlr-tui: resume with: axlr-tui --session <id>` on stderr, with the session's cost when it has one. The workspace must match the saved one. The saved model is restored without a catalog request; an accompanying `--model` must match it. An interrupted session loads without executing pending calls. Use `Ctrl+R` to continue explicitly; pending tools follow the current approval policy. Partial output remains an interrupted draft outside valid model history.
 

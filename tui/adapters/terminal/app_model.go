@@ -474,6 +474,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Sessions != nil {
 			m.Picker = NewSessionPicker(*v.Sessions, m.Header.State.Workspace)
 			m.Picker.Tasks = planTaskSessions(m.PlanPanel.Records)
+			m.Picker.NewRow = m.Header.State.Model != ""
 			if m.deps.SessionLabels != nil {
 				if labels, err := m.deps.SessionLabels.Load(m.lifetime.ctx); err == nil {
 					m.Picker.Labels = labels
@@ -558,6 +559,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Error = ""
 		}
 		m.exitCancelled = 0
+		if v.Fresh && v.Err == nil {
+			m.Status.Notice = m.Theme.T("notice.newStarted")
+		}
 		if v.ModelSelection && v.Err == nil && v.PreferenceErr != nil {
 			m.Status.Error = m.Theme.T("error.modelDefault")
 		}
@@ -637,6 +641,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !known {
 				// Text that only starts with "/" (a path) is a prompt.
 				return m.submitDraft()
+			}
+			if command == "/new" {
+				changed, cmd := m.newSession()
+				if cmd != nil {
+					changed.Composer.Input.Reset()
+				}
+				return changed, cmd
 			}
 			if command == "/update" {
 				changed, cmd := m.updateEngines()

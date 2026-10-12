@@ -22,6 +22,7 @@ type actionItem struct {
 func (a actionItem) FilterValue() string { return a.title + " " + a.description + " " + a.shortcut }
 
 var actionItems = []list.Item{
+	actionItem{NewSessionIntent, "palette.newTitle", "palette.newDescription", "n"},
 	actionItem{"mcp", "palette.mcpTitle", "palette.mcpDescription", "e"},
 	actionItem{"plugins", "palette.pluginsTitle", "palette.pluginsDescription", "p"},
 	actionItem{"models", "palette.modelsTitle", "palette.modelsDescription", "m"},

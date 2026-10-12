@@ -700,9 +700,19 @@ var enMessages = map[string]string{
 	"plugins.rowCountOne":          "%s %s · %d tool",
 
 	// qa3 qol input
-	"models.useHere":      "Enter · Use in this session",
-	"notice.modelSession": "%s for this session · Ctrl+Enter in /model also makes it the default",
-	"notice.modelDefault": "%s for this session and as the default for new sessions",
+	"models.useHere":         "Enter · Use in this session",
+	"notice.modelSession":    "%s for this session · Ctrl+Enter in /model also makes it the default",
+	"notice.modelDefault":    "%s for this session and as the default for new sessions",
+	"slash.new":              "start a new session in this workspace",
+	"palette.newTitle":       "New session",
+	"palette.newDescription": "Start an empty session in this workspace with this model",
+	"sessions.new":           "New session",
+	"notice.newBusy":         "A new session starts once the current turn or operation ends",
+	"notice.newPending":      "Decide the pending tool calls, or cancel them with Esc, before a new session",
+	"notice.newNoModel":      "Choose a model with /model first: it starts the session",
+	"notice.newAlready":      "This session is still empty: type a prompt",
+	"notice.newStarted":      "New session · Ctrl+O reopens the previous one",
+	"help.commandsSession":   "/new new session (/clear) · Ctrl+O reopen one",
 }
 
 var esMessages = map[string]string{
@@ -1341,7 +1351,17 @@ var esMessages = map[string]string{
 	"plugins.rowCountOne":          "%s %s · %d herramienta",
 
 	// qa3 qol input
-	"models.useHere":      "Enter · Usar en esta sesión",
-	"notice.modelSession": "%s para esta sesión · Ctrl+Enter en /model lo hace también predeterminado",
-	"notice.modelDefault": "%s para esta sesión y como predeterminado de las nuevas",
+	"models.useHere":         "Enter · Usar en esta sesión",
+	"notice.modelSession":    "%s para esta sesión · Ctrl+Enter en /model lo hace también predeterminado",
+	"notice.modelDefault":    "%s para esta sesión y como predeterminado de las nuevas",
+	"slash.new":              "empezar una sesión nueva en este espacio",
+	"palette.newTitle":       "Sesión nueva",
+	"palette.newDescription": "Empezar una sesión vacía en este espacio de trabajo con este modelo",
+	"sessions.new":           "Sesión nueva",
+	"notice.newBusy":         "La sesión nueva empieza cuando acabe el turno u operación en curso",
+	"notice.newPending":      "Decide las llamadas pendientes, o cancélalas con Esc, antes de una sesión nueva",
+	"notice.newNoModel":      "Elige antes un modelo con /model: él empieza la sesión",
+	"notice.newAlready":      "Esta sesión sigue vacía: escribe un mensaje",
+	"notice.newStarted":      "Sesión nueva · Ctrl+O vuelve a abrir la anterior",
+	"help.commandsSession":   "/new sesión nueva (/nueva, /clear) · Ctrl+O abrir otra",
 }
