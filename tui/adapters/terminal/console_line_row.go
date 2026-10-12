@@ -24,6 +24,11 @@ func consoleLineRow(line domain.ConsoleLine, theme Theme) transcriptRow {
 		}
 		row.Text = theme.Tf("transcript.planOutcome", plan.PlanID, theme.T("plans.status."+string(plan.Status)), plan.Done, plan.Tasks, plan.Blocked, plan.Skipped, syncVerdicts(plan.Syncs), changedFiles(plan.Changed), cost)
 	}
+	if restore := line.Restore; restore != nil {
+		// Ctrl+D shows the restore's diff beside the steps.
+		row.Label, row.LabelTone = theme.Icon("console")+" ", toneAccent
+		row.Text = restoreLineText(*restore, theme)
+	}
 	if failure := line.Failure; failure != nil {
 		// A failed turn stays in the transcript after the footer moves on:
 		// on 12 October 2026 an invalid model id left a prompt with no reply

@@ -22,6 +22,9 @@ type changeRecord struct {
 	Tool   string
 	Turn   int
 	At     time.Time
+	// Restore marks a file the person put back (Undo: with /undo), drawn
+	// from the snapshots of the steps it went back over.
+	Restore, Undo bool
 }
 
 // changeFile groups a session's changes to one path. Its net change runs
@@ -56,6 +59,10 @@ type ChangeViewer struct {
 	detailFocus   bool
 	width, height int
 	sessionID     domain.SessionID
+	// confirm is the step u asks to restore until y or another key
+	// answers; notice says why u did nothing.
+	confirm root.ToolCallID
+	notice  string
 }
 
 func NewChangeViewer() ChangeViewer {
@@ -117,7 +124,21 @@ func changeRecords(state domain.SessionState) []changeRecord {
 			resultAt[m.ToolCallID] = i
 		}
 	}
+	turnAt := func(index int) int {
+		turn := 0
+		for _, m := range state.Messages[:min(index, len(state.Messages))] {
+			if m.Role == root.RoleUser && !consoleNote(m.Content) {
+				turn++
+			}
+		}
+		return turn
+	}
+	// Each record's place in the transcript: twice its result's message
+	// index, and a restore one more than the message it follows, so the
+	// restores fall between the steps in the order they happened.
 	var records []changeRecord
+	var places []int
+	place := 0
 	for _, a := range state.Activity {
 		if a.Outcome == nil || a.Outcome.IsError || a.Outcome.Uncertain || a.Decision == domain.DecisionDeny || a.Outcome.Change == nil {
 			continue
@@ -125,18 +146,35 @@ func changeRecords(state domain.SessionState) []changeRecord {
 		record := changeRecord{ID: a.Call.ID, Change: *a.Outcome.Change}
 		record.Tool, _ = toolCallPresentation(state, a.Call)
 		if index, ok := resultAt[a.Call.ID]; ok {
-			for _, m := range state.Messages[:index] {
-				if m.Role == root.RoleUser && !consoleNote(m.Content) {
-					record.Turn++
-				}
-			}
+			record.Turn = turnAt(index)
 			if index < len(state.MessageTimes) {
 				record.At = state.MessageTimes[index]
 			}
+			place = 2 * index
 		}
 		records = append(records, record)
+		places = append(places, place)
 	}
-	return records
+	for i, line := range state.ConsoleLines {
+		if line.Restore == nil {
+			continue
+		}
+		for k, f := range line.Restore.Files {
+			change, _ := state.RestoreChange(f)
+			records = append(records, changeRecord{ID: root.ToolCallID(fmt.Sprintf("restore.%d.%d", i, k)), Change: change, Turn: turnAt(line.AfterMessage), At: line.At, Restore: true, Undo: line.Restore.Undo})
+			places = append(places, 2*line.AfterMessage-1)
+		}
+	}
+	order := make([]int, len(records))
+	for i := range order {
+		order[i] = i
+	}
+	slices.SortStableFunc(order, func(a, b int) int { return places[a] - places[b] })
+	sorted := make([]changeRecord, len(records))
+	for i, at := range order {
+		sorted[i] = records[at]
+	}
+	return sorted
 }
 
 func groupChanges(records []changeRecord, previews []changePreview) []changeFile {
@@ -241,7 +279,19 @@ func (v *ChangeViewer) stepFile(delta int) {
 
 func (v *ChangeViewer) Update(msg tea.Msg, zones *zone.Manager, prefix string) ControlIntent {
 	if k, ok := msg.(tea.KeyPressMsg); ok {
+		v.notice = ""
+		if v.confirm != "" {
+			// y restores; any other key keeps the file as it is.
+			if k.String() == "y" {
+				return "changes-restore"
+			}
+			v.confirm = ""
+			return ""
+		}
 		switch k.String() {
+		case "u":
+			v.askRestore()
+			return ""
 		case "esc":
 			return "close"
 		case "tab", "shift+tab":
@@ -399,6 +449,17 @@ func (v *ChangeViewer) View(zones *zone.Manager, prefix string, width, height in
 	if v.detailFocus {
 		hint = v.Theme.T("changes.detailHint")
 	}
+	if v.confirm != "" {
+		row := v.rows[v.selected]
+		file := v.files[row.File]
+		step := row.Step
+		if step < 0 {
+			step = 0
+		}
+		hint = v.Theme.Tf("changes.restoreConfirm", singleLine(string(file.Path)), step+1)
+	} else if v.notice != "" {
+		hint = v.notice
+	}
 	footer += "  " + v.position()
 	return v.Theme.Overlay(v.Theme.T("changes.title"), hint, body, footer, width, height)
 }
@@ -457,7 +518,12 @@ func (v ChangeViewer) stepLabel(r changeRecord) string {
 	if clock := formatClock(r.At, transcriptNow()); clock != "" {
 		parts = append(parts, clock)
 	}
-	if r.Tool != "" {
+	switch {
+	case r.Undo:
+		parts = append(parts, v.Theme.T("changes.undoStep"))
+	case r.Restore:
+		parts = append(parts, v.Theme.T("changes.restoreStep"))
+	case r.Tool != "":
 		parts = append(parts, singleLine(r.Tool))
 	}
 	return strings.Join(parts, " · ")

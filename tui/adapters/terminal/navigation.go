@@ -445,6 +445,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return next, cmd, true
 	case "usage":
 		return m.openUsagePanel(), nil, true
+	case "changes-restore":
+		next, cmd := m.restoreChange()
+		return next, cmd, true
 	case "changes":
 		m.Changes.Open(m.Header.State)
 		m.Changes.Resize(m.Layout.Width, m.Layout.Height-1)

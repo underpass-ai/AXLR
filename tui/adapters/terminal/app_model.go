@@ -138,6 +138,10 @@ type AppModel struct {
 	// in denyInput; see approval_deny_reason.go.
 	denying   bool
 	denyInput textinput.Model
+	// restoreOperation is a restore from Ctrl+D or /undo; its end says what
+	// went back. undoAsking waits for the key that answers /undo.
+	restoreOperation uint64
+	undoAsking       bool
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -233,6 +237,9 @@ func (m AppModel) Init() tea.Cmd {
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionUpdate, application.DiagnosticEvent{OperationID: m.operationID})
 	defer span.End(application.DiagnosticErrorNone)
+	if k, ok := msg.(tea.KeyPressMsg); ok && m.undoAsking {
+		return m.answerUndo(k)
+	}
 	if next, cmd, handled := m.navigation(msg); handled {
 		return next, cmd
 	}
@@ -612,6 +619,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Error = ""
 		}
 		m.exitCancelled, m.queueReturned = 0, 0
+		if v.ID == m.restoreOperation {
+			m.restoreOperation = 0
+			if v.Err == nil {
+				m.Status.Notice = m.restoredNotice(v.Session.Export())
+			}
+		}
 		if v.Fresh && v.Err == nil {
 			m.Status.Notice = m.Theme.T("notice.newStarted")
 		}
@@ -719,6 +732,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/approvals" {
 				m.Composer.Input.Reset()
 				return m.Update(ControlIntent("approvals"))
+			}
+			if command == "/undo" {
+				return m.askUndo()
 			}
 			if command == "/copy" {
 				m.Composer.Input.Reset()
