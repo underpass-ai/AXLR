@@ -51,11 +51,12 @@ func TestLatestSessionIsTheWorkspacesMostRecentConversation(t *testing.T) {
 func TestCreateSessionExecuteNewDrawsAnID(t *testing.T) {
 	store := &memoryStore{}
 	u := CreateSessionUseCase{Store: store}
-	first, err := u.ExecuteNew(context.Background(), "/ws", "test/model")
+	ws := domain.Workspace(t.TempDir())
+	first, err := u.ExecuteNew(context.Background(), ws, "test/model")
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := u.ExecuteNew(context.Background(), "/ws", "test/model")
+	second, err := u.ExecuteNew(context.Background(), ws, "test/model")
 	if err != nil || first.Export().ID == second.Export().ID || len(store.states) != 2 {
 		t.Fatalf("ids %q %q, saves %d, %v", first.Export().ID, second.Export().ID, len(store.states), err)
 	}

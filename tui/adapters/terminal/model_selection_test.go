@@ -10,6 +10,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -321,7 +322,7 @@ func TestModelSelectionBareScreenLongWorkspaceAtMinimumWidth(t *testing.T) {
 		t.Fatalf("bare screen hides selection guidance: %q", view)
 	}
 	// A short row keeps the path's last segment, not its head.
-	if !strings.Contains(view, "…/long") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
+	if !strings.Contains(view, "…"+string(filepath.Separator)+"long") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
 		t.Fatalf("workspace missing or screen overflows: %q", view)
 	}
 }

@@ -24,7 +24,7 @@ func (e exactCalls) ApprovesCall(session domain.SessionID, id domain.ToolIdentit
 // also where the mode asks for each command; another session, other
 // arguments and a call the mode denies still wait or are refused.
 func TestAnExactCallApprovalOutranksTheModesQuestionNotItsDenial(t *testing.T) {
-	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/ws", "model")
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "model")
 	if err != nil {
 		t.Fatal(err)
 	}

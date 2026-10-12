@@ -168,6 +168,8 @@ func TestACancelledOrFailedRequestStillReachesTheLedger(t *testing.T) {
 		NotifyToolCallProgress(ctx, "local_write", 220)
 		NotifyToolCallProgress(ctx, "local_read", 30)
 		_ = onText(root.Text(strings.Repeat("palabra ", 50)))
+		// Windows' clock can read no time at all for a fake this fast.
+		time.Sleep(2 * time.Millisecond)
 		cancel()
 		return root.CompletionResult{RequestBytes: 41000, Provider: "Anthropic"}, context.Canceled
 	})
