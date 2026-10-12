@@ -61,6 +61,24 @@ func TestALongPasteIsFoldedButSentWhole(t *testing.T) {
 	}
 }
 
+// tmux paste-buffer and GNOME Terminal turn each pasted newline into a
+// carriage return; on 12 October 2026 such a 200-line paste was not folded.
+func TestAPasteWithCarriageReturnsIsFolded(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	paste := numberedLines(200)
+	m = update(m, tea.PasteMsg{Content: strings.ReplaceAll(paste, "\n", "\r")})
+	if want := pasteToken(m.Theme, paste); m.Composer.Input.Value() != want {
+		t.Fatalf("composer = %q; want %q", m.Composer.Input.Value(), want)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	messages := m.Header.State.Messages
+	if len(messages) == 0 || string(messages[len(messages)-1].Content) != paste {
+		t.Fatal("the prompt sent is not the paste with its newlines")
+	}
+	m.cancel()
+}
+
 func TestShortPastesStayAsTypedAndTwoLongOnesKeepTheirOwnText(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()

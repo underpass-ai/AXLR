@@ -27,7 +27,8 @@ func pasteToken(theme Theme, text string) string {
 // paste puts a paste into the composer: as typed when it is short, as its
 // token otherwise, kept so the prompt sent carries the whole text.
 func (m *AppModel) paste(text string) {
-	text = strings.ReplaceAll(text, "\r\n", "\n")
+	// tmux and GNOME Terminal send a pasted newline as a carriage return.
+	text = strings.ReplaceAll(strings.ReplaceAll(text, "\r\n", "\n"), "\r", "\n")
 	if lineCount(text) <= pasteFoldLines {
 		m.Composer.Input.InsertString(text)
 		return
