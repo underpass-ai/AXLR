@@ -86,8 +86,20 @@ type UserSettings struct {
 	TracePayloads bool `json:"trace_payloads,omitempty"`
 	// ForgedTools offers axlr_forge_tool and axlr_run_tool; absent means on.
 	// A pointer keeps an explicit false when another setting is saved.
-	ForgedTools *bool                      `json:"forged_tools,omitempty"`
-	Extra       map[string]json.RawMessage `json:"-"`
+	ForgedTools *bool `json:"forged_tools,omitempty"`
+	// Notify is how the console calls for attention when a long turn ends
+	// or a card waits: "bell" (the default), "osc" (a desktop notification
+	// and the bell) or "off".
+	Notify string                     `json:"notify,omitempty"`
+	Extra  map[string]json.RawMessage `json:"-"`
+}
+
+// NotifyMode is the notify setting, "bell" when unset.
+func (s UserSettings) NotifyMode() string {
+	if s.Notify == "" {
+		return "bell"
+	}
+	return s.Notify
 }
 
 // ForgedToolsEnabled reports whether forged tools are offered: on unless
@@ -382,7 +394,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "prompt_tokens", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools", "notify"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -452,6 +464,11 @@ func (s UserSettings) Validate() error {
 	}
 	if err := s.Jobs.validate(); err != nil {
 		return err
+	}
+	switch s.Notify {
+	case "", "bell", "osc", "off":
+	default:
+		return errors.New(`settings notify must be "bell", "osc" or "off"`)
 	}
 	if s.TurnToolCalls != 0 && (s.TurnToolCalls < minTurnToolCalls || s.TurnToolCalls > maxTurnToolCalls) {
 		return fmt.Errorf("settings turn_tool_calls must be between %d and %d", minTurnToolCalls, maxTurnToolCalls)

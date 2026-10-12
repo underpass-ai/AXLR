@@ -49,7 +49,7 @@ The handback should identify the changed artifacts, check and outcome, unresolve
 
 In a driven ceremony, verify `COMPLETED` or `BLOCKED` and the return to normal mode. Check the KMP write outcome separately. The driver uses the session's selected project about, with `ws:<session-id>` as fallback. It records a terminal observation with a stable idempotency key, and does not automatically acknowledge a KMP request for writer review. Save other reusable decisions with rationale and evidence under the stable project scope when appropriate. Do not turn a failed memory write into a claim of durable recall.
 
-For transfer, use the [handoff contract](../ceremonies.md#handoff-contract): record exact state and evidence and obtain a real receiver's acceptance. For interruption or ambiguous effects, follow [recovery](recovery.md).
+For interruption or ambiguous effects, follow [recovery](recovery.md).
 
 ## Exit criteria
 

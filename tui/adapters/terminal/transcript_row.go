@@ -22,6 +22,9 @@ const (
 	// approval card shows a file edit taking out and putting in.
 	transcriptRowDiffRemoved
 	transcriptRowDiffAdded
+	// transcriptRowConsole is a note the console sent the model, drawn as
+	// one dim line that a click expands.
+	transcriptRowConsole
 )
 
 // transcriptRow is one conversation entry. The viewport wraps it to the
@@ -43,6 +46,11 @@ type transcriptRow struct {
 	// shown right-aligned on the row's first line when it fits.
 	At    time.Time
 	Aside string
+	// Note identifies a console note row, which a click expands or folds.
+	Note string
+	// Wrap keeps a row with a Note wrapping like any other instead of
+	// folding it to one line: a tool row and the result it opens.
+	Wrap bool
 }
 
 // toolFacts is what a tool row shows, kept structured for summaries.
@@ -76,7 +84,7 @@ const (
 )
 
 func (k transcriptRowKind) isTool() bool {
-	return k == transcriptRowPlain || k == transcriptRowMemory
+	return k == transcriptRowPlain || k == transcriptRowMemory || k == transcriptRowConsole
 }
 
 // consoleMemoryReminder reports the user message the console sends to ask

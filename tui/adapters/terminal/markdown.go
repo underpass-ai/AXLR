@@ -60,20 +60,35 @@ func renderMarkdown(src string, theme Theme) string {
 // renderMarkdownWidth renders like renderMarkdown, laying tables that do not
 // fit the width out one row per line instead of in broken columns.
 func renderMarkdownWidth(src string, theme Theme, width int) string {
+	rendered, _ := renderMarkdownHangs(src, theme, width)
+	return rendered
+}
+
+// renderMarkdownHangs renders like renderMarkdownWidth and also says, for
+// each line it returns, where a wrapped continuation of that line starts:
+// a code line continues under its own indentation inside the block, zero
+// for any other line. On 12 October 2026 a 200-character echo in a code
+// block wrapped to column 2, out of the block.
+func renderMarkdownHangs(src string, theme Theme, width int) (string, []int) {
 	s := newMarkdownStyle(theme)
 	s.width = width
 	lines := strings.Split(src, "\n")
 	out := make([]string, 0, len(lines))
+	hangs := make([]int, 0, len(lines))
 	fenced := false
 	for i := 0; i < len(lines); i++ {
 		line := lines[i]
 		trimmed := strings.TrimSpace(line)
+		for len(hangs) < len(out) {
+			hangs = append(hangs, 0)
+		}
 		switch {
 		case strings.HasPrefix(trimmed, "```"):
 			fenced = !fenced
 			out = append(out, "")
 		case fenced:
 			out = append(out, "  "+s.colour(s.code, line))
+			hangs = append(hangs, 2+ansi.StringWidth(line)-ansi.StringWidth(strings.TrimLeft(line, " ")))
 		case strings.HasPrefix(trimmed, "|"):
 			end := i
 			for end < len(lines) && strings.HasPrefix(strings.TrimSpace(lines[end]), "|") {
@@ -95,7 +110,10 @@ func renderMarkdownWidth(src string, theme Theme, width int) string {
 			out = append(out, s.inline(line))
 		}
 	}
-	return strings.Join(out, "\n")
+	for len(hangs) < len(out) {
+		hangs = append(hangs, 0)
+	}
+	return strings.Join(out, "\n"), hangs
 }
 
 // inline renders code spans and bold, whichever opens first. Code spans keep

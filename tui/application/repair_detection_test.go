@@ -214,4 +214,8 @@ func TestRepairBriefCarriesTheCitedOutcomesAndRepairSlugNamesIt(t *testing.T) {
 	if got := RepairSlug("¿¡!?", now); got != "20261005-0102-failure" {
 		t.Fatalf("empty words %q", got)
 	}
+	// Accented letters are spelled in ASCII rather than dropped.
+	if got := RepairSlug("Añade la opción de caché", now); got != "20261005-0102-anade-la-opcion-de-cache" {
+		t.Fatalf("accented %q", got)
+	}
 }

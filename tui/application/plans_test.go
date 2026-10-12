@@ -274,3 +274,60 @@ func TestPlanTaskAndSyncOutcomesReachMemory(t *testing.T) {
 		t.Fatalf("sync memory: %s %+v", outcome, last)
 	}
 }
+
+// liveRuns is the launches that still hold their run tokens.
+type liveRuns map[string]bool
+
+func (l liveRuns) Alive(token string) bool { return l[token] }
+
+// A plan another open console is running is left to it: a second launch
+// neither marks it interrupted nor starts it again. On 12 October 2026 it
+// did both, and the plan that went on running ended "done" with "the
+// console that ran it stopped".
+func TestReconcileLeavesThePlansOfAnOpenConsole(t *testing.T) {
+	ctx := context.Background()
+	plans := &memoryPlans{}
+	_ = plans.Save(ctx, domain.PlanRecord{ID: "theirs", Session: "s", Status: domain.PlanRunning, RunToken: "console-a", Tasks: []domain.PlanTask{{ID: "t", Status: domain.TaskRunning}}})
+	_ = plans.Save(ctx, domain.PlanRecord{ID: "stopped", Session: "s", Status: domain.PlanRunning, RunToken: "console-gone"})
+	_ = plans.Save(ctx, domain.PlanRecord{ID: "paused", Session: "s", Status: domain.PlanInterrupted, RunToken: "console-a"})
+	runner := &PlanRunner{Plans: plans, RunToken: "console-b", Liveness: liveRuns{"console-a": true}}
+	defer runner.Close()
+	if err := runner.Reconcile(ctx); err != nil {
+		t.Fatal(err)
+	}
+	theirs, _ := runner.load(ctx, "theirs")
+	stopped, _ := runner.load(ctx, "stopped")
+	if theirs.Status != domain.PlanRunning || theirs.Error != "" || theirs.Tasks[0].Status != domain.TaskRunning || stopped.Status != domain.PlanInterrupted {
+		t.Fatalf("reconciled %+v %+v", theirs, stopped)
+	}
+	if err := runner.Start(ctx, "paused"); err == nil || !strings.Contains(err.Error(), "another console") {
+		t.Fatalf("started the interrupted plan of an open console: %v", err)
+	}
+}
+
+// A plan that reaches its end drops an error written while it ran, such as
+// the one another console's reconcile wrote before this change.
+func TestAFinishedPlanClearsAStaleError(t *testing.T) {
+	ctx := context.Background()
+	plans := &memoryPlans{}
+	_ = plans.Save(ctx, domain.PlanRecord{ID: "p", Session: "s", Workspace: domain.Workspace(t.TempDir()), Worker: "local/gemma", Status: domain.PlanReady, Waves: 1, Tasks: []domain.PlanTask{{ID: "a", Wave: 1, Status: domain.TaskPending}}})
+	bench := &staleErrorBench{scriptedBench{plans: plans, outcome: map[string]domain.TaskStatus{"a": domain.TaskDone}}}
+	runner := &PlanRunner{Plans: plans, Store: &memoryStore{}, Workbench: benchPort{bench}, RunToken: "now"}
+	if err := runner.Start(ctx, "p"); err != nil {
+		t.Fatal(err)
+	}
+	runner.Wait()
+	record, _ := runner.load(ctx, "p")
+	if record.Status != domain.PlanDone || record.Error != "" {
+		t.Fatalf("finished plan %+v", record)
+	}
+	runner.Close()
+}
+
+// staleErrorBench writes an error on the plan while its task runs.
+type staleErrorBench struct{ scriptedBench }
+
+func (b *staleErrorBench) Begin(ctx context.Context, s *domain.Session, prompt root.Text, emit func(Event) error) error {
+	b.plans.records[0].Error = "the console that ran it stopped; start it again from /plan"
+	return b.scriptedBench.Begin(ctx, s, prompt, emit)
+}

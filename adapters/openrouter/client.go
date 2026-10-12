@@ -107,32 +107,32 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpResp, err := c.http.Do(httpReq)
 	if err != nil {
-		return domain.CompletionResult{}, failure(&TransportError{Cause: err, Provider: c.provider})
+		return domain.CompletionResult{RequestBytes: len(body)}, failure(&TransportError{Cause: err, Provider: c.provider})
 	}
 	var closeOnce sync.Once
 	closeBody := func() { closeOnce.Do(func() { _ = httpResp.Body.Close() }) }
 	stop := context.AfterFunc(requestCtx, closeBody)
 	defer func() { stop(); closeBody() }()
 	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
-		return domain.CompletionResult{}, c.providerError(httpResp.StatusCode)
+		return domain.CompletionResult{RequestBytes: len(body)}, c.providerError(httpResp.StatusCode, errorResponseMessage(httpResp.Body))
 	}
 	data, err := io.ReadAll(io.LimitReader(httpResp.Body, maxResponseBytes+1))
 	if err != nil {
-		return domain.CompletionResult{}, failure(&TransportError{Cause: err, Provider: c.provider})
+		return domain.CompletionResult{RequestBytes: len(body)}, failure(&TransportError{Cause: err, Provider: c.provider})
 	}
 	if len(data) > maxResponseBytes {
-		return domain.CompletionResult{}, errors.New("OpenRouter response exceeds 8 MiB")
+		return domain.CompletionResult{RequestBytes: len(body)}, errors.New("OpenRouter response exceeds 8 MiB")
 	}
 	var reply responseDTO
 	if err := json.Unmarshal(data, &reply); err != nil {
-		return domain.CompletionResult{}, errors.New("malformed OpenRouter response")
+		return domain.CompletionResult{RequestBytes: len(body)}, errors.New("malformed OpenRouter response")
 	}
-	if status, ok := errorBodyStatus(reply.Error); ok {
-		return domain.CompletionResult{}, c.providerError(status)
+	if status, message, ok := errorBody(reply.Error); ok {
+		return domain.CompletionResult{RequestBytes: len(body)}, c.providerError(status, message)
 	}
 	result, err := mapResponse(reply)
 	if err != nil {
-		return domain.CompletionResult{}, err
+		return domain.CompletionResult{RequestBytes: len(body)}, err
 	}
 	result.RequestBytes = len(body)
 	return result, nil
@@ -158,12 +158,15 @@ func (c *Client) authorize(req *http.Request) {
 	}
 }
 
-func (c *Client) providerError(status int) *ProviderError {
+// providerError classifies status and keeps the provider's message, without
+// the client's key.
+func (c *Client) providerError(status int, message string) *ProviderError {
 	err := classifyProviderError(status)
+	err.Message = message
 	if c.provider != providerName {
 		err.Provider = c.provider
 	}
-	return err
+	return err.withoutKey(c.apiKey)
 }
 
 // template asks the chat template to turn thinking off when configured.

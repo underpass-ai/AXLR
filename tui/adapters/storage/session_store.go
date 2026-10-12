@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -229,13 +230,14 @@ func (s *SessionStore) List(ctx context.Context) ([]domain.SessionSummary, error
 			return nil, fmt.Errorf("session %s: %w", id, e)
 		}
 		state := session.Export()
-		summary := domain.SessionSummary{ID: state.ID, Workspace: state.Workspace, Model: state.Model, Status: state.Status, MessageCount: len(state.Messages)}
+		summary := domain.SessionSummary{ID: state.ID, Workspace: state.Workspace, Model: state.Model, Status: state.Status, MessageCount: len(state.Messages), Mode: state.Mode}
 		for _, message := range state.Messages {
 			if message.Role == root.RoleUser {
 				summary.Title = message.Content
 				break
 			}
 		}
+		summary.Text = summaryText(state.Messages)
 		if info, err := entry.Info(); err == nil {
 			summary.UpdatedAt = info.ModTime()
 		}
@@ -243,6 +245,33 @@ func (s *SessionStore) List(ctx context.Context) ([]domain.SessionSummary, error
 	}
 	return result, nil
 }
+
+// summaryText joins a session's prompts and replies for the picker's
+// filter, up to domain.MaxSummaryTextBytes and never inside a character.
+func summaryText(messages []root.Message) root.Text {
+	var b strings.Builder
+	for _, message := range messages {
+		if message.Role != root.RoleUser && message.Role != root.RoleAssistant || message.Content == "" {
+			continue
+		}
+		text := string(message.Content)
+		if room := domain.MaxSummaryTextBytes - b.Len() - 1; len(text) > room {
+			for room > 0 && !utf8.RuneStart(text[room]) {
+				room--
+			}
+			text = text[:max(0, room)]
+		}
+		if text == "" {
+			break
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(text)
+	}
+	return root.Text(b.String())
+}
+
 func (s *SessionStore) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

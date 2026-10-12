@@ -59,7 +59,8 @@ func TestChangesCommandsPreserveDraftAndDoNotStartAnAgentTurn(t *testing.T) {
 	defer m.zones.Close()
 	m.Composer.Input.SetValue("draft to keep")
 	m.Busy = true
-	m = update(m, tea.KeyPressMsg{Code: 'd', Mod: tea.ModCtrl})
+	// With a draft Ctrl+D deletes forward in it; the palette opens Changes.
+	m = update(m, ControlIntent("changes"))
 	if m.overlay != "changes" {
 		t.Fatal("cannot inspect changes during streaming")
 	}

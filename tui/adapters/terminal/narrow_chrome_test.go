@@ -35,7 +35,7 @@ func TestAt80ColumnsTheFooterKeepsTheStateAndTheSessionCost(t *testing.T) {
 	defer m.zones.Close()
 	m.tokens, m.cached = 54_716, 89
 	m.cost = costView{ledger: domain.UsageLedger{Cost: 0.0531, CostRequests: 50}, turnCost: 0.0474, turnRequests: 48}
-	if footer := ansi.Strip(m.footerView()); !strings.Contains(footer, "enter send") || !strings.Contains(footer, "54.7k tok") || !strings.Contains(footer, "turn") {
+	if footer := ansi.Strip(m.footerView()); !strings.Contains(footer, "enter send") || !strings.Contains(footer, "55k tok") || !strings.Contains(footer, "turn") {
 		t.Fatalf("a wide footer dropped something: %q", footer)
 	}
 }

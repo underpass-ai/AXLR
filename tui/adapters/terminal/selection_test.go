@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 )
 
@@ -199,6 +200,7 @@ func TestHelpExplainsCopying(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 30}, {Width: 70, Height: 30}, {Width: 55, Height: 30}, {Width: 70, Height: 18}} {
 		m := update(sized(), size)
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyEnd})
 		if content := m.View().Content; !strings.Contains(content, "/copy") {
 			t.Fatalf("%dx%d help omits copying:\n%s", size.Width, size.Height, content)
 		}
@@ -234,5 +236,40 @@ func TestSelectionIsPaintedInColour(t *testing.T) {
 	}
 	if fmt.Sprint(tr.Selection.Text(strings.Split(tr.Viewport.GetContent(), "\n"))) != "beta\ngamma" {
 		t.Fatal(tr.Selection.Text(strings.Split(tr.Viewport.GetContent(), "\n")))
+	}
+}
+
+// On 12 October 2026 emoji with a variation selector (⛩️ ❄️) shifted table
+// columns. The console measures them as one 2-cell character everywhere:
+// table padding, wrapping and word selection.
+func TestEmojiWithAVariationSelectorAreTwoCellsWide(t *testing.T) {
+	for _, emoji := range []string{"⛩️", "❄️", "🗼", "🏯"} {
+		if w := ansi.StringWidth(emoji); w != 2 {
+			t.Fatalf("%q measures %d cells", emoji, w)
+		}
+	}
+	table := "| sitio | clima |\n|---|---|\n| ⛩️ Fushimi | ❄️ frío |\n| 🗼 Tokio | 🏯 templado |\n| Kioto | sol |"
+	lines := strings.Split(ansi.Strip(renderMarkdownWidth(table, Theme{Monochrome: true}, 80)), "\n")
+	column := -1
+	for _, line := range lines {
+		if strings.Contains(line, "─") || strings.TrimSpace(line) == "" {
+			continue
+		}
+		fields := strings.SplitN(line, "  ", 2)
+		second := strings.TrimLeft(fields[len(fields)-1], " ")
+		at := ansi.StringWidth(line) - ansi.StringWidth(second)
+		if column >= 0 && at != column {
+			t.Fatalf("the second column starts at cell %d, not %d:\n%s", at, column, strings.Join(lines, "\n"))
+		}
+		column = at
+	}
+	if wrapped := ansi.Wrap("⛩️⛩️⛩️⛩️", 5, ""); wrapped != "⛩️⛩️\n⛩️⛩️" {
+		t.Fatalf("wrap at 5 cells = %q", wrapped)
+	}
+	if left, right := wordAt("⛩️ Fushimi Inari", 4); left != 3 || right != 9 {
+		t.Fatalf("the word after an emoji spans cells %d–%d, want 3–9", left, right)
+	}
+	if left, right := wordAt("⛩️⛩️ x", 1); left != 0 || right != 3 {
+		t.Fatalf("two emoji span cells %d–%d, want 0–3", left, right)
 	}
 }

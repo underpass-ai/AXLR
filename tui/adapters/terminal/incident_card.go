@@ -259,7 +259,7 @@ func planCardContent(run domain.CeremonyRun, record domain.PlanRecord, err error
 		return theme.Tf("plan.cardUnreadable", err.Error())
 	}
 	lines := []string{
-		theme.Tf("plan.cardHeader", record.ID, len(record.Tasks), record.Waves, record.Planner, record.Worker),
+		theme.Tf("plan.cardHeader", record.ID, theme.Tn("count.tasks", len(record.Tasks), len(record.Tasks)), theme.Tn("count.waves", record.Waves, record.Waves), record.Planner, record.Worker),
 		theme.Tf("plan.cardE2E", strings.TrimSpace(record.E2E.Program+" "+strings.Join(record.E2E.Args, " ")), record.E2EBaseline),
 		theme.Tf("plan.cardReturns", domain.MaxPlanReturns-min(run.Plan.Returns, domain.MaxPlanReturns)),
 		"",

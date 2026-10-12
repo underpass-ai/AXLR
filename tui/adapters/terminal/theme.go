@@ -109,6 +109,8 @@ func (t Theme) Icon(kind string) string {
 		switch kind {
 		case "memory":
 			return "[MEM]"
+		case "console":
+			return "~"
 		case "connected":
 			return "[OK]"
 		case "waiting":
@@ -129,6 +131,10 @@ func (t Theme) Icon(kind string) string {
 			return "+"
 		case "failed":
 			return "x"
+		case "timer":
+			return "t"
+		case "branch":
+			return "git:"
 		}
 	}
 	if t.Icons == domain.IconsNerd {
@@ -152,6 +158,8 @@ func (t Theme) Icon(kind string) string {
 	switch kind {
 	case "memory":
 		return "◇"
+	case "console":
+		return "⟲"
 	case "connected":
 		return "●"
 	case "waiting":
@@ -174,6 +182,10 @@ func (t Theme) Icon(kind string) string {
 		return "✓"
 	case "failed":
 		return "✗"
+	case "timer":
+		return "⏱"
+	case "branch":
+		return "⎇"
 	}
 	return "•"
 }

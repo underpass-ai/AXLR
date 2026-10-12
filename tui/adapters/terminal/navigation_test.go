@@ -5,6 +5,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
@@ -76,7 +77,12 @@ func TestNavigationPaletteHelpAndInfo(t *testing.T) {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: 'h', Text: "h"})
-	if !strings.Contains(m.View().Content, "Shift+Enter") || !strings.Contains(m.View().Content, "approve") {
+	if !strings.Contains(m.View().Content, "Shift+Enter") {
+		t.Fatal(m.View().Content)
+	}
+	// At 20 rows the help scrolls to its last rows.
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnd})
+	if !strings.Contains(m.View().Content, "Approvals and catalogs") {
 		t.Fatal(m.View().Content)
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
@@ -115,8 +121,11 @@ func TestNavigationRestoreRequiresExplicitContinue(t *testing.T) {
 	s.InterruptDraft("partial")
 	m := navModel(t, &s)
 	m.deps.Agent = application.AgentTurnUseCase{Continue: application.ContinueTurnUseCase{Store: m.deps.Store, Models: navStream{}}}
-	if m.Init() != nil || m.Busy {
+	// Init only saves the terminal's title before setting it.
+	if msg := m.Init()(); m.Busy || msg == nil {
 		t.Fatal("load executed")
+	} else if _, ok := msg.(tea.BatchMsg); ok {
+		t.Fatalf("init does more than save the title: %T", msg)
 	}
 	if !strings.Contains(m.View().Content, "ctrl+r continue") {
 		t.Fatal("no explicit continuation")
@@ -211,9 +220,17 @@ func TestNavigationSwitchRejectsDifferentWorkspace(t *testing.T) {
 	if current, ok := m.Picker.Current(); !ok || current.ID != other.Export().ID {
 		t.Fatal("Tab did not show every workspace")
 	}
+	// The row says it belongs elsewhere, and Enter says how to open it
+	// without starting a load that fails.
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, m.Theme.Tf("sessions.elsewhere", string(testWorkspace())+"-other")) {
+		t.Fatalf("no other-workspace marker:\n%s", view)
+	}
 	n, c = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m = drain(t, n.(AppModel), c)
-	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "axlr-tui --root "+string(testWorkspace())+"-other") {
+	if c != nil || n.(AppModel).Busy {
+		t.Fatal("Enter on another workspace's session started an operation")
+	}
+	m = n.(AppModel)
+	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "axlr-tui --root "+string(testWorkspace())+"-other --session "+string(other.Export().ID)) || m.overlay != "sessions" {
 		t.Fatalf("workspace compatibility not enforced or not explained: %q", m.Status.Error)
 	}
 }
@@ -236,7 +253,8 @@ func TestNavigationSearchDuplicateMessageTargets(t *testing.T) {
 
 func TestNavigationSearchTargetsArchivedDraftRow(t *testing.T) {
 	s := navSession(t)
-	if err := s.BeginTurn(root.Text(strings.Repeat("earlier line\n", 40)), nil); err != nil {
+	// Nineteen lines, so the prompt is not folded, that wrap to forty.
+	if err := s.BeginTurn(root.Text(strings.Repeat("earlier line with enough words to wrap twice at seventy columns of width\n", 19)), nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.InterruptDraft("archived needle"); err != nil {
@@ -250,7 +268,7 @@ func TestNavigationSearchTargetsArchivedDraftRow(t *testing.T) {
 	for _, r := range "needle" {
 		m = update(m, tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	if len(m.SearchBox.Hits) != 1 || m.SearchBox.Hits[0].ArchivedDraftIndex == nil {
+	if len(m.SearchBox.Hits) != 1 {
 		t.Fatalf("search missed archived draft: %+v", m.SearchBox.Hits)
 	}
 	if m.Transcript.Viewport.YOffset() == 0 || !strings.Contains(m.Transcript.View(), "archived needle") {
@@ -342,5 +360,125 @@ func TestNavigationSearchResizeKeepsQueryInBounds(t *testing.T) {
 	v := m.View()
 	if lipgloss.Width(v.Content) > 50 || m.SearchBox.Input.Value() != strings.Repeat("q", 90) || v.Cursor.X >= 50 {
 		t.Fatalf("resize query=%d width=%d cursor=%+v view=%s", len(m.SearchBox.Input.Value()), lipgloss.Width(v.Content), v.Cursor, v.Content)
+	}
+}
+
+// On 12 October 2026 Enter on the open session's row in Ctrl+O left the
+// picker open with no message while the session reloaded behind it.
+func TestEnterOnTheOpenSessionClosesThePickerWithoutReloading(t *testing.T) {
+	s := navSession(t)
+	if err := s.BeginTurn("saved prompt", nil); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	if err := m.deps.Store.Save(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	n, cmd := m.Update(ControlIntent("sessions"))
+	m = drain(t, n.(AppModel), cmd)
+	if m.overlay != "sessions" {
+		t.Fatalf("picker not open: %q", m.overlay)
+	}
+	if selected, ok := m.Picker.Current(); !ok || selected.ID != m.Header.State.ID {
+		t.Fatal("the open session is not the selected row")
+	}
+	n, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = n.(AppModel)
+	if cmd != nil || m.Busy {
+		t.Fatal("Enter on the open session reloaded it")
+	}
+	if m.overlay != "" {
+		t.Fatalf("the picker stayed open: %q", m.overlay)
+	}
+}
+
+// On 12 October 2026 a session opened from Ctrl+O kept the offset the
+// previous one was scrolled to (row 5 of 159) instead of its last message.
+func TestOpeningAnotherSessionShowsItsLastMessage(t *testing.T) {
+	long := func(id domain.SessionID, prompt string) domain.Session {
+		s, err := domain.NewSession(id, testWorkspace(), "model")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range 30 {
+			if err := s.BeginTurn(root.Text(fmt.Sprintf("%s %d", prompt, i)), nil); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "reply\nwith\nlines"}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return s
+	}
+	a := long("0123456789abcdef0123456789abcdef", "first session")
+	b := long("fedcba9876543210fedcba9876543210", "second session")
+	m := navModel(t, &a)
+	for _, s := range []domain.Session{a, b} {
+		if err := m.deps.Store.Save(context.Background(), s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.Transcript.Viewport.GotoTop()
+	n, cmd := m.Update(ControlIntent("sessions"))
+	m = drain(t, n.(AppModel), cmd)
+	for i, row := range m.Picker.Visible() {
+		if row.ID == b.Export().ID {
+			m.Picker.Selected = i
+		}
+	}
+	n, cmd = m.Update(ControlIntent("open-session"))
+	m = drain(t, n.(AppModel), cmd)
+	if m.Header.State.ID != b.Export().ID {
+		t.Fatal("the other session did not open")
+	}
+	if m.Transcript.Viewport.YOffset() == 0 || !m.Transcript.Viewport.AtBottom() {
+		t.Fatalf("the opened session is not at its last message: offset %d", m.Transcript.Viewport.YOffset())
+	}
+}
+
+// On 12 October 2026 F1 at 15 rows lost its last rows (approve, quit,
+// copy) and could not scroll; F1 again did not close it.
+func TestHelpScrollsWhenItDoesNotFitAndF1ClosesIt(t *testing.T) {
+	s := navSession(t)
+	m := navModel(t, &s)
+	m = update(m, tea.WindowSizeMsg{Width: 80, Height: 15})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "help" {
+		t.Fatalf("F1 did not open the help: %q", m.overlay)
+	}
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "↓") || !strings.Contains(view, "more") || strings.Contains(view, "Ctrl+C twice") {
+		t.Fatalf("the help does not say more rows follow:\n%s", view)
+	}
+	if lipgloss.Height(m.View().Content) > 15 {
+		t.Fatal("the help is taller than the screen")
+	}
+	for range 40 {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	view = ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "/theme: I icons") || !strings.Contains(view, "above") || strings.Contains(view, "more") {
+		t.Fatalf("↓ did not reach the last rows:\n%s", view)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyPgUp})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyHome})
+	if m.Help.Top != 0 {
+		t.Fatalf("Home left the help at row %d", m.Help.Top)
+	}
+	m = update(m, tea.MouseWheelMsg{Button: tea.MouseWheelDown})
+	if m.Help.Top != 3 {
+		t.Fatalf("the wheel moved the help to row %d", m.Help.Top)
+	}
+	m = update(m, tea.MouseWheelMsg{Button: tea.MouseWheelUp})
+	if m.Help.Top != 0 {
+		t.Fatalf("the wheel moved the help back to row %d", m.Help.Top)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "" {
+		t.Fatalf("F1 did not close the help: %q", m.overlay)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "help" || m.Help.Top != 0 {
+		t.Fatalf("the help reopened at row %d", m.Help.Top)
 	}
 }

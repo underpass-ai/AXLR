@@ -131,7 +131,7 @@ func TestStreamFailuresNameTheEndpoint(t *testing.T) {
 	for name, tc := range map[string]struct{ body, want string }{
 		"no [DONE]":   {streamEvents(textChunk, stopChunk), "model endpoint 127.0.0.1:8080 stream ended without [DONE]"},
 		"cut event":   {"data: " + textChunk, "model endpoint 127.0.0.1:8080 transport failure"},
-		"error event": {streamEvents(textChunk, `{"error":{"code":503,"message":"overloaded"}}`), "model endpoint 127.0.0.1:8080 provider_failure (HTTP 503)"},
+		"error event": {streamEvents(textChunk, `{"error":{"code":503,"message":"overloaded"}}`), "model endpoint 127.0.0.1:8080 provider_failure (HTTP 503): overloaded"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			client, err := New(ClientConfig{Endpoint: "http://127.0.0.1:8080/v1/chat/completions", HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {

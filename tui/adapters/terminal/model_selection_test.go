@@ -10,6 +10,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -199,6 +200,8 @@ func TestModelSelectionBusyAndPendingPriority(t *testing.T) {
 	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "call", Name: "read", Arguments: args}}}})
 	m.Header.State = s.Export()
 	m.syncApproval()
+	// The card's bell is not the picker's doing.
+	m, _ = m.signal(nil)
 	n, cmd = m.Update(ControlIntent("models"))
 	m = n.(AppModel)
 	if cmd != nil || m.overlay == "models" || !m.approvalFocus() {
@@ -318,7 +321,8 @@ func TestModelSelectionBareScreenLongWorkspaceAtMinimumWidth(t *testing.T) {
 	if !strings.Contains(view, "Type /model to choose a model") {
 		t.Fatalf("bare screen hides selection guidance: %q", view)
 	}
-	if !strings.Contains(view, "/home/") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
+	// A short row keeps the path's last segment, not its head.
+	if !strings.Contains(view, "…"+string(filepath.Separator)+"long") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
 		t.Fatalf("workspace missing or screen overflows: %q", view)
 	}
 }
@@ -344,5 +348,52 @@ func TestClosingTheModelPickerWhileItLoadsReportsNoError(t *testing.T) {
 	m = drain(t, m, cmd)
 	if m.overlay != "" || m.Status.Error != "" || strings.Contains(m.View().Content, "context canceled") {
 		t.Fatalf("closing the picker reported %q:\n%s", m.Status.Error, m.View().Content)
+	}
+}
+
+// On 12 October 2026 Enter in /model also saved the model as the default
+// for every new session; trying a model for one session changed the next
+// ones. Enter now changes this session only, Ctrl+Enter (or Ctrl+D) also
+// saves the default.
+func TestEnterChangesThisSessionAndCtrlEnterAlsoTheDefault(t *testing.T) {
+	for _, key := range []tea.KeyPressMsg{{Code: tea.KeyEnter}, {Code: tea.KeyEnter, Mod: tea.ModCtrl}, {Code: 'd', Mod: tea.ModCtrl}} {
+		t.Run(key.String(), func(t *testing.T) {
+			s := navSession(t)
+			m, _ := selectionModel(t, &s)
+			if err := m.deps.ModelPreference.Save(context.Background(), "provider/default"); err != nil {
+				t.Fatal(err)
+			}
+			m = openModels(t, m)
+			n, cmd := m.Update(key)
+			if cmd == nil {
+				t.Fatal("selection operation absent")
+			}
+			m = drain(t, n.(AppModel), cmd)
+			if m.Header.State.Model != "provider/chosen" || m.overlay != "" {
+				t.Fatalf("model = %q overlay = %q", m.Header.State.Model, m.overlay)
+			}
+			preferred, _ := m.deps.ModelPreference.Load(context.Background())
+			wantDefault, wantNotice := root.ModelID("provider/default"), m.Theme.Tf("notice.modelSession", "provider/chosen")
+			if key.String() != "enter" {
+				wantDefault, wantNotice = "provider/chosen", m.Theme.Tf("notice.modelDefault", "provider/chosen")
+			}
+			if preferred != wantDefault || m.Status.Notice != wantNotice {
+				t.Fatalf("default = %q notice = %q; want %q, %q", preferred, m.Status.Notice, wantDefault, wantNotice)
+			}
+		})
+	}
+}
+
+func TestTheModelPickerHidesBatchVariants(t *testing.T) {
+	p := NewModelPicker()
+	p.SetCurrent("provider/slow:batch")
+	p.SetModels([]domain.AvailableModel{{ID: "provider/fast"}, {ID: "provider/fast:batch"}, {ID: "provider/slow:batch"}})
+	var shown []string
+	for _, i := range p.visible {
+		shown = append(shown, string(p.models[i].ID))
+	}
+	// The session's own model stays listed whatever its suffix.
+	if strings.Join(shown, ",") != "provider/slow:batch,provider/fast" {
+		t.Fatalf("listed %v", shown)
 	}
 }

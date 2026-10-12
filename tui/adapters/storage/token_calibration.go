@@ -40,13 +40,21 @@ type tokenCalibrationEntry struct {
 // private file beside the sessions, so a console starts from what earlier
 // consoles measured, and consoles running together add to the same average.
 // The ratio a console applies to a model is fixed the first time it is
-// asked once the model is calibrated, so the projection's ceiling does not
-// move under a running session and break the provider's prompt cache.
+// asked, the default included while the model has too few measured
+// requests, so the projection's ceiling does not move under a running
+// session and break the provider's prompt cache: on 12 October 2026 a glm
+// session's ceiling went from 138,752 to 251,392 bytes at its fifth request.
 type TokenCalibration struct {
 	path    string
 	mu      sync.Mutex
-	applied map[root.ModelID]int
+	applied map[root.ModelID]appliedRatio
 	now     func() time.Time
+}
+
+// appliedRatio is the answer BytesPerToken gave a model first.
+type appliedRatio struct {
+	hundredths int
+	ok         bool
 }
 
 var _ application.TokenCalibrationPort = (*TokenCalibration)(nil)
@@ -58,7 +66,7 @@ func NewTokenCalibration(path string) (*TokenCalibration, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return nil, err
 	}
-	return &TokenCalibration{path: path, applied: map[root.ModelID]int{}, now: time.Now}, nil
+	return &TokenCalibration{path: path, applied: map[root.ModelID]appliedRatio{}, now: time.Now}, nil
 }
 
 // Observe adds one request of model to its average.
@@ -99,24 +107,22 @@ func (c *TokenCalibration) Observe(ctx context.Context, model root.ModelID, requ
 }
 
 // BytesPerToken is the ratio, in hundredths of a byte, this console applies
-// to model: none until the model has enough measured requests, then the
-// value it had the first time it was asked.
+// to model: what it answered the first time it was asked, which is none
+// when the model had too few measured requests then. The next launch picks
+// up what was measured since.
 func (c *TokenCalibration) BytesPerToken(model root.ModelID) (int, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if hundredths, ok := c.applied[model]; ok {
-		return hundredths, true
+	if applied, asked := c.applied[model]; asked {
+		return applied.hundredths, applied.ok
 	}
-	file, err := c.read()
-	if err != nil {
-		return 0, false
+	var applied appliedRatio
+	if file, err := c.read(); err == nil {
+		entry := file.Models[string(model)]
+		applied.hundredths, applied.ok = domain.BytesPerToken{Ratio: entry.BytesPerToken, Samples: entry.Samples}.Hundredths()
 	}
-	entry := file.Models[string(model)]
-	hundredths, ok := domain.BytesPerToken{Ratio: entry.BytesPerToken, Samples: entry.Samples}.Hundredths()
-	if ok {
-		c.applied[model] = hundredths
-	}
-	return hundredths, ok
+	c.applied[model] = applied
+	return applied.hundredths, applied.ok
 }
 
 func (c *TokenCalibration) read() (tokenCalibrationFile, error) {

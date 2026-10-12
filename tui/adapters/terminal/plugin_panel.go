@@ -113,7 +113,7 @@ func (p *PluginPanel) refresh() {
 	if item.Error != "" {
 		fmt.Fprintln(&b, p.Theme.Tf("plugins.unavailable", item.Error))
 	} else {
-		fmt.Fprintln(&b, p.Theme.Tf("plugins.connectedCount", len(item.Tools)))
+		fmt.Fprintln(&b, p.Theme.Tn("plugins.connectedCount", len(item.Tools), len(item.Tools)))
 	}
 	fmt.Fprint(&b, p.Theme.Tf("plugins.approvalDetails", p.Theme.T("approval."+string(item.Profile.Approval))))
 	for _, tool := range item.Tools {
@@ -296,7 +296,7 @@ func (p PluginPanel) View(mode ControlIntent, w, h int) string {
 			if item.Error != "" {
 				state = p.Theme.Icon("error")
 			}
-			row := p.Theme.Tf("plugins.rowCount", state, singleLine(string(item.Profile.Name)), len(item.Tools))
+			row := p.Theme.Tn("plugins.rowCount", len(item.Tools), state, singleLine(string(item.Profile.Name)), len(item.Tools))
 			if index == p.Selected {
 				row = p.Theme.Selected("› " + row)
 			} else {

@@ -35,6 +35,7 @@ type sessionUsage struct {
 	Providers        map[string]providerUsageEntry `json:"providers,omitempty"`
 	FirstByte        latencyEntry                  `json:"first_byte"`
 	Total            latencyEntry                  `json:"total"`
+	Unmetered        int                           `json:"unmetered,omitempty"`
 	RaisedUSD        float64                       `json:"raised_usd,omitempty"`
 	Warned           bool                          `json:"warned,omitempty"`
 }
@@ -118,7 +119,7 @@ func (s *SessionStore) readUsage(id domain.SessionID) (domain.UsageLedger, error
 	ledger := domain.UsageLedger{
 		Requests: record.Requests, PromptTokens: record.PromptTokens, CachedTokens: record.CachedTokens, CacheWriteTokens: record.CacheWriteTokens,
 		CompletionTokens: record.CompletionTokens, ReasoningTokens: record.ReasoningTokens, Cost: record.CostUSD, CostRequests: record.CostRequests,
-		FirstByte: record.FirstByte.stats(), Total: record.Total.stats(), Raised: record.RaisedUSD, Warned: record.Warned,
+		FirstByte: record.FirstByte.stats(), Total: record.Total.stats(), Raised: record.RaisedUSD, Warned: record.Warned, Unmetered: record.Unmetered,
 	}
 	if len(record.Providers) > 0 {
 		ledger.Providers = make(map[string]domain.ProviderUsage, len(record.Providers))
@@ -133,7 +134,7 @@ func usageRecord(ledger domain.UsageLedger) sessionUsage {
 	record := sessionUsage{
 		Version: sessionUsageVersion, Requests: ledger.Requests, PromptTokens: ledger.PromptTokens, CachedTokens: ledger.CachedTokens, CacheWriteTokens: ledger.CacheWriteTokens,
 		CompletionTokens: ledger.CompletionTokens, ReasoningTokens: ledger.ReasoningTokens, CostUSD: ledger.Cost, CostRequests: ledger.CostRequests,
-		FirstByte: latency(ledger.FirstByte), Total: latency(ledger.Total), RaisedUSD: ledger.Raised, Warned: ledger.Warned,
+		FirstByte: latency(ledger.FirstByte), Total: latency(ledger.Total), RaisedUSD: ledger.Raised, Warned: ledger.Warned, Unmetered: ledger.Unmetered,
 	}
 	if len(ledger.Providers) > 0 {
 		record.Providers = make(map[string]providerUsageEntry, len(ledger.Providers))

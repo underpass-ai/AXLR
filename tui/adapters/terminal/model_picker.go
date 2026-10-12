@@ -15,8 +15,11 @@ import (
 
 const (
 	ModelSelectIntent ControlIntent = "model-select"
-	ModelRetryIntent  ControlIntent = "model-retry"
-	ModelCloseIntent  ControlIntent = "model-close"
+	// ModelDefaultIntent selects the model for this session and also saves
+	// it as the default for new sessions.
+	ModelDefaultIntent ControlIntent = "model-default"
+	ModelRetryIntent   ControlIntent = "model-retry"
+	ModelCloseIntent   ControlIntent = "model-close"
 	// ModelFavoriteIntent asks the root to pin or unpin the selected model.
 	ModelFavoriteIntent ControlIntent = "model-favorite"
 )
@@ -130,6 +133,10 @@ func (p *ModelPicker) filter() {
 	p.visible = p.visible[:0]
 	for i, model := range p.models {
 		id := singleLine(string(model.ID))
+		if strings.HasSuffix(id, ":batch") && string(model.ID) != p.current {
+			// Batch variants answer within hours, not in a console turn.
+			continue
+		}
 		name := singleLine(string(model.Name))
 		provider := strings.SplitN(id, "/", 2)[0]
 		if p.provider > 0 && p.provider < len(p.providers) && provider != p.providers[p.provider] {
@@ -188,6 +195,13 @@ func (p ModelPicker) Update(msg tea.Msg, zones *zone.Manager, prefix string) (Mo
 		case "enter":
 			if _, ok := p.SelectedModel(); ok {
 				return p, ModelSelectIntent, nil
+			}
+			return p, "", nil
+		case "ctrl+enter", "ctrl+d":
+			// Ctrl+D for terminals that send Ctrl+Enter as Enter; a plain
+			// letter would type into the filter.
+			if _, ok := p.SelectedModel(); ok {
+				return p, ModelDefaultIntent, nil
 			}
 			return p, "", nil
 		case "up", "down", "pgup", "pgdown":
@@ -364,7 +378,7 @@ func (p ModelPicker) detail(width int) string {
 	if rate := model.CompletionRate.Display(); rate != "" {
 		lines = append(lines, p.Theme.Tf("models.outputRate", rate))
 	}
-	lines = append(lines, p.Theme.T("models.toolsYes"), "", p.Theme.Accent(p.Theme.T("models.setDefault")))
+	lines = append(lines, p.Theme.T("models.toolsYes"), "", p.Theme.Accent(p.Theme.T("models.useHere")), p.Theme.Accent(p.Theme.T("models.setDefault")))
 	return strings.Join(lines, "\n")
 }
 

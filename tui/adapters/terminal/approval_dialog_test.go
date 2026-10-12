@@ -48,11 +48,19 @@ func TestApprovalDenyKeyboardAndMouse(t *testing.T) {
 		m := approvalModel(t)
 		var n tea.Model
 		var c tea.Cmd
+		// D asks for the reason first; Enter denies with it, Esc without.
+		finish := tea.KeyPressMsg{Code: tea.KeyEnter}
 		if mouse {
-			n, c = click(t, m, "deny")
+			n, _ = click(t, m, "deny")
+			finish = tea.KeyPressMsg{Code: tea.KeyEsc}
 		} else {
-			n, c = m.Update(tea.KeyPressMsg{Code: 'd', Text: "d"})
+			n, _ = m.Update(tea.KeyPressMsg{Code: 'd', Text: "d"})
 		}
+		m = n.(AppModel)
+		if m.Busy || !m.denying {
+			t.Fatal("D decided before asking for a reason")
+		}
+		n, c = m.Update(finish)
 		m = n.(AppModel)
 		if !m.Busy || m.deps.Session.Pending()[0].Call.ID != "one" {
 			t.Fatal("decision bypassed isolation")
@@ -204,7 +212,7 @@ func TestApprovalDeferredUnknownAfterKnown(t *testing.T) {
 	s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "known", Name: "local_write", Arguments: args}, {ID: "unknown", Name: "missing", Arguments: args}}}})
 	m = publishTestSession(t, m, s)
 	m.deps.Resolve.Continue.Models = navStream{}
-	n, c := m.Update(ControlIntent("deny"))
+	n, c := m.Update(ControlIntent("deny-send"))
 	m = drain(t, n.(AppModel), c)
 	state := m.Header.State
 	if state.Status != domain.StatusComplete || len(state.Activity) != 2 || state.Activity[1].Decision != domain.DecisionDeny || !strings.Contains(string(state.Activity[1].Outcome.Content), "unknown tool") {
@@ -254,7 +262,7 @@ func TestApprovalSaveFailurePreservesDecisionAndInput(t *testing.T) {
 	m := approvalModel(t)
 	m.deps.Resolve.Store = navBrokenStore{}
 	m.Composer.Input.SetValue("draft")
-	n, c := m.Update(ControlIntent("deny"))
+	n, c := m.Update(ControlIntent("deny-send"))
 	m = drain(t, n.(AppModel), c)
 	if m.Status.State != domain.StatusApproval || len(m.deps.Session.Pending()) != 2 || m.Composer.Input.Value() != "draft" || !strings.Contains(m.Status.Error, "storage offline") {
 		t.Fatal("failed decision lost state")
@@ -298,11 +306,11 @@ func TestApprovalComponentEmitsTypedDecision(t *testing.T) {
 
 // The worker has not completed while follow-up deltas are being displayed.
 func TestApprovalFollowupVisibleBeforeOperationComplete(t *testing.T) {
-	for _, decision := range []ControlIntent{"approve", "deny"} {
+	for _, decision := range []ControlIntent{"approve", "deny-send"} {
 		t.Run(string(decision), func(t *testing.T) {
 			m := approvalModel(t)
 			// Resolve the first call so the tested decision is the last in its batch.
-			n, cmd := m.Update(ControlIntent("deny"))
+			n, cmd := m.Update(ControlIntent("deny-send"))
 			m = drain(t, n.(AppModel), cmd)
 			release := make(chan struct{})
 			defer close(release)
@@ -374,10 +382,10 @@ func (s heldFollowup) Stream(ctx context.Context, _ root.CompletionRequest, emit
 
 func TestApprovalReappearsForFollowupCall(t *testing.T) {
 	m := approvalModel(t)
-	n, cmd := m.Update(ControlIntent("deny"))
+	n, cmd := m.Update(ControlIntent("deny-send"))
 	m = drain(t, n.(AppModel), cmd)
 	m.deps.Resolve.Continue.Models = followupCall{}
-	n, cmd = m.Update(ControlIntent("deny"))
+	n, cmd = m.Update(ControlIntent("deny-send"))
 	m = drain(t, n.(AppModel), cmd)
 	if !m.approvalFocus() || !strings.Contains(m.View().Content, "new-target.txt") || m.Approval.Pending.Call.ID != "next" {
 		t.Fatalf("follow-up approval missing: %s", m.View().Content)
@@ -413,5 +421,58 @@ func TestAlwaysAllowWithoutApprovalSettingsReportsATranslatedError(t *testing.T)
 	m = drain(t, next.(AppModel), cmd)
 	if want := Translate(Spanish, "error.approvalSettings"); m.Status.Error != want {
 		t.Fatalf("error %q; want %q", m.Status.Error, want)
+	}
+}
+
+// Shift+A approves the card's call and the calls queued behind it, which
+// the card offers only when more than one waits; a call added later gets
+// its own card.
+func TestShiftAApprovesEveryPendingCall(t *testing.T) {
+	m := approvalModel(t)
+	defer m.zones.Close()
+	m.deps.Resolve.Tools = navTool{}
+	m.deps.Resolve.Continue.Models = navStream{}
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "A approve all 2") {
+		t.Fatalf("the card does not offer Shift+A:\n%s", view)
+	}
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModShift, Text: "A"})
+	m = drain(t, next.(AppModel), cmd)
+	activity := m.deps.Session.Export().Activity
+	if len(activity) != 2 || activity[0].Decision != domain.DecisionApprove || activity[1].Decision != domain.DecisionApprove || len(m.deps.Session.Pending()) != 0 {
+		t.Fatalf("activity %+v", activity)
+	}
+	one := execApprovalModel(t, domain.ModeNormal, `{"program":"ls"}`)
+	defer one.zones.Close()
+	if view := ansi.Strip(one.View().Content); strings.Contains(view, "approve all") {
+		t.Fatalf("one call offers Shift+A:\n%s", view)
+	}
+}
+
+// D asks for a reason that the denial carries to the model; a paste
+// reaches it, Ctrl+C goes back to the card undecided.
+func TestADenialCarriesTheReasonToTheModel(t *testing.T) {
+	m := approvalModel(t)
+	defer m.zones.Close()
+	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 24})
+	m = update(m, tea.KeyPressMsg{Code: 'd', Text: "d"})
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "Deny · reason for the model") || !strings.Contains(view, "Esc deny without reason") {
+		t.Fatalf("no reason input:\n%s", view)
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	if m.denying || m.Busy || len(m.deps.Session.Pending()) != 2 {
+		t.Fatal("Ctrl+C did not go back to the card")
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'D', Text: "D"})
+	m = update(m, tea.PasteMsg{Content: "keep the old"})
+	for _, r := range " text" {
+		m = update(m, tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	n, c := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = drain(t, n.(AppModel), c)
+	if got := string(m.deps.Session.Export().Activity[0].Outcome.Content); got != "tool call denied by user: keep the old text" {
+		t.Fatalf("result %q", got)
+	}
+	if m.Composer.Input.Value() != "" {
+		t.Fatal("the reason leaked into the composer")
 	}
 }

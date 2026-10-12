@@ -55,7 +55,7 @@ func TestActionPaletteKeepsKeyboardShortcutsAndTheme(t *testing.T) {
 		t.Fatal("palette shortcut stopped working")
 	}
 	m = update(m, ControlIntent("palette"))
-	m.Palette.List.Select(6)
+	m.Palette.List.Select(7)
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if m.overlay != "help" {
 		t.Fatal("enter did not activate selected list row")
@@ -63,4 +63,68 @@ func TestActionPaletteKeepsKeyboardShortcutsAndTheme(t *testing.T) {
 	if m.Palette.List.FilterState() == list.Filtering {
 		t.Fatal("palette reopened with stale filter state")
 	}
+}
+
+// On 12 October 2026 clicking Jobs or Copy last reply in Ctrl+P did
+// nothing, and Cancel while idle or Continue on a session that could not
+// continue left the palette open with no message.
+func TestEveryPaletteActionClosesItAndARefusedOneSaysWhy(t *testing.T) {
+	open := func(t *testing.T) AppModel {
+		s := navSession(t)
+		m := navModel(t, &s)
+		m = update(m, tea.WindowSizeMsg{Width: 100, Height: 45})
+		return update(m, ControlIntent("palette"))
+	}
+	t.Run("click on Copy", func(t *testing.T) {
+		m := open(t)
+		n, _ := click(t, m, "copy")
+		m = n.(AppModel)
+		if m.overlay != "" || m.Status.Error != m.Theme.T("error.nothingToCopy") {
+			t.Fatalf("copy click: overlay=%q error=%q", m.overlay, m.Status.Error)
+		}
+	})
+	t.Run("click on Jobs", func(t *testing.T) {
+		m := open(t)
+		n, _ := click(t, m, "jobs")
+		m = n.(AppModel)
+		if m.overlay == "palette" || m.Status.Error != m.Theme.T("jobs.unavailable") {
+			t.Fatalf("jobs click: overlay=%q error=%q", m.overlay, m.Status.Error)
+		}
+	})
+	t.Run("click on the close button", func(t *testing.T) {
+		m := open(t)
+		n, _ := click(t, m, "close")
+		if n.(AppModel).overlay != "" {
+			t.Fatal("close did not close the palette")
+		}
+	})
+	for _, refused := range []struct {
+		key    rune
+		busy   bool
+		notice string
+	}{
+		{'c', false, "notice.nothingToCancel"},
+		{'r', false, "notice.nothingToContinue"},
+		{'o', true, "notice.sessionsBusy"},
+	} {
+		t.Run(string(refused.key), func(t *testing.T) {
+			m := open(t)
+			m.Busy = refused.busy
+			m = update(m, tea.KeyPressMsg{Code: refused.key, Text: string(refused.key)})
+			if m.overlay != "" || m.Status.Notice != m.Theme.T(refused.notice) {
+				t.Fatalf("overlay=%q notice=%q", m.overlay, m.Status.Notice)
+			}
+			if !strings.Contains(m.View().Content, m.Theme.T(refused.notice)[:20]) {
+				t.Fatalf("the reason is not on screen:\n%s", m.View().Content)
+			}
+		})
+	}
+	t.Run("models while busy", func(t *testing.T) {
+		m := open(t)
+		m.Busy = true
+		m = update(m, tea.KeyPressMsg{Code: 'm', Text: "m"})
+		if m.overlay != "" || m.Status.Error != m.Theme.T("error.modelBusy") {
+			t.Fatalf("overlay=%q error=%q", m.overlay, m.Status.Error)
+		}
+	})
 }

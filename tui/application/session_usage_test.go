@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,5 +142,74 @@ func TestTheBudgetWarningComesOnce(t *testing.T) {
 	var budget *domain.SessionBudgetError
 	if err := u.Execute(context.Background(), &s, "hello", emit); !errors.As(err, &budget) {
 		t.Fatalf("fifth request at $%.2f: %v", ledgers[s.Export().ID].Cost, err)
+	}
+}
+
+type pinnedRatio struct{ hundredths int }
+
+func (pinnedRatio) Observe(context.Context, root.ModelID, int, int) error { return nil }
+func (p pinnedRatio) BytesPerToken(root.ModelID) (int, bool) {
+	return p.hundredths, p.hundredths > 0
+}
+
+// A request cancelled while it streamed reaches the ledger as an unmetered
+// request: its prompt tokens estimated from the body it sent at the model's
+// bytes per token, its completion tokens from what it streamed. A request
+// the provider refused before answering is counted and nothing more. On 12
+// October 2026 an essay cancelled after ten seconds left the session at
+// $0.0083 while OpenRouter billed some 600 words.
+func TestACancelledOrFailedRequestStillReachesTheLedger(t *testing.T) {
+	s := turnSession(t)
+	id := s.Export().ID
+	store, ledgers := &memoryStore{}, usageLedgers{}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancelled := streamFunc(func(ctx context.Context, _ root.CompletionRequest, onText func(root.Text) error) (root.CompletionResult, error) {
+		NotifyToolCallProgress(ctx, "local_write", 100)
+		NotifyToolCallProgress(ctx, "local_write", 220)
+		NotifyToolCallProgress(ctx, "local_read", 30)
+		_ = onText(root.Text(strings.Repeat("palabra ", 50)))
+		// Windows' clock can read no time at all for a fake this fast.
+		time.Sleep(2 * time.Millisecond)
+		cancel()
+		return root.CompletionResult{RequestBytes: 41000, Provider: "Anthropic"}, context.Canceled
+	})
+	var usage []domain.UsageLedger
+	emit := func(e Event) error {
+		if e.Kind == EventUsage {
+			usage = append(usage, *e.SessionUsage)
+		}
+		return nil
+	}
+	u := StartTurnUseCase{Catalog: &catalogStub{}, Store: store, Continue: ContinueTurnUseCase{Models: cancelled, Store: store, Usage: ledgers, Calibration: pinnedRatio{410}}}
+	if err := u.Execute(ctx, &s, "write an essay", emit); !errors.Is(err, context.Canceled) {
+		t.Fatalf("error %v", err)
+	}
+	l := ledgers[id]
+	// 41,000 bytes at 4.10 is 10,000 tokens; 400 text bytes and 250 bytes
+	// of arguments at 4.10 round up to 159.
+	if l.Requests != 1 || l.Unmetered != 1 || l.PromptTokens != 10000 || l.CompletionTokens != 159 || l.CostRequests != 0 || l.Providers["Anthropic"].Requests != 1 || l.Total.Count != 1 {
+		t.Fatalf("cancelled request: %+v", l)
+	}
+	if len(usage) != 1 || usage[0].Unmetered != 1 {
+		t.Fatalf("usage events %+v", usage)
+	}
+	// Without a calibrated ratio the default 2.44 applies.
+	s = turnSession(t)
+	delete(ledgers, s.Export().ID)
+	refused := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		return root.CompletionResult{RequestBytes: 2440}, errors.New("OpenRouter invalid_request (HTTP 400): x is not a valid model ID")
+	})
+	timedOut := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+		return root.CompletionResult{RequestBytes: 2440}, context.DeadlineExceeded
+	})
+	for _, model := range []streamFunc{refused, timedOut} {
+		u = StartTurnUseCase{Catalog: &catalogStub{}, Store: store, Continue: ContinueTurnUseCase{Models: model, Store: store, Usage: ledgers}}
+		if err := u.Execute(context.Background(), &s, "hola", ignoreEvent); err == nil {
+			t.Fatal("a failed request succeeded")
+		}
+	}
+	l = ledgers[s.Export().ID]
+	if l.Requests != 2 || l.Unmetered != 1 || l.PromptTokens != 1000 || l.CompletionTokens != 0 {
+		t.Fatalf("refused and timed out: %+v", l)
 	}
 }

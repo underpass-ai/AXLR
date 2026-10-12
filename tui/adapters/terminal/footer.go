@@ -46,7 +46,7 @@ func (m AppModel) hintRow() string {
 	if count := len(m.Changes.files); count > 0 {
 		// Files, as /changes lists them: on 10 October 2026 the hint read
 		// "4 changes" for four edits to two files.
-		label := m.Theme.Tf("changes.files", count)
+		label := m.Theme.Tn("changes.files", count, count)
 		if count == 1 {
 			label = m.Theme.T("changes.oneFile")
 		}
@@ -146,17 +146,13 @@ func (m AppModel) footerStatus(detail int) string {
 		parts = append(parts, m.Theme.T("status.autonomous"))
 	}
 	if m.tokens > 0 && detail < statusNoTokens {
-		parts = append(parts, m.Theme.Tf("footer.tokens", formatTokens(m.tokens)))
+		parts = append(parts, m.footerTokens())
 		if m.cached > 0 {
 			parts = append(parts, m.Theme.Tf("footer.cache", m.cached))
 		}
 	}
-	costs := m.costParts()
-	if detail >= statusLeast && len(costs) > 1 {
-		// The turn's cost goes; the session's stays.
-		costs = costs[1:]
-	}
-	parts = append(parts, costs...)
+	// At the least detail the turn's cost goes; the session's stays.
+	parts = append(parts, m.costParts(detail < statusLeast)...)
 	text := strings.Join(parts, " · ")
 	if m.Theme.Monochrome {
 		return text
@@ -166,6 +162,9 @@ func (m AppModel) footerStatus(detail int) string {
 
 func (m AppModel) statusActivity(status StatusBar) string {
 	activity := m.activityLabel(status)
+	if clock := m.turnClock(); activity != "" && clock != "" {
+		activity += " · " + clock
+	}
 	if activity != "" && m.steer.Peek() != "" {
 		activity += " · " + m.Theme.T("status.queued")
 	}

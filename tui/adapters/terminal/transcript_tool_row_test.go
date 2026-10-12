@@ -45,8 +45,8 @@ func TestToolRowMergesCallDecisionAndResult(t *testing.T) {
 		{"unknown tool", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: `unknown tool "read" rejected`, IsError: true}), []string{"✗ read", "unknown tool, refused"}, []string{"denied"}},
 		// On 10 October 2026 all 93 calls of a batch past the turn's budget
 		// read "denied", as if the person had refused each of them.
-		{"over the call budget", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "not run: the turn reached its 32 tool-call limit; send a message to continue", IsError: true}), []string{"✗ read", "over budget"}, []string{"denied"}},
-		{"over the call budget, partial batch", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: domain.OverBudgetOutcomePrefix + " of 32 calls: 31 of this answer's 93 calls ran, in order; this one did not.", IsError: true}), []string{"✗ read", "over budget"}, []string{"denied"}},
+		{"over the call budget", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "not run: the turn reached its 32 tool-call limit; send a message to continue", IsError: true}), []string{"✗ read", "over the call limit"}, []string{"denied"}},
+		{"over the call budget, partial batch", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: domain.OverBudgetOutcomePrefix + " of 32 calls: 31 of this answer's 93 calls ran, in order; this one did not.", IsError: true}), []string{"✗ read", "over the call limit"}, []string{"denied"}},
 		{"failed result", toolRowState(domain.DecisionAutoApprove, `{"status":"failed","duration_ms":4}`, nil), []string{"✗ read", "4\u00a0ms"}, nil},
 		{"error outcome", toolRowState(domain.DecisionAutoApprove, `boom`, &domain.ToolOutcome{IsError: true}), []string{"✗ read"}, nil},
 		{"awaiting approval", toolRowState("", "", nil), []string{"◌ read", "waiting for approval"}, nil},
@@ -131,5 +131,30 @@ func TestSearchAndListRowsReadAsTheirQuestion(t *testing.T) {
 		if row := lines[len(lines)-1]; !strings.Contains(row, tc.want) {
 			t.Errorf("%s %s: row %q lacks %q", tc.name, tc.args, row, tc.want)
 		}
+	}
+}
+
+// On 12 October 2026, while a local_exec card was open, the axlr_skill call
+// behind it read "waiting for approval" although it needs none.
+func TestCallsBehindTheApprovalCardAreQueued(t *testing.T) {
+	s := toolRowState("", "", nil)
+	second := root.ToolCall{ID: "c2", Name: "axlr_skill"}
+	s.Messages[1].ToolCalls = append(s.Messages[1].ToolCalls, second)
+	s.Activity = append(s.Activity, domain.PendingTool{Call: second})
+	for _, locale := range []Locale{English, Spanish} {
+		tr := NewTranscript()
+		tr.SetWidth(120)
+		tr.SetSession(s, "", Theme{Locale: locale, Monochrome: true})
+		lines := strings.Split(ansi.Strip(tr.Text()), "\n")
+		card, queued := lines[len(lines)-2], lines[len(lines)-1]
+		if !strings.Contains(card, "read") || !strings.HasSuffix(card, "· "+Translate(locale, "transcript.toolAwaiting")) {
+			t.Fatalf("%s: the card's call reads %q", locale, card)
+		}
+		if !strings.Contains(queued, "axlr_skill") || !strings.HasSuffix(queued, "· "+Translate(locale, "transcript.toolQueued")) {
+			t.Fatalf("%s: the call behind it reads %q", locale, queued)
+		}
+	}
+	if Translate(Spanish, "transcript.toolQueued") != "en cola" || Translate(English, "transcript.toolQueued") != "queued" {
+		t.Fatal("queued label wording")
 	}
 }

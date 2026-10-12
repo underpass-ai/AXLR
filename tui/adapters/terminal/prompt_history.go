@@ -2,12 +2,18 @@ package terminal
 
 import root "github.com/underpass-ai/AXLR/domain"
 
-// Prompt history contains only user messages, in this session's order.
+// Prompt history contains only what the person typed, in this session's
+// order: console notes, whole messages or appended to a prompt, are left
+// out. On 12 October 2026 ↑ recalled "[AXLR · budget]" notes and ceremony
+// decisions.
 func (m *AppModel) resetPromptHistory() {
 	m.promptHistory = nil
 	for _, msg := range m.Header.State.Messages {
-		if msg.Role == root.RoleUser && !consoleMemoryReminder(msg.Content) {
-			m.promptHistory = append(m.promptHistory, string(msg.Content))
+		if msg.Role != root.RoleUser {
+			continue
+		}
+		if typed, _ := splitConsoleNotes(msg.Content); typed != "" {
+			m.promptHistory = append(m.promptHistory, typed)
 		}
 	}
 	m.historyIndex = len(m.promptHistory)

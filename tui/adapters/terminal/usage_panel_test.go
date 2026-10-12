@@ -51,7 +51,7 @@ func TestCostInTheFooterAndTheSessionBudget(t *testing.T) {
 	m.deps.Agent = application.AgentTurnUseCase{Continue: continuation}
 
 	m = sendPrompt(t, m, "first")
-	if got := footerText(m); !strings.HasSuffix(got, "1.1k tok · $0.30 turn · $0.30 session") || m.Status.Notice != "" {
+	if got := footerText(m); !strings.HasSuffix(got, "1k tok · $0.30 turn · $0.30 session") || m.Status.Notice != "" {
 		t.Fatalf("after the first request: %q, notice %q", got, m.Status.Notice)
 	}
 	m = sendPrompt(t, m, "second")
@@ -122,7 +122,7 @@ func TestFooterCostFormatAndLanguage(t *testing.T) {
 	}
 	m.cost = costView{ledger: domain.UsageLedger{Requests: 4}}
 	m.tokens = 12_400
-	if got := footerText(m); strings.Contains(got, "$") || !strings.HasSuffix(got, "12.4k tok") {
+	if got := footerText(m); strings.Contains(got, "$") || !strings.HasSuffix(got, "12k tok") {
 		t.Fatalf("unknown cost shown: %q", got)
 	}
 }
@@ -194,5 +194,50 @@ func TestAmountsKeepTheirPrecisionBelowADollar(t *testing.T) {
 	}
 	if got := usageContent(domain.UsageLedger{Cost: 0.0111, CostRequests: 3, Raised: 0.012}, 0.012, Theme{Locale: English}); !strings.Contains(got, "$0.024") {
 		t.Fatalf("a raised $0.012 budget does not read $0.024:\n%s", got)
+	}
+}
+
+// A cancelled or failed request the provider may have billed is counted as
+// unmetered: the footer adds "+N unmetered" after the session's cost, and
+// /usage says how many the total leaves out. The narrowest footer drops the
+// turn's cost and keeps both.
+func TestUnmeteredRequestsAreShown(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.cost = costView{ledger: domain.UsageLedger{Requests: 5, Cost: 0.0213, CostRequests: 3, Unmetered: 2}, turnCost: 0.02, turnRequests: 2}
+	if got := footerText(m); !strings.HasSuffix(got, "$0.0013 turn · $0.0213 session · +2 unmetered") {
+		t.Fatalf("footer: %q", got)
+	}
+	if got := strings.Join(m.costParts(false), " · "); got != "$0.0213 session · +2 unmetered" {
+		t.Fatalf("least detail: %q", got)
+	}
+	m.cost = costView{ledger: domain.UsageLedger{Requests: 1, Unmetered: 1}}
+	if got := footerText(m); !strings.HasSuffix(got, "idle · +1 unmetered") {
+		t.Fatalf("only unmetered: %q", got)
+	}
+	got := usageContent(domain.UsageLedger{Requests: 3, CostRequests: 2, Cost: 0.01, Unmetered: 1}, 0, Theme{Locale: English})
+	if !strings.Contains(got, "Requests: 3, 2 with a reported cost\nUnmetered: 1 cancelled or failed request without a usage report; its cost is not in the total\nPrompt tokens") {
+		t.Fatalf("/usage:\n%s", got)
+	}
+	if got := usageContent(domain.UsageLedger{Requests: 4, Unmetered: 2}, 0, Theme{Locale: Spanish}); !strings.Contains(got, "Sin medir: 2 peticiones canceladas o fallidas") {
+		t.Fatalf("spanish /usage:\n%s", got)
+	}
+	if got := usageContent(domain.UsageLedger{Requests: 4}, 0, Theme{Locale: English}); strings.Contains(got, "Unmetered") {
+		t.Fatalf("unmetered line without any:\n%s", got)
+	}
+}
+
+// A cancelled request's usage arrives just before the turn ends: the
+// footer still says "Cancelled", now with the unmetered request.
+func TestACancelledRequestsUsageKeepsTheCancelledFooter(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Busy, m.operationID, m.providerWaiting = true, 1, true
+	m.submittedPrompt, m.submittedAt = "essay", 0
+	m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: "essay"})
+	m = update(m, application.Event{Kind: application.EventUsage, SessionUsage: &domain.UsageLedger{Requests: 1, Unmetered: 1}})
+	m = update(m, operationComplete{ID: 1, Session: *m.deps.Session, Err: context.Canceled})
+	if got := footerText(m); !strings.HasPrefix(m.Status.Notice, "Cancelled") || !strings.HasPrefix(got, "Cancelled") || !strings.HasSuffix(got, "+1 unmetered") {
+		t.Fatalf("footer %q, notice %q", got, m.Status.Notice)
 	}
 }

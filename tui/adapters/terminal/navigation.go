@@ -44,7 +44,9 @@ func (m *AppModel) syncApproval() {
 	if tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call); known && err == nil {
 		switch tool.Identity.Kind {
 		case domain.ToolKindLocal:
-			target = m.Theme.Tf("approval.localTarget", tool.Identity.LocalOperation, m.Header.State.Workspace)
+			// Local tools work in the workspace, which the header names; a
+			// command elsewhere in it shows its cwd on the card.
+			target = m.Theme.Tf("approval.localTarget", tool.Identity.LocalOperation)
 		case domain.ToolKindPlugin:
 			target = m.Theme.Tf("approval.pluginTarget", tool.Identity.Plugin.PluginID, tool.Identity.Plugin.ToolName)
 		case domain.ToolKindHost:
@@ -58,24 +60,21 @@ func (m *AppModel) syncApproval() {
 			case domain.HostOperationForgeTool:
 				target = m.Theme.Tf("approval.forgeTarget", forgedName(p.Call.Arguments.Bytes()))
 			case domain.HostOperationRunTool:
-				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()), m.Header.State.Workspace)
+				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()))
 			}
 		}
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
-		// An exec card leads with the command as it will run, above its
-		// JSON: the arguments array reads as a command line, not a list.
-		var lead []string
-		if warning := m.hiddenInputWarning(p); warning != "" {
-			lead = append(lead, warning)
-		}
+		// A reason being typed was for another call.
+		m.denying = false
+		// An exec card is the command as it will run, not its JSON: the
+		// arguments array reads as a command line, not a list.
 		if command := m.execCardCommand(p); command != "" {
-			lead = append(lead, "$ "+command)
-		}
-		if len(lead) > 0 {
-			// Only an exec call leads this way, and its card is JSON text.
-			m.Approval.Details.SetContent(strings.Join(lead, "\n") + "\n\n" + m.Approval.Details.Text())
+			if warning := m.hiddenInputWarning(p); warning != "" {
+				command = warning + "\n\n" + command
+			}
+			m.Approval.Details.SetContent(command)
 			m.Approval.Details.Viewport.GotoTop()
 		}
 	}
@@ -115,15 +114,21 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	if m.overlay == "palette" && !m.approvalFocus() {
 		switch msg.(type) {
-		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseWheelMsg, list.FilterMatchesMsg:
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseWheelMsg, tea.MouseClickMsg, list.FilterMatchesMsg:
 			if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
 				return m, nil, false
 			}
 			var intent ControlIntent
 			var cmd tea.Cmd
-			m.Palette, intent, cmd = m.Palette.Update(msg)
+			if click, ok := msg.(tea.MouseClickMsg); ok {
+				// The palette resolves its own rows: on 12 October 2026
+				// Jobs and Copy ignored clicks, missing from the shared list.
+				intent = m.paletteClick(click)
+			} else {
+				m.Palette, intent, cmd = m.Palette.Update(msg)
+			}
 			if intent != "" {
-				return m.navigation(intent)
+				return m.paletteAction(intent)
 			}
 			return m, cmd, true
 		}
@@ -175,6 +180,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	if paste, ok := msg.(tea.PasteMsg); ok {
 		if m.approvalFocus() {
+			if m.denying {
+				m.denyInput, _ = m.denyInput.Update(paste)
+			}
 			return m, nil, true
 		}
 		if m.overlay == "search" {
@@ -191,6 +199,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.InstalledPlugins.Update(paste)
 			return m, nil, true
 		}
+		if m.overlay == "sessions" {
+			// On 12 October 2026 a paste into the filter was swallowed.
+			m.Picker.Paste(paste.Content)
+			return m, nil, true
+		}
 		if m.overlay != "" {
 			return m, nil, true
 		}
@@ -200,15 +213,36 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if k.String() == "ctrl+c" && !m.approvalFocus() {
 			return m, nil, false
 		}
+		if k.String() == "ctrl+r" && m.mentionActive() {
+			// Ctrl+R lists the workspace again while the @ menu is open.
+			return m, m.loadFiles(true), true
+		}
+		if k.String() == "esc" && m.mentionActive() {
+			// Esc closes the @ menu for this mention; a second one cancels.
+			_, line, start, _ := m.mentionToken()
+			m.mention.dismissed = m.mentionKey(line, start)
+			return m, nil, true
+		}
 		if k.String() == "esc" && m.overlay == "" && !m.approvalFocus() && m.Transcript.Selection.Set {
 			// Esc first drops a copied selection; a second Esc cancels work.
 			m.clearSelection()
 			return m, nil, true
 		}
+		if m.approvalFocus() && m.denying {
+			return m.denyReasonKey(k)
+		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
+			if k.String() == "A" && m.pendingCalls() > 1 {
+				// Shift+A approves the card's call and those queued behind
+				// it; with one call it is A.
+				intent = "approve-all"
+			}
 			if strings.ToLower(k.String()) == "f" {
 				intent = "autonomy-on"
+			}
+			if strings.ToLower(k.String()) == "s" && m.execCardCommand(m.Approval.Pending) != "" {
+				intent = "allow-session"
 			}
 			if intent == ControlIntent(domain.DecisionAutoApprove) {
 				intent = "always-allow"
@@ -247,8 +281,19 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				next, cmd := m.repairKey(k)
 				return next, cmd, true
 			}
+			if m.overlay == "help" {
+				if delta, ok := helpScrollKeys[k.String()]; ok {
+					m.Help.Scroll(m.Theme, m.Layout.Width, m.Layout.Height-1, delta)
+					return m, nil, true
+				}
+				if k.String() == "f1" {
+					// F1 opens the help and F1 closes it.
+					m.overlay = ""
+					return m, nil, true
+				}
+			}
 			if k.String() == "esc" {
-				if m.overlay == "sessions" && m.Picker.Renaming {
+				if m.overlay == "sessions" && (m.Picker.Renaming || m.Picker.Deleting) {
 					m.Picker.Key(k.String(), k.Text)
 					return m, nil, true
 				}
@@ -273,7 +318,13 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "info", "approvals", "updates", "made-setup":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
-					if k.String() == "enter" && !m.Picker.Renaming {
+					m.Picker.Page = m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width)
+					// Enter while renaming or confirming a delete is the
+					// picker's: it saves the title, or keeps the session.
+					if k.String() == "enter" && !m.Picker.Renaming && !m.Picker.Deleting && m.Picker.NewSelected() {
+						intent = NewSessionIntent
+						hasIntent = true
+					} else if k.String() == "enter" && !m.Picker.Renaming && !m.Picker.Deleting {
 						intent = "open-session"
 						hasIntent = true
 					} else if picked := m.Picker.Key(k.String(), k.Text); picked != "" {
@@ -282,10 +333,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					}
 				case "search":
 					switch k.String() {
-					case "enter":
+					case "enter", "down":
 						intent = "next"
 						hasIntent = true
-					case "shift+enter":
+					case "shift+enter", "up":
 						intent = "previous"
 						hasIntent = true
 					default:
@@ -308,7 +359,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			case "ctrl+o":
 				intent = "sessions"
 			case "ctrl+d":
-				intent = "changes"
+				// With a draft, Ctrl+D deletes forward in the composer; on 12
+				// October 2026 it opened Changes in the middle of a prompt.
+				if m.Composer.Input.Value() == "" {
+					intent = "changes"
+				}
 			case "f1":
 				intent = "help"
 			case "ctrl+r":
@@ -320,11 +375,16 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
+		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "approve-all", "allow-session", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
 		if m.overlay == "sessions" {
+			m.Picker.Deleting = false
+			if m.Picker.ShowsNew() && m.zones.Get(m.prefix+"session-new").InBounds(mouse) {
+				intent = NewSessionIntent
+				hasIntent = true
+			}
 			for i := range m.Picker.Visible() {
 				if m.zones.Get(fmt.Sprintf("%ssession-%d", m.prefix, i)).InBounds(mouse) {
-					m.Picker.Selected = i
+					m.Picker.Selected, m.Picker.OnNew = i, false
 					intent = "open-session"
 					hasIntent = true
 					break
@@ -361,13 +421,19 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		switch m.overlay {
 		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage":
 			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
+		case "help":
+			delta := 3
+			if wheel.Button == tea.MouseWheelUp {
+				delta = -3
+			}
+			m.Help.Scroll(m.Theme, m.Layout.Width, m.Layout.Height-1, delta)
 		}
 		return m, nil, true
 	}
 	if !hasIntent {
 		return m, nil, false
 	}
-	if m.approvalFocus() && intent != "approve" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
+	if m.approvalFocus() && intent != "approve" && intent != "approve-all" && intent != "allow-session" && intent != "deny-send" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
 		return m, nil, true
 	}
 	switch intent {
@@ -379,6 +445,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return next, cmd, true
 	case "usage":
 		return m.openUsagePanel(), nil, true
+	case "changes-restore":
+		next, cmd := m.restoreChange()
+		return next, cmd, true
 	case "changes":
 		m.Changes.Open(m.Header.State)
 		m.Changes.Resize(m.Layout.Width, m.Layout.Height-1)
@@ -563,6 +632,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			models, err = catalog.Execute(ctx)
 			return err
 		})
+		m.catalogOperation = m.operationID
 		return m, func() tea.Msg {
 			msg := cmd()
 			if done, ok := msg.(operationComplete); ok {
@@ -584,7 +654,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.Status.Error = ""
 		m.Models.SetFavorites(modelIDStrings(ids))
 		return m, nil, true
-	case ModelSelectIntent:
+	case ModelSelectIntent, ModelDefaultIntent:
 		if m.Busy || m.overlay != "models" {
 			return m, nil, true
 		}
@@ -595,7 +665,13 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		create, change, preference, id, workspace := m.deps.Create, m.deps.Change, m.deps.ModelPreference, m.deps.NewSessionID, m.deps.Workspace
 		m.Models.SetLoading(true)
 		m.Status.Error = ""
+		// Enter changes this session's model only; Ctrl+Enter also saves it
+		// as the default. On 12 October 2026 trying a model for one session
+		// silently changed every future one. The first model chosen with
+		// no default saved becomes the default: there is none to change.
+		asDefault := intent == ModelDefaultIntent
 		var preferenceErr error
+		defaultSaved := false
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
 			var err error
 			if s.Export().ID == "" {
@@ -608,7 +684,15 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				err = change.Execute(ctx, s, selected.ID)
 			}
 			if err == nil && preference != nil {
-				preferenceErr = preference.Save(ctx, selected.ID)
+				save := asDefault
+				if !save {
+					current, loadErr := preference.Load(ctx)
+					save = loadErr == nil && current == ""
+				}
+				if save {
+					preferenceErr = preference.Save(ctx, selected.ID)
+					defaultSaved = preferenceErr == nil
+				}
 			}
 			return err
 		})
@@ -617,25 +701,48 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if done, ok := msg.(operationComplete); ok {
 				done.ModelSelection = true
 				done.PreferenceErr = preferenceErr
+				done.DefaultSaved = defaultSaved
 				return done
 			}
 			return msg
 		}, true
 	case ModelCloseIntent:
-		if m.cancel != nil {
+		if m.cancel != nil && m.Busy && m.operationID == m.catalogOperation {
 			// The person closed the picker: the loading it stops is no
-			// failure to report.
+			// failure to report. Another operation, such as plan outcomes
+			// recording once the catalog arrived, keeps running.
 			m.closedCancelled = m.operationID
 			m.cancel()
 		}
 		m.overlay = ""
 		return m, nil, true
-	case "approve", "always-allow", "autonomy-on", "deny":
+	case "approve-all":
+		next, cmd := m.approveAll()
+		return next, cmd, true
+	case "approve", "always-allow", "autonomy-on", "deny", "allow-session", "deny-send":
 		if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() {
 			return m, nil, true
 		}
+		if intent == "deny" {
+			// D asks first for the reason the model is told.
+			return m.askDenyReason(), nil, true
+		}
 		p, _ := m.pending()
 		decision := m.Approval.Intent(intent)
+		reason := ""
+		if intent == "deny-send" {
+			decision, reason = domain.DecisionDeny, strings.TrimSpace(m.denyInput.Value())
+			m.denying = false
+		}
+		if intent == "allow-session" {
+			// This exact command runs from now on in this session without
+			// a card; this call is approved like A.
+			if m.execCardCommand(p) == "" || !m.allowed.allow(m.Header.State.ID, p.Call.Arguments) {
+				return m, nil, true
+			}
+			decision = domain.DecisionApprove
+		}
+		m.resumeTurnClock()
 		resolve := m.deps.Resolve
 		settings := m.deps.ApprovalSettings
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
@@ -661,15 +768,31 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				}
 				decision = domain.DecisionApprove
 			}
+			if decision == domain.DecisionDeny {
+				return resolve.Deny(ctx, s, p.Call.ID, reason, emit)
+			}
 			return resolve.Execute(ctx, s, p.Call.ID, decision, emit)
 		})
 		return m, cmd, true
 	case "cancel":
 		if m.cancel != nil {
+			// A queued message comes back to the composer, ahead of any
+			// draft, instead of starting the next turn: on 12 October 2026
+			// Esc cancelled the step and the queued message started at once.
+			if queued, ok := m.steer.Take(); ok {
+				value := string(queued)
+				if draft := m.Composer.Input.Value(); strings.TrimSpace(draft) != "" {
+					value += "\n\n" + draft
+				}
+				m.Composer.Input.SetValue(value)
+				m.resizeComposer()
+				m.queueReturned = m.operationID
+				m.refreshTranscript()
+			}
 			m.cancel()
 			return m, nil, true
 		}
-		if m.Header.State.Status != domain.StatusApproval && m.Header.State.Status != domain.StatusInterrupted && m.Header.State.Status != domain.StatusStreaming {
+		if !m.continuable() {
 			return m, nil, true
 		}
 		u := application.SessionControlUseCase{Store: m.deps.Store}
@@ -678,10 +801,16 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		})
 		return m, cmd, true
 	case "continue":
-		if m.Busy || (m.Header.State.Status != domain.StatusInterrupted && m.Header.State.Status != domain.StatusApproval && m.Header.State.Status != domain.StatusStreaming) {
+		if m.Busy {
+			m.Status.Notice = m.Theme.T("notice.continueBusy")
+			return m, nil, true
+		}
+		if !m.continuable() {
+			m.Status.Notice = m.Theme.T("notice.nothingToContinue")
 			return m, nil, true
 		}
 		m.overlay = ""
+		m.resumeTurnClock()
 		u := application.SessionControlUseCase{Store: m.deps.Store, Agent: m.deps.Agent}
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			return u.Resume(ctx, s, emit)
@@ -689,6 +818,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, cmd, true
 	case "sessions":
 		if m.Busy {
+			m.Status.Notice = m.Theme.T("notice.sessionsBusy")
 			return m, nil, true
 		}
 		store := m.deps.Store
@@ -736,12 +866,50 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.Picker.Labels[current.ID] = label
 		m.Picker.Selected = min(m.Picker.Selected, max(0, len(m.Picker.Visible())-1))
 		return m, nil, true
+	case SessionDeleteIntent:
+		current, ok := m.Picker.Current()
+		switch {
+		case !ok:
+			return m, nil, true
+		case current.ID == m.Header.State.ID:
+			m.Status.Error = m.Theme.T("sessions.deleteOpen")
+			return m, nil, true
+		case m.deps.DeleteSession == nil:
+			m.Status.Error = m.Theme.T("sessions.deleteUnavailable")
+			return m, nil, true
+		}
+		if err := m.deps.DeleteSession.Delete(m.lifetime.ctx, current.ID); err != nil {
+			m.Status.Error = m.Theme.Tf("sessions.deleteFailed", err.Error())
+			return m, nil, true
+		}
+		for i, item := range m.Picker.Items {
+			if item.ID == current.ID {
+				m.Picker.Items = append(m.Picker.Items[:i:i], m.Picker.Items[i+1:]...)
+				break
+			}
+		}
+		m.Picker.Selected = min(m.Picker.Selected, max(0, len(m.Picker.Visible())-1))
+		m.Status.Error = ""
+		m.Status.Notice = m.Theme.Tf("sessions.deleted", singleLine(m.Picker.Title(current)))
+		return m, nil, true
 	case "open-session":
 		selected, ok := m.Picker.Current()
 		if m.Busy || !ok {
 			return m, nil, true
 		}
 		id := selected.ID
+		if m.Header.State.Workspace != "" && selected.Workspace != m.Header.State.Workspace {
+			// On 12 October 2026 Enter on another workspace's session ran a
+			// load that failed; it now says at once how to open it.
+			m.Status.Error = m.Theme.Tf("sessions.elsewhereOpen", shortenHome(singleLine(string(selected.Workspace))), id)
+			return m, nil, true
+		}
+		if id == m.Header.State.ID {
+			// The open session is already on screen: Enter on its row
+			// closes the picker instead of reloading it behind the list.
+			m.overlay = ""
+			return m, nil, true
+		}
 		store := m.deps.Store
 		workspace := m.Header.State.Workspace
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
@@ -759,11 +927,15 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return nil
 		})
 		return m, cmd, true
+	case NewSessionIntent:
+		next, cmd := m.newSession()
+		return next, cmd, true
 	case "palette":
 		m.Palette = NewActionPalette(m.Theme.Locale)
 		m.overlay = intent
 		return m, nil, true
 	case "help", "info", "approvals":
+		m.Help.Top = 0
 		if intent == "info" {
 			m.Info = NewTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
@@ -806,36 +978,44 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	return m, nil, false
 }
-func (m *AppModel) search() { // Restore makes a private validated snapshot; no shared session access.
-	s, err := domain.RestoreSession(m.Header.State)
-	if err != nil {
+
+// search finds the query's occurrences in the conversation and shows the
+// first, when the query changed since the last search.
+func (m *AppModel) search() {
+	query := strings.TrimSpace(m.SearchBox.Input.Value())
+	if query == m.SearchBox.query {
 		return
 	}
-	m.SearchBox.Hits = m.deps.Search.Execute(s, root.Text(m.SearchBox.Input.Value()))
+	m.SearchBox.query = query
+	m.SearchBox.Hits = findHits(m.Transcript.Viewport.GetContent(), query)
 	m.SearchBox.Selected = 0
 	m.showHit()
 }
-func (m *AppModel) showHit() {
-	if len(m.SearchBox.Hits) == 0 {
+
+// refreshSearch finds the hits again after the conversation was drawn
+// anew (a reply streamed, the screen resized), keeping the selection.
+func (m *AppModel) refreshSearch() {
+	if m.overlay != "search" {
 		return
 	}
-	hit := m.SearchBox.Hits[m.SearchBox.Selected]
-	prefix := m.Header.State
-	prefix.Draft = ""
-	if hit.MessageIndex != nil {
-		prefix.Messages = prefix.Messages[:*hit.MessageIndex]
-	} else if hit.ArchivedDraftIndex != nil {
-		archived := *hit.ArchivedDraftIndex
-		prefix.Messages = prefix.Messages[:prefix.ArchivedDrafts[archived].AfterMessage]
-		prefix.ArchivedDrafts = prefix.ArchivedDrafts[:archived]
-	}
-	// The prefix is measured with the transcript's own theme: Editorial
-	// speaker rows, folded tool runs and the icon set change the line count.
-	rendered := NewTranscript()
-	rendered.SetWidth(m.Transcript.Viewport.Width())
-	rendered.SetSession(prefix, "", m.Theme)
-	m.Transcript.Viewport.SetYOffset(rendered.VisualLineCount())
+	m.SearchBox.Hits = findHits(m.Transcript.Viewport.GetContent(), m.SearchBox.query)
+	m.SearchBox.Selected = max(0, min(m.SearchBox.Selected, len(m.SearchBox.Hits)-1))
 }
+
+// showHit scrolls the conversation to the selected hit's line when it is
+// out of view, leaving a third of the screen above it.
+func (m *AppModel) showHit() {
+	hit, ok := m.SearchBox.current()
+	if !ok {
+		return
+	}
+	height := max(1, m.shownTranscript().Viewport.Height())
+	if top := m.Transcript.Viewport.YOffset(); hit.Line >= top && hit.Line < top+height {
+		return
+	}
+	m.Transcript.Viewport.SetYOffset(max(0, hit.Line-height/3))
+}
+
 func (m AppModel) overlayView(base string) string {
 	status := m.statusView()
 	if m.approvalFocus() {
@@ -915,3 +1095,49 @@ func modelIDStrings(ids []root.ModelID) []string {
 	}
 	return out
 }
+
+// continuable reports a session Ctrl+R can resume and Esc can cancel
+// without a running operation: interrupted, streaming or awaiting a call.
+func (m AppModel) continuable() bool {
+	switch m.Header.State.Status {
+	case domain.StatusInterrupted, domain.StatusApproval, domain.StatusStreaming:
+		return true
+	}
+	return false
+}
+
+// paletteClick is the action under a click in the palette, "close" for its
+// close button, or "" for anywhere else.
+func (m AppModel) paletteClick(click tea.MouseClickMsg) ControlIntent {
+	if click.Button != tea.MouseLeft {
+		return ""
+	}
+	if m.zones.Get(m.prefix + "close").InBounds(click) {
+		return "close"
+	}
+	for _, item := range actionItems {
+		a := item.(actionItem)
+		if m.zones.Get(m.prefix + string(a.intent)).InBounds(click) {
+			return a.intent
+		}
+	}
+	return ""
+}
+
+// paletteAction closes the palette and runs its action. A refused action
+// says why instead of leaving the palette open with nothing changed, as
+// Cancel did while idle on 12 October 2026.
+func (m AppModel) paletteAction(intent ControlIntent) (tea.Model, tea.Cmd, bool) {
+	m.overlay = ""
+	if intent == "close" {
+		return m, nil, true
+	}
+	if intent == "cancel" && m.cancel == nil && !m.continuable() {
+		m.Status.Notice = m.Theme.T("notice.nothingToCancel")
+		return m, nil, true
+	}
+	return m.navigation(intent)
+}
+
+// helpScrollKeys move the help list when it is taller than the overlay.
+var helpScrollKeys = map[string]int{"up": -1, "k": -1, "down": 1, "j": 1, "pgup": -10, "pgdown": 10, "home": -1 << 20, "end": 1 << 20}

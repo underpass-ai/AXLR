@@ -27,6 +27,8 @@ func TestPromptHistoryUsesOnlyUserMessagesAndRestoresDraft(t *testing.T) {
 	if m.Composer.Input.Value() != "second\nline" {
 		t.Fatalf("first history entry = %q", m.Composer.Input.Value())
 	}
+	// The recalled entry has two lines: Up first reaches its first line.
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	if m.Composer.Input.Value() != "first" {
 		t.Fatalf("second history entry = %q", m.Composer.Input.Value())
@@ -46,5 +48,45 @@ func TestPromptHistoryLeavesMultilineCursorNavigation(t *testing.T) {
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	if m.Composer.Input.Value() != "top\nbottom" {
 		t.Fatal("up replaced text while cursor was inside multiline draft")
+	}
+}
+
+// On 12 October 2026 Up on a recalled "a⇧↵b⇧↵c" jumped to the previous
+// prompt from the last line; there was no way to reach line 2 with arrows.
+func TestRecalledMultilinePromptIsWalkedLineByLineBeforeChangingEntry(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.promptHistory = []string{"older", "a\nb\nc", "newer"}
+	m.historyIndex = len(m.promptHistory)
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
+	if m.Composer.Input.Value() != "a\nb\nc" || m.Composer.Input.Line() != 2 {
+		t.Fatalf("recalled %q at line %d", m.Composer.Input.Value(), m.Composer.Input.Line())
+	}
+	for want := 1; want >= 0; want-- {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
+		if m.Composer.Input.Value() != "a\nb\nc" || m.Composer.Input.Line() != want {
+			t.Fatalf("Up changed entry before the first line: %q at line %d", m.Composer.Input.Value(), m.Composer.Input.Line())
+		}
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
+	if m.Composer.Input.Value() != "older" {
+		t.Fatalf("Up on the first line did not change entry: %q", m.Composer.Input.Value())
+	}
+	// Recalled entries put the cursor at their end, so Down changes entry.
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	if m.Composer.Input.Value() != "a\nb\nc" {
+		t.Fatalf("Down from the last line = %q", m.Composer.Input.Value())
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	if m.Composer.Input.Value() != "a\nb\nc" || m.Composer.Input.Line() != 1 {
+		t.Fatalf("Down off the last line changed entry: %q at line %d", m.Composer.Input.Value(), m.Composer.Input.Line())
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	if m.Composer.Input.Value() != "newer" {
+		t.Fatalf("Down from the last line did not change entry: %q", m.Composer.Input.Value())
 	}
 }

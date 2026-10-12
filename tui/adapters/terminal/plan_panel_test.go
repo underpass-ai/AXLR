@@ -7,6 +7,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -149,5 +150,38 @@ func TestPlanWithoutAPlanRunnerArmsPlanModeAndSaysSo(t *testing.T) {
 	m = runSlash(m, "/plan")
 	if m.Header.State.Mode != domain.ModePlan || m.Status.Notice != m.Theme.T("notice.planArmed") {
 		t.Fatalf("mode %q, notice %q", m.Header.State.Mode, m.Status.Notice)
+	}
+}
+
+// docs/troubleshooting.md tells the person to find a task's session in the
+// plans panel; on 12 October 2026 the panel never showed it.
+func TestThePlansPanelShowsEachTasksSession(t *testing.T) {
+	plan := samplePlan(domain.PlanRunning)
+	plan.Tasks[0].Session = "89abcdef0123456789abcdef01234567"
+	for _, locale := range []Locale{English, Spanish} {
+		content := ansi.Strip(planPanelContent([]domain.PlanRecord{plan}, Theme{Locale: locale, Monochrome: true}, time.Now()))
+		want := Translatef(locale, "plans.taskSession", "89abcdef")
+		if !strings.Contains(content, want) || strings.Contains(content, "89abcdef0") {
+			t.Fatalf("%s: the task's short session id is missing:\n%s", locale, content)
+		}
+	}
+}
+
+// On 12 October 2026 the plans read "1 tareas en 1 olas" and the sync line
+// "green · 0 rondas".
+func TestThePlansPanelCountsInTheSingularAndHidesZeroRounds(t *testing.T) {
+	plan := samplePlan(domain.PlanDone)
+	plan.Tasks, plan.Waves = plan.Tasks[:1], 1
+	plan.Syncs = []domain.SyncRecord{{Wave: 1, Verdict: "green"}, {Wave: 2, Verdict: "red", Rounds: 1}, {Wave: 3, Verdict: "red", Rounds: 2}}
+	for locale, want := range map[Locale][]string{
+		English: {"1 task in 1 wave", "sync wave 1 · green\n", "sync wave 2 · red · 1 round\n", "sync wave 3 · red · 2 rounds"},
+		Spanish: {"1 tarea en 1 ola", "sync de la ola 1 · green\n", "sync de la ola 2 · red · 1 ronda\n", "sync de la ola 3 · red · 2 rondas"},
+	} {
+		content := ansi.Strip(planPanelContent([]domain.PlanRecord{plan}, Theme{Locale: locale, Monochrome: true}, time.Now()))
+		for _, w := range want {
+			if !strings.Contains(content, w) {
+				t.Fatalf("%s: panel lacks %q:\n%s", locale, w, content)
+			}
+		}
 	}
 }

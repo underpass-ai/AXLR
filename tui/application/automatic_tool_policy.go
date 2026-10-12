@@ -50,6 +50,13 @@ func approvesInSession(policy ToolApprovalPolicyPort, s domain.Session, id domai
 	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationStepDone {
 		return !stepDoneNeedsApproval(s, arguments) && !planNeedsApproval(s, arguments)
 	}
+	if calls, ok := policy.(CallApprovalPort); ok && calls.ApprovesCall(s.ID(), id, arguments) {
+		// The person allowed this exact call for the session, where the
+		// mode asks for each one too; a mode's denial still holds.
+		if verdict, _ := s.Mode().Judge(id, arguments); verdict != domain.VerdictDeny {
+			return true
+		}
+	}
 	return approvesInMode(policy, s.Mode(), id, arguments)
 }
 

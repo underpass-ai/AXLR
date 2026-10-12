@@ -52,11 +52,11 @@ func TestTheExecCardLeadsWithTheCommandLine(t *testing.T) {
 	m := execApprovalModel(t, domain.ModeNormal, `{"program":"go","args":["vet","./buildinfo/..."],"timeout_ms":120000}`)
 	defer m.zones.Close()
 	view := ansi.Strip(m.View().Content)
-	if !strings.Contains(view, "$ go vet ./buildinfo/... (timeout 120.0") {
+	if !strings.Contains(view, "$ go vet ./buildinfo/...") || !strings.HasPrefix(m.Approval.Details.Text(), "$ go vet ./buildinfo/...\ntimeout 120.0") {
 		t.Fatalf("exec card does not lead with the command:\n%s", view)
 	}
-	if !strings.Contains(m.Approval.Details.Text(), `"args"`) {
-		t.Fatal("the card lost the call's JSON")
+	if strings.Contains(m.Approval.Details.Text(), `"args"`) {
+		t.Fatal("the card repeats the command as JSON")
 	}
 	warned := execApprovalModel(t, domain.ModeNormal, `{"program":"python3","args":["-c","print(1)"]}`)
 	defer warned.zones.Close()

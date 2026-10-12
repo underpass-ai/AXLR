@@ -1,9 +1,11 @@
 package terminal
 
 import (
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -97,10 +99,20 @@ func (s Selection) cellRange(line, width int) (left, right int, ok bool) {
 // a run of letters, digits and connecting punctuation, or of other
 // non-blank characters. A blank cell selects only itself.
 func wordAt(plain string, col int) (left, right int) {
-	runes := []rune(plain)
-	cells := make([]int, len(runes)+1)
-	for i, r := range runes {
-		cells[i+1] = cells[i] + ansi.StringWidth(string(r))
+	// Cells are counted per grapheme cluster, as the transcript wraps: an
+	// emoji with a variation selector ("⛩️") is one character of 2 cells,
+	// not a 1-cell rune followed by a 0-cell one.
+	var runes []rune
+	cells := []int{0}
+	for rest := plain; rest != ""; {
+		cluster, width := ansi.FirstGraphemeCluster(rest, ansi.GraphemeWidth)
+		if cluster == "" {
+			break
+		}
+		r, _ := utf8.DecodeRuneInString(cluster)
+		runes = append(runes, r)
+		cells = append(cells, cells[len(cells)-1]+width)
+		rest = rest[len(cluster):]
 	}
 	index := -1
 	for i := range runes {
@@ -251,6 +263,11 @@ func (m *AppModel) endSelection(release tea.MouseReleaseMsg) tea.Cmd {
 	m.Transcript.Selection.Active = false
 	if m.clickCount == 1 && s.Anchor == s.Head {
 		m.clearSelection()
+		// A click on a console note opens or folds its full text.
+		if key, ok := m.Transcript.NoteAt(s.Anchor.Line); ok {
+			m.Transcript.ToggleNote(key)
+			m.refreshTranscript()
+		}
 		return nil
 	}
 	return m.copySelection()
@@ -262,7 +279,7 @@ func (m *AppModel) copySelection() tea.Cmd {
 	if strings.TrimSpace(text) == "" {
 		return nil
 	}
-	m.Status.Notice = m.Theme.Tf("status.copied", strings.Count(text, "\n")+1)
+	m.Status.Notice = copiedNotice(m.Theme, text)
 	return copyToClipboard(text)
 }
 
@@ -274,6 +291,19 @@ func (m *AppModel) copyLatest() tea.Cmd {
 			return cmd
 		}
 	}
+	text := m.lastReply()
+	if text == "" {
+		m.Status.Error = m.Theme.T("error.nothingToCopy")
+		return nil
+	}
+	m.Status.Error = ""
+	m.Status.Notice = copiedNotice(m.Theme, text)
+	return copyToClipboard(text)
+}
+
+// lastReply is the last reply as the model wrote it: the streaming draft,
+// the last assistant message, or an interrupted draft.
+func (m AppModel) lastReply() string {
 	text := m.draft
 	for i := len(m.Header.State.Messages) - 1; i >= 0 && text == ""; i-- {
 		if msg := m.Header.State.Messages[i]; msg.Role == root.RoleAssistant && msg.Content != "" {
@@ -283,15 +313,61 @@ func (m *AppModel) copyLatest() tea.Cmd {
 	if text == "" {
 		text = string(m.Header.State.Draft)
 	}
-	if text == "" {
-		m.Status.Error = m.Theme.T("error.nothingToCopy")
+	return text
+}
+
+// codeBlocks are a reply's fenced code blocks, each without its fences.
+func codeBlocks(reply string) []string {
+	var blocks []string
+	var block []string
+	fenced := false
+	for _, line := range strings.Split(reply, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			if fenced {
+				blocks = append(blocks, strings.Join(block, "\n"))
+				block = nil
+			}
+			fenced = !fenced
+			continue
+		}
+		if fenced {
+			block = append(block, line)
+		}
+	}
+	return blocks
+}
+
+// copyCode serves "/copy code" (the last code block of the last reply) and
+// "/copy N" (its N-th). On 12 October 2026 /copy copied the whole reply and
+// a drag took a wrapped block's rows apart.
+func (m *AppModel) copyCode(which string) tea.Cmd {
+	blocks := codeBlocks(m.lastReply())
+	m.Status.Notice = ""
+	if len(blocks) == 0 {
+		m.Status.Error = m.Theme.T("error.noCodeBlock")
 		return nil
 	}
+	n := len(blocks)
+	if which != "code" {
+		parsed, err := strconv.Atoi(which)
+		if err != nil || parsed < 1 || parsed > len(blocks) {
+			m.Status.Error = m.Theme.Tn("error.codeBlockRange", len(blocks), len(blocks))
+			return nil
+		}
+		n = parsed
+	}
+	text := blocks[n-1]
 	m.Status.Error = ""
-	m.Status.Notice = m.Theme.Tf("status.copied", strings.Count(text, "\n")+1)
+	m.Status.Notice = m.Theme.Tf("status.copiedBlock", n, len(blocks)) + " · " + copiedNotice(m.Theme, text)
 	return copyToClipboard(text)
 }
 
 func (m *AppModel) clearSelection() {
 	m.Transcript.Selection = Selection{}
+}
+
+// copiedNotice says how many lines a copy took.
+func copiedNotice(theme Theme, text string) string {
+	lines := strings.Count(text, "\n") + 1
+	return theme.Tn("status.copied", lines, lines)
 }

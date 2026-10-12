@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -35,6 +36,28 @@ type sessionConsoleLine struct {
 	AfterMessage int                 `json:"after_message"`
 	At           time.Time           `json:"at"`
 	Plan         *sessionPlanOutcome `json:"plan,omitempty"`
+	Restore      *sessionRestore     `json:"restore,omitempty"`
+	Failure      *sessionFailure     `json:"failure,omitempty"`
+}
+
+// sessionFailure is a turn that failed: the error and the kind of hint
+// the console words for the person.
+type sessionFailure struct {
+	Message string `json:"message"`
+	Hint    string `json:"hint,omitempty"`
+}
+
+// sessionRestore names the steps a restore went back over; their
+// snapshots stay in the session's activity.
+type sessionRestore struct {
+	Undo  bool                  `json:"undo,omitempty"`
+	Files []sessionRestoredFile `json:"files"`
+}
+
+type sessionRestoredFile struct {
+	Path string `json:"path"`
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 type sessionPlanOutcome struct {
@@ -82,6 +105,15 @@ func encodeConsoleLines(lines []domain.ConsoleLine) []sessionConsoleLine {
 				record.Plan.Syncs = append(record.Plan.Syncs, sessionSyncVerdict{Wave: sync.Wave, Verdict: sync.Verdict})
 			}
 		}
+		if r := line.Restore; r != nil {
+			record.Restore = &sessionRestore{Undo: r.Undo}
+			for _, f := range r.Files {
+				record.Restore.Files = append(record.Restore.Files, sessionRestoredFile{Path: string(f.Path), From: string(f.From), To: string(f.To)})
+			}
+		}
+		if f := line.Failure; f != nil {
+			record.Failure = &sessionFailure{Message: f.Message, Hint: f.Hint}
+		}
 		out = append(out, record)
 	}
 	return out
@@ -96,6 +128,15 @@ func decodeConsoleLines(records []sessionConsoleLine) []domain.ConsoleLine {
 			for _, sync := range p.Syncs {
 				line.Plan.Syncs = append(line.Plan.Syncs, domain.SyncVerdict{Wave: sync.Wave, Verdict: sync.Verdict})
 			}
+		}
+		if r := record.Restore; r != nil {
+			line.Restore = &domain.FileRestore{Undo: r.Undo}
+			for _, f := range r.Files {
+				line.Restore.Files = append(line.Restore.Files, domain.RestoredFile{Path: root.RelativePath(f.Path), From: root.ToolCallID(f.From), To: root.ToolCallID(f.To)})
+			}
+		}
+		if f := record.Failure; f != nil {
+			line.Failure = &domain.TurnFailure{Message: f.Message, Hint: f.Hint}
 		}
 		out = append(out, line)
 	}

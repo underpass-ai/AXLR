@@ -2,8 +2,6 @@ package application
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -82,8 +80,12 @@ type SelfRepair struct {
 	// i (settings' repair.install).
 	AutoInstall bool
 	// RunToken names this console launch; a record left running under
-	// another token belongs to a console that stopped.
+	// another token belongs to a console that stopped once that console no
+	// longer holds it.
 	RunToken string
+	// Liveness tells whether another launch still holds its token; nil
+	// takes every other launch for stopped.
+	Liveness RunLivenessPort
 	// Lifetime bounds the background repair sessions; nil means Background.
 	Lifetime context.Context
 	Now      func() time.Time
@@ -140,11 +142,7 @@ func (r *SelfRepair) newID() (domain.SessionID, error) {
 	if r.NewID != nil {
 		return r.NewID()
 	}
-	var random [16]byte
-	if _, err := rand.Read(random[:]); err != nil {
-		return "", err
-	}
-	return domain.NewSessionID(hex.EncodeToString(random[:]))
+	return NewRandomSessionID()
 }
 
 func (r *SelfRepair) maxAttempts() int {
@@ -882,6 +880,8 @@ func (r *SelfRepair) Recover(ctx context.Context, id string) error {
 		return fmt.Errorf("repair %s is %s; only an interrupted repair is recovered", id, record.Status)
 	case record.Session == "" || record.Clone == "":
 		return fmt.Errorf("repair %s has no session to recover; it stopped before the clone was ready", id)
+	case record.RunToken != r.RunToken && ownerAlive(r.Liveness, record.RunToken, r.RunToken):
+		return fmt.Errorf("%s %s belongs to another console that is still open; recover it there", record.Kind(), id)
 	case active >= r.maxActive():
 		return fmt.Errorf("another repair is active (%d of %d allowed by jobs.max_active)", active, r.maxActive())
 	}
@@ -915,7 +915,8 @@ func (r *SelfRepair) Recover(ctx context.Context, id string) error {
 }
 
 // Reconcile marks the repairs a stopped console left running as interrupted,
-// so the person sees them and can recover them. Called at launch.
+// so the person sees them and can recover them; those another open console
+// drives are left to it. Called at launch.
 func (r *SelfRepair) Reconcile(ctx context.Context) error {
 	if r == nil || r.Registry == nil {
 		return nil
@@ -925,7 +926,7 @@ func (r *SelfRepair) Reconcile(ctx context.Context) error {
 		return err
 	}
 	for _, record := range records {
-		if !record.Active() || record.RunToken == r.RunToken {
+		if !record.Active() || ownerAlive(r.Liveness, record.RunToken, r.RunToken) {
 			continue
 		}
 		record.Status, record.Pending = domain.RepairInterrupted, ""

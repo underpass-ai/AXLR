@@ -124,3 +124,33 @@ func TestSessionWithConsoleLinesIsNotEmpty(t *testing.T) {
 		t.Fatal("a planning session reads as empty")
 	}
 }
+
+// A restore's console line names the steps it went back over and survives
+// the console closing, beside the plan outcomes.
+func TestRestoreLinesAreKeptBesideTheSnapshot(t *testing.T) {
+	store, _ := openStore(t)
+	const id = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+	s := plannedSession(t, id)
+	must(t, s.AddRestore(domain.FileRestore{Undo: true, Files: []domain.RestoredFile{{Path: "a.go", From: "call-2", To: "call-1"}}}))
+	must(t, store.Save(context.Background(), s))
+	loaded, err := store.Load(context.Background(), id)
+	lines := loaded.ConsoleLines()
+	if err != nil || len(lines) != 2 || !reflect.DeepEqual(lines, s.ConsoleLines()) || lines[1].Restore == nil || !lines[1].Restore.Undo {
+		t.Fatalf("%v\n got %+v\nwant %+v", err, lines, s.ConsoleLines())
+	}
+}
+
+// A failed request's console line keeps its message and hint kind across
+// a reopening.
+func TestTurnFailureLinesAreKeptBesideTheSnapshot(t *testing.T) {
+	store, _ := openStore(t)
+	const id = "0f1e2d3c4b5a69788796a5b4c3d2e1f0"
+	s := plannedSession(t, id)
+	must(t, s.AddTurnFailure(domain.TurnFailure{Message: "OpenRouter invalid_request (HTTP 400): x is not a valid model ID", Hint: "choose_model"}))
+	must(t, store.Save(context.Background(), s))
+	loaded, err := store.Load(context.Background(), id)
+	lines := loaded.ConsoleLines()
+	if err != nil || len(lines) != 2 || !reflect.DeepEqual(lines, s.ConsoleLines()) || lines[1].Failure == nil || lines[1].Failure.Hint != "choose_model" {
+		t.Fatalf("%v\n got %+v\nwant %+v", err, lines, s.ConsoleLines())
+	}
+}

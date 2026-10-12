@@ -54,6 +54,6 @@ It reads one JSON document from stdin and writes one JSON response to stdout. Th
 
 ## Where data goes
 
-The console sends model requests to OpenRouter, or to the configured local server for a local model, and saves sessions under `$XDG_STATE_HOME/axlr/sessions`, falling back to `$HOME/.local/state/axlr/sessions`. Diagnostics use a private `logs/` directory in the same state base. HTTP request and response payload capture is enabled by default and contains conversation content, with credentials redacted; set `--trace-payloads=false` if you only need timings. [Console guide](console.md#diagnostics-and-privacy) has the full behavior.
+The console sends model requests to OpenRouter, or to the configured local server for a local model, and saves sessions under `$XDG_STATE_HOME/axlr/sessions`, falling back to `$HOME/.local/state/axlr/sessions`. Diagnostics use a private `logs/` directory in the same state base. HTTP request and response payload capture is off by default; `--trace-payloads` (or `trace_payloads` in settings) turns it on, and then it contains conversation content, with credentials redacted. [Console guide](console.md#diagnostics-and-privacy) has the full behavior.
 
 Local tools act on the chosen workspace. `exec` and MCP servers use host account permissions, so run AXLR in an account and workspace you trust.

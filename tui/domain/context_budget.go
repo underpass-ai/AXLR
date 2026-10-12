@@ -102,7 +102,7 @@ const (
 	// session (8 October 2026), against the 3 the window budget assumes.
 	// Tokenizers that hold more bytes per token cost fewer tokens for the
 	// same bytes, so the budget errs on the cheap side for them.
-	promptBytesPerTokenHundredths = 244
+	promptBytesPerTokenHundredths = DefaultBytesPerTokenHundredths
 	// promptPrefixReserve is what the guidance and the tool schemas, which
 	// the projection does not bound, took at most in that session: 7.7 KB
 	// and 9.7 KB.

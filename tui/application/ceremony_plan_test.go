@@ -85,6 +85,19 @@ func TestPlanVerificationNamesEveryDefect(t *testing.T) {
 	}
 }
 
+func TestPlanRefusesTestFirstOverTestsOnly(t *testing.T) {
+	d, _, _, _, s := planDriver(t)
+	testsOnly := strings.Replace(goodTasks, `"scope":["lines.go","lines_test.go"]`, `"scope":["lines_test.go"],"test_first":true`, 1)
+	report := step(t, d, &s, planArgs(t, testsOnly))
+	text, _ := json.Marshal(report["defects"])
+	if !strings.Contains(string(text), "task linecount: test_first needs a file to change") {
+		t.Fatalf("test_first over tests only must be a defect: %s", text)
+	}
+	if strings.Contains(string(text), "task wordcount: test_first") {
+		t.Fatalf("a test_first task with its code in scope is fine: %s", text)
+	}
+}
+
 func TestPlanCitationsMustQuoteTheLine(t *testing.T) {
 	d, _, _, _, s := planDriver(t)
 	wrong := strings.Replace(goodTasks, `"line":8`, `"line":3`, 1)
