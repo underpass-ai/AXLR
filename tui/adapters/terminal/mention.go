@@ -131,8 +131,10 @@ func (m AppModel) mentionKeyPress(k tea.KeyPressMsg) (AppModel, tea.Cmd, bool) {
 	case "ctrl+r":
 		return m, m.loadFiles(true), true
 	case "tab", "enter":
-		if len(matches) == 0 {
-			// Enter with nothing to insert sends the prompt as typed.
+		query, _, _, _ := m.mentionToken()
+		if len(matches) == 0 || k.String() == "enter" && query == "" {
+			// Enter with nothing to insert, or after a bare "@", sends the
+			// prompt as typed; Tab never sends.
 			return m, nil, k.String() == "tab"
 		}
 		m.insertMention(matches[min(m.mention.selected, len(matches)-1)])

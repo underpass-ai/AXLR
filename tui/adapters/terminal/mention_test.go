@@ -128,6 +128,14 @@ func TestAtOpensAFileMenuAndTabInsertsThePath(t *testing.T) {
 	if got := m.Composer.Input.Value(); got != "first main.go \nsecond line" || m.Composer.Input.Line() != 0 || m.Composer.Input.Column() != len("first main.go ") {
 		t.Fatalf("inserted on the first line: %q at %d:%d", got, m.Composer.Input.Line(), m.Composer.Input.Column())
 	}
+	// Enter after a bare "@" sends the prompt; Tab still picks a file.
+	m.Composer.Input.SetValue("write to me @")
+	if _, _, handled := m.mentionKeyPress(tea.KeyPressMsg{Code: tea.KeyEnter}); handled {
+		t.Fatal("Enter after a bare @ inserted a path instead of sending")
+	}
+	if next, _, handled := m.mentionKeyPress(tea.KeyPressMsg{Code: tea.KeyTab}); !handled || next.Composer.Input.Value() == "write to me @" {
+		t.Fatal("Tab after a bare @ did not insert a path")
+	}
 	// A turn's end lists the files again the next time.
 	m.mention.stale = true
 	if m.loadFiles(false) == nil {
