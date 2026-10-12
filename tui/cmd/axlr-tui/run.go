@@ -589,7 +589,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Start:             application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: approvalSettings, Notices: notices},
 		Resolve:           application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: approvalSettings, Store: loggedStore, Continue: continuation, Diagnostics: trace},
 		Agent:             application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: approvalSettings},
-		Search:            application.SearchSessionUseCase{},
 		Store:             loggedStore,
 		DeleteSession:     store,
 		ExportFiles:       storage.ExportFiles{},

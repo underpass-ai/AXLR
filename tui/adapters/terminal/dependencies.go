@@ -29,7 +29,6 @@ type Dependencies struct {
 	Start             application.StartTurnUseCase
 	Resolve           application.ResolveToolUseCase
 	Agent             application.AgentTurnUseCase
-	Search            application.SearchSessionUseCase
 	Store             application.SessionStorePort
 	// ExportFiles writes /export's Markdown; nil refuses /export.
 	ExportFiles application.ExportFilePort
