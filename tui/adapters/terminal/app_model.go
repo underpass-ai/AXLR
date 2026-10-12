@@ -108,6 +108,11 @@ type AppModel struct {
 	// queueReturned is the operation whose Esc put the queued message back
 	// in the composer; its end says so.
 	queueReturned uint64
+	// pastes are the long pastes the composer shows as tokens; pasted holds
+	// every long paste sent from this console, which the conversation
+	// folds.
+	pastes []pastedText
+	pasted map[string]bool
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
@@ -161,7 +166,7 @@ func New(deps Dependencies) AppModel {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
-	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}}
+	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}, pasted: map[string]bool{}}
 	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()
 	m.Changes.Theme = m.Theme
@@ -854,6 +859,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.beginSelection(v)
 		}
 		return m, nil
+	case tea.PasteMsg:
+		// A long paste is a token in the composer; the prompt sent carries
+		// it whole.
+		m.paste(v.Content)
+		m.slashSelected = 0
+		m.resizeComposer()
+		return m, nil
 	case tea.MouseMotionMsg:
 		m.extendSelection(v)
 		return m, nil
@@ -983,6 +995,7 @@ func (m *AppModel) refreshTranscript() {
 		m.clearSelection()
 	}
 	m.Changes.SetSession(m.Header.State)
+	m.Transcript.Pastes = m.pasted
 	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
@@ -999,7 +1012,8 @@ func (m *AppModel) refreshTranscript() {
 // running turn, refused with a reason, or starting a new turn.
 func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	if m.Busy && strings.TrimSpace(m.Composer.Input.Value()) != "" && m.turnRunning() {
-		message := m.Composer.Input.Value()
+		message := m.expandPastes(m.Composer.Input.Value())
+		m.pastes = nil
 		m.rememberPrompt(message)
 		m.steer.Add(message)
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticPromptQueued, Bytes: len(message)})
@@ -1032,7 +1046,8 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 		m.Status.Error = m.Theme.T("error.promptPending")
 		return m, nil
 	}
-	prompt := root.Text(m.Composer.Input.Value())
+	prompt := root.Text(m.expandPastes(m.Composer.Input.Value()))
+	m.pastes = nil
 	m.rememberPrompt(string(prompt))
 	m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 	m.submittedPrompt = string(prompt)

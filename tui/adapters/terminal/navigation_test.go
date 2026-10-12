@@ -250,7 +250,8 @@ func TestNavigationSearchDuplicateMessageTargets(t *testing.T) {
 
 func TestNavigationSearchTargetsArchivedDraftRow(t *testing.T) {
 	s := navSession(t)
-	if err := s.BeginTurn(root.Text(strings.Repeat("earlier line\n", 40)), nil); err != nil {
+	// Nineteen lines, so the prompt is not folded, that wrap to forty.
+	if err := s.BeginTurn(root.Text(strings.Repeat("earlier line with enough words to wrap twice at seventy columns of width\n", 19)), nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.InterruptDraft("archived needle"); err != nil {

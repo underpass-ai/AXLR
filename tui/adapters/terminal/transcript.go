@@ -36,6 +36,9 @@ type Transcript struct {
 	// each wrapped line to its row (-1 for none), so a click finds a note.
 	expanded    map[string]bool
 	expandedFor domain.SessionID
+	// Pastes are the long pastes sent from this console: a prompt shows
+	// each as its token, which a click opens.
+	Pastes      map[string]bool
 	rowLines    map[int]int
 	visualIndex []int
 }
@@ -147,7 +150,15 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			// or appended to it are one dim line each.
 			typed, notes := splitConsoleNotes(m.Content)
 			if typed != "" || len(notes) == 0 {
-				t.appendRow(transcriptRow{Label: theme.Icon("user") + " ", LabelTone: toneAccent, Text: typed, Kind: transcriptRowUser, Indent: true, At: at, Aside: formatClock(at, clock)})
+				row := transcriptRow{Label: theme.Icon("user") + " ", LabelTone: toneAccent, Text: typed, Kind: transcriptRowUser, Indent: true, At: at, Aside: formatClock(at, clock)}
+				if shown, folded := foldPastes(typed, t.Pastes, theme); folded {
+					// A long paste reads as its token until a click opens it.
+					row.Note = fmt.Sprintf("paste.%d", index)
+					if !t.expanded[row.Note] {
+						row.Text = shown
+					}
+				}
+				t.appendRow(row)
 			}
 			for k, note := range notes {
 				key := fmt.Sprintf("%d.%d", index, k)
@@ -203,6 +214,7 @@ func (t *Transcript) AppendQueued(prompt string) {
 	if prompt == "" {
 		return
 	}
+	prompt, _ = foldPastes(prompt, t.Pastes, t.theme)
 	t.appendRow(transcriptRow{Label: t.theme.Icon("user") + " ", LabelTone: toneAccent, Text: t.theme.T("transcript.queued") + prompt, Kind: transcriptRowUser, Indent: true})
 	t.renderRows()
 	t.ApplyTheme(t.theme)

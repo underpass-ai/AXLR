@@ -45,7 +45,7 @@ func (m AppModel) editDraft() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	path := file.Name()
-	_, err = file.WriteString(m.Composer.Input.Value())
+	_, err = file.WriteString(m.expandPastes(m.Composer.Input.Value()))
 	err = errors.Join(err, file.Close())
 	if err != nil {
 		_ = os.Remove(path)
@@ -70,6 +70,7 @@ func (m AppModel) editorResult(done editorDone) AppModel {
 		return m
 	}
 	m.Status.Error = ""
+	m.pastes = nil
 	m.Composer.Input.SetValue(strings.TrimRight(done.Text, "\r\n"))
 	m.slashSelected = 0
 	m.resizeComposer()
