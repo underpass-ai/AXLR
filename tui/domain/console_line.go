@@ -16,8 +16,10 @@ type ConsoleLine struct {
 	// added; the line is shown after them.
 	AfterMessage int
 	At           time.Time
-	// Plan is the outcome of a plan the session started.
-	Plan *PlanOutcome
+	// Plan is the outcome of a plan the session started; Restore is files
+	// the person put back to an earlier snapshot. A line carries one.
+	Plan    *PlanOutcome
+	Restore *FileRestore
 }
 
 // PlanOutcome is what a finished plan left, as the session that planned it
@@ -99,6 +101,10 @@ func (l ConsoleLine) clone() ConsoleLine {
 		plan := l.Plan.clone()
 		l.Plan = &plan
 	}
+	if l.Restore != nil {
+		restore := l.Restore.clone()
+		l.Restore = &restore
+	}
 	return l
 }
 
@@ -126,14 +132,19 @@ func (s *Session) AddPlanOutcome(outcome PlanOutcome) (bool, error) {
 }
 
 // validateConsoleLines checks lines restored with a transcript of messages
-// messages: each anchored inside it, in order, and carrying an outcome.
+// messages: each anchored inside it, in order, and carrying one outcome or
+// one restore.
 func validateConsoleLines(lines []ConsoleLine, messages int) error {
 	previous := 0
 	for _, line := range lines {
-		if line.AfterMessage < previous || line.AfterMessage > messages || line.Plan == nil {
+		if line.AfterMessage < previous || line.AfterMessage > messages || (line.Plan == nil) == (line.Restore == nil) {
 			return errors.New("console line is not anchored in the transcript")
 		}
-		if err := line.Plan.validate(); err != nil {
+		if line.Plan != nil {
+			if err := line.Plan.validate(); err != nil {
+				return err
+			}
+		} else if err := line.Restore.validate(); err != nil {
 			return err
 		}
 		previous = line.AfterMessage
