@@ -23,7 +23,8 @@ func (m AppModel) searchFooter() string {
 	width := max(1, m.Layout.Width)
 	hints := []footerHint{
 		{"next", "enter", m.Theme.T("search.nextHint")},
-		{"previous", "shift+enter", m.Theme.T("search.previousHint")},
+		// Shift+Enter arrives as Enter in some terminals; ↑ always works.
+		{"previous", "↑", m.Theme.T("search.previousHint")},
 		{"close", "esc", m.Theme.T("footer.close")},
 	}
 	var left []string

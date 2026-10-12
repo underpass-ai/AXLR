@@ -21,6 +21,7 @@ func (h HelpOverlay) rows(theme Theme, inner int) []string {
 	rows := []string{
 		theme.Accent(theme.T("help.write")),
 		theme.T("help.sendFull"),
+		theme.T("help.commandsSession"),
 		theme.T("help.commandsModelTheme"),
 		theme.T("help.changes"),
 		theme.T("help.commandsMCPPlugins"),

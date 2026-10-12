@@ -28,7 +28,11 @@ func NewComposer(mono bool, locales ...Locale) Composer {
 	a.MinHeight = 2
 	a.MaxHeight = 8
 	a.SetHeight(2)
-	a.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("shift+enter"), key.WithHelp("shift+enter", Translate(locale, "composer.insertNewline")))
+	// Ctrl+J (a line feed) and Alt+Enter reach every terminal; Shift+Enter
+	// arrives as Enter without the kitty keyboard or modifyOtherKeys.
+	a.KeyMap.InsertNewline = key.NewBinding(key.WithKeys("shift+enter", "ctrl+j", "alt+enter"), key.WithHelp("shift+enter", Translate(locale, "composer.insertNewline")))
+	// Ctrl+G opens the draft in an editor (the console catches it first).
+	a.KeyMap.SelectAll = key.NewBinding(key.WithDisabled())
 	a.CharLimit = 0
 	a.Focus()
 	c := Composer{Input: a}

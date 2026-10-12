@@ -1,12 +1,15 @@
 package terminal
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -90,6 +93,8 @@ func TestSessionPickerRenamesArchivesAndCyclesScopes(t *testing.T) {
 	if p.Key("f2", "") != "" || !p.Renaming || p.RenameText != "¿qué ceremonias tienes?" {
 		t.Fatalf("F2 did not start renaming: %+v", p)
 	}
+	// An arrow keeps the selected title for editing at its end.
+	p.Key("right", "")
 	p.Key("backspace", "")
 	p.Key("!", "!")
 	if p.RenameText != "¿qué ceremonias tienes!" {
@@ -153,5 +158,105 @@ func TestPlanTaskSessionsHaveTheirOwnScope(t *testing.T) {
 	}
 	if strings.Contains(view, "Add func Short()") {
 		t.Fatalf("a task session is still titled by its context pack:\n%s", view)
+	}
+}
+
+// On 12 October 2026 F2 prefilled the old title with the cursor at its end,
+// and typing appended ("…responde solo okQA buildinfo").
+func TestRenamingStartsWithTheOldTitleSelected(t *testing.T) {
+	p := pickerFixture(time.Now())
+	p.Key("f2", "")
+	view := ansi.Strip(p.View(Theme{Monochrome: true}, zone.New(), "", 30, 100))
+	if !p.RenameSelected || !strings.Contains(view, "[¿qué ceremonias tienes?]") {
+		t.Fatalf("the old title is not shown selected:\n%s", view)
+	}
+	for _, r := range "QA buildinfo" {
+		p.Key(string(r), string(r))
+	}
+	if p.RenameText != "QA buildinfo" || p.RenameSelected {
+		t.Fatalf("typing did not replace the title: %q", p.RenameText)
+	}
+	p.Key("ctrl+u", "")
+	if p.RenameText != "" || !p.Renaming {
+		t.Fatalf("Ctrl+U did not clear the title: %q", p.RenameText)
+	}
+	p.Key("esc", "")
+	p.Key("f2", "")
+	p.Key("backspace", "")
+	if p.RenameText != "" {
+		t.Fatalf("Backspace on the selected title left %q", p.RenameText)
+	}
+}
+
+// manySessions is a picker over n sessions of this workspace, newest first.
+func manySessions(n int, now time.Time) SessionPicker {
+	var items []domain.SessionSummary
+	for i := range n {
+		items = append(items, domain.SessionSummary{ID: domain.SessionID(fmt.Sprintf("%032x", i)), Workspace: "/w", Title: root.Text(fmt.Sprintf("prompt %d", i)), MessageCount: 2, UpdatedAt: now.Add(-time.Duration(i) * time.Minute)})
+	}
+	return NewSessionPicker(items, "/w")
+}
+
+// On 12 October 2026 the picker had no PgUp, PgDn, Home or End, and a paste
+// into its filter was swallowed.
+func TestSessionPickerPagesAndTakesPastes(t *testing.T) {
+	p := manySessions(30, time.Now())
+	p.NewRow, p.Page = true, 5
+	p.Key("pgdown", "")
+	p.Key("pgdown", "")
+	if p.Selected != 10 {
+		t.Fatalf("PgDn twice selected %d; want 10", p.Selected)
+	}
+	p.Key("pgup", "")
+	if p.Selected != 5 {
+		t.Fatalf("PgUp selected %d; want 5", p.Selected)
+	}
+	p.Key("end", "")
+	if p.Selected != 29 || p.OnNew {
+		t.Fatalf("End selected %d", p.Selected)
+	}
+	p.Key("home", "")
+	if p.Selected != 0 || !p.NewSelected() {
+		t.Fatalf("Home selected %d new=%v", p.Selected, p.OnNew)
+	}
+	p.Key("pgdown", "")
+	if p.Selected != 5 || p.OnNew {
+		t.Fatalf("PgDn from the new-session row selected %d", p.Selected)
+	}
+
+	s := navSession(t)
+	m := navModel(t, &s)
+	m.overlay, m.Picker = "sessions", manySessions(30, time.Now())
+	m = update(m, tea.PasteMsg{Content: "prompt 29\n"})
+	if m.Picker.Query != "prompt 29" || len(m.Picker.Visible()) != 1 {
+		t.Fatalf("the paste did not filter: query=%q visible=%d", m.Picker.Query, len(m.Picker.Visible()))
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF2})
+	m = update(m, tea.PasteMsg{Content: "pasted title"})
+	if m.Picker.RenameText != "pasted title" {
+		t.Fatalf("the paste did not replace the selected title: %q", m.Picker.RenameText)
+	}
+	// The root gives the picker its page from the screen.
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyPgDown})
+	if m.Picker.Page != m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width) {
+		t.Fatalf("page = %d", m.Picker.Page)
+	}
+}
+
+// On 12 October 2026 the filter matched titles only: a session was found
+// by its first prompt or not at all.
+func TestSessionPickerFiltersByConversation(t *testing.T) {
+	p := NewSessionPicker([]domain.SessionSummary{
+		{ID: "a", Workspace: "/w", Title: "first", Text: "first\nWe chose the Zebra plan", MessageCount: 2},
+		{ID: "b", Workspace: "/w", Title: "second", Text: "second\nnothing here", MessageCount: 2},
+	}, "/w")
+	p.Paste("zebra")
+	if got := ids(p.Visible()); got != "a" {
+		t.Fatalf("filtering by content listed %q", got)
+	}
+	view := ansi.Strip(p.View(Theme{Monochrome: true}, zone.New(), "", 30, 100))
+	if !strings.Contains(view, Theme{}.T("sessions.contentMatch")) {
+		t.Fatalf("a content match is not marked:\n%s", view)
 	}
 }

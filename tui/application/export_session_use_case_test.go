@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"errors"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -68,5 +70,37 @@ func TestExportSessionWritesMarkdown(t *testing.T) {
 	call := root.ToolCall{ID: "x", Name: "local_exec", Arguments: mustObject(t, `{"program":"sh","args":["-c","a | b"]}`)}
 	if got := tableCell(shortArguments(call.Arguments)); !strings.Contains(got, `a \| b`) {
 		t.Fatalf("cell %q", got)
+	}
+}
+
+// exclusiveFiles refuses an existing path as the storage port does.
+type exclusiveFiles map[string]string
+
+func (e exclusiveFiles) Create(_ context.Context, path string, data []byte) error {
+	if _, ok := e[path]; ok {
+		return fs.ErrExist
+	}
+	e[path] = string(data)
+	return nil
+}
+
+// Two /export within one minute both write: the default name takes a
+// suffix, while a path the person named is never replaced.
+func TestASecondDefaultExportInTheSameMinuteTakesASuffix(t *testing.T) {
+	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "a.go", Before: "one", After: "two"}}})
+	state := s.Export()
+	files := exclusiveFiles{}
+	now := time.Date(2026, 10, 12, 18, 30, 0, 0, time.Local)
+	u := ExportSessionUseCase{Files: files, Now: func() time.Time { return now }}
+	first, err := u.Execute(context.Background(), state, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := u.Execute(context.Background(), state, "")
+	if err != nil || second != strings.TrimSuffix(first, ".md")+"-2.md" {
+		t.Fatalf("second export %q %v after %q", second, err, first)
+	}
+	if _, err := u.Execute(context.Background(), state, first); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("a named path was replaced: %v", err)
 	}
 }

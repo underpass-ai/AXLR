@@ -33,13 +33,68 @@ type SessionPicker struct {
 	Query  string
 	Labels map[domain.SessionID]domain.SessionLabel
 	// Renaming edits the selected session's title in place of the search.
-	Renaming   bool
-	RenameText string
+	// RenameSelected marks the old title as selected, as F2 leaves it: the
+	// first character typed replaces it. On 12 October 2026 F2 put the
+	// cursor after the old title and typing appended to it.
+	Renaming       bool
+	RenameText     string
+	RenameSelected bool
+	// NewRow offers "＋ New session" above the sessions, and OnNew puts the
+	// selection on it.
+	NewRow bool
+	OnNew  bool
+	// Page is how many sessions the overlay shows at once, for PgUp and
+	// PgDn; the root sets it from the screen's height.
+	Page int
+	// Deleting asks to confirm deleting the selected session: y deletes it,
+	// any other key keeps it.
+	Deleting bool
+	// content holds each session's prompts and replies, lowercased.
+	content map[domain.SessionID]string
 }
+
+// PageSize is how many sessions fit in an overlay of this size: two rows
+// per session and a blank, after the search row and up to three group
+// labels, and the new-session row with its blank.
+func (p SessionPicker) PageSize(height, width int) int {
+	_, bodyHeight := OverlayBodySize(width, height)
+	if p.ShowsNew() {
+		return max(1, (bodyHeight-7)/3)
+	}
+	return max(1, (bodyHeight-5)/3)
+}
+
+// Paste adds pasted text to the filter, or to the new title while renaming,
+// as one line.
+func (p *SessionPicker) Paste(text string) {
+	text = strings.Join(strings.Fields(text), " ")
+	if text == "" {
+		return
+	}
+	if p.Renaming {
+		if p.RenameSelected {
+			p.RenameText, p.RenameSelected = "", false
+		}
+		p.insertRename(text)
+		return
+	}
+	p.Query += text
+	p.Selected, p.OnNew = 0, false
+}
+
+// ShowsNew reports whether the new-session row is listed: in the
+// workspace scopes and while nothing is typed in the filter.
+func (p SessionPicker) ShowsNew() bool {
+	return p.NewRow && !p.ArchivedView && !p.TasksView && strings.TrimSpace(p.Query) == ""
+}
+
+// NewSelected reports the selection on the new-session row.
+func (p SessionPicker) NewSelected() bool { return p.OnNew && p.ShowsNew() }
 
 const (
 	SessionRenameIntent  ControlIntent = "session-rename"
 	SessionArchiveIntent ControlIntent = "session-archive"
+	SessionDeleteIntent  ControlIntent = "session-delete"
 )
 
 // planTaskRef is the plan task a worker session ran.
@@ -94,7 +149,12 @@ func (p SessionPicker) Title(s domain.SessionSummary) string {
 func NewSessionPicker(items []domain.SessionSummary, workspace domain.Workspace) SessionPicker {
 	sorted := append([]domain.SessionSummary(nil), items...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].UpdatedAt.After(sorted[j].UpdatedAt) })
-	return SessionPicker{Items: sorted, Workspace: workspace}
+	// Lowered once, not on every key of the filter.
+	content := make(map[domain.SessionID]string, len(sorted))
+	for _, s := range sorted {
+		content[s.ID] = strings.ToLower(string(s.Text))
+	}
+	return SessionPicker{Items: sorted, Workspace: workspace, content: content}
 }
 
 // Visible is the filtered list the selection and clicks index into.
@@ -111,7 +171,7 @@ func (p SessionPicker) Visible() []domain.SessionSummary {
 		if !p.ArchivedView && !p.TasksView && !p.AllWorkspaces && s.Workspace != p.Workspace {
 			continue
 		}
-		if query != "" && !strings.Contains(strings.ToLower(p.Title(s)), query) {
+		if query != "" && !strings.Contains(strings.ToLower(p.Title(s)), query) && !p.contentMatches(s, query) {
 			continue
 		}
 		visible = append(visible, s)
@@ -119,7 +179,20 @@ func (p SessionPicker) Visible() []domain.SessionSummary {
 	return visible
 }
 
+// contentMatches reports a session whose prompts and replies contain the
+// lowercased query. On 12 October 2026 the filter matched titles only.
+func (p SessionPicker) contentMatches(s domain.SessionSummary, query string) bool {
+	text, ok := p.content[s.ID]
+	if !ok {
+		text = strings.ToLower(string(s.Text))
+	}
+	return strings.Contains(text, query)
+}
+
 func (p SessionPicker) Current() (domain.SessionSummary, bool) {
+	if p.NewSelected() {
+		return domain.SessionSummary{}, false
+	}
 	visible := p.Visible()
 	if p.Selected < 0 || p.Selected >= len(visible) {
 		return domain.SessionSummary{}, false
@@ -130,29 +203,48 @@ func (p SessionPicker) Current() (domain.SessionSummary, bool) {
 // Key handles the picker's own keys. It returns an intent when the root has
 // to persist something: a new title or an archive toggle.
 func (p *SessionPicker) Key(key, text string) ControlIntent {
+	if p.Deleting {
+		p.Deleting = false
+		if strings.ToLower(key) == "y" {
+			return SessionDeleteIntent
+		}
+		return ""
+	}
 	if p.Renaming {
+		selected := p.RenameSelected
+		p.RenameSelected = false
 		switch key {
 		case "enter":
 			p.Renaming = false
 			return SessionRenameIntent
 		case "esc":
 			p.Renaming = false
+		case "ctrl+u":
+			p.RenameText = ""
 		case "backspace":
-			if p.RenameText != "" {
+			if selected {
+				p.RenameText = ""
+			} else if p.RenameText != "" {
 				_, size := utf8.DecodeLastRuneInString(p.RenameText)
 				p.RenameText = p.RenameText[:len(p.RenameText)-size]
 			}
 		default:
-			if text != "" && !strings.ContainsAny(text, "\r\n\t") && utf8.RuneCountInString(p.RenameText) < domain.MaxSessionTitleRunes {
-				p.RenameText += text
+			if text == "" || strings.ContainsAny(text, "\r\n\t") {
+				// Another key (an arrow, End) keeps the title and drops the
+				// selection, so typing then appends.
+				return ""
 			}
+			if selected {
+				p.RenameText = ""
+			}
+			p.insertRename(text)
 		}
 		return ""
 	}
 	switch key {
 	case "f2":
 		if current, ok := p.Current(); ok {
-			p.Renaming, p.RenameText = true, p.Title(current)
+			p.Renaming, p.RenameText, p.RenameSelected = true, p.Title(current), true
 		}
 		return ""
 	case "ctrl+x":
@@ -160,18 +252,58 @@ func (p *SessionPicker) Key(key, text string) ControlIntent {
 			return SessionArchiveIntent
 		}
 		return ""
+	case "ctrl+delete":
+		_, p.Deleting = p.Current()
+		return ""
 	}
 	p.key(key, text)
 	return ""
 }
 
+// insertRename adds typed or pasted text to the new title, up to the
+// title's limit.
+func (p *SessionPicker) insertRename(text string) {
+	for _, r := range text {
+		if utf8.RuneCountInString(p.RenameText) >= domain.MaxSessionTitleRunes {
+			return
+		}
+		p.RenameText += string(r)
+	}
+}
+
 func (p *SessionPicker) key(key, text string) bool {
+	if !p.ShowsNew() {
+		p.OnNew = false
+	}
 	switch key {
 	case "up":
+		if p.Selected == 0 && p.ShowsNew() {
+			p.OnNew = true
+		}
 		p.Selected = max(0, p.Selected-1)
 	case "down":
+		if p.OnNew {
+			p.OnNew = false
+			break
+		}
 		p.Selected = min(max(0, len(p.Visible())-1), p.Selected+1)
+	case "pgup":
+		if p.Selected == 0 && p.ShowsNew() {
+			p.OnNew = true
+		}
+		p.Selected = max(0, p.Selected-max(1, p.Page))
+	case "pgdown":
+		if p.OnNew {
+			p.OnNew = false
+			p.Selected = 0
+		}
+		p.Selected = min(max(0, len(p.Visible())-1), p.Selected+max(1, p.Page))
+	case "home":
+		p.Selected, p.OnNew = 0, p.ShowsNew()
+	case "end":
+		p.Selected, p.OnNew = max(0, len(p.Visible())-1), false
 	case "tab":
+		p.OnNew = false
 		// This workspace → every workspace → plan tasks → archived → this
 		// workspace.
 		switch {
@@ -206,19 +338,45 @@ func (p SessionPicker) View(theme Theme, z *zone.Manager, prefix string, height,
 }
 
 func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height, width int, now time.Time) string {
-	innerWidth, bodyHeight := OverlayBodySize(width, height)
+	innerWidth, _ := OverlayBodySize(width, height)
 	visible := p.Visible()
 	var lines []string
 	search := theme.Muted(theme.Icon("search")+" ") + p.Query
 	if p.Query == "" {
 		search = theme.Muted(theme.Icon("search") + " " + theme.T("sessions.searchHint"))
 	}
+	if current, ok := p.Current(); ok && p.Deleting {
+		search = theme.Accent(theme.Tf("sessions.deleteConfirm", ansi.Truncate(p.Title(current), 40, "…")))
+	}
 	if p.Renaming {
-		search = theme.Accent(theme.T("sessions.renamePrompt")) + " " + p.RenameText + theme.Accent("▏") + theme.Muted("  "+theme.T("sessions.renameHint"))
+		title := p.RenameText + theme.Accent("▏")
+		if p.RenameSelected && p.RenameText != "" {
+			title = theme.Selected(p.RenameText)
+			if theme.Monochrome {
+				// Without colour the selection is bracketed.
+				title = "[" + p.RenameText + "]"
+			}
+		}
+		search = theme.Accent(theme.T("sessions.renamePrompt")) + " " + title + theme.Muted("  "+theme.T("sessions.renameHint"))
 	}
 	lines = append(lines, search, "")
-	// Two rows per session plus a blank, after the search row and up to three group labels.
-	page := max(1, (bodyHeight-5)/3)
+	page := p.PageSize(height, width)
+	if p.ShowsNew() {
+		plus := "＋"
+		if theme.Monochrome || theme.Icons == domain.IconsASCII {
+			plus = "+"
+		}
+		row := plus + " " + theme.T("sessions.new")
+		switch {
+		case !p.OnNew:
+			row = "  " + row
+		case theme.Monochrome:
+			row = theme.Selected(row)
+		default:
+			row = theme.Selected(theme.Icon("user") + " " + row)
+		}
+		lines = append(lines, z.Mark(prefix+"session-new", row), "")
+	}
 	start := max(0, p.Selected-page+1)
 	start = min(start, max(0, len(visible)-page))
 	end := min(len(visible), start+page)
@@ -236,7 +394,7 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		head := ansi.Truncate(title, max(1, body-ansi.StringWidth(when)-2), "…")
 		head += strings.Repeat(" ", max(2, body-ansi.StringWidth(head)-ansi.StringWidth(when))) + theme.Muted(when)
 		switch {
-		case i != p.Selected:
+		case i != p.Selected || p.NewSelected():
 			head = "  " + head
 		case theme.Monochrome:
 			head = theme.Selected(head)
@@ -255,10 +413,16 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		if ref, ok := p.planTask(s); ok && ref.Status != "" {
 			meta = append(meta, theme.T("plans.task."+string(ref.Status)))
 		}
-		if p.AllWorkspaces || p.ArchivedView || p.TasksView {
+		if query := strings.ToLower(strings.TrimSpace(p.Query)); query != "" && !strings.Contains(strings.ToLower(title), query) {
+			meta = append(meta, theme.T("sessions.contentMatch"))
+		}
+		if s.Workspace != p.Workspace {
+			// It opens only in its own workspace: Enter says how.
+			meta = append([]string{theme.Tf("sessions.elsewhere", shortenHome(singleLine(string(s.Workspace))))}, meta...)
+		} else if p.AllWorkspaces || p.ArchivedView || p.TasksView {
 			meta = append(meta, shortenHome(singleLine(string(s.Workspace))))
 		}
-		if i == p.Selected {
+		if i == p.Selected && !p.NewSelected() {
 			// What axlr-tui --session takes to resume it from a shell.
 			meta = append(meta, theme.Tf("sessions.id", s.ID))
 		}

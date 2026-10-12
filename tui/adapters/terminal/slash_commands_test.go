@@ -27,8 +27,10 @@ func TestSlashSuggestionsListMatchingCommands(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	for draft, want := range map[string]string{
-		"/":          "/model,/theme,/mcp,/plugin,/changes,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/stop-ceremony,/copy,/usage,/exit",
-		"/m":         "/model,/mcp",
+		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/stop-ceremony,/copy,/export,/usage,/exit",
+		"/m":         "/model,/mcp,/improve,/theme,/autonomy on,/autonomy off,/normal,/stop-ceremony",
+		"/trab":      "/jobs",
+		"/ceremony":  "/stop-ceremony",
 		"/autonomy ": "/autonomy on,/autonomy off",
 		"/autonomy":  "",
 		"/model":     "",
@@ -130,8 +132,12 @@ func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()
 	m = typeDraft(m, "/")
+	limit := m.slashLimit()
+	if limit != slashSuggestionMax {
+		t.Fatalf("a 30-row console shows %d suggestions; want %d", limit, slashSuggestionMax)
+	}
 	view := ansi.Strip(m.View().Content)
-	if !strings.Contains(view, m.Theme.Tf("slash.more", len(slashCommands)-slashSuggestionLimit)) || strings.Contains(view, "/exit") {
+	if !strings.Contains(view, m.Theme.Tf("slash.more", len(slashCommands)-limit)) || strings.Contains(view, "/exit") {
 		t.Fatalf("the menu does not say more commands exist:\n%s", view)
 	}
 	for range len(slashCommands) - 1 {
@@ -142,22 +148,22 @@ func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
 		t.Fatalf("the menu did not scroll to the last command:\n%s", view)
 	}
 	// On 10 October 2026 the count read "↑↓ 18 more" wherever the list was.
-	if above := len(slashCommands) - slashSuggestionLimit; !strings.Contains(view, m.Theme.Tf("slash.above", above)) || strings.Contains(view, "below") {
+	if above := len(slashCommands) - limit; !strings.Contains(view, m.Theme.Tf("slash.above", above)) || strings.Contains(view, "below") {
 		t.Fatalf("at the end the menu does not count what is above:\n%s", view)
 	}
 	for range 3 {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	}
 	view = ansi.Strip(m.View().Content)
-	if !strings.Contains(view, "> /stop-ceremony") || !strings.Contains(view, "/exit") {
+	if !strings.Contains(view, "> "+slashCommands[len(slashCommands)-4].name+" ") || !strings.Contains(view, "/exit") {
 		t.Fatalf("moving up inside the window scrolled it:\n%s", view)
 	}
-	for range 6 {
+	for range limit {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	}
 	view = ansi.Strip(m.View().Content)
-	top := slashWindow(m.slashTop, m.slashSelected, len(slashCommands))
-	if want := m.Theme.Tf("slash.aboveBelow", top, len(slashCommands)-top-slashSuggestionLimit); !strings.Contains(view, want) {
+	top := slashWindow(m.slashTop, m.slashSelected, len(slashCommands), limit)
+	if want := m.Theme.Tf("slash.aboveBelow", top, len(slashCommands)-top-limit); !strings.Contains(view, want) {
 		t.Fatalf("in the middle the menu does not count both sides (%q):\n%s", want, view)
 	}
 	want := slashCommands[m.slashSelected].name
@@ -303,4 +309,39 @@ func TestSlashCommandsIgnoreCaseAndSpacingAndNeverSendTheirText(t *testing.T) {
 			t.Fatalf("/tmp/foo explain was not sent as a prompt: busy=%v error=%q", m.Busy, m.Status.Error)
 		}
 	})
+}
+
+// On 12 October 2026 "/trab" + Enter said "Unknown command" although
+// /trabajos is /jobs' alias, the menu hid every alias and showed six rows.
+func TestTheSlashMenuMatchesAliasesAndShowsThem(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m = typeDraft(m, "/trab")
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "> /jobs  /trabajos") {
+		t.Fatalf("the alias is not shown after the command:\n%s", view)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	// Without MADE the jobs panel says why it cannot open: /jobs ran.
+	if m.Status.Error != m.Theme.T("jobs.unavailable") || m.Busy {
+		t.Fatalf("/trab + Enter did not run /jobs: error=%q busy=%v", m.Status.Error, m.Busy)
+	}
+	short := update(sized(), tea.WindowSizeMsg{Width: 100, Height: 15})
+	defer short.zones.Close()
+	if limit := short.slashLimit(); limit >= slashSuggestionMax || limit < 1 {
+		t.Fatalf("a 15-row console shows %d suggestions", limit)
+	}
+	short = typeDraft(short, "/")
+	rows := 0
+	for _, line := range strings.Split(ansi.Strip(short.View().Content), "\n") {
+		for _, c := range slashCommands {
+			if strings.HasPrefix(line, "  "+c.name+" ") || strings.HasPrefix(line, "> "+c.name+" ") {
+				rows++
+				break
+			}
+		}
+	}
+	if rows != short.slashLimit() {
+		t.Fatalf("a short console shows %d rows of suggestions", rows)
+	}
 }

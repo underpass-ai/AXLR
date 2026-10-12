@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -27,5 +28,16 @@ func TestExportFilesCreateOnlyNewPrivateFiles(t *testing.T) {
 	}
 	if err := (ExportFiles{}).Create(context.Background(), "relative.md", nil); err == nil {
 		t.Fatal("a relative path was accepted")
+	}
+}
+
+func TestAnExportOverAnExistingFileIsAnErrExist(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "out.md")
+	if err := (ExportFiles{}).Create(context.Background(), path, []byte("a")); err != nil {
+		t.Fatal(err)
+	}
+	err := (ExportFiles{}).Create(context.Background(), path, []byte("b"))
+	if !errors.Is(err, os.ErrExist) || !strings.Contains(err.Error(), "already exists; export to another path") {
+		t.Fatalf("second create: %v", err)
 	}
 }

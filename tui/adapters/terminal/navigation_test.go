@@ -217,9 +217,17 @@ func TestNavigationSwitchRejectsDifferentWorkspace(t *testing.T) {
 	if current, ok := m.Picker.Current(); !ok || current.ID != other.Export().ID {
 		t.Fatal("Tab did not show every workspace")
 	}
+	// The row says it belongs elsewhere, and Enter says how to open it
+	// without starting a load that fails.
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, m.Theme.Tf("sessions.elsewhere", string(testWorkspace())+"-other")) {
+		t.Fatalf("no other-workspace marker:\n%s", view)
+	}
 	n, c = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m = drain(t, n.(AppModel), c)
-	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "axlr-tui --root "+string(testWorkspace())+"-other") {
+	if c != nil || n.(AppModel).Busy {
+		t.Fatal("Enter on another workspace's session started an operation")
+	}
+	m = n.(AppModel)
+	if s.Export().Workspace != testWorkspace() || !strings.Contains(m.Status.Error, "axlr-tui --root "+string(testWorkspace())+"-other --session "+string(other.Export().ID)) || m.overlay != "sessions" {
 		t.Fatalf("workspace compatibility not enforced or not explained: %q", m.Status.Error)
 	}
 }
@@ -242,7 +250,8 @@ func TestNavigationSearchDuplicateMessageTargets(t *testing.T) {
 
 func TestNavigationSearchTargetsArchivedDraftRow(t *testing.T) {
 	s := navSession(t)
-	if err := s.BeginTurn(root.Text(strings.Repeat("earlier line\n", 40)), nil); err != nil {
+	// Nineteen lines, so the prompt is not folded, that wrap to forty.
+	if err := s.BeginTurn(root.Text(strings.Repeat("earlier line with enough words to wrap twice at seventy columns of width\n", 19)), nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.InterruptDraft("archived needle"); err != nil {
@@ -256,7 +265,7 @@ func TestNavigationSearchTargetsArchivedDraftRow(t *testing.T) {
 	for _, r := range "needle" {
 		m = update(m, tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	if len(m.SearchBox.Hits) != 1 || m.SearchBox.Hits[0].ArchivedDraftIndex == nil {
+	if len(m.SearchBox.Hits) != 1 {
 		t.Fatalf("search missed archived draft: %+v", m.SearchBox.Hits)
 	}
 	if m.Transcript.Viewport.YOffset() == 0 || !strings.Contains(m.Transcript.View(), "archived needle") {

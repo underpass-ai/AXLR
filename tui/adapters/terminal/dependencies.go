@@ -31,8 +31,13 @@ type Dependencies struct {
 	Agent             application.AgentTurnUseCase
 	Search            application.SearchSessionUseCase
 	Store             application.SessionStorePort
-	Session           *domain.Session
-	Monochrome        bool
+	// ExportFiles writes /export's Markdown; nil refuses /export.
+	ExportFiles application.ExportFilePort
+	// DeleteSession removes a saved session from Ctrl+O; nil offers no
+	// delete.
+	DeleteSession application.SessionDeletePort
+	Session       *domain.Session
+	Monochrome    bool
 	// InitialDraft fills the composer at launch, such as the repair brief;
 	// the person still presses Enter.
 	InitialDraft string

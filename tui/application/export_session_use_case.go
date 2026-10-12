@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"time"
@@ -72,14 +73,30 @@ func (u ExportSessionUseCase) Execute(ctx context.Context, state domain.SessionS
 			ledger = &loaded
 		}
 	}
-	switch {
-	case path == "":
-		path = filepath.Join(string(state.Workspace), filepath.FromSlash(ExportDirectory), exportSlug(title)+"-"+now.Format("20060102-1504")+".md")
-	case !filepath.IsAbs(path):
+	data := []byte(RenderSessionMarkdown(state, title, ledger, now))
+	if path == "" {
+		// A second export within the minute gets a suffix rather than a
+		// refusal: the person named no file to protect.
+		base := filepath.Join(string(state.Workspace), filepath.FromSlash(ExportDirectory), exportSlug(title)+"-"+now.Format("20060102-1504"))
+		for n := 1; ; n++ {
+			path = base + ".md"
+			if n > 1 {
+				path = fmt.Sprintf("%s-%d.md", base, n)
+			}
+			err := u.Files.Create(ctx, path, data)
+			if err == nil {
+				return path, nil
+			}
+			if !errors.Is(err, fs.ErrExist) || n == maxExportSuffix {
+				return "", err
+			}
+		}
+	}
+	if !filepath.IsAbs(path) {
 		path = filepath.Join(string(state.Workspace), path)
 	}
 	path = filepath.Clean(path)
-	if err := u.Files.Create(ctx, path, []byte(RenderSessionMarkdown(state, title, ledger, now))); err != nil {
+	if err := u.Files.Create(ctx, path, data); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -94,6 +111,9 @@ func exportSlug(title string) string {
 	}
 	return slugWords(folded)
 }
+
+// maxExportSuffix bounds the default names tried within one minute.
+const maxExportSuffix = 99
 
 // maxExportArgumentRunes bounds a tool call's arguments in its row.
 const maxExportArgumentRunes = 80

@@ -105,6 +105,16 @@ type AppModel struct {
 	// exitCancelled is the operation /exit cancelled; its end says how to
 	// quit instead of a bare "Cancelled".
 	exitCancelled uint64
+	// queueReturned is the operation whose Esc put the queued message back
+	// in the composer; its end says so.
+	queueReturned uint64
+	// pastes are the long pastes the composer shows as tokens; pasted holds
+	// every long paste sent from this console, which the conversation
+	// folds.
+	pastes []pastedText
+	pasted map[string]bool
+	// mention is the @ menu of workspace files.
+	mention mentionState
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
@@ -158,7 +168,7 @@ func New(deps Dependencies) AppModel {
 	}
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
-	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}}
+	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}, pasted: map[string]bool{}}
 	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()
 	m.Changes.Theme = m.Theme
@@ -236,6 +246,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.subscribeRepairs()
 	case jobsMsg:
 		return m.jobsResult(v), nil
+	case editorDone:
+		return m.editorResult(v), nil
+	case workspaceFilesMsg:
+		return m.filesLoaded(v), nil
 	case quitDisarm:
 		if v.arm == m.quitArm && !m.quitArmedAt.IsZero() {
 			m.quitArmedAt = time.Time{}
@@ -308,6 +322,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Info.SetWidth(infoWidth)
 		m.Info.Viewport.SetHeight(infoHeight)
 		m.Transcript.ApplyTheme(m.Theme)
+		m.refreshSearch()
 		m = m.autoOpenIncidentCard()
 		m = m.autoOpenRepairPanel()
 		return m, nil
@@ -465,11 +480,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Models.SetError(v.Err)
 			} else {
 				m.overlay = ""
+				m.Status.Notice = m.Theme.Tf("notice.modelSession", singleLine(string(m.Header.State.Model)))
+				if v.DefaultSaved {
+					m.Status.Notice = m.Theme.Tf("notice.modelDefault", singleLine(string(m.Header.State.Model)))
+				}
 			}
 		}
 		if v.Sessions != nil {
 			m.Picker = NewSessionPicker(*v.Sessions, m.Header.State.Workspace)
 			m.Picker.Tasks = planTaskSessions(m.PlanPanel.Records)
+			m.Picker.NewRow = m.Header.State.Model != ""
 			if m.deps.SessionLabels != nil {
 				if labels, err := m.deps.SessionLabels.Load(m.lifetime.ctx); err == nil {
 					m.Picker.Labels = labels
@@ -478,7 +498,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.overlay = "sessions"
 		}
 		switched := oldID != m.Header.State.ID
+		if wasTurn {
+			// The turn may have written files: the @ menu lists them again.
+			m.mention.stale = true
+		}
 		if switched {
+			m.mention = mentionState{}
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
 			m.tokens = 0
@@ -533,6 +558,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.exitCancelled == v.ID {
 				m.Status.Notice = strings.TrimSpace(m.Theme.T("notice.exitCancelled") + " " + returned)
 			}
+			if m.queueReturned == v.ID {
+				m.Status.Notice += " · " + m.Theme.T("notice.queueReturned")
+			}
 			if status := v.Session.Status(); wasTurn || status == domain.StatusStreaming || status == domain.StatusInterrupted || status == domain.StatusApproval {
 				m.cancelledAt = len(m.Header.State.Messages) + 1
 			}
@@ -553,7 +581,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.draft == "" {
 			m.Status.Error = ""
 		}
-		m.exitCancelled = 0
+		m.exitCancelled, m.queueReturned = 0, 0
+		if v.Fresh && v.Err == nil {
+			m.Status.Notice = m.Theme.T("notice.newStarted")
+		}
 		if v.ModelSelection && v.Err == nil && v.PreferenceErr != nil {
 			m.Status.Error = m.Theme.T("error.modelDefault")
 		}
@@ -634,6 +665,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Text that only starts with "/" (a path) is a prompt.
 				return m.submitDraft()
 			}
+			if command == "/new" {
+				changed, cmd := m.newSession()
+				if cmd != nil {
+					changed.Composer.Input.Reset()
+				}
+				return changed, cmd
+			}
 			if command == "/update" {
 				changed, cmd := m.updateEngines()
 				if cmd != nil {
@@ -648,6 +686,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/copy" {
 				m.Composer.Input.Reset()
 				return m, m.copyLatest()
+			}
+			if command == "/export" {
+				return m.exportSession("")
 			}
 			if command == "/usage" {
 				m.Composer.Input.Reset()
@@ -757,15 +798,20 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Any other key disarms a first Ctrl+C.
 			m.quitArmedAt = time.Time{}
 		}
+		if m.mentionActive() {
+			if next, cmd, handled := m.mentionKeyPress(v); handled {
+				return next, cmd
+			}
+		}
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
 			switch v.String() {
 			case "up":
 				m.slashSelected = max(0, min(m.slashSelected, len(suggestions)-1)-1)
-				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions))
+				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions), m.slashLimit())
 				return m, nil
 			case "down":
 				m.slashSelected = min(len(suggestions)-1, m.slashSelected+1)
-				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions))
+				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions), m.slashLimit())
 				return m, nil
 			case "tab":
 				m.Composer.Input.SetValue(suggestions[min(m.slashSelected, len(suggestions)-1)].name)
@@ -786,6 +832,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "enter":
 			return m.Update(m.Composer.Intent(v))
+		case "ctrl+g":
+			if m.overlay == "" {
+				return m.editDraft()
+			}
 		case "esc":
 			if m.Transcript.Selection.Set {
 				m.clearSelection()
@@ -811,6 +861,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m.Update(ControlIntent(id))
 				}
 			}
+			if m.mentionActive() {
+				for i, path := range m.mentionMatches() {
+					if m.zones.Get(fmt.Sprintf("%smention-%d", m.prefix, i)).InBounds(v) {
+						m.insertMention(path)
+						return m, nil
+					}
+				}
+			}
 			suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value()))
 			for i := range suggestions {
 				if m.zones.Get(fmt.Sprintf("%sslash-%d", m.prefix, i)).InBounds(v) {
@@ -822,6 +880,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// release copies; the terminal keeps Shift+drag for itself.
 			m.beginSelection(v)
 		}
+		return m, nil
+	case tea.PasteMsg:
+		// A long paste is a token in the composer; the prompt sent carries
+		// it whole.
+		m.paste(v.Content)
+		m.slashSelected = 0
+		m.resizeComposer()
 		return m, nil
 	case tea.MouseMotionMsg:
 		m.extendSelection(v)
@@ -838,8 +903,14 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	m.Composer, cmd = m.Composer.Update(msg)
 	if m.Composer.Input.Value() != before {
 		m.slashSelected = 0
+		m.mention.selected, m.mention.top = 0, 0
 	}
 	m.resizeComposer()
+	if m.mentionActive() {
+		if load := m.loadFiles(false); load != nil {
+			cmd = tea.Batch(cmd, load)
+		}
+	}
 	return m, cmd
 }
 func (m AppModel) View() tea.View {
@@ -860,9 +931,14 @@ func (m AppModel) View() tea.View {
 			composer, footer = m.searchArea(), m.searchFooter()
 		}
 		body := m.mainTranscript()
+		var menu []string
 		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
+			menu = m.slashMenu(suggestions)
+		} else if m.mentionActive() {
+			menu = m.mentionMenu()
+		}
+		if len(menu) > 0 {
 			lines := strings.Split(body, "\n")
-			menu := m.slashMenu(suggestions)
 			menu = menu[max(0, len(menu)-len(lines)):]
 			body = strings.Join(append(lines[:len(lines)-len(menu)], menu...), "\n")
 		}
@@ -952,6 +1028,7 @@ func (m *AppModel) refreshTranscript() {
 		m.clearSelection()
 	}
 	m.Changes.SetSession(m.Header.State)
+	m.Transcript.Pastes = m.pasted
 	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)
@@ -961,13 +1038,15 @@ func (m *AppModel) refreshTranscript() {
 		m.Transcript.AppendCancelled()
 	}
 	m.Transcript.AppendQueued(m.steer.Peek())
+	m.refreshSearch()
 }
 
 // submitDraft sends the composer's text as a prompt: queued into the
 // running turn, refused with a reason, or starting a new turn.
 func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	if m.Busy && strings.TrimSpace(m.Composer.Input.Value()) != "" && m.turnRunning() {
-		message := m.Composer.Input.Value()
+		message := m.expandPastes(m.Composer.Input.Value())
+		m.pastes = nil
 		m.rememberPrompt(message)
 		m.steer.Add(message)
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticPromptQueued, Bytes: len(message)})
@@ -1000,7 +1079,8 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 		m.Status.Error = m.Theme.T("error.promptPending")
 		return m, nil
 	}
-	prompt := root.Text(m.Composer.Input.Value())
+	prompt := root.Text(m.expandPastes(m.Composer.Input.Value()))
+	m.pastes = nil
 	m.rememberPrompt(string(prompt))
 	m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
 	m.submittedPrompt = string(prompt)
@@ -1037,6 +1117,8 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 			changed.Models.Input.SetValue(text)
 		}
 		return changed, cmd
+	case command == "/export":
+		return m.exportSession(text)
 	case slashPromptModes[command]:
 		changed, cmd := m.switchMode(slashModes[command])
 		if changed.Status.Error != "" {
