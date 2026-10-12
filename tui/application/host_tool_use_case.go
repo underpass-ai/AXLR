@@ -74,6 +74,8 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		}
 	case domain.HostOperationForgeTool:
 		result, err = u.hostForge(ctx, session, arguments)
+	case domain.HostOperationRemoveTool:
+		result, err = u.hostRemove(ctx, session, arguments)
 	case domain.HostOperationHistory:
 		result, err = hostHistory(session.Messages(), arguments, u.historyPageLimit(session))
 	case domain.HostOperationSkill:

@@ -51,6 +51,11 @@ func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict,
 		// mode allows.
 		return VerdictDeny, string(m) + " mode does not forge tools"
 	}
+	if id.Kind == ToolKindHost && id.LocalOperation == HostOperationRemoveTool {
+		// Removing deletes the tool's files, a write no restricted mode
+		// allows.
+		return VerdictDeny, string(m) + " mode does not remove forged tools"
+	}
 	if id.Kind == ToolKindHost && id.LocalOperation == HostOperationRunTool {
 		// A forged tool is a program: the person decides each run, as for
 		// local_exec.

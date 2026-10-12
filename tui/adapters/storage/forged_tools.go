@@ -99,7 +99,7 @@ func (s *ForgedToolStore) Forge(ctx context.Context, workspace string, tool appl
 		kept = append(kept, existing)
 	}
 	if !replaced && len(kept) >= maxForgedTools {
-		return application.ForgedTool{}, false, fmt.Errorf("this workspace already has %d forged tools; forge an existing one again instead", maxForgedTools)
+		return application.ForgedTool{}, false, fmt.Errorf("this workspace already has %d forged tools; forge an existing one again or remove one with axlr_remove_tool", maxForgedTools)
 	}
 	dir := path.Join(application.ForgedToolsDir, tool.Name)
 	// A new version starts from an empty directory, so no file of the old
@@ -139,6 +139,49 @@ func (s *ForgedToolStore) Forge(ctx context.Context, workspace string, tool appl
 	return tool, replaced, nil
 }
 
+func (s *ForgedToolStore) Remove(ctx context.Context, workspace, name string) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	record, err := s.read(workspace)
+	if err != nil {
+		return false, err
+	}
+	found := false
+	kept := record.Tools[:0]
+	for _, existing := range record.Tools {
+		if existing.Name == name {
+			found = true
+			continue
+		}
+		kept = append(kept, existing)
+	}
+	// Only a registered name reaches the files: a directory planted under
+	// ForgedToolsDir is not a tool, so it is not this call's to delete.
+	if !found {
+		return false, nil
+	}
+	root, err := openWorkspace(workspace)
+	if err != nil {
+		return false, err
+	}
+	defer root.Close()
+	if err := root.RemoveAll(path.Join(application.ForgedToolsDir, name)); err != nil {
+		return false, err
+	}
+	record.Tools = kept
+	data, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	if err := writePrivateFile(ctx, s.registry(workspace), ".forged-*", append(data, '\n')); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (s *ForgedToolStore) Verify(ctx context.Context, workspace string, tool application.ForgedTool) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -156,7 +199,7 @@ func (s *ForgedToolStore) Verify(ctx context.Context, workspace string, tool app
 	for _, name := range names {
 		data, err := root.ReadFile(path.Join(application.ForgedToolsDir, tool.Name, name))
 		if err != nil {
-			return fmt.Errorf("forged tool %q is missing %s; forge it again", tool.Name, name)
+			return fmt.Errorf("forged tool %q is missing %s; forge it again or remove it with axlr_remove_tool", tool.Name, name)
 		}
 		sum := sha256.Sum256(data)
 		if hex.EncodeToString(sum[:]) != tool.Files[name] {

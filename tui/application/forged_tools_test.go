@@ -33,6 +33,15 @@ func (f *forgedMemory) Forge(_ context.Context, _ string, tool ForgedTool, files
 	return tool, false, nil
 }
 func (f *forgedMemory) Verify(context.Context, string, ForgedTool) error { return f.verifyErr }
+func (f *forgedMemory) Remove(_ context.Context, _ string, name string) (bool, error) {
+	for i, existing := range f.tools {
+		if existing.Name == name {
+			f.tools = append(f.tools[:i], f.tools[i+1:]...)
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 func hostIdentity(t *testing.T, operation string) domain.ToolIdentity {
 	t.Helper()
@@ -59,9 +68,13 @@ const forgeArguments = `{"name":"word_count","description":"Count the words of t
 // local_exec.
 func TestForgedToolsAreJudgedAndApprovedAsWriteAndExec(t *testing.T) {
 	forge, run := hostIdentity(t, domain.HostOperationForgeTool), hostIdentity(t, domain.HostOperationRunTool)
+	remove := hostIdentity(t, domain.HostOperationRemoveTool)
 	for _, mode := range []domain.WorkMode{domain.ModeReview, domain.ModeWriter, domain.ModeResearch} {
 		if verdict, _ := mode.Judge(forge, object(t, forgeArguments)); verdict != domain.VerdictDeny {
 			t.Fatalf("%s mode let the model forge a tool", mode)
+		}
+		if verdict, _ := mode.Judge(remove, object(t, `{"name":"word_count"}`)); verdict != domain.VerdictDeny {
+			t.Fatalf("%s mode let the model remove a tool", mode)
 		}
 		if verdict, _ := mode.Judge(run, object(t, `{"name":"word_count","arguments":{}}`)); verdict != domain.VerdictAsk {
 			t.Fatalf("%s mode ran a forged tool without the person", mode)
@@ -75,6 +88,9 @@ func TestForgedToolsAreJudgedAndApprovedAsWriteAndExec(t *testing.T) {
 	onlyExec := approvalFunc(func(id domain.ToolIdentity) bool { return id == exec })
 	if !automaticallyApproves(onlyWrite, forge) || automaticallyApproves(onlyExec, forge) || automaticallyApproves(nil, forge) {
 		t.Fatal("axlr_forge_tool is not approved as local_write")
+	}
+	if !automaticallyApproves(onlyWrite, remove) || automaticallyApproves(onlyExec, remove) || automaticallyApproves(nil, remove) {
+		t.Fatal("axlr_remove_tool is not approved as local_write")
 	}
 	if !automaticallyApproves(onlyExec, run) || automaticallyApproves(onlyWrite, run) || automaticallyApproves(nil, run) {
 		t.Fatal("axlr_run_tool is not approved as local_exec")
@@ -118,6 +134,10 @@ func TestForgedToolsAreOfferedInOrdinarySessions(t *testing.T) {
 			}
 			if requestHasTool(request, HostForgeToolName) != tc.forge || requestHasTool(request, HostRunToolName) != tc.run {
 				t.Fatalf("forge offered %v, run offered %v", requestHasTool(request, HostForgeToolName), requestHasTool(request, HostRunToolName))
+			}
+			// Removing is a write, offered where forging is.
+			if requestHasTool(request, HostRemoveToolName) != tc.forge {
+				t.Fatalf("remove offered %v", requestHasTool(request, HostRemoveToolName))
 			}
 		})
 	}
@@ -345,5 +365,36 @@ func TestAxlrToolsFallsBackToPartialMatches(t *testing.T) {
 	none, _ := host.Execute(context.Background(), s, tools, object(t, `{"query":"invoices"}`))
 	if strings.Contains(string(none.Content), "word_count") || strings.Contains(string(none.Content), "partial") {
 		t.Fatalf("search: %s", none.Content)
+	}
+}
+
+// axlr_remove_tool uninstalls a forged tool: axlr_tools no longer lists it
+// and axlr_run_tool no longer knows it.
+func TestRemovingAForgedTool(t *testing.T) {
+	forged := &forgedMemory{}
+	s := turnSession(t)
+	host := HostToolUseCase{Forge: forged}
+	if outcome, _ := host.Execute(context.Background(), s, hostIdentity(t, domain.HostOperationForgeTool), object(t, forgeArguments)); outcome.IsError {
+		t.Fatal(outcome.Content)
+	}
+	remove := hostIdentity(t, domain.HostOperationRemoveTool)
+	outcome, err := host.Execute(context.Background(), s, remove, object(t, `{"name":"word_count"}`))
+	if err != nil || outcome.IsError || !strings.Contains(string(outcome.Content), `"removed":"word_count"`) {
+		t.Fatalf("remove = %s, %v", outcome.Content, err)
+	}
+	if len(forged.tools) != 0 {
+		t.Fatalf("still registered: %+v", forged.tools)
+	}
+	for _, args := range []string{`{"name":"word_count"}`, `{"name":"../etc"}`, `{"other":1}`} {
+		if outcome, _ := host.Execute(context.Background(), s, remove, object(t, args)); !outcome.IsError {
+			t.Fatalf("remove %s succeeded: %s", args, outcome.Content)
+		}
+	}
+	search, _ := host.Execute(context.Background(), s, hostIdentity(t, domain.HostOperationTools), object(t, `{"query":"words"}`))
+	if strings.Contains(string(search.Content), "word_count") {
+		t.Fatalf("removed tool listed: %s", search.Content)
+	}
+	if !strings.Contains(string(RemoveTool().Definition.Description), "Uninstall") || !strings.Contains(string(ForgeTool().Definition.Description), string(HostRemoveToolName)) {
+		t.Fatal("the descriptions do not point the model at axlr_remove_tool")
 	}
 }

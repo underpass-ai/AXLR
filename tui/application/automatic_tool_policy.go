@@ -11,8 +11,9 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 		// It writes KMP memory: approved as kmp_write_memory would be.
 		return policy != nil && policy.AutoApproves(domain.MemoryWriteIdentity)
 	}
-	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationForgeTool {
-		// It writes the tool's files: approved as local_write would be.
+	if id.Kind == domain.ToolKindHost && (id.LocalOperation == domain.HostOperationForgeTool || id.LocalOperation == domain.HostOperationRemoveTool) {
+		// It writes or deletes the tool's files: approved as local_write
+		// would be.
 		return policy != nil && policy.AutoApproves(localIdentity("write"))
 	}
 	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationRunTool {

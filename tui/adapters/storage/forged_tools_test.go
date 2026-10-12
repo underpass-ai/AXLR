@@ -57,6 +57,50 @@ func TestForgedToolStoreRegistersReplacesAndVerifies(t *testing.T) {
 	}
 }
 
+// Remove unregisters a tool and deletes its directory, also when its files
+// were already deleted by hand (seen on 13 Oct 2026: the model removed two
+// tools' directories with rm and they stayed registered), and touches
+// nothing for a name that is not registered.
+func TestForgedToolStoreRemoves(t *testing.T) {
+	workspace := t.TempDir()
+	store := &ForgedToolStore{Dir: t.TempDir()}
+	ctx := context.Background()
+	for _, name := range []string{"keep_it", "drop_it", "gone_it"} {
+		if _, _, err := store.Forge(ctx, workspace, forgedTool(name), []application.ForgedFile{{Path: "run.sh", Content: "cat"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tools := filepath.Join(workspace, ".axlr", "tools")
+	if err := os.RemoveAll(filepath.Join(tools, "gone_it")); err != nil {
+		t.Fatal(err)
+	}
+	planted := filepath.Join(tools, "planted")
+	if err := os.MkdirAll(planted, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"drop_it", "gone_it"} {
+		if found, err := store.Remove(ctx, workspace, name); err != nil || !found {
+			t.Fatalf("remove %s = %v, %v", name, found, err)
+		}
+	}
+	if found, err := store.Remove(ctx, workspace, "planted"); err != nil || found {
+		t.Fatalf("remove planted = %v, %v", found, err)
+	}
+	if _, err := os.Stat(planted); err != nil {
+		t.Fatalf("an unregistered directory was deleted: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tools, "drop_it")); !os.IsNotExist(err) {
+		t.Fatalf("drop_it kept: %v", err)
+	}
+	listed, err := store.List(ctx, workspace)
+	if err != nil || len(listed) != 1 || listed[0].Name != "keep_it" {
+		t.Fatalf("list = %+v, %v", listed, err)
+	}
+	if found, err := store.Remove(ctx, workspace, "drop_it"); err != nil || found {
+		t.Fatalf("second remove = %v, %v", found, err)
+	}
+}
+
 // Only Forge registers a tool: a directory planted beside the tools, or a
 // registry that arrives with a checkout, is not one.
 func TestForgedToolStoreDoesNotScanDirectories(t *testing.T) {

@@ -14,13 +14,15 @@ import (
 )
 
 // Forged tools are the model's own workspace tools: it writes a small program
-// with axlr_forge_tool and calls it at once with axlr_run_tool, in the same
-// session and without restarting the console. Both host tools are fixed, so
-// a forged tool changes neither the request's tools nor the system prompt;
-// axlr_tools lists the forged tools beside the plugin ones.
+// with axlr_forge_tool, calls it at once with axlr_run_tool and drops it with
+// axlr_remove_tool, in the same session and without restarting the console.
+// The host tools are fixed, so a forged tool changes neither the request's
+// tools nor the system prompt; axlr_tools lists the forged tools beside the
+// plugin ones.
 const (
-	HostForgeToolName root.ToolName = "axlr_forge_tool"
-	HostRunToolName   root.ToolName = "axlr_run_tool"
+	HostForgeToolName  root.ToolName = "axlr_forge_tool"
+	HostRunToolName    root.ToolName = "axlr_run_tool"
+	HostRemoveToolName root.ToolName = "axlr_remove_tool"
 	// ForgedToolsDir is where a workspace keeps its forged tools' files, one
 	// directory per tool; the registry, which only axlr_forge_tool writes,
 	// lives in the console's state.
@@ -74,6 +76,11 @@ type ForgedToolsPort interface {
 	// ForgedAt and registers the tool; replaced reports a previous version.
 	Forge(ctx context.Context, workspace string, tool ForgedTool, files []ForgedFile) (stored ForgedTool, replaced bool, err error)
 	Verify(ctx context.Context, workspace string, tool ForgedTool) error
+	// Remove deletes a registered tool's directory and unregisters it; it
+	// does not verify the files first, so a tool whose files are already
+	// gone can still be removed. found is false, and nothing is deleted,
+	// for a name that is not registered.
+	Remove(ctx context.Context, workspace, name string) (found bool, err error)
 }
 
 func forgeSchema() string {
@@ -93,7 +100,7 @@ func ForgeTool() domain.AvailableTool {
 	schema, _ := root.NewJSONObject([]byte(forgeSchema()))
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostForgeToolName,
-		Description: "Create or replace a tool of this workspace when no local, host, plugin or forged tool does the job (search axlr_tools first; it lists forged tools). Write it as small files under " + ForgedToolsDir + "/<name>/; the console runs program (a name on PATH, such as python3, bash or node) with args from the workspace root, passes the arguments as one JSON object on stdin and returns stdout, stderr and the exit code. args must name one of the tool's files by its workspace path, " + ForgedToolsDir + "/<name>/<file>. input_schema is the JSON Schema of the arguments; description says what it does and returns. Keep it focused, deterministic and free of secrets; print the result on stdout and fail with a nonzero exit and a message on stderr. To fix a tool, forge it again under the same name. Approved like local_write; the tool is callable at once with axlr_run_tool.",
+		Description: "Create or replace a tool of this workspace when no local, host, plugin or forged tool does the job (search axlr_tools first; it lists forged tools). Write it as small files under " + ForgedToolsDir + "/<name>/; the console runs program (a name on PATH, such as python3, bash or node) with args from the workspace root, passes the arguments as one JSON object on stdin and returns stdout, stderr and the exit code. args must name one of the tool's files by its workspace path, " + ForgedToolsDir + "/<name>/<file>. input_schema is the JSON Schema of the arguments; description says what it does and returns. Keep it focused, deterministic and free of secrets; print the result on stdout and fail with a nonzero exit and a message on stderr. To fix a tool, forge it again under the same name; to drop one, call axlr_remove_tool, not a file deletion. Approved like local_write; the tool is callable at once with axlr_run_tool.",
 		Parameters:  schema,
 	}}
 }
@@ -105,6 +112,17 @@ func RunTool() domain.AvailableTool {
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostRunToolName,
 		Description: "Run a tool forged with axlr_forge_tool in this workspace by its exact name, with arguments that match its input_schema (axlr_tools with name returns it). The result is its exit code, stdout and stderr. A tool whose files changed since it was forged is refused until it is forged again. Approved like local_exec.",
+		Parameters:  schema,
+	}}
+}
+
+// RemoveTool is axlr_remove_tool.
+func RemoveTool() domain.AvailableTool {
+	identity, _ := domain.NewHostToolIdentity(domain.HostOperationRemoveTool)
+	schema, _ := root.NewJSONObject([]byte(`{"type":"object","properties":{"name":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,47}$"}},"required":["name"],"additionalProperties":false}`))
+	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
+		Name:        HostRemoveToolName,
+		Description: "Uninstall a tool forged with axlr_forge_tool in this workspace by its exact name: deletes its directory under " + ForgedToolsDir + "/ and unregisters it, so axlr_tools no longer lists it. Deleting the files any other way leaves the tool registered and broken. Works on a tool whose files are already missing or changed. Approved like local_write.",
 		Parameters:  schema,
 	}}
 }
@@ -153,6 +171,32 @@ func (u HostToolUseCase) hostForge(ctx context.Context, session domain.Session, 
 		paths = append(paths, ForgedToolsDir+"/"+stored.Name+"/"+file.Path)
 	}
 	return map[string]any{"forged": stored.Name, "replaced": replaced, "files": paths, "command": append([]string{stored.Program}, stored.Args...), "call_with": string(HostRunToolName)}, nil
+}
+
+// hostRemove unregisters a forged tool and deletes its files.
+func (u HostToolUseCase) hostRemove(ctx context.Context, session domain.Session, arguments root.JSONValue) (any, error) {
+	if u.Forge == nil {
+		return nil, errors.New("forged tools are not enabled in this console")
+	}
+	var args struct {
+		Name string `json:"name"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&args); err != nil || args.Name == "" {
+		return nil, errors.New("axlr_remove_tool arguments must be name")
+	}
+	if !forgedToolName.MatchString(args.Name) {
+		return nil, fmt.Errorf("unknown forged tool %q; axlr_tools lists the forged tools", args.Name)
+	}
+	found, err := u.Forge.Remove(ctx, string(session.Export().Workspace), args.Name)
+	if err != nil {
+		return nil, err
+	}
+	if !found {
+		return nil, fmt.Errorf("unknown forged tool %q; axlr_tools lists the forged tools", args.Name)
+	}
+	return map[string]any{"removed": args.Name, "deleted": ForgedToolsDir + "/" + args.Name}, nil
 }
 
 // validateForge checks a tool before anything is written and returns its

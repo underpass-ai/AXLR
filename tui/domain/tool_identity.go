@@ -45,6 +45,9 @@ const (
 	// HostOperationRunTool runs a forged tool; it is judged and approved as
 	// the local exec it performs.
 	HostOperationRunTool = "run_tool"
+	// HostOperationRemoveTool unregisters a forged tool and deletes its
+	// files; it is judged and approved as the local write it performs.
+	HostOperationRemoveTool = "remove_tool"
 	// HostOperationLogs reads the console's own log; read-only.
 	HostOperationLogs = "logs"
 )
@@ -68,7 +71,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember, HostOperationForgeTool, HostOperationRunTool, HostOperationLogs:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember, HostOperationForgeTool, HostOperationRunTool, HostOperationRemoveTool, HostOperationLogs:
 			return nil
 		}
 	case ToolKindLocal:

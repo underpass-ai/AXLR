@@ -103,6 +103,11 @@ func TestTheForgeCardShowsWhatItWritesAsCode(t *testing.T) {
 	if !strings.Contains(run.Approval.Target, "run forged tool count") {
 		t.Fatalf("run card: %s", run.Approval.Target)
 	}
+	remove := forgeApprovalModel(t, "axlr_remove_tool", domain.HostOperationRemoveTool, `{"name":"count"}`)
+	defer remove.zones.Close()
+	if !strings.Contains(remove.Approval.Target, "remove forged tool count: deletes .axlr/tools/count") {
+		t.Fatalf("remove card: %s", remove.Approval.Target)
+	}
 }
 
 // An exec card is the command as it runs, with cwd, timeout, output limit
