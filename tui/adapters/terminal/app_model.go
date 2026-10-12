@@ -471,7 +471,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.overlay = "sessions"
 		}
-		if oldID != m.Header.State.ID {
+		switched := oldID != m.Header.State.ID
+		if switched {
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
 			m.tokens = 0
@@ -547,6 +548,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Error = m.Theme.T("error.modelDefault")
 		}
 		m.refreshTranscript()
+		if switched {
+			// Another session opens at its last message, not at the
+			// offset the previous one was scrolled to.
+			m.Transcript.Viewport.GotoBottom()
+		}
 		m.syncApproval()
 		if m.steer.Peek() == "" && !m.inlineApproval() {
 			m = m.autoOpenIncidentCard()

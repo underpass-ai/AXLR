@@ -5,6 +5,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"context"
 	"errors"
+	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
@@ -371,5 +372,49 @@ func TestEnterOnTheOpenSessionClosesThePickerWithoutReloading(t *testing.T) {
 	}
 	if m.overlay != "" {
 		t.Fatalf("the picker stayed open: %q", m.overlay)
+	}
+}
+
+// On 12 October 2026 a session opened from Ctrl+O kept the offset the
+// previous one was scrolled to (row 5 of 159) instead of its last message.
+func TestOpeningAnotherSessionShowsItsLastMessage(t *testing.T) {
+	long := func(id domain.SessionID, prompt string) domain.Session {
+		s, err := domain.NewSession(id, testWorkspace(), "model")
+		if err != nil {
+			t.Fatal(err)
+		}
+		for i := range 30 {
+			if err := s.BeginTurn(root.Text(fmt.Sprintf("%s %d", prompt, i)), nil); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "reply\nwith\nlines"}}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return s
+	}
+	a := long("0123456789abcdef0123456789abcdef", "first session")
+	b := long("fedcba9876543210fedcba9876543210", "second session")
+	m := navModel(t, &a)
+	for _, s := range []domain.Session{a, b} {
+		if err := m.deps.Store.Save(context.Background(), s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m.Transcript.Viewport.GotoTop()
+	n, cmd := m.Update(ControlIntent("sessions"))
+	m = drain(t, n.(AppModel), cmd)
+	for i, row := range m.Picker.Visible() {
+		if row.ID == b.Export().ID {
+			m.Picker.Selected = i
+		}
+	}
+	n, cmd = m.Update(ControlIntent("open-session"))
+	m = drain(t, n.(AppModel), cmd)
+	if m.Header.State.ID != b.Export().ID {
+		t.Fatal("the other session did not open")
+	}
+	if m.Transcript.Viewport.YOffset() == 0 || !m.Transcript.Viewport.AtBottom() {
+		t.Fatalf("the opened session is not at its last message: offset %d", m.Transcript.Viewport.YOffset())
 	}
 }
