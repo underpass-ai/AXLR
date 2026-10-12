@@ -608,7 +608,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.Status.Error = ""
 		m.Models.SetFavorites(modelIDStrings(ids))
 		return m, nil, true
-	case ModelSelectIntent:
+	case ModelSelectIntent, ModelDefaultIntent:
 		if m.Busy || m.overlay != "models" {
 			return m, nil, true
 		}
@@ -619,7 +619,13 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		create, change, preference, id, workspace := m.deps.Create, m.deps.Change, m.deps.ModelPreference, m.deps.NewSessionID, m.deps.Workspace
 		m.Models.SetLoading(true)
 		m.Status.Error = ""
+		// Enter changes this session's model only; Ctrl+Enter also saves it
+		// as the default. On 12 October 2026 trying a model for one session
+		// silently changed every future one. The first model chosen with
+		// no default saved becomes the default: there is none to change.
+		asDefault := intent == ModelDefaultIntent
 		var preferenceErr error
+		defaultSaved := false
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
 			var err error
 			if s.Export().ID == "" {
@@ -632,7 +638,15 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				err = change.Execute(ctx, s, selected.ID)
 			}
 			if err == nil && preference != nil {
-				preferenceErr = preference.Save(ctx, selected.ID)
+				save := asDefault
+				if !save {
+					current, loadErr := preference.Load(ctx)
+					save = loadErr == nil && current == ""
+				}
+				if save {
+					preferenceErr = preference.Save(ctx, selected.ID)
+					defaultSaved = preferenceErr == nil
+				}
 			}
 			return err
 		})
@@ -641,6 +655,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if done, ok := msg.(operationComplete); ok {
 				done.ModelSelection = true
 				done.PreferenceErr = preferenceErr
+				done.DefaultSaved = defaultSaved
 				return done
 			}
 			return msg

@@ -432,7 +432,7 @@ var enMessages = map[string]string{
 	"mcp.manifestPrompt":                   "Install MCP: absolute manifest path or ID https://host/mcp",
 	"mcp.manifestPlaceholder":              "/absolute/server.json or ID https://host/mcp",
 	"mcp.installFormat":                    "Enter a manifest path or ID and MCP URL",
-	"help.modelSelect":                     "/model: Tab provider · Enter select",
+	"help.modelSelect":                     "/model: Tab provider · Enter this session · Ctrl+Enter also default",
 	"help.themeOptions":                    "/theme: I icons · A reduce motion · Enter save",
 	"help.subtitle":                        "Keyboard shortcuts and commands",
 	"info.title":                           "Information and results",
@@ -497,7 +497,7 @@ var enMessages = map[string]string{
 	"filters.all":                          "All",
 	"models.count":                         "Models  %d",
 	"models.current":                       "current",
-	"models.hint":                          "↑↓ move · Enter choose · Ctrl+S favorite",
+	"models.hint":                          "↑↓ move · Enter this session · Ctrl+Enter also default · Ctrl+S favorite",
 	"models.providerHint":                  "Tab provider: %s · several words narrow it: anthropic opus",
 	"models.emptyDetail":                   "Select a model to see details",
 	"models.detailsPrefix":                 "Details: ",
@@ -505,7 +505,7 @@ var enMessages = map[string]string{
 	"models.inputRate":                     "Input     %s",
 	"models.outputRate":                    "Output    %s",
 	"models.toolsYes":                      "Tools     Yes",
-	"models.setDefault":                    "Enter · Set as default",
+	"models.setDefault":                    "Ctrl+Enter or Ctrl+D · Also set as default",
 	"plugins.mcpTitle":                     "MCP · servers and tools",
 	"plugins.title":                        "Plugins · explicit approval",
 	"filters.connected":                    "Connected",
@@ -698,6 +698,11 @@ var enMessages = map[string]string{
 	"approval.stdinWarningOne":     "runs %d line of code from stdin; read \"stdin\" below before approving",
 	"plugins.connectedCountOne":    "Connected · %d tool",
 	"plugins.rowCountOne":          "%s %s · %d tool",
+
+	// qa3 qol input
+	"models.useHere":      "Enter · Use in this session",
+	"notice.modelSession": "%s for this session · Ctrl+Enter in /model also makes it the default",
+	"notice.modelDefault": "%s for this session and as the default for new sessions",
 }
 
 var esMessages = map[string]string{
@@ -1068,7 +1073,7 @@ var esMessages = map[string]string{
 	"mcp.manifestPrompt":                   "Instalar MCP: manifiesto absoluto o ID https://host/mcp",
 	"mcp.manifestPlaceholder":              "/ruta/servidor.json o ID https://host/mcp",
 	"mcp.installFormat":                    "Introduce un manifiesto o un ID y la URL MCP",
-	"help.modelSelect":                     "/model: Tab proveedor · Enter seleccionar",
+	"help.modelSelect":                     "/model: Tab proveedor · Enter esta sesión · Ctrl+Enter también predeterminado",
 	"help.themeOptions":                    "/theme: I iconos · A reducir movimiento · Enter guardar",
 	"help.subtitle":                        "Atajos de teclado y comandos",
 	"info.title":                           "Información y resultados",
@@ -1133,7 +1138,7 @@ var esMessages = map[string]string{
 	"filters.all":                          "Todos",
 	"models.count":                         "Modelos  %d",
 	"models.current":                       "actual",
-	"models.hint":                          "↑↓ mover · Enter elegir · Ctrl+S favorito",
+	"models.hint":                          "↑↓ mover · Enter esta sesión · Ctrl+Enter también predeterminado · Ctrl+S favorito",
 	"models.providerHint":                  "Tab proveedor: %s · varias palabras afinan: anthropic opus",
 	"models.emptyDetail":                   "Selecciona un modelo para ver detalles",
 	"models.detailsPrefix":                 "Detalle: ",
@@ -1141,7 +1146,7 @@ var esMessages = map[string]string{
 	"models.inputRate":                     "Entrada    %s",
 	"models.outputRate":                    "Salida     %s",
 	"models.toolsYes":                      "Herramientas  Sí",
-	"models.setDefault":                    "Enter · Usar como predeterminado",
+	"models.setDefault":                    "Ctrl+Enter o Ctrl+D · También como predeterminado",
 	"plugins.mcpTitle":                     "MCP · servidores y herramientas",
 	"plugins.title":                        "PLUGINS · aprobación explícita",
 	"filters.connected":                    "Conectados",
@@ -1334,4 +1339,9 @@ var esMessages = map[string]string{
 	"approval.stdinWarningOne":     "ejecuta %d línea de código por stdin; lee \"stdin\" abajo antes de aprobar",
 	"plugins.connectedCountOne":    "Conectado · %d herramienta",
 	"plugins.rowCountOne":          "%s %s · %d herramienta",
+
+	// qa3 qol input
+	"models.useHere":      "Enter · Usar en esta sesión",
+	"notice.modelSession": "%s para esta sesión · Ctrl+Enter en /model lo hace también predeterminado",
+	"notice.modelDefault": "%s para esta sesión y como predeterminado de las nuevas",
 }

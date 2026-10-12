@@ -346,3 +346,50 @@ func TestClosingTheModelPickerWhileItLoadsReportsNoError(t *testing.T) {
 		t.Fatalf("closing the picker reported %q:\n%s", m.Status.Error, m.View().Content)
 	}
 }
+
+// On 12 October 2026 Enter in /model also saved the model as the default
+// for every new session; trying a model for one session changed the next
+// ones. Enter now changes this session only, Ctrl+Enter (or Ctrl+D) also
+// saves the default.
+func TestEnterChangesThisSessionAndCtrlEnterAlsoTheDefault(t *testing.T) {
+	for _, key := range []tea.KeyPressMsg{{Code: tea.KeyEnter}, {Code: tea.KeyEnter, Mod: tea.ModCtrl}, {Code: 'd', Mod: tea.ModCtrl}} {
+		t.Run(key.String(), func(t *testing.T) {
+			s := navSession(t)
+			m, _ := selectionModel(t, &s)
+			if err := m.deps.ModelPreference.Save(context.Background(), "provider/default"); err != nil {
+				t.Fatal(err)
+			}
+			m = openModels(t, m)
+			n, cmd := m.Update(key)
+			if cmd == nil {
+				t.Fatal("selection operation absent")
+			}
+			m = drain(t, n.(AppModel), cmd)
+			if m.Header.State.Model != "provider/chosen" || m.overlay != "" {
+				t.Fatalf("model = %q overlay = %q", m.Header.State.Model, m.overlay)
+			}
+			preferred, _ := m.deps.ModelPreference.Load(context.Background())
+			wantDefault, wantNotice := root.ModelID("provider/default"), m.Theme.Tf("notice.modelSession", "provider/chosen")
+			if key.String() != "enter" {
+				wantDefault, wantNotice = "provider/chosen", m.Theme.Tf("notice.modelDefault", "provider/chosen")
+			}
+			if preferred != wantDefault || m.Status.Notice != wantNotice {
+				t.Fatalf("default = %q notice = %q; want %q, %q", preferred, m.Status.Notice, wantDefault, wantNotice)
+			}
+		})
+	}
+}
+
+func TestTheModelPickerHidesBatchVariants(t *testing.T) {
+	p := NewModelPicker()
+	p.SetCurrent("provider/slow:batch")
+	p.SetModels([]domain.AvailableModel{{ID: "provider/fast"}, {ID: "provider/fast:batch"}, {ID: "provider/slow:batch"}})
+	var shown []string
+	for _, i := range p.visible {
+		shown = append(shown, string(p.models[i].ID))
+	}
+	// The session's own model stays listed whatever its suffix.
+	if strings.Join(shown, ",") != "provider/slow:batch,provider/fast" {
+		t.Fatalf("listed %v", shown)
+	}
+}

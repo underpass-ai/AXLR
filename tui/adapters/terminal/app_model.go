@@ -465,6 +465,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Models.SetError(v.Err)
 			} else {
 				m.overlay = ""
+				m.Status.Notice = m.Theme.Tf("notice.modelSession", singleLine(string(m.Header.State.Model)))
+				if v.DefaultSaved {
+					m.Status.Notice = m.Theme.Tf("notice.modelDefault", singleLine(string(m.Header.State.Model)))
+				}
 			}
 		}
 		if v.Sessions != nil {
