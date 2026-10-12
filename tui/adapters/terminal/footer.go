@@ -146,7 +146,7 @@ func (m AppModel) footerStatus(detail int) string {
 		parts = append(parts, m.Theme.T("status.autonomous"))
 	}
 	if m.tokens > 0 && detail < statusNoTokens {
-		parts = append(parts, m.Theme.Tf("footer.tokens", formatTokens(m.tokens)))
+		parts = append(parts, m.footerTokens())
 		if m.cached > 0 {
 			parts = append(parts, m.Theme.Tf("footer.cache", m.cached))
 		}

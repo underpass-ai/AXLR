@@ -776,6 +776,9 @@ var enMessages = map[string]string{
 	"undo.kept":                   "Nothing undone",
 	"undo.busy":                   "Undo waits for the current turn or operation to end",
 	"undo.already":                "The last turn is already undone",
+	"usage.turns":                 "Last turns in this console",
+	"usage.turn":                  "  %s · %d requests · %s tok · %s · %s",
+	"usage.turnOne":               "  %s · %d request · %s tok · %s · %s",
 }
 
 var esMessages = map[string]string{
@@ -1490,4 +1493,7 @@ var esMessages = map[string]string{
 	"undo.kept":                   "No se ha deshecho nada",
 	"undo.busy":                   "Deshacer espera a que acabe el turno u operación en curso",
 	"undo.already":                "El último turno ya está deshecho",
+	"usage.turns":                 "Últimos turnos en esta consola",
+	"usage.turn":                  "  %s · %d peticiones · %s tok · %s · %s",
+	"usage.turnOne":               "  %s · %d petición · %s tok · %s · %s",
 }

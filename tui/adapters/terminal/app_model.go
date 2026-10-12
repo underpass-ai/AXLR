@@ -142,6 +142,11 @@ type AppModel struct {
 	// went back. undoAsking waits for the key that answers /undo.
 	restoreOperation uint64
 	undoAsking       bool
+	// turnCosts are the finished turns' usage by the number of messages
+	// each ended after, drawn under them; turnLog the last ones, for
+	// /usage. Both are this console's, from the ledger's totals.
+	turnCosts map[int]turnUsage
+	turnLog   []turnUsage
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -412,7 +417,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.observeUsage(*v.SessionUsage, v.BudgetWarning)
 		}
 		if v.Usage != nil {
-			m.tokens = v.Usage.TotalTokens
+			// The last request's prompt, against what the console lets a
+			// prompt reach.
+			m.tokens = v.Usage.PromptTokens
 			m.cached = 0
 			if v.Usage.PromptTokens > 0 {
 				m.cached = 100 * v.Usage.CachedTokens / v.Usage.PromptTokens
@@ -531,6 +538,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.SearchBox = SearchBox{}
 			m.tokens = 0
 			m.cached = 0
+			m.turnCosts, m.turnLog = nil, nil
 			m = m.loadUsage()
 			m.unsentPrompts = nil
 			m.failures = nil
@@ -563,7 +571,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Status.State = v.Session.Status()
 		if switched || v.Session.Status() != domain.StatusApproval {
 			// A card keeps the turn's clock running; an end stops it.
-			m.stopTurnClock()
+			if elapsed := m.stopTurnClock(); elapsed > 0 && !switched {
+				m.finishTurnUsage(len(v.Session.Export().Messages), elapsed)
+			}
 		}
 		if m.deps.ApprovalSettings != nil {
 			m.Status.Autonomous = m.deps.ApprovalSettings.Autonomous()
@@ -1082,6 +1092,7 @@ func (m *AppModel) refreshTranscript() {
 	}
 	m.Changes.SetSession(m.Header.State)
 	m.Transcript.Pastes = m.pasted
+	m.Transcript.TurnCosts = m.turnCostLines()
 	m.Transcript.SetSession(m.Header.State, m.draft, m.Theme)
 	if len(m.unsentPrompts) > 0 {
 		m.Transcript.AppendUnsent(m.unsentPrompts)

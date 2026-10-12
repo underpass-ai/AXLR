@@ -18,7 +18,7 @@ func TestFooterHintsStateAndTokensFitOneRow(t *testing.T) {
 		if strings.Contains(footer, "\n") || ansi.StringWidth(footer) != width {
 			t.Fatalf("width %d: footer is not one full row: %q", width, footer)
 		}
-		if !strings.HasPrefix(footer, " enter send") || !strings.HasSuffix(strings.TrimRight(footer, " "), "idle · 12.4k tok") {
+		if !strings.HasPrefix(footer, " enter send") || !strings.HasSuffix(strings.TrimRight(footer, " "), "idle · 12k tok") {
 			t.Fatalf("width %d: footer %q", width, footer)
 		}
 		m.zones.Close()

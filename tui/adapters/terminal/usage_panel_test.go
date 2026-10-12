@@ -51,7 +51,7 @@ func TestCostInTheFooterAndTheSessionBudget(t *testing.T) {
 	m.deps.Agent = application.AgentTurnUseCase{Continue: continuation}
 
 	m = sendPrompt(t, m, "first")
-	if got := footerText(m); !strings.HasSuffix(got, "1.1k tok · $0.30 turn · $0.30 session") || m.Status.Notice != "" {
+	if got := footerText(m); !strings.HasSuffix(got, "1k tok · $0.30 turn · $0.30 session") || m.Status.Notice != "" {
 		t.Fatalf("after the first request: %q, notice %q", got, m.Status.Notice)
 	}
 	m = sendPrompt(t, m, "second")
@@ -122,7 +122,7 @@ func TestFooterCostFormatAndLanguage(t *testing.T) {
 	}
 	m.cost = costView{ledger: domain.UsageLedger{Requests: 4}}
 	m.tokens = 12_400
-	if got := footerText(m); strings.Contains(got, "$") || !strings.HasSuffix(got, "12.4k tok") {
+	if got := footerText(m); strings.Contains(got, "$") || !strings.HasSuffix(got, "12k tok") {
 		t.Fatalf("unknown cost shown: %q", got)
 	}
 }

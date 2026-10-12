@@ -22,6 +22,8 @@ func (m *AppModel) startTurnClock() {
 func (m *AppModel) resumeTurnClock() {
 	if m.turnStarted.IsZero() {
 		m.turnStarted = time.Now()
+		// Its cost counts from here, as the turn's line will show.
+		m.cost.beginTurn()
 	}
 }
 

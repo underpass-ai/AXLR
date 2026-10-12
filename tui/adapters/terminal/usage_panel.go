@@ -19,10 +19,14 @@ type costView struct {
 	ledger       domain.UsageLedger
 	turnCost     float64
 	turnRequests int
+	// turnAll and turnTokens are the ledger's requests and tokens then,
+	// for the turn's line under its reply.
+	turnAll, turnTokens int
 }
 
 func (c *costView) beginTurn() {
 	c.turnCost, c.turnRequests = c.ledger.Cost, c.ledger.CostRequests
+	c.turnAll, c.turnTokens = c.ledger.Requests, c.ledger.PromptTokens+c.ledger.CompletionTokens
 }
 
 // loadUsage reads the ledger of the session on screen, so the session's
@@ -116,7 +120,7 @@ func (m AppModel) openUsagePanel() AppModel {
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)
-	m.Info.SetContent(usageContent(m.cost.ledger, m.deps.MaxSessionUSD, m.Theme))
+	m.Info.SetContent(usageContent(m.cost.ledger, m.deps.MaxSessionUSD, m.Theme, m.turnLog...))
 	m.Info.Viewport.GotoTop()
 	m.overlay = "usage"
 	return m
@@ -127,7 +131,7 @@ func (m AppModel) refreshUsagePanel() AppModel {
 		return m
 	}
 	offset := m.Info.Viewport.YOffset()
-	m.Info.SetContent(usageContent(m.cost.ledger, m.deps.MaxSessionUSD, m.Theme))
+	m.Info.SetContent(usageContent(m.cost.ledger, m.deps.MaxSessionUSD, m.Theme, m.turnLog...))
 	m.Info.Viewport.SetYOffset(offset)
 	return m
 }
@@ -165,7 +169,7 @@ func (m AppModel) usagePanelView() string {
 
 // usageContent is the /usage panel: requests, tokens, cost in total and by
 // provider (most expensive first), latency and the budget.
-func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme) string {
+func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme, turns ...turnUsage) string {
 	if l.Requests == 0 {
 		return theme.T("usage.empty") + "\n\n" + budgetLines(l, maxSessionUSD, theme)
 	}
@@ -218,6 +222,10 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme) stri
 		theme.Tf("usage.firstByte", formatLatency(l.FirstByte.Average(), l.FirstByte.Count), formatLatency(l.FirstByte.Max, l.FirstByte.Count)),
 		theme.Tf("usage.total", formatLatency(l.Total.Average(), l.Total.Count), formatLatency(l.Total.Max, l.Total.Count)),
 		"", budgetLines(l, maxSessionUSD, theme))
+	if turns := turnLogLines(turns, theme); len(turns) > 0 {
+		lines = append(lines, "")
+		lines = append(lines, turns...)
+	}
 	return strings.Join(lines, "\n")
 }
 

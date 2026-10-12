@@ -3,6 +3,7 @@ package terminal
 import (
 	"context"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -48,6 +49,10 @@ type Dependencies struct {
 	// /usage, where + raises the session's limit by MaxSessionUSD.
 	Usage         application.SessionUsagePort
 	MaxSessionUSD float64
+	// PromptCeiling is the prompt, in tokens, a request to a model may
+	// reach, for the footer's "27k/64k"; nil, or zero, shows the tokens
+	// alone.
+	PromptCeiling func(root.ModelID) int
 	// Sandbox is the exec sandbox the launch found; the header marks one
 	// that is configured but does not confine commands.
 	Sandbox SandboxStatus

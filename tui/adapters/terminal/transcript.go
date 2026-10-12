@@ -38,7 +38,10 @@ type Transcript struct {
 	expandedFor domain.SessionID
 	// Pastes are the long pastes sent from this console: a prompt shows
 	// each as its token, which a click opens.
-	Pastes      map[string]bool
+	Pastes map[string]bool
+	// TurnCosts are the dim lines under finished turns, by the number of
+	// messages each ended after.
+	TurnCosts   map[int]string
 	rowLines    map[int]int
 	visualIndex []int
 }
@@ -189,6 +192,10 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 					t.rows = append(t.rows, line)
 				}
 			}
+		}
+		if line, ok := t.TurnCosts[index+1]; ok {
+			// Under the turn's last reply, without a gap.
+			t.rows = append(t.rows, transcriptRow{Label: "  ", Text: line, Kind: transcriptRowConsole, Indent: true})
 		}
 		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
 			t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, Markdown: true})
