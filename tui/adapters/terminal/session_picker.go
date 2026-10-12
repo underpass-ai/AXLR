@@ -43,6 +43,38 @@ type SessionPicker struct {
 	// selection on it.
 	NewRow bool
 	OnNew  bool
+	// Page is how many sessions the overlay shows at once, for PgUp and
+	// PgDn; the root sets it from the screen's height.
+	Page int
+}
+
+// PageSize is how many sessions fit in an overlay of this size: two rows
+// per session and a blank, after the search row and up to three group
+// labels, and the new-session row with its blank.
+func (p SessionPicker) PageSize(height, width int) int {
+	_, bodyHeight := OverlayBodySize(width, height)
+	if p.ShowsNew() {
+		return max(1, (bodyHeight-7)/3)
+	}
+	return max(1, (bodyHeight-5)/3)
+}
+
+// Paste adds pasted text to the filter, or to the new title while renaming,
+// as one line.
+func (p *SessionPicker) Paste(text string) {
+	text = strings.Join(strings.Fields(text), " ")
+	if text == "" {
+		return
+	}
+	if p.Renaming {
+		if p.RenameSelected {
+			p.RenameText, p.RenameSelected = "", false
+		}
+		p.insertRename(text)
+		return
+	}
+	p.Query += text
+	p.Selected, p.OnNew = 0, false
 }
 
 // ShowsNew reports whether the new-session row is listed: in the
@@ -224,6 +256,21 @@ func (p *SessionPicker) key(key, text string) bool {
 			break
 		}
 		p.Selected = min(max(0, len(p.Visible())-1), p.Selected+1)
+	case "pgup":
+		if p.Selected == 0 && p.ShowsNew() {
+			p.OnNew = true
+		}
+		p.Selected = max(0, p.Selected-max(1, p.Page))
+	case "pgdown":
+		if p.OnNew {
+			p.OnNew = false
+			p.Selected = 0
+		}
+		p.Selected = min(max(0, len(p.Visible())-1), p.Selected+max(1, p.Page))
+	case "home":
+		p.Selected, p.OnNew = 0, p.ShowsNew()
+	case "end":
+		p.Selected, p.OnNew = max(0, len(p.Visible())-1), false
 	case "tab":
 		p.OnNew = false
 		// This workspace → every workspace → plan tasks → archived → this
@@ -260,7 +307,7 @@ func (p SessionPicker) View(theme Theme, z *zone.Manager, prefix string, height,
 }
 
 func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height, width int, now time.Time) string {
-	innerWidth, bodyHeight := OverlayBodySize(width, height)
+	innerWidth, _ := OverlayBodySize(width, height)
 	visible := p.Visible()
 	var lines []string
 	search := theme.Muted(theme.Icon("search")+" ") + p.Query
@@ -279,9 +326,7 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 		search = theme.Accent(theme.T("sessions.renamePrompt")) + " " + title + theme.Muted("  "+theme.T("sessions.renameHint"))
 	}
 	lines = append(lines, search, "")
-	// Two rows per session plus a blank, after the search row and up to
-	// three group labels, and the new-session row with its blank.
-	page := max(1, (bodyHeight-5)/3)
+	page := p.PageSize(height, width)
 	if p.ShowsNew() {
 		plus := "＋"
 		if theme.Monochrome || theme.Icons == domain.IconsASCII {
@@ -297,7 +342,6 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 			row = theme.Selected(theme.Icon("user") + " " + row)
 		}
 		lines = append(lines, z.Mark(prefix+"session-new", row), "")
-		page = max(1, (bodyHeight-7)/3)
 	}
 	start := max(0, p.Selected-page+1)
 	start = min(start, max(0, len(visible)-page))

@@ -197,6 +197,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.InstalledPlugins.Update(paste)
 			return m, nil, true
 		}
+		if m.overlay == "sessions" {
+			// On 12 October 2026 a paste into the filter was swallowed.
+			m.Picker.Paste(paste.Content)
+			return m, nil, true
+		}
 		if m.overlay != "" {
 			return m, nil, true
 		}
@@ -290,6 +295,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "info", "approvals", "updates", "made-setup":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
+					m.Picker.Page = m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width)
 					if k.String() == "enter" && !m.Picker.Renaming && m.Picker.NewSelected() {
 						intent = NewSessionIntent
 						hasIntent = true

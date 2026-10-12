@@ -1,12 +1,15 @@
 package terminal
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	zone "github.com/lrstanley/bubblezone/v2"
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -182,5 +185,61 @@ func TestRenamingStartsWithTheOldTitleSelected(t *testing.T) {
 	p.Key("backspace", "")
 	if p.RenameText != "" {
 		t.Fatalf("Backspace on the selected title left %q", p.RenameText)
+	}
+}
+
+// manySessions is a picker over n sessions of this workspace, newest first.
+func manySessions(n int, now time.Time) SessionPicker {
+	var items []domain.SessionSummary
+	for i := range n {
+		items = append(items, domain.SessionSummary{ID: domain.SessionID(fmt.Sprintf("%032x", i)), Workspace: "/w", Title: root.Text(fmt.Sprintf("prompt %d", i)), MessageCount: 2, UpdatedAt: now.Add(-time.Duration(i) * time.Minute)})
+	}
+	return NewSessionPicker(items, "/w")
+}
+
+// On 12 October 2026 the picker had no PgUp, PgDn, Home or End, and a paste
+// into its filter was swallowed.
+func TestSessionPickerPagesAndTakesPastes(t *testing.T) {
+	p := manySessions(30, time.Now())
+	p.NewRow, p.Page = true, 5
+	p.Key("pgdown", "")
+	p.Key("pgdown", "")
+	if p.Selected != 10 {
+		t.Fatalf("PgDn twice selected %d; want 10", p.Selected)
+	}
+	p.Key("pgup", "")
+	if p.Selected != 5 {
+		t.Fatalf("PgUp selected %d; want 5", p.Selected)
+	}
+	p.Key("end", "")
+	if p.Selected != 29 || p.OnNew {
+		t.Fatalf("End selected %d", p.Selected)
+	}
+	p.Key("home", "")
+	if p.Selected != 0 || !p.NewSelected() {
+		t.Fatalf("Home selected %d new=%v", p.Selected, p.OnNew)
+	}
+	p.Key("pgdown", "")
+	if p.Selected != 5 || p.OnNew {
+		t.Fatalf("PgDn from the new-session row selected %d", p.Selected)
+	}
+
+	s := navSession(t)
+	m := navModel(t, &s)
+	m.overlay, m.Picker = "sessions", manySessions(30, time.Now())
+	m = update(m, tea.PasteMsg{Content: "prompt 29\n"})
+	if m.Picker.Query != "prompt 29" || len(m.Picker.Visible()) != 1 {
+		t.Fatalf("the paste did not filter: query=%q visible=%d", m.Picker.Query, len(m.Picker.Visible()))
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF2})
+	m = update(m, tea.PasteMsg{Content: "pasted title"})
+	if m.Picker.RenameText != "pasted title" {
+		t.Fatalf("the paste did not replace the selected title: %q", m.Picker.RenameText)
+	}
+	// The root gives the picker its page from the screen.
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyPgDown})
+	if m.Picker.Page != m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width) {
+		t.Fatalf("page = %d", m.Picker.Page)
 	}
 }
