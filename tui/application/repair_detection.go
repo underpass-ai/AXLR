@@ -360,9 +360,11 @@ func singleLineText(text string) string {
 }
 
 // RepairSlug names a repair, its clone directory and its branch: a timestamp
-// and the brief's first words, kebab-cased.
+// and the brief's first words, spelled in ASCII and kebab-cased. The
+// signatures keep slugWords of the brief as written, so a job recorded
+// before the spelling changed is still found as a duplicate.
 func RepairSlug(brief string, now time.Time) string {
-	return now.Format("20060102-1504") + "-" + slugWords(brief)
+	return now.Format("20060102-1504") + "-" + slugWords(foldToASCII(brief))
 }
 
 // slugWords is the brief's first words, lowercased and kebab-cased, at most

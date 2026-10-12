@@ -69,3 +69,18 @@ func TestUsageLedgerBudget(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// An unmetered request counts as a request with estimated tokens, adds no
+// cost and never warns; the ledger says how many there were.
+func TestUsageLedgerCountsUnmeteredRequests(t *testing.T) {
+	var l UsageLedger
+	if warned := l.Record(UsageSample{Provider: "Anthropic", PromptTokens: EstimatedTokens(24400, 0), CompletionTokens: EstimatedTokens(4000, 400), Unmetered: true}, 0.01); warned {
+		t.Fatal("an unmetered request warned")
+	}
+	if l.Requests != 1 || l.Unmetered != 1 || l.PromptTokens != 10000 || l.CompletionTokens != 1000 || l.Cost != 0 || l.CostRequests != 0 {
+		t.Fatalf("ledger %+v", l)
+	}
+	if EstimatedTokens(0, 244) != 0 || EstimatedTokens(1, 244) != 1 || EstimatedTokens(3, 244) != 2 {
+		t.Fatal("estimates do not round up")
+	}
+}

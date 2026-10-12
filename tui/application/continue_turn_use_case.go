@@ -230,6 +230,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 			return err
 		}
 		meter.mark()
+		meter.addText(len(delta))
 		draft.WriteString(string(delta))
 		chunks++
 		bytes += len(delta)
@@ -257,13 +258,16 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 		_ = u.Diagnostics.Record(done)
 	}
+	// The request was sent: it reaches the ledger whether it finished, failed
+	// or was cancelled, or a cancelled stream the provider billed would
+	// escape the cost and max_session_usd.
+	u.recordUsage(ctx, *session, req.Model, result, streamErr, meter, emit)
 	if err != nil {
 		return interrupt(err)
 	}
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
 	}
-	u.recordUsage(ctx, *session, req.Model, result, meter, emit)
 	if u.Calibration != nil && result.Usage != nil && result.RequestBytes > 0 {
 		// A measurement that cannot be saved is only one sample lost.
 		_ = u.Calibration.Observe(context.WithoutCancel(ctx), req.Model, result.RequestBytes, result.Usage.PromptTokens)

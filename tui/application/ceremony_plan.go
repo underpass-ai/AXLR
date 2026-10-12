@@ -375,9 +375,10 @@ func taskPack(slug string, task domain.PlanTask, interfaces string, excerpts []s
 	return pack.String()
 }
 
-// planSlug names a plan from its brief: a few words and a random suffix.
+// planSlug names a plan from its brief: a few words, spelled in ASCII, and
+// a random suffix.
 func planSlug(brief string) string {
-	words := strings.FieldsFunc(strings.ToLower(brief), func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') })
+	words := strings.FieldsFunc(strings.ToLower(foldToASCII(brief)), func(r rune) bool { return !(r >= 'a' && r <= 'z' || r >= '0' && r <= '9') })
 	if len(words) > 3 {
 		words = words[:3]
 	}

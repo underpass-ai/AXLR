@@ -77,6 +77,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	traceFlag := flags.String("trace-file", "", "privacy-safe JSONL diagnostics (default a private file under $XDG_STATE_HOME/axlr/logs)")
 	tracePayloads := flags.Bool("trace-payloads", false, "capture redacted request/response bodies, prompts and tool results included, in a private per-run directory (default: trace_payloads in settings.json, else off)")
 	sessionFlag := flags.String("session", "", "saved session ID")
+	var continueFlag bool
+	flags.BoolVar(&continueFlag, "c", false, "continue the workspace's most recent session (same as --continue)")
+	flags.BoolVar(&continueFlag, "continue", false, "continue the workspace's most recent session, not archived and not a plan task")
 	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
 	repairFlag := flags.String("repair", "", "start a repair of the configured repository in a fresh clone: a failure brief or #issue")
 	improveFlag := flags.String("improve", "", "start an improvement of the configured repository in a fresh clone: an improvement brief or #issue; the merge waits for you")
@@ -94,6 +97,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if flags.NArg() != 0 {
 		return fail(errors.New("positional arguments are not accepted"))
 	}
+	if continueFlag {
+		switch {
+		case *sessionFlag != "":
+			return fail(errors.New("--continue resumes the most recent session; it cannot be combined with --session"))
+		case *repairFlag != "" || *improveFlag != "":
+			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
+		}
+	}
+	// resuming is a launch that opens a saved session rather than a new one.
+	resuming := *sessionFlag != "" || continueFlag
 	tracePath := *traceFlag
 	var logger *diagnostics.FileLogger
 	var openErr error
@@ -164,7 +177,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		selected, loadErr := legacyModel.Load(ctx)
 		if loadErr == nil {
 			initialSettings.Model = string(selected)
-		} else if *modelFlag == "" && *sessionFlag == "" {
+		} else if *modelFlag == "" && !resuming {
 			fmt.Fprintln(stderr, "axlr-tui: ignoring invalid saved model preference")
 		}
 	} else if statErr != nil {
@@ -286,10 +299,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	clientHTTP := &http.Client{Transport: transport}
 	defer clientHTTP.CloseIdleConnections()
 	// OpenRouter is optional once local models are configured; without a
-	// key and without local models the client reports the missing key.
+	// key and without local models the launch says how to get either.
 	var remote localmodels.Client
 	var remoteCatalog application.ModelCatalogPort
-	if key != "" || len(locals.models) == 0 {
+	if key == "" && len(locals.models) == 0 {
+		return fail(fmt.Errorf("no model provider: set OPENROUTER_API_KEY (create a key at https://openrouter.ai/keys), or configure local_models in %s for models that need no key", settingsPath))
+	}
+	if key != "" {
 		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP, Models: openRouterModelOptions(settings)})
 		if err != nil {
 			return fail(err)
@@ -365,6 +381,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		stateBase = filepath.Join(home, ".local", "state")
 	}
+	// The launch holds its run token for its lifetime, before any reconcile:
+	// the plans and jobs recorded under another token are taken for a
+	// stopped console's only when that console no longer holds its own.
+	var runToken [8]byte
+	if _, err := rand.Read(runToken[:]); err != nil {
+		return fail(err)
+	}
+	runLock, err := storage.HoldRun(filepath.Join(stateBase, "axlr", "runs"), hex.EncodeToString(runToken[:]))
+	if err != nil {
+		return fail(err)
+	}
+	defer runLock.Close()
 	if settings.SharedEngines() {
 		supervisor, err := engineSupervisor(getenv, stateBase)
 		if err != nil {
@@ -381,7 +409,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	preferences := settingsStore.ModelPreference()
 	uiStore := settingsStore.UIPreference()
 	uiPreferences := settings.UIPreferences()
-	if *modelFlag == "" && *sessionFlag == "" {
+	if *modelFlag == "" && !resuming {
 		model = root.ModelID(settings.Model)
 	}
 	store, err := storage.New(filepath.Join(stateBase, "axlr", "sessions"))
@@ -396,8 +424,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	var session *domain.Session
 	var newID domain.SessionID
-	if *sessionFlag != "" {
+	if resuming {
 		id, e := domain.NewSessionID(*sessionFlag)
+		if continueFlag {
+			id, e = application.LatestSessionUseCase{Store: loggedStore, Labels: sessionLabels}.Execute(ctx, workspace)
+		}
 		if e != nil {
 			return fail(e)
 		}
@@ -410,11 +441,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("saved session workspace/model differ from --root/--model"))
 		}
 	} else {
-		var random [16]byte
-		if _, err = rand.Read(random[:]); err != nil {
+		if newID, err = application.NewRandomSessionID(); err != nil {
 			return fail(err)
 		}
-		newID, _ = domain.NewSessionID(hex.EncodeToString(random[:]))
 		if model != "" {
 			created, createErr := (application.CreateSessionUseCase{Store: loggedStore}).Execute(ctx, newID, workspace, model)
 			if createErr != nil {
@@ -436,7 +465,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog)}
-	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}}
+	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}, LogFailure: failureLogger(appLog)}
 	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
 	if ceremonies != nil {
 		ceremonies.Compact = compactProfile(settings.CeremonyProfile(), locals.windows)
@@ -474,10 +503,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if repairsDirectory == "" {
 			repairsDirectory = filepath.Join(dataBase, "axlr", "repairs")
 		}
-		var token [8]byte
-		if _, err := rand.Read(token[:]); err != nil {
-			return fail(err)
-		}
 		repairs = &application.SelfRepair{
 			Registry:  registry,
 			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: stderr},
@@ -492,7 +517,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			// the merge, without asking).
 			Candidates:  repairBuilder(getenv),
 			AutoInstall: repairConfiguration.Install,
-			RunToken:    hex.EncodeToString(token[:]),
+			RunToken:    hex.EncodeToString(runToken[:]),
+			Liveness:    runLock,
 			Lifetime:    ctx,
 		}
 		if err := repairs.Reconcile(ctx); err != nil {
@@ -505,12 +531,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	var planRunner *application.PlanRunner
 	var planPanel terminal.PlanPanelPort
 	if ceremonies != nil && ceremonies.Plans != nil {
-		var token [8]byte
-		if _, err := rand.Read(token[:]); err != nil {
-			return fail(err)
-		}
 		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog}}
-		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(token[:]), Lifetime: ctx}
+		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(runToken[:]), Liveness: runLock, Lifetime: ctx}
 		if err := planRunner.Reconcile(ctx); err != nil {
 			fmt.Fprintln(stderr, "axlr-tui: plan registry:", err)
 		}

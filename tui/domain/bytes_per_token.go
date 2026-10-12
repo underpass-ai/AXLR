@@ -8,6 +8,9 @@ import "math"
 // aims at. The console therefore measures each request: the bytes of the
 // body it sent against the prompt tokens the provider counted.
 const (
+	// DefaultBytesPerTokenHundredths is the ratio, in hundredths of a byte,
+	// assumed for a model whose own was not measured.
+	DefaultBytesPerTokenHundredths = 244
 	// MinimumBytesPerToken and MaximumBytesPerToken bound a ratio, in
 	// hundredths of a byte: outside 1.5 to 6 a sample says more about the
 	// request than about the model's tokenizer.

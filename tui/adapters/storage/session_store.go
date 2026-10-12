@@ -229,7 +229,7 @@ func (s *SessionStore) List(ctx context.Context) ([]domain.SessionSummary, error
 			return nil, fmt.Errorf("session %s: %w", id, e)
 		}
 		state := session.Export()
-		summary := domain.SessionSummary{ID: state.ID, Workspace: state.Workspace, Model: state.Model, Status: state.Status, MessageCount: len(state.Messages)}
+		summary := domain.SessionSummary{ID: state.ID, Workspace: state.Workspace, Model: state.Model, Status: state.Status, MessageCount: len(state.Messages), Mode: state.Mode}
 		for _, message := range state.Messages {
 			if message.Role == root.RoleUser {
 				summary.Title = message.Content

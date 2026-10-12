@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/application"
 	"github.com/underpass-ai/AXLR/domain"
@@ -112,6 +113,58 @@ func TestClientClassifiesProviderErrorsWithoutLeakingBody(t *testing.T) {
 	}
 }
 
+// An HTTP error keeps what the provider said, on one line, bounded, without
+// the client's key or anything that looks like a credential, and says what
+// the person can do about it. On 12 October 2026 a wrong model id read only
+// "OpenRouter invalid_request (HTTP 400)".
+func TestClientKeepsTheProvidersErrorMessage(t *testing.T) {
+	for _, tc := range []struct {
+		status    int
+		body      string
+		endpoint  string
+		want      string
+		hint      ProviderHint
+		hintWords string
+	}{
+		{400, `{"error":{"code":400,"message":"anthropic/claude-nonexistent-9 is not a valid model ID"}}`, "", "OpenRouter invalid_request (HTTP 400): anthropic/claude-nonexistent-9 is not a valid model ID", HintChooseModel, "/model"},
+		{400, `{"error":{"code":400,"message":"This endpoint's maximum context length is 200000 tokens."}}`, "", "OpenRouter invalid_request (HTTP 400): This endpoint's maximum context length is 200000 tokens.", HintNone, ""},
+		{401, `{"error":{"code":401,"message":"No auth credentials found for test-secret\nBearer abc.def"}}`, "", "OpenRouter authentication (HTTP 401): No auth credentials found for [redacted] [redacted]", HintCheckKey, "OPENROUTER_API_KEY"},
+		{402, `{"error":{"code":402,"message":"Insufficient credits"}}`, "", "OpenRouter insufficient_credits (HTTP 402): Insufficient credits", HintCredits, "credits"},
+		{429, `{"error":{"code":429,"message":"Rate limit exceeded"}}`, "", "OpenRouter rate_limited (HTTP 429): Rate limit exceeded", HintRetryLater, "wait"},
+		{404, `{"object":"error","message":"The model ` + "`qwen-x`" + ` does not exist.","type":"NotFoundError","code":404}`, "http://127.0.0.1:8080/v1/chat/completions", "model endpoint 127.0.0.1:8080 invalid_request (HTTP 404): The model `qwen-x` does not exist.", HintChooseModel, "/model"},
+		{503, `<html>Service Unavailable</html>`, "", "OpenRouter provider_failure (HTTP 503)", HintNone, ""},
+	} {
+		t.Run(tc.want, func(t *testing.T) {
+			client, err := New(ClientConfig{APIKey: "test-secret", Endpoint: tc.endpoint, HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return testResponse(tc.status, tc.body), nil
+			})}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, call := range []func() error{
+				func() error { _, err := client.Complete(context.Background(), simpleCompletionRequest()); return err },
+				func() error {
+					_, err := client.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil })
+					return err
+				},
+			} {
+				err := call()
+				var providerErr *ProviderError
+				if !errors.As(err, &providerErr) || err.Error() != tc.want || providerErr.HintKind() != tc.hint || !strings.Contains(providerErr.Hint(), tc.hintWords) {
+					t.Fatalf("error = %v, hint %q %q", err, providerErr.HintKind(), providerErr.Hint())
+				}
+			}
+		})
+	}
+	long := sanitizeProviderMessage(strings.Repeat("word ", 200) + " sk-or-v1-0123456789abcdef")
+	if utf8.RuneCountInString(long) != MaxProviderMessageRunes || !strings.HasSuffix(long, "…") {
+		t.Fatalf("bounded message %d runes: %q", utf8.RuneCountInString(long), long)
+	}
+	if got := sanitizeProviderMessage("key sk-or-v1-0123456789abcdef and " + strings.Repeat("A", 48)); got != "key [redacted] and [redacted]" {
+		t.Fatalf("redacted %q", got)
+	}
+}
+
 func TestClientAvoidsNetworkAfterCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -186,16 +239,16 @@ func TestClientAllowsHistoricalToolResultWithoutCurrentDefinition(t *testing.T) 
 
 // OpenRouter answers an error found after it accepted the request with HTTP
 // 200 and the error in the body: the code classifies it as a status would,
-// without leaking the message, and a local server's error names the server.
+// the message is kept, and a local server's error names the server.
 func TestClientClassifiesErrorBodyWithStatus200(t *testing.T) {
 	for _, tc := range []struct {
 		endpoint, body, want string
 		status               int
 		category             ProviderErrorCategory
 	}{
-		{"", `{"error":{"code":429,"message":"raw-sensitive-body"}}`, "OpenRouter rate_limited (HTTP 429)", 429, CategoryRateLimited},
-		{"", `{"error":{"message":"raw-sensitive-body"}}`, "OpenRouter provider_failure (HTTP 502)", 502, CategoryProviderFailure},
-		{"http://127.0.0.1:8080/v1/chat/completions", `{"error":{"code":400,"message":"raw-sensitive-body"},"choices":[]}`, "model endpoint 127.0.0.1:8080 invalid_request (HTTP 400)", 400, CategoryInvalidRequest},
+		{"", `{"error":{"code":429,"message":"raw-sensitive-body"}}`, "OpenRouter rate_limited (HTTP 429): raw-sensitive-body", 429, CategoryRateLimited},
+		{"", `{"error":{"message":"raw-sensitive-body"}}`, "OpenRouter provider_failure (HTTP 502): raw-sensitive-body", 502, CategoryProviderFailure},
+		{"http://127.0.0.1:8080/v1/chat/completions", `{"error":{"code":400,"message":"raw-sensitive-body"},"choices":[]}`, "model endpoint 127.0.0.1:8080 invalid_request (HTTP 400): raw-sensitive-body", 400, CategoryInvalidRequest},
 	} {
 		t.Run(tc.want, func(t *testing.T) {
 			client, err := New(ClientConfig{APIKey: "test-secret", Endpoint: tc.endpoint, HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {

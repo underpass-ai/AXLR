@@ -24,6 +24,7 @@ func TestSessionUsageIsKeptBesideTheSnapshot(t *testing.T) {
 	saved, err := store.UpdateUsage(ctx, id, func(l *domain.UsageLedger) {
 		l.Record(domain.UsageSample{Provider: "Relace", PromptTokens: 7448, CachedTokens: 1, CacheWriteTokens: 2, CompletionTokens: 2567, ReasoningTokens: 2590, Cost: 0.00158142, CostKnown: true, FirstByte: 1500 * time.Millisecond, Total: 9 * time.Second}, 1)
 		l.Record(domain.UsageSample{Provider: "local/qwen", PromptTokens: 10, Total: time.Second}, 1)
+		l.Record(domain.UsageSample{Provider: "Anthropic", PromptTokens: 4000, CompletionTokens: 300, Total: 10 * time.Second, Unmetered: true}, 1)
 		l.Raise(1)
 		l.Warned = true
 	})
@@ -43,7 +44,7 @@ func TestSessionUsageIsKeptBesideTheSnapshot(t *testing.T) {
 	}
 	defer reopened.Close()
 	loaded, err := reopened.LoadUsage(ctx, id)
-	if err != nil || !reflect.DeepEqual(loaded, saved) || loaded.Providers["Relace"].Cost != 0.00158142 || loaded.FirstByte.Max != 1500*time.Millisecond || loaded.Raised != 1 {
+	if err != nil || !reflect.DeepEqual(loaded, saved) || loaded.Providers["Relace"].Cost != 0.00158142 || loaded.FirstByte.Max != 1500*time.Millisecond || loaded.Raised != 1 || loaded.Unmetered != 1 {
 		t.Fatalf("loaded %+v\nsaved %+v\n%v", loaded, saved, err)
 	}
 	if _, err := reopened.LoadUsage(ctx, "../escape"); err == nil {

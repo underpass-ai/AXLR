@@ -15,4 +15,6 @@ type SessionSummary struct {
 	Title        axlr.Text
 	UpdatedAt    time.Time
 	MessageCount int
+	// Mode is the session's work mode, empty for a normal session.
+	Mode WorkMode
 }
