@@ -40,10 +40,15 @@ func (m AppModel) approvalCard() string {
 	details.Gutter = (width - details.Viewport.Width()) / 2
 	hints := []footerHint{
 		{"approve", "a", m.Theme.T("approval.hintApprove")},
+		{"approve-all", "A", m.Theme.Tf("approval.hintApproveAll", m.pendingCalls())},
 		{"always-allow", "l", m.Theme.T("approval.hintAlways")},
 		{"deny", "d", m.Theme.T("approval.hintDeny")},
 		{"autonomy-on", "f", m.Theme.T("approval.hintAutonomy")},
 		{"cancel", "esc", m.Theme.T("footer.cancel")},
+	}
+	if m.pendingCalls() < 2 {
+		// Shift+A approves the calls queued behind this one.
+		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "approve-all" })
 	}
 	if !savesAlwaysAllow(m.Header.State.ToolSnapshot, m.Approval.Pending) {
 		// A host tool has no saved rule of its own.

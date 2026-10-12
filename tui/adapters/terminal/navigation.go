@@ -225,6 +225,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
+			if k.String() == "A" && m.pendingCalls() > 1 {
+				// Shift+A approves the card's call and those queued behind
+				// it; with one call it is A.
+				intent = "approve-all"
+			}
 			if strings.ToLower(k.String()) == "f" {
 				intent = "autonomy-on"
 			}
@@ -359,7 +364,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 	}
 	if mouse, ok := msg.(tea.MouseClickMsg); ok && mouse.Button == tea.MouseLeft {
-		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
+		ids := []string{"changes", "mcp", "plugins", "updates", "approve", "approve-all", "always-allow", "autonomy-on", "deny", "cancel", "models", "theme", "palette", "search", "sessions", "help", "info", "continue", "close", "previous", "next", "usage"}
 		if m.overlay == "sessions" {
 			m.Picker.Deleting = false
 			if m.Picker.ShowsNew() && m.zones.Get(m.prefix+"session-new").InBounds(mouse) {
@@ -417,7 +422,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	if !hasIntent {
 		return m, nil, false
 	}
-	if m.approvalFocus() && intent != "approve" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
+	if m.approvalFocus() && intent != "approve" && intent != "approve-all" && intent != "always-allow" && intent != "autonomy-on" && intent != "deny" && intent != "cancel" && !(intent == "continue" && !m.knownPending()) {
 		return m, nil, true
 	}
 	switch intent {
@@ -697,6 +702,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		m.overlay = ""
 		return m, nil, true
+	case "approve-all":
+		next, cmd := m.approveAll()
+		return next, cmd, true
 	case "approve", "always-allow", "autonomy-on", "deny":
 		if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() {
 			return m, nil, true

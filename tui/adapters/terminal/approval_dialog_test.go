@@ -415,3 +415,27 @@ func TestAlwaysAllowWithoutApprovalSettingsReportsATranslatedError(t *testing.T)
 		t.Fatalf("error %q; want %q", m.Status.Error, want)
 	}
 }
+
+// Shift+A approves the card's call and the calls queued behind it, which
+// the card offers only when more than one waits; a call added later gets
+// its own card.
+func TestShiftAApprovesEveryPendingCall(t *testing.T) {
+	m := approvalModel(t)
+	defer m.zones.Close()
+	m.deps.Resolve.Tools = navTool{}
+	m.deps.Resolve.Continue.Models = navStream{}
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "A approve all 2") {
+		t.Fatalf("the card does not offer Shift+A:\n%s", view)
+	}
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'a', Mod: tea.ModShift, Text: "A"})
+	m = drain(t, next.(AppModel), cmd)
+	activity := m.deps.Session.Export().Activity
+	if len(activity) != 2 || activity[0].Decision != domain.DecisionApprove || activity[1].Decision != domain.DecisionApprove || len(m.deps.Session.Pending()) != 0 {
+		t.Fatalf("activity %+v", activity)
+	}
+	one := execApprovalModel(t, domain.ModeNormal, `{"program":"ls"}`)
+	defer one.zones.Close()
+	if view := ansi.Strip(one.View().Content); strings.Contains(view, "approve all") {
+		t.Fatalf("one call offers Shift+A:\n%s", view)
+	}
+}
