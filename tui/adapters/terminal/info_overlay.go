@@ -1,8 +1,6 @@
 package terminal
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -24,18 +22,7 @@ func infoContentLocale(state domain.SessionState, locale Locale) string {
 			continue
 		}
 		label, _ := toolPresentation(state, record.Call.Name)
-		fmt.Fprintf(&b, "\n\n%s · %s\n\n%s", label, Translate(locale, "decision."+string(record.Decision)), prettyToolResult(string(record.Outcome.Content)))
+		fmt.Fprintf(&b, "\n\n%s · %s\n\n%s", label, Translate(locale, "decision."+string(record.Decision)), readableResult(string(record.Outcome.Content)))
 	}
 	return b.String()
-}
-
-func prettyToolResult(value string) string {
-	if len(value) > 128<<10 || !json.Valid([]byte(value)) {
-		return value
-	}
-	var formatted bytes.Buffer
-	if json.Indent(&formatted, []byte(value), "", "  ") != nil {
-		return value
-	}
-	return formatted.String()
 }

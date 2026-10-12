@@ -172,9 +172,23 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			t.appendRow(transcriptRow{Text: theme.T("role."+string(m.Role)) + ": " + string(m.Content), Kind: transcriptRowPlain})
 		}
 		for _, c := range m.ToolCalls {
-			row := toolRow(s, c, records[string(c.ID)], results[string(c.ID)], theme)
+			record, result := records[string(c.ID)], results[string(c.ID)]
+			row := toolRow(s, c, record, result, theme)
 			row.At = at
+			if theme.editorial() {
+				// Editorial sums finished runs up in one line.
+				t.appendRow(row)
+				continue
+			}
+			// A click on the row opens what the call returned under it.
+			row.Note, row.Wrap = toolNoteKey(c.ID), true
 			t.appendRow(row)
+			if t.expanded[row.Note] {
+				for _, line := range toolResultRows(s, c, record, result, theme) {
+					line.Note = row.Note
+					t.rows = append(t.rows, line)
+				}
+			}
 		}
 		for archived < len(s.ArchivedDrafts) && s.ArchivedDrafts[archived].AfterMessage == index+1 {
 			t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, Markdown: true})
@@ -248,7 +262,7 @@ func (t *Transcript) renderRows() {
 			clean = renderMarkdownWidth(clean, t.theme, t.Viewport.Width())
 		}
 		label := Sanitize(row.Label)
-		if width := t.Viewport.Width(); row.Note != "" && !strings.Contains(clean, "\n") && width > 0 {
+		if width := t.Viewport.Width(); row.Note != "" && !row.Wrap && !strings.Contains(clean, "\n") && width > 0 {
 			// A folded console note stays one line at any width.
 			clean = ansi.Truncate(clean, max(1, width-ansi.StringWidth(label)), "…")
 		}

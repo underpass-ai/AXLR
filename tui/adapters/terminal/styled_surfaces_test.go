@@ -65,8 +65,8 @@ func TestTranscriptAddsAirWithoutChangingSavedMessages(t *testing.T) {
 
 func TestInfoFormatsJSONWithoutDroppingToolResult(t *testing.T) {
 	value := `{"status":"completed","result":{"count":2}}`
-	formatted := prettyToolResult(value)
-	if !strings.Contains(formatted, "\n  \"result\"") || !strings.Contains(formatted, "\"count\": 2") {
+	formatted := readableResult(value)
+	if formatted != "status: completed\nresult:\n  count: 2" {
 		t.Fatalf("unreadable JSON: %s", formatted)
 	}
 	preview := toolResultSummary(value)

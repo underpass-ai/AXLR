@@ -48,6 +48,9 @@ type transcriptRow struct {
 	Aside string
 	// Note identifies a console note row, which a click expands or folds.
 	Note string
+	// Wrap keeps a row with a Note wrapping like any other instead of
+	// folding it to one line: a tool row and the result it opens.
+	Wrap bool
 }
 
 // toolFacts is what a tool row shows, kept structured for summaries.
