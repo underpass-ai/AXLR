@@ -7,9 +7,12 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Sanitize removes terminal commands and controls while retaining readable text.
+// Sanitize removes terminal commands and controls while retaining readable
+// text. Tabs become four spaces, as approval cards already draw them: a tab
+// measures 0 cells when the transcript wraps and 4 when lipgloss draws, so
+// a row with tabs drew taller than counted and pushed the footer away.
 func Sanitize(s string) string {
-	return strings.Map(func(r rune) rune {
+	return strings.ReplaceAll(strings.Map(func(r rune) rune {
 		if r == '\n' || r == '\t' {
 			return r
 		}
@@ -17,7 +20,7 @@ func Sanitize(s string) string {
 			return -1
 		}
 		return r
-	}, ansi.Strip(s))
+	}, ansi.Strip(s)), "\t", "    ")
 }
 
 func singleLine(s string) string { return strings.Join(strings.Fields(Sanitize(s)), " ") }

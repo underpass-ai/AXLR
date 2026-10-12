@@ -132,3 +132,35 @@ func TestTranscriptInterleavesRowsAndScrollsWhenTheyExceedTerminal(t *testing.T)
 		t.Fatal("bottom row is missing or not full width")
 	}
 }
+
+// On 12 October 2026 a row with tabs measured 0 cells per tab when the
+// transcript wrapped it and 4 when lipgloss drew it, so it drew taller than
+// counted and pushed the footer off screen (60x20 in a unit harness).
+func TestARowWithTabsDrawsNoMoreRowsThanCounted(t *testing.T) {
+	text := "col\tcol\tcol\tcol\tcol\tcol\tcol\tcol\tcol\tend\nlast line"
+	for _, rows := range []bool{false, true} {
+		tr := NewTranscript()
+		tr.SetWidth(30)
+		if rows {
+			tr.SetSession(domain.SessionState{Messages: []root.Message{{Role: root.RoleUser, Content: root.Text(text)}}}, "", Theme{Monochrome: true})
+		} else {
+			tr.SetContent(text)
+		}
+		// Exactly as tall as the rows the transcript counted.
+		tr.Viewport.SetHeight(tr.VisualLineCount())
+		tr.Viewport.GotoBottom()
+		view := tr.View()
+		plain := ansi.Strip(view)
+		if got := lipgloss.Height(view); got != tr.Viewport.Height() || !strings.Contains(plain, "last line") || strings.Count(plain, "col") != 9 {
+			t.Fatalf("rows=%v: drew %d rows for %d counted:\n%s", rows, got, tr.Viewport.Height(), view)
+		}
+		for _, line := range strings.Split(view, "\n") {
+			if lipgloss.Width(line) > 30 {
+				t.Fatalf("rows=%v: line wider than the transcript: %q", rows, line)
+			}
+		}
+	}
+	if got := Sanitize(text); got != strings.ReplaceAll(text, "\t", "    ") {
+		t.Fatalf("Sanitize kept tabs: %q", got)
+	}
+}
