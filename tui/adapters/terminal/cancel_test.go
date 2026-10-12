@@ -46,3 +46,55 @@ func TestEscapeShowsACancelledTurnInTheConversationAndKeepsTheFooter(t *testing.
 		}
 	}
 }
+
+// On 12 October 2026 /exit during a turn cancelled it but left "/exit" in
+// the composer, and the next Enter quit without a word.
+func TestExitWhileBusyCancelsTheTurnAndSaysHowToQuit(t *testing.T) {
+	for _, locale := range []Locale{English, Spanish} {
+		m := sized()
+		m.Theme.Locale = locale
+		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
+			if err := s.BeginTurn("read the repository", nil); err != nil {
+				return err
+			}
+			<-ctx.Done()
+			return ctx.Err()
+		})
+		m.Composer.Input.SetValue("/exit")
+		next, quit := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+		m = next.(AppModel)
+		if quit != nil {
+			if _, ok := quit().(tea.QuitMsg); ok {
+				t.Fatalf("%s: /exit while busy quit", locale)
+			}
+		}
+		if m.Composer.Input.Value() != "" {
+			t.Fatalf("%s: /exit stayed in the composer", locale)
+		}
+		m = update(m, cmd())
+		if m.Busy || m.Status.Notice != m.Theme.T("notice.exitCancelled") {
+			t.Fatalf("%s: notice after the turn ended = %q", locale, m.Status.Notice)
+		}
+		if footer := ansi.Strip(m.hintRow()); !strings.Contains(footer, "/exit") {
+			t.Fatalf("%s: the footer does not say how to quit: %q", locale, footer)
+		}
+		// A later Esc-cancelled operation reads plain "Cancelled" again.
+		cmd = m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
+			<-ctx.Done()
+			return ctx.Err()
+		})
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+		m = update(m, cmd())
+		if m.Status.Notice != m.Theme.T("status.cancelled") {
+			t.Fatalf("%s: a later cancel reads %q", locale, m.Status.Notice)
+		}
+		m.Composer.Input.SetValue("/exit")
+		_, quit = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+		if quit == nil {
+			t.Fatalf("%s: /exit when idle did not quit", locale)
+		}
+		if _, ok := quit().(tea.QuitMsg); !ok {
+			t.Fatalf("%s: /exit when idle did not quit", locale)
+		}
+	}
+}

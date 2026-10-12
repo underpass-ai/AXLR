@@ -60,7 +60,7 @@ func fileChangeRows(name root.ToolName, arguments []byte, theme Theme) ([]transc
 		}
 		body := lines(*call.Content, "", toneNone, transcriptRowAssistant)
 		if hidden := len(body) - writePreviewLines; hidden > 0 {
-			body = append(body[:writePreviewLines], transcriptRow{Text: theme.Tf("approval.moreLines", hidden), Kind: transcriptRowPlain})
+			body = append(body[:writePreviewLines], transcriptRow{Text: theme.Tn("approval.moreLines", hidden, hidden), Kind: transcriptRowPlain})
 		}
 		return append([]transcriptRow{header}, body...), true
 	}

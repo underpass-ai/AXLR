@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 func typeDraft(m AppModel, text string) AppModel {
@@ -82,6 +83,17 @@ func TestEnterOnBareAutonomyLeavesAutonomyUnchanged(t *testing.T) {
 	}
 	if m.Composer.Input.Value() != "" || m.Status.Error != "" {
 		t.Fatalf("bare /autonomy not handled: draft=%q error=%q", m.Composer.Input.Value(), m.Status.Error)
+	}
+	// On 12 October 2026 bare /autonomy cleared the composer and said nothing.
+	if m.Status.Notice != m.Theme.T("notice.autonomyOff") || !strings.Contains(ansi.Strip(m.View().Content), "Full autonomy is off") {
+		t.Fatalf("bare /autonomy did not say the state: %q", m.Status.Notice)
+	}
+	m = typeDraft(m, "/autonomy on")
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = typeDraft(m, "/autonomy")
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !settings.Autonomous() || m.Status.Notice != m.Theme.T("notice.autonomyOn") {
+		t.Fatalf("bare /autonomy after on said %q", m.Status.Notice)
 	}
 }
 
@@ -168,4 +180,127 @@ func TestHelpListsEveryCommand(t *testing.T) {
 			}
 		}
 	}
+}
+
+// On 12 October 2026 "/Usage" started a paid turn ("/usage es un comando
+// de la consola…"); "/EXIT", "/autonomy ON", "/autonomy  on", "/review the
+// auth module" and "/model gpt-x" would have too.
+func TestSlashCommandsIgnoreCaseAndSpacingAndNeverSendTheirText(t *testing.T) {
+	sent := func(t *testing.T, m AppModel) bool {
+		t.Helper()
+		messages := m.Header.State.Messages
+		return m.Busy && len(messages) > 0 && messages[len(messages)-1].Role == "user"
+	}
+	t.Run("case and spacing", func(t *testing.T) {
+		for draft, want := range map[string]string{
+			"/Usage": "/usage", "/EXIT": "/exit", "/autonomy ON": "/autonomy on", "/autonomy  on": "/autonomy on",
+			"/Autonomy Off": "/autonomy off", "/REVISAR": "/review", "/Copy": "/copy",
+		} {
+			if got, exact := isSlashCommand(draft); !exact || got != want {
+				t.Fatalf("%q read as %q (exact %v); want %q", draft, got, exact, want)
+			}
+		}
+		if got := slashSuggestions("/Us"); len(got) != 1 || got[0].name != "/usage" {
+			t.Fatalf("/Us suggests %v", got)
+		}
+	})
+	t.Run("/Usage opens the usage panel", func(t *testing.T) {
+		session := navSession(t)
+		m, _ := selectionModel(t, &session)
+		m.Composer.Input.SetValue("/Usage")
+		m = update(m, ControlIntent("send"))
+		if sent(t, m) || m.overlay != "usage" {
+			t.Fatalf("/Usage: busy=%v overlay=%q", m.Busy, m.overlay)
+		}
+	})
+	t.Run("/EXIT quits", func(t *testing.T) {
+		m := sized()
+		m.Composer.Input.SetValue("/EXIT")
+		_, cmd := m.Update(ControlIntent("send"))
+		if cmd == nil {
+			t.Fatal("/EXIT did nothing")
+		}
+		if _, ok := cmd().(tea.QuitMsg); !ok {
+			t.Fatal("/EXIT did not quit")
+		}
+	})
+	t.Run("/autonomy ON and /autonomy  on", func(t *testing.T) {
+		for _, draft := range []string{"/autonomy ON", "/autonomy  on"} {
+			m := sized()
+			settings, err := storage.NewApprovalSettings(filepath.Join(t.TempDir(), "approvals.json"), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			m.deps.ApprovalSettings = settings
+			m.Composer.Input.SetValue(draft)
+			m = update(m, ControlIntent("send"))
+			if !settings.Autonomous() || m.Busy || m.Composer.Input.Value() != "" {
+				t.Fatalf("%q: autonomous=%v busy=%v draft=%q", draft, settings.Autonomous(), m.Busy, m.Composer.Input.Value())
+			}
+			m.zones.Close()
+		}
+	})
+	t.Run("/review with a prompt selects the mode and sends the prompt", func(t *testing.T) {
+		for _, draft := range []string{"/review the auth module", "/Revisar the auth module"} {
+			session := navSession(t)
+			m, _ := selectionModel(t, &session)
+			m.Composer.Input.SetValue(draft)
+			m = update(m, ControlIntent("send"))
+			if m.deps.Session.Mode() != domain.ModeReview || m.Header.State.Mode != domain.ModeReview {
+				t.Fatalf("%q: mode = %q", draft, m.deps.Session.Mode())
+			}
+			if !sent(t, m) || m.Header.State.Messages[len(m.Header.State.Messages)-1].Content != "the auth module" || m.Composer.Input.Value() != "" {
+				t.Fatalf("%q: prompt not sent: busy=%v messages=%v", draft, m.Busy, m.Header.State.Messages)
+			}
+		}
+	})
+	t.Run("/review with a prompt while busy keeps the draft", func(t *testing.T) {
+		session := navSession(t)
+		m, _ := selectionModel(t, &session)
+		m.Busy = true
+		m.Composer.Input.SetValue("/review the auth module")
+		m = update(m, ControlIntent("send"))
+		if m.deps.Session.Mode() == domain.ModeReview || m.Composer.Input.Value() != "/review the auth module" || m.Status.Error == "" {
+			t.Fatalf("mode=%q draft=%q error=%q", m.deps.Session.Mode(), m.Composer.Input.Value(), m.Status.Error)
+		}
+	})
+	t.Run("/model with text opens the picker filtered", func(t *testing.T) {
+		session := navSession(t)
+		m, _ := selectionModel(t, &session)
+		m.Composer.Input.SetValue("/model gpt-x")
+		next, cmd := m.Update(ControlIntent("send"))
+		m = drain(t, next.(AppModel), cmd)
+		if m.overlay != "models" || m.Models.Input.Value() != "gpt-x" || m.Composer.Input.Value() != "" || len(m.Header.State.Messages) != 0 {
+			t.Fatalf("overlay=%q filter=%q draft=%q", m.overlay, m.Models.Input.Value(), m.Composer.Input.Value())
+		}
+		if _, ok := m.Models.SelectedModel(); ok {
+			t.Fatal("the filter did not apply: provider/chosen is listed for gpt-x")
+		}
+	})
+	t.Run("other commands with text show their usage", func(t *testing.T) {
+		for draft, usage := range map[string]string{"/copy extra": "/copy", "/usage now": "/usage", "/autonomy maybe": "/autonomy [on|off]", "/plan add a thing": "/plan"} {
+			session := navSession(t)
+			m, _ := selectionModel(t, &session)
+			m.Composer.Input.SetValue(draft)
+			m = update(m, ControlIntent("send"))
+			if sent(t, m) || m.Busy || m.overlay != "" || m.Status.Notice != m.Theme.Tf("notice.slashUsage", usage) || m.Composer.Input.Value() != draft {
+				t.Fatalf("%q: busy=%v overlay=%q notice=%q draft=%q", draft, m.Busy, m.overlay, m.Status.Notice, m.Composer.Input.Value())
+			}
+		}
+	})
+	t.Run("unknown words", func(t *testing.T) {
+		session := navSession(t)
+		m, _ := selectionModel(t, &session)
+		m.Composer.Input.SetValue("/Halp")
+		m = update(m, ControlIntent("send"))
+		if m.Busy || !strings.Contains(m.Status.Error, "/Halp") {
+			t.Fatalf("/Halp: busy=%v error=%q", m.Busy, m.Status.Error)
+		}
+		m.Status.Error = ""
+		m.Composer.Input.SetValue("/tmp/foo explain")
+		m = update(m, ControlIntent("send"))
+		if !sent(t, m) || m.Header.State.Messages[len(m.Header.State.Messages)-1].Content != "/tmp/foo explain" {
+			t.Fatalf("/tmp/foo explain was not sent as a prompt: busy=%v error=%q", m.Busy, m.Status.Error)
+		}
+	})
 }

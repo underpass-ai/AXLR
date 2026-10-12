@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -28,6 +29,13 @@ type Transcript struct {
 	Highlight string
 	// Selection is the mouse-made range the view paints; see [Selection].
 	Selection Selection
+	// expanded holds the console notes a click opened, for the session
+	// expandedFor; rowLines maps each raw line to its row and visualIndex
+	// each wrapped line to its row (-1 for none), so a click finds a note.
+	expanded    map[string]bool
+	expandedFor domain.SessionID
+	rowLines    map[int]int
+	visualIndex []int
 }
 
 func NewTranscript() Transcript {
@@ -51,6 +59,7 @@ func (t *Transcript) SetContent(s string) {
 	t.rows = nil
 	t.rowKinds = nil
 	t.indents = nil
+	t.rowLines = nil
 	t.raw = Sanitize(s)
 	t.reflow()
 }
@@ -71,6 +80,7 @@ func (t *Transcript) reflow() {
 	width := t.Viewport.Width()
 	t.wrapWidth = width
 	t.visualRows = t.visualRows[:0]
+	t.visualIndex = t.visualIndex[:0]
 	var b strings.Builder
 	for index, line := range strings.Split(t.raw, "\n") {
 		if index > 0 {
@@ -85,8 +95,13 @@ func (t *Transcript) reflow() {
 				wrapped = ansi.Cut(line, 0, indent) + strings.ReplaceAll(body, "\n", "\n"+pad)
 			}
 		}
+		row, ok := t.rowLines[index]
+		if !ok {
+			row = -1
+		}
 		for range strings.Count(wrapped, "\n") + 1 {
 			t.visualRows = append(t.visualRows, t.rowKinds[index])
+			t.visualIndex = append(t.visualIndex, row)
 		}
 		b.WriteString(wrapped)
 	}
@@ -99,6 +114,9 @@ func (t *Transcript) reflow() {
 func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme) {
 	t.theme = theme
 	t.rows = t.rows[:0]
+	if s.ID != t.expandedFor {
+		t.expanded, t.expandedFor = nil, s.ID
+	}
 	archived := 0
 	results := make(map[string]*root.Message)
 	for i := range s.Messages {
@@ -122,10 +140,19 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			at = s.MessageTimes[index]
 		}
 		switch {
-		case m.Role == root.RoleUser && consoleMemoryReminder(m.Content):
-			t.appendRow(transcriptRow{Label: theme.Icon("memory") + " ", LabelTone: toneAccent, Text: theme.T("transcript.memoryReminder"), Kind: transcriptRowMemory, Indent: true, At: at})
 		case m.Role == root.RoleUser:
-			t.appendRow(transcriptRow{Label: theme.Icon("user") + " ", LabelTone: toneAccent, Text: string(m.Content), Kind: transcriptRowUser, Indent: true, At: at, Aside: formatClock(at, clock)})
+			// What the person typed is a prompt; the notes the console wrote
+			// or appended to it are one dim line each.
+			typed, notes := splitConsoleNotes(m.Content)
+			if typed != "" || len(notes) == 0 {
+				t.appendRow(transcriptRow{Label: theme.Icon("user") + " ", LabelTone: toneAccent, Text: typed, Kind: transcriptRowUser, Indent: true, At: at, Aside: formatClock(at, clock)})
+			}
+			for k, note := range notes {
+				key := fmt.Sprintf("%d.%d", index, k)
+				row := consoleNoteRow(note, key, t.expanded[key], theme)
+				row.At = at
+				t.appendRow(row)
+			}
 		case m.Role == root.RoleAssistant && m.Content != "":
 			t.appendRow(transcriptRow{Text: string(m.Content), Kind: transcriptRowAssistant, Markdown: true, At: at})
 		case m.Role != root.RoleAssistant && m.Role != root.RoleTool:
@@ -191,6 +218,7 @@ func (t *Transcript) renderRows() {
 	var b strings.Builder
 	kinds := make(map[int]transcriptRowKind)
 	indents := make(map[int]int)
+	rowLines := make(map[int]int)
 	line := 0
 	for index, row := range t.rows {
 		if index > 0 {
@@ -206,6 +234,10 @@ func (t *Transcript) renderRows() {
 			clean = renderMarkdownWidth(clean, t.theme, t.Viewport.Width())
 		}
 		label := Sanitize(row.Label)
+		if width := t.Viewport.Width(); row.Note != "" && !strings.Contains(clean, "\n") && width > 0 {
+			// A folded console note stays one line at any width.
+			clean = ansi.Truncate(clean, max(1, width-ansi.StringWidth(label)), "…")
+		}
 		indent := 0
 		if row.Indent {
 			indent = ansi.StringWidth(label)
@@ -225,12 +257,14 @@ func (t *Transcript) renderRows() {
 		for i := range strings.Count(clean, "\n") + 1 {
 			kinds[line+i] = row.Kind
 			indents[line+i] = indent
+			rowLines[line+i] = index
 		}
 		line += strings.Count(clean, "\n") + 1
 		b.WriteString(clean)
 	}
 	t.rowKinds = kinds
 	t.indents = indents
+	t.rowLines = rowLines
 	t.raw = b.String()
 	t.reflow()
 }
@@ -319,4 +353,22 @@ func highlightMatches(line, query string, theme Theme) string {
 		i += len(needle)
 	}
 	return lipgloss.StyleRanges(line, ranges...)
+}
+
+// NoteAt is the console note drawn on a wrapped line, if any.
+func (t Transcript) NoteAt(line int) (string, bool) {
+	if line < 0 || line >= len(t.visualIndex) || t.visualIndex[line] < 0 || t.visualIndex[line] >= len(t.rows) {
+		return "", false
+	}
+	key := t.rows[t.visualIndex[line]].Note
+	return key, key != ""
+}
+
+// ToggleNote expands a folded console note or folds an expanded one; the
+// next SetSession draws it so.
+func (t *Transcript) ToggleNote(key string) {
+	if t.expanded == nil {
+		t.expanded = map[string]bool{}
+	}
+	t.expanded[key] = !t.expanded[key]
 }

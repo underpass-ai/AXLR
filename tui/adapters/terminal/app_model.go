@@ -99,6 +99,12 @@ type AppModel struct {
 	// closedCancelled marks the operation stopped because the person closed
 	// its panel (the model picker while it loads); likewise not an error.
 	closedCancelled uint64
+	// catalogOperation is the model picker's catalog load, the only
+	// operation closing the picker may cancel.
+	catalogOperation uint64
+	// exitCancelled is the operation /exit cancelled; its end says how to
+	// quit instead of a bare "Cancelled".
+	exitCancelled uint64
 	// failures are errors of operations that ended while a message was
 	// queued; the conversation shows them until the person's next message.
 	failures []string
@@ -471,7 +477,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.overlay = "sessions"
 		}
-		if oldID != m.Header.State.ID {
+		switched := oldID != m.Header.State.ID
+		if switched {
 			m.overlay = ""
 			m.SearchBox = SearchBox{}
 			m.tokens = 0
@@ -523,6 +530,9 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// is not an error, so it is said in the footer's state instead.
 			m.Status.Error = ""
 			m.Status.Notice = strings.TrimSpace(m.Theme.T("status.cancelled") + " " + returned)
+			if m.exitCancelled == v.ID {
+				m.Status.Notice = strings.TrimSpace(m.Theme.T("notice.exitCancelled") + " " + returned)
+			}
 			if status := v.Session.Status(); wasTurn || status == domain.StatusStreaming || status == domain.StatusInterrupted || status == domain.StatusApproval {
 				m.cancelledAt = len(m.Header.State.Messages) + 1
 			}
@@ -543,10 +553,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else if m.draft == "" {
 			m.Status.Error = ""
 		}
+		m.exitCancelled = 0
 		if v.ModelSelection && v.Err == nil && v.PreferenceErr != nil {
 			m.Status.Error = m.Theme.T("error.modelDefault")
 		}
 		m.refreshTranscript()
+		if switched {
+			// Another session opens at its last message, not at the
+			// offset the previous one was scrolled to.
+			m.Transcript.Viewport.GotoBottom()
+		}
 		m.syncApproval()
 		if m.steer.Peek() == "" && !m.inlineApproval() {
 			m = m.autoOpenIncidentCard()
@@ -595,16 +611,28 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Enter on a partial command runs the highlighted suggestion.
 				command = suggestions[min(m.slashSelected, len(suggestions)-1)].name
 			}
-			command, _ = isSlashCommand(command)
+			command, args, known := parseSlash(command)
+			if known && args != "" {
+				return m.slashWithText(command, args)
+			}
 			if command == "/exit" {
 				if m.Busy {
+					// The first /exit stops the work; on 12 October 2026 it
+					// stayed in the composer and the next Enter quit.
+					m.Composer.Input.Reset()
+					m.exitCancelled = m.operationID
+					m.Status.Notice = m.Theme.T("notice.exitCancelled")
 					return m.Update(ControlIntent("cancel"))
 				}
 				return m.quit()
 			}
-			if unknownSlashWord(command) {
+			if !known && unknownSlashWord(command) {
 				m.Status.Error = m.Theme.Tf("error.unknownCommand", command)
 				return m, nil
+			}
+			if !known {
+				// Text that only starts with "/" (a path) is a prompt.
+				return m.submitDraft()
 			}
 			if command == "/update" {
 				changed, cmd := m.updateEngines()
@@ -681,6 +709,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.Status.Autonomous = settings.Autonomous()
 				m.Status.Error = ""
+				if command == "/autonomy" {
+					// Bare /autonomy changes nothing: it says which way it is set.
+					m.Status.Notice = m.Theme.T("notice.autonomyOff")
+					if m.Status.Autonomous {
+						m.Status.Notice = m.Theme.T("notice.autonomyOn")
+					}
+				}
 				m.Composer.Input.Reset()
 				return m, nil
 			}
@@ -709,61 +744,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return changed, cmd
 			}
-			if m.Busy && command != "" && m.turnRunning() {
-				message := m.Composer.Input.Value()
-				m.rememberPrompt(message)
-				m.steer.Add(message)
-				m.record(application.DiagnosticEvent{Stage: application.DiagnosticPromptQueued, Bytes: len(message)})
-				m.Composer.Input.Reset()
-				m.clearStaleError()
-				m.refreshTranscript()
-				// The queued message waits for the current model step: the turn
-				// takes it after its next tool step, or it starts the next turn.
-				return m, nil
-			}
-			if strings.TrimSpace(m.Composer.Input.Value()) == "" {
-				return m, nil
-			}
-			if m.Busy {
-				// An operation that is not a turn runs (an update, MADE
-				// preparation, a list): the draft stays, and the person
-				// learns why it was not sent.
-				m.Status.Notice = m.Theme.T("notice.operationRunning")
-				return m, nil
-			}
-			if m.Header.State.ID == "" {
-				m.Status.Error = m.Theme.T("error.noModel")
-				return m, nil
-			}
-			if m.Header.State.Status != domain.StatusIdle && m.Header.State.Status != domain.StatusComplete && m.Header.State.Status != domain.StatusInterrupted {
-				m.Status.Error = m.Theme.T("error.turnActive")
-				return m, nil
-			}
-			if m.deps.Session == nil || len(m.deps.Session.Pending()) != 0 {
-				m.Status.Error = m.Theme.T("error.promptPending")
-				return m, nil
-			}
-			prompt := root.Text(m.Composer.Input.Value())
-			m.rememberPrompt(string(prompt))
-			m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
-			m.submittedPrompt = string(prompt)
-			m.submittedAt = len(m.Header.State.Messages)
-			m.cost.beginTurn()
-			m.Composer.Input.Reset()
-			m.Status.Error = ""
-			m.failures = nil
-			m.draft = ""
-			m.draftOperationID = 0
-			if m.Header.State.Status == domain.StatusInterrupted && m.Header.State.Draft != "" {
-				m.Header.State.ArchivedDrafts = append(m.Header.State.ArchivedDrafts, domain.ArchivedDraft{AfterMessage: len(m.Header.State.Messages), Content: m.Header.State.Draft})
-				m.Header.State.Draft = ""
-			}
-			m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: prompt})
-			m.refreshTranscript()
-			cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
-				return m.deps.Start.Execute(ctx, s, prompt, emit)
-			})
-			return m, cmd
+			return m.submitDraft()
 		case "cancel":
 			if m.cancel != nil {
 				m.cancel()
@@ -794,11 +775,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch v.String() {
 		case "up":
-			if m.overlay == "" && (m.historyIndex < len(m.promptHistory) || m.Composer.Input.Line() == 0) && m.previousPrompt() {
+			// Like a shell, Up changes entry only from the first line, so a
+			// recalled multi-line prompt can be walked up line by line.
+			if m.overlay == "" && m.Composer.Input.Line() == 0 && m.previousPrompt() {
 				return m, nil
 			}
 		case "down":
-			if m.overlay == "" && m.historyIndex < len(m.promptHistory) && m.nextPrompt() {
+			if m.overlay == "" && m.historyIndex < len(m.promptHistory) && m.Composer.Input.Line() >= m.Composer.Input.LineCount()-1 && m.nextPrompt() {
 				return m, nil
 			}
 		case "enter":
@@ -978,4 +961,92 @@ func (m *AppModel) refreshTranscript() {
 		m.Transcript.AppendCancelled()
 	}
 	m.Transcript.AppendQueued(m.steer.Peek())
+}
+
+// submitDraft sends the composer's text as a prompt: queued into the
+// running turn, refused with a reason, or starting a new turn.
+func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
+	if m.Busy && strings.TrimSpace(m.Composer.Input.Value()) != "" && m.turnRunning() {
+		message := m.Composer.Input.Value()
+		m.rememberPrompt(message)
+		m.steer.Add(message)
+		m.record(application.DiagnosticEvent{Stage: application.DiagnosticPromptQueued, Bytes: len(message)})
+		m.Composer.Input.Reset()
+		m.clearStaleError()
+		m.refreshTranscript()
+		// The queued message waits for the current model step: the turn
+		// takes it after its next tool step, or it starts the next turn.
+		return m, nil
+	}
+	if strings.TrimSpace(m.Composer.Input.Value()) == "" {
+		return m, nil
+	}
+	if m.Busy {
+		// An operation that is not a turn runs (an update, MADE
+		// preparation, a list): the draft stays, and the person
+		// learns why it was not sent.
+		m.Status.Notice = m.Theme.T("notice.operationRunning")
+		return m, nil
+	}
+	if m.Header.State.ID == "" {
+		m.Status.Error = m.Theme.T("error.noModel")
+		return m, nil
+	}
+	if m.Header.State.Status != domain.StatusIdle && m.Header.State.Status != domain.StatusComplete && m.Header.State.Status != domain.StatusInterrupted {
+		m.Status.Error = m.Theme.T("error.turnActive")
+		return m, nil
+	}
+	if m.deps.Session == nil || len(m.deps.Session.Pending()) != 0 {
+		m.Status.Error = m.Theme.T("error.promptPending")
+		return m, nil
+	}
+	prompt := root.Text(m.Composer.Input.Value())
+	m.rememberPrompt(string(prompt))
+	m.record(application.DiagnosticEvent{Stage: application.DiagnosticInputSubmitted, OperationID: m.operationID + 1, Bytes: len(prompt), Messages: len(m.Header.State.Messages) + 1})
+	m.submittedPrompt = string(prompt)
+	m.submittedAt = len(m.Header.State.Messages)
+	m.cost.beginTurn()
+	m.Composer.Input.Reset()
+	m.Status.Error = ""
+	m.failures = nil
+	m.draft = ""
+	m.draftOperationID = 0
+	if m.Header.State.Status == domain.StatusInterrupted && m.Header.State.Draft != "" {
+		m.Header.State.ArchivedDrafts = append(m.Header.State.ArchivedDrafts, domain.ArchivedDraft{AfterMessage: len(m.Header.State.Messages), Content: m.Header.State.Draft})
+		m.Header.State.Draft = ""
+	}
+	m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: prompt})
+	m.refreshTranscript()
+	cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+		return m.deps.Start.Execute(ctx, s, prompt, emit)
+	})
+	return m, cmd
+}
+
+// slashWithText runs a known command typed with text after it. /model
+// opens the picker filtered by the text, a work mode is selected and the
+// text sent as the prompt, and any other command shows how it is written:
+// nothing is sent to the model.
+func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
+	switch {
+	case command == "/model":
+		next, cmd, _ := m.navigation(ControlIntent("models"))
+		changed := next.(AppModel)
+		if cmd != nil {
+			changed.Composer.Input.Reset()
+			changed.Models.Input.SetValue(text)
+		}
+		return changed, cmd
+	case slashPromptModes[command]:
+		changed, cmd := m.switchMode(slashModes[command])
+		if changed.Status.Error != "" {
+			// Refused (busy, a call pending): the draft stays as typed.
+			return changed, cmd
+		}
+		changed.Composer.Input.SetValue(text)
+		return changed.submitDraft()
+	}
+	m.Status.Error = ""
+	m.Status.Notice = m.Theme.Tf("notice.slashUsage", slashUsage(command))
+	return m, nil
 }

@@ -46,7 +46,7 @@ func (m AppModel) hintRow() string {
 	if count := len(m.Changes.files); count > 0 {
 		// Files, as /changes lists them: on 10 October 2026 the hint read
 		// "4 changes" for four edits to two files.
-		label := m.Theme.Tf("changes.files", count)
+		label := m.Theme.Tn("changes.files", count, count)
 		if count == 1 {
 			label = m.Theme.T("changes.oneFile")
 		}

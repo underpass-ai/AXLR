@@ -60,7 +60,9 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 		}
 	case record != nil && record.Decision == "":
 		facts.State = toolAwaiting
-		details = append(details, theme.T("transcript.toolAwaiting"))
+		// Only the first undecided call is the card's; the calls behind it
+		// wait their turn and may need no approval at all.
+		details = append(details, theme.T(awaitingLabel(s, call)))
 	default:
 		details = append(details, theme.T("transcript.toolRunning"))
 	}
@@ -82,6 +84,22 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 	}
 	text += " · " + strings.Join(details, " · ")
 	return transcriptRow{Label: glyph + " ", LabelTone: tone, Text: text, Kind: kind, Indent: true, Tool: facts}
+}
+
+// awaitingLabel says "waiting for approval" for the call the approval card
+// is about, the first undecided one, and "queued" for the undecided calls
+// behind it. On 12 October 2026 an axlr_skill call that needs no approval
+// read "waiting for approval" while a local_exec card was open.
+func awaitingLabel(s domain.SessionState, call root.ToolCall) string {
+	for _, p := range s.Activity {
+		if p.Outcome == nil && p.Decision == "" {
+			if p.Call.ID == call.ID {
+				return "transcript.toolAwaiting"
+			}
+			return "transcript.toolQueued"
+		}
+	}
+	return "transcript.toolAwaiting"
 }
 
 // toolArgumentSummary lists the call's top-level scalar values in argument

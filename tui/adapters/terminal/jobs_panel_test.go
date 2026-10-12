@@ -155,7 +155,7 @@ func TestJobsPanelSpeaksSpanish(t *testing.T) {
 	jobs := &fakeJobs{fakeRepairs: &fakeRepairs{records: jobRecords()}, live: map[string]bool{"20261009-0950-search-matches": true}}
 	m := jobsModel(t, jobs, Spanish)
 	view := m.View().Content
-	for _, want := range []string{"Trabajos · 2 de 2 activos", "esta consola", "otra consola", "ninguna consola · r la recupera", "paso repair 2/3 · intento 1 · aún sin pull request", "g lee sus checks", "Último check: go test ./... exited 1: FAIL", "n nuevo"} {
+	for _, want := range []string{"Trabajos · 2 de 2 activos", "esta consola", "otra consola", "ninguna consola · r la recupera", "paso repair 2/3 · intento 1 · aún sin pull request", "g lee sus comprobaciones", "Última comprobación: go test ./... exited 1: FAIL", "n nuevo"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("panel lacks %q:\n%s", want, view)
 		}

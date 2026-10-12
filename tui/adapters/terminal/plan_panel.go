@@ -115,7 +115,7 @@ func planPanelContent(records []domain.PlanRecord, theme Theme, now time.Time) s
 		if i > 0 {
 			lines = append(lines, "")
 		}
-		row := theme.Tf("plans.row", plan.ID, theme.T("plans.status."+string(plan.Status)), len(plan.Tasks), plan.Waves)
+		row := theme.Tf("plans.row", plan.ID, theme.T("plans.status."+string(plan.Status)), theme.Tn("count.tasks", len(plan.Tasks), len(plan.Tasks)), theme.Tn("count.waves", plan.Waves, plan.Waves))
 		if when := relativeTime(plan.Updated, now, theme); when != "" {
 			row += " · " + when
 		}
@@ -134,6 +134,11 @@ func planPanelContent(records []domain.PlanRecord, theme Theme, now time.Time) s
 			if t.Reason != "" {
 				detail += " · " + t.Reason
 			}
+			if t.Session != "" {
+				// troubleshooting.md tells the person to find a task's
+				// session here; the short form matches the picker's.
+				detail += theme.Tf("plans.taskSession", shortSessionID(t.Session))
+			}
 			lines = append(lines, theme.Tf("plans.taskRow", t.Wave, t.ID, detail))
 			if t.Handback != nil {
 				for _, note := range t.Handback.Notes {
@@ -148,7 +153,12 @@ func planPanelContent(records []domain.PlanRecord, theme Theme, now time.Time) s
 			}
 		}
 		for _, s := range plan.Syncs {
-			lines = append(lines, theme.Tf("plans.syncRow", s.Wave, s.Verdict, s.Rounds))
+			row := theme.Tf("plans.syncRow", s.Wave, s.Verdict)
+			if s.Rounds > 0 {
+				// "0 rounds" said nothing on 12 October 2026.
+				row += theme.Tn("plans.syncRounds", s.Rounds, s.Rounds)
+			}
+			lines = append(lines, row)
 		}
 	}
 	return strings.Join(lines, "\n")
@@ -208,4 +218,10 @@ func (m AppModel) planBadge() string {
 		return m.Theme.Tf("plans.badge", plan.ID, wave, plan.Waves, current)
 	}
 	return ""
+}
+
+// shortSessionID is the first eight hex digits of a session id, enough to
+// tell sessions apart in a list and to find them in Ctrl+O.
+func shortSessionID(id domain.SessionID) string {
+	return string(id[:min(len(id), 8)])
 }

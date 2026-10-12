@@ -26,7 +26,8 @@ func (m AppModel) hiddenInputWarning(p domain.PendingTool) string {
 	}
 	icon := m.Theme.Icon("attention") + " "
 	if command.Stdin != "" {
-		return icon + m.Theme.Tf("approval.stdinWarning", strings.Count(strings.TrimRight(command.Stdin, "\n"), "\n")+1)
+		lines := strings.Count(strings.TrimRight(command.Stdin, "\n"), "\n") + 1
+		return icon + m.Theme.Tn("approval.stdinWarning", lines, lines)
 	}
 	if slices.ContainsFunc(command.Args, func(arg string) bool { return arg == "-c" || arg == "-e" || arg == "-" }) {
 		return icon + m.Theme.T("approval.inlineCodeWarning")

@@ -115,15 +115,21 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	if m.overlay == "palette" && !m.approvalFocus() {
 		switch msg.(type) {
-		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseWheelMsg, list.FilterMatchesMsg:
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseWheelMsg, tea.MouseClickMsg, list.FilterMatchesMsg:
 			if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
 				return m, nil, false
 			}
 			var intent ControlIntent
 			var cmd tea.Cmd
-			m.Palette, intent, cmd = m.Palette.Update(msg)
+			if click, ok := msg.(tea.MouseClickMsg); ok {
+				// The palette resolves its own rows: on 12 October 2026
+				// Jobs and Copy ignored clicks, missing from the shared list.
+				intent = m.paletteClick(click)
+			} else {
+				m.Palette, intent, cmd = m.Palette.Update(msg)
+			}
 			if intent != "" {
-				return m.navigation(intent)
+				return m.paletteAction(intent)
 			}
 			return m, cmd, true
 		}
@@ -247,6 +253,17 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				next, cmd := m.repairKey(k)
 				return next, cmd, true
 			}
+			if m.overlay == "help" {
+				if delta, ok := helpScrollKeys[k.String()]; ok {
+					m.Help.Scroll(m.Theme, m.Layout.Width, m.Layout.Height-1, delta)
+					return m, nil, true
+				}
+				if k.String() == "f1" {
+					// F1 opens the help and F1 closes it.
+					m.overlay = ""
+					return m, nil, true
+				}
+			}
 			if k.String() == "esc" {
 				if m.overlay == "sessions" && m.Picker.Renaming {
 					m.Picker.Key(k.String(), k.Text)
@@ -361,6 +378,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		switch m.overlay {
 		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage":
 			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
+		case "help":
+			delta := 3
+			if wheel.Button == tea.MouseWheelUp {
+				delta = -3
+			}
+			m.Help.Scroll(m.Theme, m.Layout.Width, m.Layout.Height-1, delta)
 		}
 		return m, nil, true
 	}
@@ -563,6 +586,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			models, err = catalog.Execute(ctx)
 			return err
 		})
+		m.catalogOperation = m.operationID
 		return m, func() tea.Msg {
 			msg := cmd()
 			if done, ok := msg.(operationComplete); ok {
@@ -622,9 +646,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return msg
 		}, true
 	case ModelCloseIntent:
-		if m.cancel != nil {
+		if m.cancel != nil && m.Busy && m.operationID == m.catalogOperation {
 			// The person closed the picker: the loading it stops is no
-			// failure to report.
+			// failure to report. Another operation, such as plan outcomes
+			// recording once the catalog arrived, keeps running.
 			m.closedCancelled = m.operationID
 			m.cancel()
 		}
@@ -669,7 +694,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.cancel()
 			return m, nil, true
 		}
-		if m.Header.State.Status != domain.StatusApproval && m.Header.State.Status != domain.StatusInterrupted && m.Header.State.Status != domain.StatusStreaming {
+		if !m.continuable() {
 			return m, nil, true
 		}
 		u := application.SessionControlUseCase{Store: m.deps.Store}
@@ -678,7 +703,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		})
 		return m, cmd, true
 	case "continue":
-		if m.Busy || (m.Header.State.Status != domain.StatusInterrupted && m.Header.State.Status != domain.StatusApproval && m.Header.State.Status != domain.StatusStreaming) {
+		if m.Busy {
+			m.Status.Notice = m.Theme.T("notice.continueBusy")
+			return m, nil, true
+		}
+		if !m.continuable() {
+			m.Status.Notice = m.Theme.T("notice.nothingToContinue")
 			return m, nil, true
 		}
 		m.overlay = ""
@@ -689,6 +719,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, cmd, true
 	case "sessions":
 		if m.Busy {
+			m.Status.Notice = m.Theme.T("notice.sessionsBusy")
 			return m, nil, true
 		}
 		store := m.deps.Store
@@ -742,6 +773,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		id := selected.ID
+		if id == m.Header.State.ID {
+			// The open session is already on screen: Enter on its row
+			// closes the picker instead of reloading it behind the list.
+			m.overlay = ""
+			return m, nil, true
+		}
 		store := m.deps.Store
 		workspace := m.Header.State.Workspace
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
@@ -764,6 +801,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.overlay = intent
 		return m, nil, true
 	case "help", "info", "approvals":
+		m.Help.Top = 0
 		if intent == "info" {
 			m.Info = NewTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
@@ -915,3 +953,49 @@ func modelIDStrings(ids []root.ModelID) []string {
 	}
 	return out
 }
+
+// continuable reports a session Ctrl+R can resume and Esc can cancel
+// without a running operation: interrupted, streaming or awaiting a call.
+func (m AppModel) continuable() bool {
+	switch m.Header.State.Status {
+	case domain.StatusInterrupted, domain.StatusApproval, domain.StatusStreaming:
+		return true
+	}
+	return false
+}
+
+// paletteClick is the action under a click in the palette, "close" for its
+// close button, or "" for anywhere else.
+func (m AppModel) paletteClick(click tea.MouseClickMsg) ControlIntent {
+	if click.Button != tea.MouseLeft {
+		return ""
+	}
+	if m.zones.Get(m.prefix + "close").InBounds(click) {
+		return "close"
+	}
+	for _, item := range actionItems {
+		a := item.(actionItem)
+		if m.zones.Get(m.prefix + string(a.intent)).InBounds(click) {
+			return a.intent
+		}
+	}
+	return ""
+}
+
+// paletteAction closes the palette and runs its action. A refused action
+// says why instead of leaving the palette open with nothing changed, as
+// Cancel did while idle on 12 October 2026.
+func (m AppModel) paletteAction(intent ControlIntent) (tea.Model, tea.Cmd, bool) {
+	m.overlay = ""
+	if intent == "close" {
+		return m, nil, true
+	}
+	if intent == "cancel" && m.cancel == nil && !m.continuable() {
+		m.Status.Notice = m.Theme.T("notice.nothingToCancel")
+		return m, nil, true
+	}
+	return m.navigation(intent)
+}
+
+// helpScrollKeys move the help list when it is taller than the overlay.
+var helpScrollKeys = map[string]int{"up": -1, "k": -1, "down": 1, "j": 1, "pgup": -10, "pgdown": 10, "home": -1 << 20, "end": 1 << 20}

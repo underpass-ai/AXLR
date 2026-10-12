@@ -13,7 +13,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-const outcomeLine = "console: plan add-a-func-dce953 ended done · 1/2 tasks done, 0 blocked, 1 skipped · sync green · changed: buildinfo/version.go, buildinfo/version_test.go · task sessions' cost unknown"
+const outcomeLine = "console: plan add-a-func-dce953 finished: done · 1/2 tasks done, 0 blocked, 1 skipped · sync green · changed: buildinfo/version.go, buildinfo/version_test.go · task sessions' cost unknown"
 
 // planningModel is a console open on a planning session whose planner asked
 // for approval, with a store and no model: a model request would fail.
@@ -69,7 +69,7 @@ func TestAFinishedPlanShowsItsOutcomeInThePlanningSession(t *testing.T) {
 	// The same plan again adds nothing.
 	next, cmd = m.Update(planEventMsg(application.PlanEvent{Plan: plans.records[0]}))
 	m = drain(t, next.(AppModel), cmd)
-	if n := strings.Count(m.Transcript.Text(), "ended done"); n != 1 {
+	if n := strings.Count(m.Transcript.Text(), "finished: done"); n != 1 {
 		t.Fatalf("the outcome is shown %d times", n)
 	}
 
@@ -92,12 +92,12 @@ func TestAPlanEndingDuringATurnIsShownWhenTheTurnEnds(t *testing.T) {
 	m.operationID = 7
 	next, _ := m.Update(planEventMsg(application.PlanEvent{Plan: plans.records[0]}))
 	m = next.(AppModel)
-	if len(m.pendingPlanOutcomes) != 1 || strings.Contains(m.Transcript.Text(), "ended partly done") {
+	if len(m.pendingPlanOutcomes) != 1 || strings.Contains(m.Transcript.Text(), "finished: partly done") {
 		t.Fatalf("pending %d, transcript:\n%s", len(m.pendingPlanOutcomes), m.Transcript.Text())
 	}
 	next, cmd := m.Update(operationComplete{ID: 7, Session: *m.deps.Session})
 	m = drain(t, next.(AppModel), cmd)
-	if !strings.Contains(m.Transcript.Text(), "console: plan add-a-func-dce953 ended partly done") || len(m.pendingPlanOutcomes) != 0 {
+	if !strings.Contains(m.Transcript.Text(), "console: plan add-a-func-dce953 finished: partly done") || len(m.pendingPlanOutcomes) != 0 {
 		t.Fatalf("the outcome was not recorded after the turn:\n%s", m.Transcript.Text())
 	}
 }
@@ -118,7 +118,7 @@ func TestOpeningASessionShowsThePlansThatEndedWhileItWasClosed(t *testing.T) {
 	next, cmd := m.Update(planOutcomesMsg{})
 	m = drain(t, next.(AppModel), cmd)
 	text := m.Transcript.Text()
-	if !strings.Contains(text, "console: plan add-a-func-dce953 ended blocked") || strings.Contains(text, "older-plan") || strings.Contains(text, "other-plan") {
+	if !strings.Contains(text, "console: plan add-a-func-dce953 finished: blocked") || strings.Contains(text, "older-plan") || strings.Contains(text, "other-plan") {
 		t.Fatalf("transcript:\n%s", text)
 	}
 }
@@ -128,7 +128,7 @@ func TestPlanOutcomeLineInSpanishWithCostAndWaves(t *testing.T) {
 	line := domain.ConsoleLine{AfterMessage: 2, Plan: &domain.PlanOutcome{PlanID: "p-123456", Status: domain.PlanPartial, Tasks: 5, Done: 3, Blocked: 1, Skipped: 1,
 		Syncs: []domain.SyncVerdict{{Wave: 1, Verdict: "green"}, {Wave: 2, Verdict: "red"}}, Changed: []string{"a.go", "b.go", "c.go", "d.go", "e.go"}, CostUSD: 0.0123, CostKnown: true}}
 	got := consoleLineRow(line, theme).Text
-	want := "consola: el plan p-123456 terminó hecho en parte · 3/5 tareas hechas, 1 bloqueadas, 1 omitidas · sync w1 green, w2 red · cambió: a.go, b.go, c.go +2 · las sesiones de tarea costaron " + FormatUSD(0.0123)
+	want := "consola: el plan p-123456 terminó: hecho en parte · 3/5 tareas hechas · bloqueadas: 1 · omitidas: 1 · sync w1 green, w2 red · cambió: a.go, b.go, c.go +2 · las sesiones de tarea costaron " + FormatUSD(0.0123)
 	if got != want {
 		t.Fatalf("got  %q\nwant %q", got, want)
 	}
@@ -159,7 +159,38 @@ func TestSwitchingToASessionShowsThePlansThatEndedWhileItWasClosed(t *testing.T)
 	m.operationID = 7
 	next, cmd := m.Update(operationComplete{ID: 7, Session: other})
 	m = drain(t, next.(AppModel), cmd)
-	if m.Header.State.ID != otherID || !strings.Contains(m.Transcript.Text(), "console: plan add-a-func-dce953 ended done") {
+	if m.Header.State.ID != otherID || !strings.Contains(m.Transcript.Text(), "console: plan add-a-func-dce953 finished: done") {
 		t.Fatalf("transcript of %s:\n%s", m.Header.State.ID, m.Transcript.Text())
+	}
+}
+
+// The 12 October 2026 audit found that Esc in /model cancelled whatever
+// operation ran, not only the catalog load: when the load ended, the queued
+// plan outcomes started recording while the picker stayed open, and Esc
+// then cancelled the recording, losing the outcomes.
+func TestEscInTheModelPickerCancelsOnlyTheCatalogLoad(t *testing.T) {
+	plans := &fakePlans{records: []domain.PlanRecord{finishedPlan(domain.PlanDone)}}
+	m, _ := planningModel(t, plans)
+	m.deps.Models = application.ListModelsUseCase{Catalog: modelCatalogStub{}}
+	next, load := m.Update(ControlIntent("models"))
+	m = next.(AppModel)
+	// The plan ends while the catalog loads: its outcome waits.
+	next, cmd := m.Update(planEventMsg(application.PlanEvent{Plan: plans.records[0]}))
+	m = next.(AppModel)
+	if cmd != nil || len(m.pendingPlanOutcomes) != 1 {
+		t.Fatalf("the outcome did not wait for the catalog: %d", len(m.pendingPlanOutcomes))
+	}
+	next, record := m.Update(load())
+	m = next.(AppModel)
+	if record == nil || !m.Busy || m.overlay != "models" {
+		t.Fatalf("the outcome did not start recording behind the open picker: busy=%v overlay=%q", m.Busy, m.overlay)
+	}
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	if m.overlay != "" {
+		t.Fatalf("Esc did not close the picker: %q", m.overlay)
+	}
+	m = drain(t, m, record)
+	if m.Status.Error != "" || !strings.Contains(m.Transcript.Text(), outcomeLine) {
+		t.Fatalf("Esc in the picker lost the plan outcome (error %q):\n%s", m.Status.Error, m.Transcript.Text())
 	}
 }
