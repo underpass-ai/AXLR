@@ -646,9 +646,13 @@ var enMessages = map[string]string{
 	"error.workspaceMismatch":              "This session belongs to %s (open: %s). Start AXLR there with: axlr-tui --root %[1]s",
 
 	// qa3 terminal bugs
-	"notice.autonomyOn":  "Full autonomy is on: tools run without asking · /autonomy off to ask again",
-	"notice.autonomyOff": "Full autonomy is off: each tool asks before it runs · /autonomy on to stop asking",
-	"plans.taskSession":  " · session %s",
+	"notice.autonomyOn":        "Full autonomy is on: tools run without asking · /autonomy off to ask again",
+	"notice.autonomyOff":       "Full autonomy is off: each tool asks before it runs · /autonomy on to stop asking",
+	"plans.taskSession":        " · session %s",
+	"notice.nothingToCancel":   "Nothing to cancel: no turn or operation is running",
+	"notice.nothingToContinue": "Nothing to continue: the session is not interrupted or waiting on a call",
+	"notice.continueBusy":      "Cannot continue while an operation is running",
+	"notice.sessionsBusy":      "Sessions open once the current operation finishes",
 }
 
 var esMessages = map[string]string{
@@ -1244,7 +1248,11 @@ var esMessages = map[string]string{
 	"error.workspaceMismatch":              "Esta sesión es de %s (abierto: %s). Arranca AXLR allí con: axlr-tui --root %[1]s",
 
 	// qa3 terminal bugs
-	"notice.autonomyOn":  "Autonomía completa activada: las herramientas no preguntan · /autonomy off para volver a preguntar",
-	"notice.autonomyOff": "Autonomía completa desactivada: cada herramienta pregunta antes · /autonomy on para no preguntar",
-	"plans.taskSession":  " · sesión %s",
+	"notice.autonomyOn":        "Autonomía completa activada: las herramientas no preguntan · /autonomy off para volver a preguntar",
+	"notice.autonomyOff":       "Autonomía completa desactivada: cada herramienta pregunta antes · /autonomy on para no preguntar",
+	"plans.taskSession":        " · sesión %s",
+	"notice.nothingToCancel":   "Nada que cancelar: no hay ningún turno ni operación en curso",
+	"notice.nothingToContinue": "Nada que continuar: la sesión no está interrumpida ni esperando una llamada",
+	"notice.continueBusy":      "No se puede continuar mientras se ejecuta una operación",
+	"notice.sessionsBusy":      "Las sesiones se abren cuando termine la operación en curso",
 }

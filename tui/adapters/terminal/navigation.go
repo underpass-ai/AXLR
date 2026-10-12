@@ -115,15 +115,21 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	if m.overlay == "palette" && !m.approvalFocus() {
 		switch msg.(type) {
-		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseWheelMsg, list.FilterMatchesMsg:
+		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseWheelMsg, tea.MouseClickMsg, list.FilterMatchesMsg:
 			if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
 				return m, nil, false
 			}
 			var intent ControlIntent
 			var cmd tea.Cmd
-			m.Palette, intent, cmd = m.Palette.Update(msg)
+			if click, ok := msg.(tea.MouseClickMsg); ok {
+				// The palette resolves its own rows: on 12 October 2026
+				// Jobs and Copy ignored clicks, missing from the shared list.
+				intent = m.paletteClick(click)
+			} else {
+				m.Palette, intent, cmd = m.Palette.Update(msg)
+			}
 			if intent != "" {
-				return m.navigation(intent)
+				return m.paletteAction(intent)
 			}
 			return m, cmd, true
 		}
@@ -669,7 +675,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.cancel()
 			return m, nil, true
 		}
-		if m.Header.State.Status != domain.StatusApproval && m.Header.State.Status != domain.StatusInterrupted && m.Header.State.Status != domain.StatusStreaming {
+		if !m.continuable() {
 			return m, nil, true
 		}
 		u := application.SessionControlUseCase{Store: m.deps.Store}
@@ -678,7 +684,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		})
 		return m, cmd, true
 	case "continue":
-		if m.Busy || (m.Header.State.Status != domain.StatusInterrupted && m.Header.State.Status != domain.StatusApproval && m.Header.State.Status != domain.StatusStreaming) {
+		if m.Busy {
+			m.Status.Notice = m.Theme.T("notice.continueBusy")
+			return m, nil, true
+		}
+		if !m.continuable() {
+			m.Status.Notice = m.Theme.T("notice.nothingToContinue")
 			return m, nil, true
 		}
 		m.overlay = ""
@@ -689,6 +700,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m, cmd, true
 	case "sessions":
 		if m.Busy {
+			m.Status.Notice = m.Theme.T("notice.sessionsBusy")
 			return m, nil, true
 		}
 		store := m.deps.Store
@@ -920,4 +932,47 @@ func modelIDStrings(ids []root.ModelID) []string {
 		out[i] = string(id)
 	}
 	return out
+}
+
+// continuable reports a session Ctrl+R can resume and Esc can cancel
+// without a running operation: interrupted, streaming or awaiting a call.
+func (m AppModel) continuable() bool {
+	switch m.Header.State.Status {
+	case domain.StatusInterrupted, domain.StatusApproval, domain.StatusStreaming:
+		return true
+	}
+	return false
+}
+
+// paletteClick is the action under a click in the palette, "close" for its
+// close button, or "" for anywhere else.
+func (m AppModel) paletteClick(click tea.MouseClickMsg) ControlIntent {
+	if click.Button != tea.MouseLeft {
+		return ""
+	}
+	if m.zones.Get(m.prefix + "close").InBounds(click) {
+		return "close"
+	}
+	for _, item := range actionItems {
+		a := item.(actionItem)
+		if m.zones.Get(m.prefix + string(a.intent)).InBounds(click) {
+			return a.intent
+		}
+	}
+	return ""
+}
+
+// paletteAction closes the palette and runs its action. A refused action
+// says why instead of leaving the palette open with nothing changed, as
+// Cancel did while idle on 12 October 2026.
+func (m AppModel) paletteAction(intent ControlIntent) (tea.Model, tea.Cmd, bool) {
+	m.overlay = ""
+	if intent == "close" {
+		return m, nil, true
+	}
+	if intent == "cancel" && m.cancel == nil && !m.continuable() {
+		m.Status.Notice = m.Theme.T("notice.nothingToCancel")
+		return m, nil, true
+	}
+	return m.navigation(intent)
 }
