@@ -1487,7 +1487,7 @@ var esMessages = map[string]string{
 	"transcript.toolNoResult":     "aún sin resultado",
 	"transcript.toolMoreLines":    "… %d líneas más · Ctrl+P → I muestra el resultado entero",
 	"transcript.toolMoreLinesOne": "… %d línea más · Ctrl+P → I muestra el resultado entero",
-	"transcript.toolExit":         "salida %d",
+	"transcript.toolExit":         "código de salida %d",
 	"transcript.toolDiscarded":    "salida recortada, %s fuera",
 	"transcript.toolNoOutput":     "sin salida",
 	"changes.restoreStep":         "restaurado",

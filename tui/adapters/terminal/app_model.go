@@ -251,7 +251,9 @@ func (m AppModel) Init() tea.Cmd {
 	if git := m.readGitState(); git != nil {
 		repairs = tea.Batch(repairs, git)
 	}
-	repairs = tea.Batch(repairs, startTitle())
+	if os.Getenv("TERM") != "dumb" {
+		repairs = tea.Batch(repairs, startTitle())
+	}
 	if m.Theme.Monochrome {
 		return repairs
 	}

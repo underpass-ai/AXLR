@@ -64,7 +64,10 @@ func (m AppModel) attentionKey() string {
 			return "call:" + string(p.Call.ID)
 		}
 	}
-	if run, awaiting := m.incidentRun(); awaiting && m.overlay == "incident" {
+	if m.overlay != "incident" {
+		return ""
+	}
+	if run, awaiting := m.incidentRun(); awaiting {
 		return fmt.Sprintf("card:%s:%s:%d", run.Instance, run.Step, run.Iteration)
 	}
 	return ""
