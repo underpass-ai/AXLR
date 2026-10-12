@@ -155,7 +155,6 @@ type AppModel struct {
 	turnDone      bool
 	lastAttention string
 	titleReady    bool
-	lastTitle     string
 	titleLabel    string
 	quitting      bool
 }
@@ -1155,6 +1154,12 @@ func (m AppModel) View() tea.View {
 	}
 	view.AltScreen = true
 	view.MouseMode = tea.MouseModeCellMotion
+	if m.titleReady && !m.quitting {
+		// The renderer writes the title in order with the frames; on 12
+		// October 2026 titles sent as separate writes from batched commands
+		// arrived out of order and left "working" on an idle console.
+		view.WindowTitle = m.windowTitle()
+	}
 	if m.deps.Diagnostics != nil {
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticRender, Width: lipgloss.Width(content), Height: lipgloss.Height(content), ElapsedMilliseconds: time.Since(started).Milliseconds()})
 	}

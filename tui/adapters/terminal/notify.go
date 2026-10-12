@@ -118,8 +118,7 @@ func (m *AppModel) loadTitleLabel() {
 }
 
 // signal adds what the step that just ran asks of the terminal: a ring for
-// a card that appeared or a long turn that ended, and the title when it
-// changed.
+// a card that appeared or a long turn that ended. View sets the title.
 func (m AppModel) signal(cmd tea.Cmd) (AppModel, tea.Cmd) {
 	if m.quitting {
 		return m, cmd
@@ -134,12 +133,6 @@ func (m AppModel) signal(cmd tea.Cmd) (AppModel, tea.Cmd) {
 	if m.turnDone {
 		m.turnDone = false
 		cmds = append(cmds, m.ring(m.Theme.T("notify.turnDone")))
-	}
-	if m.titleReady {
-		if title := m.windowTitle(); title != m.lastTitle {
-			m.lastTitle = title
-			cmds = append(cmds, tea.Raw(ansi.SetWindowTitle(title)))
-		}
 	}
 	return m, tea.Batch(cmds...)
 }

@@ -92,20 +92,20 @@ func TestCardsAndLongTurnsRing(t *testing.T) {
 func TestTheWindowTitleFollowsTheSession(t *testing.T) {
 	m := approvalModel(t)
 	defer m.zones.Close()
-	next, cmd := m.Update(titleReadyMsg{})
-	m = next.(AppModel)
-	if got := strings.Join(raws(cmd), ""); got != "\x1b]2;AXLR · waiting for you · write\a" {
-		t.Fatalf("title %q", got)
+	if m.View().WindowTitle != "" {
+		t.Fatal("the title was set before the old one was saved")
 	}
-	if _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyDown}); len(raws(cmd)) != 0 {
-		t.Fatal("an unchanged title was set again")
+	next, _ := m.Update(titleReadyMsg{})
+	m = next.(AppModel)
+	if got := m.View().WindowTitle; got != "AXLR · waiting for you · write" {
+		t.Fatalf("title %q", got)
 	}
 	m.Theme.Locale = Spanish
 	if got := m.windowTitle(); got != "AXLR · te espera · write" {
 		t.Fatalf("spanish %q", got)
 	}
-	next, cmd = m.quit()
-	if m = next.(AppModel); !m.quitting || cmd == nil {
+	next, cmd := m.quit()
+	if m = next.(AppModel); !m.quitting || cmd == nil || m.View().WindowTitle != "" {
 		t.Fatal("quit did not restore the title")
 	}
 }
