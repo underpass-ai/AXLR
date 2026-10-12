@@ -133,3 +133,28 @@ func TestSearchAndListRowsReadAsTheirQuestion(t *testing.T) {
 		}
 	}
 }
+
+// On 12 October 2026, while a local_exec card was open, the axlr_skill call
+// behind it read "waiting for approval" although it needs none.
+func TestCallsBehindTheApprovalCardAreQueued(t *testing.T) {
+	s := toolRowState("", "", nil)
+	second := root.ToolCall{ID: "c2", Name: "axlr_skill"}
+	s.Messages[1].ToolCalls = append(s.Messages[1].ToolCalls, second)
+	s.Activity = append(s.Activity, domain.PendingTool{Call: second})
+	for _, locale := range []Locale{English, Spanish} {
+		tr := NewTranscript()
+		tr.SetWidth(120)
+		tr.SetSession(s, "", Theme{Locale: locale, Monochrome: true})
+		lines := strings.Split(ansi.Strip(tr.Text()), "\n")
+		card, queued := lines[len(lines)-2], lines[len(lines)-1]
+		if !strings.Contains(card, "read") || !strings.HasSuffix(card, "· "+Translate(locale, "transcript.toolAwaiting")) {
+			t.Fatalf("%s: the card's call reads %q", locale, card)
+		}
+		if !strings.Contains(queued, "axlr_skill") || !strings.HasSuffix(queued, "· "+Translate(locale, "transcript.toolQueued")) {
+			t.Fatalf("%s: the call behind it reads %q", locale, queued)
+		}
+	}
+	if Translate(Spanish, "transcript.toolQueued") != "en cola" || Translate(English, "transcript.toolQueued") != "queued" {
+		t.Fatal("queued label wording")
+	}
+}

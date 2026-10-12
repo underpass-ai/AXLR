@@ -653,6 +653,7 @@ var enMessages = map[string]string{
 	"notice.nothingToContinue": "Nothing to continue: the session is not interrupted or waiting on a call",
 	"notice.continueBusy":      "Cannot continue while an operation is running",
 	"notice.sessionsBusy":      "Sessions open once the current operation finishes",
+	"transcript.toolQueued":    "queued",
 }
 
 var esMessages = map[string]string{
@@ -1255,4 +1256,5 @@ var esMessages = map[string]string{
 	"notice.nothingToContinue": "Nada que continuar: la sesión no está interrumpida ni esperando una llamada",
 	"notice.continueBusy":      "No se puede continuar mientras se ejecuta una operación",
 	"notice.sessionsBusy":      "Las sesiones se abren cuando termine la operación en curso",
+	"transcript.toolQueued":    "en cola",
 }
