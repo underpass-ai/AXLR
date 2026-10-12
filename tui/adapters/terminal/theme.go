@@ -88,6 +88,27 @@ func (t Theme) Accent(s string) string {
 	return lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(t.palette().Accent)).Render(s)
 }
 
+// axlrInk is the wordmark's colour per letter, A X L R: copper, gold, brown
+// and sand, as tools/pixelart/logos.json inks the drawn logo (docs/brand.md).
+var axlrInk = [4]string{"#B85C38", "#D97B2D", "#6B4A2E", "#C9B08C"}
+
+// axlrTileText is the letter on each tile: dark on copper, gold and sand,
+// light on brown, where dark text would not read.
+var axlrTileText = [4]string{"#11131C", "#11131C", "#F7F3E9", "#11131C"}
+
+// Brand is the header's small logo: each letter of "AXLR" on a tile of its
+// wordmark colour, whatever the theme; a monochrome terminal writes it.
+func (t Theme) Brand() string {
+	if t.Monochrome {
+		return t.Icon("brand") + " AXLR"
+	}
+	brand := ""
+	for i, letter := range "AXLR" {
+		brand += lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(axlrTileText[i])).Background(lipgloss.Color(axlrInk[i])).Render(" " + string(letter) + " ")
+	}
+	return brand
+}
+
 func (t Theme) Selected(s string) string {
 	if t.Monochrome {
 		return "> " + s
