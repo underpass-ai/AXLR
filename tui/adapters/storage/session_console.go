@@ -37,6 +37,14 @@ type sessionConsoleLine struct {
 	At           time.Time           `json:"at"`
 	Plan         *sessionPlanOutcome `json:"plan,omitempty"`
 	Restore      *sessionRestore     `json:"restore,omitempty"`
+	Failure      *sessionFailure     `json:"failure,omitempty"`
+}
+
+// sessionFailure is a turn that failed: the error and the kind of hint
+// the console words for the person.
+type sessionFailure struct {
+	Message string `json:"message"`
+	Hint    string `json:"hint,omitempty"`
 }
 
 // sessionRestore names the steps a restore went back over; their
@@ -103,6 +111,9 @@ func encodeConsoleLines(lines []domain.ConsoleLine) []sessionConsoleLine {
 				record.Restore.Files = append(record.Restore.Files, sessionRestoredFile{Path: string(f.Path), From: string(f.From), To: string(f.To)})
 			}
 		}
+		if f := line.Failure; f != nil {
+			record.Failure = &sessionFailure{Message: f.Message, Hint: f.Hint}
+		}
 		out = append(out, record)
 	}
 	return out
@@ -123,6 +134,9 @@ func decodeConsoleLines(records []sessionConsoleLine) []domain.ConsoleLine {
 			for _, f := range r.Files {
 				line.Restore.Files = append(line.Restore.Files, domain.RestoredFile{Path: root.RelativePath(f.Path), From: root.ToolCallID(f.From), To: root.ToolCallID(f.To)})
 			}
+		}
+		if f := record.Failure; f != nil {
+			line.Failure = &domain.TurnFailure{Message: f.Message, Hint: f.Hint}
 		}
 		out = append(out, line)
 	}

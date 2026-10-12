@@ -128,6 +128,9 @@ type AppModel struct {
 	cancelledAt int
 	// turnStarted is when the running turn began; see turn_clock.go.
 	turnStarted time.Time
+	// failureOperation records a failed turn's console line; its end keeps
+	// the footer's error.
+	failureOperation uint64
 }
 
 // turnRunning reports whether the busy operation is a turn, which takes a
@@ -555,7 +558,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		steered := (m.steerCancelled == v.ID || m.closedCancelled == v.ID) && errors.Is(v.Err, context.Canceled)
 		m.steerCancelled, m.closedCancelled = 0, 0
 		m.cancelledAt = 0
-		if cancelled := errors.Is(v.Err, context.Canceled) && !steered; cancelled && v.Err.Error() == context.Canceled.Error() && v.PluginApproval == nil {
+		// The end of recording a failed turn's line keeps the turn's error
+		// in the footer, saved or not.
+		recorded := m.failureOperation == v.ID
+		m.failureOperation = 0
+		var failed *domain.TurnFailure
+		if cancelled := errors.Is(v.Err, context.Canceled) && !steered && !recorded; cancelled && v.Err.Error() == context.Canceled.Error() && v.PluginApproval == nil {
 			// On 10 October 2026 Esc left "! context canceled" across the
 			// footer, hiding the state and the cost: the person's own Esc
 			// is not an error, so it is said in the footer's state instead.
@@ -570,7 +578,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if status := v.Session.Status(); wasTurn || status == domain.StatusStreaming || status == domain.StatusInterrupted || status == domain.StatusApproval {
 				m.cancelledAt = len(m.Header.State.Messages) + 1
 			}
-		} else if v.Err != nil && !steered {
+		} else if v.Err != nil && !steered && !recorded {
 			m.Status.Error = strings.Replace(v.Err.Error(), context.Canceled.Error(), m.Theme.T("status.cancelled"), 1)
 			if v.PluginApproval != nil {
 				m.Status.Error = m.Theme.T("error.approvalRefresh") + v.Err.Error()
@@ -581,10 +589,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Status.Error = strings.Replace(m.Status.Error, domain.ErrToolCallLimit.Error(), m.Theme.T("error.toolCallLimit"), 1)
 			}
 			m.Status.Error = m.budgetErrorText(v.Err, m.Status.Error)
+			m.Status.Error = m.withProviderHint(v.Err, m.Status.Error)
+			if failure, ok := turnFailure(v.Err); ok && wasTurn && returned == "" {
+				// The transcript keeps the failure once the footer moves on.
+				failed = &failure
+			}
 			if returned != "" {
 				m.Status.Error += " " + returned
 			}
-		} else if m.draft == "" {
+		} else if m.draft == "" && !recorded {
 			m.Status.Error = ""
 		}
 		m.exitCancelled, m.queueReturned = 0, 0
@@ -604,6 +617,12 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.steer.Peek() == "" && !m.inlineApproval() {
 			m = m.autoOpenIncidentCard()
 			m = m.autoOpenRepairPanel()
+		}
+		if failed != nil {
+			if record := m.recordTurnFailure(*failed); record != nil {
+				// A queued prompt starts when the line is recorded.
+				return m, record
+			}
 		}
 		if record := m.recordPlanOutcomes(); record != nil {
 			// A queued prompt starts when the outcome is recorded.

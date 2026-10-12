@@ -738,9 +738,14 @@ var enMessages = map[string]string{
 	"mention.truncated":          "first %d entries",
 
 	// qa3 qol view
-	"footer.unmetered":   "+%d unmetered",
-	"usage.unmetered":    "Unmetered: %d cancelled or failed requests without a usage report; their cost is not in the total",
-	"usage.unmeteredOne": "Unmetered: %d cancelled or failed request without a usage report; its cost is not in the total",
+	"footer.unmetered":     "+%d unmetered",
+	"usage.unmetered":      "Unmetered: %d cancelled or failed requests without a usage report; their cost is not in the total",
+	"usage.unmeteredOne":   "Unmetered: %d cancelled or failed request without a usage report; its cost is not in the total",
+	"hint.choose_model":    "choose a model the provider serves with /model",
+	"hint.check_key":       "check OPENROUTER_API_KEY (keys at https://openrouter.ai/keys)",
+	"hint.check_key_local": "check this server's key (api_key_env in local_models)",
+	"hint.credits":         "the account has no credits left; add some at https://openrouter.ai/settings/credits",
+	"hint.retry_later":     "the provider is limiting requests; wait and try again",
 }
 
 var esMessages = map[string]string{
@@ -1417,7 +1422,12 @@ var esMessages = map[string]string{
 	"mention.truncated":          "primeras %d entradas",
 
 	// qa3 qol view
-	"footer.unmetered":   "+%d sin medir",
-	"usage.unmetered":    "Sin medir: %d peticiones canceladas o fallidas sin informe de uso; su coste no está en el total",
-	"usage.unmeteredOne": "Sin medir: %d petición cancelada o fallida sin informe de uso; su coste no está en el total",
+	"footer.unmetered":     "+%d sin medir",
+	"usage.unmetered":      "Sin medir: %d peticiones canceladas o fallidas sin informe de uso; su coste no está en el total",
+	"usage.unmeteredOne":   "Sin medir: %d petición cancelada o fallida sin informe de uso; su coste no está en el total",
+	"hint.choose_model":    "elige con /model un modelo que sirva el proveedor",
+	"hint.check_key":       "revisa OPENROUTER_API_KEY (claves en https://openrouter.ai/keys)",
+	"hint.check_key_local": "revisa la clave de este servidor (api_key_env en local_models)",
+	"hint.credits":         "la cuenta no tiene créditos; añádelos en https://openrouter.ai/settings/credits",
+	"hint.retry_later":     "el proveedor está limitando las peticiones; espera y vuelve a intentarlo",
 }

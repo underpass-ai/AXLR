@@ -28,6 +28,9 @@ func TestExportSessionWritesMarkdown(t *testing.T) {
 	if err := s.AddRestore(domain.FileRestore{Files: []domain.RestoredFile{{Path: "a.go", From: "w1", To: "w1"}}}); err != nil {
 		t.Fatal(err)
 	}
+	if err := s.AddTurnFailure(domain.TurnFailure{Message: "OpenRouter provider_failure (HTTP 502)"}); err != nil {
+		t.Fatal(err)
+	}
 	state := s.Export()
 	files := exportedFiles{}
 	ledgers := usageLedgers{state.ID: {Requests: 3, PromptTokens: 9000, CompletionTokens: 400, Cost: 0.0147, CostRequests: 2, Unmetered: 1}}
@@ -52,6 +55,7 @@ func TestExportSessionWritesMarkdown(t *testing.T) {
 		"## Assistant",
 		"done",
 		"> Restored `a.go` (to before w1)",
+		"> Failed: OpenRouter provider_failure (HTTP 502)",
 	} {
 		if !strings.Contains(text, part) {
 			t.Fatalf("export lacks %q:\n%s", part, text)
