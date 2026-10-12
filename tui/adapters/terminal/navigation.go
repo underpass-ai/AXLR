@@ -61,6 +61,8 @@ func (m *AppModel) syncApproval() {
 				target = m.Theme.Tf("approval.forgeTarget", forgedName(p.Call.Arguments.Bytes()))
 			case domain.HostOperationRunTool:
 				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()))
+			case domain.HostOperationRemoveTool:
+				target = m.Theme.Tf("approval.removeToolTarget", forgedName(p.Call.Arguments.Bytes()))
 			}
 		}
 	}

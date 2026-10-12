@@ -118,7 +118,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		hostTools = append(hostTools, RememberTool())
 	}
 	if u.offersForge(*session) {
-		hostTools = append(hostTools, ForgeTool(), RunTool())
+		hostTools = append(hostTools, ForgeTool(), RunTool(), RemoveTool())
 	}
 	if u.Logs != nil {
 		hostTools = append(hostTools, LogsTool())
@@ -187,10 +187,10 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		tools = withoutTool(tools, HostLogsName)
 	}
 	if !u.offersForge(*session) {
-		tools = withoutTool(withoutTool(tools, HostForgeToolName), HostRunToolName)
+		tools = withoutTool(withoutTool(withoutTool(tools, HostForgeToolName), HostRunToolName), HostRemoveToolName)
 	} else if session.Mode().HidesWriteTools() {
-		// Review mode runs forged tools but writes none.
-		tools = withoutTool(tools, HostForgeToolName)
+		// Review mode runs forged tools but writes or removes none.
+		tools = withoutTool(withoutTool(tools, HostForgeToolName), HostRemoveToolName)
 	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
 	if u.Diagnostics != nil {
