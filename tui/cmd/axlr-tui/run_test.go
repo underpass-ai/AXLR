@@ -115,6 +115,16 @@ func TestRunRejectsInvalidConfigurationBeforeLaunch(t *testing.T) {
 			if code == 0 || called || out.Len() == 0 || strings.Contains(out.String(), "test-key-never-print") {
 				t.Fatalf("code=%d called=%v output=%s", code, called, &out)
 			}
+			// The missing key names the variable, where to get a key and
+			// the alternative that needs none.
+			if tc.noKey {
+				settings := filepath.Join(env["HOME"], ".config", "axlr", "settings.json")
+				for _, want := range []string{"OPENROUTER_API_KEY", "https://openrouter.ai/keys", "local_models in " + settings} {
+					if !strings.Contains(out.String(), want) {
+						t.Fatalf("missing-key error lacks %q:\n%s", want, &out)
+					}
+				}
+			}
 		})
 	}
 }

@@ -286,10 +286,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	clientHTTP := &http.Client{Transport: transport}
 	defer clientHTTP.CloseIdleConnections()
 	// OpenRouter is optional once local models are configured; without a
-	// key and without local models the client reports the missing key.
+	// key and without local models the launch says how to get either.
 	var remote localmodels.Client
 	var remoteCatalog application.ModelCatalogPort
-	if key != "" || len(locals.models) == 0 {
+	if key == "" && len(locals.models) == 0 {
+		return fail(fmt.Errorf("no model provider: set OPENROUTER_API_KEY (create a key at https://openrouter.ai/keys), or configure local_models in %s for models that need no key", settingsPath))
+	}
+	if key != "" {
 		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP, Models: openRouterModelOptions(settings)})
 		if err != nil {
 			return fail(err)

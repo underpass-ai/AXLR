@@ -35,6 +35,7 @@ Start with the visible symptom, then use the relevant check. AXLR prints startup
 
 | Symptom | Check | Next action |
 |:--|:--|:--|
+| `no model provider: set OPENROUTER_API_KEY … or configure local_models in …` at launch | Neither an OpenRouter key nor a local model is configured | Export `OPENROUTER_API_KEY` (keys at https://openrouter.ai/keys), or add `local_models` to the settings file the message names |
 | `local model …: … API key is required (set NAME)` | The URL is not a loopback address | Export the variable named by `api_key_env`, or point `url` at `127.0.0.1` |
 | `model endpoint must use https unless it is a loopback address` | A non-loopback `url` uses `http` | Serve it over TLS, or reach it through a loopback tunnel |
 | `model … is not a configured local model and OPENROUTER_API_KEY is not set` | The session's model is an OpenRouter id | Export the key, or choose a local model in `/model` |
