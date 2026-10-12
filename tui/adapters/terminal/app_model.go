@@ -313,6 +313,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Info.SetWidth(infoWidth)
 		m.Info.Viewport.SetHeight(infoHeight)
 		m.Transcript.ApplyTheme(m.Theme)
+		m.refreshSearch()
 		m = m.autoOpenIncidentCard()
 		m = m.autoOpenRepairPanel()
 		return m, nil
@@ -991,6 +992,7 @@ func (m *AppModel) refreshTranscript() {
 		m.Transcript.AppendCancelled()
 	}
 	m.Transcript.AppendQueued(m.steer.Peek())
+	m.refreshSearch()
 }
 
 // submitDraft sends the composer's text as a prompt: queued into the

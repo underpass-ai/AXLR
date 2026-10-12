@@ -264,7 +264,7 @@ func TestNavigationSearchTargetsArchivedDraftRow(t *testing.T) {
 	for _, r := range "needle" {
 		m = update(m, tea.KeyPressMsg{Code: r, Text: string(r)})
 	}
-	if len(m.SearchBox.Hits) != 1 || m.SearchBox.Hits[0].ArchivedDraftIndex == nil {
+	if len(m.SearchBox.Hits) != 1 {
 		t.Fatalf("search missed archived draft: %+v", m.SearchBox.Hits)
 	}
 	if m.Transcript.Viewport.YOffset() == 0 || !strings.Contains(m.Transcript.View(), "archived needle") {

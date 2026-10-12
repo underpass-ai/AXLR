@@ -30,7 +30,7 @@ The model picker filters to text models that support tools. Typing filters by ev
 | `/usage` (alias `/uso`) | Show this session's tokens, cost by provider, latency and budget; see [cost and budget](#cost-and-budget) |
 | `Ctrl+P` | Open the action palette |
 | `Ctrl+O` | Open a saved session |
-| `Ctrl+F` | Search the current conversation |
+| `Ctrl+F` | Search the current conversation as drawn: the footer counts every occurrence (`2/5`), the current one is marked apart from the others and scrolled into view; Enter or ↓ goes to the next, ↑ or Shift+Enter to the previous, and keys that leave the query as it is keep the place |
 | `Ctrl+R` | Explicitly continue an interrupted turn |
 | `PgUp` / `PgDn`, mouse wheel | Scroll the conversation |
 | `F1` | Show in-app help |

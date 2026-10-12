@@ -308,10 +308,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					}
 				case "search":
 					switch k.String() {
-					case "enter":
+					case "enter", "down":
 						intent = "next"
 						hasIntent = true
-					case "shift+enter":
+					case "shift+enter", "up":
 						intent = "previous"
 						hasIntent = true
 					default:
@@ -924,36 +924,44 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	}
 	return m, nil, false
 }
-func (m *AppModel) search() { // Restore makes a private validated snapshot; no shared session access.
-	s, err := domain.RestoreSession(m.Header.State)
-	if err != nil {
+
+// search finds the query's occurrences in the conversation and shows the
+// first, when the query changed since the last search.
+func (m *AppModel) search() {
+	query := strings.TrimSpace(m.SearchBox.Input.Value())
+	if query == m.SearchBox.query {
 		return
 	}
-	m.SearchBox.Hits = m.deps.Search.Execute(s, root.Text(m.SearchBox.Input.Value()))
+	m.SearchBox.query = query
+	m.SearchBox.Hits = findHits(m.Transcript.Viewport.GetContent(), query)
 	m.SearchBox.Selected = 0
 	m.showHit()
 }
-func (m *AppModel) showHit() {
-	if len(m.SearchBox.Hits) == 0 {
+
+// refreshSearch finds the hits again after the conversation was drawn
+// anew (a reply streamed, the screen resized), keeping the selection.
+func (m *AppModel) refreshSearch() {
+	if m.overlay != "search" {
 		return
 	}
-	hit := m.SearchBox.Hits[m.SearchBox.Selected]
-	prefix := m.Header.State
-	prefix.Draft = ""
-	if hit.MessageIndex != nil {
-		prefix.Messages = prefix.Messages[:*hit.MessageIndex]
-	} else if hit.ArchivedDraftIndex != nil {
-		archived := *hit.ArchivedDraftIndex
-		prefix.Messages = prefix.Messages[:prefix.ArchivedDrafts[archived].AfterMessage]
-		prefix.ArchivedDrafts = prefix.ArchivedDrafts[:archived]
-	}
-	// The prefix is measured with the transcript's own theme: Editorial
-	// speaker rows, folded tool runs and the icon set change the line count.
-	rendered := NewTranscript()
-	rendered.SetWidth(m.Transcript.Viewport.Width())
-	rendered.SetSession(prefix, "", m.Theme)
-	m.Transcript.Viewport.SetYOffset(rendered.VisualLineCount())
+	m.SearchBox.Hits = findHits(m.Transcript.Viewport.GetContent(), m.SearchBox.query)
+	m.SearchBox.Selected = max(0, min(m.SearchBox.Selected, len(m.SearchBox.Hits)-1))
 }
+
+// showHit scrolls the conversation to the selected hit's line when it is
+// out of view, leaving a third of the screen above it.
+func (m *AppModel) showHit() {
+	hit, ok := m.SearchBox.current()
+	if !ok {
+		return
+	}
+	height := max(1, m.shownTranscript().Viewport.Height())
+	if top := m.Transcript.Viewport.YOffset(); hit.Line >= top && hit.Line < top+height {
+		return
+	}
+	m.Transcript.Viewport.SetYOffset(max(0, hit.Line-height/3))
+}
+
 func (m AppModel) overlayView(base string) string {
 	status := m.statusView()
 	if m.approvalFocus() {

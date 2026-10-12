@@ -77,7 +77,10 @@ func (m AppModel) approvalCard() string {
 func (m AppModel) mainTranscript() string {
 	t := m.shownTranscript()
 	if m.overlay == "search" {
-		t.Highlight = strings.TrimSpace(m.SearchBox.Input.Value())
+		t.Highlight = m.SearchBox.query
+		if hit, ok := m.SearchBox.current(); ok {
+			t.CurrentHit = &hit
+		}
 	}
 	return t.View()
 }

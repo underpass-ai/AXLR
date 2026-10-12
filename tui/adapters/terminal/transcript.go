@@ -25,8 +25,10 @@ type Transcript struct {
 	// every line from its start on each render, which stalls on large results.
 	raw       string
 	wrapWidth int
-	// Highlight marks every case-insensitive occurrence in the visible rows.
-	Highlight string
+	// Highlight marks every case-insensitive occurrence in the visible rows,
+	// and CurrentHit the selected one differently.
+	Highlight  string
+	CurrentHit *searchHit
 	// Selection is the mouse-made range the view paints; see [Selection].
 	Selection Selection
 	// expanded holds the console notes a click opened, for the session
@@ -297,7 +299,11 @@ func (t Transcript) View() string {
 	}
 	if t.Highlight != "" {
 		for i := range lines {
-			lines[i] = highlightMatches(lines[i], t.Highlight, t.theme)
+			current := -1
+			if t.CurrentHit != nil && t.CurrentHit.Line == t.Viewport.YOffset()+i {
+				current = t.CurrentHit.Cell + t.Gutter
+			}
+			lines[i] = highlightMatches(lines[i], t.Highlight, t.theme, current)
 		}
 	}
 	if t.Selection.Set {
@@ -330,16 +336,19 @@ func formatClock(at, now time.Time) string {
 }
 
 // highlightMatches styles every case-insensitive occurrence of query in a
-// rendered line, measuring positions in cells as lipgloss ranges expect.
-func highlightMatches(line, query string, theme Theme) string {
+// rendered line, measuring positions in cells as lipgloss ranges expect;
+// the one starting at cell current (-1 for none) is the selected hit.
+func highlightMatches(line, query string, theme Theme, current int) string {
 	needle := []rune(query)
 	if len(needle) == 0 {
 		return line
 	}
 	style := lipgloss.NewStyle().Reverse(true)
+	selected := lipgloss.NewStyle().Reverse(true).Underline(true).Bold(true)
 	if !theme.Monochrome {
 		p := theme.palette()
 		style = lipgloss.NewStyle().Background(lipgloss.Color(p.Warning)).Foreground(lipgloss.Color(p.Background)).Bold(true)
+		selected = lipgloss.NewStyle().Background(lipgloss.Color(p.Accent)).Foreground(lipgloss.Color(p.Background)).Bold(true).Underline(true)
 	}
 	runes := []rune(ansi.Strip(line))
 	var ranges []lipgloss.Range
@@ -349,7 +358,11 @@ func highlightMatches(line, query string, theme Theme) string {
 			continue
 		}
 		start := ansi.StringWidth(string(runes[:i]))
-		ranges = append(ranges, lipgloss.NewRange(start, start+ansi.StringWidth(string(runes[i:i+len(needle)])), style))
+		hit := style
+		if start == current {
+			hit = selected
+		}
+		ranges = append(ranges, lipgloss.NewRange(start, start+ansi.StringWidth(string(runes[i:i+len(needle)])), hit))
 		i += len(needle)
 	}
 	return lipgloss.StyleRanges(line, ranges...)
