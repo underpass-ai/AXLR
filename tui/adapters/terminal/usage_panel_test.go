@@ -226,3 +226,18 @@ func TestUnmeteredRequestsAreShown(t *testing.T) {
 		t.Fatalf("unmetered line without any:\n%s", got)
 	}
 }
+
+// A cancelled request's usage arrives just before the turn ends: the
+// footer still says "Cancelled", now with the unmetered request.
+func TestACancelledRequestsUsageKeepsTheCancelledFooter(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Busy, m.operationID, m.providerWaiting = true, 1, true
+	m.submittedPrompt, m.submittedAt = "essay", 0
+	m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: "essay"})
+	m = update(m, application.Event{Kind: application.EventUsage, SessionUsage: &domain.UsageLedger{Requests: 1, Unmetered: 1}})
+	m = update(m, operationComplete{ID: 1, Session: *m.deps.Session, Err: context.Canceled})
+	if got := footerText(m); !strings.HasPrefix(m.Status.Notice, "Cancelled") || !strings.HasPrefix(got, "Cancelled") || !strings.HasSuffix(got, "+1 unmetered") {
+		t.Fatalf("footer %q, notice %q", got, m.Status.Notice)
+	}
+}
