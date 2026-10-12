@@ -382,7 +382,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "prompt_tokens", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -147,5 +148,34 @@ func TestUserSettingsConcurrentSelectorsKeepBothChanges(t *testing.T) {
 	got, err := first.Load(context.Background())
 	if err != nil || got.Model != "provider/new" || got.Theme != "paper" {
 		t.Fatalf("concurrent saves lost a setting: %+v, %v", got, err)
+	}
+}
+
+// prompt_tokens is a key this version owns: it is not kept again as an
+// unknown key, so a save writes it once, whatever its case in the file.
+func TestPromptTokensIsNotKeptAsAnUnknownKey(t *testing.T) {
+	var settings UserSettings
+	if err := json.Unmarshal([]byte(`{"PROMPT_TOKENS":20000,"future_key":1}`), &settings); err != nil {
+		t.Fatal(err)
+	}
+	if settings.PromptTokens != 20000 || len(settings.Extra) != 1 {
+		t.Fatalf("prompt tokens %d, extra %v", settings.PromptTokens, settings.Extra)
+	}
+	data, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for key := range fields {
+		if strings.EqualFold(key, "prompt_tokens") {
+			count++
+		}
+	}
+	if count != 1 || string(fields["prompt_tokens"]) != "20000" || string(fields["future_key"]) != "1" {
+		t.Fatalf("saved %s", data)
 	}
 }
