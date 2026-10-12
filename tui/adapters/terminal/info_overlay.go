@@ -13,7 +13,7 @@ func infoContent(state domain.SessionState) string {
 
 func infoContentLocale(state domain.SessionState, locale Locale) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s", Translate(locale, "info.model"), state.Model, Translate(locale, "info.workspace"), state.Workspace, Translate(locale, "info.session"), state.ID, Translate(locale, "info.fullResults"))
+	fmt.Fprintf(&b, "%s\n%s\n\n%s\n%s\n\n%s\n%s\n\n%s", Translate(locale, "info.model"), state.Model, Translate(locale, "info.workspace"), shortenHome(string(state.Workspace)), Translate(locale, "info.session"), state.ID, Translate(locale, "info.fullResults"))
 	if len(state.Activity) == 0 {
 		b.WriteString("\n" + Translate(locale, "info.noTools"))
 	}

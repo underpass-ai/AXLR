@@ -53,6 +53,9 @@ type Dependencies struct {
 	// reach, for the footer's "27k/64k"; nil, or zero, shows the tokens
 	// alone.
 	PromptCeiling func(root.ModelID) int
+	// GitState reads the workspace's branch for the header; nil shows
+	// none.
+	GitState func(context.Context, domain.Workspace) (GitState, error)
 	// Sandbox is the exec sandbox the launch found; the header marks one
 	// that is configured but does not confine commands.
 	Sandbox SandboxStatus

@@ -234,6 +234,9 @@ func (m AppModel) Init() tea.Cmd {
 	if len(m.pendingPlanOutcomes) > 0 {
 		repairs = tea.Batch(func() tea.Msg { return planOutcomesMsg{} }, repairs)
 	}
+	if git := m.readGitState(); git != nil {
+		repairs = tea.Batch(repairs, git)
+	}
 	if m.Theme.Monochrome {
 		return repairs
 	}
@@ -278,6 +281,15 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.editorResult(v), nil
 	case workspaceFilesMsg:
 		return m.filesLoaded(v), nil
+	case gitStateMsg:
+		if v.Workspace == m.Header.State.Workspace {
+			m.Header.Git = nil
+			if v.Err == nil {
+				state := v.State
+				m.Header.Git = &state
+			}
+		}
+		return m, nil
 	case quitDisarm:
 		if v.arm == m.quitArm && !m.quitArmedAt.IsZero() {
 			m.quitArmedAt = time.Time{}
@@ -439,6 +451,13 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case operationComplete:
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
+		}
+		if !v.gitRead && m.turnRunning() {
+			// A turn may have committed or switched branches: the header
+			// reads the workspace's Git state again.
+			v.gitRead = true
+			next, cmd := m.Update(v)
+			return next, tea.Batch(cmd, next.(AppModel).readGitState())
 		}
 		wasTurn := m.turnRunning()
 		if m.cancel != nil {

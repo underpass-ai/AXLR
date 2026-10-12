@@ -23,4 +23,6 @@ type operationComplete struct {
 	PluginApproval   *domain.PluginProfile
 	EngineUpdates    *[]application.EngineUpdateResult
 	MADEPreparation  *application.MADEPreparation
+	// gitRead marks a turn's end whose Git state read is already asked.
+	gitRead bool
 }

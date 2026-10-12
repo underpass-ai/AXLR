@@ -318,7 +318,8 @@ func TestModelSelectionBareScreenLongWorkspaceAtMinimumWidth(t *testing.T) {
 	if !strings.Contains(view, "Type /model to choose a model") {
 		t.Fatalf("bare screen hides selection guidance: %q", view)
 	}
-	if !strings.Contains(view, "/home/") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
+	// A short row keeps the path's last segment, not its head.
+	if !strings.Contains(view, "…/long") || lipgloss.Width(view) > 50 || lipgloss.Height(view) > 15 {
 		t.Fatalf("workspace missing or screen overflows: %q", view)
 	}
 }
