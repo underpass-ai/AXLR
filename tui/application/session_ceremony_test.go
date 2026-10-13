@@ -507,3 +507,42 @@ func TestSessionCeremonyTurnEntryCarriesTheContext(t *testing.T) {
 		t.Fatalf("journal %+v", journal.entries)
 	}
 }
+
+// A closed instance continues in its successor when the session is
+// resumed (or imported): MADE refuses to start the same id again.
+func TestSessionCeremonyContinuesAClosedInstanceInItsSuccessor(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	s := turnSession(t)
+	if err := s.BeginTurn("primero", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	if err := s.CompleteAssistant(assistant("ok")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.EndTurn(context.Background(), &s); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Close(context.Background(), &s, "exit"); err != nil {
+		t.Fatal(err)
+	}
+	closed, _ := s.Instance()
+	closed.Pending = []string{encodeEntry(TurnEntry{About: "ws:x", Key: "k", Summary: "left over"})}
+	if err := s.SetInstance(closed); err != nil {
+		t.Fatal(err)
+	}
+	engine.existing = map[string]bool{closed.Instance + "-2": true}
+	engine.calls = nil
+	if err := s.BeginTurn("segundo", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, _ := s.Instance()
+	if instance.Closed || instance.Instance != closed.Instance+"-3" || instance.Turns != 0 || len(instance.Pending) != 1 {
+		t.Fatalf("successor %+v after %+v", instance, closed)
+	}
+	if !strings.HasPrefix(strings.Join(engine.calls, ";"), "start refused "+closed.Instance+"-2;start axlr_session 1.0 about=;claim turn 2") || engine.inputs["predecessor"] != closed.Instance {
+		t.Fatalf("calls %v inputs %v", engine.calls, engine.inputs)
+	}
+}

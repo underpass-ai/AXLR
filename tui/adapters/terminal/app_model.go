@@ -560,6 +560,20 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Published != "" && v.Err == nil {
 			m.Status.Notice = m.Theme.Tf("notice.ceremonyPublished", v.Published)
 		}
+		if v.MemorySaved != nil && v.Err == nil {
+			m.Status.Notice = m.Theme.Tf("notice.memorySaved", v.MemorySaved.Events, v.MemorySaved.About, shortenHome(v.MemorySaved.Path))
+		}
+		if v.MemoryForgotten != nil && v.Err == nil {
+			m.Status.Notice = m.Theme.Tf("notice.memoryForgotten", v.MemoryForgotten.Ref, v.MemoryForgotten.Superseding)
+		}
+		if v.MemoryCompared != nil && m.overlay == "memory" {
+			content := memoryCompareContent(*v.MemoryCompared, m.Theme)
+			if v.Err != nil {
+				content = v.Err.Error()
+			}
+			m.Info.SetContent(content)
+			m.Info.Viewport.GotoTop()
+		}
 		if v.MADEPreparation != nil && m.overlay == "made-setup" {
 			m.Info.SetContent(madePreparationContent(*v.MADEPreparation, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
@@ -849,6 +863,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if command == "/ceremony" {
 				return m.ceremonyCommand("")
+			}
+			if command == "/memory" {
+				return m.memoryCommand("")
 			}
 			if command == "/changes" || command == "/diff" {
 				m.Composer.Input.Reset()
@@ -1299,6 +1316,15 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 		return m.exportSession(text)
 	case command == "/ceremony":
 		return m.ceremonyCommand(text)
+	case command == "/memory":
+		return m.memoryCommand(text)
+	case command == "/session":
+		fields := strings.Fields(text)
+		if strings.EqualFold(fields[0], "export") {
+			return m.exportSessionBundle(strings.Join(fields[1:], " "))
+		}
+		m.Status.Notice = m.Theme.Tf("notice.slashUsage", slashUsage("/session"))
+		return m, nil
 	case command == "/copy" && (strings.EqualFold(text, "code") || strings.Trim(text, "0123456789") == ""):
 		m.Composer.Input.Reset()
 		return m, m.copyCode(strings.ToLower(text))

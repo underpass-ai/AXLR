@@ -308,3 +308,16 @@ func TestCountReadsTheAboutsEventsFromTheMemoriesListing(t *testing.T) {
 		t.Fatalf("%v %v", known, err)
 	}
 }
+
+func TestExportedEventsReadsTheLastJSONLine(t *testing.T) {
+	output := "log line\n{\"abouts\":[\"project:Repo-B\"],\"event_count\":2,\"exported_to\":\"/x/.kmp/memory.jsonl\"}\n"
+	if got := exportedEvents([]byte(output)); got != 2 {
+		t.Fatalf("events %d", got)
+	}
+	if got := exportedEvents([]byte("nothing")); got != -1 {
+		t.Fatalf("no JSON: %d", got)
+	}
+	if _, _, err := (Preparer{Binary: "/bin/true"}).Export(context.Background(), Selection{Path: "/tmp/store"}, "project:X", nil); err == nil || !strings.Contains(err.Error(), "git checkout") {
+		t.Fatalf("no top level: %v", err)
+	}
+}

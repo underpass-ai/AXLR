@@ -317,7 +317,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "plugins":
 					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
-				case "info", "approvals", "updates", "made-setup", "session", "ceremonies":
+				case "info", "approvals", "updates", "made-setup", "session", "ceremonies", "memory":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
 					m.Picker.Page = m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width)
@@ -421,7 +421,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// m.Info scroll it, and the others keep the conversation behind
 		// them still. Search shows the conversation, so it falls through.
 		switch m.overlay {
-		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage", "session", "ceremonies":
+		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage", "session", "ceremonies", "memory":
 			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
 		case "help":
 			delta := 3
@@ -1051,13 +1051,16 @@ func (m AppModel) overlayView(base string) string {
 		body = m.Palette.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
 	case "help":
 		body = m.Help.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
-	case "info", "approvals", "updates", "made-setup", "session", "ceremonies":
+	case "info", "approvals", "updates", "made-setup", "session", "ceremonies", "memory":
 		title, subtitle := m.Theme.T("info.title"), m.Theme.T("info.subtitle")
 		if m.overlay == "session" {
 			title, subtitle = m.Theme.T("session.title"), m.Theme.T("session.subtitle")
 		}
 		if m.overlay == "ceremonies" {
 			title, subtitle = m.Theme.T("ceremonies.title"), m.Theme.T("ceremonies.subtitle")
+		}
+		if m.overlay == "memory" {
+			title, subtitle = m.Theme.T("memory.title"), m.Theme.T("memory.subtitle")
 		}
 		if m.overlay == "made-setup" {
 			title, subtitle = m.Theme.T("madeSetup.title"), m.Theme.T("madeSetup.subtitle")

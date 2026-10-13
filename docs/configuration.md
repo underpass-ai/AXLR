@@ -493,6 +493,7 @@ Command-line flags and environment variables win over `settings.json` for one la
 | `--plugin PATH` | Adds an MCP manifest for this launch, with purpose `tools` and approval `manual`; not saved |
 | `--plugin-env-from ID:KEY=HOST_VAR` | Child environment for a `--plugin` server; refuses `OPENROUTER_API_KEY` and every `api_key_env` as `HOST_VAR`, and an `ID` no `--plugin` registers |
 | `--root`, `--session`, `-c`/`--continue`, `--repair`, `--improve` | Choose the workspace and session; not configuration. `--repair` and `--improve` use the `repair` section |
+| `--import FILE` | Save the session bundle `/session export` wrote on another console (or this one) in this store, bound to `--root`, and resume it; refused when the session is saved here already (resume it with `--session`) and when combined with `--session`, `--continue`, `--repair` or `--improve`. Its MADE instance continues in a successor and the handoff is recorded in KMP under `ws:<id>` |
 
 | Variable | Effect |
 |:--|:--|

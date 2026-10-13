@@ -27,6 +27,8 @@ type fakeEngine struct {
 	inputs          map[string]string
 	failReports     bool
 	noOperation     bool
+	// existing names instance ids Start refuses as taken.
+	existing map[string]bool
 }
 
 var fakeTransitions = map[string]string{
@@ -39,6 +41,10 @@ var fakeTransitions = map[string]string{
 
 func (f *fakeEngine) Ready(context.Context, string, string) error { return f.ready }
 func (f *fakeEngine) Start(_ context.Context, definition, version, instance string, inputs map[string]string) error {
+	if f.existing[instance] {
+		f.calls = append(f.calls, "start refused "+instance)
+		return errors.New("refused: already exists: ceremony_instance")
+	}
 	f.calls = append(f.calls, "start "+definition+" "+version+" about="+inputs["memory_about"])
 	f.definition = definition
 	f.inputs = inputs

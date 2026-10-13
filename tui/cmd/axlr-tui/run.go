@@ -79,6 +79,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	traceFlag := flags.String("trace-file", "", "privacy-safe JSONL diagnostics (default a private file under $XDG_STATE_HOME/axlr/logs)")
 	tracePayloads := flags.Bool("trace-payloads", false, "capture redacted request/response bodies, prompts and tool results included, in a private per-run directory (default: trace_payloads in settings.json, else off)")
 	sessionFlag := flags.String("session", "", "saved session ID")
+	importFlag := flags.String("import", "", "session bundle written by /session export: saves it here and resumes it")
 	var continueFlag bool
 	flags.BoolVar(&continueFlag, "c", false, "continue the workspace's most recent session (same as --continue)")
 	flags.BoolVar(&continueFlag, "continue", false, "continue the workspace's most recent session, not archived and not a plan task")
@@ -99,6 +100,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if flags.NArg() != 0 {
 		return fail(errors.New("positional arguments are not accepted"))
 	}
+	if *importFlag != "" && (*sessionFlag != "" || continueFlag || *repairFlag != "" || *improveFlag != "") {
+		return fail(errors.New("--import resumes the imported session; it cannot be combined with --session, --continue, --repair or --improve"))
+	}
 	if continueFlag {
 		switch {
 		case *sessionFlag != "":
@@ -108,7 +112,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 	}
 	// resuming is a launch that opens a saved session rather than a new one.
-	resuming := *sessionFlag != "" || continueFlag
+	resuming := *sessionFlag != "" || continueFlag || *importFlag != ""
 	tracePath := *traceFlag
 	var logger *diagnostics.FileLogger
 	var openErr error
@@ -491,8 +495,12 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	store.OnDiscard = func(id domain.SessionID) { _ = sessionLabels.Forget(context.Background(), id) }
 	var session *domain.Session
 	var newID domain.SessionID
+	hostname, _ := os.Hostname()
 	if resuming {
 		id, e := domain.NewSessionID(*sessionFlag)
+		if *importFlag != "" {
+			id, e = importSession(ctx, *importFlag, loggedStore, sessionLabels, workspace, hostname)
+		}
 		if continueFlag {
 			id, e = application.LatestSessionUseCase{Store: loggedStore, Labels: sessionLabels}.Execute(ctx, workspace)
 		}
@@ -573,7 +581,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	// The console's host identity in MADE (decision H5): the lease owner is
 	// its work identity, the incarnation this install and this run.
-	hostname, _ := os.Hostname()
 	host := application.HostIdentity{Owner: madeWorkIdentity(configPath, registrations), AgentID: installID, Incarnation: hex.EncodeToString(runToken[:]), Hostname: hostname}
 	if sessionCeremony != nil {
 		sessionCeremony.Host = host
@@ -581,8 +588,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if ceremonies != nil {
 		ceremonies.Host, ceremonies.Roles = host, ceremonyhost.RoleOf
 	}
+	var kmpMemory *ceremonyhost.Memory
 	if hasKMP {
 		memory := ceremonyhost.Memory{Tools: runner, SyncGuide: kmp.SyncGuide}
+		kmpMemory = &memory
 		sessionCeremony.Identity = &application.KMPIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewKMPAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: memory, Recall: memory, UserAbout: userAbout(getenv)}
 	}
 	if ceremonies != nil {
@@ -700,7 +709,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if session != nil {
 		shown = session.Export()
 	}
-	app := terminal.New(terminal.Dependencies{
+	deps := terminal.Dependencies{
 		Context:           ctx,
 		Diagnostics:       trace,
 		Plugins:           pluginManager,
@@ -743,7 +752,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Notify:            settings.NotifyMode(),
 		Sandbox:           terminal.SandboxStatus{Mode: settings.ExecSandbox().Mode, Unavailable: sandboxUnavailable},
 		Quit:              func(state domain.SessionState) { shown = state },
-	})
+		SessionBundles:    storage.SessionBundles{},
+		Sessions:          store,
+		Hostname:          hostname,
+	}
+	if hasKMP && kmp.Save != nil {
+		deps.MemoryBundle = memoryBundle(kmp.Save)
+	}
+	if kmpMemory != nil {
+		deps.MemoryCompare, deps.MemoryForget = *kmpMemory, *kmpMemory
+	}
+	app := terminal.New(deps)
 	defer app.Close()
 	defer func() { printResumeHint(stderr, shown, store) }()
 	defer func() {

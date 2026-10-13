@@ -36,6 +36,17 @@ type Dependencies struct {
 	Store        application.SessionStorePort
 	// ExportFiles writes /export's Markdown; nil refuses /export.
 	ExportFiles application.ExportFilePort
+	// SessionBundles encodes /session export's bundle; nil refuses it.
+	// Sessions loads a saved session for it (nil: only the open one), and
+	// Hostname names this machine in the bundle.
+	SessionBundles application.SessionBundleCodec
+	Sessions       application.SessionLister
+	Hostname       string
+	// MemoryBundle, MemoryCompare and MemoryForget serve /memory save,
+	// compare and forget; nil refuses the command.
+	MemoryBundle  application.MemoryBundlePort
+	MemoryCompare application.MemoryComparePort
+	MemoryForget  application.MemoryForgetPort
 	// DeleteSession removes a saved session from Ctrl+O; nil offers no
 	// delete.
 	DeleteSession application.SessionDeletePort

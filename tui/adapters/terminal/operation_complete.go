@@ -16,7 +16,12 @@ type operationComplete struct {
 	// Fresh reports the new session /new started.
 	Fresh bool
 	// Published names the definition /ceremony publish published.
-	Published        string
+	Published string
+	// MemorySaved, MemoryCompared and MemoryForgotten are /memory's
+	// results: the bundle written, the comparison read, the entry closed.
+	MemorySaved      *application.BundleSaved
+	MemoryCompared   *application.CompareResult
+	MemoryForgotten  *application.ForgetReceipt
 	Session          domain.Session
 	Err              error
 	Sessions         *[]domain.SessionSummary

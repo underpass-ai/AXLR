@@ -50,7 +50,10 @@ type kmpStore struct {
 	// Memories is how many events the store holds under About, when
 	// Counted (decision J2).
 	Memories int
-	Counted  bool
+	// Save exports an about as the checkout's bundle (/memory save); nil
+	// without a binary.
+	Save    func(ctx context.Context, about string) (application.BundleSaved, error)
+	Counted bool
 }
 
 // prepareKMPStore chooses the store of the stdio kmp registration for this
@@ -87,6 +90,10 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 	preparer := kmpstore.Preparer{Binary: binary, PluginRoot: pluginRoot, UserStore: kmpstore.UserDefault(dataBase)}
 	selection, env := store.Selection, r.Env
 	store.SyncGuide = func(ctx context.Context) error { return preparer.SyncGuide(ctx, selection, env) }
+	store.Save = func(ctx context.Context, about string) (application.BundleSaved, error) {
+		path, events, err := preparer.Export(ctx, selection, about, env)
+		return application.BundleSaved{Path: path, About: about, Events: events}, err
+	}
 	if store.Report, err = preparer.Prepare(ctx, store.Selection, r.Env); err != nil {
 		return store, true, err
 	}

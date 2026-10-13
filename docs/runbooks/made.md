@@ -2,7 +2,7 @@
 
 MADE owns ceremony definitions, claims, state transitions and decision records. AXLR performs the work. Use the exact MCP registration ID `made` for console-driven ceremonies and setup. A built-in `/plugin` row is not proof of connectivity or authorization.
 
-The distribution locks MADE 0.9.1 in [engines.lock.json](../../distribution/engines.lock.json). Use a release-matched binary, plugin assets and the [upstream embedded setup](https://github.com/underpass-ai/made/blob/main/docs/embedded/README.md) for engine installation and store lifecycle. Record the binary version, SQLite path, policy, trusted-host identity and stable cursor key without exposing the key.
+The distribution locks the MADE release in [engines.lock.json](../../distribution/engines.lock.json); the file is the only place the version is stated. Use a release-matched binary, plugin assets and the [upstream embedded setup](https://github.com/underpass-ai/made/blob/main/docs/embedded/README.md) for engine installation and store lifecycle. Record the binary version, SQLite path, policy, trusted-host identity and stable cursor key without exposing the key.
 
 ## Choose the connection route
 

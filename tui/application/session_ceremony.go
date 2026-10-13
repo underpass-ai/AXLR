@@ -132,6 +132,12 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 	if has && current.Instance != "" && current.Unavailable == "" && !current.Closed && successor <= 1 {
 		return current, true
 	}
+	if has && current.Instance != "" && current.Closed && successor <= 1 {
+		// A closed instance (the session ended, or came from another
+		// console with --import) continues in its successor: MADE refuses
+		// to start an id again ("already exists", seen 13 October 2026).
+		successor = successorNumber(current.Instance) + 1
+	}
 	if err := c.Engine.Ready(ctx, SessionDefinition, SessionDefinitionVersion); err != nil {
 		c.unavailable(s, current, has, err)
 		return domain.SessionInstance{}, false
@@ -143,11 +149,22 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 	} else if current.Predecessor != "" {
 		inputs["predecessor"] = instanceID(domain.SessionID(current.Predecessor), 1)
 	}
-	if err := c.Engine.Start(ctx, SessionDefinition, SessionDefinitionVersion, id, inputs); err != nil {
+	err := c.Engine.Start(ctx, SessionDefinition, SessionDefinitionVersion, id, inputs)
+	for tries := 0; err != nil && successor > 1 && instanceExists(err) && tries < successorTries; tries++ {
+		// The successor exists already (the same bundle imported twice on
+		// one machine): the next number is tried.
+		successor++
+		id = instanceID(state.ID, successor)
+		err = c.Engine.Start(ctx, SessionDefinition, SessionDefinitionVersion, id, inputs)
+	}
+	if err != nil {
 		c.unavailable(s, current, has, err)
 		return domain.SessionInstance{}, false
 	}
-	instance := domain.SessionInstance{Instance: id, KMPAgent: current.KMPAgent, KMPContext: current.KMPContext, Recalled: current.Recalled, Predecessor: current.Predecessor, RecalledMemories: current.RecalledMemories}
+	// The entries KMP has not taken yet travel to the successor (an
+	// imported session's handoff among them); until 13 October 2026 they
+	// were lost with the predecessor.
+	instance := domain.SessionInstance{Instance: id, KMPAgent: current.KMPAgent, KMPContext: current.KMPContext, Recalled: current.Recalled, Predecessor: current.Predecessor, RecalledMemories: current.RecalledMemories, Pending: current.Pending}
 	if err := s.SetInstance(instance); err != nil {
 		c.log("session instance: %v", err)
 		return domain.SessionInstance{}, false
@@ -458,6 +475,14 @@ func (c *SessionCeremony) usage(ctx context.Context, id domain.SessionID) (int, 
 		return 0, 0
 	}
 	return ledger.Requests, ledger.Cost
+}
+
+// successorTries bounds how many taken successor numbers open skips.
+const successorTries = 20
+
+// instanceExists reports a start MADE refused because the id is taken.
+func instanceExists(err error) bool {
+	return strings.Contains(strings.ToLower(err.Error()), "already exists")
 }
 
 // exhausted reports a claim MADE refused because the step's repetitions
