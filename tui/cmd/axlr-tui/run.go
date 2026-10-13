@@ -696,6 +696,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		InitialDraft:      initialDraft,
 		Repairs:           repairPanelPort(repairs),
 		Plans:             planPanel,
+		Definitions:       ceremonyDefinitions(ceremonies),
 		Usage:             store,
 		MaxSessionUSD:     settings.MaxSessionUSD,
 		PromptCeiling:     locals.windows.PromptCeiling,
@@ -832,7 +833,8 @@ func ceremonyDriver(registrations []plugins.Registration, tools application.Tool
 	if !connected["made"] {
 		return nil
 	}
-	driver := &application.CeremonyDriver{Engine: ceremonyhost.Engine{Tools: tools, Owner: owner}, Checks: ceremonyhost.Checks{Tools: tools}, Labels: labels}
+	engine := ceremonyhost.Engine{Tools: tools, Owner: owner}
+	driver := &application.CeremonyDriver{Engine: engine, Definitions: engine, Checks: ceremonyhost.Checks{Tools: tools}, Labels: labels}
 	if connected["kmp"] {
 		driver.Memory = ceremonyhost.Memory{Tools: tools}
 	}
@@ -890,4 +892,12 @@ func madeWorkIdentity(configPath string, registrations []plugins.Registration) s
 		}
 	}
 	return ""
+}
+
+// ceremonyDefinitions is the /ceremony port, nil without MADE.
+func ceremonyDefinitions(ceremonies *application.CeremonyDriver) application.CeremonyDefinitionPort {
+	if ceremonies == nil {
+		return nil
+	}
+	return ceremonies.Definitions
 }

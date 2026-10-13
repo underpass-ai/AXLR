@@ -38,6 +38,7 @@ var slashCommands = []slashCommand{
 	{"/improve", "slash.improve"},
 	{"/plan", "slash.plan"},
 	{"/jobs", "slash.jobs"},
+	{"/ceremony", "slash.ceremony"},
 	{"/stop-ceremony", "slash.stopCeremony"},
 	{"/copy", "slash.copy"},
 	{"/export", "slash.export"},
@@ -200,7 +201,7 @@ var slashPromptModes = map[string]bool{"/normal": true, "/review": true, "/write
 
 // slashUsages are how the commands that take text are written; any other
 // command takes none.
-var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]"}
+var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]", "/ceremony": "/ceremony [<definition> [version] [brief]] · /ceremony publish <file.yaml>"}
 
 func slashUsage(command string) string {
 	if usage, ok := slashUsages[command]; ok {

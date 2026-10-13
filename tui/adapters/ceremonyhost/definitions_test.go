@@ -75,3 +75,25 @@ func TestPinnedDigestsMatchTheShippedYAML(t *testing.T) {
 func containsDigest(raw []byte, digest string) bool {
 	return strings.Contains(string(raw), digest)
 }
+
+// The generic driver reads a definition's inputs, steps, prompts and
+// terminal states from the YAML MADE returns.
+func TestParseDefinitionReadsStepsPromptsAndTerminalStates(t *testing.T) {
+	text, err := (Definition{Name: "axlr_session", Version: "1.0"}).YAML()
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, err := parseDefinition(text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definition.Name != "axlr_session" || definition.Version != "1.0" || definition.Initial != "OPEN" || len(definition.Terminal) != 2 || definition.Terminal[0] != "ABANDONED" || len(definition.Steps) != 1 || definition.Steps[0].ID != "turn" || definition.Steps[0].State != "OPEN" || !strings.Contains(definition.Prompts["turn"], "records one turn") || len(definition.Inputs) != 3 || len(definition.Transitions["OPEN"]) != 3 {
+		t.Fatalf("%+v", definition)
+	}
+	if _, err := parseDefinition("name: x\n"); err == nil {
+		t.Fatal("a definition without steps")
+	}
+	if RoleOf("axlr_session", "1.0") != "AXLR" || RoleOf("nope", "1.0") != "" {
+		t.Fatal("role")
+	}
+}

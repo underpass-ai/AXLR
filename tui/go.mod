@@ -21,6 +21,8 @@ require (
 	google.golang.org/protobuf v1.36.12
 )
 
+require gopkg.in/yaml.v3 v3.0.1 // indirect
+
 require (
 	github.com/atotto/clipboard v0.1.4
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect

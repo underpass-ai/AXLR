@@ -538,6 +538,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// m.Info is shared by several overlays: a result is written only
 		// while its own panel is open, never over one opened since.
+		if v.Published != "" && v.Err == nil {
+			m.Status.Notice = m.Theme.Tf("notice.ceremonyPublished", v.Published)
+		}
 		if v.MADEPreparation != nil && m.overlay == "made-setup" {
 			m.Info.SetContent(madePreparationContent(*v.MADEPreparation, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
@@ -824,6 +827,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/stop-ceremony" {
 				m.Composer.Input.Reset()
 				return m.stopCeremony()
+			}
+			if command == "/ceremony" {
+				return m.ceremonyCommand("")
 			}
 			if command == "/changes" || command == "/diff" {
 				m.Composer.Input.Reset()
@@ -1272,6 +1278,8 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 		return changed, cmd
 	case command == "/export":
 		return m.exportSession(text)
+	case command == "/ceremony":
+		return m.ceremonyCommand(text)
 	case command == "/copy" && (strings.EqualFold(text, "code") || strings.Trim(text, "0123456789") == ""):
 		m.Composer.Input.Reset()
 		return m, m.copyCode(strings.ToLower(text))

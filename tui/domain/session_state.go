@@ -45,6 +45,9 @@ type SessionState struct {
 	// against calls the steps already paid for, and the one a resume
 	// restarted. It lives for one turn.
 	FinishedBudgetBase int
+	// ChosenCeremony is the published definition /ceremony selected for the
+	// next prompt; it lives with the mode and is cleared with it.
+	ChosenCeremony CeremonyChoice
 	// StoppedCeremony is the definition of a ceremony the person stopped
 	// since the last prompt, "" when none: the next prompt tells the model
 	// once. Finishing the ceremony and returning to normal mode keep it.

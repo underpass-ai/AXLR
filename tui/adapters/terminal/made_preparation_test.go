@@ -21,6 +21,8 @@ func (s *madePreparerStub) Prepare(context.Context) (application.MADEPreparation
 	return s.result, nil
 }
 
+func (s *madePreparerStub) Publish(context.Context, string) (string, error) { return "x 1.0", nil }
+
 func TestMADEPreparationRunsFromTheMADERowOnly(t *testing.T) {
 	stub := &madePreparerStub{result: application.MADEPreparation{Status: "granted", WorkIdentity: "axlr-work-1a2b", GrantID: "axlr-default-work-v1", RestartRequired: true}}
 	m := sized()

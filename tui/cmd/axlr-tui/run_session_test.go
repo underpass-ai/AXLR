@@ -51,6 +51,8 @@ func (p *preparerStub) Prepare(context.Context) (application.MADEPreparation, er
 	return p.result, p.err
 }
 
+func (p *preparerStub) Publish(context.Context, string) (string, error) { return "", p.err }
+
 // A store that lacks axlr_session gets it published at start, through the
 // preparer P uses; a store that has it is left alone.
 func TestPrepareSessionDefinitionPublishesOnlyWhenMissing(t *testing.T) {

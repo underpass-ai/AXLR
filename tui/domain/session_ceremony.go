@@ -1,5 +1,7 @@
 package domain
 
+import "errors"
+
 // Ceremony returns a copy of the live ceremony run, or false when none runs.
 func (s Session) Ceremony() (CeremonyRun, bool) {
 	if s.state.Ceremony == nil {
@@ -58,3 +60,23 @@ func (s *Session) TakeStoppedCeremony() string {
 	s.state.StoppedCeremony = ""
 	return definition
 }
+
+// CeremonyChoice is the published definition the person chose with
+// /ceremony: its name and version.
+type CeremonyChoice struct{ Definition, Version string }
+
+// ChooseCeremony selects a published definition for the next prompt and
+// switches the session to ceremony mode.
+func (s *Session) ChooseCeremony(definition, version string) error {
+	if definition == "" || version == "" {
+		return errors.New("a ceremony needs a definition name and a version")
+	}
+	if err := s.SetMode(ModeCeremony); err != nil {
+		return err
+	}
+	s.state.ChosenCeremony = CeremonyChoice{Definition: definition, Version: version}
+	return nil
+}
+
+// ChosenCeremony is the definition /ceremony selected, zero when none.
+func (s Session) ChosenCeremony() CeremonyChoice { return s.state.ChosenCeremony }

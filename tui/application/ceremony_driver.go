@@ -93,6 +93,9 @@ type CeremonyDriver struct {
 	// console's role in a definition (nil: AXLR).
 	Host  HostIdentity
 	Roles func(definition, version string) string
+	// Definitions reads published definitions for /ceremony; nil offers
+	// none.
+	Definitions CeremonyDefinitionPort
 }
 
 // role is the console's role in the run's definition.
@@ -243,14 +246,16 @@ func unapproved(run domain.CeremonyRun, commands []domain.CheckCommand) bool {
 // carries the user's request.
 func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt root.Text) error {
 	spec, ok := ceremonySpecs[s.Mode()]
-	if !ok {
+	if !ok && s.Mode() != domain.ModeCeremony {
 		return errors.New("this mode starts no ceremony")
 	}
 	if d == nil || d.Engine == nil || d.Checks == nil {
 		return errors.New("MADE is not connected; ceremonies are unavailable")
 	}
-	if err := d.Engine.Ready(ctx, spec.definition, spec.version); err != nil {
-		return err
+	if ok {
+		if err := d.Engine.Ready(ctx, spec.definition, spec.version); err != nil {
+			return err
+		}
 	}
 	state := s.Export()
 	// A ceremony keeps the session's own about unless one was selected
@@ -296,6 +301,9 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 	now := time.Now
 	if d.Now != nil {
 		now = d.Now
+	}
+	if s.Mode() == domain.ModeCeremony {
+		return d.beginGeneric(ctx, s, prompt, about, memory, now)
 	}
 	instance := fmt.Sprintf("axlr-%s-%d", state.ID, now().UTC().Unix())
 	inputs := map[string]string{spec.briefInput: string(prompt), "workspace": string(state.Workspace), "memory_about": about}
@@ -459,6 +467,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 	}
 	if run.AwaitingPerson() {
 		return refuse("the draft is with the person for approval; tell the user to decide on the approval card (/incident) and end your turn"), nil
+	}
+	if run.Generic != nil {
+		return d.genericStepDone(ctx, s, run, arguments)
 	}
 	done, ignored, err := decodeStepDoneFor(run, arguments)
 	if err != nil {
@@ -727,6 +738,9 @@ func (d *CeremonyDriver) enterStep(ctx context.Context, s domain.Session, run do
 
 // stepInstruction is the next step's instruction under the run's profile.
 func stepInstruction(run domain.CeremonyRun) string {
+	if run.Generic != nil {
+		return genericInstruction(run)
+	}
 	if step, ok := compactSteps[run.Step]; ok && run.Compact {
 		return step.instruction
 	}
@@ -736,6 +750,9 @@ func stepInstruction(run domain.CeremonyRun) string {
 // baseInstruction is the standard instruction for the run's step; an
 // improvement words brief and build its own way.
 func baseInstruction(run domain.CeremonyRun) string {
+	if run.Generic != nil {
+		return genericInstruction(run)
+	}
 	if text, ok := improveInstructions[run.Step]; ok && improving(run) {
 		return text
 	}

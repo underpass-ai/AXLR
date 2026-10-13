@@ -27,6 +27,9 @@ type sessionConsole struct {
 	// StoppedCeremony is the ceremony the person stopped since the last
 	// prompt; the next prompt tells the model.
 	StoppedCeremony string `json:"stopped_ceremony,omitempty"`
+	// ChosenCeremony and ChosenVersion are the definition /ceremony chose.
+	ChosenCeremony string `json:"chosen_ceremony,omitempty"`
+	ChosenVersion  string `json:"chosen_version,omitempty"`
 	// Lines are the console lines shown between messages, such as a
 	// finished plan's outcome; files written before them have none.
 	Lines []sessionConsoleLine `json:"lines,omitempty"`
@@ -81,17 +84,21 @@ type sessionSyncVerdict struct {
 // consoleNotes is the part of a session's state <id>.console holds.
 type consoleNotes struct {
 	StoppedCeremony string
+	Chosen          domain.CeremonyChoice
 	Lines           []domain.ConsoleLine
 }
 
-func (n consoleNotes) empty() bool { return n.StoppedCeremony == "" && len(n.Lines) == 0 }
+func (n consoleNotes) empty() bool {
+	return n.StoppedCeremony == "" && n.Chosen == (domain.CeremonyChoice{}) && len(n.Lines) == 0
+}
 
 func notesOf(state domain.SessionState) consoleNotes {
-	return consoleNotes{StoppedCeremony: state.StoppedCeremony, Lines: state.ConsoleLines}
+	return consoleNotes{StoppedCeremony: state.StoppedCeremony, Chosen: state.ChosenCeremony, Lines: state.ConsoleLines}
 }
 
 func (n consoleNotes) apply(state *domain.SessionState) {
 	state.StoppedCeremony = n.StoppedCeremony
+	state.ChosenCeremony = n.Chosen
 	state.ConsoleLines = n.Lines
 }
 
@@ -165,7 +172,7 @@ func (s *SessionStore) readConsole(id domain.SessionID) consoleNotes {
 	if json.NewDecoder(bytes.NewReader(data)).Decode(&record) != nil || record.Version != sessionConsoleVersion {
 		return consoleNotes{}
 	}
-	return consoleNotes{StoppedCeremony: record.StoppedCeremony, Lines: decodeConsoleLines(record.Lines)}
+	return consoleNotes{StoppedCeremony: record.StoppedCeremony, Chosen: domain.CeremonyChoice{Definition: record.ChosenCeremony, Version: record.ChosenVersion}, Lines: decodeConsoleLines(record.Lines)}
 }
 
 func (s *SessionStore) writeConsole(id domain.SessionID, notes consoleNotes) error {
@@ -175,7 +182,7 @@ func (s *SessionStore) writeConsole(id domain.SessionID, notes consoleNotes) err
 		}
 		return nil
 	}
-	data, err := json.Marshal(sessionConsole{Version: sessionConsoleVersion, StoppedCeremony: notes.StoppedCeremony, Lines: encodeConsoleLines(notes.Lines)})
+	data, err := json.Marshal(sessionConsole{Version: sessionConsoleVersion, StoppedCeremony: notes.StoppedCeremony, ChosenCeremony: notes.Chosen.Definition, ChosenVersion: notes.Chosen.Version, Lines: encodeConsoleLines(notes.Lines)})
 	if err != nil {
 		return err
 	}

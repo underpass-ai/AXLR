@@ -284,3 +284,78 @@ func WorkIdentity(configPath string, env []string) string {
 	}
 	return ""
 }
+
+// Publish validates and publishes one definition under a five-minute
+// install grant, as publishCeremonies does for the console's own; the work
+// identity never keeps publication rights.
+func (p *Preparer) Publish(ctx context.Context, definitionYAML string) (string, error) {
+	if strings.TrimSpace(definitionYAML) == "" {
+		return "", errors.New("the definition is empty")
+	}
+	if p.ConfigPath == "" || !filepath.IsAbs(p.ConfigPath) || p.Store == nil {
+		return "", errors.New("MADE preparation is not configured")
+	}
+	configuration, err := storage.LoadMCPConfiguration(p.ConfigPath, p.Getenv)
+	if err != nil {
+		return "", err
+	}
+	var made *plugins.Registration
+	for i := range configuration.Registrations {
+		if configuration.Registrations[i].Manifest.ID == "made" {
+			made = &configuration.Registrations[i]
+		}
+	}
+	if made == nil {
+		return "", errors.New("MADE is not registered")
+	}
+	values := environment(made.Env)
+	if made.Manifest.URL != "" || values["MADE_MCP_BACKEND"] == "grpc" || filepath.Base(made.Manifest.Command) != embeddedLauncher {
+		return "", errors.New("only the embedded MADE launcher can publish from this console; the remote operator publishes")
+	}
+	work := WorkIdentity(p.ConfigPath, made.Env)
+	if work == "" {
+		return "", errors.New("the MADE entry sets an explicit trusted host; publish as that operator")
+	}
+	admin := server(made, without(made.Env, hostIdentityKey))
+	worker := server(made, append(without(made.Env, hostIdentityKey), hostIdentityKey+"="+work))
+	now := p.now().UTC()
+	grant := fmt.Sprintf("axlr-ceremony-install-%d", now.Unix())
+	if _, err := p.call(ctx, admin, "made_issue_authorization_grant", map[string]any{
+		"grant_id": grant, "grantee_id": work, "scope": map[string]any{"kind": "global"},
+		"valid_from": "2000-01-01T00:00:00Z", "valid_until": now.Add(5 * time.Minute).Format(time.RFC3339), "delegation_depth": 0,
+		"actions": []string{"validate_ceremony_draft", "publish_ceremony_definition"},
+	}); err != nil {
+		return "", fmt.Errorf("issue the install grant: %w", err)
+	}
+	var name string
+	report, err := p.call(ctx, worker, "made_validate_ceremony_draft", map[string]any{"definition_yaml": definitionYAML})
+	if err == nil {
+		if valid, ok := report["valid"].(bool); ok && !valid {
+			err = fmt.Errorf("the definition is not publishable: %v", bounded(fmt.Sprint(report["problems"]), 600))
+		}
+	}
+	if err == nil {
+		var published map[string]any
+		published, err = p.call(ctx, worker, "made_publish_ceremony_definition", map[string]any{"definition_yaml": definitionYAML})
+		if err == nil {
+			ceremony, _ := published["ceremony"].(string)
+			version, _ := published["version"].(string)
+			name = strings.TrimSpace(ceremony + " " + version)
+		}
+	}
+	_, revokeErr := p.call(ctx, admin, "made_revoke_authorization_grant", map[string]any{"grant_id": grant, "reason": "AXLR ceremony definition published"})
+	if revokeErr != nil {
+		revokeErr = fmt.Errorf("revoke install grant %s (it expires in five minutes): %w", grant, revokeErr)
+	}
+	if err != nil {
+		return "", errors.Join(err, revokeErr)
+	}
+	return name, revokeErr
+}
+
+func bounded(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	return text[:limit] + "…"
+}

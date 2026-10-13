@@ -7,6 +7,10 @@ import "context"
 // it may act as the store's trusted host, which the work agent never is.
 type MADEPreparationPort interface {
 	Prepare(context.Context) (MADEPreparation, error)
+	// Publish validates and publishes one definition the person wrote
+	// (/ceremony publish), through the same temporary install grant as the
+	// console's own definitions, and returns "name version".
+	Publish(ctx context.Context, definitionYAML string) (string, error)
 }
 
 type MADEPreparation struct {

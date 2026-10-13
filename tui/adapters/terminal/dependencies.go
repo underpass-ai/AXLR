@@ -48,6 +48,9 @@ type Dependencies struct {
 	Repairs RepairPanelPort
 	// Plans shows the plans and their tasks; nil without MADE.
 	Plans PlanPanelPort
+	// Definitions lists and reads published MADE definitions for
+	// /ceremony; nil without MADE.
+	Definitions application.CeremonyDefinitionPort
 	// Usage is the session's usage ledger for the footer's cost and
 	// /usage, where + raises the session's limit by MaxSessionUSD.
 	Usage         application.SessionUsagePort

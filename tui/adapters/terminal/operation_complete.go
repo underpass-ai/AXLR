@@ -14,7 +14,9 @@ type operationComplete struct {
 	// for new sessions.
 	DefaultSaved bool
 	// Fresh reports the new session /new started.
-	Fresh            bool
+	Fresh bool
+	// Published names the definition /ceremony publish published.
+	Published        string
 	Session          domain.Session
 	Err              error
 	Sessions         *[]domain.SessionSummary

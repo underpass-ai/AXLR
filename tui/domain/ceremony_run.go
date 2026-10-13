@@ -81,6 +81,16 @@ type CeremonyRun struct {
 	// of host reports on this instance (decision H5).
 	OperationID string
 	Reports     int
+	// Generic is the state of a definition driven through /ceremony's
+	// generic loop; nil for the console's own definitions.
+	Generic *GenericRun
+}
+
+// GenericRun is what the generic loop keeps of a definition: each step's
+// prompt and the terminal states.
+type GenericRun struct {
+	Prompts  map[string]string
+	Terminal []string
 }
 
 // LedgerEntry is one accepted step: its recorded fields, bounded, and the
@@ -294,6 +304,13 @@ func (r CeremonyRun) clone() CeremonyRun {
 		plan := *r.Plan
 		plan.Defects = append([]string(nil), plan.Defects...)
 		r.Plan = &plan
+	}
+	if r.Generic != nil {
+		generic := GenericRun{Prompts: make(map[string]string, len(r.Generic.Prompts)), Terminal: append([]string(nil), r.Generic.Terminal...)}
+		for step, prompt := range r.Generic.Prompts {
+			generic.Prompts[step] = prompt
+		}
+		r.Generic = &generic
 	}
 	if r.Task != nil {
 		task := r.Task.Clone()
