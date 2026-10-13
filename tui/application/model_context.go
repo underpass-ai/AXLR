@@ -86,7 +86,7 @@ func modelHostGuidance(s *domain.Session) root.Message {
 	}
 	plugins := map[root.PluginID][]string{}
 	for _, tool := range s.ToolSnapshot() {
-		if tool.Identity.Kind == domain.ToolKindPlugin {
+		if _, hidden := hiddenFromModel(tool); tool.Identity.Kind == domain.ToolKindPlugin && !hidden {
 			id := tool.Identity.Plugin.PluginID
 			plugins[id] = append(plugins[id], fmt.Sprintf("%s = %s", tool.Identity.Plugin.ToolName, tool.Definition.Name))
 		}
@@ -116,7 +116,7 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		// whole catalogue, so it is reached through axlr_tools only when needed.
 		entries := []string{}
 		for _, name := range plugins[id] {
-			if strings.Contains(name, "guide") && !strings.HasPrefix(name, "kmp_guide =") || id == "kmp" && strings.HasPrefix(name, "kmp_write_memory =") {
+			if strings.Contains(name, "guide") || id == "kmp" && strings.HasPrefix(name, "kmp_write_memory =") {
 				entries = append(entries, name)
 			}
 		}

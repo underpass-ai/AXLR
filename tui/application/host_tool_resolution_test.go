@@ -168,3 +168,53 @@ func TestBridgeAndDiscoveryKeepKMPGuideToTheConsole(t *testing.T) {
 		t.Fatalf("listed: %s", encoded)
 	}
 }
+
+// MADE's write surface is the console's (decision D6): the model reads,
+// searches, streams, inspects and designs; everything that changes an
+// instance or a definition is refused by the bridge and hidden by
+// discovery, which also stops counting it.
+func TestBridgeAndDiscoveryKeepMADEWritesToTheConsole(t *testing.T) {
+	allowed := []string{"made_get_help", "made_discover_capabilities", "made_list_ceremony_definitions", "made_get_ceremony_instance", "made_read_ceremony_events", "made_stream_ceremony", "made_search_ceremony_instances", "made_inspect_ceremony_resume", "made_design_ceremony", "made_validate_ceremony_draft", "made_explain_ceremony_draft", "made_diff_ceremony_definitions", "made_render_agentic_system_diagram", "made_generate_ceremony_report", "made_verify_ceremony_journal"}
+	hidden := []string{"made_start_published_ceremony", "made_start_ceremony", "made_claim_ceremony_step", "made_complete_ceremony_step", "made_apply_ceremony_transition", "made_cancel_ceremony", "made_pause_ceremony", "made_resume_ceremony", "made_run_ceremony", "made_run_ceremony_step", "made_approve_ceremony_guard", "made_defer_ceremony_guard", "made_issue_authorization_grant", "made_revoke_authorization_grant", "made_publish_ceremony_definition", "made_register_agent", "made_unregister_agent", "made_delete_contract", "made_begin_artifact_upload", "made_put_artifact_chunk", "made_report_ceremony_agent_status", "made_renew_ceremony_step_lease", "made_record_ceremony_host_handoff", "made_orchestrate", "made_deliberate", "made_create_council", "made_design_agentic_system", "made_lease_council_events", "made_pull_ceremony_events", "made_request_ceremony_intervention"}
+	var snapshot []domain.AvailableTool
+	for _, name := range append(append([]string{}, allowed...), hidden...) {
+		snapshot = append(snapshot, hostPlugin(t, name, "made", name))
+	}
+	snapshot = append(HostTools(), snapshot...)
+	for _, name := range allowed {
+		call := root.ToolCall{ID: "c", Name: HostCallToolName, Arguments: hostJSON(t, `{"name":"`+name+`","arguments":{},"why":"read"}`)}
+		if tool, _, _, err := ResolveToolCall(snapshot, call); err != nil || string(tool.Identity.Plugin.ToolName) != name {
+			t.Fatalf("%s refused: %v", name, err)
+		}
+		if _, err := hostDiscover(snapshot, nil, hostJSON(t, `{"name":"`+name+`"}`)); err != nil {
+			t.Fatalf("%s undescribed: %v", name, err)
+		}
+	}
+	for _, name := range hidden {
+		call := root.ToolCall{ID: "c", Name: HostCallToolName, Arguments: hostJSON(t, `{"name":"`+name+`","arguments":{},"why":"write"}`)}
+		if _, _, known, err := ResolveToolCall(snapshot, call); !known || err == nil || !strings.Contains(err.Error(), "the console runs ceremonies") {
+			t.Fatalf("%s allowed: %v", name, err)
+		}
+		if _, err := hostDiscover(snapshot, nil, hostJSON(t, `{"name":"`+name+`"}`)); err == nil {
+			t.Fatalf("%s described", name)
+		}
+	}
+	listed, err := hostDiscover(snapshot, nil, hostJSON(t, `{"query":"made","limit":20}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(listed)
+	for _, name := range hidden {
+		if strings.Contains(string(encoded), `"`+name+`"`) {
+			t.Fatalf("%s listed", name)
+		}
+	}
+	s := turnSession(t)
+	if err := s.BeginTurn("hello", snapshot); err != nil {
+		t.Fatal(err)
+	}
+	guidance := string(modelHostGuidance(&s).Content)
+	if !strings.Contains(guidance, "Registered MCP plugin made: "+itoa(len(allowed))+" tools") {
+		t.Fatalf("the hidden verbs are counted: %s", guidance)
+	}
+}

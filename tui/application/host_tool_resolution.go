@@ -47,22 +47,61 @@ func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domai
 	if target.Identity.Kind != domain.ToolKindPlugin {
 		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New("axlr_call_tool can only call registered plugin tools")
 	}
-	if consoleOwnedTool(target) {
-		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New(consoleOwnedRefusal)
+	if refusal, hidden := hiddenFromModel(target); hidden {
+		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New(refusal)
 	}
 	return target, arguments, true, nil
 }
 
-// consoleOwnedRefusal answers a model that reaches for KMP's identity
-// (decision G6): registering an agent, opening a context and choosing the
-// store are the console's alone, and it says what to do instead, since
-// the guidance of older sessions still names kmp_guide.
+// The plugin verbs the console keeps to itself (decisions D6 and G6 of the
+// lifecycle integration design): the bridge refuses them and axlr_tools
+// neither lists nor describes them, so the model never sees their schema;
+// the console's own calls do not pass here.
+
+// consoleOwnedRefusal answers a model that reaches for KMP's identity:
+// registering an agent, opening a context and choosing the store are the
+// console's alone, and it says what to do instead, since the guidance of
+// older sessions still names kmp_guide.
 const consoleOwnedRefusal = "kmp_guide is the console's: it registered this session with KMP and passes the session's context on every KMP call; ask memory with axlr_recall, or call kmp_ask, kmp_wake and kmp_write_memory through axlr_call_tool without context_id"
 
-// consoleOwnedTool reports a plugin tool the model may not call: KMP's
-// kmp_guide.
-func consoleOwnedTool(tool domain.AvailableTool) bool {
-	return tool.Identity.Kind == domain.ToolKindPlugin && tool.Identity.Plugin.PluginID == "kmp" && tool.Identity.Plugin.ToolName == "kmp_guide"
+// ceremonyOwnedRefusal answers a model that reaches for MADE's write
+// surface: the console starts, claims, completes and transitions every
+// ceremony, this session's included.
+const ceremonyOwnedRefusal = "the console runs ceremonies: it starts, claims, completes, transitions, publishes and cancels them itself, this session's included; read definitions and instances with the made_get_*, made_list_*, made_read_*, made_search_* and made_inspect_* verbs, design and validate drafts, and ask the person to run or publish one"
+
+// madeReadVerbs are the MADE verbs the model may call: reads, searches,
+// streams and design-time checks; nothing that starts, claims, completes,
+// transitions, cancels, pauses, resumes, runs, approves, defers, grants,
+// revokes, publishes, registers, deletes or uploads.
+var (
+	madeReadPrefixes = []string{"list_", "get_", "read_", "stream_", "search_", "inspect_"}
+	madeReadVerbs    = map[string]bool{"get_help": true, "discover_capabilities": true, "design_ceremony": true, "validate_ceremony_draft": true, "explain_ceremony_draft": true, "diff_ceremony_definitions": true, "render_agentic_system_diagram": true, "generate_ceremony_report": true, "verify_ceremony_journal": true}
+)
+
+// hiddenFromModel reports a plugin tool the model may not call and why.
+func hiddenFromModel(tool domain.AvailableTool) (string, bool) {
+	if tool.Identity.Kind != domain.ToolKindPlugin {
+		return "", false
+	}
+	name := string(tool.Identity.Plugin.ToolName)
+	switch tool.Identity.Plugin.PluginID {
+	case "kmp":
+		if name == "kmp_guide" {
+			return consoleOwnedRefusal, true
+		}
+	case "made":
+		verb := strings.TrimPrefix(name, "made_")
+		if madeReadVerbs[verb] {
+			return "", false
+		}
+		for _, prefix := range madeReadPrefixes {
+			if strings.HasPrefix(verb, prefix) {
+				return "", false
+			}
+		}
+		return ceremonyOwnedRefusal, true
+	}
+	return "", false
 }
 
 // malformedArgumentsKey names the object the model adapter

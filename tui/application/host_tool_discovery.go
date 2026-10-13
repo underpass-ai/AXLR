@@ -56,8 +56,8 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 			}
 			return nil, fmt.Errorf("unknown registered plugin tool %q", name)
 		}
-		if consoleOwnedTool(tool) {
-			return nil, errors.New(consoleOwnedRefusal)
+		if refusal, hidden := hiddenFromModel(tool); hidden {
+			return nil, errors.New(refusal)
 		}
 		if _, err := root.NewJSONObject(tool.Definition.Parameters.Bytes()); err != nil {
 			return nil, errors.New("registered tool has no valid object schema")
@@ -83,7 +83,7 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 	terms := strings.Fields(strings.ToLower(query))
 	plugins := make([]domain.AvailableTool, 0, len(snapshot))
 	for _, tool := range snapshot {
-		if tool.Identity.Kind == domain.ToolKindPlugin && !consoleOwnedTool(tool) {
+		if _, hidden := hiddenFromModel(tool); tool.Identity.Kind == domain.ToolKindPlugin && !hidden {
 			plugins = append(plugins, tool)
 		}
 	}

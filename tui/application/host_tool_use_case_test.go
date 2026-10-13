@@ -47,7 +47,7 @@ func hostExecute(t *testing.T, s domain.Session, op, args string) domain.ToolOut
 }
 
 func TestHostDiscoveryListsStableSummariesAndExactSchema(t *testing.T) {
-	s := hostSession(t, "reply", hostPlugin(t, "zeta", "made", "run"), hostPlugin(t, "alpha", "kmp", "kmp_wake"))
+	s := hostSession(t, "reply", hostPlugin(t, "zeta", "made", "made_get_ceremony_instance"), hostPlugin(t, "alpha", "kmp", "kmp_wake"))
 	out := hostExecute(t, s, domain.HostOperationTools, `{"limit":1}`)
 	var result struct {
 		Tools        []struct{ Name string }

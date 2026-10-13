@@ -12,7 +12,7 @@ import (
 func TestProgressiveAgentDiscoveryDoesNotAuthorizeManualPlugin(t *testing.T) {
 	s := turnSession(t)
 	kmp := hostPlugin(t, "memory", "kmp", "kmp_ask")
-	made := hostPlugin(t, "ceremony", "made", "run")
+	made := hostPlugin(t, "ceremony", "made", "made_get_ceremony_instance")
 	tools := append(turnTools(), HostTools()...)
 	tools = append(tools, kmp, made)
 	if err := s.BeginTurn("use memory and then a ceremony", tools); err != nil {
