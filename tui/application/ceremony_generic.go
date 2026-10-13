@@ -161,7 +161,7 @@ func (d *CeremonyDriver) genericStepDone(ctx context.Context, s domain.Session, 
 		// Nothing to claim and no transition: the definition waits for
 		// something the console does not drive (a human guard, a server
 		// step). The run stays live for the person to decide.
-		report["instruction"] = "The orchestrator enables no transition and offers no step to claim in state " + view.State + ": the ceremony waits for something outside this console (a guard, a server-owned step). Tell the user; they can wait, decide in MADE, or /stop-ceremony."
+		report["instruction"] = "The orchestrator enables no transition and offers no step to claim in state " + view.State + ": the ceremony waits for something outside this console (a guard, a server-owned step). Tell the user; they can wait, decide in the orchestrator, or /stop-ceremony."
 		d.observe(run, view.State, report, false, true)
 		return accept(report, &run), nil
 	}

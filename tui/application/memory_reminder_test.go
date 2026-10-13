@@ -146,6 +146,10 @@ func TestMemoryReminderAndJevEachActOncePerRequest(t *testing.T) {
 			if !strings.HasPrefix(last, MemoryReminderPrefix) {
 				t.Fatalf("fourth request should carry the memory reminder: %q", last)
 			}
+			// The reminder names the memory write the snapshot holds.
+			if strings.Contains(last, "%!") || !strings.Contains(last, "axlr_remember") && !strings.Contains(last, "kmp_write_memory through axlr_call_tool") {
+				t.Fatalf("the reminder names no memory write: %q", last)
+			}
 			return assistant("Nothing durable to record: a one-line fix."), nil
 		}
 		t.Fatalf("an extra model turn after %q", last)

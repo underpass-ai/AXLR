@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -21,8 +22,9 @@ const MemoryReminderPrefix = "[AXLR · memory]"
 // model and says how to decline.
 const memoryReminder = MemoryReminderPrefix + " Memory is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with axlr_remember (kind, text and its evidence, with summary_en when the text is not in English; the console uses the session's exact about and a stable idempotency key), then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
 
-// memoryReminderBridged is the reminder where axlr_remember is not offered.
-const memoryReminderBridged = MemoryReminderPrefix + " Memory is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with kmp_write_memory through axlr_call_tool, under the session's exact about (axlr_session shows it), with its source evidence and a stable idempotency key, then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
+// memoryReminderBridgedFormat is the reminder where axlr_remember is not
+// offered; %s is the memory engine's write, by its own name.
+const memoryReminderBridgedFormat = MemoryReminderPrefix + " Memory is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with %s through axlr_call_tool, under the session's exact about (axlr_session shows it), with its source evidence and a stable idempotency key, then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
 
 // remindMemory starts one console turn when a request ends with durable work
 // and no memory write: models given KMP recall it reliably but record what
@@ -48,7 +50,8 @@ func remindMemory(ctx context.Context, s *domain.Session, u ContinueTurnUseCase,
 		return false, nil
 	}
 	next := *s
-	reminder := memoryReminderBridged
+	_, write, _ := memoryWriteTool(s.ToolSnapshot())
+	reminder := fmt.Sprintf(memoryReminderBridgedFormat, write.Plugin.ToolName)
 	if _, remembers := findTool(s, HostRememberName); remembers {
 		reminder = memoryReminder
 	}
