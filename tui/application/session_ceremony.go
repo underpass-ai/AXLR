@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -58,6 +59,9 @@ type SessionCeremony struct {
 	Now      func() time.Time
 	// Log reports what the console did or could not do; nil says nothing.
 	Log func(string)
+
+	mu       sync.Mutex
+	recalled map[domain.SessionID]bool
 }
 
 // drives reports whether a session is one the console records for: a

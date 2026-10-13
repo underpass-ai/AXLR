@@ -28,6 +28,9 @@ func (m Memory) Remember(ctx context.Context, request application.RememberReques
 	arguments := map[string]any{"continuation": request.Continuation}
 	if request.Continuation == "" {
 		memory := map[string]any{"id": "m1", "kind": request.Kind, "summary": request.Text, "evidence": strings.Join(request.Evidence, "\n")}
+		if request.SummaryEN != "" {
+			memory["summary_en"] = request.SummaryEN
+		}
 		var links []any
 		for _, link := range request.Links {
 			evidence := link.Evidence
@@ -48,7 +51,11 @@ func (m Memory) Remember(ctx context.Context, request application.RememberReques
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) {
-			return nil, fmt.Errorf("KMP refused the memory (%s): %s", refused.Code, bounded(refused.Message, 1000))
+			hint := ""
+			if strings.Contains(refused.Message, "SEARCH_SUMMARY_REQUIRED") || strings.Contains(refused.Message, "summary_en") {
+				hint = "; add summary_en: an English summary of the text"
+			}
+			return nil, fmt.Errorf("KMP refused the memory (%s): %s%s", refused.Code, bounded(refused.Message, 1000), hint)
 		}
 		return nil, err
 	}

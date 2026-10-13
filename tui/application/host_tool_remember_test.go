@@ -244,3 +244,18 @@ func TestHostRememberReadsEvidenceLinesAndArrays(t *testing.T) {
 		t.Fatalf("example %q: %v", description[start:start+end], err)
 	}
 }
+
+func TestHostRememberPassesSummaryEN(t *testing.T) {
+	s := rememberSession(t, domain.ModeNormal)
+	recorder := &rememberRecorder{answer: map[string]any{"accepted": true}}
+	u := HostToolUseCase{Memory: recorder}
+	if outcome, err := u.Execute(context.Background(), s, rememberIdentity(t), mustObject(t, `{"kind":"decision","text":"Las fechas se guardan en UTC.","summary_en":"Dates are stored in UTC.","evidence":["parser.go:12"]}`)); err != nil || outcome.IsError {
+		t.Fatalf("%+v %v", outcome, err)
+	}
+	if recorder.requests[0].SummaryEN != "Dates are stored in UTC." || recorder.requests[0].Text != "Las fechas se guardan en UTC." {
+		t.Fatalf("%+v", recorder.requests[0])
+	}
+	if !strings.Contains(string(RememberTool().Definition.Description), "summary_en") || !strings.Contains(rememberSchema, `"summary_en"`) {
+		t.Fatal("summary_en is not described")
+	}
+}

@@ -545,7 +545,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if err != nil {
 			return fail(fmt.Errorf("install id: %w", err))
 		}
-		sessionCeremony.Identity = &application.KMPIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewKMPAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: ceremonyhost.Memory{Tools: runner, SyncGuide: kmp.SyncGuide}}
+		memory := ceremonyhost.Memory{Tools: runner, SyncGuide: kmp.SyncGuide}
+		sessionCeremony.Identity = &application.KMPIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewKMPAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: memory, Recall: memory, UserAbout: userAbout(getenv)}
 	}
 	if ceremonies != nil {
 		sessionCeremony.Engine = ceremonies.Engine
@@ -633,8 +634,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		continuation.Forge = forged
 	}
 	if _, kmp := activeEngineCommands["kmp"]; kmp {
-		// axlr_remember writes the model's memories in one call.
+		// axlr_remember writes the model's memories in one call;
+		// axlr_recall reads them in one.
 		continuation.Remember = ceremonyhost.Memory{Tools: runner}
+		continuation.Recall = ceremonyhost.Memory{Tools: runner}
 	}
 	var notices application.RepairNoticesPort
 	if repairs != nil {

@@ -28,6 +28,7 @@ const HostRememberName root.ToolName = "axlr_remember"
 const rememberSchema = `{"type":"object","properties":{` +
 	`"kind":{"type":"string","enum":["decision","constraint","observation","feedback","preference","error_path","success_path","semantic_delta","derived_value"]},` +
 	`"text":{"type":"string","minLength":1,"maxLength":4000},` +
+	`"summary_en":{"type":"string","minLength":1,"maxLength":4000,"description":"An English summary of text when text is not in English; a strict store refuses such a memory without it."},` +
 	`"evidence":{"type":"string","minLength":1,"maxLength":8200,"description":"One to eight evidence items, one per line (a file:line and what it shows, a command and its result); each line at most 1000 characters."},` +
 	`"links":{"type":"array","maxItems":8,"items":{"type":"object","properties":{"ref":{"type":"string","minLength":1},"rel":{"type":"string","minLength":1},"why":{"type":"string","minLength":1,"maxLength":1000},"evidence":{"type":"string","maxLength":1000}},"required":["ref","rel","why"],"additionalProperties":false}},` +
 	`"about":{"type":"string","minLength":1,"maxLength":256},` +
@@ -40,7 +41,7 @@ func RememberTool() domain.AvailableTool {
 	schema, _ := root.NewJSONObject([]byte(rememberSchema))
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostRememberName,
-		Description: "Record one durable memory in KMP in one call: kind, text, its evidence and optional links to refs you saw (rel such as supports, depends_on, supersedes, contradicts, corrects, restates or derived_from, and why). evidence is one string with an item per line. Example: {\"kind\":\"constraint\",\"text\":\"…\",\"evidence\":\"runtime/config.go:37 const HardTimeout = 5 * time.Minute\\ngo test ./runtime/ ok\"}. The console writes it under the session's about (the one session metadata and axlr_session show: the selected about, by default the workspace's project about) unless you name one, labels it with the session and workspace, and derives the idempotency key, so a retry never duplicates it; it needs no kmp_guide or schema read. A write with links returns needs_review with the stored context they touch and writes nothing: check it, then call again with only the continuation to commit, or correct the links. Approved like kmp_write_memory.",
+		Description: "Record one durable memory in KMP in one call: kind, text (with summary_en, an English summary, when text is not in English), its evidence and optional links to refs you saw (rel such as supports, depends_on, supersedes, contradicts, corrects, restates or derived_from, and why). evidence is one string with an item per line. Example: {\"kind\":\"constraint\",\"text\":\"…\",\"evidence\":\"runtime/config.go:37 const HardTimeout = 5 * time.Minute\\ngo test ./runtime/ ok\"}. The console writes it under the session's about (the one session metadata and axlr_session show: the selected about, by default the workspace's project about) unless you name one, labels it with the session and workspace, and derives the idempotency key, so a retry never duplicates it; it needs no kmp_guide or schema read. A write with links returns needs_review with the stored context they touch and writes nothing: check it, then call again with only the continuation to commit, or correct the links. Approved like kmp_write_memory.",
 		Parameters:  schema,
 	}}
 }
@@ -54,10 +55,13 @@ func (u ContinueTurnUseCase) offersRemember(s domain.Session) bool {
 // RememberRequest is one memory for KMP as the console writes it.
 type RememberRequest struct {
 	About, Kind, Text string
-	Evidence          []string
-	Links             []MemoryLink
-	Labels            map[string][]string
-	IdempotencyKey    string
+	// SummaryEN is the English summary of a text written in another
+	// language, which a strict store requires (decision E13).
+	SummaryEN      string
+	Evidence       []string
+	Links          []MemoryLink
+	Labels         map[string][]string
+	IdempotencyKey string
 	// Continuation resumes a write KMP returned for review; the other
 	// fields are then empty.
 	Continuation string
@@ -82,6 +86,7 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	}
 	var args struct {
 		About, Kind, Text, Continuation string
+		SummaryEN                       string `json:"summary_en"`
 		Evidence                        json.RawMessage
 		Links                           []struct{ Ref, Rel, Why, Evidence string }
 	}
@@ -109,7 +114,7 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 			return nil, err
 		}
 	}
-	request := RememberRequest{About: about, Kind: args.Kind, Text: args.Text, Evidence: evidence,
+	request := RememberRequest{About: about, Kind: args.Kind, Text: args.Text, SummaryEN: strings.TrimSpace(args.SummaryEN), Evidence: evidence,
 		Labels: map[string][]string{"session": {string(state.ID)}, "ws": {string(state.Workspace)}}}
 	for _, link := range args.Links {
 		request.Links = append(request.Links, MemoryLink{Ref: link.Ref, Rel: link.Rel, Why: link.Why, Evidence: link.Evidence})

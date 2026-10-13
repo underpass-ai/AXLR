@@ -47,7 +47,22 @@ func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domai
 	if target.Identity.Kind != domain.ToolKindPlugin {
 		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New("axlr_call_tool can only call registered plugin tools")
 	}
+	if consoleOwnedTool(target) {
+		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New(consoleOwnedRefusal)
+	}
 	return target, arguments, true, nil
+}
+
+// consoleOwnedRefusal answers a model that reaches for KMP's identity
+// (decision G6): registering an agent, opening a context and choosing the
+// store are the console's alone, and it says what to do instead, since
+// the guidance of older sessions still names kmp_guide.
+const consoleOwnedRefusal = "kmp_guide is the console's: it registered this session with KMP and passes the session's context on every KMP call; ask memory with axlr_recall, or call kmp_ask, kmp_wake and kmp_write_memory through axlr_call_tool without context_id"
+
+// consoleOwnedTool reports a plugin tool the model may not call: KMP's
+// kmp_guide.
+func consoleOwnedTool(tool domain.AvailableTool) bool {
+	return tool.Identity.Kind == domain.ToolKindPlugin && tool.Identity.Plugin.PluginID == "kmp" && tool.Identity.Plugin.ToolName == "kmp_guide"
 }
 
 // malformedArgumentsKey names the object the model adapter

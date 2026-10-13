@@ -41,6 +41,8 @@ type ContinueTurnUseCase struct {
 	// Remember writes axlr_remember's memories in KMP; nil, without KMP,
 	// offers no axlr_remember.
 	Remember RememberPort
+	// Recall reads KMP for axlr_recall; nil, without KMP, offers none.
+	Recall RecallPort
 	// Forge keeps the workspace's forged tools (forged_tools.go); nil, when
 	// settings turn them off, offers neither axlr_forge_tool nor
 	// axlr_run_tool.
@@ -120,6 +122,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if u.offersRemember(*session) {
 		hostTools = append(hostTools, RememberTool())
 	}
+	if u.Recall != nil {
+		hostTools = append(hostTools, RecallTool())
+	}
 	if u.offersForge(*session) {
 		hostTools = append(hostTools, ForgeTool(), RunTool(), RemoveTool())
 	}
@@ -185,6 +190,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if !u.offersRemember(*session) {
 		tools = withoutTool(tools, HostRememberName)
+	}
+	if u.Recall == nil {
+		tools = withoutTool(tools, HostRecallName)
 	}
 	if u.Logs == nil {
 		tools = withoutTool(tools, HostLogsName)

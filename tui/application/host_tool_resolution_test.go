@@ -142,3 +142,29 @@ func TestHostToolsDropAnUnaskedWhy(t *testing.T) {
 		t.Fatal("an unknown argument is still refused")
 	}
 }
+
+// kmp_guide is the console's: the bridge refuses it with what to do
+// instead, and discovery neither lists it nor describes it (decision G6
+// of the lifecycle integration design).
+func TestBridgeAndDiscoveryKeepKMPGuideToTheConsole(t *testing.T) {
+	snapshot := append(HostTools(), hostPlugin(t, "kmp_guide", "kmp", "kmp_guide"), hostPlugin(t, "kmp_wake", "kmp", "kmp_wake"))
+	call := root.ToolCall{ID: "c1", Name: HostCallToolName, Arguments: hostJSON(t, `{"name":"kmp_guide","arguments":{"registration_key":"session-1"},"why":"start the guide"}`)}
+	if _, _, known, err := ResolveToolCall(snapshot, call); !known || err == nil || !strings.Contains(err.Error(), "axlr_recall") || !strings.Contains(err.Error(), "without context_id") {
+		t.Fatalf("%v %v", known, err)
+	}
+	call.Arguments = hostJSON(t, `{"name":"kmp_wake","arguments":{"about":"project:x"},"why":"resume"}`)
+	if tool, _, _, err := ResolveToolCall(snapshot, call); err != nil || tool.Identity.Plugin.ToolName != "kmp_wake" {
+		t.Fatalf("%+v %v", tool, err)
+	}
+	if _, err := hostDiscover(snapshot, nil, hostJSON(t, `{"name":"kmp_guide"}`)); err == nil || !strings.Contains(err.Error(), "console") {
+		t.Fatalf("schema served: %v", err)
+	}
+	listed, err := hostDiscover(snapshot, nil, hostJSON(t, `{"query":"guide"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(listed)
+	if strings.Contains(string(encoded), "kmp_guide") {
+		t.Fatalf("listed: %s", encoded)
+	}
+}

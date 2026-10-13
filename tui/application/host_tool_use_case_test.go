@@ -82,7 +82,7 @@ func TestHostDiscoveryRejectsInvalidRangesAndSchemaWithoutTruncation(t *testing.
 	if out := hostExecute(t, s, domain.HostOperationTools, string(query)); !out.IsError {
 		t.Fatal("unbounded query")
 	}
-	huge := hostPlugin(t, "huge", "kmp", "kmp_guide")
+	huge := hostPlugin(t, "huge", "kmp", "kmp_inspect")
 	schema, _ := json.Marshal(map[string]any{"type": "object", "description": strings.Repeat("z", MaxHostResultBytes)})
 	huge.Definition.Parameters = hostJSON(t, string(schema))
 	s = hostSession(t, "reply", huge)

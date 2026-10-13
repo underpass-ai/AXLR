@@ -21,6 +21,8 @@ type Memory struct {
 	// SyncGuide writes the guide into the store when kmp_guide reports it
 	// missing; nil leaves the refusal to the caller.
 	SyncGuide func(context.Context) error
+	// Now is the clock a history read rewinds from; nil is time.Now.
+	Now func() time.Time
 }
 
 var _ application.MemoryPort = Memory{}

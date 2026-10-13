@@ -31,6 +31,11 @@ type KMPIdentity struct {
 	RegistrationKey string
 	Agents          KMPAgentsPort
 	Guide           MemoryIdentityPort
+	// Recall wakes memory for the recall note; nil appends none.
+	Recall RecallPort
+	// UserAbout is the person's about, user:<login name>, woken with the
+	// project's (decision F6); "" when the login name is unknown.
+	UserAbout string
 }
 
 func (i *KMPIdentity) usable() bool {

@@ -27,7 +27,7 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 		// card. A judgement
 		// asks Jev a question the person enabled in settings and changes
 		// nothing. The console's log is read-only.
-		return id.LocalOperation == domain.HostOperationLogs || id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationRequestImprovement || id.LocalOperation == domain.HostOperationJudge
+		return id.LocalOperation == domain.HostOperationLogs || id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationRequestImprovement || id.LocalOperation == domain.HostOperationJudge || id.LocalOperation == domain.HostOperationRecall
 	}
 	if readsWorkspace(id) {
 		// On 10 October 2026, with autonomy off, every local_search and

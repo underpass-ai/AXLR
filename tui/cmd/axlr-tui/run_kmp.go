@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/user"
 	"path/filepath"
 	"strings"
 
@@ -93,6 +94,30 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 		store.About, store.FromBundle, store.FromRoot = about, true, false
 	}
 	return store, true, nil
+}
+
+// userAbout is the person's memory about, user:<login name> (decision F6
+// of the lifecycle integration design): the account's user name, else
+// USER or USERNAME from the environment, else none.
+func userAbout(getenv func(string) string) string {
+	name := ""
+	if current, err := user.Current(); err == nil {
+		name = current.Username
+	}
+	if name == "" {
+		name = getenv("USER")
+	}
+	if name == "" {
+		name = getenv("USERNAME")
+	}
+	name = strings.TrimSpace(name)
+	if i := strings.LastIndexAny(name, "\\/"); i >= 0 {
+		name = name[i+1:] // DOMAIN\name on Windows
+	}
+	if name == "" {
+		return ""
+	}
+	return "user:" + strings.ToLower(strings.Join(strings.Fields(name), "-"))
 }
 
 // bundleAbout is the about to bind new sessions to: the bundle's or the

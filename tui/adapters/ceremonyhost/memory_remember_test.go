@@ -138,3 +138,26 @@ func TestRecordTurnWritesOneTurnEntry(t *testing.T) {
 		t.Fatal("an unaccepted write is an error")
 	}
 }
+
+func TestRememberSendsSummaryENAndNamesItOnRefusal(t *testing.T) {
+	var requests []map[string]any
+	m := kmpAnswers(t, &requests, map[string]any{"accepted": true, "status": "committed", "local_refs": map[string]any{"m1": "project:probe:entry:decision:x"}},
+		map[string]any{"status": "rejected", "error": map[string]any{"code": "invalid_request", "message": "SEARCH_SUMMARY_REQUIRED@memories[0].summary_en"}})
+	request := rememberRequest()
+	request.Text, request.SummaryEN = "Las fechas se guardan en UTC.", "Dates are stored in UTC."
+	if _, err := m.Remember(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	memory := requests[0]["memories"].([]any)[0].(map[string]any)
+	if memory["summary_en"] != "Dates are stored in UTC." || memory["summary"] != "Las fechas se guardan en UTC." {
+		t.Fatalf("%+v", memory)
+	}
+	plain := rememberRequest()
+	_, err := m.Remember(context.Background(), plain)
+	if err == nil || !strings.Contains(err.Error(), "add summary_en") {
+		t.Fatalf("%v", err)
+	}
+	if _, has := requests[1]["memories"].([]any)[0].(map[string]any)["summary_en"]; has {
+		t.Fatalf("summary_en sent empty: %+v", requests[1])
+	}
+}
