@@ -10,7 +10,11 @@ Use an engine supported by your platform and store format; the service distribut
 
 Success means AXLR discovers the intended `kmp` registration, can retrieve its guide and can recover a known memory from the intended store. A new project may legitimately have no memories. A successful connection alone does not prove that you selected the right data.
 
-## Install and connect
+## Let AXLR install it
+
+On Linux x86_64/arm64 and macOS on Apple silicon, the first-run setup assistant (`axlr-tui setup`) or `/update` in the console installs KMP when `mcp.json` has no `kmp` entry. It downloads and verifies the official release into `$XDG_DATA_HOME/axlr/engines/`. It then synchronises the guide into the store `$XDG_DATA_HOME/kmp/default`, which it creates when missing and reuses otherwise, before the first discovery. Finally it registers the package launcher with `KMP_MCP_BACKEND=embedded`, that `KMP_MCP_DATA_DIR`, `env_from {HOME, PATH}` and the approval you chose: `auto` by default in the assistant and in `/update`. To keep another store, register KMP by hand as below before running either.
+
+## Install and connect by hand
 
 1. Install a release-matched `kmp-mcp` binary using the upstream KMP instructions. If no published asset exists for your platform, KMP documents `cargo install kmp-mcp --locked`. Record its **absolute** executable path and check `kmp-mcp --version` and `kmp-mcp doctor`.
 2. Choose the store deliberately. `KMP_MCP_DATA_DIR` is the most explicit selection; use an absolute directory containing the intended memory. Check it with `KMP_MCP_DATA_DIR=/absolute/path/to/memory kmp-mcp info` before any write. KMP also supports a saved selection and automatic project/user defaults; see its guide for precedence. Do not create a new empty store accidentally when you meant to resume an existing one.

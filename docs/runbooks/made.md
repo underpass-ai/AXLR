@@ -12,7 +12,11 @@ The distribution locks MADE 0.9.1 in [engines.lock.json](../../distribution/engi
 | Direct `made-mcp` binary | Operator supplies store, policy, work identity and cursor key | Operator must issue the work grant and publish the exact definitions |
 | Remote engine | Remote operator owns authorization and definitions | `P` reports remote; it does not administer that engine |
 
-AXLR's preparer recognizes the launcher by the executable basename `run-embedded-mcp.sh`. A directly registered binary, even in embedded mode, is not that route. Neither `/update` nor installing a package bootstraps an engine store.
+AXLR's preparer recognizes the launcher by the executable basename `run-embedded-mcp.sh`. A directly registered binary, even in embedded mode, is not that route. Installing a package does not bootstrap an engine store.
+
+## Let AXLR install it
+
+On Linux x86_64/arm64 and macOS on Apple silicon, the first-run setup assistant (`axlr-tui setup`) or `/update` in the console installs MADE when `mcp.json` has no `made` entry. It downloads and verifies the official release into `$XDG_DATA_HOME/axlr/engines/`, runs the package's `made-configure-embedded.sh` with only `HOME` and `PATH`, creating or reusing the default store, its private configuration and the authorization bootstrap, and registers the launcher as below with `env_from {HOME, PATH}`. It then performs the preparation `P` describes. A failed preparation leaves MADE connected and says so; `P` retries it. The rest of this runbook is the manual route, and the reference for what that installation does.
 
 ## Register the installed embedded launcher
 

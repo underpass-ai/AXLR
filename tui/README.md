@@ -12,7 +12,7 @@ GOWORK=off CGO_ENABLED=0 go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-t
 /tmp/axlr-tui --root "$PWD"
 ```
 
-Supply `OPENROUTER_API_KEY` through the host environment before launch, or configure [local models](../docs/console.md#local-models). Type `/model` to select a model, then send a prompt. `--model provider/model` selects one directly; `--lang es` changes interface labels to Spanish. `F1` opens the keyboard guide.
+The first launch in a terminal runs the setup assistant: language, model (an OpenRouter key with a recommended light model, or a [local server](../docs/console.md#local-models)) and the KMP and MADE engines; `axlr-tui setup` repeats it. `OPENROUTER_API_KEY` in the host environment takes precedence over the key it saves. Type `/model` to change the model, then send a prompt. `--model provider/model` selects one directly; `--lang es` changes interface labels to Spanish. `F1` opens the keyboard guide.
 
 ## Read next
 

@@ -50,6 +50,11 @@ func engineUpdateContent(results []application.EngineUpdateResult, err error, th
 	for _, result := range results {
 		fmt.Fprintf(&b, "%s\n", strings.ToUpper(result.Engine))
 		switch result.Status {
+		case "installed":
+			fmt.Fprintf(&b, "%s · %s", result.Version, theme.T("update.installed"))
+			if result.Detail != "" {
+				fmt.Fprintf(&b, "\n%s", result.Detail)
+			}
 		case "updated":
 			if result.PreviousVersion != "" {
 				fmt.Fprintf(&b, "%s → %s · ", result.PreviousVersion, result.Version)

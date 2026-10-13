@@ -686,6 +686,13 @@ func (s *UserSettingsStore) update(ctx context.Context, change func(*UserSetting
 	return syncDirectoryFile(dir)
 }
 
+// Change applies one validated change to settings.json under its lock,
+// creating the file when it does not exist; the setup writes its choices
+// through it.
+func (s *UserSettingsStore) Change(ctx context.Context, change func(*UserSettings)) error {
+	return s.update(ctx, change)
+}
+
 type settingsModelPreference struct{ store *UserSettingsStore }
 
 var _ application.ModelPreferencePort = settingsModelPreference{}

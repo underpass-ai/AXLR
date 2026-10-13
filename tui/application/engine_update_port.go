@@ -18,9 +18,11 @@ type EngineUpdateResult struct {
 	Engine          string
 	PreviousVersion string
 	Version         string
-	Status          string // updated, current, skipped, failed
+	Status          string // installed, updated, current, skipped, failed
 	RestartRequired bool
 	Error           string
+	// Detail says what an installation prepared, or what is left to do.
+	Detail string
 }
 
 type EngineUpdateTarget struct {
@@ -32,4 +34,24 @@ type EngineUpdateTarget struct {
 type EngineConfigurationPort interface {
 	EngineTargets(context.Context) ([]EngineUpdateTarget, error)
 	ActivateEngine(context.Context, EngineUpdateTarget, string) error
+}
+
+// EngineRegistration is the mcp.json entry for an engine package that AXLR
+// installed itself: its launcher, profile and explicit child environment.
+type EngineRegistration struct {
+	Engine      string
+	Launcher    string
+	Name        string
+	Description string
+	Purpose     string
+	Approval    string
+	Env         map[string]string
+	EnvFrom     map[string]string
+}
+
+// EngineInstallPort prepares and connects an engine package mcp.json lacks;
+// packageRoot is the verified, extracted release. The detail is shown to the
+// person beside the installed version.
+type EngineInstallPort interface {
+	InstallEngine(ctx context.Context, engine, packageRoot string) (detail string, err error)
 }

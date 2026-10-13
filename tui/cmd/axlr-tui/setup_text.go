@@ -1,0 +1,111 @@
+package main
+
+import "fmt"
+
+// setupText holds the assistant's messages; it runs before the console, so
+// it does not use the console's theme.
+var setupText = map[string]map[string]string{
+	"en": {
+		"title":                    "AXLR · setup",
+		"intro":                    "Three steps: language, model, and AXLR's default engines (KMP memory and MADE ceremonies).\nPress Enter to take the option marked with *. Run axlr-tui setup to repeat it at any time.",
+		"language.question":        "1 · Language",
+		"choice":                   "Choice",
+		"invalid":                  "Answer with one of the options.",
+		"model.title":              "2 · Model",
+		"model.localFound":         "Found %d model(s) on local servers.",
+		"model.question":           "Where should AXLR's model run?",
+		"model.openrouter":         "OpenRouter: cloud models, light ones recommended (needs an OpenRouter key)",
+		"model.local":              "A local OpenAI-compatible server (llama.cpp, vLLM, Ollama, LM Studio): no key",
+		"model.skip":               "Skip: choose later with /model",
+		"model.skipped":            "No model chosen; pick one with /model in the console.",
+		"model.saved":              "Default model: %s",
+		"openrouter.keyFound":      "Using your OpenRouter key.",
+		"openrouter.keyPrompt":     "OpenRouter key (create one at https://openrouter.ai/keys; typing is hidden, Enter skips): ",
+		"openrouter.keyRefused":    "OpenRouter refused that key.",
+		"openrouter.keySaved":      "Key saved in %s (readable only by you; OPENROUTER_API_KEY takes precedence when set).",
+		"openrouter.loading":       "Reading OpenRouter's model list…",
+		"openrouter.catalogFailed": "Could not read the model list (%v); you can type a model id.",
+		"openrouter.recommended":   "Light models suit most work: fast, cheap and able to call tools. Change it any time with /model.",
+		"openrouter.question":      "Model",
+		"openrouter.other":         "Another OpenRouter model id",
+		"openrouter.modelID":       "OpenRouter model id",
+		"local.question":           "Local model",
+		"local.other":              "Another server URL",
+		"local.url":                "Server base URL (OpenAI-compatible, ending in /v1)",
+		"local.unreachable":        "%s did not list its models; it is saved as typed, start the server before using it.",
+		"local.served":             "Model name the server expects (empty for llama.cpp)",
+		"local.context":            "Context window in tokens (at most what the server was started with)",
+		"engines.title":            "3 · KMP and MADE",
+		"engines.intro":            "KMP is AXLR's durable memory; MADE runs its ceremonies (/plan, /debug, /delivery, /incident, /repair).\nAXLR downloads the official releases, verifies their checksums, creates their local stores and connects them.",
+		"engines.configUnreadable": "Cannot read %s (%v); fix it and run axlr-tui setup again.",
+		"engines.connected":        "KMP and MADE are already connected. /update in the console updates them.",
+		"engines.question":         "Install and configure KMP and MADE now?",
+		"engines.kmpAuto":          "Let the model record memories without asking each time? (recommended; change it in /mcp)",
+		"engines.later":            "Skipped. /update in the console installs them later.",
+		"engines.working":          "Downloading, verifying and configuring… (this can take a minute)",
+		"engines.installed":        "%s %s · installed and connected · %s",
+		"engines.ready":            "%s %s · already connected",
+		"engines.skipped":          "%s · connected by hand or remotely; left as it is",
+		"engines.failed":           "%s · could not install: %v",
+		"engines.platform":         "Official KMP and MADE packages exist for Linux (x86_64, arm64) and macOS (Apple silicon). On this system, follow docs/runbooks/kmp.md and docs/runbooks/made.md.",
+		"done":                     "Setup saved in %s.",
+		"continue":                 "Press Enter to open the console.",
+	},
+	"es": {
+		"title":                    "AXLR · configuración",
+		"intro":                    "Tres pasos: idioma, modelo y los motores por defecto de AXLR (memoria KMP y ceremonias MADE).\nPulsa Enter para la opción marcada con *. Repítelo cuando quieras con axlr-tui setup.",
+		"language.question":        "1 · Idioma",
+		"choice":                   "Opción",
+		"invalid":                  "Responde con una de las opciones.",
+		"model.title":              "2 · Modelo",
+		"model.localFound":         "Encontrados %d modelo(s) en servidores locales.",
+		"model.question":           "¿Dónde se ejecuta el modelo de AXLR?",
+		"model.openrouter":         "OpenRouter: modelos en la nube, recomendados los ligeros (necesita una clave de OpenRouter)",
+		"model.local":              "Un servidor local compatible con OpenAI (llama.cpp, vLLM, Ollama, LM Studio): sin clave",
+		"model.skip":               "Saltar: elegirlo luego con /model",
+		"model.skipped":            "Sin modelo; elige uno con /model en la consola.",
+		"model.saved":              "Modelo por defecto: %s",
+		"openrouter.keyFound":      "Uso tu clave de OpenRouter.",
+		"openrouter.keyPrompt":     "Clave de OpenRouter (créala en https://openrouter.ai/keys; no se ve al escribir, Enter salta): ",
+		"openrouter.keyRefused":    "OpenRouter rechazó esa clave.",
+		"openrouter.keySaved":      "Clave guardada en %s (solo tú puedes leerla; OPENROUTER_API_KEY manda si está definida).",
+		"openrouter.loading":       "Leyendo la lista de modelos de OpenRouter…",
+		"openrouter.catalogFailed": "No se pudo leer la lista de modelos (%v); puedes escribir el id de un modelo.",
+		"openrouter.recommended":   "Los modelos ligeros sirven para casi todo: rápidos, baratos y capaces de llamar herramientas. Cámbialo cuando quieras con /model.",
+		"openrouter.question":      "Modelo",
+		"openrouter.other":         "Otro id de modelo de OpenRouter",
+		"openrouter.modelID":       "Id de modelo de OpenRouter",
+		"local.question":           "Modelo local",
+		"local.other":              "Otra URL de servidor",
+		"local.url":                "URL base del servidor (compatible con OpenAI, terminada en /v1)",
+		"local.unreachable":        "%s no listó sus modelos; se guarda tal cual, arranca el servidor antes de usarlo.",
+		"local.served":             "Nombre del modelo que espera el servidor (vacío para llama.cpp)",
+		"local.context":            "Ventana de contexto en tokens (como mucho la que tiene el servidor)",
+		"engines.title":            "3 · KMP y MADE",
+		"engines.intro":            "KMP es la memoria duradera de AXLR; MADE ejecuta sus ceremonias (/plan, /debug, /delivery, /incident, /repair).\nAXLR descarga las versiones oficiales, verifica sus checksums, crea sus almacenes locales y los conecta.",
+		"engines.configUnreadable": "No se puede leer %s (%v); corrígelo y vuelve a ejecutar axlr-tui setup.",
+		"engines.connected":        "KMP y MADE ya están conectados. /update en la consola los actualiza.",
+		"engines.question":         "¿Instalar y configurar KMP y MADE ahora?",
+		"engines.kmpAuto":          "¿Dejar que el modelo guarde memorias sin preguntar cada vez? (recomendado; se cambia en /mcp)",
+		"engines.later":            "Saltado. /update en la consola los instala más tarde.",
+		"engines.working":          "Descargando, verificando y configurando… (puede tardar un minuto)",
+		"engines.installed":        "%s %s · instalado y conectado · %s",
+		"engines.ready":            "%s %s · ya conectado",
+		"engines.skipped":          "%s · conectado a mano o en remoto; se deja como está",
+		"engines.failed":           "%s · no se pudo instalar: %v",
+		"engines.platform":         "Hay paquetes oficiales de KMP y MADE para Linux (x86_64, arm64) y macOS (Apple silicon). En este sistema, sigue docs/runbooks/kmp.md y docs/runbooks/made.md.",
+		"done":                     "Configuración guardada en %s.",
+		"continue":                 "Pulsa Enter para abrir la consola.",
+	},
+}
+
+func (w *setupWizard) t(key string, args ...any) string {
+	text, ok := setupText[w.lang][key]
+	if !ok {
+		text = setupText["en"][key]
+	}
+	if len(args) == 0 {
+		return text
+	}
+	return fmt.Sprintf(text, args...)
+}

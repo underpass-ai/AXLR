@@ -26,6 +26,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
+	"github.com/underpass-ai/AXLR/tui/adapters/enginesetup"
 	"github.com/underpass-ai/AXLR/tui/adapters/engineupdate"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
@@ -148,7 +149,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	settingsPath := filepath.Join(configBase, "axlr", "settings.json")
 	initialSettings := storage.DefaultUserSettings()
+	firstRun := false
 	if _, statErr := os.Lstat(settingsPath); errors.Is(statErr, os.ErrNotExist) {
+		firstRun = true
 		stateBase := getenv("XDG_STATE_HOME")
 		if !filepath.IsAbs(stateBase) {
 			home := getenv("HOME")
@@ -187,11 +190,34 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
+	// The first launch in a terminal asks for the language and the model and
+	// installs KMP and MADE; axlr-tui setup repeats it. A launch that names
+	// a model, a session or a repair has decided already.
+	if firstRun && initialSettings.Model == "" && *modelFlag == "" && !resuming && *repairFlag == "" && *improveFlag == "" && setupTerminal() {
+		paths, pathErr := resolveSetupPaths(getenv, *mcpConfigFlag)
+		if pathErr == nil {
+			wizard := newSetupWizard(getenv, paths, settingsStore, os.Stdin, terminalErr)
+			wizard.pause = true
+			pathErr = wizard.run(ctx)
+		}
+		if pathErr != nil {
+			fmt.Fprintln(terminalErr, "axlr-tui: setup:", pathErr)
+		}
+	}
 	settings, err := settingsStore.Load(ctx)
 	if err != nil {
 		return fail(err)
 	}
 	fmt.Fprintln(stderr, "axlr-tui: settings:", settingsPath)
+	// OPENROUTER_API_KEY wins; otherwise the key the setup saved.
+	if key == "" {
+		credentials, credentialsErr := storage.CredentialsStore{Path: filepath.Join(configBase, "axlr", "credentials.json")}.Load()
+		if credentialsErr != nil {
+			return fail(credentialsErr)
+		}
+		key = credentials.OpenRouterAPIKey
+		appLog.AddSecrets(key)
+	}
 	locals := newLocalModelSetup(settings, getenv)
 	localKeys = locals.secrets
 	appLog.AddSecrets(localKeys...)
@@ -303,7 +329,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	var remote localmodels.Client
 	var remoteCatalog application.ModelCatalogPort
 	if key == "" && len(locals.models) == 0 {
-		return fail(fmt.Errorf("no model provider: set OPENROUTER_API_KEY (create a key at https://openrouter.ai/keys), or configure local_models in %s for models that need no key", settingsPath))
+		return fail(fmt.Errorf("no model provider: run axlr-tui setup, set OPENROUTER_API_KEY (create a key at https://openrouter.ai/keys), or configure local_models in %s for models that need no key", settingsPath))
 	}
 	if key != "" {
 		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP, Models: openRouterModelOptions(settings)})
@@ -572,7 +598,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Diagnostics:       trace,
 		Plugins:           pluginManager,
 		InstalledPlugins:  axlrCatalog,
-		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands},
+		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands, Install: &enginesetup.Installer{Configuration: &configStore, DataBase: dataBase, Getenv: getenv, KMPApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}).Prepare}},
 		MADEPreparation:   &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore},
 		Models:            application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: locals.available, Remote: remoteCatalog}, Diagnostics: trace},
 		ModelPreference:   preferences,
