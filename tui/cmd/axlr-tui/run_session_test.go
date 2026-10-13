@@ -27,6 +27,15 @@ func (readyEngine) Inspect(context.Context, string) (application.CeremonyView, e
 	return application.CeremonyView{}, nil
 }
 func (readyEngine) Cancel(context.Context, string, string) error { return nil }
+func (readyEngine) Report(context.Context, application.HostReport) error {
+	return nil
+}
+func (readyEngine) Renew(context.Context, string, string, string, time.Duration) error {
+	return nil
+}
+func (readyEngine) OperationID(context.Context, string, string, string) (string, error) {
+	return "", nil
+}
 
 type preparerStub struct {
 	result application.MADEPreparation

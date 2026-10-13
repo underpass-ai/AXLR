@@ -89,6 +89,32 @@ type CeremonyDriver struct {
 	Plan  PlanSettings
 	// Starter runs a plan once the person approved it; nil leaves it READY.
 	Starter PlanStarter
+	// Host names the console in MADE's host reports; Roles gives the
+	// console's role in a definition (nil: AXLR).
+	Host  HostIdentity
+	Roles func(definition, version string) string
+}
+
+// role is the console's role in the run's definition.
+func (d *CeremonyDriver) role(run domain.CeremonyRun) string {
+	if d != nil && d.Roles != nil {
+		if role := d.Roles(run.Definition, run.Version); role != "" {
+			return role
+		}
+	}
+	return sessionRole
+}
+
+// report sends one host status report for the run's claimed step; a
+// failure is logged through the observer's absence, never returned.
+func (d *CeremonyDriver) report(ctx context.Context, s domain.Session, run *domain.CeremonyRun, status, activity string) {
+	if d == nil || d.Engine == nil || run.Fence == "" || run.OperationID == "" {
+		return
+	}
+	state := s.Export()
+	run.Reports++
+	_ = d.Engine.Report(ctx, HostReport{Instance: run.Instance, Step: run.Step, Fence: run.Fence, OperationID: run.OperationID, Status: status, Activity: activity,
+		Summary: fmt.Sprintf("step %s of %s %s, attempt %d, session %s", run.Step, run.Definition, run.Version, run.Iteration, state.ID), Execution: run.Instance, Worker: string(state.ID), Role: d.role(*run), Model: string(state.Model), Sequence: run.Reports, Host: d.Host})
 }
 
 // observe tells the observer where the ceremony stands. The report is copied
@@ -317,6 +343,8 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		return fmt.Errorf("claim %s: %w", run.Step, err)
 	}
 	run.Fence = fence
+	run.OperationID, _ = d.Engine.OperationID(ctx, instance, run.Step, fence)
+	d.report(ctx, *s, &run, "running", "step")
 	return s.SetCeremony(run)
 }
 
@@ -607,6 +635,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		appendLedger(&run, s, output)
 		compactCheckEvidence(report)
 	}
+	// The finished report goes before the completion, which ends the lease
+	// a report needs.
+	d.report(ctx, s, &run, "finished", "step")
 	if err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, output); err != nil {
 		return d.reconcile(ctx, s, run, output, report, fmt.Errorf("complete %s: %w", run.Step, err))
 	}
@@ -782,6 +813,7 @@ func (d *CeremonyDriver) claimFor(ctx context.Context, run *domain.CeremonyRun, 
 	}
 	run.Fence = fence
 	run.Reminded = false
+	run.OperationID, _ = d.Engine.OperationID(ctx, run.Instance, run.Step, fence)
 	return nil
 }
 

@@ -17,7 +17,20 @@ const (
 )
 
 // Engine is application.CeremonyEnginePort over the connected MADE plugin.
-type Engine struct{ Tools application.ToolExecutionPort }
+// Owner is the lease owner of every claim: the console's MADE work
+// identity, since MADE accepts a status report only from the claim's owner
+// (13 October 2026); "" keeps the historical "axlr".
+type Engine struct {
+	Tools application.ToolExecutionPort
+	Owner string
+}
+
+func (e Engine) owner() string {
+	if e.Owner != "" {
+		return e.Owner
+	}
+	return actorID
+}
 
 var _ application.CeremonyEnginePort = Engine{}
 
@@ -58,7 +71,7 @@ func (e Engine) Claim(ctx context.Context, instance, step, key string, lease tim
 	if lease > 0 {
 		ttl = lease.Milliseconds()
 	}
-	claim, err := e.made(ctx, "made_claim_ceremony_step", map[string]any{"ceremony_id": instance, "step_id": step, "actor_kind": actorKind, "lease_owner_id": actorID, "idempotency_key": key, "lease_ttl_ms": ttl})
+	claim, err := e.made(ctx, "made_claim_ceremony_step", map[string]any{"ceremony_id": instance, "step_id": step, "actor_kind": actorKind, "lease_owner_id": e.owner(), "idempotency_key": key, "lease_ttl_ms": ttl})
 	if err != nil {
 		return "", err
 	}
@@ -140,7 +153,7 @@ func (e Engine) Inspect(ctx context.Context, instance string) (application.Cerem
 			fence, _ := claim["claim_fence"].(string)
 			phase, _ := claim["phase"].(string)
 			owner, _ := claim["owner"].(string)
-			if step != "" && fence != "" && phase == "live" && owner == actorID {
+			if step != "" && fence != "" && phase == "live" && (owner == e.owner() || owner == actorID) {
 				if view.Live == nil {
 					view.Live = map[string]string{}
 				}
@@ -169,4 +182,58 @@ func (e Engine) Transition(ctx context.Context, instance, trigger string) (strin
 		return "", errors.New("MADE returned no current state")
 	}
 	return state, nil
+}
+
+// OperationID reads the operation id MADE assigned to a claim: the claim
+// receipt does not carry it, made_inspect_ceremony_resume does.
+func (e Engine) OperationID(ctx context.Context, instance, step, fence string) (string, error) {
+	resume, err := e.made(ctx, "made_inspect_ceremony_resume", map[string]any{"ceremony_id": instance})
+	if err != nil {
+		return "", err
+	}
+	claims, _ := resume["claims"].([]any)
+	for _, raw := range claims {
+		claim, _ := raw.(map[string]any)
+		if claim["claim_fence"] == fence && claim["step_id"] == step {
+			if id, _ := claim["operation_id"].(string); id != "" {
+				return id, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no operation id for claim %s of %s", bounded(fence, 12), instance)
+}
+
+// Report sends one host status report. The host agent id is the claim's
+// owner, as MADE requires; the install id and the run token travel as the
+// incarnation.
+func (e Engine) Report(ctx context.Context, report application.HostReport) error {
+	status := map[string]any{
+		"ceremony_id": report.Instance, "step_id": report.Step, "claim_fence": report.Fence, "operation_id": report.OperationID,
+		"agent_execution_id": report.Execution, "logical_worker_id": report.Worker, "claim_owner_id": e.owner(),
+		"host_agent_id": e.owner(), "host_agent_incarnation": report.Host.Incarnation, "role_id": report.Role,
+		"execution_status": report.Status, "liveness": "fresh", "source": "host_report", "activity": report.Activity,
+		"task_summary": bounded(report.Summary, 500), "observed_at": time.Now().UTC().Format(time.RFC3339),
+		"report_sequence": report.Sequence, "idempotency_key": fmt.Sprintf("axlr:report:%s:%s:%d", report.Instance, report.Step, report.Sequence),
+	}
+	if report.Host.AgentID != "" {
+		status["host_agent_incarnation"] = report.Host.AgentID + ":" + report.Host.Incarnation
+	}
+	if status["host_agent_incarnation"] == "" {
+		status["host_agent_incarnation"] = "unknown"
+	}
+	if report.Model != "" {
+		status["requested_model"], status["actual_model"] = report.Model, report.Model
+	}
+	_, err := e.made(ctx, "made_report_ceremony_agent_status", map[string]any{"status": status})
+	return err
+}
+
+// Renew extends a live claim's lease by lease from now.
+func (e Engine) Renew(ctx context.Context, instance, step, fence string, lease time.Duration) error {
+	ttl := int64(claimLease)
+	if lease > 0 {
+		ttl = lease.Milliseconds()
+	}
+	_, err := e.made(ctx, "made_renew_ceremony_step_lease", map[string]any{"ceremony_id": instance, "step_id": step, "claim_fence": fence, "lease_owner_id": e.owner(), "renewal_id": fmt.Sprintf("axlr:renew:%s:%s:%d", instance, step, time.Now().UnixNano()), "lease_ttl_ms": ttl})
+	return err
 }

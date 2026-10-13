@@ -82,7 +82,7 @@ func (w repairWorkbenches) Open(_ context.Context, clone string) (application.Re
 		return nil, err
 	}
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: w.trace, LogFailure: failureLogger(w.appLog)}
-	driver := ceremonyDriver(w.registrations, runner, w.labels)
+	driver := ceremonyDriver(w.registrations, runner, w.labels, madeWorkIdentity(w.configPath, w.registrations))
 	if driver == nil {
 		_ = executor.Close()
 		return nil, errors.New("MADE is not connected")

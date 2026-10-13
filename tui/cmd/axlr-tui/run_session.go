@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -59,4 +61,30 @@ func consoleSessionID(session *domain.Session, newID domain.SessionID) domain.Se
 		return session.Export().ID
 	}
 	return newID
+}
+
+// ensureWorkGrant issues the console's current MADE work grant once per
+// grant id: the id changes when its actions do (madesetup.WorkGrantID), and
+// an install prepared under the previous id would otherwise see MADE
+// refuse the new verbs (the handoff, the draft explanation) until the
+// person pressed P in /mcp. The marker file remembers the id issued; the
+// preparer is idempotent. It returns one line for the log.
+func ensureWorkGrant(ctx context.Context, preparer application.MADEPreparationPort, marker, grant string) string {
+	if preparer == nil || marker == "" {
+		return ""
+	}
+	if data, err := os.ReadFile(marker); err == nil && strings.TrimSpace(string(data)) == grant {
+		return ""
+	}
+	result, err := preparer.Prepare(ctx)
+	if err != nil {
+		return "MADE work grant " + grant + ": " + err.Error()
+	}
+	switch result.Status {
+	case "ready", "granted":
+		_ = os.MkdirAll(filepath.Dir(marker), 0o700)
+		_ = os.WriteFile(marker, []byte(grant+"\n"), 0o600)
+		return "MADE work grant " + grant + " " + result.Status
+	}
+	return "MADE work grant " + grant + ": " + result.Status + " " + result.Detail
 }

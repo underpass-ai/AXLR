@@ -514,7 +514,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	validator := axlr.NewToolArgumentValidator()
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog)}
 	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}, LogFailure: failureLogger(appLog)}
-	ceremonies := ceremonyDriver(registrations, runner, sessionLabels)
+	ceremonies := ceremonyDriver(registrations, runner, sessionLabels, madeWorkIdentity(configPath, registrations))
 	if ceremonies != nil {
 		ceremonies.Compact = compactProfile(settings.CeremonyProfile(), locals.windows)
 		plans, err := storage.NewPlanRegistry(filepath.Join(stateBase, "axlr", "plans.json"))
@@ -540,11 +540,21 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			}
 		}}
 	}
+	installID, err := storage.InstallID(filepath.Join(stateBase, "axlr"))
+	if err != nil {
+		return fail(fmt.Errorf("install id: %w", err))
+	}
+	// The console's host identity in MADE (decision H5): the lease owner is
+	// its work identity, the incarnation this install and this run.
+	hostname, _ := os.Hostname()
+	host := application.HostIdentity{Owner: madeWorkIdentity(configPath, registrations), AgentID: installID, Incarnation: hex.EncodeToString(runToken[:]), Hostname: hostname}
+	if sessionCeremony != nil {
+		sessionCeremony.Host = host
+	}
+	if ceremonies != nil {
+		ceremonies.Host, ceremonies.Roles = host, ceremonyhost.RoleOf
+	}
 	if hasKMP {
-		installID, err := storage.InstallID(filepath.Join(stateBase, "axlr"))
-		if err != nil {
-			return fail(fmt.Errorf("install id: %w", err))
-		}
 		memory := ceremonyhost.Memory{Tools: runner, SyncGuide: kmp.SyncGuide}
 		sessionCeremony.Identity = &application.KMPIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewKMPAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: memory, Recall: memory, UserAbout: userAbout(getenv)}
 	}
@@ -554,6 +564,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			sessionCeremony.Journal = journal
 		}
 		for _, line := range []string{
+			ensureWorkGrant(ctx, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}, filepath.Join(stateBase, "axlr", "made-grant"), madesetup.WorkGrantID),
 			prepareSessionDefinition(ctx, ceremonies.Engine, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}),
 			sweepAbandonedSessions(ctx, sessionCeremony, store, workspace, consoleSessionID(session, newID)),
 		} {
@@ -809,7 +820,7 @@ func repairPanelPort(repairs *application.SelfRepair) terminal.RepairPanelPort {
 
 // ceremonyDriver drives /debug, /delivery and /incident when MADE is connected. KMP is
 // optional: without it ceremonies run without memory.
-func ceremonyDriver(registrations []plugins.Registration, tools application.ToolExecutionPort, labels application.SessionLabelsPort) *application.CeremonyDriver {
+func ceremonyDriver(registrations []plugins.Registration, tools application.ToolExecutionPort, labels application.SessionLabelsPort, owner string) *application.CeremonyDriver {
 	connected := map[string]bool{}
 	for _, registration := range registrations {
 		connected[registration.Manifest.ID.String()] = true
@@ -817,7 +828,7 @@ func ceremonyDriver(registrations []plugins.Registration, tools application.Tool
 	if !connected["made"] {
 		return nil
 	}
-	driver := &application.CeremonyDriver{Engine: ceremonyhost.Engine{Tools: tools}, Checks: ceremonyhost.Checks{Tools: tools}, Labels: labels}
+	driver := &application.CeremonyDriver{Engine: ceremonyhost.Engine{Tools: tools, Owner: owner}, Checks: ceremonyhost.Checks{Tools: tools}, Labels: labels}
 	if connected["kmp"] {
 		driver.Memory = ceremonyhost.Memory{Tools: tools}
 	}
@@ -864,4 +875,15 @@ func payloadSecrets(key string, local []string) []string {
 		}
 	}
 	return secrets
+}
+
+// madeWorkIdentity is the identity the console's MADE registration works
+// as, "" without a stdio made registration the console set up.
+func madeWorkIdentity(configPath string, registrations []plugins.Registration) string {
+	for _, registration := range registrations {
+		if registration.Manifest.ID == "made" && registration.Manifest.Command != "" {
+			return madesetup.WorkIdentity(configPath, registration.Env)
+		}
+	}
+	return ""
 }

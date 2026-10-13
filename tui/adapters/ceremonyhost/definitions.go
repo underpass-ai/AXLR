@@ -3,6 +3,7 @@ package ceremonyhost
 import (
 	"embed"
 	"fmt"
+	"regexp"
 )
 
 //go:embed definitions/*.yaml
@@ -47,4 +48,23 @@ func pinned(name, version string) (Definition, bool) {
 		}
 	}
 	return Definition{}, false
+}
+
+var roleLine = regexp.MustCompile(`(?m)^roles:\n- id: (\S+)`)
+
+// RoleOf is the console's role in a pinned definition: the first role it
+// declares ("" for an unpinned one).
+func RoleOf(name, version string) string {
+	definition, ok := pinned(name, version)
+	if !ok {
+		return ""
+	}
+	text, err := definition.YAML()
+	if err != nil {
+		return ""
+	}
+	if m := roleLine.FindStringSubmatch(text); m != nil {
+		return m[1]
+	}
+	return ""
 }

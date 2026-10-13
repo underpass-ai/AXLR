@@ -42,6 +42,8 @@ type sessionCeremony struct {
 	Ledger       []sessionLedger  `json:"ledger,omitempty"`
 	StepCall     string           `json:"step_call,omitempty"`
 	Model        string           `json:"model,omitempty"`
+	OperationID  string           `json:"operation_id,omitempty"`
+	Reports      int              `json:"reports,omitempty"`
 	Plan         *sessionPlan     `json:"plan,omitempty"`
 	Task         *sessionTask     `json:"task,omitempty"`
 	Incident     *sessionIncident `json:"incident,omitempty"`
@@ -152,7 +154,7 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 	if decoder.Decode(&record) != nil || record.Version != sessionCeremonyVersion {
 		return nil
 	}
-	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, LimitStep: record.LimitStep, LimitResumes: record.LimitResumes, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model}
+	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, LimitStep: record.LimitStep, LimitResumes: record.LimitResumes, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model, OperationID: record.OperationID, Reports: record.Reports}
 	for _, command := range record.Approved {
 		run.Approved = append(run.Approved, domain.CheckCommand{Program: command.Program, Args: command.Args})
 	}
@@ -184,7 +186,7 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 		}
 		return nil
 	}
-	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, LimitStep: run.LimitStep, LimitResumes: run.LimitResumes, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model}
+	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, LimitStep: run.LimitStep, LimitResumes: run.LimitResumes, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model, OperationID: run.OperationID, Reports: run.Reports}
 	for _, command := range run.Approved {
 		record.Approved = append(record.Approved, sessionCheck{Program: command.Program, Args: command.Args})
 	}

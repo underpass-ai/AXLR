@@ -268,3 +268,19 @@ func CallOnce(ctx context.Context, s mcpclient.Server, tool string, arguments ma
 	}
 	return payload, nil
 }
+
+// WorkIdentity is the identity the console's MADE registration works as:
+// the configured work identity, or the one this setup derives from the
+// configuration path when the entry sets none; "" when the entry names an
+// operator's trusted host or is absent.
+func WorkIdentity(configPath string, env []string) string {
+	configured := environment(env)[hostIdentityKey]
+	switch {
+	case configured == "":
+		digest := sha256.Sum256([]byte(configPath))
+		return "axlr-work-" + hex.EncodeToString(digest[:8])
+	case isWorkIdentity(configured):
+		return configured
+	}
+	return ""
+}

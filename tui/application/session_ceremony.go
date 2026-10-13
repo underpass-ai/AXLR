@@ -56,7 +56,10 @@ type SessionCeremony struct {
 	// Identity opens the session's KMP context (session_identity.go); nil
 	// without KMP.
 	Identity *KMPIdentity
-	Now      func() time.Time
+	// Host is how the console names itself in MADE's host reports
+	// (host_report.go).
+	Host HostIdentity
+	Now  func() time.Time
 	// Log reports what the console did or could not do; nil says nothing.
 	Log func(string)
 
@@ -174,13 +177,13 @@ func (c *SessionCeremony) BeginTurn(ctx context.Context, s *domain.Session) {
 	}
 	index := len(s.Messages()) - 1
 	key := fmt.Sprintf("axlr:turn:%s:%d", s.ID(), index)
-	fence, err := c.Engine.Claim(ctx, instance.Instance, sessionTurnStep, key, 0)
+	fence, err := c.Engine.Claim(ctx, instance.Instance, sessionTurnStep, key, sessionLease)
 	if err != nil && exhausted(err) {
 		// The instance's thousand turns ran out: the next one continues it.
 		successor := successorNumber(instance.Instance) + 1
 		if next, opened := c.open(ctx, s, successor); opened {
 			instance = next
-			fence, err = c.Engine.Claim(ctx, instance.Instance, sessionTurnStep, key, 0)
+			fence, err = c.Engine.Claim(ctx, instance.Instance, sessionTurnStep, key, sessionLease)
 		}
 	}
 	if err != nil {
@@ -189,8 +192,9 @@ func (c *SessionCeremony) BeginTurn(ctx context.Context, s *domain.Session) {
 		_ = s.SetInstance(instance)
 		return
 	}
-	instance.Fence, instance.TurnIndex = fence, index
+	instance.TurnIndex = index
 	instance.ClaimRequests, instance.ClaimCost = c.usage(ctx, s.ID())
+	c.claimed(ctx, *s, &instance, fence, sessionLease)
 	_ = s.SetInstance(instance)
 }
 
@@ -231,11 +235,16 @@ func (c *SessionCeremony) record(ctx context.Context, s domain.Session, instance
 func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, instance domain.SessionInstance, record TurnRecord) domain.SessionInstance {
 	stepRef := fmt.Sprintf("MADE %s step %s #%d", instance.Instance, sessionTurnStep, record.Turn)
 	if instance.Fence != "" {
+		// The finished report goes before the completion: MADE takes a
+		// report only on an accepted lease, which the completion ends
+		// (seen on 13 October 2026: "ceremony agent status step has no
+		// accepted lease").
+		c.report(ctx, *s, &instance, "finished", "turn")
 		if err := c.Engine.Complete(ctx, instance.Instance, sessionTurnStep, instance.Fence, record.Output()); err != nil {
 			c.log("session turn %d completion: %v", record.Turn, err)
 			stepRef += " (not completed: " + bounded(err.Error(), 200) + ")"
 		} else {
-			instance.Fence = ""
+			instance.Fence, instance.OperationID = "", ""
 		}
 	} else {
 		stepRef += " (not claimed)"
@@ -396,7 +405,7 @@ func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, tr
 	// claim (the transition refused) leaves a used key behind, and MADE
 	// refuses a claim that reuses it (seen on 13 October 2026).
 	key := fmt.Sprintf("axlr:%s:%s:%d:%d", trigger, s.ID(), instance.Turns, c.now().UTC().Unix())
-	fence, err := c.Engine.Claim(ctx, instance.Instance, sessionTurnStep, key, 0)
+	fence, err := c.Engine.Claim(ctx, instance.Instance, sessionTurnStep, key, sessionLease)
 	if err == nil {
 		err = c.Engine.Complete(ctx, instance.Instance, sessionTurnStep, fence, output)
 	}

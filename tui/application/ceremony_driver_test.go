@@ -22,6 +22,9 @@ type fakeEngine struct {
 	view            CeremonyView
 	leases          []time.Duration
 	definition      string
+	reports         []HostReport
+	failReports     bool
+	noOperation     bool
 }
 
 var fakeTransitions = map[string]string{
@@ -84,6 +87,25 @@ func (f *fakeEngine) Cancel(_ context.Context, _, reason string) error {
 func (f *fakeEngine) Inspect(context.Context, string) (CeremonyView, error) {
 	f.calls = append(f.calls, "inspect")
 	return f.view, nil
+}
+func (f *fakeEngine) Report(_ context.Context, report HostReport) error {
+	f.calls = append(f.calls, "report "+report.Status+" "+report.Activity)
+	f.reports = append(f.reports, report)
+	if f.failReports {
+		return errors.New("conflict: status claim changed")
+	}
+	return nil
+}
+func (f *fakeEngine) Renew(_ context.Context, _, step, _ string, lease time.Duration) error {
+	f.calls = append(f.calls, "renew "+step)
+	f.leases = append(f.leases, lease)
+	return nil
+}
+func (f *fakeEngine) OperationID(_ context.Context, _, step, fence string) (string, error) {
+	if f.noOperation {
+		return "", errors.New("no operation id")
+	}
+	return "op-" + fence, nil
 }
 
 type fakeChecks struct {

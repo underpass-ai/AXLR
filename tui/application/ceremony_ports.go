@@ -67,6 +67,12 @@ type CeremonyEnginePort interface {
 	// Cancel ends the instance irreversibly with a recorded reason: a stalled
 	// step the model will not hand back, or the person's stop.
 	Cancel(ctx context.Context, instance, reason string) error
+	// Report tells MADE where the host stands on a claimed step (decision
+	// H5); Renew extends a claim's lease; OperationID reads a claim's
+	// operation id, which the claim receipt does not carry.
+	Report(ctx context.Context, report HostReport) error
+	Renew(ctx context.Context, instance, step, fence string, lease time.Duration) error
+	OperationID(ctx context.Context, instance, step, fence string) (string, error)
 }
 
 // CeremonyView is the part of a MADE instance the driver reconciles from.

@@ -157,6 +157,8 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		if u.Tools == nil && tool.Identity.Kind != domain.ToolKindHost {
 			return errors.New("approval requires tool executor")
 		}
+		// A long turn reports to MADE and renews its lease on the way.
+		u.Continue.Session.Heartbeat(ctx, &next)
 		// Persist before the effect: a crash must never reopen this call for execution.
 		if err := next.RecordToolOutcome(id, decision, domain.ToolOutcome{Content: "tool execution started; effect unknown", IsError: true, Uncertain: true}); err != nil {
 			return err

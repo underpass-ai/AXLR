@@ -48,7 +48,7 @@ func TestSessionCeremonyClaimsAndCompletesEachTurn(t *testing.T) {
 	if !has || instance.Instance != "axlr-session-"+string(first.ID) || instance.Fence != "fence-turn" || instance.TurnIndex != len(s.Messages())-1 {
 		t.Fatalf("instance %+v", instance)
 	}
-	if strings.Join(engine.calls, ";") != "start axlr_session 1.0 about=;claim turn "+itoa(len(s.Messages())-1) {
+	if strings.Join(engine.calls, ";") != "start axlr_session 1.0 about=;claim turn "+itoa(len(s.Messages())-1)+";report running turn" {
 		t.Fatalf("calls %v", engine.calls)
 	}
 	if err := s.CompleteAssistant(assistant("listo")); err != nil {
@@ -114,7 +114,7 @@ func TestSessionCeremonyCompletesAnInterruptedTurnBeforeTheNextClaim(t *testing.
 		t.Fatal(err)
 	}
 	c.BeginTurn(context.Background(), &s)
-	if strings.Join(engine.calls, ";") != "start axlr_session 1.0 about=;claim turn 0;complete turn;claim turn 1" {
+	if strings.Join(engine.calls, ";") != "start axlr_session 1.0 about=;claim turn 0;report running turn;report finished turn;complete turn;claim turn 1;report running turn" {
 		t.Fatalf("calls %v", engine.calls)
 	}
 	if engine.completed[0]["interrupted"] != true || engine.completed[0]["answer_kind"] != "paused" {
@@ -143,7 +143,7 @@ func TestSessionCeremonyCloseClaimsAClosingTurnAndTransitions(t *testing.T) {
 	if err := c.Close(context.Background(), &s, "exit"); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(engine.calls, ";") != "start axlr_session 1.0 about=;claim turn 0;complete turn;claim turn 1791907200;complete turn;transition closed" {
+	if strings.Join(engine.calls, ";") != "start axlr_session 1.0 about=;claim turn 0;report running turn;report finished turn;complete turn;claim turn 1791907200;complete turn;transition closed" {
 		t.Fatalf("calls %v", engine.calls)
 	}
 	closing := engine.completed[1]
@@ -155,7 +155,7 @@ func TestSessionCeremonyCloseClaimsAClosingTurnAndTransitions(t *testing.T) {
 		t.Fatalf("instance %+v saves %d", instance, len(store.states))
 	}
 	// A closed instance is left alone.
-	if err := c.Close(context.Background(), &s, "exit"); err != nil || len(engine.calls) != 6 {
+	if err := c.Close(context.Background(), &s, "exit"); err != nil || len(engine.calls) != 8 {
 		t.Fatalf("%v %v", err, engine.calls)
 	}
 }

@@ -77,6 +77,10 @@ type CeremonyRun struct {
 	// StepCall is the axlr_step_done call that opened the current step; the
 	// compact projection cuts the transcript after its results.
 	StepCall string
+	// OperationID is the live claim's operation id and Reports the count
+	// of host reports on this instance (decision H5).
+	OperationID string
+	Reports     int
 }
 
 // LedgerEntry is one accepted step: its recorded fields, bounded, and the

@@ -1,6 +1,9 @@
 package domain
 
-import "errors"
+import (
+	"errors"
+	"time"
+)
 
 // SessionInstance is the session's own MADE instance, axlr_session: one
 // turn step per prompt, claimed when the prompt arrives and completed with
@@ -45,6 +48,14 @@ type SessionInstance struct {
 	// Recalled is the intent the console last woke memory for; "" before
 	// the first prompt's recall.
 	Recalled string
+	// OperationID, ClaimedAt and LeaseMS describe the live claim for the
+	// host reports and the lease renewal (decision H5); Reported is the
+	// time of the last report and Reports their count on this instance.
+	OperationID string
+	ClaimedAt   time.Time
+	LeaseMS     int64
+	Reported    time.Time
+	Reports     int
 }
 
 // MaxSessionRecordBytes bounds LastRecord.
@@ -58,7 +69,7 @@ func (i SessionInstance) Validate() error {
 	if i.Instance == "" && i.Unavailable == "" && i.KMPContext == "" {
 		return errors.New("session instance needs an id, a reason it is unavailable or a KMP context")
 	}
-	if i.Turns < 0 || i.TurnIndex < 0 || i.ClaimRequests < 0 || i.ClaimCost < 0 {
+	if i.Turns < 0 || i.TurnIndex < 0 || i.ClaimRequests < 0 || i.ClaimCost < 0 || i.LeaseMS < 0 || i.Reports < 0 {
 		return errors.New("invalid session instance counters")
 	}
 	if len(i.LastRecord) > MaxSessionRecordBytes {

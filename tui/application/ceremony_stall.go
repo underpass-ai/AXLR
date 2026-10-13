@@ -67,6 +67,7 @@ func (d *CeremonyDriver) StopCeremony(ctx context.Context, s *domain.Session, re
 	if d == nil || d.Engine == nil {
 		return errors.New("MADE is not connected; the ceremony cannot be stopped")
 	}
+	d.report(ctx, *s, &run, "blocked", "stall")
 	if err := d.Engine.Cancel(ctx, run.Instance, "AXLR console: "+reason); err != nil {
 		return fmt.Errorf("cancel %s: %w", run.Instance, err)
 	}
