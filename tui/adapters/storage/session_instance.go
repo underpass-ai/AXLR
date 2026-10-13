@@ -21,16 +21,17 @@ const maxSessionInstanceBytes = 64 << 10
 // beside the snapshot for the same reason as <id>.ceremony: a pointer to a
 // durable instance, read leniently.
 type sessionInstance struct {
-	Version       int     `json:"version"`
-	Instance      string  `json:"instance"`
-	Turns         int     `json:"turns"`
-	Fence         string  `json:"fence,omitempty"`
-	TurnIndex     int     `json:"turn_index"`
-	ClaimRequests int     `json:"claim_requests,omitempty"`
-	ClaimCost     float64 `json:"claim_cost,omitempty"`
-	Closed        bool    `json:"closed,omitempty"`
-	LastRecord    string  `json:"last_record,omitempty"`
-	Unavailable   string  `json:"unavailable,omitempty"`
+	Version       int      `json:"version"`
+	Instance      string   `json:"instance"`
+	Turns         int      `json:"turns"`
+	Fence         string   `json:"fence,omitempty"`
+	TurnIndex     int      `json:"turn_index"`
+	ClaimRequests int      `json:"claim_requests,omitempty"`
+	ClaimCost     float64  `json:"claim_cost,omitempty"`
+	Closed        bool     `json:"closed,omitempty"`
+	LastRecord    string   `json:"last_record,omitempty"`
+	Unavailable   string   `json:"unavailable,omitempty"`
+	Pending       []string `json:"pending,omitempty"`
 }
 
 func (s *SessionStore) instancePath(id domain.SessionID) string {
@@ -52,7 +53,7 @@ func (s *SessionStore) readInstance(id domain.SessionID) *domain.SessionInstance
 	if json.NewDecoder(bytes.NewReader(data)).Decode(&record) != nil || record.Version != sessionInstanceVersion {
 		return nil
 	}
-	instance := domain.SessionInstance{Instance: record.Instance, Turns: record.Turns, Fence: record.Fence, TurnIndex: record.TurnIndex, ClaimRequests: record.ClaimRequests, ClaimCost: record.ClaimCost, Closed: record.Closed, LastRecord: record.LastRecord, Unavailable: record.Unavailable}
+	instance := domain.SessionInstance{Instance: record.Instance, Turns: record.Turns, Fence: record.Fence, TurnIndex: record.TurnIndex, ClaimRequests: record.ClaimRequests, ClaimCost: record.ClaimCost, Closed: record.Closed, LastRecord: record.LastRecord, Unavailable: record.Unavailable, Pending: record.Pending}
 	if instance.Validate() != nil {
 		return nil
 	}
@@ -66,7 +67,7 @@ func (s *SessionStore) writeInstance(id domain.SessionID, instance *domain.Sessi
 		}
 		return nil
 	}
-	record := sessionInstance{Version: sessionInstanceVersion, Instance: instance.Instance, Turns: instance.Turns, Fence: instance.Fence, TurnIndex: instance.TurnIndex, ClaimRequests: instance.ClaimRequests, ClaimCost: instance.ClaimCost, Closed: instance.Closed, LastRecord: instance.LastRecord, Unavailable: instance.Unavailable}
+	record := sessionInstance{Version: sessionInstanceVersion, Instance: instance.Instance, Turns: instance.Turns, Fence: instance.Fence, TurnIndex: instance.TurnIndex, ClaimRequests: instance.ClaimRequests, ClaimCost: instance.ClaimCost, Closed: instance.Closed, LastRecord: instance.LastRecord, Unavailable: instance.Unavailable, Pending: instance.Pending}
 	data, err := json.Marshal(record)
 	if err != nil {
 		return err

@@ -97,6 +97,21 @@ func (s *SessionStore) claim(id domain.SessionID) error {
 	s.locks[id] = lock
 	return nil
 }
+
+// Release gives a session's lock back without closing the store: a session
+// the console loaded only to look at it (the abandoned-instance sweep at
+// start) stays openable by another console afterwards.
+func (s *SessionStore) Release(id domain.SessionID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lock := s.locks[id]
+	if lock == nil {
+		return nil
+	}
+	delete(s.locks, id)
+	return lock.close()
+}
+
 func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -206,6 +206,7 @@ func cloneState(state SessionState) SessionState {
 	}
 	if state.Instance != nil {
 		instance := *state.Instance
+		instance.Pending = append([]string(nil), instance.Pending...)
 		state.Instance = &instance
 	}
 	if len(state.MessageTimes) > len(state.Messages) {

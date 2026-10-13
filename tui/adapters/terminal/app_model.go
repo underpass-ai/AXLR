@@ -813,6 +813,10 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m.openUsagePanel(), nil
 			}
+			if command == "/session" {
+				m.Composer.Input.Reset()
+				return m.openSessionPanel(), nil
+			}
 			if command == "/jobs" {
 				m.Composer.Input.Reset()
 				return m.openJobsPanel(), nil

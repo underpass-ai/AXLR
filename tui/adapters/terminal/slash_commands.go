@@ -42,11 +42,12 @@ var slashCommands = []slashCommand{
 	{"/copy", "slash.copy"},
 	{"/export", "slash.export"},
 	{"/usage", "slash.usage"},
+	{"/session", "slash.session"},
 	{"/exit", "slash.exit"},
 }
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo"}
 
 // slashSuggestionMax is how many suggestions the menu shows at once on a
 // screen tall enough; the selection scrolls the rest into view. On 12

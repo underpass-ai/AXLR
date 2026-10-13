@@ -32,10 +32,18 @@ type SessionInstance struct {
 	// the definition not published, the engine refusing); the console says
 	// it once and tries again at the next prompt.
 	Unavailable string
+	// Pending are KMP turn entries, as JSON, that KMP did not take when the
+	// turn ended (the engine down, a refusal); the console retries them at
+	// the next turn end and at close, oldest first.
+	Pending []string
 }
 
 // MaxSessionRecordBytes bounds LastRecord.
 const MaxSessionRecordBytes = 16 << 10
+
+// MaxPendingEntries bounds Pending; beyond it the oldest entry is dropped
+// and the loss logged.
+const MaxPendingEntries = 50
 
 func (i SessionInstance) Validate() error {
 	if i.Instance == "" && i.Unavailable == "" {
@@ -47,6 +55,9 @@ func (i SessionInstance) Validate() error {
 	if len(i.LastRecord) > MaxSessionRecordBytes {
 		return errors.New("session record is too large")
 	}
+	if len(i.Pending) > MaxPendingEntries {
+		return errors.New("too many pending session entries")
+	}
 	return nil
 }
 
@@ -56,7 +67,9 @@ func (s Session) Instance() (SessionInstance, bool) {
 	if s.state.Instance == nil {
 		return SessionInstance{}, false
 	}
-	return *s.state.Instance, true
+	copied := *s.state.Instance
+	copied.Pending = append([]string(nil), copied.Pending...)
+	return copied, true
 }
 
 // SetInstance records the session's MADE instance.
@@ -65,6 +78,7 @@ func (s *Session) SetInstance(instance SessionInstance) error {
 		return err
 	}
 	copied := instance
+	copied.Pending = append([]string(nil), instance.Pending...)
 	s.state.Instance = &copied
 	return nil
 }

@@ -541,6 +541,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if journal, ok := ceremonies.Memory.(application.JournalPort); ok {
 			sessionCeremony.Journal = journal
 		}
+		for _, line := range []string{
+			prepareSessionDefinition(ctx, ceremonies.Engine, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}),
+			sweepAbandonedSessions(ctx, sessionCeremony, store, workspace, consoleSessionID(session, newID)),
+		} {
+			if line != "" && appLog != nil {
+				appLog.Logf(diagnostics.AppInfo, "%s", line)
+			}
+		}
 	}
 	repairPolicy := application.RepairPolicy{AutoMerge: repairConfiguration.AutoMerge, WatchDeadline: time.Duration(repairConfiguration.WatchMinutes) * time.Minute}
 	if ceremonies != nil {
@@ -644,6 +652,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ApprovalSettings:  approvalSettings,
 		Locale:            locale,
 		Create:            application.CreateSessionUseCase{Store: loggedStore, Labels: sessionLabels, About: kmp.bundleAbout()},
+		Leave:             sessionCeremony.Leave,
 		Change:            application.ChangeSessionModelUseCase{Store: loggedStore},
 		Workspace:         workspace,
 		NewSessionID:      newID,

@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -228,11 +229,112 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 		if entry.About == record.About {
 			delete(entry.Labels, "project")
 		}
-		if _, err := c.Journal.RecordTurn(ctx, entry); err != nil {
-			c.log("session turn %d memory: %v", record.Turn, err)
-		}
+		instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
+	} else if len(instance.Pending) > 0 {
+		instance.Pending = c.journal(ctx, instance.Pending)
 	}
 	return instance
+}
+
+// journal writes the queued entries to KMP, oldest first, and returns what
+// KMP did not take: the engine down or a refusal keeps the entry for the
+// next turn end or the close (decision E10), bounded by MaxPendingEntries.
+func (c *SessionCeremony) journal(ctx context.Context, pending []string) []string {
+	if c.Journal == nil {
+		return pending
+	}
+	var kept []string
+	for i, encoded := range pending {
+		entry, err := decodeEntry(encoded)
+		if err != nil {
+			c.log("session memory entry dropped: %v", err)
+			continue
+		}
+		if _, err := c.Journal.RecordTurn(ctx, entry); err != nil {
+			c.log("session memory %s: %v; kept for the next turn", entry.Key, err)
+			kept = append(kept, pending[i:]...)
+			break
+		}
+	}
+	for len(kept) > domain.MaxPendingEntries {
+		c.log("session memory entry dropped: %d pending", len(kept))
+		kept = kept[1:]
+	}
+	return kept
+}
+
+func encodeEntry(entry TurnEntry) string {
+	data, _ := json.Marshal(entry)
+	return string(data)
+}
+
+func decodeEntry(encoded string) (TurnEntry, error) {
+	var entry TurnEntry
+	if err := json.Unmarshal([]byte(encoded), &entry); err != nil {
+		return TurnEntry{}, err
+	}
+	if entry.About == "" || entry.Key == "" {
+		return TurnEntry{}, fmt.Errorf("entry without about or key")
+	}
+	return entry, nil
+}
+
+// Leave closes the instance of a session the console switches away from
+// (/new, the picker): its turns are over for this console.
+func (c *SessionCeremony) Leave(ctx context.Context, s *domain.Session) error {
+	return c.Close(ctx, s, "left")
+}
+
+// Abandon ends the instance of a session no console holds: an open turn is
+// completed as interrupted, a turn carries abandoned=true, and the
+// abandoned transition reaches ABANDONED. The turn carries closed=true as
+// well: the step's repeat ends on that field, and MADE enables no
+// transition out of OPEN while the repeat runs (seen on 13 October 2026:
+// "ceremony transition guards are not satisfied").
+func (c *SessionCeremony) Abandon(ctx context.Context, s *domain.Session) error {
+	return c.end(ctx, s, "abandoned", sessionAbandonedTrigger, map[string]any{"closed": true, "abandoned": true})
+}
+
+// SessionLister lists and loads saved sessions and gives their locks back.
+type SessionLister interface {
+	List(context.Context) ([]domain.SessionSummary, error)
+	Load(context.Context, domain.SessionID) (domain.Session, error)
+	Release(domain.SessionID) error
+}
+
+// SweepAbandoned ends, as abandoned, the open instances of this workspace's
+// sessions that no console holds: a session another console has open
+// cannot be loaded (its lock is held) and is left alone; the current one
+// is skipped. It runs at console start, before heartbeats exist to tell
+// liveness by report. It returns how many it ended.
+func (c *SessionCeremony) SweepAbandoned(ctx context.Context, store SessionLister, workspace domain.Workspace, current domain.SessionID) (int, error) {
+	if c == nil || c.Engine == nil || store == nil {
+		return 0, nil
+	}
+	summaries, err := store.List(ctx)
+	if err != nil {
+		return 0, err
+	}
+	ended := 0
+	for _, summary := range summaries {
+		if summary.Workspace != workspace || summary.ID == current {
+			continue
+		}
+		session, err := store.Load(ctx, summary.ID)
+		if err != nil {
+			continue // held by a live console, or unreadable: not ours to end
+		}
+		instance, has := session.Instance()
+		if has && instance.Instance != "" && !instance.Closed {
+			if err := c.Abandon(ctx, &session); err != nil {
+				c.log("session %s abandon: %v", summary.ID, err)
+			} else if closed, _ := session.Instance(); closed.Closed {
+				ended++
+			}
+		}
+		_ = store.Release(summary.ID)
+	}
+	return ended, nil
 }
 
 // completeInterrupted completes the turn a claim was left on: the console
@@ -246,6 +348,12 @@ func (c *SessionCeremony) completeInterrupted(ctx context.Context, s *domain.Ses
 // closing turn carries the summary, and the closed transition reaches DONE.
 // Nothing here stops the console from exiting; failures are logged.
 func (c *SessionCeremony) Close(ctx context.Context, s *domain.Session, reason string) error {
+	return c.end(ctx, s, reason, sessionClosedTrigger, map[string]any{"closed": true})
+}
+
+// end completes an open turn, claims one more turn with the ending fields
+// and the summary, applies the trigger and saves the session.
+func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, trigger string, fields map[string]any) error {
 	if !c.records(*s) {
 		return nil
 	}
@@ -256,20 +364,29 @@ func (c *SessionCeremony) Close(ctx context.Context, s *domain.Session, reason s
 	if instance.Fence != "" {
 		instance = c.completeInterrupted(ctx, s, instance)
 	}
-	summary := map[string]any{"turns": instance.Turns, "reason": reason, "closed_at": c.now().UTC().Format(time.RFC3339)}
-	key := fmt.Sprintf("axlr:close:%s:%d", s.ID(), instance.Turns)
+	if len(instance.Pending) > 0 {
+		instance.Pending = c.journal(ctx, instance.Pending)
+	}
+	output := map[string]any{"summary": map[string]any{"turns": instance.Turns, "reason": reason, "ended_at": c.now().UTC().Format(time.RFC3339)}}
+	for key, value := range fields {
+		output[key] = value
+	}
+	// The key carries the attempt's time: an ending that failed after its
+	// claim (the transition refused) leaves a used key behind, and MADE
+	// refuses a claim that reuses it (seen on 13 October 2026).
+	key := fmt.Sprintf("axlr:%s:%s:%d:%d", trigger, s.ID(), instance.Turns, c.now().UTC().Unix())
 	fence, err := c.Engine.Claim(ctx, instance.Instance, sessionTurnStep, key, 0)
 	if err == nil {
-		err = c.Engine.Complete(ctx, instance.Instance, sessionTurnStep, fence, map[string]any{"closed": true, "summary": summary})
+		err = c.Engine.Complete(ctx, instance.Instance, sessionTurnStep, fence, output)
 	}
 	if err == nil {
-		_, err = c.Engine.Transition(ctx, instance.Instance, sessionClosedTrigger)
+		_, err = c.Engine.Transition(ctx, instance.Instance, trigger)
 	}
 	if err != nil {
-		c.log("session instance %s close: %v", instance.Instance, err)
+		c.log("session instance %s %s: %v", instance.Instance, trigger, err)
 	} else {
 		instance.Closed = true
-		c.log("session instance %s closed after %s", instance.Instance, plural(instance.Turns, "turn"))
+		c.log("session instance %s %s after %s", instance.Instance, trigger, plural(instance.Turns, "turn"))
 	}
 	if err := s.SetInstance(instance); err != nil {
 		return err

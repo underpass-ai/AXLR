@@ -24,13 +24,16 @@ type Dependencies struct {
 	ApprovalSettings  application.ApprovalSettingsPort
 	Locale            Locale
 	Create            application.CreateSessionUseCase
-	Change            application.ChangeSessionModelUseCase
-	Workspace         domain.Workspace
-	NewSessionID      domain.SessionID
-	Start             application.StartTurnUseCase
-	Resolve           application.ResolveToolUseCase
-	Agent             application.AgentTurnUseCase
-	Store             application.SessionStorePort
+	// Leave closes what the console keeps open for a session it switches
+	// away from (its MADE instance); nil leaves nothing to close.
+	Leave        func(context.Context, *domain.Session) error
+	Change       application.ChangeSessionModelUseCase
+	Workspace    domain.Workspace
+	NewSessionID domain.SessionID
+	Start        application.StartTurnUseCase
+	Resolve      application.ResolveToolUseCase
+	Agent        application.AgentTurnUseCase
+	Store        application.SessionStorePort
 	// ExportFiles writes /export's Markdown; nil refuses /export.
 	ExportFiles application.ExportFilePort
 	// DeleteSession removes a saved session from Ctrl+O; nil offers no

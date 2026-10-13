@@ -317,7 +317,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "plugins":
 					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
-				case "info", "approvals", "updates", "made-setup":
+				case "info", "approvals", "updates", "made-setup", "session":
 					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 				case "sessions":
 					m.Picker.Page = m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width)
@@ -421,7 +421,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// m.Info scroll it, and the others keep the conversation behind
 		// them still. Search shows the conversation, so it falls through.
 		switch m.overlay {
-		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage":
+		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage", "session":
 			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
 		case "help":
 			delta := 3
@@ -447,6 +447,8 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return next, cmd, true
 	case "usage":
 		return m.openUsagePanel(), nil, true
+	case "session":
+		return m.openSessionPanel(), nil, true
 	case "changes-restore":
 		next, cmd := m.restoreChange()
 		return next, cmd, true
@@ -914,6 +916,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		store := m.deps.Store
 		workspace := m.Header.State.Workspace
+		leave := m.deps.Leave
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
 			if store == nil {
 				return errors.New(m.Theme.T("error.sessionStoreUnavailable"))
@@ -924,6 +927,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			if loaded.Export().Workspace != workspace {
 				return errors.New(m.Theme.Tf("error.workspaceMismatch", shortenHome(string(loaded.Export().Workspace)), shortenHome(string(workspace))))
+			}
+			if leave != nil && s != nil {
+				// The session left closes its MADE instance for this console.
+				_ = leave(ctx, s)
 			}
 			*s = loaded
 			return nil
@@ -1043,8 +1050,11 @@ func (m AppModel) overlayView(base string) string {
 		body = m.Palette.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
 	case "help":
 		body = m.Help.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
-	case "info", "approvals", "updates", "made-setup":
+	case "info", "approvals", "updates", "made-setup", "session":
 		title, subtitle := m.Theme.T("info.title"), m.Theme.T("info.subtitle")
+		if m.overlay == "session" {
+			title, subtitle = m.Theme.T("session.title"), m.Theme.T("session.subtitle")
+		}
 		if m.overlay == "made-setup" {
 			title, subtitle = m.Theme.T("madeSetup.title"), m.Theme.T("madeSetup.subtitle")
 		}

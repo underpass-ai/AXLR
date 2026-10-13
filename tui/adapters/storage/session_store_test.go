@@ -408,3 +408,26 @@ func TestCloseReportsTheEmptySessionsItDiscards(t *testing.T) {
 		t.Fatalf("the used session must stay: %v", err)
 	}
 }
+
+// Release gives a loaded session's lock back, so another console can open
+// it, while the store stays open.
+func TestReleaseGivesTheLockBack(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "sessions")
+	first, e := New(dir)
+	must(t, e)
+	defer first.Close()
+	s := fixture(t)
+	must(t, s.BeginTurn("hola", nil))
+	must(t, first.Save(context.Background(), s))
+	must(t, first.Release(s.Export().ID))
+	second, e := New(dir)
+	must(t, e)
+	defer second.Close()
+	if _, err := second.Load(context.Background(), s.Export().ID); err != nil {
+		t.Fatalf("released session must be loadable elsewhere: %v", err)
+	}
+	must(t, first.Release(s.Export().ID)) // twice is fine
+	if _, err := first.Load(context.Background(), s.Export().ID); err == nil {
+		t.Fatal("the second store holds the lock now")
+	}
+}
