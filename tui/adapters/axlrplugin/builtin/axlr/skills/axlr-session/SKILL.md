@@ -36,10 +36,11 @@ as unavailable; do not claim it ran.
 The console supplies the session's about: session metadata and `axlr_session`
 show it, and `axlr_remember` writes there unless you name another. Unless one
 was selected, it is the workspace's project about, which the console derives
-from the workspace root's name (`/home/me/AXLR` gives `project:axlr`) and marks
-`about_is_default`; every session in that workspace gets the same one, so use
-it for recall and records. Abouts are opaque and case-sensitive: `project:AXLR`
-and `project:axlr` differ. Never derive one yourself, from the session title or
+from the workspace root's name with its case (`/home/me/AXLR` gives
+`project:AXLR`) and marks `about_is_default`, or the one the checkout's
+committed bundle names, selected by the console at session start; every session
+in that workspace gets the same one, so use it for recall and records. Abouts
+are opaque and case-sensitive. Never derive one yourself, from the session title or
 otherwise, or silently change a supplied identifier. When repository
 instructions, the user or KMP evidence name a different canonical scope, save
 it with `axlr_session` using `about`. A default about with no memory yet is a

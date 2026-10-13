@@ -388,7 +388,9 @@ func (r *SelfRepair) about() string {
 	if r.Settings.About != "" {
 		return r.Settings.About
 	}
-	return "project:" + strings.ToLower(r.Settings.Repository[strings.LastIndex(r.Settings.Repository, "/")+1:])
+	// The repository's name with its case: abouts are case-sensitive and
+	// this is what the project's other hosts write (decision D2).
+	return "project:" + r.Settings.Repository[strings.LastIndex(r.Settings.Repository, "/")+1:]
 }
 
 func (r *SelfRepair) fail(ctx context.Context, record *domain.RepairRecord, err error) error {

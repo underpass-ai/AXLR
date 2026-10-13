@@ -11,9 +11,9 @@ import (
 
 func TestProjectAboutIsDerivedFromTheWorkspaceRoot(t *testing.T) {
 	for workspace, want := range map[domain.Workspace]string{
-		"/home/tirso/ai/AXLR":        "project:axlr",
-		"/home/tirso/ai/AXLR/":       "project:axlr",
-		"/srv/My Service":            "project:my-service",
+		"/home/tirso/ai/AXLR":        "project:AXLR",
+		"/home/tirso/ai/AXLR/":       "project:AXLR",
+		"/srv/My Service":            "project:My-Service",
 		"/home/tirso/ai/kmp\tengine": "project:kmp-engine",
 		"/":                          "",
 	} {

@@ -139,7 +139,7 @@ The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/
     "directory": "/absolute/repairs",
     "auto_merge": false,
     "watch_minutes": 45,
-    "about": "project:axlr",
+    "about": "project:AXLR",
     "autonomous": true,
     "max_attempts": 2
   },

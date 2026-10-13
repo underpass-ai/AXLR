@@ -45,7 +45,7 @@ Files in `<state>` and `<data>` are AXLR's own records, not configuration, but t
 | `<data>/plugins/` | Packages installed with `/plugin` |
 | `<data>/repairs/` | Default clone directory of `/repair` and `/improve` (`repair.directory` overrides it) |
 | `<data>/engines/` | KMP and MADE packages downloaded by `/update` or the setup assistant |
-| `$XDG_DATA_HOME/kmp/default` | The KMP store AXLR's installer pins with `KMP_MCP_DATA_DIR` (KMP's own data, outside `<data>`) |
+| `<git top level>/.kernel`, `$XDG_DATA_HOME/kmp/default` | The KMP store the console opens for a workspace: the checkout's own inside a git repository, the per-user default outside one, unless the `kmp` entry's `env` pins another directory (KMP's own data; see the [KMP runbook](runbooks/kmp.md#let-axlr-install-it)) |
 | `$HOME/.local/state/underpass-made/`, `$HOME/.config/underpass-made/embedded/` | MADE's default embedded store and its private configuration, created by the package's setup (MADE's own files). The launcher receives only `HOME` and `PATH`, so these paths ignore the XDG variables |
 
 ## settings.json
@@ -418,7 +418,7 @@ Configures `/repair`, the agent's self-repair (`axlr_request_repair`), `/improve
 | `directory` | string | `<data>/repairs` | Absolute path where clones are made |
 | `auto_merge` | boolean | `false` | Merge a green repair pull request without you |
 | `watch_minutes` | integer | `0` (45) | How long one round of checks may take; `0` to 720 |
-| `about` | string | `project:<name>` | The KMP project scope of repairs. Not validated |
+| `about` | string | `project:<name>` | The KMP project scope of repairs: the repository name with its case (`underpass-ai/AXLR` gives `project:AXLR`). Not validated |
 | `autonomous` | boolean | `true` | Let a repair session the agent started run local tools in its clone without a card. The reproduction command and the merge always wait for you; an explicit `false` is kept on save |
 | `max_attempts` | integer | `0` (2) | Repair sessions one failure may start; `0` to 5 |
 | `install` | boolean | `false` | Replace the running `axlr-tui` with the repaired build once its pull request merges, without the panel's `i` |
@@ -431,7 +431,7 @@ Refused: `settings repair.repository must be owner/name`, `settings repair.direc
   "directory": "/home/you/repairs",
   "auto_merge": false,
   "watch_minutes": 45,
-  "about": "project:axlr",
+  "about": "project:AXLR",
   "autonomous": true,
   "max_attempts": 2,
   "install": false
@@ -592,7 +592,7 @@ Package-generated registrations are usually named `<package>-<server>` and do no
 
 ### Full examples
 
-The KMP entry the installer writes (`purpose` `memory`, the store pinned before first discovery, `HOME` and `PATH` passed through). Its `approval` is `auto` from `/update` and from the assistant unless you answer no to recording memories without a card, which gives `manual`:
+The KMP entry the installer writes (`purpose` `memory`, the embedded backend pinned, `HOME` and `PATH` passed through; no store, which the console chooses per workspace at launch and pins into the child environment itself). Its `approval` is `auto` from `/update` and from the assistant unless you answer no to recording memories without a card, which gives `manual`:
 
 ```json
 {
@@ -601,13 +601,12 @@ The KMP entry the installer writes (`purpose` `memory`, the store pinned before 
   "description": "Underpass graph-temporal agent memory",
   "purpose": "memory",
   "approval": "auto",
-  "env": {
-    "KMP_MCP_BACKEND": "embedded",
-    "KMP_MCP_DATA_DIR": "/home/you/.local/share/kmp/default"
-  },
+  "env": {"KMP_MCP_BACKEND": "embedded"},
   "env_from": {"HOME": "HOME", "PATH": "PATH"}
 }
 ```
+
+An entry written before 13 October 2026 also carries `"KMP_MCP_DATA_DIR": "/home/you/.local/share/kmp/default"`; the console treats that value as the old pin and still opens a checkout's `.kernel`. Any other directory in `KMP_MCP_DATA_DIR` is yours and wins.
 
 A MADE entry for the installed embedded launcher, which finds its private store configuration through `HOME`:
 
@@ -759,7 +758,7 @@ Every key with a value. The file passes validation as written; to launch with it
     "directory": "/home/you/repairs",
     "auto_merge": false,
     "watch_minutes": 45,
-    "about": "project:axlr",
+    "about": "project:AXLR",
     "autonomous": true,
     "max_attempts": 2,
     "install": false

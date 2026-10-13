@@ -26,10 +26,7 @@ type Registrar interface {
 // Installer is the EngineInstallPort of the console and the setup.
 type Installer struct {
 	Configuration Registrar
-	// DataBase is $XDG_DATA_HOME (or ~/.local/share); KMP's store is
-	// <DataBase>/kmp/default, the per-user store KMP itself defaults to.
-	DataBase string
-	Getenv   func(string) string
+	Getenv        func(string) string
 	// KMPApproval is kmp's approval policy: auto lets memory writes land
 	// without a card; empty means manual.
 	KMPApproval string
@@ -45,7 +42,8 @@ var _ application.EngineInstallPort = (*Installer)(nil)
 // InstallEngine prepares the store and connects the engine. The child
 // environment is HOME and PATH only, exactly what the registration passes
 // through env_from: MADE's launcher finds its private configuration by the
-// same HOME, and KMP's guide lands in the store the console will open.
+// same HOME. KMP's store is not chosen here: the console resolves it per
+// workspace at launch and fills a store it creates (adapters/kmpstore).
 func (i *Installer) InstallEngine(ctx context.Context, engine, packageRoot string) (string, error) {
 	if i.Configuration == nil || i.Getenv == nil || !filepath.IsAbs(packageRoot) {
 		return "", errors.New("engine installer is not configured")
@@ -59,27 +57,24 @@ func (i *Installer) InstallEngine(ctx context.Context, engine, packageRoot strin
 	launcher := filepath.Join(packageRoot, "scripts", "run-embedded-mcp.sh")
 	switch engine {
 	case "kmp":
-		if !filepath.IsAbs(i.DataBase) {
-			return "", errors.New("an absolute data directory is required for the KMP store")
-		}
-		store := filepath.Join(i.DataBase, "kmp", "default")
-		storeEnv := map[string]string{"KMP_MCP_BACKEND": "embedded", "KMP_MCP_DATA_DIR": store}
-		// The guide is written before the first discovery, while no engine
-		// holds the store.
-		if _, err := i.execute(ctx, filepath.Join(packageRoot, "bin", "kmp-mcp"), []string{"guide", "sync", "--plugin-root", packageRoot}, append(env, "KMP_MCP_BACKEND=embedded", "KMP_MCP_DATA_DIR="+store)); err != nil {
-			return "", fmt.Errorf("synchronise the KMP guide: %w", err)
-		}
+		// Until 13 October 2026 the installer pinned $XDG_DATA_HOME/kmp/default
+		// here for every workspace and synced the guide into it, which kept a
+		// project's memory apart from what the person's other hosts wrote in
+		// the same checkout. The console now chooses the store per workspace
+		// at launch (the checkout's .kernel, or that per-user default outside
+		// one) and writes the guide into a store it creates; the entry pins
+		// only the backend.
 		approval := i.KMPApproval
 		if approval == "" {
 			approval = "manual"
 		}
 		if err := i.Configuration.RegisterEngine(ctx, application.EngineRegistration{
 			Engine: "kmp", Launcher: launcher, Name: "KMP", Description: "Underpass graph-temporal agent memory",
-			Purpose: "memory", Approval: approval, Env: storeEnv, EnvFrom: hostEnv,
+			Purpose: "memory", Approval: approval, Env: map[string]string{"KMP_MCP_BACKEND": "embedded"}, EnvFrom: hostEnv,
 		}); err != nil {
 			return "", err
 		}
-		return "memory store " + store, nil
+		return "connected; the memory store is chosen per workspace at launch", nil
 	case "made":
 		// The package's setup creates the store, its private configuration
 		// and the authorization bootstrap; it reuses all three when they exist.

@@ -367,6 +367,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		profiles = append(profiles, domain.PluginProfile{ID: registration.Manifest.ID, Name: root.Text(registration.Manifest.ID), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
 	}
 	registrations = append(persisted.Registrations, registrations...)
+	// The memory of this launch: the checkout's own store, prepared and
+	// pinned before anything reads the registrations.
+	kmp, hasKMP, kmpErr := prepareKMPStore(ctx, registrations, workspacePath, dataBase)
+	if hasKMP {
+		line := kmp.line(dataBase)
+		if kmpErr != nil {
+			line += "; preparation failed: " + kmpErr.Error()
+		}
+		// The console's stderr lines reach the app log too.
+		fmt.Fprintln(stderr, "axlr-tui: "+line)
+	}
 	activeEngineCommands := map[string]string{}
 	for _, registration := range registrations {
 		activeEngineCommands[registration.Manifest.ID.String()] = registration.Manifest.Command
@@ -488,6 +499,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(fmt.Errorf("%s needs a model: pass --model or choose one in settings.json", launchFlag))
 		}
 	}
+	if session != nil && kmp.FromBundle {
+		// The checkout's bundle names the project's about: the session is
+		// bound to it as the person would bind it, unless one is selected.
+		if err := selectBundleAbout(ctx, sessionLabels, session.Export().ID, kmp.About); err != nil {
+			return fail(err)
+		}
+	}
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog)}
@@ -598,7 +616,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Diagnostics:       trace,
 		Plugins:           pluginManager,
 		InstalledPlugins:  axlrCatalog,
-		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands, Install: &enginesetup.Installer{Configuration: &configStore, DataBase: dataBase, Getenv: getenv, KMPApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}).Prepare}},
+		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands, Install: &enginesetup.Installer{Configuration: &configStore, Getenv: getenv, KMPApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}).Prepare}},
 		MADEPreparation:   &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore},
 		Models:            application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: locals.available, Remote: remoteCatalog}, Diagnostics: trace},
 		ModelPreference:   preferences,

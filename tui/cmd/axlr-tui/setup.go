@@ -156,7 +156,7 @@ func newSetupWizard(getenv func(string) string, paths setupPaths, settings *stor
 			Configuration: store,
 			Root:          filepath.Join(paths.data, "axlr", "engines"),
 			Install: &enginesetup.Installer{
-				Configuration: store, DataBase: paths.data, Getenv: getenv, KMPApproval: kmpApproval,
+				Configuration: store, Getenv: getenv, KMPApproval: kmpApproval,
 				PrepareMADE: (&madesetup.Preparer{ConfigPath: paths.mcp, Getenv: getenv, Store: store}).Prepare,
 			},
 		}
