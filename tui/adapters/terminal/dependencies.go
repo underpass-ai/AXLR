@@ -92,7 +92,3 @@ type Dependencies struct {
 	// Ctrl+C), so the launcher can say how to resume it.
 	Quit func(domain.SessionState)
 }
-
-// EngineFact is one line /mcp shows under an engine: an i18n key for the
-// label and the value.
-type EngineFact struct{ Key, Value string }

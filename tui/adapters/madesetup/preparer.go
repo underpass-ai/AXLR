@@ -230,10 +230,6 @@ func without(env []string, key string) []string {
 	return out
 }
 
-type refusal struct{ Code, Message string }
-
-func (r *refusal) Error() string { return r.Code + ": " + r.Message }
-
 // CallOnce starts the server, calls one tool and stops it.
 func CallOnce(ctx context.Context, s mcpclient.Server, tool string, arguments map[string]any) (map[string]any, error) {
 	name, err := mcpclient.NewToolName(tool)

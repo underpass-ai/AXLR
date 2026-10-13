@@ -33,7 +33,3 @@ type operationComplete struct {
 	// gitRead marks a turn's end whose Git state read is already asked.
 	gitRead bool
 }
-
-// resubmitPrompt sends a prompt in the session that continues a capped
-// one.
-type resubmitPrompt struct{ prompt string }
