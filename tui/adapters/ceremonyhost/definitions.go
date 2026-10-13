@@ -50,7 +50,9 @@ func pinned(name, version string) (Definition, bool) {
 	return Definition{}, false
 }
 
-var roleLine = regexp.MustCompile(`(?m)^roles:\n- id: (\S+)`)
+// roleLine tolerates CRLF: a Windows checkout converts the embedded YAML
+// (seen in CI on 13 October 2026).
+var roleLine = regexp.MustCompile(`(?m)^roles:\r?\n- id: (\S+)`)
 
 // RoleOf is the console's role in a pinned definition: the first role it
 // declares ("" for an unpinned one).

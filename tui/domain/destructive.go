@@ -229,7 +229,10 @@ func outsideWorkspace(workspace Workspace, cwd, path string) bool {
 	if strings.HasPrefix(path, "~") {
 		return true
 	}
-	if !filepath.IsAbs(path) {
+	// Commands are POSIX shell words: a leading slash is absolute on every
+	// platform (on Windows filepath.IsAbs says otherwise, seen in CI on
+	// 13 October 2026).
+	if !filepath.IsAbs(path) && !strings.HasPrefix(path, "/") {
 		path = filepath.Join(root, cwd, path)
 	}
 	path = filepath.Clean(path)

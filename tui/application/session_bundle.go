@@ -175,5 +175,10 @@ func ImportedInstance(instance *domain.SessionInstance, id domain.SessionID, wor
 		Evidence: []string{"axlr-tui --import " + source},
 		Labels:   map[string][]string{"ws": {string(workspace)}, "session": {string(id)}, "event": {"import"}}}
 	next.Pending = append(next.Pending, encodeEntry(entry))
+	if next.Instance == "" {
+		// The origin had no instance: the record needs a reason to exist
+		// until the first prompt opens one here and takes the entry.
+		next.Unavailable = "imported from " + origin + " without a MADE instance"
+	}
 	return &next
 }

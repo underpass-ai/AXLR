@@ -116,6 +116,20 @@ func TestImportSessionMakesTheBundleThisConsoles(t *testing.T) {
 	}
 }
 
+// A bundle whose session never had an instance still carries the handoff:
+// the record says why it has no id, so the store keeps it, and the first
+// prompt here opens the instance and writes the entry.
+func TestImportedInstanceWithoutAnOriginInstanceKeepsTheHandoff(t *testing.T) {
+	now := time.Date(2026, 10, 13, 21, 0, 0, 0, time.UTC)
+	instance := ImportedInstance(nil, "0123456789abcdef0123456789abcdef", "/ws", SessionBundleMeta{Host: "laptop"}, "gx10", "/tmp/b.json", now)
+	if err := instance.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if instance.Instance != "" || instance.Closed || len(instance.Pending) != 1 || !strings.Contains(instance.Unavailable, "imported from laptop") {
+		t.Fatalf("instance %+v", instance)
+	}
+}
+
 func TestRefAboutReadsTheAboutOfARef(t *testing.T) {
 	about, err := RefAbout("project:Repo-B:entry:decision:las-fechas-166c94f5031adc46")
 	if err != nil || about != "project:Repo-B" {
