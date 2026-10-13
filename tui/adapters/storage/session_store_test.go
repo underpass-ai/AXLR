@@ -384,3 +384,27 @@ func TestSessionSummaryCarriesBoundedConversationText(t *testing.T) {
 		t.Fatalf("bounded text: %d bytes, valid %v", len(text), utf8.ValidString(string(text)))
 	}
 }
+
+// Close tells OnDiscard about the empty session it removes, so the label the
+// checkout's about bound at creation goes with it; a session that received
+// a message is kept and not reported.
+func TestCloseReportsTheEmptySessionsItDiscards(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "sessions")
+	store, e := New(dir)
+	must(t, e)
+	var discarded []domain.SessionID
+	store.OnDiscard = func(id domain.SessionID) { discarded = append(discarded, id) }
+	empty := fixture(t)
+	must(t, store.Save(context.Background(), empty))
+	used, e := domain.NewSession("2123456789abcdef0123456789abcdef", empty.Export().Workspace, "test/model")
+	must(t, e)
+	must(t, used.BeginTurn("hola", nil))
+	must(t, store.Save(context.Background(), used))
+	must(t, store.Close())
+	if len(discarded) != 1 || discarded[0] != empty.Export().ID {
+		t.Fatalf("discarded %v", discarded)
+	}
+	if _, err := os.Stat(filepath.Join(dir, string(used.Export().ID)+".json")); err != nil {
+		t.Fatalf("the used session must stay: %v", err)
+	}
+}

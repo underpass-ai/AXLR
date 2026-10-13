@@ -459,6 +459,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
+	// A session discarded at close for never receiving a message takes its
+	// label with it, which the checkout's about binds at creation.
+	store.OnDiscard = func(id domain.SessionID) { _ = sessionLabels.Forget(context.Background(), id) }
 	var session *domain.Session
 	var newID domain.SessionID
 	if resuming {
@@ -482,7 +485,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 		if model != "" {
-			created, createErr := (application.CreateSessionUseCase{Store: loggedStore}).Execute(ctx, newID, workspace, model)
+			created, createErr := (application.CreateSessionUseCase{Store: loggedStore, Labels: sessionLabels, About: kmp.bundleAbout()}).Execute(ctx, newID, workspace, model)
 			if createErr != nil {
 				return fail(createErr)
 			}
@@ -499,10 +502,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(fmt.Errorf("%s needs a model: pass --model or choose one in settings.json", launchFlag))
 		}
 	}
-	if session != nil && kmp.FromBundle {
-		// The checkout's bundle names the project's about: the session is
-		// bound to it as the person would bind it, unless one is selected.
-		if err := selectBundleAbout(ctx, sessionLabels, session.Export().ID, kmp.About); err != nil {
+	if about := kmp.bundleAbout(); resuming && session != nil && about != "" {
+		// A resumed session from before the checkout named the about is
+		// bound to it too, unless one is selected; new sessions are bound
+		// by CreateSessionUseCase wherever the console creates them.
+		if err := selectBundleAbout(ctx, sessionLabels, session.Export().ID, about); err != nil {
 			return fail(err)
 		}
 	}
@@ -626,7 +630,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		UIPreferences:     uiPreferences,
 		ApprovalSettings:  approvalSettings,
 		Locale:            locale,
-		Create:            application.CreateSessionUseCase{Store: loggedStore},
+		Create:            application.CreateSessionUseCase{Store: loggedStore, Labels: sessionLabels, About: kmp.bundleAbout()},
 		Change:            application.ChangeSessionModelUseCase{Store: loggedStore},
 		Workspace:         workspace,
 		NewSessionID:      newID,

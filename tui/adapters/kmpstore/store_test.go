@@ -44,20 +44,46 @@ func TestResolvePrefersTheOperatorThenTheCheckoutThenTheUserDefault(t *testing.T
 	}
 }
 
-func TestGitTopLevelAcceptsAWorktreeFile(t *testing.T) {
-	top := t.TempDir()
-	if err := os.WriteFile(filepath.Join(top, ".git"), []byte("gitdir: /elsewhere/.git/worktrees/x\n"), 0o644); err != nil {
+func TestGitTopLevelResolvesWorktreesSubmodulesAndStoreDirectories(t *testing.T) {
+	main := filepath.Join(t.TempDir(), "main")
+	if err := os.MkdirAll(filepath.Join(main, ".git", "worktrees", "x"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	inner := filepath.Join(top, "a", "b")
+	worktree := filepath.Join(t.TempDir(), "x")
+	inner := filepath.Join(worktree, "a", "b")
 	if err := os.MkdirAll(inner, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := GitTopLevel(inner); !ok || got != top {
-		t.Fatalf("%q %v", got, ok)
+	if err := os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: "+filepath.Join(main, ".git", "worktrees", "x")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := GitTopLevel(inner); !ok || got != main {
+		t.Fatalf("worktree: %q %v, want %q", got, ok, main)
+	}
+	// A submodule's .git file points into .git/modules: its own project.
+	submodule := filepath.Join(t.TempDir(), "sub")
+	if err := os.MkdirAll(submodule, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(submodule, ".git"), []byte("gitdir: ../.git/modules/sub\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := GitTopLevel(submodule); !ok || got != submodule {
+		t.Fatalf("submodule: %q %v", got, ok)
+	}
+	// A directory that already holds a store is a project root without git.
+	holder := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(holder, StoreDirectory), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(holder, StoreDirectory, "FORMAT_VERSION"), []byte("4"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := GitTopLevel(filepath.Join(holder)); !ok || got != holder {
+		t.Fatalf("store holder: %q %v", got, ok)
 	}
 	if _, ok := GitTopLevel(t.TempDir()); ok {
-		t.Fatal("a directory without .git is not a checkout")
+		t.Fatal("a directory without .git or a store is not a project")
 	}
 }
 
@@ -179,7 +205,11 @@ func TestPrepareWithoutABinaryOrBundleOnlyCreatesTheDirectory(t *testing.T) {
 	}
 }
 
-func TestPrepareReportsAFailedImport(t *testing.T) {
+// A bundle kmp-mcp refuses (an unreadable header, seen on 13 October 2026
+// with a hand-written one) is reported, and the store it initialised
+// before refusing is still configured and given the guide, so the next
+// start does not find a bare store it will never fill.
+func TestPrepareReportsAFailedImportAndStillFinishesTheStore(t *testing.T) {
 	top, _ := checkout(t)
 	if err := os.MkdirAll(filepath.Join(top, ".kmp"), 0o755); err != nil {
 		t.Fatal(err)
@@ -187,11 +217,26 @@ func TestPrepareReportsAFailedImport(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(top, ".kmp", "memory.jsonl"), []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p := Preparer{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
-		return nil, errors.New("store is not empty")
+	var runs []run
+	p := Preparer{Binary: "/opt/kmp/bin/kmp-mcp", PluginRoot: "/opt/kmp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
+		runs = append(runs, run{command, args, env})
+		if args[0] == "import" {
+			return nil, errors.New("could not decode bundle header")
+		}
+		return nil, nil
 	}}
-	_, err := p.Prepare(context.Background(), Resolve(top, nil, t.TempDir()), nil)
-	if err == nil || !strings.Contains(err.Error(), "import") || !strings.Contains(err.Error(), "store is not empty") {
+	report, err := p.Prepare(context.Background(), Resolve(top, nil, t.TempDir()), nil)
+	if err != nil || !strings.Contains(report.ImportFailed, "bundle header") || report.Imported != 0 || !report.GuideSynced || len(runs) != 2 {
+		t.Fatalf("%+v %v %+v", report, err, runs)
+	}
+}
+
+func TestPrepareReportsAFailedGuideSync(t *testing.T) {
+	p := Preparer{Binary: "/opt/kmp/bin/kmp-mcp", PluginRoot: "/opt/kmp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
+		return nil, errors.New("no guide assets")
+	}}
+	_, err := p.Prepare(context.Background(), Selection{Path: filepath.Join(t.TempDir(), "default"), Reason: ReasonUser}, nil)
+	if err == nil || !strings.Contains(err.Error(), "guide") {
 		t.Fatalf("%v", err)
 	}
 }

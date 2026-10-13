@@ -28,6 +28,10 @@ type SessionStore struct {
 	closed         bool
 	preserveActive bool
 	replace        func(string, string) error
+	// OnDiscard is told each session Close discarded because it never
+	// received a message, so what the console kept about it elsewhere (its
+	// label) goes too.
+	OnDiscard func(domain.SessionID)
 }
 
 var _ application.SessionStorePort = (*SessionStore)(nil)
@@ -292,6 +296,9 @@ func (s *SessionStore) Close() error {
 		}
 		errs = append(errs, lock.close())
 		if empty {
+			if s.OnDiscard != nil {
+				s.OnDiscard(id)
+			}
 			_ = os.Remove(s.timesPath(id))
 			_ = os.Remove(s.modePath(id))
 			_ = os.Remove(s.ceremonyPath(id))

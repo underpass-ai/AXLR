@@ -81,13 +81,28 @@ func Resolve(workspace string, env []string, dataBase string) Selection {
 	return Selection{Path: user, Reason: ReasonUser}
 }
 
-// GitTopLevel is the nearest directory at or above the workspace that holds
-// a .git directory or file (a worktree or submodule has a file).
+// GitTopLevel is the project root of a workspace, found the way KMP finds
+// it: the nearest directory at or above the workspace that is a git
+// checkout or already holds a store. A worktree (whose .git is a file
+// pointing into the main repository's .git/worktrees) resolves to the main
+// repository, so worktrees share its store; a submodule's .git file keeps
+// the submodule as its own project.
 func GitTopLevel(workspace string) (string, bool) {
 	dir := filepath.Clean(workspace)
 	for {
-		if info, err := os.Stat(filepath.Join(dir, ".git")); err == nil && (info.IsDir() || info.Mode().IsRegular()) {
+		if Exists(filepath.Join(dir, StoreDirectory)) {
 			return dir, true
+		}
+		if info, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			if info.IsDir() {
+				return dir, true
+			}
+			if info.Mode().IsRegular() {
+				if main, ok := worktreeMain(dir); ok {
+					return main, true
+				}
+				return dir, true
+			}
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -95,6 +110,31 @@ func GitTopLevel(workspace string) (string, bool) {
 		}
 		dir = parent
 	}
+}
+
+// worktreeMain reads a worktree's .git file, "gitdir: <main>/.git/worktrees/<name>",
+// and returns <main>; false for any other .git file.
+func worktreeMain(dir string) (string, bool) {
+	data, err := os.ReadFile(filepath.Join(dir, ".git"))
+	if err != nil {
+		return "", false
+	}
+	line, _, _ := strings.Cut(string(data), "\n")
+	target, ok := strings.CutPrefix(strings.TrimSpace(line), "gitdir:")
+	if !ok {
+		return "", false
+	}
+	target = filepath.Clean(strings.TrimSpace(target))
+	if !filepath.IsAbs(target) {
+		target = filepath.Join(dir, target)
+	}
+	// <main>/.git/worktrees/<name>
+	worktrees := filepath.Dir(target)
+	gitDir := filepath.Dir(worktrees)
+	if filepath.Base(worktrees) != "worktrees" || filepath.Base(gitDir) != ".git" {
+		return "", false
+	}
+	return filepath.Dir(gitDir), true
 }
 
 // Value reads one variable from a KEY=VALUE environment.
@@ -150,7 +190,7 @@ func Binary(command string) (binary, pluginRoot string) {
 // from the person's per-user store, so the project is ready to use the way
 // the person already works (decision B7). Indexes, agents and judgements are
 // not copied: KMP rebuilds them.
-var configurationFiles = []string{"typesafe.json", "rerank.json", "wake-focus.json", "write-relations.json", "judgement-book.json", "curate.json", "ask-judge.json", "write-expansions.json", "telemetry-salt"}
+var configurationFiles = []string{"typesafe.json", "rerank.json", "wake-focus.json", "write-relations.json", "judgement-book.json", "curate.json", "ask-judge.json", "write-expansions.json"}
 
 // Preparer creates a store the console chose and fills it.
 type Preparer struct {
@@ -173,6 +213,11 @@ type Report struct {
 	// Imported is the number of events restored from the bundle, -1 when
 	// a bundle was imported but its receipt was unreadable, 0 without one.
 	Imported int
+	// ImportFailed is why the bundle was not imported; empty otherwise.
+	// kmp-mcp initialises the store before it reads the bundle, so the
+	// store stays and is configured and given the guide all the same, and
+	// the person is told.
+	ImportFailed string
 	// Configured lists the configuration files copied from the user store.
 	Configured []string
 	// GuideSynced is true when the guide was written into the new store.
@@ -209,11 +254,11 @@ func (p Preparer) Prepare(ctx context.Context, selection Selection, env []string
 	}
 	child := WithStore(env, selection.Path)
 	if bundle := filepath.Join(selection.TopLevel, filepath.FromSlash(BundlePath)); selection.TopLevel != "" && p.Binary != "" && fileExists(bundle) {
-		out, err := p.run(ctx, p.Binary, []string{"import", bundle}, child)
-		if err != nil {
-			return report, fmt.Errorf("import %s: %w", bundle, err)
+		if out, err := p.run(ctx, p.Binary, []string{"import", bundle}, child); err != nil {
+			report.ImportFailed = err.Error()
+		} else {
+			report.Imported = importedEvents(out)
 		}
-		report.Imported = importedEvents(out)
 	}
 	if p.UserStore != "" && filepath.Clean(p.UserStore) != filepath.Clean(selection.Path) {
 		for _, name := range configurationFiles {

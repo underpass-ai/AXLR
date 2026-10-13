@@ -45,8 +45,11 @@ func TestPrepareKMPStorePinsTheCheckoutsStoreIntoTheRegistration(t *testing.T) {
 	}
 	registrations := []plugins.Registration{other, registration}
 	store, found, err := prepareKMPStore(context.Background(), registrations, workspace, data)
-	if !found || err == nil || !strings.Contains(err.Error(), "import") {
-		t.Fatalf("found %v err %v", found, err)
+	if !found || err != nil || !strings.Contains(store.Report.ImportFailed, "not executable") {
+		t.Fatalf("found %v err %v report %+v", found, err, store.Report)
+	}
+	if store.About != "project:AXLR" || !store.FromBundle || store.bundleAbout() != "project:AXLR" {
+		t.Fatalf("about %+v", store)
 	}
 	want := filepath.Join(top, kmpstore.StoreDirectory)
 	if store.Selection.Path != want || store.Selection.Reason != kmpstore.ReasonProject || store.Selection.Replaced != user {
@@ -62,7 +65,7 @@ func TestPrepareKMPStorePinsTheCheckoutsStoreIntoTheRegistration(t *testing.T) {
 		t.Fatalf("report %+v", store.Report)
 	}
 	line := store.line(data)
-	for _, part := range []string{"KMP store " + want, "the checkout " + top, "replaces the installer's pin " + user, "new store"} {
+	for _, part := range []string{"KMP store " + want, "the checkout " + top, "replaces the installer's pin " + user, "new store", ".kmp/memory.jsonl not imported: "} {
 		if !strings.Contains(line, part) {
 			t.Fatalf("line %q lacks %q", line, part)
 		}
@@ -128,5 +131,28 @@ func TestSelectBundleAboutFillsOnlyAMissingAbout(t *testing.T) {
 	all, _ = labels.Load(context.Background())
 	if all[id].About != "project:AXLR" {
 		t.Fatalf("a selected about must be kept: %+v", all[id])
+	}
+}
+
+// --root inside a checkout: the about is the checkout's name, bound to
+// the session because the console's default derives from the workspace.
+func TestPrepareKMPStoreInsideACheckoutUsesTheCheckoutsName(t *testing.T) {
+	top := filepath.Join(t.TempDir(), "Repo-B")
+	workspace := filepath.Join(top, "src", "deep")
+	for _, dir := range []string{filepath.Join(top, ".git"), workspace} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	registration, err := plugins.NewRegistration(plugins.Manifest{ID: "kmp", Command: filepath.Join(t.TempDir(), "scripts", kmpstore.Launcher), AllowAll: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, found, err := prepareKMPStore(context.Background(), []plugins.Registration{registration}, workspace, filepath.Join(t.TempDir(), "share"))
+	if !found || err != nil {
+		t.Fatalf("found %v err %v", found, err)
+	}
+	if store.About != "project:Repo-B" || !store.FromRoot || store.bundleAbout() != "project:Repo-B" || !strings.Contains(store.line("/d"), "about project:Repo-B (the checkout's name)") {
+		t.Fatalf("%+v", store)
 	}
 }

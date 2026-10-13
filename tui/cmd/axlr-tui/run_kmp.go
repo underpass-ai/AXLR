@@ -35,10 +35,14 @@ type kmpStore struct {
 	Selection kmpstore.Selection
 	Report    kmpstore.Report
 	// About is the workspace's project about: the one its committed bundle
-	// names, else the directory rule (application.ProjectAbout).
+	// names, else the checkout's directory name, else the workspace's
+	// (application.ProjectAbout).
 	About string
-	// FromBundle says the about came from the checkout's bundle.
-	FromBundle bool
+	// FromBundle says the about came from the checkout's bundle; FromRoot
+	// that it came from the checkout's name because the workspace is a
+	// directory inside it. Either is bound to the session, since the
+	// console's default about is derived from the workspace alone.
+	FromBundle, FromRoot bool
 }
 
 // prepareKMPStore chooses the store of the stdio kmp registration for this
@@ -63,6 +67,14 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 	store.Selection = kmpstore.Resolve(workspace, r.Env, dataBase)
 	registrations[index].Env = kmpstore.WithStore(r.Env, store.Selection.Path)
 	store.About = application.ProjectAbout(domain.Workspace(workspace))
+	if top := store.Selection.TopLevel; top != "" {
+		// --root inside a checkout: the memory is the checkout's, so the
+		// about is its name, not the subdirectory's (seen with
+		// --root Repo-B/src/deep giving project:deep on 13 October 2026).
+		if about := application.ProjectAbout(domain.Workspace(top)); about != "" && about != store.About {
+			store.About, store.FromRoot = about, true
+		}
+	}
 	binary, pluginRoot := kmpstore.Binary(r.Manifest.Command)
 	preparer := kmpstore.Preparer{Binary: binary, PluginRoot: pluginRoot, UserStore: kmpstore.UserDefault(dataBase)}
 	if store.Report, err = preparer.Prepare(ctx, store.Selection, r.Env); err != nil {
@@ -73,9 +85,18 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 		return store, true, err
 	}
 	if about != "" {
-		store.About, store.FromBundle = about, true
+		store.About, store.FromBundle, store.FromRoot = about, true, false
 	}
 	return store, true, nil
+}
+
+// bundleAbout is the about to bind new sessions to: the bundle's or the
+// checkout's when it differs from the workspace's own, or none.
+func (s kmpStore) bundleAbout() string {
+	if s.FromBundle || s.FromRoot {
+		return s.About
+	}
+	return ""
 }
 
 // line is the startup line: where this launch's memory lives, why, and what
@@ -95,14 +116,19 @@ func (s kmpStore) line(dataBase string) string {
 		b.WriteString("the per-user default, outside a checkout")
 	}
 	fmt.Fprintf(&b, "), about %s", s.About)
-	if s.FromBundle {
+	switch {
+	case s.FromBundle:
 		b.WriteString(" (from " + kmpstore.BundlePath + ")")
+	case s.FromRoot:
+		b.WriteString(" (the checkout's name)")
 	}
 	if !s.Report.Created {
 		return b.String()
 	}
 	b.WriteString("; new store")
 	switch {
+	case s.Report.ImportFailed != "":
+		fmt.Fprintf(&b, ", %s not imported: %s", kmpstore.BundlePath, s.Report.ImportFailed)
 	case s.Report.Imported > 0:
 		fmt.Fprintf(&b, ", %d events imported from %s", s.Report.Imported, kmpstore.BundlePath)
 	case s.Report.Imported < 0:

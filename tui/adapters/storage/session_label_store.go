@@ -74,6 +74,36 @@ func (s *SessionLabelStore) Initialize(ctx context.Context, id domain.SessionID,
 	return s.update(ctx, id, label, true)
 }
 
+// Forget removes a session's label whole, about included: the console
+// calls it for a session it discarded at close because it never received a
+// message, so a label bound at creation (the checkout's about) does not
+// outlive the session (seen on 13 October 2026).
+func (s *SessionLabelStore) Forget(ctx context.Context, id domain.SessionID) error {
+	if _, err := domain.NewSessionID(string(id)); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	release, err := acquireMCPConfigLock(ctx, s.path)
+	if err != nil {
+		return err
+	}
+	defer release()
+	record, err := s.read()
+	if err != nil {
+		return err
+	}
+	if _, ok := record.Labels[string(id)]; !ok {
+		return nil
+	}
+	delete(record.Labels, string(id))
+	data, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return err
+	}
+	return s.write(ctx, data)
+}
+
 func (s *SessionLabelStore) update(ctx context.Context, id domain.SessionID, label domain.SessionLabel, initialize bool) (domain.SessionLabel, error) {
 	if _, err := domain.NewSessionID(string(id)); err != nil {
 		return domain.SessionLabel{}, err
