@@ -28,7 +28,7 @@ func TestSessionBundleRoundTrip(t *testing.T) {
 	if err := s.SetMode(domain.ModeReview); err != nil {
 		t.Fatal(err)
 	}
-	instance := domain.SessionInstance{Instance: "axlr-session-" + string(id), Turns: 1, Closed: true, LastRecord: `{"turn":1}`, Pending: []string{`{"About":"ws:x"}`}, KMPAgent: "a", KMPContext: "c", Predecessor: "p"}
+	instance := domain.SessionInstance{Instance: "axlr-session-" + string(id), Turns: 1, Closed: true, LastRecord: `{"turn":1}`, Pending: []string{`{"About":"ws:x"}`}, MemoryAgent: "a", MemoryContext: "c", Predecessor: "fedcba9876543210fedcba9876543210"}
 	if err := s.SetInstance(instance); err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestSessionBundleRoundTrip(t *testing.T) {
 	if state.ID != want.ID || state.Workspace != want.Workspace || len(state.Messages) != len(want.Messages) || back.Mode() != domain.ModeCeremony || state.ChosenCeremony != want.ChosenCeremony {
 		t.Fatalf("state %+v", state)
 	}
-	if state.Instance == nil || state.Instance.Instance != instance.Instance || !state.Instance.Closed || state.Instance.KMPContext != "c" || state.Instance.Predecessor != "p" || len(state.Instance.Pending) != 1 {
+	if state.Instance == nil || state.Instance.Instance != instance.Instance || !state.Instance.Closed || state.Instance.MemoryContext != "c" || state.Instance.Predecessor != "fedcba9876543210fedcba9876543210" || len(state.Instance.Pending) != 1 {
 		t.Fatalf("instance %+v", state.Instance)
 	}
 	if len(state.MessageTimes) != len(want.MessageTimes) {

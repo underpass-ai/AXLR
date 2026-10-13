@@ -31,7 +31,7 @@ type SettledEntry struct {
 	Evidence  []string
 	Labels    map[string][]string
 	Key       string
-	ContextID string
+	ContextID domain.MemoryContextID
 	Links     []MemoryLink
 	// Probability is Jev's probability for the gate, kept as evidence.
 	Probability float64
@@ -117,7 +117,7 @@ func (c *SessionCeremony) settle(ctx context.Context, s domain.Session, instance
 		about = c.Identity.UserAbout
 	}
 	entry := SettledEntry{About: about, Kind: kind.Choice, Text: text, SummaryEN: settledSummaryEN(kind.Choice, record),
-		Evidence: append([]string{stepRef, fmt.Sprintf("Jev judged the turn durable with p=%.2f", *gate.Yes)}, actions...), Key: fmt.Sprintf("axlr:settled:%s:%d:1", stateOf.ID, record.PromptIndex), ContextID: instance.KMPContext, Probability: *gate.Yes,
+		Evidence: append([]string{stepRef, fmt.Sprintf("Jev judged the turn durable with p=%.2f", *gate.Yes)}, actions...), Key: fmt.Sprintf("axlr:settled:%s:%d:1", stateOf.ID, record.PromptIndex), ContextID: instance.MemoryContext, Probability: *gate.Yes,
 		Labels: map[string][]string{"session": {string(stateOf.ID)}, "ws": {string(stateOf.Workspace)}, "judged_by": {"jev"}, "model": {record.Model}, "mode": {record.Mode}}}
 	if link := c.supersedes(ctx, instance, text, actions); link != nil {
 		entry.Links = []MemoryLink{*link}

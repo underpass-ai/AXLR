@@ -28,7 +28,7 @@ func (s *successorStub) Continue(_ context.Context, predecessor domain.Session) 
 	if err != nil {
 		return domain.Session{}, err
 	}
-	_ = successor.SetInstance(domain.SessionInstance{Predecessor: string(predecessor.ID())})
+	_ = successor.SetInstance(domain.SessionInstance{Predecessor: predecessor.ID()})
 	s.created = append(s.created, successor.ID())
 	return successor, nil
 }
@@ -96,7 +96,7 @@ func TestContinueTurnContinuesInASuccessorPastTheCap(t *testing.T) {
 	if len(journal.entries) != 1 || !strings.Contains(journal.entries[0].Summary, "continued at") {
 		t.Fatalf("entries %+v", journal.entries)
 	}
-	if next, _ := capped.Successor.Instance(); next.Predecessor != string(s.ID()) {
+	if next, _ := capped.Successor.Instance(); next.Predecessor != s.ID() {
 		t.Fatalf("successor %+v", next)
 	}
 	// Under the cap the request goes out.

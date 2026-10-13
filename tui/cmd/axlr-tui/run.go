@@ -1027,7 +1027,7 @@ func (s successorSessions) Continue(ctx context.Context, predecessor domain.Sess
 			return domain.Session{}, err
 		}
 	}
-	if err := session.SetInstance(domain.SessionInstance{Predecessor: string(state.ID)}); err != nil {
+	if err := session.SetInstance(domain.SessionInstance{Predecessor: state.ID}); err != nil {
 		return domain.Session{}, err
 	}
 	if s.labels != nil {

@@ -4,12 +4,13 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// The session's MADE instance lives in <id>.instance beside the snapshot,
+// The session's ceremony instance lives in <id>.instance beside the snapshot,
 // survives a reload and goes with a discarded or deleted session.
 func TestSessionInstanceSidecarRoundTripsAndIsDiscarded(t *testing.T) {
 	store, dir := openStore(t)
@@ -46,5 +47,33 @@ func TestSessionInstanceSidecarRoundTripsAndIsDiscarded(t *testing.T) {
 	must(t, store.Close())
 	if _, err := os.Stat(filepath.Join(dir, string(empty.Export().ID)+".instance")); !os.IsNotExist(err) {
 		t.Fatalf("sidecar kept after discard: %v", err)
+	}
+}
+
+// A sidecar written before the memory ids were typed (keys kmp_agent and
+// kmp_context, a predecessor as text) loads into the same instance, and
+// the console writes the same keys back.
+func TestSessionInstanceSidecarKeepsTheKeysOnDisk(t *testing.T) {
+	store, dir := openStore(t)
+	s := fixture(t)
+	must(t, s.BeginTurn("hola", nil))
+	must(t, store.Save(context.Background(), s))
+	id := string(s.Export().ID)
+	path := filepath.Join(dir, id+".instance")
+	written := `{"version":1,"instance":"axlr-session-` + id + `","turns":2,"turn_index":0,"kmp_agent":"agent_1","kmp_context":"context_1","predecessor":"fedcba9876543210fedcba9876543210"}`
+	must(t, os.WriteFile(path, []byte(written), 0o600))
+	loaded, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	got, has := loaded.Instance()
+	if !has || got.MemoryAgent != "agent_1" || got.MemoryContext != "context_1" || got.Predecessor != "fedcba9876543210fedcba9876543210" {
+		t.Fatalf("loaded %+v", got)
+	}
+	must(t, store.Save(context.Background(), loaded))
+	data, err := os.ReadFile(path)
+	must(t, err)
+	for _, key := range []string{`"kmp_agent":"agent_1"`, `"kmp_context":"context_1"`, `"predecessor":"fedcba9876543210fedcba9876543210"`} {
+		if !strings.Contains(strings.ReplaceAll(string(data), " ", ""), key) {
+			t.Fatalf("written %s lacks %s", data, key)
+		}
 	}
 }

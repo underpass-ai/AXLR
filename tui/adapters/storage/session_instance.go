@@ -33,8 +33,10 @@ type sessionInstance struct {
 	LastRecord    string   `json:"last_record,omitempty"`
 	Unavailable   string   `json:"unavailable,omitempty"`
 	Pending       []string `json:"pending,omitempty"`
-	KMPAgent      string   `json:"kmp_agent,omitempty"`
-	KMPContext    string   `json:"kmp_context,omitempty"`
+	// The memory ids keep the keys the sidecars on disk were written
+	// with before the engine names left the domain (14 October 2026).
+	MemoryAgent   string   `json:"kmp_agent,omitempty"`
+	MemoryContext string   `json:"kmp_context,omitempty"`
 	Recalled      string   `json:"recalled,omitempty"`
 	OperationID   string   `json:"operation_id,omitempty"`
 	ClaimedAt     string   `json:"claimed_at,omitempty"`
@@ -65,7 +67,7 @@ func (s *SessionStore) readInstance(id domain.SessionID) *domain.SessionInstance
 	if json.NewDecoder(bytes.NewReader(data)).Decode(&record) != nil || record.Version != sessionInstanceVersion {
 		return nil
 	}
-	instance := domain.SessionInstance{Instance: record.Instance, Turns: record.Turns, Fence: record.Fence, TurnIndex: record.TurnIndex, ClaimRequests: record.ClaimRequests, ClaimCost: record.ClaimCost, Closed: record.Closed, LastRecord: record.LastRecord, Unavailable: record.Unavailable, Pending: record.Pending, KMPAgent: record.KMPAgent, KMPContext: record.KMPContext, Recalled: record.Recalled, OperationID: record.OperationID, ClaimedAt: parseInstant(record.ClaimedAt), LeaseMS: record.LeaseMS, Reported: parseInstant(record.ReportedAt), Reports: record.Reports, ClaimIncarnation: record.Incarnation, RecalledMemories: record.Recalled2, Predecessor: record.Predecessor}
+	instance := domain.SessionInstance{Instance: record.Instance, Turns: record.Turns, Fence: record.Fence, TurnIndex: record.TurnIndex, ClaimRequests: record.ClaimRequests, ClaimCost: record.ClaimCost, Closed: record.Closed, LastRecord: record.LastRecord, Unavailable: record.Unavailable, Pending: record.Pending, MemoryAgent: domain.MemoryAgentID(record.MemoryAgent), MemoryContext: domain.MemoryContextID(record.MemoryContext), Recalled: record.Recalled, OperationID: record.OperationID, ClaimedAt: parseInstant(record.ClaimedAt), LeaseMS: record.LeaseMS, Reported: parseInstant(record.ReportedAt), Reports: record.Reports, ClaimIncarnation: record.Incarnation, RecalledMemories: record.Recalled2, Predecessor: domain.SessionID(record.Predecessor)}
 	if instance.Validate() != nil {
 		return nil
 	}
@@ -79,7 +81,7 @@ func (s *SessionStore) writeInstance(id domain.SessionID, instance *domain.Sessi
 		}
 		return nil
 	}
-	record := sessionInstance{Version: sessionInstanceVersion, Instance: instance.Instance, Turns: instance.Turns, Fence: instance.Fence, TurnIndex: instance.TurnIndex, ClaimRequests: instance.ClaimRequests, ClaimCost: instance.ClaimCost, Closed: instance.Closed, LastRecord: instance.LastRecord, Unavailable: instance.Unavailable, Pending: instance.Pending, KMPAgent: instance.KMPAgent, KMPContext: instance.KMPContext, Recalled: instance.Recalled, OperationID: instance.OperationID, ClaimedAt: formatInstant(instance.ClaimedAt), LeaseMS: instance.LeaseMS, ReportedAt: formatInstant(instance.Reported), Reports: instance.Reports, Incarnation: instance.ClaimIncarnation, Recalled2: instance.RecalledMemories, Predecessor: instance.Predecessor}
+	record := sessionInstance{Version: sessionInstanceVersion, Instance: instance.Instance, Turns: instance.Turns, Fence: instance.Fence, TurnIndex: instance.TurnIndex, ClaimRequests: instance.ClaimRequests, ClaimCost: instance.ClaimCost, Closed: instance.Closed, LastRecord: instance.LastRecord, Unavailable: instance.Unavailable, Pending: instance.Pending, MemoryAgent: string(instance.MemoryAgent), MemoryContext: string(instance.MemoryContext), Recalled: instance.Recalled, OperationID: instance.OperationID, ClaimedAt: formatInstant(instance.ClaimedAt), LeaseMS: instance.LeaseMS, ReportedAt: formatInstant(instance.Reported), Reports: instance.Reports, Incarnation: instance.ClaimIncarnation, Recalled2: instance.RecalledMemories, Predecessor: string(instance.Predecessor)}
 	data, err := json.Marshal(record)
 	if err != nil {
 		return err

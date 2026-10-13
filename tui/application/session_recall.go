@@ -66,7 +66,7 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 	}
 	if instance.Predecessor != "" && instance.Recalled == "" {
 		// A successor's first recall wakes what the predecessor settled.
-		abouts = append(abouts, sessionAbout(domain.SessionID(instance.Predecessor)))
+		abouts = append(abouts, sessionAbout(instance.Predecessor))
 	}
 	var sections []string
 	remaining := limit
@@ -75,7 +75,7 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 		if remaining <= 0 {
 			break
 		}
-		section, lines := c.recallSection(ctx, about, prompt, instance.KMPContext, i == 0, remaining)
+		section, lines := c.recallSection(ctx, about, prompt, instance.MemoryContext, i == 0, remaining)
 		remaining -= len(section) + 1
 		sections = append(sections, section)
 		if i == 0 {
@@ -94,7 +94,7 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 // recorded is said in one line (decision D6: "new project, nothing
 // recorded", nothing more); a failure is disclosed, never hidden. The
 // memories exposed come back too, "ref text" per line, for Jev.
-func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt, contextID string, project bool, limit int) (string, []string) {
+func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt string, contextID domain.MemoryContextID, project bool, limit int) (string, []string) {
 	result, err := c.Identity.Recall.Recall(ctx, RecallRequest{Mode: RecallWake, About: about, Intent: prompt, ContextID: contextID})
 	if err != nil {
 		c.log("recall of %s: %v", about, err)

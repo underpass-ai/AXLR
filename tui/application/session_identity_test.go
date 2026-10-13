@@ -12,7 +12,7 @@ import (
 // and nowhere else.
 func TestWithSessionContextPutsTheSessionContextWhereTheSurfaceSays(t *testing.T) {
 	s := turnSession(t)
-	if err := s.SetInstance(domain.SessionInstance{KMPAgent: "agent_1", KMPContext: "ctx_1"}); err != nil {
+	if err := s.SetInstance(domain.SessionInstance{MemoryAgent: "agent_1", MemoryContext: "ctx_1"}); err != nil {
 		t.Fatal(err)
 	}
 	kmp := func(name string) domain.AvailableTool {

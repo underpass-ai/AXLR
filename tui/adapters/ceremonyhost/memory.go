@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // wakeBytes is the packet budget. Below it KMP shortens the core prose to
@@ -43,12 +44,12 @@ func guideMissing(err error) bool {
 // Guide registers the console's agent (registrationKey) or opens a context
 // for a known agent (agentID with contextKey). A store without the guide is
 // synced once and the call repeated.
-func (m Memory) Guide(ctx context.Context, registrationKey, agentID, contextKey string) (application.GuideResult, error) {
+func (m Memory) Guide(ctx context.Context, registrationKey string, agentID domain.MemoryAgentID, contextKey string) (application.GuideResult, error) {
 	arguments := map[string]any{}
 	if registrationKey != "" {
 		arguments["registration_key"] = registrationKey
 	} else {
-		arguments["agent_id"], arguments["context_key"] = agentID, contextKey
+		arguments["agent_id"], arguments["context_key"] = string(agentID), contextKey
 	}
 	packet, err := callPlugin(ctx, m.Tools, "kmp", "kmp_guide", arguments)
 	if err != nil && guideMissing(err) && m.SyncGuide != nil {
@@ -60,12 +61,20 @@ func (m Memory) Guide(ctx context.Context, registrationKey, agentID, contextKey 
 	if err != nil {
 		return application.GuideResult{}, err
 	}
-	var result application.GuideResult
 	agent, _ := packet["agent"].(map[string]any)
-	result.AgentID, _ = agent["id"].(string)
-	result.ContextID, _ = packet["context_id"].(string)
-	if result.ContextID == "" || (registrationKey != "" && result.AgentID == "") {
+	agentText, _ := agent["id"].(string)
+	contextText, _ := packet["context_id"].(string)
+	if contextText == "" || (registrationKey != "" && agentText == "") {
 		return application.GuideResult{}, errors.New("kmp_guide returned no agent or context")
+	}
+	var result application.GuideResult
+	if result.ContextID, err = domain.NewMemoryContextID(contextText); err != nil {
+		return application.GuideResult{}, fmt.Errorf("kmp_guide: %w", err)
+	}
+	if agentText != "" {
+		if result.AgentID, err = domain.NewMemoryAgentID(agentText); err != nil {
+			return application.GuideResult{}, fmt.Errorf("kmp_guide: %w", err)
+		}
 	}
 	return result, nil
 }
@@ -202,7 +211,7 @@ func (m Memory) RecordTurn(ctx context.Context, entry application.TurnEntry) (st
 	}
 	arguments := map[string]any{"about": entry.About, "actor": "axlr", "idempotency_key": entry.Key, "labels": entry.Labels, "memories": []any{memory}}
 	if entry.ContextID != "" {
-		arguments["context_id"] = entry.ContextID
+		arguments["context_id"] = string(entry.ContextID)
 	}
 	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
 	if err != nil {
@@ -244,7 +253,7 @@ func (m Memory) RecordSettled(ctx context.Context, entry application.SettledEntr
 	}
 	arguments := map[string]any{"about": entry.About, "actor": "axlr", "idempotency_key": entry.Key, "labels": entry.Labels, "memories": []any{memory}}
 	if entry.ContextID != "" {
-		arguments["context_id"] = entry.ContextID
+		arguments["context_id"] = string(entry.ContextID)
 	}
 	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
 	if err != nil {

@@ -45,7 +45,7 @@ func (m Memory) Remember(ctx context.Context, request application.RememberReques
 		arguments = map[string]any{"about": request.About, "actor": "axlr", "idempotency_key": request.IdempotencyKey, "labels": request.Labels, "memories": []any{memory}}
 	}
 	if request.ContextID != "" {
-		arguments["context_id"] = request.ContextID
+		arguments["context_id"] = string(request.ContextID)
 	}
 	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
 	if err != nil {

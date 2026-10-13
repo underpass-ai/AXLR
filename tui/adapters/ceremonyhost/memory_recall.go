@@ -37,7 +37,7 @@ func (m Memory) Recall(ctx context.Context, request application.RecallRequest) (
 	var tool string
 	arguments := map[string]any{"about": about}
 	if request.ContextID != "" {
-		arguments["context_id"] = request.ContextID
+		arguments["context_id"] = string(request.ContextID)
 	}
 	switch request.Mode {
 	case "", application.RecallWake:

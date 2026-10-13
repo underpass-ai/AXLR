@@ -56,7 +56,7 @@ func TestRecallNoteWakesTheProjectAndThePersonAtTheFirstPrompt(t *testing.T) {
 		t.Fatalf("requests %+v", recall.requests)
 	}
 	instance, _ := s.Instance()
-	if instance.Recalled != "añade tests al parser" || instance.KMPContext != "ctx_1" {
+	if instance.Recalled != "añade tests al parser" || instance.MemoryContext != "ctx_1" {
 		t.Fatalf("instance %+v", instance)
 	}
 	// The next prompt on the same topic gets no note; another topic does.
@@ -89,7 +89,7 @@ func TestRecallNoteWakesTheSessionsOwnAboutWhenResumed(t *testing.T) {
 	if err := s.CompleteAssistant(assistant("hecho")); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetInstance(domain.SessionInstance{KMPContext: "ctx_old", Recalled: "primero"}); err != nil {
+	if err := s.SetInstance(domain.SessionInstance{MemoryContext: "ctx_old", Recalled: "primero"}); err != nil {
 		t.Fatal(err)
 	}
 	id := string(s.ID())

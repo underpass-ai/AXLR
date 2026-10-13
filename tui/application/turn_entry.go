@@ -1,6 +1,9 @@
 package application
 
-import "time"
+import (
+	"github.com/underpass-ai/AXLR/tui/domain"
+	"time"
+)
 
 // TurnEntry is a turn's results as the console writes them to KMP under
 // the session's about: the summary and its evidence, one line per action,
@@ -12,8 +15,9 @@ type TurnEntry struct {
 	Summary    string
 	Evidence   []string
 	OccurredAt time.Time
-	// ContextID is the session's KMP context, when the console opened one.
-	ContextID string
+	// ContextID is the session's memory context, when the console opened
+	// one.
+	ContextID domain.MemoryContextID
 	// Kind is the memory's kind: turn, or observation for the entry the
 	// close writes (decision F3); "" is turn.
 	Kind string

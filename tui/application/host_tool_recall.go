@@ -86,7 +86,7 @@ func (u HostToolUseCase) hostRecall(ctx context.Context, session domain.Session,
 	}
 	request := RecallRequest{Mode: mode, About: about, Intent: question, Since: since, Entries: recallHistoryEntries}
 	if instance, ok := session.Instance(); ok {
-		request.ContextID = instance.KMPContext
+		request.ContextID = instance.MemoryContext
 	}
 	result, err := u.Recall.Recall(ctx, request)
 	if err != nil {

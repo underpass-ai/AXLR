@@ -33,7 +33,7 @@ func (m Memory) Forget(ctx context.Context, request application.ForgetRequest) (
 	}
 	inspect := map[string]any{"about": about, "ref": ref, "budget": map[string]any{"max_bytes": forgetInspectBytes}, "include": map[string]any{"details": false, "incoming": false, "outgoing": false, "raw": false}}
 	if request.ContextID != "" {
-		inspect["context_id"] = request.ContextID
+		inspect["context_id"] = string(request.ContextID)
 	}
 	found, err := callPlugin(ctx, m.Tools, "kmp", "kmp_inspect", inspect)
 	if err != nil {
@@ -78,7 +78,7 @@ func (m Memory) Forget(ctx context.Context, request application.ForgetRequest) (
 	digest := sha256.Sum256([]byte(ref))
 	arguments := map[string]any{"about": about, "actor": "axlr", "idempotency_key": fmt.Sprintf("axlr:forget:%s:%d", hex.EncodeToString(digest[:8]), at.UTC().Unix()), "labels": labels, "memories": []any{memory}}
 	if request.ContextID != "" {
-		arguments["context_id"] = request.ContextID
+		arguments["context_id"] = string(request.ContextID)
 	}
 	receipt := application.ForgetReceipt{About: about, Ref: ref, Text: text}
 	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)

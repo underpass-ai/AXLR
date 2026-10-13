@@ -380,31 +380,31 @@ type guideStub struct {
 	context int
 }
 
-func (g *guideStub) Guide(_ context.Context, registrationKey, agentID, contextKey string) (GuideResult, error) {
+func (g *guideStub) Guide(_ context.Context, registrationKey string, agentID domain.MemoryAgentID, contextKey string) (GuideResult, error) {
 	call := "register " + registrationKey
 	if registrationKey == "" {
-		call = "context " + agentID + " " + contextKey
+		call = "context " + string(agentID) + " " + contextKey
 	}
 	g.calls = append(g.calls, call)
 	if err := g.fail[call]; err != nil {
 		return GuideResult{}, err
 	}
 	if registrationKey != "" {
-		return GuideResult{AgentID: "agent_" + registrationKey, ContextID: "ctx_registration"}, nil
+		return GuideResult{AgentID: domain.MemoryAgentID("agent_" + registrationKey), ContextID: "ctx_registration"}, nil
 	}
 	g.context++
-	return GuideResult{AgentID: agentID, ContextID: "ctx_" + itoa(g.context)}, nil
+	return GuideResult{AgentID: agentID, ContextID: domain.MemoryContextID("ctx_" + itoa(g.context))}, nil
 }
 
 type agentsStub struct{ agents map[string]string }
 
-func (a *agentsStub) Agent(_ context.Context, store string) (string, bool) {
+func (a *agentsStub) Agent(_ context.Context, store string) (domain.MemoryAgentID, bool) {
 	id, ok := a.agents[store]
-	return id, ok
+	return domain.MemoryAgentID(id), ok
 }
 
-func (a *agentsStub) Remember(_ context.Context, store, agentID, _ string) error {
-	a.agents[store] = agentID
+func (a *agentsStub) Remember(_ context.Context, store string, agentID domain.MemoryAgentID, _ string) error {
+	a.agents[store] = string(agentID)
 	return nil
 }
 
@@ -425,7 +425,7 @@ func TestSessionCeremonyRegistersTheAgentOnceAndOpensAContextPerSession(t *testi
 	}
 	c.BeginTurn(context.Background(), &s)
 	instance, _ := s.Instance()
-	if instance.KMPAgent != "agent_axlr:install-1" || instance.KMPContext != "ctx_1" || instance.Instance == "" {
+	if instance.MemoryAgent != "agent_axlr:install-1" || instance.MemoryContext != "ctx_1" || instance.Instance == "" {
 		t.Fatalf("instance %+v", instance)
 	}
 	if strings.Join(guide.calls, ";") != "register axlr:install-1;context agent_axlr:install-1 axlr:session:"+string(s.ID()) || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" {
@@ -440,7 +440,7 @@ func TestSessionCeremonyRegistersTheAgentOnceAndOpensAContextPerSession(t *testi
 		t.Fatal(err)
 	}
 	c.BeginTurn(context.Background(), &s)
-	if instance, _ = s.Instance(); instance.KMPContext != "ctx_1" || len(guide.calls) != 2 {
+	if instance, _ = s.Instance(); instance.MemoryContext != "ctx_1" || len(guide.calls) != 2 {
 		t.Fatalf("instance %+v calls %v", instance, guide.calls)
 	}
 	// Another session in the same store reuses the agent.
@@ -452,7 +452,7 @@ func TestSessionCeremonyRegistersTheAgentOnceAndOpensAContextPerSession(t *testi
 		t.Fatal(err)
 	}
 	c.BeginTurn(context.Background(), &other)
-	if instance, _ = other.Instance(); instance.KMPContext != "ctx_2" || guide.calls[2] != "context agent_axlr:install-1 axlr:session:fedcba9876543210fedcba9876543210" {
+	if instance, _ = other.Instance(); instance.MemoryContext != "ctx_2" || guide.calls[2] != "context agent_axlr:install-1 axlr:session:fedcba9876543210fedcba9876543210" {
 		t.Fatalf("instance %+v calls %v", instance, guide.calls)
 	}
 }
@@ -472,7 +472,7 @@ func TestSessionCeremonyRegistersAgainWhenTheStoreForgotTheAgent(t *testing.T) {
 	}
 	c.BeginTurn(context.Background(), &s)
 	instance, _ := s.Instance()
-	if instance.KMPAgent != "agent_axlr:install-1" || instance.KMPContext != "ctx_1" || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" || len(guide.calls) != 3 {
+	if instance.MemoryAgent != "agent_axlr:install-1" || instance.MemoryContext != "ctx_1" || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" || len(guide.calls) != 3 {
 		t.Fatalf("instance %+v calls %v agents %v", instance, guide.calls, agents.agents)
 	}
 	var logged []string
@@ -487,7 +487,7 @@ func TestSessionCeremonyRegistersAgainWhenTheStoreForgotTheAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	c.BeginTurn(context.Background(), &other)
-	if instance, _ = other.Instance(); instance.KMPContext != "" || instance.Instance == "" || instance.Fence == "" {
+	if instance, _ = other.Instance(); instance.MemoryContext != "" || instance.Instance == "" || instance.Fence == "" {
 		t.Fatalf("instance %+v", instance)
 	}
 	if len(logged) == 0 || !strings.Contains(logged[0], "engine down") {
@@ -508,7 +508,7 @@ func TestSessionCeremonyOpensTheContextWithoutMADE(t *testing.T) {
 	}
 	c.BeginTurn(context.Background(), &s)
 	instance, has := s.Instance()
-	if !has || instance.KMPContext != "ctx_1" || instance.Instance != "" || instance.Unavailable != "" {
+	if !has || instance.MemoryContext != "ctx_1" || instance.Instance != "" || instance.Unavailable != "" {
 		t.Fatalf("instance %+v", instance)
 	}
 	if err := c.EndTurn(context.Background(), &s); err != nil || len(store.states) != 0 {

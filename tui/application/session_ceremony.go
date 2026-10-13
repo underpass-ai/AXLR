@@ -128,7 +128,7 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 	if successor > 1 {
 		inputs["predecessor"] = current.Instance
 	} else if current.Predecessor != "" {
-		inputs["predecessor"] = instanceID(domain.SessionID(current.Predecessor), 1)
+		inputs["predecessor"] = instanceID(current.Predecessor, 1)
 	}
 	err := c.Engine.Start(ctx, SessionDefinition, SessionDefinitionVersion, id, inputs)
 	for tries := 0; err != nil && successor > 1 && instanceExists(err) && tries < successorTries; tries++ {
@@ -145,7 +145,7 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 	// The entries KMP has not taken yet travel to the successor (an
 	// imported session's handoff among them); until 13 October 2026 they
 	// were lost with the predecessor.
-	instance := domain.SessionInstance{Instance: id, KMPAgent: current.KMPAgent, KMPContext: current.KMPContext, Recalled: current.Recalled, Predecessor: current.Predecessor, RecalledMemories: current.RecalledMemories, Pending: current.Pending}
+	instance := domain.SessionInstance{Instance: id, MemoryAgent: current.MemoryAgent, MemoryContext: current.MemoryContext, Recalled: current.Recalled, Predecessor: current.Predecessor, RecalledMemories: current.RecalledMemories, Pending: current.Pending}
 	if err := s.SetInstance(instance); err != nil {
 		c.log("session instance: %v", err)
 		return domain.SessionInstance{}, false
@@ -266,7 +266,7 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 		if entry.About == record.About {
 			delete(entry.Labels, "project")
 		}
-		entry.ContextID = instance.KMPContext
+		entry.ContextID = instance.MemoryContext
 		instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
 		if !record.Interrupted {
 			c.settle(ctx, *s, instance, record, stepRef)
@@ -434,7 +434,7 @@ func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, tr
 			// KMP's kinds have no session_closed (refused on 13 October
 			// 2026): the entry is an observation labelled event=closed.
 			entry := TurnEntry{Kind: "observation", About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:%s:%s", trigger, instance.Instance), Summary: fmt.Sprintf("Session %s after %s (%s).", trigger, plural(instance.Turns, "turn"), reason),
-				Evidence: []string{fmt.Sprintf("ceremony %s %s", instance.Instance, trigger)}, OccurredAt: c.now(), ContextID: instance.KMPContext,
+				Evidence: []string{fmt.Sprintf("ceremony %s %s", instance.Instance, trigger)}, OccurredAt: c.now(), ContextID: instance.MemoryContext,
 				Labels: map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {string(s.Mode())}, "event": {trigger}}}
 			instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
 		}

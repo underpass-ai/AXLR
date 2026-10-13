@@ -5,12 +5,12 @@ import (
 	"time"
 )
 
-// SessionInstance is the session's own MADE instance, axlr_session: one
+// SessionInstance is the session's own ceremony instance, axlr_session: one
 // turn step per prompt, claimed when the prompt arrives and completed with
 // the turn's record, by the console alone (decision D4 of the lifecycle
 // integration design). Like the ceremony run it lives beside the snapshot.
 type SessionInstance struct {
-	// Instance is the MADE ceremony id, axlr-session-<session id>, with a
+	// Instance is the ceremony instance id, axlr-session-<session id>, with a
 	// suffix for each successor opened when a predecessor's turns ran out.
 	Instance string
 	// Turns counts the turns completed in this instance.
@@ -31,20 +31,21 @@ type SessionInstance struct {
 	// LastRecord is the JSON of the last turn record the console wrote,
 	// for /session.
 	LastRecord string
-	// Unavailable is why no instance could be opened (MADE not connected,
+	// Unavailable is why no instance could be opened (the orchestrator not connected,
 	// the definition not published, the engine refusing); the console says
 	// it once and tries again at the next prompt.
 	Unavailable string
-	// Pending are KMP turn entries, as JSON, that KMP did not take when the
+	// Pending are memory turn entries, as JSON, that memory did not take when the
 	// turn ended (the engine down, a refusal); the console retries them at
 	// the next turn end and at close, oldest first.
 	Pending []string
-	// KMPAgent and KMPContext are the console's KMP identity for this
-	// session: the agent registered in the session's store and the context
-	// opened for the session, which the console passes on every KMP call
-	// (decision D3). The model never sees them.
-	KMPAgent   string
-	KMPContext string
+	// MemoryAgent and MemoryContext are the console's identity in the
+	// memory engine for this session: the agent registered in the
+	// session's store and the context opened for the session, which the
+	// console passes on every memory call (decision D3). The model never
+	// sees them.
+	MemoryAgent   MemoryAgentID
+	MemoryContext MemoryContextID
 	// Recalled is the intent the console last woke memory for; "" before
 	// the first prompt's recall.
 	Recalled string
@@ -63,7 +64,7 @@ type SessionInstance struct {
 	// Predecessor is the session this one continues (decision D10): its
 	// memory is recalled at the first prompt and its instance named as the
 	// predecessor of this one.
-	Predecessor string
+	Predecessor SessionID
 	// RecalledMemories are the project memories the last recall exposed,
 	// "ref text" per line, bounded; Jev reads them to say what a settled
 	// turn supersedes (decision F5).
@@ -78,8 +79,23 @@ const MaxSessionRecordBytes = 16 << 10
 const MaxPendingEntries = 50
 
 func (i SessionInstance) Validate() error {
-	if i.Instance == "" && i.Unavailable == "" && i.KMPContext == "" && i.Predecessor == "" {
-		return errors.New("session instance needs an id, a reason it is unavailable, a KMP context or a predecessor")
+	if i.Instance == "" && i.Unavailable == "" && i.MemoryContext == "" && i.Predecessor == "" {
+		return errors.New("session instance needs an id, a reason it is unavailable, a memory context or a predecessor")
+	}
+	if i.MemoryContext != "" {
+		if err := i.MemoryContext.Validate(); err != nil {
+			return err
+		}
+	}
+	if i.MemoryAgent != "" {
+		if err := i.MemoryAgent.Validate(); err != nil {
+			return err
+		}
+	}
+	if i.Predecessor != "" {
+		if _, err := NewSessionID(string(i.Predecessor)); err != nil {
+			return errors.New("session instance predecessor: " + err.Error())
+		}
 	}
 	if i.Turns < 0 || i.TurnIndex < 0 || i.ClaimRequests < 0 || i.ClaimCost < 0 || i.LeaseMS < 0 || i.Reports < 0 {
 		return errors.New("invalid session instance counters")

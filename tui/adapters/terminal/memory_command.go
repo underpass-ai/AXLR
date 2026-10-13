@@ -54,10 +54,11 @@ func (m AppModel) sessionAbout() string {
 	return m.deps.About
 }
 
-// sessionContext is the session's KMP context, "" before the first prompt.
-func (m AppModel) sessionContext() string {
+// sessionContext is the session's memory context, "" before the first
+// prompt.
+func (m AppModel) sessionContext() domain.MemoryContextID {
 	if instance := m.Header.State.Instance; instance != nil {
-		return instance.KMPContext
+		return instance.MemoryContext
 	}
 	return ""
 }

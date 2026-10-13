@@ -20,7 +20,7 @@ func recallIdentity(t *testing.T) domain.ToolIdentity {
 
 func TestHostRecallBuildsTheRequestFromTheSession(t *testing.T) {
 	s := rememberSession(t, domain.ModeNormal)
-	if err := s.SetInstance(domain.SessionInstance{KMPContext: "ctx_1"}); err != nil {
+	if err := s.SetInstance(domain.SessionInstance{MemoryContext: "ctx_1"}); err != nil {
 		t.Fatal(err)
 	}
 	labels := &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{s.Export().ID: {About: "project:AXLR"}}}

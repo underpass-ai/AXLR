@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // MemoryAgentStore keeps, per memory store, the agent the console
@@ -23,7 +25,7 @@ type MemoryAgentStore struct {
 func NewMemoryAgentStore(path string) *MemoryAgentStore { return &MemoryAgentStore{path: path} }
 
 // Agent is the agent registered in a store, if any.
-func (s *MemoryAgentStore) Agent(_ context.Context, store string) (string, bool) {
+func (s *MemoryAgentStore) Agent(_ context.Context, store string) (domain.MemoryAgentID, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	record, err := s.read()
@@ -31,11 +33,11 @@ func (s *MemoryAgentStore) Agent(_ context.Context, store string) (string, bool)
 		return "", false
 	}
 	entry, ok := record.Agents[filepath.Clean(store)]
-	return entry.AgentID, ok && entry.AgentID != ""
+	return domain.MemoryAgentID(entry.AgentID), ok && entry.AgentID != ""
 }
 
 // Remember records the agent registered in a store.
-func (s *MemoryAgentStore) Remember(_ context.Context, store, agentID, registrationKey string) error {
+func (s *MemoryAgentStore) Remember(_ context.Context, store string, agentID domain.MemoryAgentID, registrationKey string) error {
 	if store == "" || agentID == "" {
 		return errors.New("a store and an agent id are required")
 	}
@@ -45,7 +47,7 @@ func (s *MemoryAgentStore) Remember(_ context.Context, store, agentID, registrat
 	if err != nil {
 		return err
 	}
-	record.Agents[filepath.Clean(store)] = memoryAgentEntry{AgentID: agentID, RegistrationKey: registrationKey, RegisteredAt: time.Now().UTC().Format(time.RFC3339)}
+	record.Agents[filepath.Clean(store)] = memoryAgentEntry{AgentID: string(agentID), RegistrationKey: registrationKey, RegisteredAt: time.Now().UTC().Format(time.RFC3339)}
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return err

@@ -29,7 +29,7 @@ func (c *SessionCeremony) openContext(ctx context.Context, s *domain.Session) {
 		return
 	}
 	instance, _ := s.Instance()
-	if instance.KMPContext != "" {
+	if instance.MemoryContext != "" {
 		return
 	}
 	id := s.ID()
@@ -61,7 +61,7 @@ func (c *SessionCeremony) openContext(ctx context.Context, s *domain.Session) {
 			return
 		}
 	}
-	instance.KMPAgent, instance.KMPContext = agent, result.ContextID
+	instance.MemoryAgent, instance.MemoryContext = agent, result.ContextID
 	if err := s.SetInstance(instance); err != nil {
 		c.log("session instance: %v", err)
 		return
@@ -79,14 +79,14 @@ func withSessionContext(s domain.Session, tool domain.AvailableTool, arguments r
 		return arguments
 	}
 	instance, ok := s.Instance()
-	if !ok || instance.KMPContext == "" {
+	if !ok || instance.MemoryContext == "" {
 		return arguments
 	}
 	var call map[string]json.RawMessage
 	if json.Unmarshal(arguments.Bytes(), &call) != nil || call == nil {
 		return arguments
 	}
-	call[argument] = json.RawMessage(fmt.Sprintf("%q", instance.KMPContext))
+	call[argument] = json.RawMessage(fmt.Sprintf("%q", instance.MemoryContext))
 	data, err := json.Marshal(call)
 	if err != nil {
 		return arguments

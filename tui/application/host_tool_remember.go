@@ -100,7 +100,7 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	sum := sha256.Sum256([]byte(about + "\x00" + args.Kind + "\x00" + args.Text))
 	request.IdempotencyKey = "axlr:remember:" + hex.EncodeToString(sum[:8])
 	if instance, ok := session.Instance(); ok {
-		request.ContextID = instance.KMPContext
+		request.ContextID = instance.MemoryContext
 	}
 	return u.Memory.Remember(ctx, request)
 }

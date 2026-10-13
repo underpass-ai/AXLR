@@ -35,7 +35,7 @@ func (m Memory) Compare(ctx context.Context, request application.CompareRequest)
 	}
 	arguments := map[string]any{"about": about, "dimensions": map[string]any{"scope": "abouts", "abouts": abouts}, "budget": map[string]any{"max_bytes": compareBytes}}
 	if request.ContextID != "" {
-		arguments["context_id"] = request.ContextID
+		arguments["context_id"] = string(request.ContextID)
 	}
 	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_relate", arguments)
 	if err != nil {

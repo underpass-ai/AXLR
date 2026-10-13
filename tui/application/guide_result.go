@@ -1,7 +1,10 @@
 package application
 
-// GuideResult is what kmp_guide gave the console: the agent and the
-// context it opened.
+import "github.com/underpass-ai/AXLR/tui/domain"
+
+// GuideResult is what the memory engine gave the console when it
+// registered: the agent and the context it opened.
 type GuideResult struct {
-	AgentID, ContextID string
+	AgentID   domain.MemoryAgentID
+	ContextID domain.MemoryContextID
 }
