@@ -34,23 +34,6 @@ const (
 	decisionHandoff = 2 * time.Second
 )
 
-// RepairSettings is what settings.json decides about self-repair, as the
-// coordinator needs it.
-type RepairSettings struct {
-	// Repository is owner/name; About the KMP project about; Directory the
-	// absolute directory the clones live in.
-	Repository, About, Directory string
-	// MaxAttempts bounds repair sessions per failure signature; zero means
-	// DefaultMaxRepairAttempts.
-	MaxAttempts int
-	// MaxActive bounds the repair and improvement sessions active in the
-	// registry, whoever started them; zero means DefaultMaxActiveJobs.
-	MaxActive int
-	// Watch bounds the merge queue's wait for one job's checks
-	// (repair.watch_minutes); zero means the ceremony's default.
-	Watch time.Duration
-}
-
 // SelfRepair lets the agent of a running session ask the console to repair
 // AXLR itself. The console validates the request against the session's own
 // transcript, refuses what belongs to the project or to an external service,
@@ -104,21 +87,6 @@ type SelfRepair struct {
 	draining    bool
 	queueCtx    context.Context
 	queueCancel context.CancelFunc
-}
-
-// repairRun is one repair session the console drives in the background.
-type repairRun struct {
-	cancel    context.CancelFunc
-	decisions chan repairDecision
-	// record, waiting and progress are guarded by SelfRepair.mu.
-	record   domain.RepairRecord
-	waiting  bool
-	progress CeremonyProgress
-}
-
-type repairDecision struct {
-	approve bool
-	reason  string
 }
 
 var _ RepairRequestPort = (*SelfRepair)(nil)
@@ -784,39 +752,6 @@ func repairNotice(record domain.RepairRecord, build string) string {
 		text.WriteString(" KMP: the ceremony reported no memory write.")
 	}
 	return text.String()
-}
-
-// runObserver mirrors the driver's progress into the record while a console
-// step runs for minutes, so the panel shows propose, watch and decide.
-type runObserver struct {
-	repair *SelfRepair
-	run    *repairRun
-}
-
-func (o runObserver) Observe(progress CeremonyProgress) {
-	o.repair.mu.Lock()
-	o.run.progress = progress
-	o.repair.mu.Unlock()
-	o.repair.update(context.Background(), o.run, func(record *domain.RepairRecord) {
-		if progress.Instance != "" {
-			record.Instance = progress.Instance
-		}
-		if progress.Step != "" {
-			record.Step, record.StepAttempt, record.StepLimit = progress.Step, progress.StepAttempt, progress.StepLimit
-		}
-		if check := checkSummary(progress.Report); check != "" {
-			record.Check = check
-		}
-		if progress.State != "" {
-			record.State = progress.State
-		}
-		if repair := progress.Repair; repair != nil && repair.PullRequest > 0 {
-			record.PullRequest, record.URL = repair.PullRequest, repair.URL
-		}
-		if memory, _ := progress.Report["memory"].(string); memory != "" {
-			record.Memory = memory
-		}
-	})
 }
 
 // Decide hands the person's decision to a waiting repair: the reproduction

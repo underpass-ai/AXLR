@@ -24,33 +24,9 @@ const (
 	sessionAbandonedTrigger  = "abandoned"
 )
 
-// TurnEntry is a turn's results as the console writes them to KMP under
-// the session's about: the summary and its evidence, one line per action,
-// never the prompt or the answer (decision H8).
-type TurnEntry struct {
-	About      string
-	Labels     map[string][]string
-	Key        string
-	Summary    string
-	Evidence   []string
-	OccurredAt time.Time
-	// ContextID is the session's KMP context, when the console opened one.
-	ContextID string
-	// Kind is the memory's kind: turn, or observation for the entry the
-	// close writes (decision F3); "" is turn.
-	Kind string
-}
-
 // ErrEntryRecorded is the journal's answer to an entry whose idempotency
 // key the store accepted already: nothing to retry.
 var ErrEntryRecorded = errors.New("entry recorded already")
-
-// JournalPort writes a turn's results to KMP and returns the stored ref;
-// RecordSettled writes what Jev selected from a turn (session_settle.go).
-type JournalPort interface {
-	RecordTurn(ctx context.Context, entry TurnEntry) (string, error)
-	RecordSettled(ctx context.Context, entry SettledEntry) (string, error)
-}
 
 // SessionCeremony runs the session's MADE instance. Every failure of the
 // engines is logged and leaves the turn to run: the record is the
@@ -363,13 +339,6 @@ func (c *SessionCeremony) Leave(ctx context.Context, s *domain.Session) error {
 // "ceremony transition guards are not satisfied").
 func (c *SessionCeremony) Abandon(ctx context.Context, s *domain.Session) error {
 	return c.end(ctx, s, "abandoned", sessionAbandonedTrigger, map[string]any{"closed": true, "abandoned": true})
-}
-
-// SessionLister lists and loads saved sessions and gives their locks back.
-type SessionLister interface {
-	List(context.Context) ([]domain.SessionSummary, error)
-	Load(context.Context, domain.SessionID) (domain.Session, error)
-	Release(domain.SessionID) error
 }
 
 // SweepAbandoned ends, as abandoned, the open instances of this workspace's

@@ -27,31 +27,6 @@ const (
 	RecallHistory = "history"
 )
 
-// RecallRequest is one read of memory under an about: a wake (with an
-// intent the store may focus on), a question, or a span of history (Since
-// onwards, else the newest Entries).
-type RecallRequest struct {
-	Mode, About, Intent, Since string
-	Entries                    int
-	ContextID                  string
-}
-
-// RecallResult is what the read gave: prose and refs for a wake, a compact
-// answer for a question or a history. Empty says nothing is recorded under
-// the about.
-type RecallResult struct {
-	Mode, About string
-	Text        string
-	Refs        []string
-	Answer      map[string]any
-	Empty       bool
-}
-
-// RecallPort reads KMP for the console and for axlr_recall.
-type RecallPort interface {
-	Recall(ctx context.Context, request RecallRequest) (RecallResult, error)
-}
-
 // recalledIntentBytes bounds what the console keeps of the woken prompt.
 const recalledIntentBytes = 600
 

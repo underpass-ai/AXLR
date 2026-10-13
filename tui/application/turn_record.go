@@ -39,32 +39,6 @@ type TurnRecord struct {
 	Extra       map[string]any `json:"-"`
 }
 
-// TurnAction is one side effect of a turn.
-type TurnAction struct {
-	Tool       string    `json:"tool"`
-	Target     string    `json:"target"`
-	Why        string    `json:"why"`
-	Decision   string    `json:"decision"`
-	Reason     string    `json:"reason,omitempty"`
-	Outcome    string    `json:"outcome"`
-	ExitCode   *int      `json:"exit_code,omitempty"`
-	OutputTail string    `json:"output_tail,omitempty"`
-	OccurredAt time.Time `json:"occurred_at,omitempty"`
-	CallID     string    `json:"call_id"`
-}
-
-// TurnMemory is a memory the turn recorded in KMP.
-type TurnMemory struct {
-	About string `json:"about"`
-	Key   string `json:"idempotency_key"`
-}
-
-// TurnCost is the turn's share of the session's usage ledger.
-type TurnCost struct {
-	Requests int     `json:"requests"`
-	USD      float64 `json:"usd"`
-}
-
 // Bounds of the record's texts.
 const (
 	turnExcerptBytes = 500

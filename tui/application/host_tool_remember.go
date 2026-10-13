@@ -52,28 +52,6 @@ func (u ContinueTurnUseCase) offersRemember(s domain.Session) bool {
 	return u.Remember != nil && modelRecordsMemory(s)
 }
 
-// RememberRequest is one memory for KMP as the console writes it.
-type RememberRequest struct {
-	About, Kind, Text string
-	// SummaryEN is the English summary of a text written in another
-	// language, which a strict store requires (decision E13).
-	SummaryEN      string
-	Evidence       []string
-	Links          []MemoryLink
-	Labels         map[string][]string
-	IdempotencyKey string
-	// Continuation resumes a write KMP returned for review; the other
-	// fields are then empty.
-	Continuation string
-	// ContextID is the session's KMP context, when the console opened one.
-	ContextID string
-}
-
-// RememberPort writes a RememberRequest and returns KMP's answer, compact.
-type RememberPort interface {
-	Remember(ctx context.Context, request RememberRequest) (map[string]any, error)
-}
-
 // hostRemember turns axlr_remember's arguments into a request: the
 // session's about (memoryAbout) unless one is named, labels for the session and
 // workspace, and a key derived from what is recorded.

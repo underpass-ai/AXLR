@@ -18,11 +18,6 @@ import (
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
-// Registrar writes the mcp.json entry of an installed engine.
-type Registrar interface {
-	RegisterEngine(context.Context, application.EngineRegistration) error
-}
-
 // Installer is the EngineInstallPort of the console and the setup.
 type Installer struct {
 	Configuration Registrar

@@ -98,28 +98,8 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 	return domain.AvailableTool{}, false
 }
 
-// headAdmission is what rejectUnknown checks the call at the head against
-// before any card or automatic approval.
-type headAdmission struct {
-	Store SessionStorePort
-	Trace DiagnosticPort
-	// Validation checks local arguments against their schema; nil leaves
-	// that to the runtime.
-	Validation ToolArgumentValidationPort
-	// TurnLimit is the turn's tool-call budget; zero means
-	// domain.MaxTurnToolCalls.
-	TurnLimit int
-}
-
 func (u ContinueTurnUseCase) admission() headAdmission {
 	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, TurnLimit: u.turnLimit()}
-}
-
-func (a headAdmission) turnLimit() int {
-	if a.TurnLimit > 0 {
-		return a.TurnLimit
-	}
-	return domain.MaxTurnToolCalls
 }
 
 func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, emit func(Event) error) error {

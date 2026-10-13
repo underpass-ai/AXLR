@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/mcpclient"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
@@ -23,11 +22,6 @@ const (
 	hostIdentityKey  = "MADE_AUTH_TRUSTED_HOST_ID"
 	embeddedLauncher = "run-embedded-mcp.sh"
 )
-
-// EnvironmentStore persists the work identity on the MADE entry of mcp.json.
-type EnvironmentStore interface {
-	SetPluginEnvironment(ctx context.Context, id root.PluginID, key, value string) error
-}
 
 // ToolCaller runs one MCP tool in a fresh process with a complete environment.
 type ToolCaller func(ctx context.Context, server mcpclient.Server, tool string, arguments map[string]any) (map[string]any, error)

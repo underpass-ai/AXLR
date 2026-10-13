@@ -46,43 +46,6 @@ var (
 	forgedProgram  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 )
 
-// ForgedTool is one registered tool of a workspace: what the model sees, the
-// command the console runs from the workspace root with the arguments as JSON
-// on stdin, and the SHA-256 of each file it was forged with.
-type ForgedTool struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	InputSchema json.RawMessage   `json:"input_schema"`
-	Program     string            `json:"program"`
-	Args        []string          `json:"args"`
-	Files       map[string]string `json:"files"`
-	ForgedAt    string            `json:"forged_at,omitempty"`
-	Session     string            `json:"session,omitempty"`
-}
-
-// ForgedFile is one file of a tool, its path relative to the tool's directory.
-type ForgedFile struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-}
-
-// ForgedToolsPort keeps a workspace's forged tools. Only Forge registers a
-// tool: a file written another way into ForgedToolsDir, or brought by a
-// checkout, is never one, and Verify refuses a tool whose files changed
-// since it was forged.
-type ForgedToolsPort interface {
-	List(ctx context.Context, workspace string) ([]ForgedTool, error)
-	// Forge replaces the tool's directory with files, fills Files and
-	// ForgedAt and registers the tool; replaced reports a previous version.
-	Forge(ctx context.Context, workspace string, tool ForgedTool, files []ForgedFile) (stored ForgedTool, replaced bool, err error)
-	Verify(ctx context.Context, workspace string, tool ForgedTool) error
-	// Remove deletes a registered tool's directory and unregisters it; it
-	// does not verify the files first, so a tool whose files are already
-	// gone can still be removed. found is false, and nothing is deleted,
-	// for a name that is not registered.
-	Remove(ctx context.Context, workspace, name string) (found bool, err error)
-}
-
 func forgeSchema() string {
 	return `{"type":"object","properties":{` +
 		`"name":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,47}$"},` +

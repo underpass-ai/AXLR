@@ -23,34 +23,6 @@ import (
 // transition MADE enables and claims the next step, until a terminal
 // state. The person publishes definitions; the model designs them.
 
-// CeremonyDefinition is what the generic driver reads from a definition.
-type CeremonyDefinition struct {
-	Name, Version, Description string
-	// Inputs are the required inputs; Initial the initial state; Terminal
-	// the terminal states; Steps the steps with their states; Prompts each
-	// step's prompt; Transitions the triggers leaving each state.
-	Inputs      []string
-	Initial     string
-	Terminal    []string
-	Steps       []DefinitionStep
-	Prompts     map[string]string
-	Transitions map[string][]string
-}
-
-type DefinitionStep struct{ ID, State string }
-
-// CeremonyDefinitionSummary is one published definition as listed.
-type CeremonyDefinitionSummary struct {
-	Name, Version, Description string
-	Steps                      int
-}
-
-// CeremonyDefinitionPort reads published definitions.
-type CeremonyDefinitionPort interface {
-	Describe(ctx context.Context, name, version string) (CeremonyDefinition, error)
-	List(ctx context.Context) ([]CeremonyDefinitionSummary, error)
-}
-
 // VersionLess orders versions numerically by dotted component ("2.0" after
 // "1.10"), then lexically.
 func VersionLess(a, b string) bool {

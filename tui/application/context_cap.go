@@ -3,10 +3,8 @@ package application
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
-	"sync"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -20,32 +18,6 @@ import (
 // interrupted, the session's instance closed, and the person's prompt
 // continues in a successor session whose first prompt recalls the
 // predecessor's memory.
-
-// TokenCounterPort counts the tokens of a text.
-type TokenCounterPort interface {
-	Count(text string) int
-}
-
-// SuccessorPort opens the session that continues a predecessor: same
-// workspace, model, mode and about, with the predecessor named in its
-// instance so its memory is recalled.
-type SuccessorPort interface {
-	Continue(ctx context.Context, predecessor domain.Session) (domain.Session, error)
-}
-
-// ContextCapError says a request would exceed the cap and names the
-// successor the console opened; the console continues the prompt there.
-type ContextCapError struct {
-	Tokens, Cap int
-	Predecessor domain.SessionID
-	Successor   domain.Session
-	// Prompt is the person's prompt the successor takes.
-	Prompt string
-}
-
-func (e *ContextCapError) Error() string {
-	return fmt.Sprintf("the request would reach %d tokens, past the cap of %d: continuing in session %s", e.Tokens, e.Cap, e.Successor.ID())
-}
 
 // messageTokenOverhead is what a message costs beyond its text: the role
 // and the framing, as OpenAI counts them.
@@ -149,15 +121,6 @@ func ContinuedNote(predecessor domain.SessionID, tokens, cap int) string {
 	return fmt.Sprintf("[AXLR] This session continues session %s, whose context reached %d tokens (cap %d); its memory is recalled below and its transcript stays readable with /session.", predecessor, tokens, cap)
 }
 
-// IsContextCap reports a context cap error and returns it.
-func IsContextCap(err error) (*ContextCapError, bool) {
-	var capped *ContextCapError
-	if errors.As(err, &capped) {
-		return capped, true
-	}
-	return nil, false
-}
-
 // firstRequest reports a session whose only person message is the one
 // being asked: nothing earlier can be left behind.
 func firstRequest(messages []root.Message) bool {
@@ -168,56 +131,4 @@ func firstRequest(messages []root.Message) bool {
 		}
 	}
 	return prompts <= 1
-}
-
-// TokenScale learns, per model, how the provider's prompt token count
-// relates to the console's o200k count of the same request: on 13 October
-// 2026 claude-haiku-5.5 through OpenRouter billed 27K prompt tokens where
-// o200k counted 9.4K of Spanish text. The cap check multiplies the count
-// by the factor, which starts at 1 and follows the reports with an
-// exponential average, clamped between 1 and 4.
-type TokenScale struct {
-	mu      sync.Mutex
-	factors map[root.ModelID]float64
-}
-
-const (
-	tokenScaleMinimum = 1.0
-	tokenScaleMaximum = 4.0
-	tokenScaleWeight  = 0.5
-)
-
-// Factor is the model's current factor.
-func (t *TokenScale) Factor(model root.ModelID) float64 {
-	if t == nil {
-		return 1
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if factor, ok := t.factors[model]; ok {
-		return factor
-	}
-	return 1
-}
-
-// Observe records one request's counted and reported prompt tokens.
-func (t *TokenScale) Observe(model root.ModelID, counted, reported int) {
-	if t == nil || counted <= 0 || reported <= 0 {
-		return
-	}
-	ratio := min(max(float64(reported)/float64(counted), tokenScaleMinimum), tokenScaleMaximum)
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.factors == nil {
-		t.factors = map[root.ModelID]float64{}
-	}
-	if current, ok := t.factors[model]; ok {
-		ratio = current*(1-tokenScaleWeight) + ratio*tokenScaleWeight
-	}
-	t.factors[model] = ratio
-}
-
-// Estimate is the provider's likely count for a counted request.
-func (t *TokenScale) Estimate(model root.ModelID, counted int) int {
-	return int(float64(counted) * t.Factor(model))
 }

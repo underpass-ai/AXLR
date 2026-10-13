@@ -1,7 +1,6 @@
 package application
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,19 +18,6 @@ import (
 const ceremonyRepeatLimit = 3
 
 const maxCeremonyMemoryBytes = 2 << 10
-
-type ceremonySpec struct {
-	definition, version, first, briefInput string
-}
-
-var ceremonySpecs = map[domain.WorkMode]ceremonySpec{
-	domain.ModeDebug:    {definition: "axlr_debug", version: "2.0", first: "reproduce", briefInput: "failure_brief"},
-	domain.ModeDelivery: {definition: "axlr_delivery", version: "2.0", first: "brief", briefInput: "task_brief"},
-	domain.ModeIncident: {definition: "axlr_incident", version: "1.0", first: "triage", briefInput: "incident_brief"},
-	domain.ModeRepair:   {definition: "axlr_repair", version: "1.0", first: "reproduce", briefInput: "failure_brief"},
-	domain.ModeImprove:  {definition: "axlr_improve", version: "1.0", first: "brief", briefInput: "improvement_brief"},
-	domain.ModePlan:     {definition: "axlr_plan", version: "1.0", first: "decompose", briefInput: "brief"},
-}
 
 // terminalStates end a ceremony: COMPLETED and BLOCKED for the 2.0 and 1.0
 // definitions, READY for a plan, DONE for a task and SYNCED for a sync.
@@ -138,55 +124,6 @@ func (d *CeremonyDriver) observe(run domain.CeremonyRun, state string, report ma
 		progress.Repair = &repair
 	}
 	d.Observer.Observe(progress)
-}
-
-// StepResult is what one axlr_step_done call did. When accepted, Run is nil
-// once the ceremony reached a terminal state. A refusal leaves Run nil unless
-// the console must still remember something, such as a reviewer failure.
-type StepResult struct {
-	Outcome  domain.ToolOutcome
-	Run      *domain.CeremonyRun
-	Accepted bool
-}
-
-type stepDone struct {
-	CheckCommand *struct {
-		Program string   `json:"program"`
-		Args    []string `json:"args"`
-	} `json:"check_command"`
-	Reproducible *bool                `json:"reproducible"`
-	Feasible     *bool                `json:"feasible"`
-	Expected     string               `json:"expected"`
-	Observed     string               `json:"observed"`
-	RootCause    string               `json:"root_cause"`
-	Evidence     string               `json:"evidence"`
-	ProposedFix  string               `json:"proposed_fix"`
-	Criteria     string               `json:"criteria"`
-	Scope        string               `json:"scope"`
-	Summary      string               `json:"summary"`
-	Report       string               `json:"report"`
-	SummaryEN    string               `json:"summary_en"`
-	ConnectTo    []memoryLinkArgument `json:"connect_to"`
-	incidentDone
-	planDone
-	taskDone
-}
-
-func decodeStepDone(arguments root.JSONValue) (stepDone, error) {
-	var done stepDone
-	decoder := json.NewDecoder(bytes.NewReader(arguments.Bytes()))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&done); err != nil {
-		return stepDone{}, fmt.Errorf("axlr_step_done arguments: %w; send only the fields the current step asks for", err)
-	}
-	return done, nil
-}
-
-func (d stepDone) command() (domain.CheckCommand, bool) {
-	if d.CheckCommand == nil || strings.TrimSpace(d.CheckCommand.Program) == "" {
-		return domain.CheckCommand{}, false
-	}
-	return domain.CheckCommand{Program: d.CheckCommand.Program, Args: append([]string(nil), d.CheckCommand.Args...)}, true
 }
 
 // stepDoneNeedsApproval is true when the call proposes a check command the

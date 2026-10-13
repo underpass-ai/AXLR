@@ -15,32 +15,6 @@ import (
 // lease before it runs out. Every failure is logged and never stops a
 // turn: the reports are visibility, not the work.
 
-// HostIdentity is how this console names itself to MADE.
-type HostIdentity struct {
-	// Owner is the lease owner of every claim; MADE accepts a status report
-	// only from the claim's owner, so it is the host agent id as well
-	// (seen on 13 October 2026: "agent status reporter is not the current
-	// claim owner" for any other host agent id).
-	Owner string
-	// AgentID is the install id and Incarnation the console run's token;
-	// together they are the incarnation MADE records.
-	AgentID, Incarnation string
-	Hostname             string
-}
-
-// incarnation is the host incarnation as reported: install and run.
-func (h HostIdentity) incarnation() string {
-	switch {
-	case h.AgentID == "" && h.Incarnation == "":
-		return "unknown"
-	case h.AgentID == "":
-		return h.Incarnation
-	case h.Incarnation == "":
-		return h.AgentID
-	}
-	return h.AgentID + ":" + h.Incarnation
-}
-
 // HostReport is one bounded status report on a claimed step.
 type HostReport struct {
 	Instance, Step, Fence, OperationID string
@@ -56,16 +30,6 @@ type HostReport struct {
 	Model             string
 	Sequence          int
 	Host              HostIdentity
-}
-
-// HostHandoff is the declaration that a claim's incarnation is gone: the
-// claim's fence and owner, the incarnation that held it, and the evidence
-// (the earlier run, the host and the time of its last report).
-type HostHandoff struct {
-	Instance, Step, Fence string
-	// Incarnation is the one that held the claim; State is lost.
-	Incarnation string
-	Evidence    string
 }
 
 // Host visibility cadence.

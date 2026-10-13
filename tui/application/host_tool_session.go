@@ -11,21 +11,6 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-type sessionContext struct {
-	ID          domain.SessionID `json:"session_id"`
-	Workspace   domain.Workspace `json:"workspace"`
-	PromptCount int              `json:"user_prompt_count"`
-	Title       root.Text        `json:"title"`
-	// About is the about the console uses for the session's memory: the
-	// selected one, or by default the workspace's project about, which
-	// AboutIsDefault marks.
-	About          string `json:"about"`
-	AboutIsDefault bool   `json:"about_is_default,omitempty"`
-	// TitleDeferred says why a proposed title was not stored while the about
-	// sent with it was.
-	TitleDeferred string `json:"title_deferred,omitempty"`
-}
-
 // titleDeferred is the note for a title proposed before the second prompt.
 const titleDeferred = "the title was not stored: define the session title after the second user prompt"
 
@@ -95,18 +80,6 @@ func (u HostToolUseCase) sessionContext(ctx context.Context, s domain.Session, a
 		value.TitleDeferred = titleDeferred
 	}
 	return value, err
-}
-
-// sessionGuidance is the session metadata in the system prompt. It leaves out
-// user_prompt_count and the title, which axlr_session still reports: a value
-// that changes during the session would change the prompt's prefix, and a
-// prefix cache reuses nothing after the first changed token. Setting the
-// title broke the cache at message 0 on 8 October 2026; since 10 October the
-// console also sets it itself (titleUntitled).
-type sessionGuidance struct {
-	ID        domain.SessionID `json:"session_id"`
-	Workspace domain.Workspace `json:"workspace"`
-	About     string           `json:"about"`
 }
 
 func sessionContextGuidance(ctx context.Context, s domain.Session, store SessionLabelsPort) (string, error) {
