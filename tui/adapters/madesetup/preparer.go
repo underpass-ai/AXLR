@@ -84,15 +84,16 @@ func (p *Preparer) Prepare(ctx context.Context) (application.MADEPreparation, er
 		return result, nil
 	}
 	result.WorkIdentity = work
+	result.GrantID = grantID(WorkGrantID, work)
 	admin := server(made, without(made.Env, hostIdentityKey))
 	issued, err := p.call(ctx, admin, "made_issue_authorization_grant", map[string]any{
-		"grant_id": WorkGrantID, "grantee_id": work, "scope": map[string]any{"kind": "global"},
+		"grant_id": result.GrantID, "grantee_id": work, "scope": map[string]any{"kind": "global"},
 		"valid_from": "2000-01-01T00:00:00Z", "delegation_depth": 0, "actions": append([]string(nil), workGrantActions...),
 	})
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) && refused.Code == "conflict" {
-			result.Status, result.Detail = "conflict", "a grant with this id already exists with different actions"
+			result.Status, result.Detail = "conflict", "a grant with this id already exists for another grantee or with other actions"
 			return result, nil
 		}
 		return result, err
@@ -104,13 +105,13 @@ func (p *Preparer) Prepare(ctx context.Context) (application.MADEPreparation, er
 	// The approver acts for the person at the console: it may grant human
 	// guards, which the work identity may not.
 	approved, err := p.call(ctx, admin, "made_issue_authorization_grant", map[string]any{
-		"grant_id": ApproverGrantID, "grantee_id": approverIdentity(work), "scope": map[string]any{"kind": "global"},
+		"grant_id": grantID(ApproverGrantID, approverIdentity(work)), "grantee_id": approverIdentity(work), "scope": map[string]any{"kind": "global"},
 		"valid_from": "2000-01-01T00:00:00Z", "delegation_depth": 0, "actions": append([]string(nil), approverActions...),
 	})
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) && refused.Code == "conflict" {
-			result.Status, result.Detail = "conflict", "an approver grant with this id already exists with different actions"
+			result.Status, result.Detail = "conflict", "an approver grant with this id already exists for another grantee or with other actions"
 			return result, nil
 		}
 		return result, fmt.Errorf("issue the approver grant: %w", err)

@@ -56,7 +56,7 @@ Restart AXLR and verify discovery in `/mcp`. Avoid duplicate package-generated r
 
 When the console has no active turn or pending calls, select MADE in `/mcp` and press `P`:
 
-1. AXLR invokes the embedded launcher with the trusted-host override removed and issues `axlr-default-work-v1` to a work identity. It recognizes existing `axlr-work-…` or `…-axlr-work` identities; a different explicit trusted-host override requires manual operator setup.
+1. AXLR invokes the embedded launcher with the trusted-host override removed and issues `axlr-default-work-v2-<grantee digest>` to a work identity (one grant per identity: a store shared by several installs keeps each one's). It recognizes existing `axlr-work-…` or `…-axlr-work` identities; a different explicit trusted-host override requires manual operator setup.
 2. If needed, it persists an `axlr-work-…` identity in `mcp.json`. Restart when requested so the running connection uses it.
 3. It verifies the work identity can read definitions and compares the published digests of `axlr_debug` 2.0, `axlr_delivery` 2.0, `axlr_incident` 1.0, `axlr_repair` 1.0, `axlr_improve` 1.0, `axlr_plan` 1.0, `axlr_task` 1.0 and `axlr_sync` 1.0 with the [shipped pins](../../tui/adapters/ceremonyhost/definitions.go).
 4. It publishes missing definitions with a temporary five-minute install grant, then revokes that grant. Conflicting content under an existing immutable name/version is an error, not an overwrite.

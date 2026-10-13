@@ -11,7 +11,7 @@ import (
 )
 
 // ApproverGrantID names the approver's action set; a changed set needs a new
-// id, as with WorkGrantID.
+// id, as with WorkGrantID, and the grant issued carries the approver's suffix.
 const ApproverGrantID = "axlr-approver-v1"
 
 // approverActions let the person's keypress grant a human guard and nothing

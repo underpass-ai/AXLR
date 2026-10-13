@@ -1,8 +1,25 @@
 package madesetup
 
+import (
+	"crypto/sha256"
+	"encoding/hex"
+)
+
 // WorkGrantID names the exact action set below. MADE rejects reissuing an id
 // with different actions, so a changed set needs a new id, never an edit.
+// The grant issued carries the grantee's suffix (grantID): a MADE store that
+// several installs share (one HOME, a config directory set up anew) holds
+// one grant per work identity instead of refusing every identity but the
+// first, which left a clean install without its session instances.
 const WorkGrantID = "axlr-default-work-v2"
+
+// grantID is the id of family's grant for grantee: the family and eight hex
+// digits of the grantee's digest, so a conflict from MADE can only mean the
+// family's actions changed under the same version.
+func grantID(family, grantee string) string {
+	digest := sha256.Sum256([]byte(grantee))
+	return family + "-" + hex.EncodeToString(digest[:4])
+}
 
 // workGrantActions run, inspect and resume published ceremonies, report the
 // host's status and handoffs, and let the model read, search, stream and
