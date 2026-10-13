@@ -192,7 +192,11 @@ var _ application.JournalPort = Memory{}
 // turn entry: the console's English summary serves as summary_en too, so
 // a strict store accepts it, and the evidence is one line per action.
 func (m Memory) RecordTurn(ctx context.Context, entry application.TurnEntry) (string, error) {
-	memory := map[string]any{"id": "turn", "kind": "turn", "summary": entry.Summary, "summary_en": entry.Summary, "evidence": strings.Join(entry.Evidence, "\n")}
+	kind := entry.Kind
+	if kind == "" {
+		kind = "turn"
+	}
+	memory := map[string]any{"id": "turn", "kind": kind, "summary": entry.Summary, "summary_en": entry.Summary, "evidence": strings.Join(entry.Evidence, "\n")}
 	if !entry.OccurredAt.IsZero() {
 		memory["occurred_at"] = entry.OccurredAt.UTC().Format(time.RFC3339)
 	}

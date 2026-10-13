@@ -23,6 +23,7 @@ type fakeEngine struct {
 	leases          []time.Duration
 	definition      string
 	reports         []HostReport
+	handoffs        []HostHandoff
 	failReports     bool
 	noOperation     bool
 }
@@ -99,6 +100,11 @@ func (f *fakeEngine) Report(_ context.Context, report HostReport) error {
 func (f *fakeEngine) Renew(_ context.Context, _, step, _ string, lease time.Duration) error {
 	f.calls = append(f.calls, "renew "+step)
 	f.leases = append(f.leases, lease)
+	return nil
+}
+func (f *fakeEngine) Handoff(_ context.Context, handoff HostHandoff) error {
+	f.calls = append(f.calls, "handoff "+handoff.Incarnation)
+	f.handoffs = append(f.handoffs, handoff)
 	return nil
 }
 func (f *fakeEngine) OperationID(_ context.Context, _, step, fence string) (string, error) {

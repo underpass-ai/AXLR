@@ -102,7 +102,7 @@ func cancelStalled(ctx context.Context, s *domain.Session, u ContinueTurnUseCase
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticCeremonyStalled})
 	}
-	note := root.Text(fmt.Sprintf("[AXLR] The console cancelled ceremony %s %s at step %s: %s. The session is back in normal mode; nothing was rolled back. Tell the user in their language what was done and what is left.", run.Definition, run.Version, run.Step, reason))
+	note := root.Text(fmt.Sprintf("[AXLR] The console cancelled ceremony %s %s at step %s: %s. The session is back in normal mode; nothing was rolled back. Tell the user in their language what was done and what is left, and propose the next step: "+blockedNextSteps+".", run.Definition, run.Version, run.Step, reason))
 	if s.Mode() == domain.ModeTask {
 		// A plan worker is ended by its runner; no further turn.
 		if err := u.Store.Save(ctx, next); err != nil {
@@ -164,3 +164,8 @@ func OpenStepIdle(s domain.Session) (domain.CeremonyRun, bool) {
 func StoppedCeremonyNote(definition string) string {
 	return "[AXLR] The person stopped the " + definition + " ceremony; do not resume it or call axlr_step_done unless asked."
 }
+
+// blockedNextSteps is what the console proposes to the person when a
+// ceremony ends blocked or is cancelled (decision H10 of the lifecycle
+// integration design).
+const blockedNextSteps = "run it again with another check command (the same mode), continue by hand in normal mode (/normal), or open a repair of AXLR itself when the console was at fault (/repair)"

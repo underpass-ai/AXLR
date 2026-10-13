@@ -56,6 +56,10 @@ type SessionInstance struct {
 	LeaseMS     int64
 	Reported    time.Time
 	Reports     int
+	// ClaimIncarnation is the console incarnation that made the live claim
+	// (install id and run token); another incarnation finding it declares
+	// a handoff (decision H6).
+	ClaimIncarnation string
 }
 
 // MaxSessionRecordBytes bounds LastRecord.

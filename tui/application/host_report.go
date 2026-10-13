@@ -58,6 +58,16 @@ type HostReport struct {
 	Host              HostIdentity
 }
 
+// HostHandoff is the declaration that a claim's incarnation is gone: the
+// claim's fence and owner, the incarnation that held it, and the evidence
+// (the earlier run, the host and the time of its last report).
+type HostHandoff struct {
+	Instance, Step, Fence string
+	// Incarnation is the one that held the claim; State is lost.
+	Incarnation string
+	Evidence    string
+}
+
 // Host visibility cadence.
 const (
 	// hostHeartbeat is how often a long turn reports while the model works.
@@ -123,7 +133,7 @@ func (c *SessionCeremony) Heartbeat(ctx context.Context, s *domain.Session) {
 // from MADE, which the claim receipt does not carry), its lease and time,
 // then reports running.
 func (c *SessionCeremony) claimed(ctx context.Context, s domain.Session, instance *domain.SessionInstance, fence string, lease time.Duration) {
-	instance.Fence, instance.ClaimedAt, instance.LeaseMS, instance.OperationID, instance.Reported, instance.Reports = fence, c.now(), lease.Milliseconds(), "", time.Time{}, 0
+	instance.Fence, instance.ClaimedAt, instance.LeaseMS, instance.OperationID, instance.Reported, instance.Reports, instance.ClaimIncarnation = fence, c.now(), lease.Milliseconds(), "", time.Time{}, 0, c.Host.incarnation()
 	operation, err := c.Engine.OperationID(ctx, instance.Instance, sessionTurnStep, fence)
 	if err != nil {
 		c.log("session %s operation id: %v", instance.Instance, err)
@@ -131,4 +141,25 @@ func (c *SessionCeremony) claimed(ctx context.Context, s domain.Session, instanc
 	}
 	instance.OperationID = operation
 	c.report(ctx, s, instance, "running", "turn")
+}
+
+// handoff declares, before an interrupted claim is completed, that the
+// incarnation which made it is gone when it was another console run of
+// this install (decision H6): the evidence names that run, the host and
+// the time of its last report. A failure is logged; MADE 0.10.0 has no
+// grantable action for the declaration yet (13 October 2026).
+func (c *SessionCeremony) handoff(ctx context.Context, instance domain.SessionInstance) {
+	if c == nil || c.Engine == nil || instance.Fence == "" || instance.ClaimIncarnation == "" || instance.ClaimIncarnation == c.Host.incarnation() {
+		return
+	}
+	last := "never reported"
+	if !instance.Reported.IsZero() {
+		last = "last reported at " + instance.Reported.UTC().Format(time.RFC3339)
+	}
+	evidence := fmt.Sprintf("console run %s on host %s claimed at %s, %s; run %s found the claim open", instance.ClaimIncarnation, c.Host.Hostname, instance.ClaimedAt.UTC().Format(time.RFC3339), last, c.Host.incarnation())
+	if err := c.Engine.Handoff(ctx, HostHandoff{Instance: instance.Instance, Step: sessionTurnStep, Fence: instance.Fence, Incarnation: instance.ClaimIncarnation, Evidence: evidence}); err != nil {
+		c.log("session %s handoff: %v", instance.Instance, err)
+		return
+	}
+	c.log("session %s: handoff from run %s recorded", instance.Instance, instance.ClaimIncarnation)
 }

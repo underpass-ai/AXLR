@@ -237,3 +237,10 @@ func (e Engine) Renew(ctx context.Context, instance, step, fence string, lease t
 	_, err := e.made(ctx, "made_renew_ceremony_step_lease", map[string]any{"ceremony_id": instance, "step_id": step, "claim_fence": fence, "lease_owner_id": e.owner(), "renewal_id": fmt.Sprintf("axlr:renew:%s:%s:%d", instance, step, time.Now().UnixNano()), "lease_ttl_ms": ttl})
 	return err
 }
+
+// Handoff journals a lost host incarnation for a live claim.
+func (e Engine) Handoff(ctx context.Context, handoff application.HostHandoff) error {
+	declaration := map[string]any{"id": fmt.Sprintf("axlr:handoff:%s:%s", handoff.Instance, bounded(handoff.Fence, 16)), "step_id": handoff.Step, "claim_fence": handoff.Fence, "owner": e.owner(), "incarnation": handoff.Incarnation, "state": "lost", "observed_at": time.Now().UTC().Format(time.RFC3339), "evidence": bounded(handoff.Evidence, 2000)}
+	_, err := e.made(ctx, "made_record_ceremony_host_handoff", map[string]any{"ceremony_id": handoff.Instance, "declaration": declaration})
+	return err
+}

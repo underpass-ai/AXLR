@@ -110,6 +110,7 @@ func (e *incidentEngine) Transition(_ context.Context, _, trigger string) (strin
 }
 func (e *incidentEngine) Cancel(context.Context, string, string) error { return nil }
 func (e *incidentEngine) Report(context.Context, HostReport) error     { return nil }
+func (e *incidentEngine) Handoff(context.Context, HostHandoff) error   { return nil }
 func (e *incidentEngine) Renew(context.Context, string, string, string, time.Duration) error {
 	return nil
 }

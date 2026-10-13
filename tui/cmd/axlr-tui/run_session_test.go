@@ -30,6 +30,9 @@ func (readyEngine) Cancel(context.Context, string, string) error { return nil }
 func (readyEngine) Report(context.Context, application.HostReport) error {
 	return nil
 }
+func (readyEngine) Handoff(context.Context, application.HostHandoff) error {
+	return nil
+}
 func (readyEngine) Renew(context.Context, string, string, string, time.Duration) error {
 	return nil
 }

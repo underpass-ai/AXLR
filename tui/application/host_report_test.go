@@ -141,3 +141,68 @@ func TestCeremonyDriverReportsItsSteps(t *testing.T) {
 		t.Fatalf("%+v", last)
 	}
 }
+
+// A claim another incarnation of this install left open is declared lost
+// before it is completed as interrupted; one's own claim is not.
+func TestInterruptedClaimOfAnotherIncarnationIsHandedOff(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	c.Host = HostIdentity{Owner: "w", AgentID: "install", Incarnation: "run2", Hostname: "gx10"}
+	s := turnSession(t)
+	if err := s.BeginTurn("primero", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, _ := s.Instance()
+	instance.ClaimIncarnation = "install:run1"
+	instance.Reported = time.Date(2026, 10, 13, 17, 0, 0, 0, time.UTC)
+	if err := s.SetInstance(instance); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("segundo", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	if len(engine.handoffs) != 1 || engine.handoffs[0].Incarnation != "install:run1" || engine.handoffs[0].Fence != "fence-turn" || !strings.Contains(engine.handoffs[0].Evidence, "run install:run1 on host gx10") || !strings.Contains(engine.handoffs[0].Evidence, "last reported at 2026-10-13T17:00:00Z") || !strings.Contains(engine.handoffs[0].Evidence, "run install:run2 found") {
+		t.Fatalf("%+v", engine.handoffs)
+	}
+	if calls := strings.Join(engine.calls, ";"); !strings.Contains(calls, "handoff install:run1;report finished turn;complete turn") {
+		t.Fatalf("calls %v", engine.calls)
+	}
+	// The same incarnation's own interrupted claim needs no handoff.
+	if err := s.InterruptDraft(""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("tercero", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	if len(engine.handoffs) != 1 {
+		t.Fatalf("%+v", engine.handoffs)
+	}
+}
+
+// The close leaves one session_closed entry under the session's about.
+func TestCloseWritesASessionClosedEntry(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, journal, _ := sessionCeremonyFor(t, engine)
+	s := turnSession(t)
+	if err := s.BeginTurn("hola", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	if err := s.CompleteAssistant(assistant("hola")); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.EndTurn(context.Background(), &s)
+	if err := c.Close(context.Background(), &s, "exit"); err != nil {
+		t.Fatal(err)
+	}
+	id := string(s.ID())
+	if len(journal.entries) != 1 || journal.entries[0].Kind != "observation" || journal.entries[0].Labels["event"][0] != "closed" || journal.entries[0].About != "ws:"+id || journal.entries[0].Key != "axlr:closed:"+id || journal.entries[0].Summary != "Session closed after 1 turn (exit)." {
+		t.Fatalf("%+v", journal.entries)
+	}
+}

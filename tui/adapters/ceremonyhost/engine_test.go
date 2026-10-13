@@ -90,3 +90,22 @@ func TestEngineReportsAsTheClaimOwner(t *testing.T) {
 		t.Fatal("without a work identity the owner stays axlr")
 	}
 }
+
+func TestEngineDeclaresAHandoffForTheOwner(t *testing.T) {
+	var request map[string]any
+	engine := Engine{Owner: "w", Tools: memoryToolsFunc(func(_ context.Context, id domain.ToolIdentity, args root.JSONValue) (domain.ToolOutcome, error) {
+		if id.Plugin.ToolName != "made_record_ceremony_host_handoff" {
+			t.Fatalf("%+v", id)
+		}
+		_ = json.Unmarshal(args.Bytes(), &request)
+		encoded, _ := json.Marshal(map[string]any{"status": "completed", "output": map[string]any{"structured_content": map[string]any{"recorded": true}}})
+		return domain.ToolOutcome{Content: root.Text(encoded)}, nil
+	})}
+	if err := engine.Handoff(context.Background(), application.HostHandoff{Instance: "i", Step: "turn", Fence: "f1", Incarnation: "install:run1", Evidence: "run1 gone"}); err != nil {
+		t.Fatal(err)
+	}
+	declaration := request["declaration"].(map[string]any)
+	if request["ceremony_id"] != "i" || declaration["owner"] != "w" || declaration["incarnation"] != "install:run1" || declaration["state"] != "lost" || declaration["claim_fence"] != "f1" || declaration["evidence"] != "run1 gone" || declaration["id"] != "axlr:handoff:i:f1" {
+		t.Fatalf("%+v", request)
+	}
+}

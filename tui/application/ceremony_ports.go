@@ -73,6 +73,10 @@ type CeremonyEnginePort interface {
 	Report(ctx context.Context, report HostReport) error
 	Renew(ctx context.Context, instance, step, fence string, lease time.Duration) error
 	OperationID(ctx context.Context, instance, step, fence string) (string, error)
+	// Handoff journals that a claim's host incarnation is gone (decision
+	// H6): a console that finds a claim of an earlier incarnation of
+	// itself declares it lost, with the evidence, before completing it.
+	Handoff(ctx context.Context, handoff HostHandoff) error
 }
 
 // CeremonyView is the part of a MADE instance the driver reconciles from.

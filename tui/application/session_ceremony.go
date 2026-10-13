@@ -35,6 +35,9 @@ type TurnEntry struct {
 	OccurredAt time.Time
 	// ContextID is the session's KMP context, when the console opened one.
 	ContextID string
+	// Kind is the memory's kind: turn, or observation for the entry the
+	// close writes (decision F3); "" is turn.
+	Kind string
 }
 
 // JournalPort writes a turn's results to KMP and returns the stored ref.
@@ -370,6 +373,7 @@ func (c *SessionCeremony) SweepAbandoned(ctx context.Context, store SessionListe
 // completeInterrupted completes the turn a claim was left on: the console
 // stopped, or a completion failed, before the turn's record reached MADE.
 func (c *SessionCeremony) completeInterrupted(ctx context.Context, s *domain.Session, instance domain.SessionInstance) domain.SessionInstance {
+	c.handoff(ctx, instance)
 	record := c.record(ctx, *s, instance, true)
 	return c.complete(ctx, s, instance, record)
 }
@@ -417,6 +421,17 @@ func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, tr
 	} else {
 		instance.Closed = true
 		c.log("session instance %s %s after %s", instance.Instance, trigger, plural(instance.Turns, "turn"))
+		if c.Journal != nil {
+			// The close leaves one entry under the session's about and
+			// nothing in the project's (decision F3).
+			state := s.Export()
+			// KMP's kinds have no session_closed (refused on 13 October
+			// 2026): the entry is an observation labelled event=closed.
+			entry := TurnEntry{Kind: "observation", About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:%s:%s", trigger, state.ID), Summary: fmt.Sprintf("Session %s after %s (%s).", trigger, plural(instance.Turns, "turn"), reason),
+				Evidence: []string{fmt.Sprintf("MADE %s %s", instance.Instance, trigger)}, OccurredAt: c.now(), ContextID: instance.KMPContext,
+				Labels: map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {string(s.Mode())}, "event": {trigger}}}
+			instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
+		}
 	}
 	if err := s.SetInstance(instance); err != nil {
 		return err
