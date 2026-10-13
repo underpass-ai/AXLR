@@ -1,5 +1,9 @@
 # Documentation audit — 4 October 2026
 
+## v0.7.0 release preparation
+
+Releases `main` at `c613a75`. Since v0.6.0: a bare install sets up the model, KMP and MADE on the first run (#115). The first launch in a terminal runs a setup assistant (language; an OpenRouter key with recommended light models, or a local server it finds; the engines), and `axlr-tui setup` repeats it. `/update` installs the KMP and MADE engines `mcp.json` lacks, preparing their stores, MADE's work grant and the driven ceremonies. The OpenRouter key the assistant takes is kept in a private `credentials.json` that `OPENROUTER_API_KEY` overrides, and `docs/configuration.md` documents every key of `settings.json`, `mcp.json`, `credentials.json` and MCP manifests. The chart's `version` and `appVersion` are `0.7.0`. Publication and the six-platform native checks belong to the release workflow.
+
 ## v0.6.0 release preparation
 
 Releases `main` at `32edbe2`. Since v0.5.0: the findings of the third console QA of 12 October (#111) — cancelled, failed and timed-out requests count toward cost and budget as unmetered requests, a provider error keeps its redacted message, launching a second console no longer interrupts the plans and jobs of a console still open, slash commands with stray case or arguments no longer reach the model as paid prompts, and the remaining low-severity bugs; twenty-three quality-of-life items including `/new`, `@` file mentions, expandable tool rows, allowing one exact command for the session with S, Shift+A, `/undo`, `/export`, per-turn cost and session-picker filtering; and the docs drift from the audits. The header tiles the AXLR logo in the wordmark colours and labels the model and workspace (#112), and the model can uninstall a forged tool with `axlr_remove_tool` (#113). The chart's `version` and `appVersion` are `0.6.0`. Publication and the six-platform native checks belong to the release workflow.
