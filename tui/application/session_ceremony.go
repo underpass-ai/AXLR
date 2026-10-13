@@ -40,9 +40,11 @@ type TurnEntry struct {
 	Kind string
 }
 
-// JournalPort writes a turn's results to KMP and returns the stored ref.
+// JournalPort writes a turn's results to KMP and returns the stored ref;
+// RecordSettled writes what Jev selected from a turn (session_settle.go).
 type JournalPort interface {
 	RecordTurn(ctx context.Context, entry TurnEntry) (string, error)
+	RecordSettled(ctx context.Context, entry SettledEntry) (string, error)
 }
 
 // SessionCeremony runs the session's MADE instance. Every failure of the
@@ -62,7 +64,10 @@ type SessionCeremony struct {
 	// Host is how the console names itself in MADE's host reports
 	// (host_report.go).
 	Host HostIdentity
-	Now  func() time.Time
+	// Judge is TypeSafe Jev, which decides what a turn settles
+	// (session_settle.go); nil leaves it to the model and the reminder.
+	Judge JudgementPort
+	Now   func() time.Time
 	// Log reports what the console did or could not do; nil says nothing.
 	Log func(string)
 
@@ -263,6 +268,9 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 		}
 		entry.ContextID = instance.KMPContext
 		instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
+		if !record.Interrupted {
+			c.settle(ctx, *s, instance, record, stepRef)
+		}
 	} else if len(instance.Pending) > 0 {
 		instance.Pending = c.journal(ctx, instance.Pending)
 	}

@@ -60,6 +60,10 @@ type SessionInstance struct {
 	// (install id and run token); another incarnation finding it declares
 	// a handoff (decision H6).
 	ClaimIncarnation string
+	// RecalledMemories are the project memories the last recall exposed,
+	// "ref text" per line, bounded; Jev reads them to say what a settled
+	// turn supersedes (decision F5).
+	RecalledMemories []string
 }
 
 // MaxSessionRecordBytes bounds LastRecord.
@@ -93,6 +97,7 @@ func (s Session) Instance() (SessionInstance, bool) {
 	}
 	copied := *s.state.Instance
 	copied.Pending = append([]string(nil), copied.Pending...)
+	copied.RecalledMemories = append([]string(nil), copied.RecalledMemories...)
 	return copied, true
 }
 

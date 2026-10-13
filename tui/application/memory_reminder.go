@@ -33,6 +33,9 @@ func remindMemory(ctx context.Context, s *domain.Session, u ContinueTurnUseCase,
 	if s.Status() != domain.StatusComplete || !modelRecordsMemory(*s) {
 		return false, nil
 	}
+	if u.Session.settles() {
+		return false, nil // Jev decides what the turn settled (decision D5)
+	}
 	write, _, _ := memoryWriteTool(s.ToolSnapshot())
 	messages := s.Messages()
 	if len(messages) == 0 || messages[len(messages)-1].Role != root.RoleAssistant || len(messages[len(messages)-1].ToolCalls) > 0 {

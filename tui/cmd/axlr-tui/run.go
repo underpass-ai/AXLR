@@ -563,6 +563,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if journal, ok := ceremonies.Memory.(application.JournalPort); ok {
 			sessionCeremony.Journal = journal
 		}
+		if judge != nil {
+			// Jev decides what each turn settled (decision D5).
+			sessionCeremony.Judge = judge.Port
+		}
 		for _, line := range []string{
 			ensureWorkGrant(ctx, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}, filepath.Join(stateBase, "axlr", "made-grant"), madesetup.WorkGrantID),
 			prepareSessionDefinition(ctx, ceremonies.Engine, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}),

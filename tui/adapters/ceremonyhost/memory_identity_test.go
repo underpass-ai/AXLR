@@ -107,3 +107,20 @@ func TestWritesCarryTheSessionContext(t *testing.T) {
 		t.Fatalf("request %+v", requests[0])
 	}
 }
+
+func TestRecordSettledWritesTheSelectedMemoryAndResumesItsReview(t *testing.T) {
+	var requests []map[string]any
+	m := kmpAnswers(t, &requests,
+		map[string]any{"accepted": false, "status": "needs_review", "continuation": "review-1"},
+		map[string]any{"accepted": true, "status": "committed", "local_refs": map[string]any{"settled": "project:probe:entry:decision:utc"}})
+	entry := application.SettledEntry{About: "project:probe", Kind: "decision", Text: "Las fechas se guardan en UTC.", SummaryEN: "decision settled in turn 1: \"Las fechas se guardan en UTC.\"", Evidence: []string{"MADE i step turn #1", "local_write parser.go"}, Labels: map[string][]string{"judged_by": {"jev"}}, Key: "axlr:settled:s:0:1", ContextID: "ctx_1", Links: []application.MemoryLink{{Ref: "project:probe:entry:decision:old", Rel: "supersedes", Why: "Jev judged (p=0.60) that the turn's result replaces it", Evidence: "local_write parser.go"}}}
+	ref, err := m.RecordSettled(context.Background(), entry)
+	if err != nil || ref != "project:probe:entry:decision:utc" || len(requests) != 2 {
+		t.Fatalf("%q %v %d", ref, err, len(requests))
+	}
+	memory := requests[0]["memories"].([]any)[0].(map[string]any)
+	link := memory["connect_to"].([]any)[0].(map[string]any)
+	if memory["kind"] != "decision" || memory["summary"] != entry.Text || memory["summary_en"] != entry.SummaryEN || requests[0]["context_id"] != "ctx_1" || requests[0]["idempotency_key"] != "axlr:settled:s:0:1" || link["rel"] != "supersedes" || link["ref"] != "project:probe:entry:decision:old" || requests[1]["continuation"] != "review-1" {
+		t.Fatalf("%+v %+v", requests[0], requests[1])
+	}
+}

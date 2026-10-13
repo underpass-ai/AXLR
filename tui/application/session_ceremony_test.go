@@ -13,12 +13,18 @@ import (
 
 type journalStub struct {
 	entries []TurnEntry
+	settled []SettledEntry
 	err     error
 }
 
 func (j *journalStub) RecordTurn(_ context.Context, entry TurnEntry) (string, error) {
 	j.entries = append(j.entries, entry)
 	return "ws:x:entry:turn:1", j.err
+}
+
+func (j *journalStub) RecordSettled(_ context.Context, entry SettledEntry) (string, error) {
+	j.settled = append(j.settled, entry)
+	return entry.About + ":entry:" + entry.Kind + ":1", j.err
 }
 
 func sessionCeremonyFor(t *testing.T, engine *fakeEngine) (*SessionCeremony, *memoryStore, *journalStub, []string) {

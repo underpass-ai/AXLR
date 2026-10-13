@@ -91,13 +91,17 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 	}
 	var sections []string
 	remaining := limit
+	instance.RecalledMemories = nil
 	for i, about := range abouts {
 		if remaining <= 0 {
 			break
 		}
-		section := c.recallSection(ctx, about, prompt, instance.KMPContext, i == 0, remaining)
+		section, lines := c.recallSection(ctx, about, prompt, instance.KMPContext, i == 0, remaining)
 		remaining -= len(section) + 1
 		sections = append(sections, section)
+		if i == 0 {
+			instance.RecalledMemories = lines
+		}
 	}
 	instance.Recalled = bounded(prompt, recalledIntentBytes)
 	if err := s.SetInstance(instance); err != nil {
@@ -109,21 +113,51 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 
 // recallSection wakes one about and renders it within limit bytes. Nothing
 // recorded is said in one line (decision D6: "new project, nothing
-// recorded", nothing more); a failure is disclosed, never hidden.
-func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt, contextID string, project bool, limit int) string {
+// recorded", nothing more); a failure is disclosed, never hidden. The
+// memories exposed come back too, "ref text" per line, for Jev.
+func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt, contextID string, project bool, limit int) (string, []string) {
 	result, err := c.Identity.Recall.Recall(ctx, RecallRequest{Mode: RecallWake, About: about, Intent: prompt, ContextID: contextID})
 	if err != nil {
 		c.log("recall of %s: %v", about, err)
-		return bounded(fmt.Sprintf("%s: KMP recall unavailable: %s", about, bounded(err.Error(), 200)), limit)
+		return bounded(fmt.Sprintf("%s: KMP recall unavailable: %s", about, bounded(err.Error(), 200)), limit), nil
 	}
 	if result.Empty || strings.TrimSpace(result.Text) == "" {
 		if project {
-			return bounded(about+": new project, nothing recorded yet.", limit)
+			return bounded(about+": new project, nothing recorded yet.", limit), nil
 		}
-		return bounded(about+": nothing recorded yet.", limit)
+		return bounded(about+": nothing recorded yet.", limit), nil
 	}
 	header := "Memory of " + about + ":\n"
-	return header + bounded(result.Text, max(0, limit-len(header)))
+	return header + bounded(result.Text, max(0, limit-len(header))), recalledMemories(result.Text, result.Refs)
+}
+
+// recalledMemoryLines bounds what the sidecar keeps of a recall for Jev.
+const (
+	recalledMemoryLines = 8
+	recalledMemoryBytes = 300
+)
+
+// recalledMemories pairs the refs a wake exposed with their lines: a wake
+// line reads "- <ref> (kind): text", and only lines that start with a
+// known ref are kept.
+func recalledMemories(text string, refs []string) []string {
+	known := map[string]bool{}
+	for _, ref := range refs {
+		known[ref] = true
+	}
+	var out []string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "- "))
+		ref, rest, _ := strings.Cut(line, " ")
+		if !known[ref] {
+			continue
+		}
+		out = append(out, bounded(ref+" "+strings.TrimSpace(rest), recalledMemoryBytes))
+		if len(out) == recalledMemoryLines {
+			break
+		}
+	}
+	return out
 }
 
 // seen and markSeen track the sessions this console incarnation already

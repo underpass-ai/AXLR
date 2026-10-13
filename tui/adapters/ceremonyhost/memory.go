@@ -220,3 +220,55 @@ func (m Memory) RecordTurn(ctx context.Context, entry application.TurnEntry) (st
 	status, _ := result["status"].(string)
 	return "", fmt.Errorf("KMP did not write the turn entry (status %q)", status)
 }
+
+// RecordSettled writes what Jev selected from a turn: the quoted text as
+// the summary, an English frame as summary_en, the step and the actions as
+// evidence, and the supersedes link when Jev found the memory it replaces.
+func (m Memory) RecordSettled(ctx context.Context, entry application.SettledEntry) (string, error) {
+	memory := map[string]any{"id": "settled", "kind": entry.Kind, "summary": entry.Text, "summary_en": entry.SummaryEN, "evidence": strings.Join(entry.Evidence, "\n")}
+	if len(entry.Links) > 0 {
+		var links []any
+		for _, link := range entry.Links {
+			item := map[string]any{"ref": link.Ref, "rel": link.Rel, "why": link.Why, "confidence": "medium"}
+			if link.Evidence != "" {
+				item["evidence"] = link.Evidence
+			}
+			links = append(links, item)
+		}
+		memory["connect_to"] = links
+	}
+	arguments := map[string]any{"about": entry.About, "actor": "axlr", "idempotency_key": entry.Key, "labels": entry.Labels, "memories": []any{memory}}
+	if entry.ContextID != "" {
+		arguments["context_id"] = entry.ContextID
+	}
+	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
+	if err != nil {
+		var refused *refusal
+		if errors.As(err, &refused) {
+			return "", fmt.Errorf("KMP refused the settled memory (%s): %s", refused.Code, bounded(refused.Message, 600))
+		}
+		return "", err
+	}
+	if accepted, _ := result["accepted"].(bool); accepted {
+		refs, _ := result["local_refs"].(map[string]any)
+		ref, _ := refs["settled"].(string)
+		return ref, nil
+	}
+	status, _ := result["status"].(string)
+	if status == "needs_review" {
+		// The links point at refs the wake exposed (decision F4): the
+		// console resumes the review itself.
+		if continuation, _ := result["continuation"].(string); continuation != "" {
+			resumed, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", map[string]any{"continuation": continuation})
+			if err != nil {
+				return "", err
+			}
+			if accepted, _ := resumed["accepted"].(bool); accepted {
+				refs, _ := resumed["local_refs"].(map[string]any)
+				ref, _ := refs["settled"].(string)
+				return ref, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("KMP did not write the settled memory (status %q)", status)
+}
