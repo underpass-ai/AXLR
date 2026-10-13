@@ -20,8 +20,8 @@ Switching work mode is not a MADE cancellation command. An active ceremony recor
 Preconditions: no active task or pending call; known store paths and identities; backups suitable for the installed engines. Record the current AXLR version, engine versions, `mcp.json` and manifest references.
 
 1. Run `/update`. AXLR checks the latest stable official packages and verifies package SHA-256, plugin version and engine version.
-2. Review each engine's result. Only persistent local registrations named exactly `kmp` and `made` without custom arguments are eligible. Unconfigured, remote and command-line-only connections are skipped. The updater supports Linux amd64/arm64 and macOS arm64; this is narrower than AXLR's own release matrix.
-3. AXLR changes the persistent manifest reference while keeping prior packages/manifests, explicit environments, stores, keys, allowlists and approvals. It does not bootstrap authorization, publish definitions or migrate a store.
+2. Review each engine's result. Persistent local registrations named exactly `kmp` and `made` without custom arguments are updated; remote and command-line-only connections are skipped. An engine `mcp.json` lacks is installed: AXLR prepares its store (KMP's guide sync into `$XDG_DATA_HOME/kmp/default`; MADE's embedded setup and authorization bootstrap), registers it with `HOME` and `PATH` passed through, and for MADE issues the work grant and publishes the driven definitions, as `P` in `/mcp` does. The updater supports Linux amd64/arm64 and macOS arm64; this is narrower than AXLR's own release matrix.
+3. For an update, AXLR changes the persistent manifest reference while keeping prior packages/manifests, explicit environments, stores, keys, allowlists and approvals. An update does not bootstrap authorization, publish definitions or migrate a store.
 4. Restart AXLR. Existing live connections keep their old executable until restart.
 5. Verify discovery, selected store/identity, KMP known-memory recall and MADE pinned definitions. Re-run the appropriate engine runbook if setup needs repair.
 

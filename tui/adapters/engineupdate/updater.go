@@ -36,6 +36,9 @@ type Updater struct {
 	Client        *http.Client
 	// Commands registered by this running AXLR process, before any update.
 	ActiveCommands map[string]string
+	// Install, when set, installs and connects the engines mcp.json lacks;
+	// without it they are skipped.
+	Install application.EngineInstallPort
 	// The release endpoint is fixed in production; tests use a local transport.
 	apiBase  string
 	platform string
@@ -71,9 +74,18 @@ func (u *Updater) Update(ctx context.Context) ([]application.EngineUpdateResult,
 				target = &targets[i]
 			}
 		}
-		if target != nil && target.Command != "" {
+		switch {
+		case target != nil && target.Command != "":
 			operation, cancel := context.WithTimeout(ctx, 3*time.Minute)
 			result, err = u.update(operation, *target)
+			cancel()
+			if err != nil {
+				result.Status = "failed"
+				result.Error = err.Error()
+			}
+		case target == nil && u.Install != nil:
+			operation, cancel := context.WithTimeout(ctx, 5*time.Minute)
+			result, err = u.install(operation, engine)
 			cancel()
 			if err != nil {
 				result.Status = "failed"
@@ -90,101 +102,13 @@ func (u *Updater) Update(ctx context.Context) ([]application.EngineUpdateResult,
 
 func (u *Updater) update(ctx context.Context, target application.EngineUpdateTarget) (application.EngineUpdateResult, error) {
 	r := application.EngineUpdateResult{Engine: target.Engine}
-	platform, ok := u.packagePlatform()
-	if !ok {
-		return r, application.ErrEngineUpdatePlatform
-	}
 	r.PreviousVersion = installedVersion(ctx, target)
-	base := u.apiBase
-	if base == "" {
-		base = "https://api.github.com"
-	}
-	data, err := u.fetch(ctx, base+"/repos/underpass-ai/"+target.Engine+"/releases/latest", 2<<20)
+	version, destination, err := u.fetchPackage(ctx, target.Engine, r.PreviousVersion)
+	r.Version = version
 	if err != nil {
 		return r, err
 	}
-	var latest release
-	if json.Unmarshal(data, &latest) != nil || latest.Draft || latest.Prerelease || !stableVersion.MatchString(latest.Tag) {
-		return r, errors.New("invalid stable release metadata")
-	}
-	r.Version = strings.TrimPrefix(latest.Tag, "v")
-	if r.PreviousVersion != "" && compareVersions(r.PreviousVersion, r.Version) > 0 {
-		return r, errors.New("installed version is newer than the stable release; keeping it")
-	}
-	name := target.Engine + "-plugin-" + r.Version + "-" + platform + ".tar.gz"
-	archiveURL, checksumURL := "", ""
-	for _, asset := range latest.Assets {
-		if asset.Name == name {
-			archiveURL = asset.URL
-		}
-		if asset.Name == name+".sha256" {
-			checksumURL = asset.URL
-		}
-	}
-	if archiveURL == "" || checksumURL == "" {
-		return r, errors.New("release package or checksum is missing")
-	}
-	checksum, err := u.fetch(ctx, checksumURL, 4096)
-	if err != nil {
-		return r, err
-	}
-	fields := strings.Fields(string(checksum))
-	if len(fields) == 0 {
-		return r, errors.New("invalid release checksum")
-	}
-	expected, err := hex.DecodeString(fields[0])
-	if err != nil || len(expected) != sha256.Size {
-		return r, errors.New("invalid release checksum")
-	}
-	archive, err := u.fetch(ctx, archiveURL, maxArchive)
-	if err != nil {
-		return r, err
-	}
-	digest := sha256.Sum256(archive)
-	if !bytes.Equal(digest[:], expected) {
-		return r, errors.New("release checksum mismatch; keeping the installed engine")
-	}
-	if err := os.MkdirAll(u.Root, 0700); err != nil {
-		return r, err
-	}
-	stage, err := os.MkdirTemp(u.Root, ".update-"+target.Engine+"-")
-	if err != nil {
-		return r, err
-	}
-	defer os.RemoveAll(stage)
-	if err := extract(archive, stage, target.Engine); err != nil {
-		return r, err
-	}
-	packageRoot := filepath.Join(stage, target.Engine)
-	manifest, err := os.ReadFile(filepath.Join(packageRoot, ".claude-plugin", "plugin.json"))
-	var metadata struct {
-		Version string `json:"version"`
-	}
-	if err != nil || json.Unmarshal(manifest, &metadata) != nil || metadata.Version != r.Version {
-		return r, errors.New("plugin version does not match the release")
-	}
-	binary := filepath.Join(packageRoot, "bin", target.Engine+"-mcp")
-	if version(ctx, binary, target.Engine) != r.Version {
-		return r, errors.New("engine version does not match the release")
-	}
-	launcher := filepath.Join(packageRoot, "scripts", "run-embedded-mcp.sh")
-	if info, err := os.Stat(launcher); err != nil || !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
-		return r, errors.New("release launcher is missing or not executable")
-	}
-	// A content-derived directory avoids replacing files used by a running process.
-	destination := filepath.Join(u.Root, target.Engine+"-"+r.Version+"-"+hex.EncodeToString(digest[:8]))
-	if _, err := os.Lstat(destination); err == nil {
-		if err := sameTree(packageRoot, destination); err != nil {
-			return r, err
-		}
-	} else if errors.Is(err, os.ErrNotExist) {
-		if err := os.Rename(packageRoot, destination); err != nil {
-			return r, err
-		}
-	} else {
-		return r, err
-	}
-	launcher = filepath.Join(destination, "scripts", "run-embedded-mcp.sh")
+	launcher := filepath.Join(destination, "scripts", "run-embedded-mcp.sh")
 	if target.Command == launcher {
 		r.Status = "current"
 		if active, known := u.ActiveCommands[target.Engine]; known {
@@ -200,6 +124,127 @@ func (u *Updater) update(ctx context.Context, target application.EngineUpdateTar
 	}
 	r.Status, r.RestartRequired = "updated", true
 	return r, nil
+}
+
+// install downloads the stable release of an engine mcp.json lacks and hands
+// the verified package to Install, which prepares its store and connects it.
+func (u *Updater) install(ctx context.Context, engine string) (application.EngineUpdateResult, error) {
+	r := application.EngineUpdateResult{Engine: engine}
+	version, destination, err := u.fetchPackage(ctx, engine, "")
+	r.Version = version
+	if err != nil {
+		return r, err
+	}
+	if err := ctx.Err(); err != nil {
+		return r, err
+	}
+	detail, err := u.Install.InstallEngine(ctx, engine, destination)
+	r.Detail = detail
+	if err != nil {
+		return r, err
+	}
+	r.Status, r.RestartRequired = "installed", true
+	return r, nil
+}
+
+// fetchPackage downloads, verifies and unpacks the stable release of an
+// engine into a content-derived directory under Root, and returns its version
+// and that directory. A previous version newer than the release is kept.
+func (u *Updater) fetchPackage(ctx context.Context, engine, previous string) (string, string, error) {
+	platform, ok := u.packagePlatform()
+	if !ok {
+		return "", "", application.ErrEngineUpdatePlatform
+	}
+	base := u.apiBase
+	if base == "" {
+		base = "https://api.github.com"
+	}
+	data, err := u.fetch(ctx, base+"/repos/underpass-ai/"+engine+"/releases/latest", 2<<20)
+	if err != nil {
+		return "", "", err
+	}
+	var latest release
+	if json.Unmarshal(data, &latest) != nil || latest.Draft || latest.Prerelease || !stableVersion.MatchString(latest.Tag) {
+		return "", "", errors.New("invalid stable release metadata")
+	}
+	stable := strings.TrimPrefix(latest.Tag, "v")
+	if previous != "" && compareVersions(previous, stable) > 0 {
+		return stable, "", errors.New("installed version is newer than the stable release; keeping it")
+	}
+	name := engine + "-plugin-" + stable + "-" + platform + ".tar.gz"
+	archiveURL, checksumURL := "", ""
+	for _, asset := range latest.Assets {
+		if asset.Name == name {
+			archiveURL = asset.URL
+		}
+		if asset.Name == name+".sha256" {
+			checksumURL = asset.URL
+		}
+	}
+	if archiveURL == "" || checksumURL == "" {
+		return stable, "", errors.New("release package or checksum is missing")
+	}
+	checksum, err := u.fetch(ctx, checksumURL, 4096)
+	if err != nil {
+		return stable, "", err
+	}
+	fields := strings.Fields(string(checksum))
+	if len(fields) == 0 {
+		return stable, "", errors.New("invalid release checksum")
+	}
+	expected, err := hex.DecodeString(fields[0])
+	if err != nil || len(expected) != sha256.Size {
+		return stable, "", errors.New("invalid release checksum")
+	}
+	archive, err := u.fetch(ctx, archiveURL, maxArchive)
+	if err != nil {
+		return stable, "", err
+	}
+	digest := sha256.Sum256(archive)
+	if !bytes.Equal(digest[:], expected) {
+		return stable, "", errors.New("release checksum mismatch; keeping the installed engine")
+	}
+	if err := os.MkdirAll(u.Root, 0700); err != nil {
+		return stable, "", err
+	}
+	stage, err := os.MkdirTemp(u.Root, ".update-"+engine+"-")
+	if err != nil {
+		return stable, "", err
+	}
+	defer os.RemoveAll(stage)
+	if err := extract(archive, stage, engine); err != nil {
+		return stable, "", err
+	}
+	packageRoot := filepath.Join(stage, engine)
+	manifest, err := os.ReadFile(filepath.Join(packageRoot, ".claude-plugin", "plugin.json"))
+	var metadata struct {
+		Version string `json:"version"`
+	}
+	if err != nil || json.Unmarshal(manifest, &metadata) != nil || metadata.Version != stable {
+		return stable, "", errors.New("plugin version does not match the release")
+	}
+	binary := filepath.Join(packageRoot, "bin", engine+"-mcp")
+	if version(ctx, binary, engine) != stable {
+		return stable, "", errors.New("engine version does not match the release")
+	}
+	launcher := filepath.Join(packageRoot, "scripts", "run-embedded-mcp.sh")
+	if info, err := os.Stat(launcher); err != nil || !info.Mode().IsRegular() || info.Mode()&0111 == 0 {
+		return stable, "", errors.New("release launcher is missing or not executable")
+	}
+	// A content-derived directory avoids replacing files used by a running process.
+	destination := filepath.Join(u.Root, engine+"-"+stable+"-"+hex.EncodeToString(digest[:8]))
+	if _, err := os.Lstat(destination); err == nil {
+		if err := sameTree(packageRoot, destination); err != nil {
+			return stable, "", err
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
+		if err := os.Rename(packageRoot, destination); err != nil {
+			return stable, "", err
+		}
+	} else {
+		return stable, "", err
+	}
+	return stable, destination, nil
 }
 
 func (u *Updater) fetch(ctx context.Context, address string, limit int64) ([]byte, error) {

@@ -9,11 +9,11 @@ AXLR shows two related inventories:
 
 AXLR extends its execution engine through MCP tools and the supported components of OpenAI/Codex plugin packages. Compatibility depends on the manifest, transport, authentication and host capabilities listed below. AXLR owns its copy of the package and its MCP approval policy; installation in one host does not install it in the other.
 
-AXLR, KMP and MADE appear as built-in catalogue entries. AXLR supplies the embedded `axlr-session` skill for session titles and project continuity. KMP and MADE identify the intended memory and orchestration engines; their rows do not install an engine binary or prove that its MCP server is connected. Check `/mcp` for the live state. Use the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks to connect, verify or remove them.
+AXLR, KMP and MADE appear as built-in catalogue entries. AXLR supplies the embedded `axlr-session` skill for session titles and project continuity. KMP and MADE identify the intended memory and orchestration engines; their rows do not install an engine binary or prove that its MCP server is connected. Check `/mcp` for the live state. The first-run setup assistant (`axlr-tui setup`) and `/update` install and connect both; the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks cover the manual route, verification and removal.
 
 The MADE entry identifies the ceremony engine. The procedures the console drives (`/debug`, `/delivery`, `/incident`, `/repair`, `/improve`, `/plan`) are pinned definitions published through `/mcp` → `P`, not a skill; the earlier `axlr-ceremonies` 1.0 skill catalogue was retired on 5 Oct 2026 because its protocol cost defeated real models. [Ceremonies](ceremonies.md) describes them; engine connection, definition publication and real execution are separate operations.
 
-## Update MADE and KMP
+## Install and update MADE and KMP
 
 Run `/update`, or choose **Update engines** in the action palette. AXLR checks
 the latest stable releases from the official `underpass-ai/made` and
@@ -23,16 +23,22 @@ The panel reports each result separately; one engine's failure does not prevent
 the other from updating.
 
 Only explicitly configured local servers named `made` and `kmp` with no custom
-arguments are updated. Remote, command-line-only and unconfigured connections
-are skipped. Supported release packages are Linux x86_64/arm64 and macOS arm64.
-Finish or cancel any active agent task before updating.
+arguments are updated. Remote and command-line-only connections are skipped. An
+engine `mcp.json` does not configure is installed instead: KMP gets its guide
+synchronised into the store `$XDG_DATA_HOME/kmp/default` and is registered with
+approval `auto`; MADE gets its embedded store and authorization bootstrap, its
+work grant and the driven ceremony definitions, as `P` in `/mcp` would. Both
+receive `HOME` and `PATH` through `env_from`. Supported release packages are
+Linux x86_64/arm64 and macOS arm64. Finish or cancel any active agent task
+before updating.
 
 Verified packages live under `$XDG_DATA_HOME/axlr/engines` or
 `$HOME/.local/share/axlr/engines`. AXLR saves a new private manifest reference
 under its MCP configuration directory and keeps the previous package and
 manifest. Explicit environments, selected stores, cursor keys, approval modes,
-tool allowlists and other servers are preserved. The command installs no
-ceremony definitions and performs no store migration or authorization bootstrap.
+tool allowlists and other servers are preserved. An update installs no
+ceremony definitions and performs no store migration or authorization bootstrap;
+only a first installation prepares the store.
 
 Restart AXLR after an update: existing MCP registrations keep their current
 executables for the running session. Packages installed in Codex, Claude or
@@ -53,7 +59,7 @@ Hermes have their own update lifecycle; `/update` manages AXLR's copies.
 
 OpenAI's [packaging guide](https://developers.openai.com/plugins/build/plugins) describes both portable root manifests and the `.codex-plugin/plugin.json` compatibility format. AXLR's importer currently implements the latter. The precise supported fields are in [manifest.go](../tui/adapters/axlrplugin/manifest.go); an OpenAI-compatible label alone is not proof that all package features run here.
 
-The MCP server must still have its executable, credentials and configuration available to AXLR. The supported package shape is the compatibility promise; arbitrary Codex host behavior and future manifest fields are not automatically implemented. Follow the [extension qualification runbook](runbooks/extensions.md) before relying on a candidate. A package import generates server IDs as `<package>-<server>`; built-in driver/update/setup integration expects exact IDs `kmp` and `made`. Direct registrations are the documented route for those engines.
+The MCP server must still have its executable, credentials and configuration available to AXLR. The supported package shape is the compatibility promise; arbitrary Codex host behavior and future manifest fields are not automatically implemented. Follow the [extension qualification runbook](runbooks/extensions.md) before relying on a candidate. A package import generates server IDs as `<package>-<server>`; built-in driver/update/setup integration expects exact IDs `kmp` and `made`. `/update`, the setup assistant or a direct registration are the routes for those engines.
 
 ## Install a package into AXLR
 

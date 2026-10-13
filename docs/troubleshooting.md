@@ -35,10 +35,12 @@ Start with the visible symptom, then use the relevant check. AXLR prints startup
 
 | Symptom | Check | Next action |
 |:--|:--|:--|
-| `no model provider: set OPENROUTER_API_KEY … or configure local_models in …` at launch | Neither an OpenRouter key nor a local model is configured | Export `OPENROUTER_API_KEY` (keys at https://openrouter.ai/keys), or add `local_models` to the settings file the message names |
+| `no model provider: run axlr-tui setup, set OPENROUTER_API_KEY … or configure local_models in …` at launch | Neither an OpenRouter key (variable or `credentials.json`) nor a local model is configured | Run `axlr-tui setup` in a terminal, export `OPENROUTER_API_KEY` (keys at https://openrouter.ai/keys), or add `local_models` to the settings file the message names |
+| `…/credentials.json holds a key and must be a regular file readable only by you` | The saved OpenRouter key's file is readable by other accounts | `chmod 600` the file the message names, or delete it and run `axlr-tui setup` |
+| `/mcp` lists no `kmp` or `made` | The engines were never installed or the assistant's step was skipped | Run `/update` in the console or `axlr-tui setup`, then restart; on other platforms follow the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks |
 | `local model …: … API key is required (set NAME)` | The URL is not a loopback address | Export the variable named by `api_key_env`, or point `url` at `127.0.0.1` |
 | `model endpoint must use https unless it is a loopback address` | A non-loopback `url` uses `http` | Serve it over TLS, or reach it through a loopback tunnel |
-| `model … is not a configured local model and OPENROUTER_API_KEY is not set` | The session's model is an OpenRouter id | Export the key, or choose a local model in `/model` |
+| `model … is not a configured local model and OPENROUTER_API_KEY is not set` | The session's model is an OpenRouter id | Export the key or save one with `axlr-tui setup`, or choose a local model in `/model` |
 | `model endpoint HOST invalid_request (HTTP 400): MESSAGE` | The server refused the request, often because its template does not declare tools; MESSAGE is what the server said, at most 300 characters with anything that looks like a key redacted, and the app log has it too | Run the smoke test below |
 | `OpenRouter invalid_request (HTTP 400): … is not a valid model ID` | The session's model id is not one OpenRouter serves | Choose another with `/model` |
 | The model answers in text, or repeats the same call | The server's tool-call parser does not match the model's template | Fix the server's parser or template; AXLR receives only what the server returns |

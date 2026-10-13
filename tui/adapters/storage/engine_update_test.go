@@ -105,3 +105,59 @@ func TestEngineUpdateRefusesCanceledAndInvalidConfiguration(t *testing.T) {
 		t.Fatal("invalid config accepted")
 	}
 }
+
+func TestRegisterEngineAddsAPrivateManifestAndEntry(t *testing.T) {
+	dir := t.TempDir()
+	store := MCPConfigStore{Path: filepath.Join(dir, "axlr", "mcp.json")}
+	launcher := filepath.Join(dir, "made-1.0.0", "scripts", "run-embedded-mcp.sh")
+	registration := application.EngineRegistration{Engine: "made", Launcher: launcher, Name: "MADE", Purpose: "ceremony", Approval: "manual", EnvFrom: map[string]string{"HOME": "HOME", "PATH": "PATH"}}
+	if err := store.RegisterEngine(context.Background(), registration); err != nil {
+		t.Fatal(err)
+	}
+	config, err := readMCPConfig(store.Path)
+	if err != nil || config.Version != 1 || len(config.Plugins) != 1 {
+		t.Fatalf("%+v %v", config, err)
+	}
+	entry := config.Plugins[0]
+	if entry.Name != "MADE" || entry.Purpose != "ceremony" || entry.Approval != "manual" || !reflect.DeepEqual(entry.EnvFrom, registration.EnvFrom) {
+		t.Fatalf("%+v", entry)
+	}
+	if filepath.Dir(entry.Manifest) != filepath.Join(dir, "axlr", "engines") {
+		t.Fatalf("manifest %s", entry.Manifest)
+	}
+	manifest, err := plugins.LoadManifest(entry.Manifest)
+	if err != nil || manifest.ID != "made" || manifest.Command != launcher || !manifest.AllowAll {
+		t.Fatalf("%+v %v", manifest, err)
+	}
+	if err := store.RegisterEngine(context.Background(), registration); err == nil {
+		t.Fatal("a second MADE registration was accepted")
+	}
+	targets, err := store.EngineTargets(context.Background())
+	if err != nil || len(targets) != 1 || targets[0].Command != launcher {
+		t.Fatalf("%+v %v", targets, err)
+	}
+}
+
+func TestRegisterEngineRefusesUnsafeRegistrations(t *testing.T) {
+	store := MCPConfigStore{Path: filepath.Join(t.TempDir(), "mcp.json")}
+	base := application.EngineRegistration{Engine: "kmp", Launcher: "/opt/kmp/scripts/run-embedded-mcp.sh", Purpose: "memory", Approval: "auto"}
+	for name, change := range map[string]func(*application.EngineRegistration){
+		"engine":   func(r *application.EngineRegistration) { r.Engine = "other" },
+		"relative": func(r *application.EngineRegistration) { r.Launcher = "run.sh" },
+		"key":      func(r *application.EngineRegistration) { r.EnvFrom = map[string]string{"KEY": "OPENROUTER_API_KEY"} },
+		"overlap": func(r *application.EngineRegistration) {
+			r.Env, r.EnvFrom = map[string]string{"HOME": "/x"}, map[string]string{"HOME": "HOME"}
+		},
+		"purpose":  func(r *application.EngineRegistration) { r.Purpose = "everything" },
+		"approval": func(r *application.EngineRegistration) { r.Approval = "always" },
+	} {
+		registration := base
+		change(&registration)
+		if err := store.RegisterEngine(context.Background(), registration); err == nil {
+			t.Fatalf("%s accepted", name)
+		}
+	}
+	if _, err := os.Stat(store.Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("a refused registration wrote mcp.json")
+	}
+}

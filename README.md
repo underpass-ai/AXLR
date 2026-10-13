@@ -17,7 +17,7 @@ GOWORK=off go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
 /tmp/axlr-tui --root "$PWD"
 ```
 
-Supply `OPENROUTER_API_KEY` through your normal environment or secret manager before launching, or configure [local models](docs/console.md#local-models) served by llama.cpp or vLLM. In the console, choose a model with `/model` and send a prompt. Use `F1` for controls, `/mcp` for AXLR's server connections, `/plugin` for AXLR-managed packages, and `/update` to update the connected local MADE and KMP engines.
+The first launch in a terminal opens the setup assistant: it asks for the language, sets up the model (an OpenRouter key and a recommended light model, or a [local server](docs/console.md#local-models) such as llama.cpp, vLLM, Ollama or LM Studio it finds on this machine), and downloads, verifies, configures and connects KMP and MADE, AXLR's default memory and ceremony engines. `axlr-tui setup` runs it again; [getting started](docs/getting-started.md#2-start-a-console) has the details. In the console, send a prompt. Use `F1` for controls, `/model` to change the model, `/mcp` for AXLR's server connections, `/plugin` for AXLR-managed packages, and `/update` to install or update the local MADE and KMP engines. Every configuration file is described in the [configuration reference](docs/configuration.md).
 
 The console is a separate Go module in [`tui/`](tui/README.md). It can start with `--lang es` for Spanish labels and `--model provider/model` to skip the model picker. New sessions use `/normal`; `/review`, `/writer` and `/research` tailor local tool policy, while `/debug`, `/delivery`, `/incident`, `/repair` and `/improve` run prepared MADE procedures (`axlr-tui --repair "<brief>"` lets the console repair its own repository through a pull request, and the agent can request that repair from any session with evidence the console validates; `axlr-tui --improve "<brief or #issue>"` improves it the same way, against a check that fails first, and always leaves the merge to you; the agent can request an improvement too). Follow the [agent workflow](docs/runbooks/agent-workflow.md) to put AXLR, KMP and MADE to work together.
 
@@ -29,6 +29,7 @@ After the second user prompt clarifies the task, the built-in session skill guid
 |:--|:--|
 | Understand AXLR’s product role and current limits | [Product contract](docs/product.md) |
 | Install, launch and send a first prompt | [Getting started](docs/getting-started.md) |
+| Look up every configuration key | [Configuration reference](docs/configuration.md) |
 | Use models, controls, sessions and diagnostics | [Console guide](docs/console.md) |
 | Connect KMP or MADE | [KMP runbook](docs/runbooks/kmp.md), [MADE runbook](docs/runbooks/made.md) |
 | Choose a work mode, run a ceremony or hand off a task | [Console modes](docs/console.md#work-modes), [ceremonies](docs/ceremonies.md) |

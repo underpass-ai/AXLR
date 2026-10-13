@@ -15,19 +15,28 @@ GOWORK=off CGO_ENABLED=0 go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-t
 
 The root and `tui/` directories are separate Go modules. The checked-in workspace and TUI replace directive let the console build from this repository.
 
-AXLR is the default execution entry point in the [product stack](product.md). Connect [KMP](runbooks/kmp.md) for memory and [MADE](runbooks/made.md) for tracked procedures, then confirm both in `/mcp`. Their built-in `/plugin` catalogue entries do not establish a connection. The console can start without either engine; `/debug` and `/delivery` require prepared MADE definitions.
+AXLR is the default execution entry point in the [product stack](product.md). KMP gives it memory and MADE tracked procedures; the setup assistant below installs and connects both, and `/mcp` confirms them. Their built-in `/plugin` catalogue entries do not establish a connection. The console can start without either engine; `/debug` and `/delivery` require prepared MADE definitions.
 
 ## 2. Start a console
-
-Provide `OPENROUTER_API_KEY` through your shell's environment or secret manager, or configure `local_models` in the [settings file](console.md#local-models) to use a local server such as llama.cpp or vLLM without OpenRouter, then run:
 
 ```bash
 /tmp/axlr-tui --root "$PWD"
 ```
 
+The first launch in a terminal, with no `settings.json` yet and no `--model`, `--session` or `--repair`, runs the setup assistant before the console. Press Enter to take the option marked with `*`.
+
+1. **Language.** English or Spanish, starting from `AXLR_LANG` or the locale.
+2. **Model.** The assistant looks for OpenAI-compatible servers on this machine's usual ports (8080–8082, 8000, 11434 and 1234) and offers three routes:
+   - **OpenRouter.** It uses `OPENROUTER_API_KEY` when set; otherwise it asks for a key, without echo, checks it against OpenRouter's model list and saves it in `credentials.json`, a private file beside `settings.json` that the variable overrides. It then recommends light models: fast, cheap and able to call tools, with their window and price. GLM 5.3 Flash and Claude Haiku 5.5 come first when available, then the cheapest flash, mini, lite or haiku models with at least 128k tokens of context.
+   - **Local server.** Pick a model it found or type a base URL. It reads the context window llama.cpp or vLLM report, which you confirm, and writes a `local_models` entry.
+   - **Skip.** Choose later with `/model`.
+3. **KMP and MADE.** Unless both are already connected, it offers to install them. It downloads the official releases, verifies their checksums and versions, creates KMP's store at `$XDG_DATA_HOME/kmp/default` with its guide, and runs MADE's embedded setup with its store and authorization bootstrap. It then adds both to `mcp.json`, issues AXLR's MADE work grant and publishes the driven ceremonies. You choose whether KMP may record memories without a card each time (recommended); `/mcp` changes it later. Official packages exist for Linux x86_64/arm64 and macOS on Apple silicon; elsewhere follow the [KMP](runbooks/kmp.md) and [MADE](runbooks/made.md) runbooks.
+
+Run `axlr-tui setup` at any time to repeat it, for example to add a local model or install the engines you skipped. Without a terminal (a script, a service) the assistant never runs, and a launch without a provider stops with the ways to configure one.
+
 Without a saved model, the console waits for you to choose one; startup alone does not send a model request or create a session. Type `/model`, choose a tool-capable text model, then send a prompt. Your account must have access to the selected OpenRouter model; a local model needs its server running.
 
-You can edit model, language and appearance in `$XDG_CONFIG_HOME/axlr/settings.json` (or `$HOME/.config/axlr/settings.json`). See the [settings format](console.md#edit-settings-as-json). The console reads changes on its next launch.
+You can edit model, language and appearance in `$XDG_CONFIG_HOME/axlr/settings.json` (or `$HOME/.config/axlr/settings.json`). The [configuration reference](configuration.md) describes every key of it, `mcp.json` and `credentials.json`. The console reads changes on its next launch.
 
 Useful launch options:
 

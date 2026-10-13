@@ -21,7 +21,7 @@ The model picker filters to text models that support tools. Typing filters by ev
 | `/plan` (alias `/planificar`) | Open the plans panel: recent plans with their tasks, sync and changed files; `n` arms planning for the next prompt (the brief becomes verified atomic tasks you approve, run by workers) and `r` resumes an interrupted plan. Without MADE plans it arms planning directly. See [plans](ceremonies.md#plans-atomic-tasks-for-small-models) |
 | `/debug`, `/delivery`, `/incident`, `/repair`, `/improve` (aliases `/depurar`, `/entrega`, `/incidente`, `/reparar`, `/mejorar`) | Select a console-driven MADE procedure for the next prompt; `/incident`, `/repair` and `/improve` also open a pending approval card; `/repair` opens the self-repairs and improvements panel when the agent requested one from this session, and `/improve` does when one of them is an improvement |
 | `/jobs` (alias `/trabajos`) | List every repair and improvement of every session and console with its step, pull request and owner; start one from a brief, decide, recover, read its checks and queue green pull requests to merge in order. See [jobs and the merge queue](ceremonies.md#jobs-and-the-merge-queue) |
-| `/update` | Update explicitly configured local KMP and MADE engines |
+| `/update` | Install KMP and MADE when they are not connected, and update the local ones that are |
 | `/mcp` | Inspect connected MCP servers, tools and approvals |
 | `/approvals` | Show saved always-allow tools and autonomy mode |
 | `/autonomy on` / `/autonomy off` | Automatically approve permitted known tools, or restore normal policy; `/autonomy` alone shows the current state |
@@ -121,7 +121,7 @@ English is the default. `--lang es` or `AXLR_LANG=es` changes interface labels o
 
 ## Edit settings as JSON
 
-The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/settings.json` when `XDG_CONFIG_HOME` is unset. Create or edit it with any text editor:
+The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/settings.json` when `XDG_CONFIG_HOME` is unset. The first-run setup assistant creates it; the [configuration reference](configuration.md) lists every key with its default and limits. Create or edit it with any text editor:
 
 ```json
 {

@@ -8,6 +8,7 @@ AXLR is Underpass's default engine for agentic execution, supported by KMP memor
 |:--|:--|
 | Build and launch the console | [Getting started](getting-started.md) |
 | Use models, work modes, approvals, sessions and diagnostics | [Console](console.md) |
+| Look up every key of `settings.json`, `mcp.json` and `credentials.json` | [Configuration reference](configuration.md) |
 | Understand driven and explicitly requested procedures | [Ceremonies](ceremonies.md) |
 | Install packages or connect MCP tools | [Plugins and MCP](plugins.md) |
 | Resolve a visible failure | [Troubleshooting](troubleshooting.md) |

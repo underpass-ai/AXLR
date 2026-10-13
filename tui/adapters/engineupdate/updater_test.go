@@ -306,3 +306,63 @@ func TestOfficialPackagesExistOnlyForPOSIXTargets(t *testing.T) {
 		}
 	}
 }
+
+type install struct {
+	roots map[string]string
+	err   error
+}
+
+func (i *install) InstallEngine(_ context.Context, engine, packageRoot string) (string, error) {
+	i.roots[engine] = packageRoot
+	return engine + " ready", i.err
+}
+
+func TestUpdateInstallsTheEnginesThatAreNotConfigured(t *testing.T) {
+	skipWithoutPOSIXLaunchers(t)
+	cfg := &config{targets: []application.EngineUpdateTarget{{Engine: "made", Manifest: "/remote.json"}}}
+	u, _ := updater(t, cfg)
+	installed := &install{roots: map[string]string{}}
+	u.Install = installed
+	results, err := u.Update(context.Background())
+	if err != nil || len(results) != 2 {
+		t.Fatalf("%+v %v", results, err)
+	}
+	// A remote or hand-made MADE entry stays its owner's; only KMP is new.
+	if results[0].Status != "skipped" || len(installed.roots) != 1 {
+		t.Fatalf("%+v %+v", results[0], installed.roots)
+	}
+	kmp := results[1]
+	if kmp.Status != "installed" || kmp.Version != "1.2.3" || !kmp.RestartRequired || kmp.Detail != "kmp ready" {
+		t.Fatalf("%+v", kmp)
+	}
+	root := installed.roots["kmp"]
+	if filepath.Dir(root) != u.Root || !strings.HasPrefix(filepath.Base(root), "kmp-1.2.3-") {
+		t.Fatalf("package root %s", root)
+	}
+	if _, err := os.Stat(filepath.Join(root, "scripts", "run-embedded-mcp.sh")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUpdateReportsAFailedInstallationWithItsDetail(t *testing.T) {
+	skipWithoutPOSIXLaunchers(t)
+	u, _ := updater(t, &config{})
+	u.Install = &install{roots: map[string]string{}, err: errors.New("guide sync failed")}
+	results, err := u.Update(context.Background())
+	if err != nil || len(results) != 2 {
+		t.Fatalf("%+v %v", results, err)
+	}
+	for _, r := range results {
+		if r.Status != "failed" || r.Error != "guide sync failed" || r.RestartRequired {
+			t.Fatalf("%+v", r)
+		}
+	}
+}
+
+func TestUpdateWithoutAnInstallerSkipsMissingEngines(t *testing.T) {
+	u, _ := updater(t, &config{})
+	results, err := u.Update(context.Background())
+	if err != nil || len(results) != 2 || results[0].Status != "skipped" || results[1].Status != "skipped" {
+		t.Fatalf("%+v %v", results, err)
+	}
+}
