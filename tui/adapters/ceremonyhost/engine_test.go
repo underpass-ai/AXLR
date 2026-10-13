@@ -76,7 +76,7 @@ func TestEngineReportsAsTheClaimOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	status := requests[len(requests)-1]["args"].(map[string]any)["status"].(map[string]any)
-	if status["host_agent_id"] != "made-local-host-1-axlr-work" || status["claim_owner_id"] != "made-local-host-1-axlr-work" || status["host_agent_incarnation"] != "install1:run1" || status["operation_id"] != "op-1" || status["claim_fence"] != "f1" || status["execution_status"] != "running" || status["report_sequence"] != float64(1) || status["idempotency_key"] != "axlr:report:i:turn:1" || status["requested_model"] != "m" || status["role_id"] != "AXLR" || status["source"] != "host_report" || status["liveness"] != "fresh" {
+	if status["host_agent_id"] != "made-local-host-1-axlr-work" || status["claim_owner_id"] != "made-local-host-1-axlr-work" || status["host_agent_incarnation"] != "install1:run1" || status["operation_id"] != "op-1" || status["claim_fence"] != "f1" || status["execution_status"] != "running" || status["report_sequence"] != float64(1) || status["idempotency_key"] != "axlr:report:i:turn:f1:1" || status["requested_model"] != "m" || status["role_id"] != "AXLR" || status["source"] != "host_report" || status["liveness"] != "fresh" {
 		t.Fatalf("%+v", status)
 	}
 	if err := engine.Renew(ctx, "i", "turn", "f1", 0); err != nil {

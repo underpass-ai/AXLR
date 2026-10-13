@@ -213,7 +213,7 @@ func (e Engine) Report(ctx context.Context, report application.HostReport) error
 		"host_agent_id": e.owner(), "host_agent_incarnation": report.Host.Incarnation, "role_id": report.Role,
 		"execution_status": report.Status, "liveness": "fresh", "source": "host_report", "activity": report.Activity,
 		"task_summary": bounded(report.Summary, 500), "observed_at": time.Now().UTC().Format(time.RFC3339),
-		"report_sequence": report.Sequence, "idempotency_key": fmt.Sprintf("axlr:report:%s:%s:%d", report.Instance, report.Step, report.Sequence),
+		"report_sequence": report.Sequence, "idempotency_key": fmt.Sprintf("axlr:report:%s:%s:%s:%d", report.Instance, report.Step, bounded(report.Fence, 12), report.Sequence),
 	}
 	if report.Host.AgentID != "" {
 		status["host_agent_incarnation"] = report.Host.AgentID + ":" + report.Host.Incarnation

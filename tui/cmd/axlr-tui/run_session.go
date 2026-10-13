@@ -81,10 +81,12 @@ func ensureWorkGrant(ctx context.Context, preparer application.MADEPreparationPo
 		return "MADE work grant " + grant + ": " + err.Error()
 	}
 	switch result.Status {
-	case "ready", "granted":
+	case "ready", "granted", "remote", "unsupported":
+		// A remote or operator-managed MADE will not take the grant from
+		// this console at any start: the marker remembers that too.
 		_ = os.MkdirAll(filepath.Dir(marker), 0o700)
 		_ = os.WriteFile(marker, []byte(grant+"\n"), 0o600)
-		return "MADE work grant " + grant + " " + result.Status
+		return "MADE work grant " + grant + " " + strings.TrimSpace(result.Status+" "+result.Detail)
 	}
 	return "MADE work grant " + grant + ": " + result.Status + " " + result.Detail
 }

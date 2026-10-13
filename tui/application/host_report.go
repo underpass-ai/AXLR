@@ -133,7 +133,9 @@ func (c *SessionCeremony) Heartbeat(ctx context.Context, s *domain.Session) {
 // from MADE, which the claim receipt does not carry), its lease and time,
 // then reports running.
 func (c *SessionCeremony) claimed(ctx context.Context, s domain.Session, instance *domain.SessionInstance, fence string, lease time.Duration) {
-	instance.Fence, instance.ClaimedAt, instance.LeaseMS, instance.OperationID, instance.Reported, instance.Reports, instance.ClaimIncarnation = fence, c.now(), lease.Milliseconds(), "", time.Time{}, 0, c.Host.incarnation()
+	// Reports count across the instance's claims: MADE orders reports and
+	// keys them, so a sequence that restarted at every claim would replay.
+	instance.Fence, instance.ClaimedAt, instance.LeaseMS, instance.OperationID, instance.Reported, instance.ClaimIncarnation = fence, c.now(), lease.Milliseconds(), "", time.Time{}, c.Host.incarnation()
 	operation, err := c.Engine.OperationID(ctx, instance.Instance, sessionTurnStep, fence)
 	if err != nil {
 		c.log("session %s operation id: %v", instance.Instance, err)
