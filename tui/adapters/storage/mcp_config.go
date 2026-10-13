@@ -112,7 +112,11 @@ func checkMCPConfigFile(path string, info os.FileInfo) error {
 	case !info.Mode().IsRegular():
 		return fmt.Errorf("MCP config %s is not a regular file; replace it with a regular file of mode 0600", path)
 	case !privateRegular(info):
-		return fmt.Errorf("MCP config %s has mode %04o and must not be readable or writable by other accounts; run chmod 600 %s", path, info.Mode().Perm(), path)
+		// The console owns the file: a copy made under a wide umask (a Mac
+		// on 13 October 2026 stopped twice on 0644) is made private here.
+		if err := os.Chmod(path, 0o600); err != nil {
+			return fmt.Errorf("MCP config %s has mode %04o and must not be readable or writable by other accounts; run chmod 600 %s", path, info.Mode().Perm(), path)
+		}
 	case info.Size() > maxMCPConfigBytes:
 		return fmt.Errorf("MCP config %s is %d bytes; the limit is %d bytes (64 KiB)", path, info.Size(), maxMCPConfigBytes)
 	}

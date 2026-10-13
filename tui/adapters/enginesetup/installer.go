@@ -28,8 +28,9 @@ type Installer struct {
 	Configuration Registrar
 	Getenv        func(string) string
 	// KMPApproval is kmp's approval policy: auto lets memory writes land
-	// without a card; empty means manual.
-	KMPApproval string
+	// without a card; empty means manual. MADEApproval is made's: auto
+	// lets the model's reads run without a card (decision B11).
+	KMPApproval, MADEApproval string
 	// PrepareMADE issues AXLR's work grant and publishes the driven
 	// ceremonies once MADE is registered (madesetup.Preparer.Prepare).
 	PrepareMADE func(context.Context) (application.MADEPreparation, error)
@@ -81,9 +82,13 @@ func (i *Installer) InstallEngine(ctx context.Context, engine, packageRoot strin
 		if _, err := i.execute(ctx, filepath.Join(packageRoot, "scripts", "made-configure-embedded.sh"), nil, env); err != nil {
 			return "", fmt.Errorf("configure the MADE store: %w", err)
 		}
+		madeApproval := i.MADEApproval
+		if madeApproval == "" {
+			madeApproval = "manual"
+		}
 		if err := i.Configuration.RegisterEngine(ctx, application.EngineRegistration{
 			Engine: "made", Launcher: launcher, Name: "MADE", Description: "Underpass agentic ceremonies, structured reviews and human approval procedures",
-			Purpose: "ceremony", Approval: "manual", EnvFrom: hostEnv,
+			Purpose: "ceremony", Approval: madeApproval, EnvFrom: hostEnv,
 		}); err != nil {
 			return "", err
 		}

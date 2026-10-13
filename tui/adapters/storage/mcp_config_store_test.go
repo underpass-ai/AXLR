@@ -157,8 +157,12 @@ func TestMCPConfigStoreRejectsInvalidAndCancelledChange(t *testing.T) {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "windows" {
-		if store.SaveApproval(context.Background(), "kmp", domain.ApprovalAuto) == nil {
-			t.Fatal("unsafe file accepted")
+		// A public file is made private and used (13 October 2026).
+		if err := store.SaveApproval(context.Background(), "kmp", domain.ApprovalAuto); err != nil {
+			t.Fatal("public file refused:", err)
+		}
+		if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("public file left as it was: %v %v", info.Mode(), err)
 		}
 	}
 }

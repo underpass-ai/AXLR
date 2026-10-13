@@ -98,6 +98,15 @@ func (m AppModel) execCardCommand(p domain.PendingTool) string {
 // modeAsksForEachCall is true when the session's mode, not the user's
 // approval settings, keeps this call under approval; "always allow" would
 // then only add a global rule the mode ignores until it leaves.
+// destructiveRule names the destructive rule a pending command falls under.
+func (m AppModel) destructiveRule(p domain.PendingTool) string {
+	tool, args, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
+	if !known || err != nil || m.deps.Session == nil {
+		return ""
+	}
+	return application.DestructiveReason(m.deps.ApprovalSettings, *m.deps.Session, tool.Identity, args)
+}
+
 func (m AppModel) modeAsksForEachCall(p domain.PendingTool) bool {
 	tool, args, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
 	if !known || err != nil {

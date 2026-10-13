@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/plugins"
 	"strings"
 	"testing"
 	"time"
@@ -77,5 +79,20 @@ func TestPrepareSessionDefinitionPublishesOnlyWhenMissing(t *testing.T) {
 	}
 	if line := prepareSessionDefinition(context.Background(), nil, preparer); line != "" {
 		t.Fatalf("%q", line)
+	}
+}
+
+func TestMissingEnginesNamesWhatIsNotConnected(t *testing.T) {
+	manifest := func(id string) plugins.Registration {
+		return plugins.Registration{Manifest: plugins.Manifest{ID: root.PluginID(id), Command: "/bin/true"}}
+	}
+	if got := missingEngines(nil); len(got) != 2 || got[0] != "KMP" || got[1] != "MADE" {
+		t.Fatalf("%v", got)
+	}
+	if got := missingEngines([]plugins.Registration{manifest("kmp")}); len(got) != 1 || got[0] != "MADE" {
+		t.Fatalf("%v", got)
+	}
+	if got := missingEngines([]plugins.Registration{manifest("kmp"), manifest("made")}); len(got) != 0 {
+		t.Fatalf("%v", got)
 	}
 }

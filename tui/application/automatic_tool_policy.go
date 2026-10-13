@@ -1,6 +1,7 @@
 package application
 
 import (
+	"encoding/json"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -51,6 +52,9 @@ func approvesInSession(policy ToolApprovalPolicyPort, s domain.Session, id domai
 	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationStepDone {
 		return !stepDoneNeedsApproval(s, arguments) && !planNeedsApproval(s, arguments)
 	}
+	if DestructiveReason(policy, s, id, arguments) != "" {
+		return false // the destructive list keeps its card (decision K5a)
+	}
 	if calls, ok := policy.(CallApprovalPort); ok && calls.ApprovesCall(s.ID(), id, arguments) {
 		// The person allowed this exact call for the session, where the
 		// mode asks for each one too; a mode's denial still holds.
@@ -68,4 +72,32 @@ func approvesInMode(policy ToolApprovalPolicyPort, mode domain.WorkMode, id doma
 		return false
 	}
 	return automaticallyApproves(policy, id)
+}
+
+// AlwaysAskPort names the destructive rules in force (settings
+// approvals.always_ask); a policy without it keeps every rule.
+type AlwaysAskPort interface {
+	AlwaysAsk() []string
+}
+
+// DestructiveReason names the destructive rule a local_exec call falls
+// under, "" for any other call: such a call keeps its approval card under
+// autonomy and under a saved rule (decision K5a).
+func DestructiveReason(policy ToolApprovalPolicyPort, s domain.Session, id domain.ToolIdentity, arguments root.JSONValue) string {
+	if id.Kind != domain.ToolKindLocal || id.LocalOperation != "exec" {
+		return ""
+	}
+	var call struct {
+		Program string   `json:"program"`
+		Args    []string `json:"args"`
+		Cwd     string   `json:"cwd"`
+	}
+	if json.Unmarshal(arguments.Bytes(), &call) != nil || call.Program == "" {
+		return ""
+	}
+	var enabled []string
+	if asks, ok := policy.(AlwaysAskPort); ok {
+		enabled = asks.AlwaysAsk()
+	}
+	return domain.DestructiveReason(s.Export().Workspace, call.Program, call.Args, call.Cwd, enabled)
 }

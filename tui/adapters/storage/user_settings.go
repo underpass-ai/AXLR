@@ -335,9 +335,12 @@ func (s UserSettings) RepairConfiguration() RepairSettings {
 }
 
 type ApprovalPreferences struct {
-	Autonomous bool                       `json:"autonomous"`
-	Allowed    []domain.ToolIdentity      `json:"allowed"`
-	Extra      map[string]json.RawMessage `json:"-"`
+	Autonomous bool                  `json:"autonomous"`
+	Allowed    []domain.ToolIdentity `json:"allowed"`
+	// AlwaysAsk names the destructive rules that keep a card under
+	// autonomy (domain.DestructiveRules); absent means every rule.
+	AlwaysAsk []string                   `json:"always_ask,omitempty"`
+	Extra     map[string]json.RawMessage `json:"-"`
 }
 
 func (p *ApprovalPreferences) UnmarshalJSON(data []byte) error {
@@ -796,4 +799,51 @@ func repositoryName(raw string) bool {
 		}
 	}
 	return true
+}
+
+// DefaultContextCapTokens is the prompt cap a complete settings file
+// writes (decision D10 of the lifecycle integration design).
+const DefaultContextCapTokens = 75000
+
+// CompleteDefaults fills every section a clean install decides (decision
+// D9): autonomy on with the destructive list, engines shared and required,
+// forged tools on, Jev on when its key exists, the context cap, retention,
+// jobs, the plan's model and the ceremony profile; a section already set is
+// kept. Repair and the sandbox have no default a machine can decide.
+func CompleteDefaults(s *UserSettings, jev bool) {
+	if s.Language == "" {
+		s.Language = "en"
+	}
+	if s.Approvals == nil {
+		s.Approvals = &ApprovalPreferences{Autonomous: true, Allowed: []domain.ToolIdentity{}}
+	}
+	if s.Approvals.AlwaysAsk == nil {
+		s.Approvals.AlwaysAsk = domain.DestructiveRules()
+	}
+	if s.Engines == nil {
+		s.Engines = &EngineSettings{Shared: true, Required: true}
+	}
+	if s.ForgedTools == nil {
+		on := true
+		s.ForgedTools = &on
+	}
+	if s.Jev == nil {
+		s.Jev = &JevSettings{Tool: jev, FinalCheck: jev, FinalThreshold: 0.5, Model: "jev-1.13.0", TimeoutMS: 20000}
+	}
+	if s.PromptTokens == 0 {
+		s.PromptTokens = DefaultContextCapTokens
+	}
+	if s.TraceRetentionDays == nil {
+		days := DefaultTraceRetentionDays
+		s.TraceRetentionDays = &days
+	}
+	if s.Jobs == nil {
+		s.Jobs = &JobsSettings{MaxActive: DefaultMaxActiveJobs}
+	}
+	if s.Plan == nil {
+		s.Plan = &PlanSettings{Model: "session"}
+	}
+	if s.Ceremonies == nil {
+		s.Ceremonies = &CeremonySettings{Profile: "auto"}
+	}
 }

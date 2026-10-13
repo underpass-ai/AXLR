@@ -21,6 +21,8 @@ const maxCredentialsBytes = 16 << 10
 // (0600) and is never given to plugins, tools or the model.
 type Credentials struct {
 	OpenRouterAPIKey string `json:"openrouter_api_key,omitempty"`
+	// TypeSafeAPIKey is Jev's key, saved by setup; TYPESAFE_API_KEY wins.
+	TypeSafeAPIKey string `json:"typesafe_api_key,omitempty"`
 }
 
 // CredentialsStore reads and writes credentials.json.
@@ -62,11 +64,24 @@ func (s CredentialsStore) Load() (Credentials, error) {
 	if credentials.OpenRouterAPIKey != "" && !validAPIKey(credentials.OpenRouterAPIKey) {
 		return Credentials{}, errors.New("credentials.json has an invalid openrouter_api_key")
 	}
+	if credentials.TypeSafeAPIKey != "" && !validAPIKey(credentials.TypeSafeAPIKey) {
+		return Credentials{}, errors.New("credentials.json has an invalid typesafe_api_key")
+	}
 	return credentials, nil
 }
 
-// SaveOpenRouterKey writes the key atomically with mode 0600.
+// SaveOpenRouterKey writes the OpenRouter key, keeping the others.
 func (s CredentialsStore) SaveOpenRouterKey(ctx context.Context, key string) error {
+	return s.save(ctx, key, func(c *Credentials) { c.OpenRouterAPIKey = key })
+}
+
+// SaveTypeSafeKey writes Jev's key, keeping the others.
+func (s CredentialsStore) SaveTypeSafeKey(ctx context.Context, key string) error {
+	return s.save(ctx, key, func(c *Credentials) { c.TypeSafeAPIKey = key })
+}
+
+// save writes the file atomically with mode 0600 after applying change.
+func (s CredentialsStore) save(ctx context.Context, key string, change func(*Credentials)) error {
 	if !filepath.IsAbs(s.Path) {
 		return errors.New("credentials path must be absolute")
 	}
@@ -76,7 +91,12 @@ func (s CredentialsStore) SaveOpenRouterKey(ctx context.Context, key string) err
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(Credentials{OpenRouterAPIKey: key}, "", "  ")
+	credentials, err := s.Load()
+	if err != nil {
+		return err
+	}
+	change(&credentials)
+	data, err := json.MarshalIndent(credentials, "", "  ")
 	if err != nil {
 		return err
 	}

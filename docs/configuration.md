@@ -21,7 +21,7 @@ Files in `<config>`:
 |:--|:--|:--|
 | [`settings.json`](#settingsjson) | Every user setting: model, language, appearance, approvals, local models, budgets, ceremonies, sandbox, Jev, diagnostics | You, and the console for the keys listed in [who writes settings.json](#who-writes-settingsjson) |
 | `settings.json.lock` | Empty lock file that serializes writers of `settings.json` | The console (`0600`) |
-| [`credentials.json`](#credentialsjson) | The OpenRouter key the setup assistant saved | The setup assistant |
+| [`credentials.json`](#credentialsjson) | The OpenRouter key and the TypeSafe (Jev) key the setup assistant saved; `OPENROUTER_API_KEY` and `TYPESAFE_API_KEY` win when set | The setup assistant |
 | [`mcp.json`](#mcpjson) | MCP server registrations and their approval policy | You, `/mcp`, `/plugin`, `/update`, `P` on MADE |
 | `mcp.json.lock` | Lock file that serializes writers of `mcp.json` | The console (`0600`) |
 | [`approvals.json`](#approvalsjson-legacy) | Legacy approval choices, read until `settings.json` has an `approvals` section | Older consoles only |
@@ -120,16 +120,16 @@ Wherever a key takes a model id (`model`, `reviewer_model`, `favorite_models`, `
 | `icons` | string | `"safe"` | [icons](#icons) |
 | `reduce_motion` | boolean | `false` | [reduce_motion](#reduce_motion) |
 | `notify` | `"bell"` \| `"osc"` \| `"off"` | `"bell"` | [notify](#notify) |
-| `approvals` | object | absent (manual approval) | [approvals](#approvals) |
+| `approvals` | object | absent (manual approval); a clean install writes `autonomous: true` with `always_ask` | [approvals](#approvals) |
 | `context_tokens` | integer | `0` (no cap) | [context_tokens](#context_tokens) |
-| `prompt_tokens` | integer | `0` (64,000) | [prompt_tokens](#prompt_tokens) |
+| `prompt_tokens` | integer | `0` (64,000); a clean install writes 75,000 | [prompt_tokens](#prompt_tokens) |
 | `turn_tool_calls` | integer | `0` (32) | [turn_tool_calls](#turn_tool_calls) |
 | `max_session_usd` | number | `0` (no limit) | [max_session_usd](#max_session_usd) |
 | `local_models` | array of objects | `[]` | [local_models](#local_models) |
 | `models` | object | `{}` | [models](#models-per-model-openrouter-options) |
 | `exec_sandbox` | object | absent (`mode: off`) | [exec_sandbox](#exec_sandbox) |
 | `forged_tools` | boolean | `true` | [forged_tools](#forged_tools) |
-| `engines` | object | absent (`shared: false`) | [engines](#engines) |
+| `engines` | object | absent (`shared: false`, `required: false`); a clean install writes both true | [engines](#engines) |
 | `ceremonies` | object | absent (`profile: auto`) | [ceremonies](#ceremonies) |
 | `plan` | object | absent (session model, manual approval) | [plan](#plan) |
 | `repair` | object | absent (repairs `underpass-ai/AXLR`) | [repair](#repair) |
@@ -200,6 +200,7 @@ Object; absent means every tool call that needs a card asks for one, except the 
 |:--|:--|:--|:--|
 | `autonomous` | boolean | `false` | Full autonomy: every known tool the work mode permits runs without a card. Set by `/autonomy on` and `F` on a card, cleared by `/autonomy off` |
 | `allowed` | array of tool identities, or `null` | `null` | Exact tools that always run without a card, added by `L` on a card. `/approvals` lists them |
+| `always_ask` | array of strings | absent (every rule) | The destructive list (decision K5a of the [lifecycle integration design](plans/2026-10-13-lifecycle-integration-design.md)): the rules that keep a card for a `local_exec` even under autonomy or a saved rule. Rule names: `delete-outside-workspace` (`rm`, `rmdir`, `mv`, `cp`, `dd`… with a path outside the workspace, `~` included, also inside a shell string), `git-push`, `git-reset-hard`, `git-clean`, `git-branch-delete`, `git-rebase`, `network-write` (`curl`/`wget` with a method other than GET or a body, `gh pr create|merge`, `gh release`, `npm`/`cargo` publish, `docker push`, `kubectl apply|delete`, `terraform apply|destroy`, `helm install|upgrade`, deploys). The card says which rule asked. An empty list disables them all |
 
 Unknown keys inside `approvals` are kept, as at the top level. Work modes still restrict or refuse a call whatever these say; see [work modes](console.md#work-modes).
 
@@ -390,6 +391,7 @@ These keys matter only when the MCP registrations with the ids [`kmp` and `made`
 
 | Key | Type | Default | Meaning |
 |:--|:--|:--|:--|
+| `required` | boolean | `false` | Refuse to start without KMP and MADE connected (decision A2): a launch that lacks one installs and configures it first, without a question, and stops with a message naming `axlr-tui setup` when that fails. A clean install writes `true` |
 | `shared` | boolean | `false` | Run one KMP and one MADE process per identical launch (same command, arguments and whole environment) for every console of the user, through a small daemon and a private unix socket, instead of one per console. Unix only |
 
 See [shared engines](console.md#shared-engines). Source: [user_settings_engines.go](../tui/adapters/storage/user_settings_engines.go).

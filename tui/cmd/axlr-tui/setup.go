@@ -95,10 +95,6 @@ func runSetupCommand(ctx context.Context, args []string, getenv func(string) str
 		fmt.Fprintln(stderr, "usage: axlr-tui setup")
 		return 2
 	}
-	if !setupTerminal() {
-		fmt.Fprintln(stderr, "axlr-tui: setup asks questions and needs an interactive terminal")
-		return 1
-	}
 	paths, err := resolveSetupPaths(getenv, "")
 	if err != nil {
 		fmt.Fprintln(stderr, "axlr-tui:", err)
@@ -109,7 +105,14 @@ func runSetupCommand(ctx context.Context, args []string, getenv func(string) str
 		fmt.Fprintln(stderr, "axlr-tui:", err)
 		return 1
 	}
-	if err := newSetupWizard(getenv, paths, settings, stdin, stderr).run(ctx); err != nil {
+	wizard := newSetupWizard(getenv, paths, settings, stdin, stderr)
+	if !setupTerminal() {
+		// Without a terminal nothing is asked (decision B12): the key comes
+		// from the environment or the model stays unset, Jev from its key,
+		// and the engines install and configure themselves.
+		wizard.quiet = true
+	}
+	if err := wizard.run(ctx); err != nil {
 		fmt.Fprintln(stderr, "axlr-tui:", err)
 		return 1
 	}
@@ -125,6 +128,9 @@ type setupWizard struct {
 	lang     string
 	// pause waits for Enter after the summary, before the console opens.
 	pause bool
+	// quiet asks nothing: every question takes its default, a secret is
+	// empty.
+	quiet bool
 	// Seams the tests replace: hidden input, the OpenRouter catalog, the
 	// local servers' discovery and the engine installation.
 	secret  func() (string, error)
@@ -156,7 +162,7 @@ func newSetupWizard(getenv func(string) string, paths setupPaths, settings *stor
 			Configuration: store,
 			Root:          filepath.Join(paths.data, "axlr", "engines"),
 			Install: &enginesetup.Installer{
-				Configuration: store, Getenv: getenv, KMPApproval: kmpApproval,
+				Configuration: store, Getenv: getenv, KMPApproval: kmpApproval, MADEApproval: kmpApproval,
 				PrepareMADE: (&madesetup.Preparer{ConfigPath: paths.mcp, Getenv: getenv, Store: store}).Prepare,
 			},
 		}
@@ -167,23 +173,31 @@ func newSetupWizard(getenv func(string) string, paths setupPaths, settings *stor
 	return w
 }
 
+// run asks for the model (nothing when OPENROUTER_API_KEY is set) and,
+// optionally, the TypeSafe key for Jev; the language comes from the
+// environment, the engines are installed and configured without a
+// question, and settings.json is written complete (decision D9 of the
+// lifecycle integration design).
 func (w *setupWizard) run(ctx context.Context) error {
 	w.lang = setupLanguage(w.getenv)
 	fmt.Fprintf(w.out, "\n%s\n%s\n", w.t("title"), w.t("intro"))
-	choice, err := w.choose(w.t("language.question"), []string{"English", "Español"}, map[string]int{"en": 1, "es": 2}[w.lang])
-	if err != nil {
-		return err
-	}
-	w.lang = []string{"en", "es"}[choice-1]
 	if err := w.settings.Change(ctx, func(s *storage.UserSettings) { s.Language = w.lang }); err != nil {
 		return err
 	}
 	if err := w.chooseModel(ctx); err != nil {
 		return err
 	}
+	jev, err := w.chooseJev(ctx)
+	if err != nil {
+		return err
+	}
 	if err := w.installEngines(ctx); err != nil {
 		return err
 	}
+	if err := w.settings.Change(ctx, func(s *storage.UserSettings) { storage.CompleteDefaults(s, jev) }); err != nil {
+		return err
+	}
+	fmt.Fprintln(w.out, w.t("settings.complete", map[bool]string{true: w.t("jev.on"), false: w.t("jev.off")}[jev]))
 	fmt.Fprintf(w.out, "\n%s\n", w.t("done", w.paths.settings))
 	if w.pause {
 		// The console takes the whole screen next; the summary stays until
@@ -200,6 +214,20 @@ func (w *setupWizard) run(ctx context.Context) error {
 // choice as the default model.
 func (w *setupWizard) chooseModel(ctx context.Context) error {
 	fmt.Fprintf(w.out, "\n%s\n", w.t("model.title"))
+	if key := strings.TrimSpace(w.getenv("OPENROUTER_API_KEY")); key != "" {
+		// The key decides the provider; a light model is the default.
+		model := lightModels[0]
+		if models, err := w.catalog(ctx, key); err == nil {
+			if recommended := recommendLightModels(models); len(recommended) > 0 {
+				model = string(recommended[0].ID)
+			}
+		}
+		if err := w.settings.Change(ctx, func(s *storage.UserSettings) { s.Model = model }); err != nil {
+			return err
+		}
+		fmt.Fprintln(w.out, w.t("model.auto", model))
+		return nil
+	}
 	var locals []localCandidate
 	for _, base := range w.bases {
 		locals = append(locals, w.probe(ctx, base)...)
@@ -244,6 +272,10 @@ func (w *setupWizard) chooseOpenRouter(ctx context.Context) error {
 	}
 	var models []domain.AvailableModel
 	for attempt := 0; ; attempt++ {
+		if key == "" && w.quiet {
+			fmt.Fprintln(w.out, w.t("model.skipped"))
+			return nil
+		}
 		if key == "" {
 			fmt.Fprint(w.out, w.t("openrouter.keyPrompt"))
 			entered, err := w.secret()
@@ -380,6 +412,41 @@ func (w *setupWizard) chooseLocal(ctx context.Context, locals []localCandidate) 
 
 // installEngines downloads, verifies, prepares and connects KMP and MADE,
 // the console's default memory and ceremony engines.
+// chooseJev asks for the TypeSafe key, once, hidden; Enter skips. The
+// environment's key is used as it is.
+func (w *setupWizard) chooseJev(ctx context.Context) (bool, error) {
+	fmt.Fprintf(w.out, "\n%s\n", w.t("jev.title"))
+	if strings.TrimSpace(w.getenv("TYPESAFE_API_KEY")) != "" {
+		fmt.Fprintln(w.out, w.t("jev.found"))
+		return true, nil
+	}
+	if credentials, err := (storage.CredentialsStore{Path: w.paths.credentials}).Load(); err == nil && credentials.TypeSafeAPIKey != "" {
+		fmt.Fprintln(w.out, w.t("jev.found"))
+		return true, nil
+	}
+	if w.quiet {
+		fmt.Fprintln(w.out, w.t("jev.skipped"))
+		return false, nil
+	}
+	fmt.Fprint(w.out, w.t("jev.question"))
+	entered, err := w.secret()
+	if err != nil {
+		return false, errSetupInterrupted
+	}
+	key := strings.TrimSpace(entered)
+	if key == "" {
+		fmt.Fprintln(w.out, w.t("jev.skipped"))
+		return false, nil
+	}
+	if err := (storage.CredentialsStore{Path: w.paths.credentials}).SaveTypeSafeKey(ctx, key); err != nil {
+		return false, err
+	}
+	fmt.Fprintln(w.out, w.t("jev.saved", w.paths.credentials))
+	return true, nil
+}
+
+// installEngines downloads, verifies, prepares and connects KMP and MADE
+// without a question, both at auto (decisions B11 and B12).
 func (w *setupWizard) installEngines(ctx context.Context) error {
 	fmt.Fprintf(w.out, "\n%s\n%s\n", w.t("engines.title"), w.t("engines.intro"))
 	targets, err := (&storage.MCPConfigStore{Path: w.paths.mcp}).EngineTargets(ctx)
@@ -395,26 +462,8 @@ func (w *setupWizard) installEngines(ctx context.Context) error {
 		fmt.Fprintln(w.out, w.t("engines.connected"))
 		return nil
 	}
-	install, err := w.yes(w.t("engines.question"), true)
-	if err != nil {
-		return err
-	}
-	if !install {
-		fmt.Fprintln(w.out, w.t("engines.later"))
-		return nil
-	}
-	approval := "manual"
-	if !connected["kmp"] {
-		auto, err := w.yes(w.t("engines.kmpAuto"), true)
-		if err != nil {
-			return err
-		}
-		if auto {
-			approval = "auto"
-		}
-	}
 	fmt.Fprintln(w.out, w.t("engines.working"))
-	results, err := w.engines(approval).Update(ctx)
+	results, err := w.engines("auto").Update(ctx)
 	if errors.Is(err, application.ErrEngineUpdatePlatform) {
 		fmt.Fprintln(w.out, w.t("engines.platform"))
 		return nil
@@ -440,6 +489,9 @@ func (w *setupWizard) installEngines(ctx context.Context) error {
 
 // choose prints numbered options and returns the 1-based answer.
 func (w *setupWizard) choose(question string, options []string, preferred int) (int, error) {
+	if w.quiet {
+		return preferred, nil
+	}
 	for {
 		fmt.Fprintln(w.out, question)
 		for i, option := range options {
@@ -461,6 +513,9 @@ func (w *setupWizard) choose(question string, options []string, preferred int) (
 }
 
 func (w *setupWizard) yes(question string, preferred bool) (bool, error) {
+	if w.quiet {
+		return preferred, nil
+	}
 	hints := map[bool]string{true: "[Y/n]", false: "[y/N]"}
 	if w.lang == "es" {
 		hints = map[bool]string{true: "[S/n]", false: "[s/N]"}
@@ -485,6 +540,9 @@ func (w *setupWizard) yes(question string, preferred bool) (bool, error) {
 }
 
 func (w *setupWizard) ask(question, preferred string) (string, error) {
+	if w.quiet {
+		return preferred, nil
+	}
 	if preferred != "" {
 		fmt.Fprintf(w.out, "%s [%s]: ", question, preferred)
 	} else {

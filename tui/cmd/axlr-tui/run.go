@@ -218,6 +218,19 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		key = credentials.OpenRouterAPIKey
 		appLog.AddSecrets(key)
 	}
+	if getenv("TYPESAFE_API_KEY") == "" {
+		// Jev's key the setup saved; the variable wins when set.
+		if credentials, credentialsErr := (storage.CredentialsStore{Path: filepath.Join(configBase, "axlr", "credentials.json")}).Load(); credentialsErr == nil && credentials.TypeSafeAPIKey != "" {
+			saved, inner := credentials.TypeSafeAPIKey, getenv
+			getenv = func(name string) string {
+				if name == "TYPESAFE_API_KEY" {
+					return saved
+				}
+				return inner(name)
+			}
+			appLog.AddSecrets(saved)
+		}
+	}
 	locals := newLocalModelSetup(settings, getenv)
 	localKeys = locals.secrets
 	appLog.AddSecrets(localKeys...)
@@ -350,6 +363,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	} else if _, err := os.Stat(configPath); err != nil {
 		return fail(err)
 	}
+	// The engines are required (decision A2): a launch that lacks one
+	// installs and configures it without a question (B12), and refuses to
+	// start when that fails.
+	if settings.EnginesRequired() {
+		for _, line := range ensureEngines(ctx, configPath, filepath.Join(dataBase, "axlr", "engines"), getenv) {
+			fmt.Fprintln(stderr, "axlr-tui:", line)
+		}
+	}
 	var refusedKey string
 	persisted, err := storage.LoadMCPConfiguration(configPath, locals.pluginGetenv(getenv, &refusedKey))
 	if err == nil && refusedKey != "" {
@@ -357,6 +378,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	if err != nil {
 		return fail(err)
+	}
+	if settings.EnginesRequired() {
+		if missing := missingEngines(persisted.Registrations); len(missing) > 0 {
+			return fail(fmt.Errorf("%s required to start and not connected (settings engines.required): run axlr-tui setup, or set engines.required to false in %s", strings.Join(missing, " and "), settingsPath))
+		}
 	}
 	registrations, err := pluginRegistrations(paths, selections, getenv, locals.keyEnvs)
 	if err != nil {
@@ -670,7 +696,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Diagnostics:       trace,
 		Plugins:           pluginManager,
 		InstalledPlugins:  axlrCatalog,
-		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands, Install: &enginesetup.Installer{Configuration: &configStore, Getenv: getenv, KMPApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}).Prepare}},
+		EngineUpdates:     &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands, Install: &enginesetup.Installer{Configuration: &configStore, Getenv: getenv, KMPApproval: "auto", MADEApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}).Prepare}},
 		MADEPreparation:   &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore},
 		Models:            application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: locals.available, Remote: remoteCatalog}, Diagnostics: trace},
 		ModelPreference:   preferences,
@@ -900,4 +926,51 @@ func ceremonyDefinitions(ceremonies *application.CeremonyDriver) application.Cer
 		return nil
 	}
 	return ceremonies.Definitions
+}
+
+// ensureEngines installs and connects the engines mcp.json lacks, both at
+// auto, as /update does, and returns one line per engine for stderr.
+func ensureEngines(ctx context.Context, configPath, root string, getenv func(string) string) []string {
+	store := &storage.MCPConfigStore{Path: configPath}
+	targets, err := store.EngineTargets(ctx)
+	if err != nil {
+		return []string{"engines: " + err.Error()}
+	}
+	connected := map[string]bool{}
+	for _, target := range targets {
+		connected[target.Engine] = true
+	}
+	if connected["kmp"] && connected["made"] {
+		return nil
+	}
+	updater := &engineupdate.Updater{Configuration: store, Root: root, Install: &enginesetup.Installer{Configuration: store, Getenv: getenv, KMPApproval: "auto", MADEApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: store}).Prepare}}
+	results, err := updater.Update(ctx)
+	var lines []string
+	for _, result := range results {
+		switch result.Status {
+		case "installed":
+			lines = append(lines, fmt.Sprintf("%s %s installed and connected: %s", strings.ToUpper(result.Engine), result.Version, result.Detail))
+		case "failed":
+			lines = append(lines, fmt.Sprintf("%s could not be installed: %s", strings.ToUpper(result.Engine), result.Error))
+		}
+	}
+	if err != nil {
+		lines = append(lines, "engines: "+err.Error())
+	}
+	return lines
+}
+
+// missingEngines names the engines a configuration does not register.
+func missingEngines(registrations []plugins.Registration) []string {
+	connected := map[string]bool{}
+	for _, registration := range registrations {
+		connected[registration.Manifest.ID.String()] = true
+	}
+	var missing []string
+	for _, engine := range []string{"KMP", "MADE"} {
+		if !connected[strings.ToLower(engine)] {
+			missing = append(missing, engine)
+		}
+	}
+	return missing
 }

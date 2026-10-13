@@ -84,6 +84,17 @@ func NewApprovalSettingsInUserSettings(store *UserSettingsStore, legacyPath stri
 	return legacy, nil
 }
 
+// AlwaysAsk names the destructive rules in force: those settings list,
+// or every rule when settings name none.
+func (s *ApprovalSettings) AlwaysAsk() []string {
+	if s.settings != nil {
+		if user, err := s.settings.Load(context.Background()); err == nil && user.Approvals != nil && user.Approvals.AlwaysAsk != nil {
+			return append([]string(nil), user.Approvals.AlwaysAsk...)
+		}
+	}
+	return domain.DestructiveRules()
+}
+
 func (s *ApprovalSettings) Autonomous() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
