@@ -18,17 +18,6 @@ import (
 const sessionLabelsVersion = 1
 const maxSessionLabelsBytes = 256 << 10
 
-type sessionLabelsRecord struct {
-	Version int                          `json:"version"`
-	Labels  map[string]sessionLabelEntry `json:"labels"`
-}
-
-type sessionLabelEntry struct {
-	Title    string `json:"title,omitempty"`
-	Archived bool   `json:"archived,omitempty"`
-	About    string `json:"about,omitempty"`
-}
-
 // SessionLabelStore keeps session titles and archive flags in one file next
 // to the sessions, so session snapshots keep their format.
 type SessionLabelStore struct {

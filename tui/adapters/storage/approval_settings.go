@@ -16,12 +16,6 @@ import (
 
 const maxApprovalSettingsBytes = 65536
 
-type approvalSettingsFile struct {
-	Version    int                   `json:"version"`
-	Autonomous bool                  `json:"autonomous"`
-	Allowed    []domain.ToolIdentity `json:"allowed"`
-}
-
 // ApprovalSettings stores exact tool identities. A saved choice applies on the
 // next call too; the global autonomous switch includes every known tool.
 type ApprovalSettings struct {

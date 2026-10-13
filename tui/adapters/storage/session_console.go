@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -33,73 +32,6 @@ type sessionConsole struct {
 	// Lines are the console lines shown between messages, such as a
 	// finished plan's outcome; files written before them have none.
 	Lines []sessionConsoleLine `json:"lines,omitempty"`
-}
-
-type sessionConsoleLine struct {
-	AfterMessage int                 `json:"after_message"`
-	At           time.Time           `json:"at"`
-	Plan         *sessionPlanOutcome `json:"plan,omitempty"`
-	Restore      *sessionRestore     `json:"restore,omitempty"`
-	Failure      *sessionFailure     `json:"failure,omitempty"`
-}
-
-// sessionFailure is a turn that failed: the error and the kind of hint
-// the console words for the person.
-type sessionFailure struct {
-	Message string `json:"message"`
-	Hint    string `json:"hint,omitempty"`
-}
-
-// sessionRestore names the steps a restore went back over; their
-// snapshots stay in the session's activity.
-type sessionRestore struct {
-	Undo  bool                  `json:"undo,omitempty"`
-	Files []sessionRestoredFile `json:"files"`
-}
-
-type sessionRestoredFile struct {
-	Path string `json:"path"`
-	From string `json:"from"`
-	To   string `json:"to"`
-}
-
-type sessionPlanOutcome struct {
-	ID        string               `json:"id"`
-	Status    string               `json:"status"`
-	Tasks     int                  `json:"tasks"`
-	Done      int                  `json:"done"`
-	Blocked   int                  `json:"blocked"`
-	Skipped   int                  `json:"skipped"`
-	Syncs     []sessionSyncVerdict `json:"syncs,omitempty"`
-	Changed   []string             `json:"changed,omitempty"`
-	CostUSD   float64              `json:"cost_usd,omitempty"`
-	CostKnown bool                 `json:"cost_known,omitempty"`
-}
-
-type sessionSyncVerdict struct {
-	Wave    int    `json:"wave"`
-	Verdict string `json:"verdict"`
-}
-
-// consoleNotes is the part of a session's state <id>.console holds.
-type consoleNotes struct {
-	StoppedCeremony string
-	Chosen          domain.CeremonyChoice
-	Lines           []domain.ConsoleLine
-}
-
-func (n consoleNotes) empty() bool {
-	return n.StoppedCeremony == "" && n.Chosen == (domain.CeremonyChoice{}) && len(n.Lines) == 0
-}
-
-func notesOf(state domain.SessionState) consoleNotes {
-	return consoleNotes{StoppedCeremony: state.StoppedCeremony, Chosen: state.ChosenCeremony, Lines: state.ConsoleLines}
-}
-
-func (n consoleNotes) apply(state *domain.SessionState) {
-	state.StoppedCeremony = n.StoppedCeremony
-	state.ChosenCeremony = n.Chosen
-	state.ConsoleLines = n.Lines
 }
 
 func encodeConsoleLines(lines []domain.ConsoleLine) []sessionConsoleLine {
