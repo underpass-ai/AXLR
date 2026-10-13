@@ -43,6 +43,7 @@ type sessionInstance struct {
 	Reports       int      `json:"reports,omitempty"`
 	Incarnation   string   `json:"claim_incarnation,omitempty"`
 	Recalled2     []string `json:"recalled_memories,omitempty"`
+	Predecessor   string   `json:"predecessor,omitempty"`
 }
 
 func (s *SessionStore) instancePath(id domain.SessionID) string {
@@ -64,7 +65,7 @@ func (s *SessionStore) readInstance(id domain.SessionID) *domain.SessionInstance
 	if json.NewDecoder(bytes.NewReader(data)).Decode(&record) != nil || record.Version != sessionInstanceVersion {
 		return nil
 	}
-	instance := domain.SessionInstance{Instance: record.Instance, Turns: record.Turns, Fence: record.Fence, TurnIndex: record.TurnIndex, ClaimRequests: record.ClaimRequests, ClaimCost: record.ClaimCost, Closed: record.Closed, LastRecord: record.LastRecord, Unavailable: record.Unavailable, Pending: record.Pending, KMPAgent: record.KMPAgent, KMPContext: record.KMPContext, Recalled: record.Recalled, OperationID: record.OperationID, ClaimedAt: parseInstant(record.ClaimedAt), LeaseMS: record.LeaseMS, Reported: parseInstant(record.ReportedAt), Reports: record.Reports, ClaimIncarnation: record.Incarnation, RecalledMemories: record.Recalled2}
+	instance := domain.SessionInstance{Instance: record.Instance, Turns: record.Turns, Fence: record.Fence, TurnIndex: record.TurnIndex, ClaimRequests: record.ClaimRequests, ClaimCost: record.ClaimCost, Closed: record.Closed, LastRecord: record.LastRecord, Unavailable: record.Unavailable, Pending: record.Pending, KMPAgent: record.KMPAgent, KMPContext: record.KMPContext, Recalled: record.Recalled, OperationID: record.OperationID, ClaimedAt: parseInstant(record.ClaimedAt), LeaseMS: record.LeaseMS, Reported: parseInstant(record.ReportedAt), Reports: record.Reports, ClaimIncarnation: record.Incarnation, RecalledMemories: record.Recalled2, Predecessor: record.Predecessor}
 	if instance.Validate() != nil {
 		return nil
 	}
@@ -78,7 +79,7 @@ func (s *SessionStore) writeInstance(id domain.SessionID, instance *domain.Sessi
 		}
 		return nil
 	}
-	record := sessionInstance{Version: sessionInstanceVersion, Instance: instance.Instance, Turns: instance.Turns, Fence: instance.Fence, TurnIndex: instance.TurnIndex, ClaimRequests: instance.ClaimRequests, ClaimCost: instance.ClaimCost, Closed: instance.Closed, LastRecord: instance.LastRecord, Unavailable: instance.Unavailable, Pending: instance.Pending, KMPAgent: instance.KMPAgent, KMPContext: instance.KMPContext, Recalled: instance.Recalled, OperationID: instance.OperationID, ClaimedAt: formatInstant(instance.ClaimedAt), LeaseMS: instance.LeaseMS, ReportedAt: formatInstant(instance.Reported), Reports: instance.Reports, Incarnation: instance.ClaimIncarnation, Recalled2: instance.RecalledMemories}
+	record := sessionInstance{Version: sessionInstanceVersion, Instance: instance.Instance, Turns: instance.Turns, Fence: instance.Fence, TurnIndex: instance.TurnIndex, ClaimRequests: instance.ClaimRequests, ClaimCost: instance.ClaimCost, Closed: instance.Closed, LastRecord: instance.LastRecord, Unavailable: instance.Unavailable, Pending: instance.Pending, KMPAgent: instance.KMPAgent, KMPContext: instance.KMPContext, Recalled: instance.Recalled, OperationID: instance.OperationID, ClaimedAt: formatInstant(instance.ClaimedAt), LeaseMS: instance.LeaseMS, ReportedAt: formatInstant(instance.Reported), Reports: instance.Reports, Incarnation: instance.ClaimIncarnation, Recalled2: instance.RecalledMemories, Predecessor: instance.Predecessor}
 	data, err := json.Marshal(record)
 	if err != nil {
 		return err

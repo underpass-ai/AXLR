@@ -8,7 +8,7 @@ func TestContextBudgetForPromptDerivesFromThePromptSize(t *testing.T) {
 		maximum, lowWater, toolResult, checkpointBytes int
 	}{
 		{64000, 138752, 69376, 17344, 11562},
-		{DefaultPromptTokens, 138752, 69376, 17344, 11562},
+		{DefaultPromptTokens, 165592, 82796, 20699, 13799},
 		{MinimumPromptTokens, 22568, 11284, 2821, 1880},
 		{32000, 60672, 30336, 7584, 5056},
 		{96000, 216832, 108416, 27104, 16384},

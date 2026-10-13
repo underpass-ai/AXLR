@@ -89,6 +89,10 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 	if resumed {
 		abouts = append(abouts, sessionAbout(id))
 	}
+	if instance.Predecessor != "" && instance.Recalled == "" {
+		// A successor's first recall wakes what the predecessor settled.
+		abouts = append(abouts, sessionAbout(domain.SessionID(instance.Predecessor)))
+	}
 	var sections []string
 	remaining := limit
 	instance.RecalledMemories = nil

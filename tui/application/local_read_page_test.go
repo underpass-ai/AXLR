@@ -123,7 +123,7 @@ func TestLocalReadWithoutMaxBytesFitsThePromptBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 	budget := domain.ContextBudgetForPrompt(domain.DefaultPromptTokens)
-	if budget.ToolResultBytes() != 17344 {
+	if budget.ToolResultBytes() != 20699 {
 		t.Fatalf("default prompt budget keeps %d bytes per tool result", budget.ToolResultBytes())
 	}
 	result := sent.Messages[len(sent.Messages)-1]

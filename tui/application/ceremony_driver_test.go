@@ -24,6 +24,7 @@ type fakeEngine struct {
 	definition      string
 	reports         []HostReport
 	handoffs        []HostHandoff
+	inputs          map[string]string
 	failReports     bool
 	noOperation     bool
 }
@@ -40,6 +41,7 @@ func (f *fakeEngine) Ready(context.Context, string, string) error { return f.rea
 func (f *fakeEngine) Start(_ context.Context, definition, version, instance string, inputs map[string]string) error {
 	f.calls = append(f.calls, "start "+definition+" "+version+" about="+inputs["memory_about"])
 	f.definition = definition
+	f.inputs = inputs
 	return nil
 }
 func (f *fakeEngine) Claim(_ context.Context, _, step, key string, lease time.Duration) (string, error) {

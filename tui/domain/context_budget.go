@@ -93,7 +93,7 @@ const (
 	// DefaultPromptTokens is the prompt a request may reach by default. It
 	// stays under the 100K tokens above which Claude Haiku 5.5 costs five
 	// times as much, with room for the guidance, the schemas and the reply.
-	DefaultPromptTokens = 64000
+	DefaultPromptTokens = 75000
 	// MinimumPromptTokens is the smallest prompt a budget can be derived
 	// from: below it the guidance and the schemas leave no room for a turn.
 	MinimumPromptTokens = 16384

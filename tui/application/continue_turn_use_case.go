@@ -43,6 +43,15 @@ type ContinueTurnUseCase struct {
 	Remember RememberPort
 	// Recall reads KMP for axlr_recall; nil, without KMP, offers none.
 	Recall RecallPort
+	// Tokens counts a request's tokens and ContextCap gives the cap for a
+	// model (decision D10); nil keeps the byte budgets' cuts. Successor
+	// opens the session a capped prompt continues in.
+	Tokens     TokenCounterPort
+	ContextCap func(root.ModelID) int
+	Successor  SuccessorPort
+	// Scale learns each model's provider count per counted token; nil
+	// takes the count as it is.
+	Scale *TokenScale
 	// Forge keeps the workspace's forged tools (forged_tools.go); nil, when
 	// settings turn them off, offers neither axlr_forge_tool nor
 	// axlr_run_tool.
@@ -142,7 +151,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	projector := u.Context
 	if projector == nil {
-		sized, err := NewModelContextProjector(projectionBudget(u.Windows, *session))
+		budget := projectionBudget(u.Windows, *session)
+		if _, capped := u.capsContext(*session); capped {
+			budget = cappedBudget(budget)
+		}
+		sized, err := NewModelContextProjector(budget)
 		if err != nil {
 			sized, _ = NewModelContextProjector(domain.ContextBudgetForWindow(0))
 		}
@@ -204,6 +217,16 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		tools = withoutTool(withoutTool(tools, HostForgeToolName), HostRemoveToolName)
 	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
+	counted := 0
+	if cap, capped := u.capsContext(*session); capped {
+		counted = RequestTokens(u.Tokens, guidance, tools, projection.Messages)
+		if estimated := u.Scale.Estimate(model, counted); estimated > cap {
+			contextSpan.End(DiagnosticErrorInvalidState)
+			// The turn ends interrupted either way: continued in the
+			// successor, or refused when the prompt alone exceeds the cap.
+			return interrupt(u.continueInSuccessor(ctx, session, estimated, cap))
+		}
+	}
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticContextProjected, SpanID: CurrentDiagnosticSpan(contextCtx), Messages: len(req.Messages), Tools: len(req.Tools), OriginalMessages: projection.OriginalMessages, DroppedMessages: projection.DroppedMessages, OriginalBytes: projection.OriginalBytes, ProjectedBytes: projection.ProjectedBytes, ContextCutIndex: projection.CutIndex})
 	}
@@ -278,6 +301,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
+	}
+	if u.Scale != nil && result.Usage != nil && counted > 0 {
+		u.Scale.Observe(model, counted, result.Usage.PromptTokens)
 	}
 	if u.Calibration != nil && result.Usage != nil && result.RequestBytes > 0 {
 		// A measurement that cannot be saved is only one sample lost.

@@ -475,9 +475,26 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmd := m.waitingCommand(nil)
 		return m, cmd
+	case resubmitPrompt:
+		// The successor session takes the prompt the capped one could not.
+		m.Composer.Input.SetValue(v.prompt)
+		return m.submitDraft()
 	case operationComplete:
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
+		}
+		if capped, ok := application.IsContextCap(v.Err); ok {
+			// The context cap (decision D10): the turn stopped, the session
+			// closed, and the prompt continues in the successor.
+			if m.deps.Session != nil {
+				*m.deps.Session = capped.Successor
+			}
+			v.Session, v.Err, v.Fresh = capped.Successor, nil, true
+			next, cmd := m.Update(v)
+			changed := next.(AppModel)
+			changed.Status.Notice = changed.Theme.Tf("notice.continued", capped.Tokens/1000, capped.Cap/1000, string(capped.Predecessor)[:8])
+			prompt := capped.Prompt
+			return changed, tea.Batch(cmd, func() tea.Msg { return resubmitPrompt{prompt: prompt} })
 		}
 		if !v.gitRead && m.turnRunning() {
 			// A turn may have committed or switched branches: the header

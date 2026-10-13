@@ -34,6 +34,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/repairclone"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
+	"github.com/underpass-ai/AXLR/tui/adapters/tokens"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -665,6 +666,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
 	// Each session keeps its usage ledger beside its snapshot.
 	continuation.Usage, continuation.MaxSessionUSD = store, settings.MaxSessionUSD
+	// The context cap (decision D10): one tokenizer for every model, no
+	// cut and no checkpoint, a successor session past the cap.
+	if counter, err := tokens.New(); err != nil {
+		fmt.Fprintln(stderr, "axlr-tui: token counter unavailable, the byte budgets apply:", err)
+	} else {
+		continuation.Tokens, continuation.ContextCap, continuation.Scale = counter, locals.windows.ContextCap, &application.TokenScale{}
+		continuation.Successor = successorSessions{create: application.CreateSessionUseCase{Store: loggedStore, Labels: sessionLabels, About: kmp.bundleAbout()}, labels: sessionLabels, store: loggedStore}
+	}
 	continuation.Logs = logReader(appLog)
 	if settings.ForgedToolsEnabled() {
 		// The model forges workspace tools and runs them in the same session.
@@ -973,4 +982,54 @@ func missingEngines(registrations []plugins.Registration) []string {
 		}
 	}
 	return missing
+}
+
+// successorSessions opens the session a capped prompt continues in: the
+// same workspace, model, mode and about, titled after the predecessor,
+// with the predecessor in its instance (decision D10).
+type successorSessions struct {
+	create application.CreateSessionUseCase
+	labels application.SessionLabelsPort
+	store  application.SessionStorePort
+}
+
+func (s successorSessions) Continue(ctx context.Context, predecessor domain.Session) (domain.Session, error) {
+	state := predecessor.Export()
+	session, err := s.create.ExecuteNew(ctx, state.Workspace, state.Model)
+	if err != nil {
+		return domain.Session{}, err
+	}
+	if predecessor.Mode() != domain.ModeNormal {
+		if err := session.SetMode(predecessor.Mode()); err != nil {
+			return domain.Session{}, err
+		}
+	}
+	if err := session.SetInstance(domain.SessionInstance{Predecessor: string(state.ID)}); err != nil {
+		return domain.Session{}, err
+	}
+	if s.labels != nil {
+		if labels, err := s.labels.Load(ctx); err == nil {
+			previous := labels[state.ID]
+			title := previous.Title
+			if title != "" {
+				title = root.Text(bounded(string(title), 100) + " (2)")
+			}
+			_, _ = s.labels.Initialize(ctx, session.ID(), domain.SessionLabel{Title: title, About: previous.About})
+		}
+	}
+	if err := s.store.Save(ctx, session); err != nil {
+		return domain.Session{}, err
+	}
+	return session, nil
+}
+
+func bounded(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	cut := limit
+	for cut > 0 && text[cut]&0xC0 == 0x80 {
+		cut--
+	}
+	return text[:cut]
 }

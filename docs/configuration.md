@@ -122,7 +122,7 @@ Wherever a key takes a model id (`model`, `reviewer_model`, `favorite_models`, `
 | `notify` | `"bell"` \| `"osc"` \| `"off"` | `"bell"` | [notify](#notify) |
 | `approvals` | object | absent (manual approval); a clean install writes `autonomous: true` with `always_ask` | [approvals](#approvals) |
 | `context_tokens` | integer | `0` (no cap) | [context_tokens](#context_tokens) |
-| `prompt_tokens` | integer | `0` (64,000); a clean install writes 75,000 | [prompt_tokens](#prompt_tokens) |
+| `prompt_tokens` | integer | `0` (75,000); a clean install writes it | [prompt_tokens](#prompt_tokens) |
 | `turn_tool_calls` | integer | `0` (32) | [turn_tool_calls](#turn_tool_calls) |
 | `max_session_usd` | number | `0` (no limit) | [max_session_usd](#max_session_usd) |
 | `local_models` | array of objects | `[]` | [local_models](#local_models) |
@@ -238,7 +238,7 @@ Integer. Absent or `0`: no cap. Otherwise from 4,096 to 16,777,216 (`settings co
 
 #### prompt_tokens
 
-Integer. Absent or `0`: 64,000. Otherwise from 16,384 to 16,777,216 (`settings prompt_tokens must be between 16384 and 16777216`). The prompt, in tokens, a request to a model without a known window (every OpenRouter model) may reach; the console turns it into a byte budget at the bytes per token it has measured for that model (2.44 until five requests are measured). 64,000 stays under the 100K prompt tokens above which Claude Haiku 5.5 costs five times as much. Local models use their window instead. See [model context](console.md#model-context).
+Integer. Absent or `0`: 75,000. Otherwise from 16,384 to 16,777,216 (`settings prompt_tokens must be between 16384 and 16777216`). The cap, in tokens, of a request's whole context (guidance, tool schemas and messages) for a model without a known window (every OpenRouter model), counted by the console with one tokenizer (tiktoken's `o200k`) for every model (decision D10 of the [lifecycle integration design](plans/2026-10-13-lifecycle-integration-design.md)); a local model's cap is three quarters of its window. Under the cap nothing is dropped or compacted, so the provider's prompt cache keeps its prefix; the per-result excerpt bounds still derive from this value at the bytes per token measured for the model (2.44 until five requests are measured). A request that would exceed the cap stops the turn, closes the session's MADE instance and continues the prompt in a successor session whose first prompt recalls the predecessor's memory (`ws:<predecessor>`); the footer says so and the previous session stays readable. 75,000 stays under the 100K prompt tokens above which Claude Haiku 5.5 costs five times as much. Local models use their window instead. See [model context](console.md#model-context).
 
 #### turn_tool_calls
 

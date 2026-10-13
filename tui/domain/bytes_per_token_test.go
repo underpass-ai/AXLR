@@ -56,15 +56,15 @@ func TestContextBudgetForPromptAtSizesTheBudgetToTheMeasuredRatio(t *testing.T) 
 	}
 	// At 2.44 bytes per token GLM's requests stopped at about 37K tokens;
 	// at its measured 4.2 they reach the 64K the budget aims at.
-	at244 := ContextBudgetForPrompt(DefaultPromptTokens)
+	at244 := ContextBudgetForPrompt(64000)
 	if tokens := (at244.MaximumBytes() + promptPrefixReserve) * 10 / 42; tokens > 37200 {
 		t.Fatalf("2.44 budget reaches %d GLM tokens", tokens)
 	}
-	glm := ContextBudgetForPromptAt(DefaultPromptTokens, 420)
+	glm := ContextBudgetForPromptAt(64000, 420)
 	if glm.MaximumBytes() != 251392 || glm.LowWaterBytes() != 125696 || glm.ToolResultBytes() != 31424 || glm.CheckpointBytes() != 16384 {
 		t.Fatalf("GLM budget = %d/%d/%d/%d", glm.MaximumBytes(), glm.LowWaterBytes(), glm.ToolResultBytes(), glm.CheckpointBytes())
 	}
-	if tokens := (glm.MaximumBytes() + promptPrefixReserve) * 100 / 420; tokens != DefaultPromptTokens {
+	if tokens := (glm.MaximumBytes() + promptPrefixReserve) * 100 / 420; tokens != 64000 {
 		t.Fatalf("4.2 budget reaches %d tokens", tokens)
 	}
 	if ContextBudgetForPromptAt(DefaultPromptTokens, 10) != ContextBudgetForPromptAt(DefaultPromptTokens, MinimumBytesPerToken) || ContextBudgetForPromptAt(DefaultPromptTokens, 5000) != ContextBudgetForPromptAt(DefaultPromptTokens, MaximumBytesPerToken) {

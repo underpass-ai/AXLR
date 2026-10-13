@@ -140,12 +140,14 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 	inputs := map[string]string{"workspace": string(state.Workspace), "model": string(state.Model), "about": c.about(ctx, state), "session": string(state.ID)}
 	if successor > 1 {
 		inputs["predecessor"] = current.Instance
+	} else if current.Predecessor != "" {
+		inputs["predecessor"] = instanceID(domain.SessionID(current.Predecessor), 1)
 	}
 	if err := c.Engine.Start(ctx, SessionDefinition, SessionDefinitionVersion, id, inputs); err != nil {
 		c.unavailable(s, current, has, err)
 		return domain.SessionInstance{}, false
 	}
-	instance := domain.SessionInstance{Instance: id, KMPAgent: current.KMPAgent, KMPContext: current.KMPContext, Recalled: current.Recalled}
+	instance := domain.SessionInstance{Instance: id, KMPAgent: current.KMPAgent, KMPContext: current.KMPContext, Recalled: current.Recalled, Predecessor: current.Predecessor, RecalledMemories: current.RecalledMemories}
 	if err := s.SetInstance(instance); err != nil {
 		c.log("session instance: %v", err)
 		return domain.SessionInstance{}, false

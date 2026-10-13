@@ -60,6 +60,10 @@ type SessionInstance struct {
 	// (install id and run token); another incarnation finding it declares
 	// a handoff (decision H6).
 	ClaimIncarnation string
+	// Predecessor is the session this one continues (decision D10): its
+	// memory is recalled at the first prompt and its instance named as the
+	// predecessor of this one.
+	Predecessor string
 	// RecalledMemories are the project memories the last recall exposed,
 	// "ref text" per line, bounded; Jev reads them to say what a settled
 	// turn supersedes (decision F5).
@@ -74,8 +78,8 @@ const MaxSessionRecordBytes = 16 << 10
 const MaxPendingEntries = 50
 
 func (i SessionInstance) Validate() error {
-	if i.Instance == "" && i.Unavailable == "" && i.KMPContext == "" {
-		return errors.New("session instance needs an id, a reason it is unavailable or a KMP context")
+	if i.Instance == "" && i.Unavailable == "" && i.KMPContext == "" && i.Predecessor == "" {
+		return errors.New("session instance needs an id, a reason it is unavailable, a KMP context or a predecessor")
 	}
 	if i.Turns < 0 || i.TurnIndex < 0 || i.ClaimRequests < 0 || i.ClaimCost < 0 || i.LeaseMS < 0 || i.Reports < 0 {
 		return errors.New("invalid session instance counters")
