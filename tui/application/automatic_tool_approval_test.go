@@ -140,7 +140,7 @@ func TestModelContextReflectsRegisteredCapabilitiesAndPreservesHistory(t *testin
 		}
 	}
 	// The two paragraphs and the session line stay under 1 KB (decision D8).
-	if size := len(kmpGuidance) + len(kmpRecordGuidance) + len(madeGuidance) + len(sessionTitleGuidance); size > 1024 {
+	if size := len(kmpGuidance) + len(kmpRecordGuidance) + len(madeGuidance) + len(SessionTitleGuidance); size > 1024 {
 		t.Fatalf("lifecycle guidance is %d bytes", size)
 	}
 	if len(s.Messages()) != 1 || s.Messages()[0].Role != root.RoleUser || messages[1].Content != "hello" {
