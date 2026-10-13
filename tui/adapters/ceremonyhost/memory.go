@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 )
@@ -132,4 +134,31 @@ func (m Memory) RecordLinked(ctx context.Context, about string, labels map[strin
 		return "", errors.New("KMP outcome needs writer review; inspect the returned context before resuming")
 	}
 	return "", errors.New("KMP did not accept the ceremony outcome")
+}
+
+var _ application.JournalPort = Memory{}
+
+// RecordTurn writes a turn's results under the session's about as one
+// turn entry: the console's English summary serves as summary_en too, so
+// a strict store accepts it, and the evidence is one line per action.
+func (m Memory) RecordTurn(ctx context.Context, entry application.TurnEntry) (string, error) {
+	memory := map[string]any{"id": "turn", "kind": "turn", "summary": entry.Summary, "summary_en": entry.Summary, "evidence": strings.Join(entry.Evidence, "\n")}
+	if !entry.OccurredAt.IsZero() {
+		memory["occurred_at"] = entry.OccurredAt.UTC().Format(time.RFC3339)
+	}
+	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", map[string]any{"about": entry.About, "actor": "axlr", "idempotency_key": entry.Key, "labels": entry.Labels, "memories": []any{memory}})
+	if err != nil {
+		var refused *refusal
+		if errors.As(err, &refused) {
+			return "", fmt.Errorf("KMP refused the turn entry (%s): %s", refused.Code, bounded(refused.Message, 600))
+		}
+		return "", err
+	}
+	if accepted, _ := result["accepted"].(bool); accepted {
+		refs, _ := result["local_refs"].(map[string]any)
+		ref, _ := refs["turn"].(string)
+		return ref, nil
+	}
+	status, _ := result["status"].(string)
+	return "", fmt.Errorf("KMP did not write the turn entry (status %q)", status)
 }

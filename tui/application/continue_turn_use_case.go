@@ -26,6 +26,9 @@ type ContinueTurnUseCase struct {
 	SessionLabels  SessionLabelsPort
 	// Ceremonies drives MADE for the debug and delivery modes; nil without MADE.
 	Ceremonies *CeremonyDriver
+	// Session runs the session's own MADE instance and journal; nil
+	// without MADE.
+	Session *SessionCeremony
 	// SelfRepair serves the model's repair requests; nil hides nothing but
 	// refuses the request with the reason.
 	SelfRepair RepairRequestPort

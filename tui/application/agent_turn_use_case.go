@@ -67,6 +67,12 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 				return err
 			}
 			if !reminded {
+				// The turn is over: its record goes to the session's MADE
+				// step and its results to KMP, after any memory the model
+				// recorded on the reminder.
+				if err := u.Continue.Session.EndTurn(ctx, s); err != nil {
+					return err
+				}
 				titleUntitled(ctx, *s, u.Continue.SessionLabels)
 				return nil
 			}

@@ -529,6 +529,19 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		ceremonies.Plan = application.PlanSettings{Planner: planner, AutoApprove: settings.Plan != nil && settings.Plan.AutoApprove}
 	}
+	// Every session the person drives is a MADE axlr_session instance whose
+	// turns the console records (decision D4); its results go to KMP.
+	var sessionCeremony *application.SessionCeremony
+	if ceremonies != nil {
+		sessionCeremony = &application.SessionCeremony{Engine: ceremonies.Engine, Labels: sessionLabels, Usage: store, Store: loggedStore, Log: func(line string) {
+			if appLog != nil {
+				appLog.Logf(diagnostics.AppInfo, "%s", line)
+			}
+		}}
+		if journal, ok := ceremonies.Memory.(application.JournalPort); ok {
+			sessionCeremony.Journal = journal
+		}
+	}
 	repairPolicy := application.RepairPolicy{AutoMerge: repairConfiguration.AutoMerge, WatchDeadline: time.Duration(repairConfiguration.WatchMinutes) * time.Minute}
 	if ceremonies != nil {
 		ceremonies.Files = ceremonyhost.Files{Tools: runner}
@@ -588,7 +601,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ceremonies.Starter = planRunner
 		planPanel = planRunner
 	}
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
+	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
 	// Each session keeps its usage ledger beside its snapshot.
 	continuation.Usage, continuation.MaxSessionUSD = store, settings.MaxSessionUSD
 	continuation.Logs = logReader(appLog)
@@ -655,6 +668,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	})
 	defer app.Close()
 	defer func() { printResumeHint(stderr, shown, store) }()
+	defer func() {
+		// The session's MADE instance closes with the console; the sidecar
+		// keeps an interrupted turn's fence for a close that fails here.
+		if sessionCeremony == nil || shown.ID == "" {
+			return
+		}
+		if current, err := domain.RestoreSession(shown); err == nil {
+			_ = sessionCeremony.Close(context.WithoutCancel(ctx), &current, "exit")
+		}
+	}()
 	consoleSession := newID
 	if session != nil {
 		consoleSession = session.Export().ID

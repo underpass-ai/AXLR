@@ -96,6 +96,8 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 	if err := next.BeginTurn(prompt, tools); err != nil {
 		return err
 	}
+	// The session's own MADE step is claimed before the model is asked.
+	u.Continue.Session.BeginTurn(ctx, &next)
 	if err := u.Store.Save(ctx, next); err != nil {
 		return err
 	}
