@@ -3,6 +3,7 @@ package enginesetup
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -27,12 +28,15 @@ type call struct {
 	env     []string
 }
 
+// home is an absolute HOME on every platform.
+var home = filepath.Join(os.TempDir(), "person")
+
 func installer(t *testing.T, r *registrar, calls *[]call, fail error) *Installer {
 	t.Helper()
-	env := map[string]string{"HOME": "/home/person", "PATH": "/usr/bin:/bin", "OPENROUTER_API_KEY": "secret", "XDG_CONFIG_HOME": "/elsewhere"}
+	env := map[string]string{"HOME": home, "PATH": "/usr/bin:/bin", "OPENROUTER_API_KEY": "secret", "XDG_CONFIG_HOME": "/elsewhere"}
 	return &Installer{
 		Configuration: r,
-		DataBase:      "/home/person/.local/share",
+		DataBase:      filepath.Join(home, ".local", "share"),
 		Getenv:        func(name string) string { return env[name] },
 		KMPApproval:   "auto",
 		run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
@@ -50,11 +54,11 @@ func TestInstallKMPSynchronisesTheGuideIntoThePinnedStoreBeforeRegistering(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := "/home/person/.local/share/kmp/default"
+	store := filepath.Join(home, ".local", "share", "kmp", "default")
 	if detail != "memory store "+store {
 		t.Fatalf("detail %q", detail)
 	}
-	want := call{filepath.Join(root, "bin", "kmp-mcp"), []string{"guide", "sync", "--plugin-root", root}, []string{"HOME=/home/person", "PATH=/usr/bin:/bin", "KMP_MCP_BACKEND=embedded", "KMP_MCP_DATA_DIR=" + store}}
+	want := call{filepath.Join(root, "bin", "kmp-mcp"), []string{"guide", "sync", "--plugin-root", root}, []string{"HOME=" + home, "PATH=/usr/bin:/bin", "KMP_MCP_BACKEND=embedded", "KMP_MCP_DATA_DIR=" + store}}
 	if len(calls) != 1 || !reflect.DeepEqual(calls[0], want) {
 		t.Fatalf("calls %+v", calls)
 	}
@@ -91,7 +95,7 @@ func TestInstallMADEConfiguresWithTheLauncherEnvironmentThenPrepares(t *testing.
 	}
 	// Only HOME and PATH: the launcher gets the same two through env_from,
 	// so it finds the configuration this step writes under HOME.
-	want := call{filepath.Join(root, "scripts", "made-configure-embedded.sh"), nil, []string{"HOME=/home/person", "PATH=/usr/bin:/bin"}}
+	want := call{filepath.Join(root, "scripts", "made-configure-embedded.sh"), nil, []string{"HOME=" + home, "PATH=/usr/bin:/bin"}}
 	if len(calls) != 1 || !reflect.DeepEqual(calls[0], want) {
 		t.Fatalf("calls %+v", calls)
 	}

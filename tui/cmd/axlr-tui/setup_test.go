@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -329,6 +330,9 @@ func TestRunUsesTheKeyTheSetupSaved(t *testing.T) {
 	}, &out)
 	if code != 0 || !launched || strings.Contains(out.String(), "saved-key-never-print") {
 		t.Fatalf("code=%d launched=%v\n%s", code, launched, &out)
+	}
+	if runtime.GOOS == "windows" {
+		return
 	}
 	if err := os.Chmod(path, 0644); err != nil {
 		t.Fatal(err)
