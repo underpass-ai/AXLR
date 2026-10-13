@@ -281,6 +281,21 @@ func (p Preparer) Prepare(ctx context.Context, selection Selection, env []string
 	return report, nil
 }
 
+// SyncGuide writes the guide into the selected store: the console calls it
+// when kmp_guide reports the guide missing (an existing store the console
+// did not create). A live engine on the store does not block it (seen on
+// 13 October 2026 with Claude Code's engine on AXLR/.kernel).
+func (p Preparer) SyncGuide(ctx context.Context, selection Selection, env []string) error {
+	if p.Binary == "" || p.PluginRoot == "" {
+		return errors.New("no KMP plugin root holds the guide assets")
+	}
+	_, err := p.run(ctx, p.Binary, []string{"guide", "sync", "--plugin-root", p.PluginRoot}, WithStore(env, selection.Path))
+	if err != nil {
+		return fmt.Errorf("synchronise the KMP guide: %w", err)
+	}
+	return nil
+}
+
 // importedEvents reads kmp-mcp import's receipt, {"events_imported":N} on
 // its last line; -1 when it is not there.
 func importedEvents(out []byte) int {

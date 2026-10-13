@@ -32,6 +32,8 @@ type TurnEntry struct {
 	Summary    string
 	Evidence   []string
 	OccurredAt time.Time
+	// ContextID is the session's KMP context, when the console opened one.
+	ContextID string
 }
 
 // JournalPort writes a turn's results to KMP and returns the stored ref.
@@ -50,20 +52,29 @@ type SessionCeremony struct {
 	// Usage gives each turn its share of the session's ledger; nil none.
 	Usage SessionUsagePort
 	Store SessionStorePort
-	Now   func() time.Time
+	// Identity opens the session's KMP context (session_identity.go); nil
+	// without KMP.
+	Identity *KMPIdentity
+	Now      func() time.Time
 	// Log reports what the console did or could not do; nil says nothing.
 	Log func(string)
 }
 
-// records reports whether a session runs its own instance: a console
-// session the person drives. Workers and the clones of repairs and
+// drives reports whether a session is one the console records for: a
+// console session the person drives. Workers and the clones of repairs and
 // improvements are sessions the console created for ceremonies that are
 // MADE instances already.
-func (c *SessionCeremony) records(s domain.Session) bool {
-	if c == nil || c.Engine == nil || c.Store == nil {
+func (c *SessionCeremony) drives(s domain.Session) bool {
+	if c == nil || c.Store == nil {
 		return false
 	}
 	return s.Mode() != domain.ModeTask && !s.Mode().ForgesPullRequest()
+}
+
+// records reports whether a session runs its own MADE instance: one the
+// console drives, with MADE connected.
+func (c *SessionCeremony) records(s domain.Session) bool {
+	return c.drives(s) && c.Engine != nil
 }
 
 func (c *SessionCeremony) log(format string, args ...any) {
@@ -119,7 +130,7 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 		c.unavailable(s, current, has, err)
 		return domain.SessionInstance{}, false
 	}
-	instance := domain.SessionInstance{Instance: id}
+	instance := domain.SessionInstance{Instance: id, KMPAgent: current.KMPAgent, KMPContext: current.KMPContext, Recalled: current.Recalled}
 	if err := s.SetInstance(instance); err != nil {
 		c.log("session instance: %v", err)
 		return domain.SessionInstance{}, false
@@ -138,11 +149,16 @@ func (c *SessionCeremony) unavailable(s *domain.Session, current domain.SessionI
 	_ = s.SetInstance(current)
 }
 
-// BeginTurn claims the turn step for the prompt the session just began,
-// completing first the turn an interrupted console left claimed. It
-// changes the session in place; the caller saves it.
+// BeginTurn opens the session's KMP context at its first prompt and claims
+// the turn step for the prompt the session just began, completing first
+// the turn an interrupted console left claimed. It changes the session in
+// place; the caller saves it.
 func (c *SessionCeremony) BeginTurn(ctx context.Context, s *domain.Session) {
-	if !c.records(*s) {
+	if !c.drives(*s) {
+		return
+	}
+	c.openContext(ctx, s)
+	if c.Engine == nil {
 		return
 	}
 	instance, ok := c.open(ctx, s, 1)
@@ -229,6 +245,7 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 		if entry.About == record.About {
 			delete(entry.Labels, "project")
 		}
+		entry.ContextID = instance.KMPContext
 		instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
 	} else if len(instance.Pending) > 0 {
 		instance.Pending = c.journal(ctx, instance.Pending)

@@ -61,6 +61,8 @@ type RememberRequest struct {
 	// Continuation resumes a write KMP returned for review; the other
 	// fields are then empty.
 	Continuation string
+	// ContextID is the session's KMP context, when the console opened one.
+	ContextID string
 }
 
 // RememberPort writes a RememberRequest and returns KMP's answer, compact.
@@ -114,6 +116,9 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	}
 	sum := sha256.Sum256([]byte(about + "\x00" + args.Kind + "\x00" + args.Text))
 	request.IdempotencyKey = "axlr:remember:" + hex.EncodeToString(sum[:8])
+	if instance, ok := session.Instance(); ok {
+		request.ContextID = instance.KMPContext
+	}
 	return u.Memory.Remember(ctx, request)
 }
 

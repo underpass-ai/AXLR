@@ -530,14 +530,25 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ceremonies.Plan = application.PlanSettings{Planner: planner, AutoApprove: settings.Plan != nil && settings.Plan.AutoApprove}
 	}
 	// Every session the person drives is a MADE axlr_session instance whose
-	// turns the console records (decision D4); its results go to KMP.
+	// turns the console records (decision D4); its results go to KMP, in
+	// the context the console opens for the session (decision D3).
 	var sessionCeremony *application.SessionCeremony
-	if ceremonies != nil {
-		sessionCeremony = &application.SessionCeremony{Engine: ceremonies.Engine, Labels: sessionLabels, Usage: store, Store: loggedStore, Log: func(line string) {
+	if ceremonies != nil || hasKMP {
+		sessionCeremony = &application.SessionCeremony{Labels: sessionLabels, Usage: store, Store: loggedStore, Log: func(line string) {
 			if appLog != nil {
 				appLog.Logf(diagnostics.AppInfo, "%s", line)
 			}
 		}}
+	}
+	if hasKMP {
+		installID, err := storage.InstallID(filepath.Join(stateBase, "axlr"))
+		if err != nil {
+			return fail(fmt.Errorf("install id: %w", err))
+		}
+		sessionCeremony.Identity = &application.KMPIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewKMPAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: ceremonyhost.Memory{Tools: runner, SyncGuide: kmp.SyncGuide}}
+	}
+	if ceremonies != nil {
+		sessionCeremony.Engine = ceremonies.Engine
 		if journal, ok := ceremonies.Memory.(application.JournalPort); ok {
 			sessionCeremony.Journal = journal
 		}

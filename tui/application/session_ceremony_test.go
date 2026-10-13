@@ -338,3 +338,166 @@ func TestSweepAbandonedEndsOnlyUnheldOpenInstances(t *testing.T) {
 		t.Fatalf("released %v", lister.released)
 	}
 }
+
+type guideStub struct {
+	calls   []string
+	fail    map[string]error
+	context int
+}
+
+func (g *guideStub) Guide(_ context.Context, registrationKey, agentID, contextKey string) (GuideResult, error) {
+	call := "register " + registrationKey
+	if registrationKey == "" {
+		call = "context " + agentID + " " + contextKey
+	}
+	g.calls = append(g.calls, call)
+	if err := g.fail[call]; err != nil {
+		return GuideResult{}, err
+	}
+	if registrationKey != "" {
+		return GuideResult{AgentID: "agent_" + registrationKey, ContextID: "ctx_registration"}, nil
+	}
+	g.context++
+	return GuideResult{AgentID: agentID, ContextID: "ctx_" + itoa(g.context)}, nil
+}
+
+type agentsStub struct{ agents map[string]string }
+
+func (a *agentsStub) Agent(_ context.Context, store string) (string, bool) {
+	id, ok := a.agents[store]
+	return id, ok
+}
+
+func (a *agentsStub) Remember(_ context.Context, store, agentID, _ string) error {
+	a.agents[store] = agentID
+	return nil
+}
+
+func identityFor(guide *guideStub, agents *agentsStub) *KMPIdentity {
+	return &KMPIdentity{Store: "/repo/.kernel", RegistrationKey: "axlr:install-1", Agents: agents, Guide: guide}
+}
+
+// The first prompt in a store registers the console's agent once and opens
+// one context per session; the next session reuses the agent.
+func TestSessionCeremonyRegistersTheAgentOnceAndOpensAContextPerSession(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	guide, agents := &guideStub{}, &agentsStub{agents: map[string]string{}}
+	c.Identity = identityFor(guide, agents)
+	s := turnSession(t)
+	if err := s.BeginTurn("hola", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, _ := s.Instance()
+	if instance.KMPAgent != "agent_axlr:install-1" || instance.KMPContext != "ctx_1" || instance.Instance == "" {
+		t.Fatalf("instance %+v", instance)
+	}
+	if strings.Join(guide.calls, ";") != "register axlr:install-1;context agent_axlr:install-1 axlr:session:"+string(s.ID()) || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" {
+		t.Fatalf("calls %v agents %v", guide.calls, agents.agents)
+	}
+	// The second prompt opens nothing more.
+	if err := s.CompleteAssistant(assistant("hola")); err != nil {
+		t.Fatal(err)
+	}
+	_ = c.EndTurn(context.Background(), &s)
+	if err := s.BeginTurn("otra", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	if instance, _ = s.Instance(); instance.KMPContext != "ctx_1" || len(guide.calls) != 2 {
+		t.Fatalf("instance %+v calls %v", instance, guide.calls)
+	}
+	// Another session in the same store reuses the agent.
+	other, err := domain.NewSession("fedcba9876543210fedcba9876543210", s.Export().Workspace, "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := other.BeginTurn("hola", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &other)
+	if instance, _ = other.Instance(); instance.KMPContext != "ctx_2" || guide.calls[2] != "context agent_axlr:install-1 axlr:session:fedcba9876543210fedcba9876543210" {
+		t.Fatalf("instance %+v calls %v", instance, guide.calls)
+	}
+}
+
+// An agent KMP no longer knows (the store emptied) is registered again; a
+// registration that fails leaves the session without a context and the
+// turn runs.
+func TestSessionCeremonyRegistersAgainWhenTheStoreForgotTheAgent(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	guide := &guideStub{fail: map[string]error{"context stale axlr:session:0123456789abcdef0123456789abcdef": errors.New("not_found: agent stale")}}
+	agents := &agentsStub{agents: map[string]string{"/repo/.kernel": "stale"}}
+	c.Identity = identityFor(guide, agents)
+	s := turnSession(t)
+	if err := s.BeginTurn("hola", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, _ := s.Instance()
+	if instance.KMPAgent != "agent_axlr:install-1" || instance.KMPContext != "ctx_1" || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" || len(guide.calls) != 3 {
+		t.Fatalf("instance %+v calls %v agents %v", instance, guide.calls, agents.agents)
+	}
+	var logged []string
+	c.Log = func(line string) { logged = append(logged, line) }
+	guide = &guideStub{fail: map[string]error{"register axlr:install-1": errors.New("engine down")}}
+	c.Identity = identityFor(guide, &agentsStub{agents: map[string]string{}})
+	other, err := domain.NewSession("fedcba9876543210fedcba9876543210", s.Export().Workspace, "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := other.BeginTurn("hola", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &other)
+	if instance, _ = other.Instance(); instance.KMPContext != "" || instance.Instance == "" || instance.Fence == "" {
+		t.Fatalf("instance %+v", instance)
+	}
+	if len(logged) == 0 || !strings.Contains(logged[0], "engine down") {
+		t.Fatalf("logged %v", logged)
+	}
+}
+
+// Without MADE the session still gets its KMP context, and the turn's
+// entry carries it.
+func TestSessionCeremonyOpensTheContextWithoutMADE(t *testing.T) {
+	c, store, _, _ := sessionCeremonyFor(t, nil)
+	c.Engine = nil
+	guide, agents := &guideStub{}, &agentsStub{agents: map[string]string{}}
+	c.Identity = identityFor(guide, agents)
+	s := turnSession(t)
+	if err := s.BeginTurn("hola", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, has := s.Instance()
+	if !has || instance.KMPContext != "ctx_1" || instance.Instance != "" || instance.Unavailable != "" {
+		t.Fatalf("instance %+v", instance)
+	}
+	if err := c.EndTurn(context.Background(), &s); err != nil || len(store.states) != 0 {
+		t.Fatalf("no MADE record without MADE: %v %d", err, len(store.states))
+	}
+	if _, err := domain.RestoreSession(s.Export()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSessionCeremonyTurnEntryCarriesTheContext(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, journal, _ := sessionCeremonyFor(t, engine)
+	c.Identity = identityFor(&guideStub{}, &agentsStub{agents: map[string]string{}})
+	s := turnSession(t)
+	if err := s.BeginTurn("añade hola.txt y comprueba", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	recordTurnOn(t, &s)
+	if err := c.EndTurn(context.Background(), &s); err != nil {
+		t.Fatal(err)
+	}
+	if len(journal.entries) != 1 || journal.entries[0].ContextID != "ctx_1" {
+		t.Fatalf("journal %+v", journal.entries)
+	}
+}

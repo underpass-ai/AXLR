@@ -43,6 +43,9 @@ type kmpStore struct {
 	// directory inside it. Either is bound to the session, since the
 	// console's default about is derived from the workspace alone.
 	FromBundle, FromRoot bool
+	// SyncGuide writes the guide into the store, for a kmp_guide that
+	// finds none; nil when no plugin root holds the guide assets.
+	SyncGuide func(context.Context) error
 }
 
 // prepareKMPStore chooses the store of the stdio kmp registration for this
@@ -77,6 +80,8 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 	}
 	binary, pluginRoot := kmpstore.Binary(r.Manifest.Command)
 	preparer := kmpstore.Preparer{Binary: binary, PluginRoot: pluginRoot, UserStore: kmpstore.UserDefault(dataBase)}
+	selection, env := store.Selection, r.Env
+	store.SyncGuide = func(ctx context.Context) error { return preparer.SyncGuide(ctx, selection, env) }
 	if store.Report, err = preparer.Prepare(ctx, store.Selection, r.Env); err != nil {
 		return store, true, err
 	}

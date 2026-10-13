@@ -177,6 +177,21 @@ type MemoryPort interface {
 	RecordLinked(ctx context.Context, about string, labels map[string][]string, record MemoryRecord) (ref string, err error)
 }
 
+// GuideResult is what kmp_guide gave the console: the agent and the
+// context it opened.
+type GuideResult struct {
+	AgentID, ContextID string
+}
+
+// MemoryIdentityPort registers the console's KMP agent and opens contexts:
+// Guide with a registration key registers (or finds) the agent and opens
+// its first context; with an agent id and a context key it opens a new
+// context for that agent. A store without the guide is synced and the
+// call tried again before an error is returned.
+type MemoryIdentityPort interface {
+	Guide(ctx context.Context, registrationKey, agentID, contextKey string) (GuideResult, error)
+}
+
 // WorkspaceFilesPort reads and writes workspace files for the console through
 // the same runtime as the model's tools, so the workspace boundary holds.
 type WorkspaceFilesPort interface {

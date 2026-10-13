@@ -36,6 +36,15 @@ type SessionInstance struct {
 	// turn ended (the engine down, a refusal); the console retries them at
 	// the next turn end and at close, oldest first.
 	Pending []string
+	// KMPAgent and KMPContext are the console's KMP identity for this
+	// session: the agent registered in the session's store and the context
+	// opened for the session, which the console passes on every KMP call
+	// (decision D3). The model never sees them.
+	KMPAgent   string
+	KMPContext string
+	// Recalled is the intent the console last woke memory for; "" before
+	// the first prompt's recall.
+	Recalled string
 }
 
 // MaxSessionRecordBytes bounds LastRecord.
@@ -46,8 +55,8 @@ const MaxSessionRecordBytes = 16 << 10
 const MaxPendingEntries = 50
 
 func (i SessionInstance) Validate() error {
-	if i.Instance == "" && i.Unavailable == "" {
-		return errors.New("session instance needs an id or a reason it is unavailable")
+	if i.Instance == "" && i.Unavailable == "" && i.KMPContext == "" {
+		return errors.New("session instance needs an id, a reason it is unavailable or a KMP context")
 	}
 	if i.Turns < 0 || i.TurnIndex < 0 || i.ClaimRequests < 0 || i.ClaimCost < 0 {
 		return errors.New("invalid session instance counters")

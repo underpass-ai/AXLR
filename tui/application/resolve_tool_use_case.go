@@ -200,7 +200,8 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			if tool.Identity.Kind == domain.ToolKindLocal && tool.Identity.LocalOperation == "exec" && tolerantSession(*s) {
 				toolArgs, _ = normalizeExec(toolArgs)
 			}
-			outcome, runErr = u.Tools.Execute(ctx, tool.Identity, toolArgs)
+			// The model's KMP calls run in the session's context (decision D3).
+			outcome, runErr = u.Tools.Execute(ctx, tool.Identity, withSessionContext(*s, tool, toolArgs))
 		}
 		if outcome.IsError || outcome.Uncertain {
 			spanClass = DiagnosticErrorTool

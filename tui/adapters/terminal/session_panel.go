@@ -29,8 +29,14 @@ func sessionPanelContent(state domain.SessionState, theme Theme) string {
 	fmt.Fprintf(&b, "%s %s\n", theme.T("session.id"), state.ID)
 	fmt.Fprintf(&b, "%s ws:%s\n", theme.T("session.about"), state.ID)
 	instance := state.Instance
+	if instance != nil && instance.KMPContext != "" {
+		fmt.Fprintf(&b, "%s %s\n", theme.T("session.context"), instance.KMPContext)
+	}
 	switch {
 	case instance == nil:
+		b.WriteString(theme.T("session.none"))
+		return b.String()
+	case instance.Instance == "" && instance.Unavailable == "":
 		b.WriteString(theme.T("session.none"))
 		return b.String()
 	case instance.Instance == "":
