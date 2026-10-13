@@ -34,7 +34,7 @@ Files in `<state>` and `<data>` are AXLR's own records, not configuration, but t
 
 | Path | Contents |
 |:--|:--|
-| `<state>/sessions/` | Saved sessions, their usage ledgers (`<id>.usage.json`) and side files |
+| `<state>/sessions/` | Saved sessions, their usage ledgers (`<id>.usage.json`) and side files, among them `<id>.instance`, the session's MADE instance with the live claim's fence, the last turn's record and the KMP entries still to write (see [the session ceremony](ceremonies.md#the-session-ceremony)) |
 | `<state>/logs/` | Diagnostics traces (`trace-<pid>-<n>.jsonl`), payload captures (`*.jsonl.payloads-<n>/`) and the app log `axlr.log`; see [diagnostics and privacy](console.md#diagnostics-and-privacy) |
 | `<state>/session-labels.json` | Session titles, abouts and archive marks |
 | `<state>/bytes-per-token.json` | Measured bytes per prompt token per remote model, shared by every console |
