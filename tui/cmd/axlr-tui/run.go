@@ -398,7 +398,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// pinned before anything reads the registrations.
 	kmp, hasKMP, kmpErr := prepareKMPStore(ctx, registrations, workspacePath, dataBase)
 	if hasKMP {
-		line := kmp.line(dataBase)
+		line := kmp.line(dataBase) + kmp.memoriesLine()
 		if kmpErr != nil {
 			line += "; preparation failed: " + kmpErr.Error()
 		}
@@ -732,6 +732,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Repairs:           repairPanelPort(repairs),
 		Plans:             planPanel,
 		Definitions:       ceremonyDefinitions(ceremonies),
+		About:             kmp.About,
+		Memories:          kmp.Memories,
+		MemoriesKnown:     kmp.Counted,
+		EngineFacts:       engineFacts(kmp, hasKMP, host, ceremonies != nil),
 		Usage:             store,
 		MaxSessionUSD:     settings.MaxSessionUSD,
 		PromptCeiling:     locals.windows.PromptCeiling,
@@ -1032,4 +1036,26 @@ func bounded(text string, limit int) string {
 		cut--
 	}
 	return text[:cut]
+}
+
+// engineFacts are the lines /mcp shows under each engine (decision J1):
+// KMP's store, how it was chosen, its about and the console's agent; MADE's
+// work identity and grant.
+func engineFacts(kmp kmpStore, hasKMP bool, host application.HostIdentity, hasMADE bool) map[string][]terminal.EngineFact {
+	facts := map[string][]terminal.EngineFact{}
+	if hasKMP {
+		facts["kmp"] = []terminal.EngineFact{
+			{Key: "mcp.store", Value: kmp.Selection.Path},
+			{Key: "mcp.reason", Value: string(kmp.Selection.Reason)},
+			{Key: "mcp.about", Value: kmp.About},
+			{Key: "mcp.identity", Value: "axlr:" + host.AgentID + " (one agent per store, one context per session)"},
+		}
+	}
+	if hasMADE {
+		facts["made"] = []terminal.EngineFact{
+			{Key: "mcp.identity", Value: host.Owner},
+			{Key: "mcp.grant", Value: madesetup.WorkGrantID},
+		}
+	}
+	return facts
 }

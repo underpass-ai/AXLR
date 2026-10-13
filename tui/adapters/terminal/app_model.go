@@ -205,6 +205,8 @@ func New(deps Dependencies) AppModel {
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
 	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}, pasted: map[string]bool{}}
+	m.Header.About, m.Header.Memories, m.Header.MemoriesKnown = deps.About, deps.Memories, deps.MemoriesKnown
+	m.Plugins.Facts = deps.EngineFacts
 	m.withCommandAllows()
 	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()

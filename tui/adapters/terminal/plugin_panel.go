@@ -14,7 +14,9 @@ import (
 
 // PluginPanel keeps the selected manifest identity separate from list filters.
 type PluginPanel struct {
-	Theme        Theme
+	Theme Theme
+	// Facts are the lines shown under an engine, keyed by plugin id.
+	Facts        map[string][]EngineFact
 	Items        []domain.PluginState
 	Selected     int
 	Loading      bool
@@ -28,6 +30,8 @@ type PluginPanel struct {
 	filter       int // all, connected, unavailable, manual, automatic
 	w, h         int
 }
+
+// Facts are the lines /mcp shows under an engine, keyed by plugin id.
 
 func NewPluginPanel() PluginPanel {
 	search := textinput.New()
@@ -110,6 +114,11 @@ func (p *PluginPanel) refresh() {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s · %s\n%s\n", item.Profile.Name, item.Profile.Purpose, item.Profile.Description)
 	fmt.Fprintln(&b, p.Theme.Tf("plugins.exactID", item.Profile.ID))
+	for _, fact := range p.Facts[string(item.Profile.ID)] {
+		// An engine's store, selection reason, about and work identity
+		// (decision J1).
+		fmt.Fprintf(&b, "%s %s\n", p.Theme.T(fact.Key), fact.Value)
+	}
 	if item.Error != "" {
 		fmt.Fprintln(&b, p.Theme.Tf("plugins.unavailable", item.Error))
 	} else {

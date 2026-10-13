@@ -284,3 +284,27 @@ func TestBundleAboutTakesTheProjectAboutOrTheDirectoryMatch(t *testing.T) {
 		t.Fatalf("no top level: %q %v", about, err)
 	}
 }
+
+func TestCountReadsTheAboutsEventsFromTheMemoriesListing(t *testing.T) {
+	listing := `{"memories":[{"path":"/s/.kernel","abouts":[{"about":"project:X","events":7},{"about":"ws:a","events":2}]},{"path":"/other","abouts":[{"about":"project:X","events":99}]}]}`
+	var args []string
+	p := Preparer{Binary: "/bin/kmp-mcp", Run: func(_ context.Context, _ string, a, env []string) ([]byte, error) {
+		args = a
+		for _, entry := range env {
+			if entry == "KMP_MCP_DATA_DIR=/s/.kernel" {
+				return []byte("note\n" + listing), nil
+			}
+		}
+		return []byte(listing), nil
+	}}
+	count, known, err := p.Count(context.Background(), Selection{Path: "/s/.kernel"}, "project:X", nil)
+	if err != nil || !known || count != 7 || args[0] != "memories" || args[1] != "--json" {
+		t.Fatalf("%d %v %v %v", count, known, err, args)
+	}
+	if count, known, err := p.Count(context.Background(), Selection{Path: "/s/.kernel"}, "project:Y", nil); err != nil || known || count != 0 {
+		t.Fatalf("%d %v %v", count, known, err)
+	}
+	if _, known, err := p.Count(context.Background(), Selection{Path: "/none"}, "project:X", nil); err != nil || known {
+		t.Fatalf("%v %v", known, err)
+	}
+}

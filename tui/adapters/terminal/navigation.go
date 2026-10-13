@@ -534,6 +534,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.overlay = intent
 			m.Plugins = NewPluginPanel()
 			m.Plugins.Theme = m.Theme
+			m.Plugins.Facts = m.deps.EngineFacts
 			m.Plugins.Search.Placeholder = m.Theme.T("plugins.searchPlaceholder")
 			m.Plugins.Resize(m.Layout.Width, m.Layout.Height-2)
 		}

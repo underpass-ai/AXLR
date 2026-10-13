@@ -51,6 +51,15 @@ type Dependencies struct {
 	// Definitions lists and reads published MADE definitions for
 	// /ceremony; nil without MADE.
 	Definitions application.CeremonyDefinitionPort
+	// About is the launch's project about and Memories how many events
+	// the store holds under it (MemoriesKnown false: not counted), for the
+	// header (decision J2). EngineFacts are the lines /mcp shows under an
+	// engine (store, selection reason, about, work identity), keyed by
+	// plugin id (decision J1).
+	About         string
+	Memories      int
+	MemoriesKnown bool
+	EngineFacts   map[string][]EngineFact
 	// Usage is the session's usage ledger for the footer's cost and
 	// /usage, where + raises the session's limit by MaxSessionUSD.
 	Usage         application.SessionUsagePort
@@ -72,3 +81,7 @@ type Dependencies struct {
 	// Ctrl+C), so the launcher can say how to resume it.
 	Quit func(domain.SessionState)
 }
+
+// EngineFact is one line /mcp shows under an engine: an i18n key for the
+// label and the value.
+type EngineFact struct{ Key, Value string }

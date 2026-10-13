@@ -47,6 +47,10 @@ type kmpStore struct {
 	// SyncGuide writes the guide into the store, for a kmp_guide that
 	// finds none; nil when no plugin root holds the guide assets.
 	SyncGuide func(context.Context) error
+	// Memories is how many events the store holds under About, when
+	// Counted (decision J2).
+	Memories int
+	Counted  bool
 }
 
 // prepareKMPStore chooses the store of the stdio kmp registration for this
@@ -93,7 +97,26 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 	if about != "" {
 		store.About, store.FromBundle, store.FromRoot = about, true, false
 	}
+	if count, known, err := preparer.Count(ctx, store.Selection, store.About, r.Env); err == nil && known {
+		store.Memories, store.Counted = count, true
+	} else if err == nil {
+		store.Counted = true // listed, nothing under the about: a new project
+	}
 	return store, true, nil
+}
+
+// memoriesLine is the startup line's tail: how much the store holds
+// under the about, or that the project is new (decision J2).
+func (s kmpStore) memoriesLine() string {
+	switch {
+	case !s.Counted:
+		return ""
+	case s.Memories == 0:
+		return "; new project, nothing recorded yet"
+	case s.Memories == 1:
+		return fmt.Sprintf("; 1 memory for %s", s.About)
+	}
+	return fmt.Sprintf("; %d memories for %s", s.Memories, s.About)
 }
 
 // userAbout is the person's memory about, user:<login name> (decision F6

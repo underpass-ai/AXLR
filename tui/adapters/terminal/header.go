@@ -19,6 +19,39 @@ type Header struct {
 	SandboxOff bool
 	// Git is the workspace's branch, when it is a Git repository.
 	Git *GitState
+	// About is the session's memory about and Memories how many events
+	// the store holds under the launch's about, when MemoriesKnown
+	// (decision J2); the live MADE instance comes from State.
+	About         string
+	Memories      int
+	MemoriesKnown bool
+}
+
+// memory is the header's memory segment: the about, the count and the
+// MADE instance, muted, after the branch; "" when nothing is known.
+func (h Header) memory(theme Theme) string {
+	var parts []string
+	if h.About != "" {
+		parts = append(parts, singleLine(h.About))
+	}
+	if h.MemoriesKnown {
+		if h.Memories == 0 {
+			parts = append(parts, theme.T("header.newProject"))
+		} else {
+			parts = append(parts, theme.Tn("header.memories", h.Memories, h.Memories))
+		}
+	}
+	if instance := h.State.Instance; instance != nil && instance.Instance != "" {
+		if instance.Closed {
+			parts = append(parts, theme.T("header.instanceClosed"))
+		} else {
+			parts = append(parts, theme.T("header.instanceOpen"))
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "  " + strings.Join(parts, " · ")
 }
 
 const (
@@ -66,21 +99,32 @@ func (h Header) View(width int, theme Theme) string {
 		labels bool
 		path   string
 		limit  int
+		memory bool
 	}
 	var layouts []layout
-	for _, labels := range []bool{true, false} {
-		for _, p := range []string{path, pathTail(path, 2), pathTail(path, 1)} {
-			layouts = append(layouts, layout{labels, p, 0})
+	memory := h.memory(theme)
+	for _, withMemory := range []bool{true, false} {
+		if withMemory && memory == "" {
+			continue
+		}
+		for _, labels := range []bool{true, false} {
+			for _, p := range []string{path, pathTail(path, 2), pathTail(path, 1)} {
+				layouts = append(layouts, layout{labels, p, 0, withMemory})
+			}
 		}
 	}
-	layouts = append(layouts, layout{false, pathTail(path, 1), headerPluginWidth})
+	layouts = append(layouts, layout{false, pathTail(path, 1), headerPluginWidth, false})
 	var left, right string
 	for _, l := range layouts {
 		brand, workspace := " "+theme.Brand()+"  "+model+marker, ""
 		if l.labels {
 			brand, workspace = " "+theme.Brand()+"  "+labelled+marker, theme.T("header.workspace")+" "
 		}
-		left = brand + theme.Muted("  "+workspace+l.path+branch)
+		segment := ""
+		if l.memory {
+			segment = memory
+		}
+		left = brand + theme.Muted("  "+workspace+l.path+branch+segment)
 		right = headerPlugins(plugins, l.limit, theme)
 		if ansi.StringWidth(left)+ansi.StringWidth(right)+2 <= width {
 			break

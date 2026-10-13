@@ -94,3 +94,25 @@ func TestHeaderLabelsTheModelAndTheWorkspace(t *testing.T) {
 		t.Fatalf("short header %q kept the labels", view)
 	}
 }
+
+// The header carries the session's about, the store's memory count and
+// the live MADE instance after the branch, and drops them first when the
+// row is short (decision J2).
+func TestHeaderShowsTheAboutTheMemoriesAndTheInstance(t *testing.T) {
+	s := domain.SessionState{ID: "0123456789abcdef0123456789abcdef", Workspace: "/home/me/AXLR", Model: "anthropic/claude-haiku-5.5", Instance: &domain.SessionInstance{Instance: "axlr-session-0123"}}
+	theme := Theme{Monochrome: true}
+	view := ansi.Strip(Header{State: s, About: "project:AXLR", Memories: 12, MemoriesKnown: true}.View(160, theme))
+	for _, want := range []string{"project:AXLR", "12 memories", "MADE instance open"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("header lacks %q: %s", want, view)
+		}
+	}
+	fresh := ansi.Strip(Header{State: s, About: "project:AXLR", Memories: 0, MemoriesKnown: true}.View(160, theme))
+	if !strings.Contains(fresh, "new project") {
+		t.Fatalf("header: %s", fresh)
+	}
+	narrow := ansi.Strip(Header{State: s, About: "project:AXLR", Memories: 12, MemoriesKnown: true}.View(60, theme))
+	if strings.Contains(narrow, "12 memories") || !strings.Contains(narrow, "claude-haiku-5.5") {
+		t.Fatalf("narrow header kept the memory segment: %s", narrow)
+	}
+}

@@ -156,3 +156,22 @@ func TestPrepareKMPStoreInsideACheckoutUsesTheCheckoutsName(t *testing.T) {
 		t.Fatalf("%+v", store)
 	}
 }
+
+func TestStartupLineSaysHowMuchTheStoreHolds(t *testing.T) {
+	store := kmpStore{About: "project:X"}
+	if store.memoriesLine() != "" {
+		t.Fatal("an uncounted store says nothing")
+	}
+	store.Counted = true
+	if store.memoriesLine() != "; new project, nothing recorded yet" {
+		t.Fatal(store.memoriesLine())
+	}
+	store.Memories = 1
+	if store.memoriesLine() != "; 1 memory for project:X" {
+		t.Fatal(store.memoriesLine())
+	}
+	store.Memories = 12
+	if store.memoriesLine() != "; 12 memories for project:X" {
+		t.Fatal(store.memoriesLine())
+	}
+}
