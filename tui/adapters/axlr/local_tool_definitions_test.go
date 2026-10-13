@@ -7,6 +7,7 @@ import (
 
 	root "github.com/underpass-ai/AXLR/domain"
 	axlrruntime "github.com/underpass-ai/AXLR/runtime"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 func localDefinition(t *testing.T, name root.ToolName) root.ToolDefinition {
@@ -58,5 +59,57 @@ func TestLocalToolSchemasCompileAndBoundExec(t *testing.T) {
 	within, _ := root.NewJSONObject([]byte(`{"program":"go","timeout_ms":300000,"max_output_bytes":1048576}`))
 	if err := validator.Validate(exec, within); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The console's catalog requires a why on every side effect; the service's
+// catalog, which API clients read, keeps the plain schemas.
+func TestTheCatalogRequiresAWhyOnlyWhenAsked(t *testing.T) {
+	plain, err := (ToolCatalog{}).Snapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	required, err := (ToolCatalog{RequireWhy: true}).Snapshot(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	find := func(tools []domain.AvailableTool, name string) string {
+		for _, tool := range tools {
+			if string(tool.Definition.Name) == name {
+				return string(tool.Definition.Parameters.Bytes())
+			}
+		}
+		t.Fatalf("%s missing", name)
+		return ""
+	}
+	parse := func(schema string) (hasWhy, requiresWhy bool) {
+		var object struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+			Required   []string                   `json:"required"`
+		}
+		if err := json.Unmarshal([]byte(schema), &object); err != nil {
+			t.Fatal(err)
+		}
+		_, hasWhy = object.Properties["why"]
+		for _, name := range object.Required {
+			requiresWhy = requiresWhy || name == "why"
+		}
+		return hasWhy, requiresWhy
+	}
+	for _, name := range []string{"local_write", "local_edit", "local_exec", "axlr_call_tool"} {
+		if has, _ := parse(find(plain, name)); has {
+			t.Fatalf("%s mentions a why without being asked", name)
+		}
+		if has, requires := parse(find(required, name)); !has || !requires {
+			t.Fatalf("%s lacks the why requirement: %s", name, find(required, name))
+		}
+	}
+	for _, name := range []string{"local_read", "local_search", "local_list"} {
+		if has, requires := parse(find(required, name)); !has || requires {
+			t.Fatalf("%s must accept a why without requiring it: %s", name, find(required, name))
+		}
+	}
+	if strings.Contains(find(required, "axlr_tools"), `"why"`) {
+		t.Fatal("axlr_tools must not mention a why")
 	}
 }

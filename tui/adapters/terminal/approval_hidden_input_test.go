@@ -151,3 +151,12 @@ func TestTheApprovalCardGrowsToSixtyPercent(t *testing.T) {
 }
 
 func lipglossHeight(s string) int { return strings.Count(s, "\n") + 1 }
+
+// The model's why leads the exec card, right under the command line.
+func TestTheExecCardShowsTheWhy(t *testing.T) {
+	m := execApprovalModel(t, domain.ModeNormal, `{"program":"go","args":["test","./parser/..."],"why":"run the parser tests after the fix"}`)
+	defer m.zones.Close()
+	if got := m.Approval.Details.Text(); got != "$ go test ./parser/...\nwhy: run the parser tests after the fix" {
+		t.Fatalf("card %q", got)
+	}
+}

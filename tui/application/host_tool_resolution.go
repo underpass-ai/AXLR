@@ -25,7 +25,7 @@ func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domai
 	if tool.Identity.Kind != domain.ToolKindHost || tool.Identity.LocalOperation != domain.HostOperationCallTool {
 		return tool, call.Arguments, true, nil
 	}
-	args, err := decodeHostArguments(call.Arguments, "name", "arguments")
+	args, err := decodeHostArguments(call.Arguments, "name", "arguments", WhyArgument)
 	if err != nil {
 		return domain.AvailableTool{}, root.JSONValue{}, true, err
 	}
@@ -122,6 +122,15 @@ func decodeHostArguments(value root.JSONValue, allowed ...string) (map[string]js
 			return nil, err
 		}
 		key, ok := token.(string)
+		if ok && key == WhyArgument && !fields[key] {
+			// A why on a host tool that asks none is read and dropped, as
+			// on a local read: the model gives them to everything once told.
+			var ignored json.RawMessage
+			if err := d.Decode(&ignored); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if !ok || !fields[key] {
 			return nil, fmt.Errorf("unknown host argument %q; accepted: %s", key, strings.Join(allowed, ", "))
 		}

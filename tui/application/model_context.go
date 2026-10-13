@@ -21,6 +21,15 @@ var modeGuidance = map[domain.WorkMode]string{
 	domain.ModeResearch: "Mode: research. You answer a question with evidence and leave a decision behind. When KMP is connected, ask project memory first with kmp_ask and say what it already knows. Then read primary sources: repository files, and public pages through local_exec with curl, which needs approval. Attribute every claim to its source and separate observation from inference. Deliver a recommendation with alternatives, confidence and open questions, as a Markdown file when the user wants a document; the host lets you write only documents. When KMP is connected, record the decision with its sources and why. Never use local_exec to create or change files the mode does not allow; when the task needs such a change, stop and tell the user to switch with /normal. Use no ceremony.\n",
 }
 
+// whyGuidance asks for the one-sentence why every side effect carries
+// (decision E2 of the lifecycle integration design). It is the same for
+// every session, so the prompt's cached prefix keeps it.
+const whyGuidance = "Give each local_write, local_edit, local_exec, axlr_call_tool and axlr_run_tool call a why: one sentence in its arguments saying what the call is for, such as \"run the parser tests after the fix\". A call without it is refused; the person reads it on the approval card and the console records it with the turn.\n"
+
+// compactWhyGuidance is the same rule for a compact step, which has only
+// the local tools; the planner, which reads only, gets neither.
+const compactWhyGuidance = "Give each local_write, local_edit and local_exec call a why: one sentence in its arguments saying what the call is for. A call without it is refused.\n"
+
 // modelHostGuidance is stable for a frozen catalog and does not embed session data.
 func modelHostGuidance(s *domain.Session) root.Message {
 	var guidance strings.Builder
@@ -36,12 +45,14 @@ func modelHostGuidance(s *domain.Session) root.Message {
 	if run, step, compact := compactRun(*s); compact {
 		// About 1 KB of constant prefix: no MCP bridge, history, self-repair
 		// or plugin paragraphs, since a compact step exposes none of them.
+		guidance.WriteString(compactWhyGuidance)
 		if text, ok := modeGuidance[s.Mode()]; ok {
 			guidance.WriteString(text)
 		}
 		guidance.WriteString(compactInstruction(run, step))
 		return root.Message{Role: root.RoleSystem, Content: root.Text(guidance.String())}
 	}
+	guidance.WriteString(whyGuidance)
 	guidance.WriteString("Use a MADE ceremony only when the user asks for one or a mode starts it; otherwise work directly with your tools.\n")
 	// Tool mechanics live in the tool descriptions; these paragraphs say only
 	// when to use them, so the two do not repeat each other on every request.

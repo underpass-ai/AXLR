@@ -1,0 +1,81 @@
+version: '1.0'
+name: axlr_session
+description: One AXLR console session. The console claims the turn step when the person sends a prompt and completes it with the turn's record; the step repeats for every prompt until the session closes with done or is found abandoned.
+inputs:
+  required:
+  - workspace
+  - model
+  - about
+  optional:
+  - session
+  - predecessor
+outputs:
+  summary:
+    type: object
+states:
+- id: OPEN
+  initial: true
+- id: DONE
+  terminal: true
+- id: ABANDONED
+  terminal: true
+transitions:
+- from: OPEN
+  to: DONE
+  trigger: closed
+  guards:
+  - turn_completed
+  - session_closed
+- from: OPEN
+  to: ABANDONED
+  trigger: abandoned
+  guards:
+  - turn_completed
+  - session_abandoned
+- from: OPEN
+  to: ABANDONED
+  trigger: exhausted
+  guards:
+  - turn_exhausted
+steps:
+- id: turn
+  state: OPEN
+  handler: host_callback
+  repeat:
+    max_iterations: 1000
+    until:
+      output_field: closed
+      equals: true
+  config:
+    num_agents: 1
+    prompt: The console records one turn of the session; the model is never asked for this step.
+    see_prior: false
+guards:
+  turn_completed:
+    type: automated
+    check: step_status:turn:COMPLETED
+  session_closed:
+    type: automated
+    check: output_field:turn:closed=true
+  session_abandoned:
+    type: automated
+    check: output_field:turn:abandoned=true
+  turn_exhausted:
+    type: automated
+    check: step_repeat_exhausted:turn
+roles:
+- id: AXLR
+  allowed_actions:
+  - turn
+  - closed
+  - abandoned
+  - exhausted
+timeouts:
+  step_default: 3600
+retry_policies:
+  default:
+    max_attempts: 1
+    backoff_seconds: 1
+max_parallel: 1
+max_transitions: 20
+max_bounces: 3

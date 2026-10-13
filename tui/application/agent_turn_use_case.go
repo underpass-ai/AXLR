@@ -143,8 +143,12 @@ func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, 
 			verdict, reason := s.Mode().Judge(tool.Identity, args)
 			if verdict != domain.VerdictDeny {
 				if resolveErr = compactRefusal(*s, p); resolveErr == nil {
-					if resolveErr = localArgumentError(admit.Validation, tool, args); resolveErr == nil {
-						return nil
+					// The missing why is named before the schema check, so
+					// the model reads what to send rather than a schema rule.
+					if resolveErr = whyError(tool, args); resolveErr == nil {
+						if resolveErr = localArgumentError(admit.Validation, tool, args); resolveErr == nil {
+							return nil
+						}
 					}
 				}
 			} else {

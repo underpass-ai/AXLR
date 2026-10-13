@@ -109,7 +109,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	if !known || resolveErr != nil || s.HeadOverBudget(admit.turnLimit()) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
-	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || localArgumentError(u.Validation, tool, toolArgs) != nil {
+	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyError(tool, toolArgs) != nil || localArgumentError(u.Validation, tool, toolArgs) != nil {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
 	if decision == domain.DecisionAutoApprove && !approvesInSession(u.Approval, *s, tool.Identity, toolArgs) {

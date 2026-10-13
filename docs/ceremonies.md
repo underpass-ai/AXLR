@@ -13,7 +13,7 @@ AXLR runs ordinary work directly. The console starts a MADE ceremony when the us
 | `/repair` | `axlr_repair` 1.0 | Reproduce → diagnose → repair in a fresh clone → the console commits, pushes and opens the pull request → watches its checks → merge decision (automatic or the person's) → squash merge |
 | `/improve` | `axlr_improve` 1.0 | Brief with a check that fails in a fresh clone → build until it passes → the console commits, pushes and opens the pull request → watches its checks → the person's merge decision → squash merge |
 
-The [MADE runbook](runbooks/made.md#prepare-the-driven-ceremonies) prepares the work identity and publishes the eight pinned definitions. Selecting a mode does not start an instance; the next prompt does. AXLR checks the published semantic digest, starts the instance and claims its first step. Missing or conflicting definitions stop the start.
+The [MADE runbook](runbooks/made.md#prepare-the-driven-ceremonies) prepares the work identity and publishes the nine pinned definitions (the eight driven ones and `axlr_session` 1.0, the instance every session runs; see [the session ceremony](#the-session-ceremony)). Selecting a mode does not start an instance; the next prompt does. AXLR checks the published semantic digest, starts the instance and claims its first step. Missing or conflicting definitions stop the start.
 
 The model does real work with AXLR tools and returns the current step's fields through `axlr_step_done`. AXLR runs the check itself, records its output in MADE, applies an enabled transition and claims the next step. The model must not also drive that instance through direct `made_*` calls.
 

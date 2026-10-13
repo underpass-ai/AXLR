@@ -88,9 +88,9 @@ func TestHostWrapperRefusalNamesAcceptedFields(t *testing.T) {
 	snapshot := append(turnTools(), HostTools()...)
 	snapshot = append(snapshot, hostPlugin(t, "memory", "kmp", "kmp_wake"))
 	for input, want := range map[string]string{
-		`{"tool":"memory","arguments":{}}`: `unknown host argument "tool"; accepted: name, arguments`,
-		`{"name":"memory","args":{}}`:      `unknown host argument "args"; accepted: name, arguments`,
-		`["memory"]`:                       `host arguments must be an object; accepted: name, arguments`,
+		`{"tool":"memory","arguments":{}}`: `unknown host argument "tool"; accepted: name, arguments, why`,
+		`{"name":"memory","args":{}}`:      `unknown host argument "args"; accepted: name, arguments, why`,
+		`["memory"]`:                       `host arguments must be an object; accepted: name, arguments, why`,
 	} {
 		_, _, _, err := ResolveToolCall(snapshot, root.ToolCall{Name: HostCallToolName, Arguments: hostJSON(t, input)})
 		if err == nil || err.Error() != want {
@@ -128,5 +128,17 @@ func TestHostDefinitionsRemainStableAndExcludePluginSchemas(t *testing.T) {
 	definitions[0].Definition.Description = "changed"
 	if reflect.DeepEqual(definitions, HostTools()) {
 		t.Fatal("host definitions share mutable caller slice")
+	}
+}
+
+// A why on a host tool that asks none is dropped, not refused: a model told
+// to give its side effects a why gives one to everything.
+func TestHostToolsDropAnUnaskedWhy(t *testing.T) {
+	args, err := decodeHostArguments(hostJSON(t, `{"name":"kmp_ask","arguments":{"q":1},"why":"recall the decision"}`), "name", "arguments")
+	if err != nil || string(args["name"]) != `"kmp_ask"` || args["why"] != nil {
+		t.Fatalf("%v %v", args, err)
+	}
+	if _, err := decodeHostArguments(hostJSON(t, `{"name":"x","other":1}`), "name"); err == nil {
+		t.Fatal("an unknown argument is still refused")
 	}
 }

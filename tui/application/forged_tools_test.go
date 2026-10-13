@@ -304,7 +304,7 @@ func TestAnApprovedForgedRunReachesTheRuntimeThroughTheResolver(t *testing.T) {
 	if err := s.BeginTurn("count the words", append(turnTools(), RunTool())); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CompleteAssistant(assistant("", root.ToolCall{ID: "call-1", Name: HostRunToolName, Arguments: object(t, `{"name":"word_count","arguments":{"text":"one two"}}`)})); err != nil {
+	if err := s.CompleteAssistant(assistant("", root.ToolCall{ID: "call-1", Name: HostRunToolName, Arguments: object(t, `{"name":"word_count","arguments":{"text":"one two"},"why":"count the words of the sample"}`)})); err != nil {
 		t.Fatal(err)
 	}
 	var ran domain.ToolIdentity

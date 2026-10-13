@@ -22,6 +22,10 @@ type ToolCatalog struct {
 	Plugins     *plugins.Manager
 	Diagnostics application.DiagnosticPort
 	Profiles    func() []domain.PluginProfile
+	// RequireWhy makes every side-effect tool's schema require a
+	// one-sentence why (application.RequireWhy). The console sets it; the
+	// service keeps the plain schemas for its API clients.
+	RequireWhy bool
 }
 
 var portableName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
@@ -32,6 +36,9 @@ func (c ToolCatalog) Snapshot(ctx context.Context) ([]domain.AvailableTool, erro
 	}
 	result := localToolDefinitions()
 	result = append(result, application.HostTools()...)
+	if c.RequireWhy {
+		result = application.RequireWhy(result)
+	}
 	if c.Plugins != nil {
 		var tools []root.PluginTool
 		if c.Profiles == nil {

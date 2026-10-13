@@ -25,9 +25,15 @@ func fileChangeRows(name root.ToolName, arguments []byte, theme Theme) ([]transc
 		NewText *string `json:"new_text"`
 		Content *string `json:"content"`
 		Mode    string  `json:"mode"`
+		Why     string  `json:"why"`
 	}
 	if json.Unmarshal(arguments, &call) != nil || call.Path == nil {
 		return nil, false
+	}
+	// The model's reason for the change comes first, before the diff.
+	var reason []transcriptRow
+	if why := strings.TrimSpace(call.Why); why != "" {
+		reason = append(reason, transcriptRow{Text: theme.Tf("approval.why", strings.ReplaceAll(why, "\n", " ")), Kind: transcriptRowSpeaker})
 	}
 	lines := func(text, label string, tone rowTone, kind transcriptRowKind) []transcriptRow {
 		var rows []transcriptRow
@@ -42,7 +48,7 @@ func fileChangeRows(name root.ToolName, arguments []byte, theme Theme) ([]transc
 		if call.OldText == nil || call.NewText == nil {
 			return nil, false
 		}
-		rows := []transcriptRow{header}
+		rows := append(append([]transcriptRow(nil), reason...), header)
 		if context, ok := editRows(*call.OldText, *call.NewText); ok {
 			return append(rows, context...), true
 		}
@@ -62,7 +68,7 @@ func fileChangeRows(name root.ToolName, arguments []byte, theme Theme) ([]transc
 		if hidden := len(body) - writePreviewLines; hidden > 0 {
 			body = append(body[:writePreviewLines], transcriptRow{Text: theme.Tn("approval.moreLines", hidden, hidden), Kind: transcriptRowPlain})
 		}
-		return append([]transcriptRow{header}, body...), true
+		return append(append(append([]transcriptRow(nil), reason...), header), body...), true
 	}
 	return nil, false
 }
