@@ -17,16 +17,9 @@ import (
 // transcript shows messages with this prefix as a console line.
 const MemoryReminderPrefix = "[AXLR · memory]"
 
-// memoryReminderCalls is how many local tool calls make a request worth
-// recording when it changed no file. File reads do not count, since a request
-// that only read settled nothing durable, and neither do host bookkeeping and
-// KMP reads: a session's startup alone makes several of them. A command does,
-// since running a check or a test can settle an outcome.
-const memoryReminderCalls = 5
-
 // memoryReminder is the console's message; it leaves the judgement to the
 // model and says how to decline.
-const memoryReminder = MemoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with axlr_remember (kind, text and its evidence; the console uses the session's exact about and a stable idempotency key), then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
+const memoryReminder = MemoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with axlr_remember (kind, text and its evidence, with summary_en when the text is not in English; the console uses the session's exact about and a stable idempotency key), then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
 
 // memoryReminderBridged is the reminder where axlr_remember is not offered.
 const memoryReminderBridged = MemoryReminderPrefix + " KMP is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with kmp_write_memory through axlr_call_tool, under the session's exact about (axlr_session shows it), with its source evidence and a stable idempotency key, then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
@@ -106,11 +99,13 @@ func personRequest(messages []root.Message) int {
 
 // needsMemoryReminder reads one request: it was not reminded yet, ran no
 // ceremony step, attempted no memory write (an attempt the person denied
-// counts: they decided), and changed a file or made several local tool calls
-// other than reads, searches and listings. A write counts as a change only
-// when its result says it completed: on 10 October 2026 the person denied
-// the only local_edit of a request and the console still reminded the model
-// that the request "did real work".
+// counts: they decided), and changed a file or ran a command (decision F2
+// of the lifecycle integration design: a check or a test can settle an
+// outcome; reads, searches, listings, bookkeeping and KMP reads never
+// do). A write or a command counts only when its result says it
+// completed: on 10 October 2026 the person denied the only local_edit of a
+// request and the console still reminded the model that the request "did
+// real work".
 func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 	results := map[root.ToolCallID]string{}
 	for _, message := range request {
@@ -118,15 +113,12 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 			results[message.ToolCallID] = string(message.Content)
 		}
 	}
-	local, changed := 0, false
+	ran, changed := false, false
 	for _, message := range request[1:] {
 		if message.Role == root.RoleUser && strings.HasPrefix(string(message.Content), MemoryReminderPrefix) {
 			return false
 		}
 		for _, call := range message.ToolCalls {
-			if countsForMemory(call.Name) {
-				local++
-			}
 			switch call.Name {
 			case write, HostStepDoneName, HostRememberName:
 				return false
@@ -139,10 +131,33 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 				}
 			case "local_write", "local_edit":
 				changed = changed || writeSucceeded(results[call.ID])
+			case "local_exec", HostRunToolName:
+				ran = ran || commandRan(results[call.ID])
 			}
 		}
 	}
-	return changed || local >= memoryReminderCalls
+	return changed || ran
+}
+
+// commandRan reports a command whose result says it ran: not denied,
+// cancelled or refused before starting.
+func commandRan(result string) bool {
+	if result == "" {
+		return false
+	}
+	lower := strings.ToLower(result)
+	for _, refused := range []string{"denied by user", "tool call cancelled", "tool call denied", "give why", "effect unknown"} {
+		if strings.Contains(lower, refused) {
+			return false
+		}
+	}
+	var envelope struct {
+		Status string `json:"status"`
+	}
+	if json.Unmarshal([]byte(result), &envelope) == nil && envelope.Status != "" && envelope.Status != "completed" && envelope.Status != "ok" {
+		return false
+	}
+	return true
 }
 
 // answerAddressesMemory reports whether a final answer already says what
@@ -178,10 +193,3 @@ var (
 	memoryAnchor = regexp.MustCompile(`\b(kmp|memory|memories|memoria|remember|durable|duradero)\b`)
 	memoryVerb   = regexp.MustCompile(`\b(record|records|recorded|recording|write|wrote|written|writing|save|saved|saving|store|stored|storing|remember|remembered|registr[a-z]*)\b|\bguard(é|ado|ada|ar|o)`)
 )
-
-// countsForMemory reports whether a call counts toward memoryReminderCalls:
-// a local tool call that is not a file read, a search or a listing, which
-// change nothing.
-func countsForMemory(name root.ToolName) bool {
-	return strings.HasPrefix(string(name), "local_") && name != "local_read" && name != "local_search" && name != "local_list"
-}

@@ -258,7 +258,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		// the evidence relevant to it instead of the about's whole history.
 		if text, _, err := d.Memory.WakeFocused(ctx, about, string(prompt)); err == nil {
 			if len(text) > memoryLimit {
-				prefix := "Partial KMP recall: console context shortened; recover the full about with kmp_wake before relying on omitted evidence.\n"
+				prefix := "Partial KMP recall: console context shortened; recover the full about with axlr_recall (mode wake) before relying on omitted evidence.\n"
 				memory = prefix + bounded(text, memoryLimit-len(prefix))
 			} else {
 				memory = text

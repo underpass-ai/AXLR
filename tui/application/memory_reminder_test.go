@@ -72,10 +72,16 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		{"an edit without a result", []root.Message{{Role: root.RoleUser, Content: "fix the parser"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{edit}}, {Role: root.RoleAssistant, Content: "done"}}, false},
 		{"a denied and a completed write", withResult(memoryRequest(t, edit, toolCall(t, "w2", "local_write", `{}`)), "e1", "tool call denied by user"), true},
 		{"five commands", memoryRequest(t, commands...), true},
-		{"commands and reads", memoryRequest(t, append([]root.ToolCall{reads[0], reads[1]}, commands[:3]...)...), false},
+		// One command that ran can settle an outcome (decision F2); one
+		// the person denied, or that never started, settled nothing.
+		{"one command and reads", memoryRequest(t, reads[0], reads[1], commands[0]), true},
+		{"a denied command", withResult(memoryRequest(t, commands[0]), "x1", "tool call denied by user"), false},
+		{"a refused command", withResult(memoryRequest(t, commands[0]), "x1", "give why: one sentence saying what this call is for"), false},
+		{"a command without a result", []root.Message{{Role: root.RoleUser, Content: "run the tests"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{commands[0]}}, {Role: root.RoleAssistant, Content: "done"}}, false},
+		{"a forged tool run", memoryRequest(t, toolCall(t, "f1", HostRunToolName, `{"name":"t"}`)), true},
 		{"eight reads", memoryRequest(t, reads...), false},
 		{"searches and listings", memoryRequest(t, searches...), false},
-		{"commands and searches", memoryRequest(t, append(append([]root.ToolCall{}, searches[:4]...), commands[:4]...)...), false},
+		{"searches and a recall", memoryRequest(t, searches[0], searches[1], toolCall(t, "q1", HostRecallName, `{}`)), false},
 		{"a question", memoryRequest(t, reads[:2]...), false},
 		{"session startup", memoryRequest(t, toolCall(t, "b1", HostSessionName, `{}`), toolCall(t, "b2", HostSkillName, `{}`), toolCall(t, "b3", HostToolsName, `{}`), toolCall(t, "b4", HostCallToolName, `{"name":"kmp_guide","arguments":{}}`), toolCall(t, "b5", HostCallToolName, `{"name":"kmp_wake","arguments":{}}`), toolCall(t, "b6", "kmp_wake", `{}`)), false},
 		{"bridged write", memoryRequest(t, edit, toolCall(t, "w1", HostCallToolName, `{"name":"kmp_write_memory","arguments":{}}`)), false},

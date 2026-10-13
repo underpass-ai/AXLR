@@ -134,10 +134,14 @@ func TestModelContextReflectsRegisteredCapabilitiesAndPreservesHistory(t *testin
 		t.Fatal(err)
 	}
 	messages := modelMessages(&s)
-	for _, text := range []string{"MADE", "KMP", "specific extended topic", "made_guide", "kmp_guide"} {
+	for _, text := range []string{"Ceremonies (MADE)", "Memory (KMP)", "axlr_recall", "made_guide"} {
 		if !strings.Contains(string(messages[0].Content), text) {
 			t.Fatalf("missing %s", text)
 		}
+	}
+	// The two paragraphs and the session line stay under 1 KB (decision D8).
+	if size := len(kmpGuidance) + len(kmpRecordGuidance) + len(madeGuidance) + len(sessionTitleGuidance); size > 1024 {
+		t.Fatalf("lifecycle guidance is %d bytes", size)
 	}
 	if len(s.Messages()) != 1 || s.Messages()[0].Role != root.RoleUser || messages[1].Content != "hello" {
 		t.Fatal("changed persisted history")

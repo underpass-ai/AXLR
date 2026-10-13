@@ -166,7 +166,7 @@ func (d *CeremonyDriver) beginRepair(ctx context.Context, s *domain.Session, run
 		case err != nil:
 			run.Memory = "KMP recall unavailable: " + bounded(err.Error(), 300)
 		case len(text) > maxCeremonyMemoryBytes:
-			prefix := "Partial KMP recall: console context shortened; recover the full about with kmp_wake before relying on omitted evidence.\n"
+			prefix := "Partial KMP recall: console context shortened; recover the full about with axlr_recall (mode wake) before relying on omitted evidence.\n"
 			run.Memory = prefix + bounded(text, maxCeremonyMemoryBytes-len(prefix))
 		default:
 			run.Memory = text

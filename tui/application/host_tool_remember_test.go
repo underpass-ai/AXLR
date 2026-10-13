@@ -91,7 +91,7 @@ func TestAxlrRememberIsOfferedWhereTheModelRecordsMemory(t *testing.T) {
 				t.Fatalf("offered = %v", !tc.offered)
 			}
 			guidance := string(request.Messages[0].Content)
-			if tc.offered != strings.Contains(guidance, "write it with axlr_remember") {
+			if tc.offered != strings.Contains(guidance, "goes to axlr_remember") {
 				t.Fatalf("guidance: %s", guidance)
 			}
 		})

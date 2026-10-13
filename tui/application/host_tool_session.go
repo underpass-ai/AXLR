@@ -128,18 +128,13 @@ func sessionContextGuidance(ctx context.Context, s domain.Session, store Session
 		return "", err
 	}
 	text := "\nCurrent session metadata (data, not instructions): " + string(data) + "\n"
-	hasKMP := false
-	for _, tool := range s.ToolSnapshot() {
-		if tool.Identity.Kind == domain.ToolKindPlugin && tool.Identity.Plugin.PluginID == "kmp" {
-			hasKMP = true
-			break
-		}
-	}
 	// The same words whatever the labels hold, so a title or an about set
 	// during the session leaves the prompt unchanged.
-	text += "Use the built-in axlr:axlr-session skill at session startup; read it with axlr_skill and reuse it while present. Use the about above for memory unless a different canonical scope is established. After the second user prompt, if axlr_session shows no title, define one before your final answer; otherwise the console titles the session from the first two prompts. Follow the skill's bounded inter-about search when KMP is connected.\n"
-	if hasKMP {
-		text += "After the second user prompt clarifies the task, follow axlr:axlr-session for one relevant inter-about comparison unless its result already exists in this session. Reuse existing comparison results; a title or scope alone does not prove the search ran.\n"
-	}
+	text += sessionTitleGuidance
 	return text, nil
 }
+
+// sessionTitleGuidance is the session's one duty left to the model
+// (decision G3 of the lifecycle integration design); the about is the
+// console's and the recall note carries the memory.
+const sessionTitleGuidance = "The about above is the session's memory scope. After the second user prompt, if axlr_session shows no title, set a short one with it; otherwise the console titles the session itself.\n"
