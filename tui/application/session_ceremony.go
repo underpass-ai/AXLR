@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -39,6 +40,10 @@ type TurnEntry struct {
 	// close writes (decision F3); "" is turn.
 	Kind string
 }
+
+// ErrEntryRecorded is the journal's answer to an entry whose idempotency
+// key the store accepted already: nothing to retry.
+var ErrEntryRecorded = errors.New("entry recorded already")
 
 // JournalPort writes a turn's results to KMP and returns the stored ref;
 // RecordSettled writes what Jev selected from a turn (session_settle.go).
@@ -310,7 +315,12 @@ func (c *SessionCeremony) journal(ctx context.Context, pending []string) []strin
 			c.log("session memory entry dropped: %v", err)
 			continue
 		}
-		if _, err := c.Journal.RecordTurn(ctx, entry); err != nil {
+		if _, err := c.Journal.RecordTurn(ctx, entry); errors.Is(err, ErrEntryRecorded) {
+			// The store has it from an earlier attempt (the entry was
+			// queued after a write whose receipt was lost): retrying
+			// would block every entry behind it.
+			c.log("session memory %s: recorded already; dropped", entry.Key)
+		} else if err != nil {
 			c.log("session memory %s: %v; kept for the next turn", entry.Key, err)
 			kept = append(kept, pending[i:]...)
 			break
@@ -454,7 +464,7 @@ func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, tr
 			state := s.Export()
 			// KMP's kinds have no session_closed (refused on 13 October
 			// 2026): the entry is an observation labelled event=closed.
-			entry := TurnEntry{Kind: "observation", About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:%s:%s", trigger, state.ID), Summary: fmt.Sprintf("Session %s after %s (%s).", trigger, plural(instance.Turns, "turn"), reason),
+			entry := TurnEntry{Kind: "observation", About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:%s:%s", trigger, instance.Instance), Summary: fmt.Sprintf("Session %s after %s (%s).", trigger, plural(instance.Turns, "turn"), reason),
 				Evidence: []string{fmt.Sprintf("MADE %s %s", instance.Instance, trigger)}, OccurredAt: c.now(), ContextID: instance.KMPContext,
 				Labels: map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {string(s.Mode())}, "event": {trigger}}}
 			instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))

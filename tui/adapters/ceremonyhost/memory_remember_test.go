@@ -3,6 +3,7 @@ package ceremonyhost
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -136,6 +137,12 @@ func TestRecordTurnWritesOneTurnEntry(t *testing.T) {
 	refused := kmpAnswers(t, &more, map[string]any{"accepted": false, "status": "needs_review"})
 	if _, err := refused.RecordTurn(context.Background(), application.TurnEntry{About: "ws:abc", Key: "k", Summary: "s", Evidence: []string{"e"}}); err == nil {
 		t.Fatal("an unaccepted write is an error")
+	}
+	// A key the store accepted already is the journal's "recorded".
+	var dup []map[string]any
+	recorded := kmpAnswers(t, &dup, map[string]any{"status": "rejected", "error": map[string]any{"code": "conflict", "message": "embedded kernel ingest conflict for `ws:abc`: idempotency key 'k' was already accepted"}})
+	if _, err := recorded.RecordTurn(context.Background(), application.TurnEntry{About: "ws:abc", Key: "k", Summary: "s", Evidence: []string{"e"}}); !errors.Is(err, application.ErrEntryRecorded) {
+		t.Fatalf("duplicate key: %v", err)
 	}
 }
 

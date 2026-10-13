@@ -208,6 +208,11 @@ func (m Memory) RecordTurn(ctx context.Context, entry application.TurnEntry) (st
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) {
+			if refused.Code == "conflict" && strings.Contains(refused.Message, "idempotency key") {
+				// The key was accepted by an earlier write (seen on 13
+				// October 2026 when a close entry was queued twice).
+				return "", fmt.Errorf("KMP refused the turn entry (%s): %s: %w", refused.Code, bounded(refused.Message, 600), application.ErrEntryRecorded)
+			}
 			return "", fmt.Errorf("KMP refused the turn entry (%s): %s", refused.Code, bounded(refused.Message, 600))
 		}
 		return "", err

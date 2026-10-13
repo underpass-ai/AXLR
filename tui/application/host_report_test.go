@@ -202,7 +202,7 @@ func TestCloseWritesASessionClosedEntry(t *testing.T) {
 		t.Fatal(err)
 	}
 	id := string(s.ID())
-	if len(journal.entries) != 1 || journal.entries[0].Kind != "observation" || journal.entries[0].Labels["event"][0] != "closed" || journal.entries[0].About != "ws:"+id || journal.entries[0].Key != "axlr:closed:"+id || journal.entries[0].Summary != "Session closed after 1 turn (exit)." {
+	if len(journal.entries) != 1 || journal.entries[0].Kind != "observation" || journal.entries[0].Labels["event"][0] != "closed" || journal.entries[0].About != "ws:"+id || journal.entries[0].Key != "axlr:closed:axlr-session-"+id || journal.entries[0].Summary != "Session closed after 1 turn (exit)." {
 		t.Fatalf("%+v", journal.entries)
 	}
 }

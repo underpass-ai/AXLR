@@ -48,7 +48,10 @@ const (
 	settleAnswerBytes        = 4000
 	settleActionLines        = 40
 	settleSentenceMin        = 20
-	settleSentenceMax        = 300
+	// settleSentenceMax is in bytes: the answers of a model in Spanish
+	// carry sentences of several hundred bytes, which Jev sees bounded
+	// (optionLabels) and the store keeps whole.
+	settleSentenceMax = 600
 )
 
 // settleKinds are the kinds Jev chooses among, with what each means.

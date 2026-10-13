@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -15,11 +16,39 @@ type journalStub struct {
 	entries []TurnEntry
 	settled []SettledEntry
 	err     error
+	// errFor answers one key with its own error.
+	errFor map[string]error
 }
 
 func (j *journalStub) RecordTurn(_ context.Context, entry TurnEntry) (string, error) {
 	j.entries = append(j.entries, entry)
+	if err, ok := j.errFor[entry.Key]; ok {
+		return "", err
+	}
 	return "ws:x:entry:turn:1", j.err
+}
+
+// An entry the store accepted already (its idempotency key conflicts) is
+// dropped so the entries behind it are written; any other refusal keeps
+// the queue from that entry on (seen on 13 October 2026: a close entry
+// queued twice blocked a successor's turn records).
+func TestJournalDropsAnEntryRecordedAlready(t *testing.T) {
+	c, _, journal, _ := sessionCeremonyFor(t, &fakeEngine{})
+	journal.errFor = map[string]error{"axlr:closed:axlr-session-x": fmt.Errorf("KMP refused the turn entry (conflict): %w", ErrEntryRecorded), "k3": errors.New("engine down")}
+	var pending []string
+	for _, key := range []string{"axlr:closed:axlr-session-x", "k2", "k3", "k4"} {
+		pending = append(pending, encodeEntry(TurnEntry{Key: key, About: "ws:x", Summary: key}))
+	}
+	kept := c.journal(context.Background(), pending)
+	if len(journal.entries) != 3 || journal.entries[1].Key != "k2" || journal.entries[2].Key != "k3" {
+		t.Fatalf("written %+v", journal.entries)
+	}
+	if len(kept) != 2 {
+		t.Fatalf("kept %d", len(kept))
+	}
+	if k3, _ := decodeEntry(kept[0]); k3.Key != "k3" {
+		t.Fatalf("kept %+v", k3)
+	}
 }
 
 func (j *journalStub) RecordSettled(_ context.Context, entry SettledEntry) (string, error) {
