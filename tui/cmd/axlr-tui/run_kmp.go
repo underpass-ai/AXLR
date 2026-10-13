@@ -87,11 +87,14 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 		}
 	}
 	binary, pluginRoot := kmpstore.Binary(r.Manifest.Command)
-	preparer := kmpstore.Preparer{Binary: binary, PluginRoot: pluginRoot, UserStore: kmpstore.UserDefault(dataBase)}
+	cli := kmpstore.CLI{Binary: binary}
+	preparer := kmpstore.Preparer{CLI: cli, PluginRoot: pluginRoot, UserStore: kmpstore.UserDefault(dataBase)}
 	selection, env := store.Selection, r.Env
-	store.SyncGuide = func(ctx context.Context) error { return preparer.SyncGuide(ctx, selection, env) }
+	store.SyncGuide = func(ctx context.Context) error {
+		return kmpstore.GuideSync{CLI: cli, PluginRoot: pluginRoot}.Sync(ctx, selection, env)
+	}
 	store.Save = func(ctx context.Context, about string) (application.BundleSaved, error) {
-		path, events, err := preparer.Export(ctx, selection, about, env)
+		path, events, err := kmpstore.Exporter{CLI: cli}.Export(ctx, selection, about, env)
 		return application.BundleSaved{Path: path, About: about, Events: events}, err
 	}
 	if store.Report, err = preparer.Prepare(ctx, store.Selection, r.Env); err != nil {
@@ -104,7 +107,7 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 	if about != "" {
 		store.About, store.FromBundle, store.FromRoot = about, true, false
 	}
-	if count, known, err := preparer.Count(ctx, store.Selection, store.About, r.Env); err == nil && known {
+	if count, known, err := (kmpstore.Counter{CLI: cli}).Count(ctx, store.Selection, store.About, r.Env); err == nil && known {
 		store.Memories, store.Counted = count, true
 	} else if err == nil {
 		store.Counted = true // listed, nothing under the about: a new project

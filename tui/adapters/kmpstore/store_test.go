@@ -145,13 +145,13 @@ func TestPrepareCreatesImportsConfiguresAndSyncsANewProjectStore(t *testing.T) {
 		}
 	}
 	var runs []run
-	p := Preparer{Binary: "/opt/kmp/bin/kmp-mcp", PluginRoot: "/opt/kmp", UserStore: user, Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
+	p := Preparer{PluginRoot: "/opt/kmp", UserStore: user, CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
 		runs = append(runs, run{command, args, env})
 		if args[0] == "import" {
 			return []byte("note\n" + `{"events_imported":7,"mutations_applied":99}` + "\n"), nil
 		}
 		return nil, nil
-	}}
+	}}}
 	selection := Resolve(top, []string{"HOME=/h", "PATH=/bin"}, t.TempDir())
 	report, err := p.Prepare(context.Background(), selection, []string{"HOME=/h", "PATH=/bin"})
 	if err != nil {
@@ -181,10 +181,10 @@ func TestPrepareLeavesAnExistingStoreAlone(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(store, "FORMAT_VERSION"), []byte("4"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p := Preparer{Binary: "/opt/kmp/bin/kmp-mcp", PluginRoot: "/opt/kmp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
+	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
 		t.Fatal("nothing runs on an existing store")
 		return nil, nil
-	}}
+	}}}
 	report, err := p.Prepare(context.Background(), Selection{Path: store, Reason: ReasonOperator}, nil)
 	if err != nil || report.Created || report.Imported != 0 || report.GuideSynced || len(report.Configured) != 0 {
 		t.Fatalf("%+v %v", report, err)
@@ -218,13 +218,13 @@ func TestPrepareReportsAFailedImportAndStillFinishesTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	var runs []run
-	p := Preparer{Binary: "/opt/kmp/bin/kmp-mcp", PluginRoot: "/opt/kmp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
+	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
 		runs = append(runs, run{command, args, env})
 		if args[0] == "import" {
 			return nil, errors.New("could not decode bundle header")
 		}
 		return nil, nil
-	}}
+	}}}
 	report, err := p.Prepare(context.Background(), Resolve(top, nil, t.TempDir()), nil)
 	if err != nil || !strings.Contains(report.ImportFailed, "bundle header") || report.Imported != 0 || !report.GuideSynced || len(runs) != 2 {
 		t.Fatalf("%+v %v %+v", report, err, runs)
@@ -232,9 +232,9 @@ func TestPrepareReportsAFailedImportAndStillFinishesTheStore(t *testing.T) {
 }
 
 func TestPrepareReportsAFailedGuideSync(t *testing.T) {
-	p := Preparer{Binary: "/opt/kmp/bin/kmp-mcp", PluginRoot: "/opt/kmp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
+	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
 		return nil, errors.New("no guide assets")
-	}}
+	}}}
 	_, err := p.Prepare(context.Background(), Selection{Path: filepath.Join(t.TempDir(), "default"), Reason: ReasonUser}, nil)
 	if err == nil || !strings.Contains(err.Error(), "guide") {
 		t.Fatalf("%v", err)
@@ -288,7 +288,7 @@ func TestBundleAboutTakesTheProjectAboutOrTheDirectoryMatch(t *testing.T) {
 func TestCountReadsTheAboutsEventsFromTheMemoriesListing(t *testing.T) {
 	listing := `{"memories":[{"path":"/s/.kernel","abouts":[{"about":"project:X","events":7},{"about":"ws:a","events":2}]},{"path":"/other","abouts":[{"about":"project:X","events":99}]}]}`
 	var args []string
-	p := Preparer{Binary: "/bin/kmp-mcp", Run: func(_ context.Context, _ string, a, env []string) ([]byte, error) {
+	p := Counter{CLI: CLI{Binary: "/bin/kmp-mcp", Run: func(_ context.Context, _ string, a, env []string) ([]byte, error) {
 		args = a
 		for _, entry := range env {
 			if entry == "KMP_MCP_DATA_DIR=/s/.kernel" {
@@ -296,7 +296,7 @@ func TestCountReadsTheAboutsEventsFromTheMemoriesListing(t *testing.T) {
 			}
 		}
 		return []byte(listing), nil
-	}}
+	}}}
 	count, known, err := p.Count(context.Background(), Selection{Path: "/s/.kernel"}, "project:X", nil)
 	if err != nil || !known || count != 7 || args[0] != "memories" || args[1] != "--json" {
 		t.Fatalf("%d %v %v %v", count, known, err, args)
@@ -317,7 +317,7 @@ func TestExportedEventsReadsTheLastJSONLine(t *testing.T) {
 	if got := exportedEvents([]byte("nothing")); got != -1 {
 		t.Fatalf("no JSON: %d", got)
 	}
-	if _, _, err := (Preparer{Binary: "/bin/true"}).Export(context.Background(), Selection{Path: "/tmp/store"}, "project:X", nil); err == nil || !strings.Contains(err.Error(), "git checkout") {
+	if _, _, err := (Exporter{CLI: CLI{Binary: "/bin/true"}}).Export(context.Background(), Selection{Path: "/tmp/store"}, "project:X", nil); err == nil || !strings.Contains(err.Error(), "git checkout") {
 		t.Fatalf("no top level: %v", err)
 	}
 }
