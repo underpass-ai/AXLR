@@ -90,13 +90,14 @@ func (c *SessionCeremony) settle(ctx context.Context, s domain.Session, instance
 		return
 	}
 	none := "none of them"
-	choice, err := c.Judge.Judge(ctx, JudgementQuestion{State: string(state), Question: "Which sentence of the answer states what this turn settled: the decision, constraint, fix or outcome worth reusing? Pick \"none of them\" when no sentence does.", Options: append(append([]string{}, candidates...), none)})
+	labels, sentences := optionLabels(candidates)
+	choice, err := c.Judge.Judge(ctx, JudgementQuestion{State: string(state), Question: "Which sentence of the answer states what this turn settled: the decision, constraint, fix or outcome worth reusing? Pick \"none of them\" when no sentence does.", Options: append(labels, none)})
 	if err != nil {
 		c.log("settle turn %d: %v", record.Turn, err)
 		return
 	}
-	text := choice.Choice
-	if text == "" || text == none || choice.Probabilities[text] < settleSentenceThreshold {
+	text := sentences[choice.Choice]
+	if text == "" || choice.Choice == none || choice.Probabilities[choice.Choice] < settleSentenceThreshold {
 		return
 	}
 	kind, err := c.Judge.Judge(ctx, JudgementQuestion{State: text, Question: "Which kind of memory is this sentence: decision (a choice made), constraint (a rule that holds), success_path (what worked), error_path (what failed and why), observation (a fact seen), preference (how the person wants things done), or feedback (a correction the person gave)?", Options: settleKinds})
@@ -147,16 +148,35 @@ func (c *SessionCeremony) supersedes(ctx context.Context, instance domain.Sessio
 	}
 	sort.Strings(options)
 	none := "none"
+	labels, byLabel := optionLabels(options)
 	state, _ := json.Marshal(map[string]any{"new_memory": text, "earlier_memories": instance.RecalledMemories})
-	verdict, err := c.Judge.Judge(ctx, JudgementQuestion{State: string(state), Question: "Does new_memory replace or contradict one of earlier_memories (each line is its ref, then its text)? Pick the ref of the memory it replaces, or none.", Options: append(options, none)})
-	if err != nil || verdict.Choice == "" || verdict.Choice == none || verdict.Probabilities[verdict.Choice] < settleSupersedeThreshold {
+	verdict, err := c.Judge.Judge(ctx, JudgementQuestion{State: string(state), Question: "Does new_memory replace or contradict one of earlier_memories (each line is its ref, then its text)? Pick the ref of the memory it replaces, or none.", Options: append(labels, none)})
+	if err != nil || verdict.Choice == none || byLabel[verdict.Choice] == "" || verdict.Probabilities[verdict.Choice] < settleSupersedeThreshold {
 		return nil
 	}
 	evidence := ""
 	if len(actions) > 0 {
 		evidence = actions[0]
 	}
-	return &MemoryLink{Ref: verdict.Choice, Rel: "supersedes", Why: fmt.Sprintf("Jev judged (p=%.2f) that the turn's result replaces it", verdict.Probabilities[verdict.Choice]), Evidence: evidence}
+	return &MemoryLink{Ref: byLabel[verdict.Choice], Rel: "supersedes", Why: fmt.Sprintf("Jev judged (p=%.2f) that the turn's result replaces it", verdict.Probabilities[verdict.Choice]), Evidence: evidence}
+}
+
+// optionLabels gives Jev one label per text, bounded to what a judgement
+// accepts (MaxJudgementOptionBytes; a sentence of the answer may be
+// longer, seen with glm-5.3-flash on 13 October 2026), and maps each label
+// back to its whole text, which is what the console stores.
+func optionLabels(texts []string) ([]string, map[string]string) {
+	byLabel := map[string]string{}
+	var labels []string
+	for _, text := range texts {
+		label := cut(text, MaxJudgementOptionBytes-len("…"))
+		if _, taken := byLabel[label]; taken {
+			continue
+		}
+		byLabel[label] = text
+		labels = append(labels, label)
+	}
+	return labels, byLabel
 }
 
 // settleSentences splits an answer into candidate sentences: a sentence
