@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -57,8 +58,8 @@ func TestExportSessionBundleNamesTheFileAndCarriesTheLabels(t *testing.T) {
 	now := time.Date(2026, 10, 13, 21, 5, 0, 0, time.UTC)
 	u := ExportSessionBundleUseCase{Codec: codec, Files: files, Labels: labels, Host: "gx10", Now: func() time.Time { return now }}
 	path, err := u.Execute(context.Background(), s, "")
-	if err != nil || !strings.HasSuffix(path, "/.axlr/exports/"+string(state.ID)+"-20261013-2105"+SessionBundleSuffix) {
-		t.Fatalf("path %q %v", path, err)
+	if want := filepath.Join(string(state.Workspace), ExportDirectory, string(state.ID)+"-20261013-2105"+SessionBundleSuffix); err != nil || path != want {
+		t.Fatalf("path %q want %q %v", path, want, err)
 	}
 	if files[path] != "bundle:"+string(state.ID) || codec.meta != (SessionBundleMeta{ExportedAt: now, Host: "gx10", Title: "Parser UTC", About: "project:Repo-B"}) {
 		t.Fatalf("file %q meta %+v", files[path], codec.meta)
@@ -84,14 +85,15 @@ func TestImportSessionMakesTheBundleThisConsoles(t *testing.T) {
 	store := &bundleStore{}
 	labels := &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{}}
 	now := time.Date(2026, 10, 13, 21, 0, 0, 0, time.UTC)
-	u := ImportSessionUseCase{Codec: codec, Store: store, Labels: labels, Workspace: domain.Workspace("/elsewhere/Repo-B"), Host: "gx10", Source: "/tmp/b.json", Now: func() time.Time { return now }}
+	elsewhere := domain.Workspace(filepath.Join(t.TempDir(), "Repo-B"))
+	u := ImportSessionUseCase{Codec: codec, Store: store, Labels: labels, Workspace: elsewhere, Host: "gx10", Source: "/tmp/b.json", Now: func() time.Time { return now }}
 	imported, meta, err := u.Execute(context.Background(), []byte("x"))
 	if err != nil || meta.Host != "laptop" {
 		t.Fatal(err, meta)
 	}
 	got := imported.Export()
 	instance := got.Instance
-	if got.Workspace != "/elsewhere/Repo-B" || got.Ceremony != nil || instance == nil {
+	if got.Workspace != elsewhere || got.Ceremony != nil || instance == nil {
 		t.Fatalf("state %+v", got)
 	}
 	if !instance.Closed || instance.Instance != "axlr-session-"+string(state.ID) || instance.Turns != 3 || instance.Fence != "" || instance.OperationID != "" || !instance.ClaimedAt.IsZero() || instance.Reports != 0 || instance.ClaimIncarnation != "" || instance.KMPAgent != "" || instance.KMPContext != "" || instance.LastRecord != `{"turn":3}` {

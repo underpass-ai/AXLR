@@ -15,7 +15,7 @@ import (
 // ceremony stays behind.
 func TestSessionBundleRoundTrip(t *testing.T) {
 	id, _ := domain.NewSessionID("0123456789abcdef0123456789abcdef")
-	s, err := domain.NewSession(id, domain.Workspace("/tmp/ws"), root.ModelID("test/model"))
+	s, err := domain.NewSession(id, domain.Workspace(t.TempDir()), root.ModelID("test/model"))
 	if err != nil {
 		t.Fatal(err)
 	}
