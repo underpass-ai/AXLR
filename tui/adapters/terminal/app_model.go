@@ -574,8 +574,8 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Info.SetContent(content)
 			m.Info.Viewport.GotoTop()
 		}
-		if v.MADEPreparation != nil && m.overlay == "made-setup" {
-			m.Info.SetContent(madePreparationContent(*v.MADEPreparation, v.Err, m.Theme))
+		if v.OrchestratorPreparation != nil && m.overlay == "made-setup" {
+			m.Info.SetContent(madePreparationContent(*v.OrchestratorPreparation, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
 		}
 		if v.EngineUpdates != nil && m.overlay == "updates" {

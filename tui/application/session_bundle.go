@@ -126,7 +126,7 @@ func (u ImportSessionUseCase) Execute(ctx context.Context, data []byte) (domain.
 		now = u.Now()
 	}
 	state.Workspace = u.Workspace
-	state.Ceremony = nil // a driven ceremony is bound to the origin's MADE
+	state.Ceremony = nil // a driven ceremony is bound to the origin's orchestrator
 	state.Instance = ImportedInstance(state.Instance, state.ID, u.Workspace, meta, u.Host, u.Source, now)
 	restored, err := domain.RestoreSession(state)
 	if err != nil {
@@ -178,7 +178,7 @@ func ImportedInstance(instance *domain.SessionInstance, id domain.SessionID, wor
 	if next.Instance == "" {
 		// The origin had no instance: the record needs a reason to exist
 		// until the first prompt opens one here and takes the entry.
-		next.Unavailable = "imported from " + origin + " without a MADE instance"
+		next.Unavailable = "imported from " + origin + " without a ceremony instance"
 	}
 	return &next
 }

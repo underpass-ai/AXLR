@@ -34,7 +34,7 @@ func RecallTool() domain.AvailableTool {
 	schema, _ := root.NewJSONObject([]byte(recallSchema))
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostRecallName,
-		Description: "Read KMP memory in one call. With a question: an evidence-backed answer under the session's about, or UNKNOWN, which is a valid answer; never invent a memory. mode wake: where the work on the about stands. mode history: its newest entries, or those since an instant. The console adds the about, the KMP context and the budget; it needs no kmp_guide or schema read. Read-only.",
+		Description: "Read the workspace's memory in one call. With a question: an evidence-backed answer under the session's about, or UNKNOWN, which is a valid answer; never invent a memory. mode wake: where the work on the about stands. mode history: its newest entries, or those since an instant. The console adds the about, the KMP context and the budget; it needs no kmp_guide or schema read. Read-only.",
 		Parameters:  schema,
 	}}
 }
@@ -43,7 +43,7 @@ func RecallTool() domain.AvailableTool {
 // compacts the result.
 func (u HostToolUseCase) hostRecall(ctx context.Context, session domain.Session, arguments root.JSONValue) (any, error) {
 	if u.Recall == nil {
-		return nil, errors.New("KMP is not connected in this console")
+		return nil, errors.New("memory is not connected in this console")
 	}
 	args, err := decodeHostArguments(arguments, "question", "about", "since", "mode", WhyArgument)
 	if err != nil {

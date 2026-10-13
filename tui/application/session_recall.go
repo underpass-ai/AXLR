@@ -123,7 +123,7 @@ func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt, cont
 	result, err := c.Identity.Recall.Recall(ctx, RecallRequest{Mode: RecallWake, About: about, Intent: prompt, ContextID: contextID})
 	if err != nil {
 		c.log("recall of %s: %v", about, err)
-		return bounded(fmt.Sprintf("%s: KMP recall unavailable: %s", about, bounded(err.Error(), 200)), limit), nil
+		return bounded(fmt.Sprintf("%s: memory recall unavailable: %s", about, bounded(err.Error(), 200)), limit), nil
 	}
 	if result.Empty || strings.TrimSpace(result.Text) == "" {
 		if project {

@@ -85,7 +85,7 @@ const ForgetWhy = "the person asked the console to forget it"
 func RefAbout(ref string) (string, error) {
 	about, _, found := strings.Cut(strings.TrimSpace(ref), ":entry:")
 	if !found || about == "" {
-		return "", errors.New("a memory ref reads <about>:entry:<kind>:<slug>, as KMP returns it")
+		return "", errors.New("a memory ref reads <about>:entry:<kind>:<slug>, as the memory engine returns it")
 	}
 	return about, nil
 }

@@ -19,17 +19,17 @@ type operationComplete struct {
 	Published string
 	// MemorySaved, MemoryCompared and MemoryForgotten are /memory's
 	// results: the bundle written, the comparison read, the entry closed.
-	MemorySaved      *application.BundleSaved
-	MemoryCompared   *application.CompareResult
-	MemoryForgotten  *application.ForgetReceipt
-	Session          domain.Session
-	Err              error
-	Sessions         *[]domain.SessionSummary
-	Plugins          *[]domain.PluginState
-	InstalledPlugins *[]application.InstalledPlugin
-	PluginApproval   *domain.PluginProfile
-	EngineUpdates    *[]application.EngineUpdateResult
-	MADEPreparation  *application.MADEPreparation
+	MemorySaved             *application.BundleSaved
+	MemoryCompared          *application.CompareResult
+	MemoryForgotten         *application.ForgetReceipt
+	Session                 domain.Session
+	Err                     error
+	Sessions                *[]domain.SessionSummary
+	Plugins                 *[]domain.PluginState
+	InstalledPlugins        *[]application.InstalledPlugin
+	PluginApproval          *domain.PluginProfile
+	EngineUpdates           *[]application.EngineUpdateResult
+	OrchestratorPreparation *application.OrchestratorPreparation
 	// gitRead marks a turn's end whose Git state read is already asked.
 	gitRead bool
 }

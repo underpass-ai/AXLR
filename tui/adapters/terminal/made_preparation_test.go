@@ -12,11 +12,11 @@ import (
 )
 
 type madePreparerStub struct {
-	result application.MADEPreparation
+	result application.OrchestratorPreparation
 	calls  int
 }
 
-func (s *madePreparerStub) Prepare(context.Context) (application.MADEPreparation, error) {
+func (s *madePreparerStub) Prepare(context.Context) (application.OrchestratorPreparation, error) {
 	s.calls++
 	return s.result, nil
 }
@@ -24,10 +24,10 @@ func (s *madePreparerStub) Prepare(context.Context) (application.MADEPreparation
 func (s *madePreparerStub) Publish(context.Context, string) (string, error) { return "x 1.0", nil }
 
 func TestMADEPreparationRunsFromTheMADERowOnly(t *testing.T) {
-	stub := &madePreparerStub{result: application.MADEPreparation{Status: "granted", WorkIdentity: "axlr-work-1a2b", GrantID: "axlr-default-work-v1", RestartRequired: true}}
+	stub := &madePreparerStub{result: application.OrchestratorPreparation{Status: "granted", WorkIdentity: "axlr-work-1a2b", GrantID: "axlr-default-work-v1", RestartRequired: true}}
 	m := sized()
 	defer m.Close()
-	m.deps.MADEPreparation = stub
+	m.deps.OrchestratorPreparation = stub
 	m.overlay = "mcp"
 	m.Plugins.SetItems([]domain.PluginState{
 		{Profile: domain.PluginProfile{ID: "kmp", Name: "KMP", Purpose: domain.PluginPurposeMemory, Approval: domain.ApprovalAuto}},

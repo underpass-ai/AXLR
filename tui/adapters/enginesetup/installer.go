@@ -33,7 +33,7 @@ type Installer struct {
 	KMPApproval, MADEApproval string
 	// PrepareMADE issues AXLR's work grant and publishes the driven
 	// ceremonies once MADE is registered (madesetup.Preparer.Prepare).
-	PrepareMADE func(context.Context) (application.MADEPreparation, error)
+	PrepareMADE func(context.Context) (application.OrchestratorPreparation, error)
 	// run executes one setup command; tests replace it.
 	run func(ctx context.Context, command string, args, env []string) ([]byte, error)
 }

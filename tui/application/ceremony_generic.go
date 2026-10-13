@@ -92,7 +92,7 @@ func (d *CeremonyDriver) beginGeneric(ctx context.Context, s *domain.Session, pr
 		return errors.New("no ceremony was chosen: /ceremony <definition> [version] [brief]")
 	}
 	if d.Definitions == nil {
-		return errors.New("MADE is not connected; ceremonies are unavailable")
+		return errors.New("the orchestrator is not connected; ceremonies are unavailable")
 	}
 	definition, err := d.Definitions.Describe(ctx, choice.Definition, choice.Version)
 	if err != nil {
@@ -133,7 +133,7 @@ func genericInstruction(run domain.CeremonyRun) string {
 		prompt = run.Generic.Prompts[run.Step]
 	}
 	if prompt == "" {
-		prompt = "Do the work of step " + run.Step + " of ceremony " + run.Definition + " as its definition describes (read it with made_get_ceremony_definition when needed)."
+		prompt = "Do the work of step " + run.Step + " of ceremony " + run.Definition + " as its definition describes (read the definition when needed)."
 	}
 	return prompt + " When the step's work is done, hand it back with axlr_step_done, giving the fields the step asks for as JSON fields."
 }
@@ -180,7 +180,7 @@ func (d *CeremonyDriver) genericStepDone(ctx context.Context, s domain.Session, 
 		report["ceremony"] = view.State
 		report["instruction"] = "The ceremony is over and the session is back in normal mode. Tell the user the outcome in their language."
 		if view.State == "BLOCKED" {
-			report["instruction"] = "The ceremony ended BLOCKED and the session is back in normal mode; its state stays in MADE and its outcome in memory. Tell the user the outcome in their language and propose the next step: " + blockedNextSteps + "."
+			report["instruction"] = "The ceremony ended BLOCKED and the session is back in normal mode; its state stays with the orchestrator and its outcome in memory. Tell the user the outcome in their language and propose the next step: " + blockedNextSteps + "."
 		}
 		d.observe(run, view.State, report, true, false)
 		return accept(report, nil), nil
@@ -189,7 +189,7 @@ func (d *CeremonyDriver) genericStepDone(ctx context.Context, s domain.Session, 
 		// Nothing to claim and no transition: the definition waits for
 		// something the console does not drive (a human guard, a server
 		// step). The run stays live for the person to decide.
-		report["instruction"] = "MADE enables no transition and offers no step to claim in state " + view.State + ": the ceremony waits for something outside this console (a guard, a server-owned step). Tell the user; they can wait, decide in MADE, or /stop-ceremony."
+		report["instruction"] = "The orchestrator enables no transition and offers no step to claim in state " + view.State + ": the ceremony waits for something outside this console (a guard, a server-owned step). Tell the user; they can wait, decide in MADE, or /stop-ceremony."
 		d.observe(run, view.State, report, false, true)
 		return accept(report, &run), nil
 	}

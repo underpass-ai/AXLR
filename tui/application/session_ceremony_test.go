@@ -122,7 +122,7 @@ func TestSessionCeremonyWritesTheResultsOfATurnToKMP(t *testing.T) {
 	}
 	id := string(s.ID())
 	entry := journal.entries[0]
-	if entry.About != "ws:"+id || entry.Key != "axlr:turn:"+id+":0" || !strings.Contains(entry.Summary, "1 file written") || entry.Evidence[0] != "MADE axlr-session-"+id+" step turn #1" || entry.Labels["session"][0] != id {
+	if entry.About != "ws:"+id || entry.Key != "axlr:turn:"+id+":0" || !strings.Contains(entry.Summary, "1 file written") || entry.Evidence[0] != "ceremony axlr-session-"+id+" step turn #1" || entry.Labels["session"][0] != id {
 		t.Fatalf("entry %+v", entry)
 	}
 	if len(store.states) == 0 {
@@ -408,8 +408,8 @@ func (a *agentsStub) Remember(_ context.Context, store, agentID, _ string) error
 	return nil
 }
 
-func identityFor(guide *guideStub, agents *agentsStub) *KMPIdentity {
-	return &KMPIdentity{Store: "/repo/.kernel", RegistrationKey: "axlr:install-1", Agents: agents, Guide: guide}
+func identityFor(guide *guideStub, agents *agentsStub) *MemoryIdentity {
+	return &MemoryIdentity{Store: "/repo/.kernel", RegistrationKey: "axlr:install-1", Agents: agents, Guide: guide}
 }
 
 // The first prompt in a store registers the console's agent once and opens

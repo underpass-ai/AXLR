@@ -132,7 +132,7 @@ func TestJevSettlesATurnIntoTheProjectAbout(t *testing.T) {
 	}
 	entry := journal.settled[0]
 	id := string(s.ID())
-	if entry.Kind != "decision" || entry.Text != "Las fechas del parser se guardan en UTC, como pide la RFC 3339" || entry.Key != "axlr:settled:"+id+":0:1" || entry.Labels["judged_by"][0] != "jev" || !strings.HasPrefix(entry.SummaryEN, "decision settled in turn 1 by ") || !strings.Contains(entry.SummaryEN, "files written: parser.go") || strings.Contains(entry.SummaryEN, entry.Text) || !strings.HasPrefix(entry.Evidence[0], "MADE axlr-session-") || !strings.Contains(entry.Evidence[1], "p=0.80") || entry.Probability != 0.8 {
+	if entry.Kind != "decision" || entry.Text != "Las fechas del parser se guardan en UTC, como pide la RFC 3339" || entry.Key != "axlr:settled:"+id+":0:1" || entry.Labels["judged_by"][0] != "jev" || !strings.HasPrefix(entry.SummaryEN, "decision settled in turn 1 by ") || !strings.Contains(entry.SummaryEN, "files written: parser.go") || strings.Contains(entry.SummaryEN, entry.Text) || !strings.HasPrefix(entry.Evidence[0], "ceremony axlr-session-") || !strings.Contains(entry.Evidence[1], "p=0.80") || entry.Probability != 0.8 {
 		t.Fatalf("entry %+v", entry)
 	}
 	if entry.About != "project:"+defaultAboutName(t, s) {
@@ -157,7 +157,7 @@ func defaultAboutName(t *testing.T, s domain.Session) string {
 func TestJevSettlementRoutesAndDeclines(t *testing.T) {
 	engine := &fakeEngine{}
 	c, _, _, _ := sessionCeremonyFor(t, engine)
-	c.Identity = &KMPIdentity{Store: "/s", RegistrationKey: "k", Agents: &agentsStub{agents: map[string]string{}}, Guide: &guideStub{}, UserAbout: "user:tirso"}
+	c.Identity = &MemoryIdentity{Store: "/s", RegistrationKey: "k", Agents: &agentsStub{agents: map[string]string{}}, Guide: &guideStub{}, UserAbout: "user:tirso"}
 	c.Judge = &scriptedJudge{gate: 0.9, sentence: "Las fechas del parser se guardan en UTC, como pide la RFC 3339", sentenceP: 0.8, kind: "preference", replaces: "none", replacesP: 0.9}
 	journal, _ := settledTurn(t, c, nil)
 	if len(journal.settled) != 1 || journal.settled[0].About != "user:tirso" || len(journal.settled[0].Links) != 0 {

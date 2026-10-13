@@ -9,21 +9,21 @@ import (
 )
 
 type Dependencies struct {
-	Context           context.Context
-	Diagnostics       application.DiagnosticPort
-	Plugins           application.PluginManagementPort
-	InstalledPlugins  application.InstalledPluginPort
-	EngineUpdates     application.EngineUpdatePort
-	MADEPreparation   application.MADEPreparationPort
-	Models            application.ListModelsUseCase
-	ModelPreference   application.ModelPreferencePort
-	SessionLabels     application.SessionLabelsPort
-	ModelFavorites    application.ModelFavoritesPort
-	UIPreferenceStore application.UIPreferencePort
-	UIPreferences     domain.UIPreferences
-	ApprovalSettings  application.ApprovalSettingsPort
-	Locale            Locale
-	Create            application.CreateSessionUseCase
+	Context                 context.Context
+	Diagnostics             application.DiagnosticPort
+	Plugins                 application.PluginManagementPort
+	InstalledPlugins        application.InstalledPluginPort
+	EngineUpdates           application.EngineUpdatePort
+	OrchestratorPreparation application.OrchestratorPreparationPort
+	Models                  application.ListModelsUseCase
+	ModelPreference         application.ModelPreferencePort
+	SessionLabels           application.SessionLabelsPort
+	ModelFavorites          application.ModelFavoritesPort
+	UIPreferenceStore       application.UIPreferencePort
+	UIPreferences           domain.UIPreferences
+	ApprovalSettings        application.ApprovalSettingsPort
+	Locale                  Locale
+	Create                  application.CreateSessionUseCase
 	// Leave closes what the console keeps open for a session it switches
 	// away from (its MADE instance); nil leaves nothing to close.
 	Leave        func(context.Context, *domain.Session) error

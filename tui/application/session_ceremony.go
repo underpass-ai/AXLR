@@ -65,7 +65,7 @@ type SessionCeremony struct {
 	Store SessionStorePort
 	// Identity opens the session's KMP context (session_identity.go); nil
 	// without KMP.
-	Identity *KMPIdentity
+	Identity *MemoryIdentity
 	// Host is how the console names itself in MADE's host reports
 	// (host_report.go).
 	Host HostIdentity
@@ -265,7 +265,7 @@ func (c *SessionCeremony) record(ctx context.Context, s domain.Session, instance
 // complete hands the record to MADE, then to KMP. A MADE completion that
 // fails keeps the fence, so the next claim completes it as interrupted.
 func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, instance domain.SessionInstance, record TurnRecord) domain.SessionInstance {
-	stepRef := fmt.Sprintf("MADE %s step %s #%d", instance.Instance, sessionTurnStep, record.Turn)
+	stepRef := fmt.Sprintf("ceremony %s step %s #%d", instance.Instance, sessionTurnStep, record.Turn)
 	if instance.Fence != "" {
 		// The finished report goes before the completion: MADE takes a
 		// report only on an accepted lease, which the completion ends
@@ -465,7 +465,7 @@ func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, tr
 			// KMP's kinds have no session_closed (refused on 13 October
 			// 2026): the entry is an observation labelled event=closed.
 			entry := TurnEntry{Kind: "observation", About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:%s:%s", trigger, instance.Instance), Summary: fmt.Sprintf("Session %s after %s (%s).", trigger, plural(instance.Turns, "turn"), reason),
-				Evidence: []string{fmt.Sprintf("MADE %s %s", instance.Instance, trigger)}, OccurredAt: c.now(), ContextID: instance.KMPContext,
+				Evidence: []string{fmt.Sprintf("ceremony %s %s", instance.Instance, trigger)}, OccurredAt: c.now(), ContextID: instance.KMPContext,
 				Labels: map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {string(s.Mode())}, "event": {trigger}}}
 			instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
 		}

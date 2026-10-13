@@ -132,7 +132,7 @@ func TestHostRememberBuildsTheRequestFromTheSession(t *testing.T) {
 		}
 	}
 	// Without KMP, or while a ceremony records the outcome, it refuses.
-	if outcome, _ := (HostToolUseCase{}).Execute(context.Background(), s, rememberIdentity(t), mustObject(t, `{"kind":"decision","text":"x","evidence":["e"]}`)); !outcome.IsError || !strings.Contains(string(outcome.Content), "KMP is not connected") {
+	if outcome, _ := (HostToolUseCase{}).Execute(context.Background(), s, rememberIdentity(t), mustObject(t, `{"kind":"decision","text":"x","evidence":["e"]}`)); !outcome.IsError || !strings.Contains(string(outcome.Content), "memory is not connected") {
 		t.Fatalf("without KMP: %s", outcome.Content)
 	}
 	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "repair", Iteration: 1}); err != nil {

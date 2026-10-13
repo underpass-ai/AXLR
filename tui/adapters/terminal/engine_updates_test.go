@@ -102,7 +102,7 @@ func TestBackgroundResultsLeaveAnotherOverlayAlone(t *testing.T) {
 	for _, intent := range []ControlIntent{"updates", "made-prepare"} {
 		m := sized()
 		m.deps.EngineUpdates = &engineUpdaterStub{results: []application.EngineUpdateResult{{Engine: "made", Version: "9.9.9", Status: "current"}}}
-		m.deps.MADEPreparation = &madePreparerStub{result: application.MADEPreparation{Status: "granted", WorkIdentity: "axlr-work-9z9z", GrantID: "g"}}
+		m.deps.OrchestratorPreparation = &madePreparerStub{result: application.OrchestratorPreparation{Status: "granted", WorkIdentity: "axlr-work-9z9z", GrantID: "g"}}
 		next, cmd := m.Update(intent)
 		m = next.(AppModel)
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyEsc})

@@ -78,12 +78,12 @@ func TestInstallMADEConfiguresWithTheLauncherEnvironmentThenPrepares(t *testing.
 	root := filepath.Join(t.TempDir(), "made-0.10.0-abc")
 	i := installer(t, r, &calls, nil)
 	prepared := false
-	i.PrepareMADE = func(context.Context) (application.MADEPreparation, error) {
+	i.PrepareMADE = func(context.Context) (application.OrchestratorPreparation, error) {
 		if len(r.got) != 1 {
 			t.Fatal("prepared before MADE was registered")
 		}
 		prepared = true
-		return application.MADEPreparation{Status: "granted", WorkIdentity: "axlr-work-1", Published: []string{"axlr_debug 2.0", "axlr_plan 1.0"}}, nil
+		return application.OrchestratorPreparation{Status: "granted", WorkIdentity: "axlr-work-1", Published: []string{"axlr_debug 2.0", "axlr_plan 1.0"}}, nil
 	}
 	detail, err := i.InstallEngine(context.Background(), "made", root)
 	if err != nil || !prepared {
@@ -108,8 +108,8 @@ func TestInstallMADEStaysConnectedWhenPreparationFails(t *testing.T) {
 	r := &registrar{}
 	var calls []call
 	i := installer(t, r, &calls, nil)
-	i.PrepareMADE = func(context.Context) (application.MADEPreparation, error) {
-		return application.MADEPreparation{}, errors.New("grant refused")
+	i.PrepareMADE = func(context.Context) (application.OrchestratorPreparation, error) {
+		return application.OrchestratorPreparation{}, errors.New("grant refused")
 	}
 	detail, err := i.InstallEngine(context.Background(), "made", t.TempDir())
 	if err != nil || len(r.got) != 1 || !strings.Contains(detail, "grant refused") || !strings.Contains(detail, "/mcp") {

@@ -43,12 +43,12 @@ func (readyEngine) OperationID(context.Context, string, string, string) (string,
 }
 
 type preparerStub struct {
-	result application.MADEPreparation
+	result application.OrchestratorPreparation
 	err    error
 	calls  int
 }
 
-func (p *preparerStub) Prepare(context.Context) (application.MADEPreparation, error) {
+func (p *preparerStub) Prepare(context.Context) (application.OrchestratorPreparation, error) {
 	p.calls++
 	return p.result, p.err
 }
@@ -58,7 +58,7 @@ func (p *preparerStub) Publish(context.Context, string) (string, error) { return
 // A store that lacks axlr_session gets it published at start, through the
 // preparer P uses; a store that has it is left alone.
 func TestPrepareSessionDefinitionPublishesOnlyWhenMissing(t *testing.T) {
-	preparer := &preparerStub{result: application.MADEPreparation{Status: "ready", Published: []string{"axlr_session 1.0"}}}
+	preparer := &preparerStub{result: application.OrchestratorPreparation{Status: "ready", Published: []string{"axlr_session 1.0"}}}
 	if line := prepareSessionDefinition(context.Background(), readyEngine{}, preparer); line != "" || preparer.calls != 0 {
 		t.Fatalf("%q %d", line, preparer.calls)
 	}

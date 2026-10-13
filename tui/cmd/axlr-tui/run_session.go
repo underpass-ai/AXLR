@@ -17,7 +17,7 @@ import (
 // before the definition existed would otherwise ask the person to press P
 // before any session is recorded. The preparer is idempotent and only the
 // console publishes (decision H4). It returns one line for the log.
-func prepareSessionDefinition(ctx context.Context, engine application.CeremonyEnginePort, preparer application.MADEPreparationPort) string {
+func prepareSessionDefinition(ctx context.Context, engine application.CeremonyEnginePort, preparer application.OrchestratorPreparationPort) string {
 	if engine == nil {
 		return ""
 	}
@@ -69,7 +69,7 @@ func consoleSessionID(session *domain.Session, newID domain.SessionID) domain.Se
 // refuse the new verbs (the handoff, the draft explanation) until the
 // person pressed P in /mcp. The marker file remembers the id issued; the
 // preparer is idempotent. It returns one line for the log.
-func ensureWorkGrant(ctx context.Context, preparer application.MADEPreparationPort, marker, grant string) string {
+func ensureWorkGrant(ctx context.Context, preparer application.OrchestratorPreparationPort, marker, grant string) string {
 	if preparer == nil || marker == "" {
 		return ""
 	}

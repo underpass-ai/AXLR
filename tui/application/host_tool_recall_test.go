@@ -60,7 +60,7 @@ func TestHostRecallBuildsTheRequestFromTheSession(t *testing.T) {
 			t.Fatalf("accepted %s: %+v", refused, answer)
 		}
 	}
-	if outcome, _ := (HostToolUseCase{}).Execute(context.Background(), s, recallIdentity(t), mustObject(t, `{}`)); !outcome.IsError || !strings.Contains(string(outcome.Content), "KMP is not connected") {
+	if outcome, _ := (HostToolUseCase{}).Execute(context.Background(), s, recallIdentity(t), mustObject(t, `{}`)); !outcome.IsError || !strings.Contains(string(outcome.Content), "memory is not connected") {
 		t.Fatalf("%+v", outcome)
 	}
 }

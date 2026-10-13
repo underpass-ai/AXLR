@@ -126,7 +126,7 @@ func (m AppModel) openCeremoniesPanel() AppModel {
 // publishCeremony validates and publishes a definition file through the
 // console's install grant; the completion shows what was published.
 func (m AppModel) publishCeremony(path string) (tea.Model, tea.Cmd) {
-	if m.deps.MADEPreparation == nil {
+	if m.deps.OrchestratorPreparation == nil {
 		m.Status.Error = m.Theme.T("ceremonies.unavailable")
 		return m, nil
 	}
@@ -144,7 +144,7 @@ func (m AppModel) publishCeremony(path string) (tea.Model, tea.Cmd) {
 	}
 	m.Composer.Input.Reset()
 	m.Status.Error = ""
-	preparer := m.deps.MADEPreparation
+	preparer := m.deps.OrchestratorPreparation
 	text := string(data)
 	var published string
 	cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {

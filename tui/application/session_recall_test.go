@@ -123,7 +123,7 @@ func TestRecallNoteIsBoundedAndDisclosesFailures(t *testing.T) {
 	short := &recallStub{texts: map[string]string{}, errs: map[string]error{"user:tirso": errors.New("engine down")}}
 	c = recallCeremony(t, short)
 	other := turnSession(t)
-	if note := c.Recall(context.Background(), &other, "hola que tal todo"); !strings.Contains(note, "user:tirso: KMP recall unavailable: engine down") {
+	if note := c.Recall(context.Background(), &other, "hola que tal todo"); !strings.Contains(note, "user:tirso: memory recall unavailable: engine down") {
 		t.Fatalf("note %q", note)
 	}
 }

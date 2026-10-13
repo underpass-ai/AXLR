@@ -43,10 +43,10 @@ type Preparer struct {
 	Now        func() time.Time
 }
 
-var _ application.MADEPreparationPort = (*Preparer)(nil)
+var _ application.OrchestratorPreparationPort = (*Preparer)(nil)
 
-func (p *Preparer) Prepare(ctx context.Context) (application.MADEPreparation, error) {
-	result := application.MADEPreparation{GrantID: WorkGrantID}
+func (p *Preparer) Prepare(ctx context.Context) (application.OrchestratorPreparation, error) {
+	result := application.OrchestratorPreparation{GrantID: WorkGrantID}
 	if p.ConfigPath == "" || !filepath.IsAbs(p.ConfigPath) || p.Store == nil {
 		return result, errors.New("MADE preparation is not configured")
 	}

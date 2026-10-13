@@ -289,7 +289,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		// the evidence relevant to it instead of the about's whole history.
 		if text, _, err := d.Memory.WakeFocused(ctx, about, string(prompt)); err == nil {
 			if len(text) > memoryLimit {
-				prefix := "Partial KMP recall: console context shortened; recover the full about with axlr_recall (mode wake) before relying on omitted evidence.\n"
+				prefix := "Partial memory recall: console context shortened; recover the full about with axlr_recall (mode wake) before relying on omitted evidence.\n"
 				memory = prefix + bounded(text, memoryLimit-len(prefix))
 			} else {
 				memory = text
@@ -693,7 +693,7 @@ func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain
 		if state == "BLOCKED" {
 			// Decision H10: the state stays in MADE and the outcome under
 			// ws:<session>; the person hears what to do next.
-			report["instruction"] = "The ceremony ended BLOCKED and the session is back in normal mode; its state stays in MADE and its outcome in memory. Tell the user the outcome in their language and propose the next step: " + blockedNextSteps + "."
+			report["instruction"] = "The ceremony ended BLOCKED and the session is back in normal mode; its state stays with the orchestrator and its outcome in memory. Tell the user the outcome in their language and propose the next step: " + blockedNextSteps + "."
 		}
 		if run.Plan != nil && state == "READY" {
 			report["instruction"] = "The plan is approved and the console now runs its tasks in separate worker sessions in this workspace. Do not read, run or change anything: answer the user in one or two sentences in their language and end your turn."
