@@ -27,7 +27,7 @@ func TestInstallIDIsDrawnOnceAndKept(t *testing.T) {
 }
 
 func TestKMPAgentStoreKeepsOneAgentPerStore(t *testing.T) {
-	agents := NewKMPAgentStore(filepath.Join(t.TempDir(), "axlr", "kmp-agents.json"))
+	agents := NewMemoryAgentStore(filepath.Join(t.TempDir(), "axlr", "kmp-agents.json"))
 	ctx := context.Background()
 	if _, ok := agents.Agent(ctx, "/s/.kernel"); ok {
 		t.Fatal("empty store has no agent")
@@ -47,7 +47,7 @@ func TestKMPAgentStoreKeepsOneAgentPerStore(t *testing.T) {
 	if err := agents.Remember(ctx, "", "agent_3", "k"); err == nil {
 		t.Fatal("a store path is required")
 	}
-	reopened := NewKMPAgentStore(agents.path)
+	reopened := NewMemoryAgentStore(agents.path)
 	if id, ok := reopened.Agent(ctx, "/s/.kernel"); !ok || id != "agent_1" {
 		t.Fatalf("not persisted: %q %v", id, ok)
 	}
