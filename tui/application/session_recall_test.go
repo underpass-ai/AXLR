@@ -189,8 +189,9 @@ func TestStartTurnAppendsTheRecallNote(t *testing.T) {
 	if !strings.HasPrefix(string(first), "hola\n\n"+RecallNotePrefix+" project:") || len(recall.requests) != 2 {
 		t.Fatalf("prompt %q requests %d", first, len(recall.requests))
 	}
+	// The turn record keeps what the person typed, not the note.
 	record := BuildTurnRecord(s, 0, 1, "project:x", nil)
-	if !strings.Contains(record.Prompt, RecallNotePrefix) {
-		t.Logf("the turn record keeps the note in the prompt excerpt: %d bytes", len(record.Prompt))
+	if record.Prompt != "hola" || strings.Contains(record.Prompt, RecallNotePrefix) {
+		t.Fatalf("record prompt %q", record.Prompt)
 	}
 }
