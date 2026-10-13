@@ -18,31 +18,31 @@ func ref(plugin, tool string) root.PluginRef {
 // the tools of other plugins are the model's.
 func TestSurfaceKeepsTheEnginesProtocolsToTheConsole(t *testing.T) {
 	guide := Surface(ref("kmp", "kmp_guide"))
-	if guide.Role != domain.PluginRoleMemory || guide.Hidden == "" || guide.ContextArgument != "" || guide.MemoryWrite || !guide.Entry {
+	if guide.Role != domain.PluginRoleMemory || guide.Hidden == "" || guide.ContextArgument != "" || guide.MemoryWrite {
 		t.Fatalf("kmp_guide %+v", guide)
 	}
 	write := Surface(ref("kmp", "kmp_write_memory"))
-	if write.Hidden != "" || write.ContextArgument != "context_id" || !write.MemoryWrite || !write.Entry {
+	if write.Hidden != "" || write.ContextArgument != "context_id" || !write.MemoryWrite {
 		t.Fatalf("kmp_write_memory %+v", write)
 	}
-	if ask := Surface(ref("kmp", "kmp_ask")); ask.Hidden != "" || ask.ContextArgument != "context_id" || ask.MemoryWrite || ask.Entry {
+	if ask := Surface(ref("kmp", "kmp_ask")); ask.Hidden != "" || ask.ContextArgument != "context_id" || ask.MemoryWrite {
 		t.Fatalf("kmp_ask %+v", ask)
 	}
-	for _, verb := range []string{"made_claim_ceremony_step", "made_start_ceremony", "made_issue_authorization_grant", "made_publish_ceremony_definition", "made_approve_ceremony_guard"} {
+	if !strings.Contains(guide.Hidden, "axlr_recall") || !strings.Contains(guide.Hidden, "without context_id") {
+		t.Fatalf("kmp_guide refusal: %s", guide.Hidden)
+	}
+	for _, verb := range []string{"made_start_published_ceremony", "made_start_ceremony", "made_claim_ceremony_step", "made_complete_ceremony_step", "made_apply_ceremony_transition", "made_cancel_ceremony", "made_pause_ceremony", "made_resume_ceremony", "made_run_ceremony", "made_run_ceremony_step", "made_approve_ceremony_guard", "made_defer_ceremony_guard", "made_issue_authorization_grant", "made_revoke_authorization_grant", "made_publish_ceremony_definition", "made_register_agent", "made_unregister_agent", "made_delete_contract", "made_begin_artifact_upload", "made_put_artifact_chunk", "made_report_ceremony_agent_status", "made_renew_ceremony_step_lease", "made_record_ceremony_host_handoff", "made_orchestrate", "made_deliberate", "made_create_council", "made_design_agentic_system", "made_lease_council_events", "made_pull_ceremony_events", "made_request_ceremony_intervention"} {
 		if s := Surface(ref("made", verb)); s.Role != domain.PluginRoleOrchestrator || s.Hidden == "" || s.ContextArgument != "" {
 			t.Fatalf("%s %+v", verb, s)
 		}
 	}
-	for _, verb := range []string{"made_get_ceremony_instance", "made_list_ceremony_definitions", "made_read_ceremony_events", "made_stream_ceremony", "made_search_ceremony_instances", "made_inspect_ceremony_resume", "made_get_help", "made_design_ceremony", "made_validate_ceremony_draft", "made_generate_ceremony_report", "made_verify_ceremony_journal"} {
+	for _, verb := range []string{"made_get_help", "made_discover_capabilities", "made_list_ceremony_definitions", "made_get_ceremony_instance", "made_read_ceremony_events", "made_stream_ceremony", "made_search_ceremony_instances", "made_inspect_ceremony_resume", "made_design_ceremony", "made_validate_ceremony_draft", "made_explain_ceremony_draft", "made_diff_ceremony_definitions", "made_render_agentic_system_diagram", "made_generate_ceremony_report", "made_verify_ceremony_journal"} {
 		if s := Surface(ref("made", verb)); s.Hidden != "" {
 			t.Fatalf("%s hidden: %s", verb, s.Hidden)
 		}
 	}
 	if other := Surface(ref("github", "list_issues")); other != (domain.ToolSurface{}) {
 		t.Fatalf("other plugin %+v", other)
-	}
-	if s := Surface(ref("docs", "docs_guide")); s.Role != domain.PluginRoleNone || !s.Entry {
-		t.Fatalf("guide of another plugin %+v", s)
 	}
 }
 

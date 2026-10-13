@@ -21,8 +21,8 @@ const (
 // ToolSurface is what the console owns of one plugin tool, decided by the
 // engine adapter when the tool is registered and frozen in the session's
 // snapshot with the tool: whether the model may call it, which argument
-// carries the session's memory context, whether a call of it is a memory
-// write, and whether its name is worth a line of the model's orientation.
+// carries the session's memory context and whether a call of it is a
+// memory write.
 type ToolSurface struct {
 	Role PluginRole
 	// Hidden is the refusal the bridge answers and axlr_tools shows when
@@ -34,11 +34,8 @@ type ToolSurface struct {
 	// none.
 	ContextArgument string
 	// MemoryWrite is true for the engine's memory write: the console's
-	// reminder and the turn record count such calls.
+	// reminder, the turn record and the model's orientation count it.
 	MemoryWrite bool
-	// Entry is true when the tool's name belongs in the model's
-	// orientation line for its plugin.
-	Entry bool
 }
 
 // Validate refuses a surface that names a role the console does not play.

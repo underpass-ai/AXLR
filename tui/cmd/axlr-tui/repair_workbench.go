@@ -78,8 +78,8 @@ func (w repairWorkbenches) Open(_ context.Context, clone string) (application.Re
 	driver.RepairPolicy = w.policy
 	driver.Plans, driver.Compact = w.plans, w.compact
 	approval := application.RepairToolPolicy{Next: w.approval, AutonomousLocal: w.autonomous}
-	continuation := application.ContinueTurnUseCase{Validation: w.validator, Models: w.models, Windows: w.windows, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver, Calibration: w.calibration, TurnToolCalls: w.turnToolCalls, Usage: w.usage, MaxSessionUSD: w.maxSessionUSD, Logs: logReader(w.appLog)}
-	catalog := axlr.ToolCatalog{Plugins: w.manager, Diagnostics: w.trace, Profiles: w.profiles, RequireWhy: true}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: w.validator, Models: w.models, Windows: w.windows, Store: w.store, Diagnostics: w.trace, PluginGuidance: w.catalog.Guidance, PluginSkills: w.catalog, SessionLabels: w.labels, Ceremonies: driver, Calibration: w.calibration, TurnToolCalls: w.turnToolCalls, Usage: w.usage, MaxSessionUSD: w.maxSessionUSD, Logs: logReader(w.appLog)}
+	catalog := axlr.ToolCatalog{Plugins: w.manager, Diagnostics: w.trace, Profiles: w.profiles, RequireWhy: true, Surfaces: ceremonyhost.Surface}
 	return &application.UseCaseWorkbench{
 		Start:    application.StartTurnUseCase{Catalog: catalog, Store: w.store, Continue: continuation, Tools: runner, Approval: approval},
 		Resolver: application.ResolveToolUseCase{Validation: w.validator, Tools: runner, Approval: approval, Store: w.store, Continue: continuation, Diagnostics: w.trace},

@@ -112,7 +112,7 @@ func TestCompactStepOffersOnlyWhatTheStepNeeds(t *testing.T) {
 		t.Fatalf("build tools = %s", build)
 	}
 	s := compactDeliverySession(t, "brief")
-	guidance := string(modelHostGuidance(&s).Content)
+	guidance := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 	if len(guidance) > 2048 || strings.Contains(guidance, "axlr_call_tool") || strings.Contains(guidance, "Self-repair") || !strings.Contains(guidance, "Example: axlr_step_done") {
 		t.Fatalf("compact guidance (%d bytes): %s", len(guidance), guidance)
 	}

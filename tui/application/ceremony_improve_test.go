@@ -315,7 +315,7 @@ func TestImproveModeKeepsMemoryAndRepairRequestsToTheConsole(t *testing.T) {
 	if hasDefinition(SessionTools(s, append(turnTools(), HostTools()...)), HostRequestRepairName) {
 		t.Fatal("an improvement session must not request a repair")
 	}
-	if text := string(modelHostGuidance(&s).Content); !strings.Contains(text, "Mode: improve.") || strings.Contains(text, "Self-repair:") {
+	if text := string(modelHostGuidance(&s, engineParagraphs{}).Content); !strings.Contains(text, "Mode: improve.") || strings.Contains(text, "Self-repair:") {
 		t.Fatalf("guidance: %s", text)
 	}
 }

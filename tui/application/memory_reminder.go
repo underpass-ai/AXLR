@@ -36,7 +36,6 @@ func remindMemory(ctx context.Context, s *domain.Session, u ContinueTurnUseCase,
 	if u.Session.settles() {
 		return false, nil // Jev decides what the turn settled (decision D5)
 	}
-	write, _, _ := memoryWriteTool(s.ToolSnapshot())
 	messages := s.Messages()
 	if len(messages) == 0 || messages[len(messages)-1].Role != root.RoleAssistant || len(messages[len(messages)-1].ToolCalls) > 0 {
 		return false, nil
@@ -45,7 +44,7 @@ func remindMemory(ctx context.Context, s *domain.Session, u ContinueTurnUseCase,
 		return false, nil
 	}
 	start := personRequest(messages)
-	if start < 0 || !needsMemoryReminder(messages[start:], write) {
+	if start < 0 || !needsMemoryReminder(messages[start:], s.ToolSnapshot()) {
 		return false, nil
 	}
 	next := *s
@@ -78,15 +77,28 @@ func modelRecordsMemory(s domain.Session) bool {
 	return verdict != domain.VerdictDeny
 }
 
-// memoryWriteTool finds kmp_write_memory in the session's snapshot: the name
-// the model calls it by and its identity for the mode's verdict.
+// memoryWriteTool finds the memory engine's write in the session's
+// snapshot (its surface says which tool it is): the name the model calls
+// it by and its identity for the mode's verdict.
 func memoryWriteTool(snapshot []domain.AvailableTool) (root.ToolName, domain.ToolIdentity, bool) {
 	for _, tool := range snapshot {
-		if tool.Identity.Kind == domain.ToolKindPlugin && tool.Identity.Plugin.PluginID == "kmp" && tool.Identity.Plugin.ToolName == "kmp_write_memory" {
+		if tool.Identity.Kind == domain.ToolKindPlugin && tool.Surface.MemoryWrite {
 			return tool.Definition.Name, tool.Identity, true
 		}
 	}
 	return "", domain.ToolIdentity{}, false
+}
+
+// isMemoryWrite reports whether a name the model called, directly or
+// through axlr_call_tool, is the memory engine's write: by the name the
+// snapshot gives it or by the engine's own.
+func isMemoryWrite(snapshot []domain.AvailableTool, name string) bool {
+	for _, tool := range snapshot {
+		if tool.Identity.Kind == domain.ToolKindPlugin && tool.Surface.MemoryWrite && (string(tool.Definition.Name) == name || string(tool.Identity.Plugin.ToolName) == name) {
+			return true
+		}
+	}
+	return false
 }
 
 // personRequest is the index of the last message the person wrote. Console
@@ -109,7 +121,7 @@ func personRequest(messages []root.Message) int {
 // completed: on 10 October 2026 the person denied the only local_edit of a
 // request and the console still reminded the model that the request "did
 // real work".
-func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
+func needsMemoryReminder(request []root.Message, snapshot []domain.AvailableTool) bool {
 	results := map[root.ToolCallID]string{}
 	for _, message := range request {
 		if message.Role == root.RoleTool {
@@ -122,14 +134,17 @@ func needsMemoryReminder(request []root.Message, write root.ToolName) bool {
 			return false
 		}
 		for _, call := range message.ToolCalls {
+			if isMemoryWrite(snapshot, string(call.Name)) {
+				return false
+			}
 			switch call.Name {
-			case write, HostStepDoneName, HostRememberName:
+			case HostStepDoneName, HostRememberName:
 				return false
 			case HostCallToolName:
 				var bridged struct {
 					Name string `json:"name"`
 				}
-				if json.Unmarshal(call.Arguments.Bytes(), &bridged) == nil && (bridged.Name == string(write) || bridged.Name == "kmp_write_memory") {
+				if json.Unmarshal(call.Arguments.Bytes(), &bridged) == nil && isMemoryWrite(snapshot, bridged.Name) {
 					return false
 				}
 			case "local_write", "local_edit":

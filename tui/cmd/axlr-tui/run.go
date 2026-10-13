@@ -672,7 +672,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ceremonies.Starter = planRunner
 		planPanel = planRunner
 	}
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls}
 	// Each session keeps its usage ledger beside its snapshot.
 	continuation.Usage, continuation.MaxSessionUSD = store, settings.MaxSessionUSD
 	// The context cap (decision D10): one tokenizer for every model, no
@@ -729,7 +729,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Change:            application.ChangeSessionModelUseCase{Store: loggedStore},
 		Workspace:         workspace,
 		NewSessionID:      newID,
-		Start:             application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles, RequireWhy: true}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: approvalSettings, Notices: notices},
+		Start:             application.StartTurnUseCase{Catalog: axlr.ToolCatalog{Plugins: manager, Diagnostics: trace, Profiles: pluginManager.Profiles, RequireWhy: true, Surfaces: ceremonyhost.Surface}, Store: loggedStore, Continue: continuation, Tools: runner, Approval: approvalSettings, Notices: notices},
 		Resolve:           application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: approvalSettings, Store: loggedStore, Continue: continuation, Diagnostics: trace},
 		Agent:             application.AgentTurnUseCase{Continue: continuation, Tools: runner, Approval: approvalSettings},
 		Store:             loggedStore,

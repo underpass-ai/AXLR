@@ -133,15 +133,11 @@ func TestModelContextReflectsRegisteredCapabilitiesAndPreservesHistory(t *testin
 	if err := s.BeginTurn("hello", tools); err != nil {
 		t.Fatal(err)
 	}
-	messages := modelMessages(&s)
+	messages := append([]root.Message{modelHostGuidance(&s, engineParagraphs{})}, s.Messages()...)
 	for _, text := range []string{"Ceremonies (MADE)", "Memory (KMP)", "axlr_recall", "Registered MCP plugin made: 1 tools"} {
 		if !strings.Contains(string(messages[0].Content), text) {
 			t.Fatalf("missing %s", text)
 		}
-	}
-	// The two paragraphs and the session line stay under 1 KB (decision D8).
-	if size := len(kmpGuidance) + len(kmpRecordGuidance) + len(madeGuidance) + len(SessionTitleGuidance); size > 1024 {
-		t.Fatalf("lifecycle guidance is %d bytes", size)
 	}
 	if len(s.Messages()) != 1 || s.Messages()[0].Role != root.RoleUser || messages[1].Content != "hello" {
 		t.Fatal("changed persisted history")

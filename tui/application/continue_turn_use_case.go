@@ -22,8 +22,12 @@ type ContinueTurnUseCase struct {
 	Store          SessionStorePort
 	Diagnostics    DiagnosticPort
 	PluginGuidance func(context.Context) (string, error)
-	PluginSkills   PluginSkillPort
-	SessionLabels  SessionLabelsPort
+	// Engines words the paragraph of each engine the session has (what
+	// the console does with it and what the model never does); nil
+	// writes none.
+	Engines       EngineGuidancePort
+	PluginSkills  PluginSkillPort
+	SessionLabels SessionLabelsPort
 	// Ceremonies drives MADE for the debug and delivery modes; nil without MADE.
 	Ceremonies *CeremonyDriver
 	// Session runs the session's own MADE instance and journal; nil
@@ -176,7 +180,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	snapshot := session.ToolSnapshot()
-	guidance := modelHostGuidance(session)
+	guidance := modelHostGuidance(session, u.Engines)
 	guidance.Content += root.Text(callBudgetGuidance(u.turnLimit()))
 	_, _, focused := focusedRun(*session)
 	if u.SessionLabels != nil && !focused {

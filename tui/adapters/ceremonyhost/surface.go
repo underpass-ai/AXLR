@@ -48,19 +48,19 @@ func Surface(ref root.PluginRef) domain.ToolSurface {
 	name := ref.ToolName.String()
 	switch ref.PluginID {
 	case memoryPluginID:
-		surface := domain.ToolSurface{Role: domain.PluginRoleMemory, ContextArgument: memoryContextArgument, MemoryWrite: name == memoryWriteTool, Entry: name == memoryWriteTool || strings.Contains(name, "guide")}
+		surface := domain.ToolSurface{Role: domain.PluginRoleMemory, ContextArgument: memoryContextArgument, MemoryWrite: name == memoryWriteTool}
 		if name == memoryGuideTool {
 			surface.Hidden, surface.ContextArgument = memoryOwnedRefusal, ""
 		}
 		return surface
 	case orchestratorPluginID:
-		surface := domain.ToolSurface{Role: domain.PluginRoleOrchestrator, Entry: strings.Contains(name, "guide")}
+		surface := domain.ToolSurface{Role: domain.PluginRoleOrchestrator}
 		if !madeRead(strings.TrimPrefix(name, "made_")) {
 			surface.Hidden = orchestratorOwnedRefusal
 		}
 		return surface
 	}
-	return domain.ToolSurface{Entry: strings.Contains(name, "guide")}
+	return domain.ToolSurface{}
 }
 
 func madeRead(verb string) bool {

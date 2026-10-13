@@ -21,11 +21,12 @@ func hostJSON(t *testing.T, text string) root.JSONValue {
 
 func hostPlugin(t *testing.T, alias, plugin, native string) domain.AvailableTool {
 	t.Helper()
-	id, err := domain.NewPluginToolIdentity(root.PluginRef{PluginID: root.PluginID(plugin), ToolName: root.PluginToolName(native)})
+	ref := root.PluginRef{PluginID: root.PluginID(plugin), ToolName: root.PluginToolName(native)}
+	id, err := domain.NewPluginToolIdentity(ref)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return domain.AvailableTool{Identity: id, Definition: root.ToolDefinition{Name: root.ToolName(alias), Description: "Memory wake guide", Parameters: hostJSON(t, `{"type":"object","properties":{"about":{"type":"string"}},"required":["about"]}`)}}
+	return domain.AvailableTool{Identity: id, Definition: root.ToolDefinition{Name: root.ToolName(alias), Description: "Memory wake guide", Parameters: hostJSON(t, `{"type":"object","properties":{"about":{"type":"string"}},"required":["about"]}`)}, Surface: engineSurface(ref)}
 }
 
 func TestHostWrapperResolvesExactPluginWithoutChangingCallOrSnapshot(t *testing.T) {
@@ -143,13 +144,14 @@ func TestHostToolsDropAnUnaskedWhy(t *testing.T) {
 	}
 }
 
-// kmp_guide is the console's: the bridge refuses it with what to do
-// instead, and discovery neither lists it nor describes it (decision G6
-// of the lifecycle integration design).
-func TestBridgeAndDiscoveryKeepKMPGuideToTheConsole(t *testing.T) {
+// A tool whose surface the engine adapter hides (kmp_guide here) is the
+// console's: the bridge refuses it with the surface's refusal, and
+// discovery neither lists it nor describes it (decision G6 of the
+// lifecycle integration design).
+func TestBridgeAndDiscoveryKeepAHiddenToolToTheConsole(t *testing.T) {
 	snapshot := append(HostTools(), hostPlugin(t, "kmp_guide", "kmp", "kmp_guide"), hostPlugin(t, "kmp_wake", "kmp", "kmp_wake"))
 	call := root.ToolCall{ID: "c1", Name: HostCallToolName, Arguments: hostJSON(t, `{"name":"kmp_guide","arguments":{"registration_key":"session-1"},"why":"start the guide"}`)}
-	if _, _, known, err := ResolveToolCall(snapshot, call); !known || err == nil || !strings.Contains(err.Error(), "axlr_recall") || !strings.Contains(err.Error(), "without context_id") {
+	if _, _, known, err := ResolveToolCall(snapshot, call); !known || err == nil || !strings.Contains(err.Error(), engineSurface(root.PluginRef{PluginID: "kmp", ToolName: "kmp_guide"}).Hidden) {
 		t.Fatalf("%v %v", known, err)
 	}
 	call.Arguments = hostJSON(t, `{"name":"kmp_wake","arguments":{"about":"project:x"},"why":"resume"}`)
@@ -169,16 +171,23 @@ func TestBridgeAndDiscoveryKeepKMPGuideToTheConsole(t *testing.T) {
 	}
 }
 
-// MADE's write surface is the console's (decision D6): the model reads,
-// searches, streams, inspects and designs; everything that changes an
-// instance or a definition is refused by the bridge and hidden by
-// discovery, which also stops counting it.
-func TestBridgeAndDiscoveryKeepMADEWritesToTheConsole(t *testing.T) {
+// The orchestrator's write surface is the console's (decision D6): the
+// verbs the adapter leaves visible are bridged and described; the ones it
+// hides are refused by the bridge and hidden by discovery, which also
+// stops counting them. Which MADE verb is which is ceremonyhost's table.
+func TestBridgeAndDiscoveryKeepTheOrchestratorsWritesToTheConsole(t *testing.T) {
 	allowed := []string{"made_get_help", "made_discover_capabilities", "made_list_ceremony_definitions", "made_get_ceremony_instance", "made_read_ceremony_events", "made_stream_ceremony", "made_search_ceremony_instances", "made_inspect_ceremony_resume", "made_design_ceremony", "made_validate_ceremony_draft", "made_explain_ceremony_draft", "made_diff_ceremony_definitions", "made_render_agentic_system_diagram", "made_generate_ceremony_report", "made_verify_ceremony_journal"}
 	hidden := []string{"made_start_published_ceremony", "made_start_ceremony", "made_claim_ceremony_step", "made_complete_ceremony_step", "made_apply_ceremony_transition", "made_cancel_ceremony", "made_pause_ceremony", "made_resume_ceremony", "made_run_ceremony", "made_run_ceremony_step", "made_approve_ceremony_guard", "made_defer_ceremony_guard", "made_issue_authorization_grant", "made_revoke_authorization_grant", "made_publish_ceremony_definition", "made_register_agent", "made_unregister_agent", "made_delete_contract", "made_begin_artifact_upload", "made_put_artifact_chunk", "made_report_ceremony_agent_status", "made_renew_ceremony_step_lease", "made_record_ceremony_host_handoff", "made_orchestrate", "made_deliberate", "made_create_council", "made_design_agentic_system", "made_lease_council_events", "made_pull_ceremony_events", "made_request_ceremony_intervention"}
 	var snapshot []domain.AvailableTool
-	for _, name := range append(append([]string{}, allowed...), hidden...) {
-		snapshot = append(snapshot, hostPlugin(t, name, "made", name))
+	for _, name := range allowed {
+		tool := hostPlugin(t, name, "made", name)
+		tool.Surface = domain.ToolSurface{Role: domain.PluginRoleOrchestrator}
+		snapshot = append(snapshot, tool)
+	}
+	for _, name := range hidden {
+		tool := hostPlugin(t, name, "made", name)
+		tool.Surface = domain.ToolSurface{Role: domain.PluginRoleOrchestrator, Hidden: "the console runs ceremonies"}
+		snapshot = append(snapshot, tool)
 	}
 	snapshot = append(HostTools(), snapshot...)
 	for _, name := range allowed {
@@ -213,7 +222,7 @@ func TestBridgeAndDiscoveryKeepMADEWritesToTheConsole(t *testing.T) {
 	if err := s.BeginTurn("hello", snapshot); err != nil {
 		t.Fatal(err)
 	}
-	guidance := string(modelHostGuidance(&s).Content)
+	guidance := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 	if !strings.Contains(guidance, "Registered MCP plugin made: "+itoa(len(allowed))+" tools") {
 		t.Fatalf("the hidden verbs are counted: %s", guidance)
 	}

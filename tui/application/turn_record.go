@@ -179,7 +179,7 @@ func BuildTurnRecord(s domain.Session, index, turn int, about string, cost *Turn
 					record.Memories = append(record.Memories, TurnMemory{About: about, Key: key})
 				}
 			case HostCallToolName:
-				if name, arguments := memoryCall(call); name == "kmp_write_memory" && memoryWriteAccepted(resultText) {
+				if name, arguments := memoryCall(call); isMemoryWrite(state.ToolSnapshot, name) && memoryWriteAccepted(resultText) {
 					record.Memories = append(record.Memories, TurnMemory{About: argumentString(arguments, "about"), Key: argumentString(arguments, "idempotency_key")})
 				}
 			}

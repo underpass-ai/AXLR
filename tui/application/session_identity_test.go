@@ -7,14 +7,18 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-func TestWithSessionContextPutsTheSessionContextOnKMPCallsOnly(t *testing.T) {
+// The session's memory context goes in the argument the tool's surface
+// names (context_id on KMP's verbs but kmp_guide), replacing the model's,
+// and nowhere else.
+func TestWithSessionContextPutsTheSessionContextWhereTheSurfaceSays(t *testing.T) {
 	s := turnSession(t)
 	if err := s.SetInstance(domain.SessionInstance{KMPAgent: "agent_1", KMPContext: "ctx_1"}); err != nil {
 		t.Fatal(err)
 	}
 	kmp := func(name string) domain.AvailableTool {
-		identity, _ := domain.NewPluginToolIdentity(root.PluginRef{PluginID: "kmp", ToolName: root.PluginToolName(name)})
-		return domain.AvailableTool{Identity: identity}
+		ref := root.PluginRef{PluginID: "kmp", ToolName: root.PluginToolName(name)}
+		identity, _ := domain.NewPluginToolIdentity(ref)
+		return domain.AvailableTool{Identity: identity, Surface: engineSurface(ref)}
 	}
 	args := func(text string) root.JSONValue {
 		value, err := root.NewJSONObject([]byte(text))

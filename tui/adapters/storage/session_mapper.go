@@ -35,7 +35,11 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 		d.ArchivedDrafts = append(d.ArchivedDrafts, dto.ArchivedDraft{AfterMessage: archived.AfterMessage, Content: string(archived.Content)})
 	}
 	for _, t := range state.ToolSnapshot {
-		d.ToolSnapshot = append(d.ToolSnapshot, dto.AvailableTool{Name: string(t.Definition.Name), Description: string(t.Definition.Description), Parameters: t.Definition.Parameters.Bytes(), Kind: t.Identity.Kind, LocalOperation: t.Identity.LocalOperation, PluginID: string(t.Identity.Plugin.PluginID), PluginToolName: string(t.Identity.Plugin.ToolName)})
+		tool := dto.AvailableTool{Name: string(t.Definition.Name), Description: string(t.Definition.Description), Parameters: t.Definition.Parameters.Bytes(), Kind: t.Identity.Kind, LocalOperation: t.Identity.LocalOperation, PluginID: string(t.Identity.Plugin.PluginID), PluginToolName: string(t.Identity.Plugin.ToolName)}
+		if t.Surface != (domain.ToolSurface{}) {
+			tool.Surface = &dto.ToolSurface{Role: string(t.Surface.Role), Hidden: t.Surface.Hidden, ContextArgument: t.Surface.ContextArgument, MemoryWrite: t.Surface.MemoryWrite}
+		}
+		d.ToolSnapshot = append(d.ToolSnapshot, tool)
 	}
 	for _, p := range state.Activity {
 		record := dto.ToolActivity{Call: encodeCall(p.Call), Decision: string(p.Decision)}
@@ -77,7 +81,11 @@ func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Ti
 		if e != nil {
 			return domain.Session{}, e
 		}
-		s.ToolSnapshot = append(s.ToolSnapshot, domain.AvailableTool{Definition: root.ToolDefinition{Name: root.ToolName(t.Name), Description: root.Text(t.Description), Parameters: params}, Identity: domain.ToolIdentity{Kind: t.Kind, LocalOperation: t.LocalOperation, Plugin: root.PluginRef{PluginID: root.PluginID(t.PluginID), ToolName: root.PluginToolName(t.PluginToolName)}}})
+		tool := domain.AvailableTool{Definition: root.ToolDefinition{Name: root.ToolName(t.Name), Description: root.Text(t.Description), Parameters: params}, Identity: domain.ToolIdentity{Kind: t.Kind, LocalOperation: t.LocalOperation, Plugin: root.PluginRef{PluginID: root.PluginID(t.PluginID), ToolName: root.PluginToolName(t.PluginToolName)}}}
+		if t.Surface != nil {
+			tool.Surface = domain.ToolSurface{Role: domain.PluginRole(t.Surface.Role), Hidden: t.Surface.Hidden, ContextArgument: t.Surface.ContextArgument, MemoryWrite: t.Surface.MemoryWrite}
+		}
+		s.ToolSnapshot = append(s.ToolSnapshot, tool)
 	}
 	for _, p := range d.Activity {
 		call, e := decodeCall(p.Call)

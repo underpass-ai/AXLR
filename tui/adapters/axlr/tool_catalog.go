@@ -26,6 +26,9 @@ type ToolCatalog struct {
 	// one-sentence why (application.RequireWhy). The console sets it; the
 	// service keeps the plain schemas for its API clients.
 	RequireWhy bool
+	// Surfaces says what the console owns of each plugin tool (the engine
+	// adapters' protocol, ceremonyhost.Surface); nil bridges every tool.
+	Surfaces func(root.PluginRef) domain.ToolSurface
 }
 
 var portableName = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
@@ -85,7 +88,11 @@ func (c ToolCatalog) Snapshot(ctx context.Context) ([]domain.AvailableTool, erro
 			if portableName.MatchString(native) && nativeCounts[native] == 1 && !strings.HasPrefix(native, "mcp_") {
 				name = root.ToolName(native)
 			}
-			result = append(result, domain.AvailableTool{Identity: id, Definition: root.ToolDefinition{Name: name, Description: root.Text(tool.Ref.PluginID.String() + "/" + tool.Ref.ToolName.String() + ": " + tool.Description), Parameters: tool.InputSchema}})
+			available := domain.AvailableTool{Identity: id, Definition: root.ToolDefinition{Name: name, Description: root.Text(tool.Ref.PluginID.String() + "/" + tool.Ref.ToolName.String() + ": " + tool.Description), Parameters: tool.InputSchema}}
+			if c.Surfaces != nil {
+				available.Surface = c.Surfaces(tool.Ref)
+			}
+			result = append(result, available)
 		}
 	}
 	if err := validateSnapshot(result); err != nil {

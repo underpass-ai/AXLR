@@ -89,7 +89,7 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		{"a ceremony", memoryRequest(t, edit, toolCall(t, "s1", HostStepDoneName, `{}`)), false},
 		{"already reminded", append(memoryRequest(t, edit), root.Message{Role: root.RoleUser, Content: memoryReminder}, root.Message{Role: root.RoleAssistant, Content: "nothing durable"}), false},
 	} {
-		if got := needsMemoryReminder(tc.request, "kmp_write_memory"); got != tc.want {
+		if got := needsMemoryReminder(tc.request, memoryWriteSnapshot()); got != tc.want {
 			t.Fatalf("%s: got %v", tc.name, got)
 		}
 	}
@@ -104,7 +104,7 @@ func TestModelIsToldToRecordOnlyWhereItRecordsMemory(t *testing.T) {
 	if err := s.BeginTurn("fix the parser", memoryTools(t)); err != nil {
 		t.Fatal(err)
 	}
-	text := string(modelHostGuidance(&s).Content)
+	text := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 	if !strings.Contains(text, "Record what the work settles") || !strings.Contains(text, "kmp_write_memory = kmp_write_memory") {
 		t.Fatalf("normal mode guidance: %s", text)
 	}
@@ -114,7 +114,7 @@ func TestModelIsToldToRecordOnlyWhereItRecordsMemory(t *testing.T) {
 	if err := s.SetMode(domain.ModeIncident); err != nil {
 		t.Fatal(err)
 	}
-	if modelRecordsMemory(s) || strings.Contains(string(modelHostGuidance(&s).Content), "Record what the work settles") {
+	if modelRecordsMemory(s) || strings.Contains(string(modelHostGuidance(&s, engineParagraphs{}).Content), "Record what the work settles") {
 		t.Fatal("incident mode refuses the model's memory writes; it must not be told to record")
 	}
 	noKMP := turnSession(t)

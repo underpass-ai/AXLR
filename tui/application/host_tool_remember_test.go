@@ -77,7 +77,7 @@ func TestAxlrRememberIsOfferedWhereTheModelRecordsMemory(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := rememberSession(t, tc.mode)
 			var request root.CompletionRequest
-			u := ContinueTurnUseCase{Store: &memoryStore{}, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			u := ContinueTurnUseCase{Store: &memoryStore{}, Engines: engineParagraphs{}, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
 				request = req
 				return assistant("ok"), nil
 			})}
@@ -145,7 +145,7 @@ func TestHostRememberBuildsTheRequestFromTheSession(t *testing.T) {
 
 func TestAxlrRememberCountsAsTheRequestsMemoryWrite(t *testing.T) {
 	edit := toolCall(t, "e1", "local_edit", `{"path":"a.go","old_text":"x","new_text":"y"}`)
-	if needsMemoryReminder(memoryRequest(t, edit, toolCall(t, "m1", HostRememberName, `{"kind":"decision","text":"x","evidence":["e"]}`)), "kmp_write_memory") {
+	if needsMemoryReminder(memoryRequest(t, edit, toolCall(t, "m1", HostRememberName, `{"kind":"decision","text":"x","evidence":["e"]}`)), memoryWriteSnapshot()) {
 		t.Fatal("a request that called axlr_remember was reminded")
 	}
 	// The checkpoint lists what it recorded, from its answer.

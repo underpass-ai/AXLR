@@ -96,13 +96,13 @@ func (c *SessionCeremony) openContext(ctx context.Context, s *domain.Session) {
 	c.log("KMP context %s opened for session %s", result.ContextID, id)
 }
 
-// withSessionContext puts the session's KMP context in a kmp call's
-// arguments: every KMP verb but kmp_guide takes context_id, the console
-// holds the session's context, and a context the model names is replaced
-// (a model's call runs in the session's context, never in one of its own;
-// decision G6).
+// withSessionContext puts the session's memory context in the argument
+// the tool's surface names: the console holds the session's context, and
+// a context the model names is replaced (a model's call runs in the
+// session's context, never in one of its own; decision G6).
 func withSessionContext(s domain.Session, tool domain.AvailableTool, arguments root.JSONValue) root.JSONValue {
-	if tool.Identity.Kind != domain.ToolKindPlugin || tool.Identity.Plugin.PluginID != "kmp" || tool.Identity.Plugin.ToolName == "kmp_guide" {
+	argument := tool.Surface.ContextArgument
+	if tool.Identity.Kind != domain.ToolKindPlugin || argument == "" {
 		return arguments
 	}
 	instance, ok := s.Instance()
@@ -113,7 +113,7 @@ func withSessionContext(s domain.Session, tool domain.AvailableTool, arguments r
 	if json.Unmarshal(arguments.Bytes(), &call) != nil || call == nil {
 		return arguments
 	}
-	call["context_id"] = json.RawMessage(fmt.Sprintf("%q", instance.KMPContext))
+	call[argument] = json.RawMessage(fmt.Sprintf("%q", instance.KMPContext))
 	data, err := json.Marshal(call)
 	if err != nil {
 		return arguments

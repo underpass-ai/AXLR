@@ -31,22 +31,10 @@ const whyGuidance = "Give each local_write, local_edit, local_exec, axlr_call_to
 // the local tools; the planner, which reads only, gets neither.
 const compactWhyGuidance = "Give each local_write, local_edit and local_exec call a why: one sentence in its arguments saying what the call is for. A call without it is refused.\n"
 
-// The KMP and MADE paragraphs (decision D8 of the lifecycle integration
-// design): the console runs both protocols, so the model is told what it
-// gets and what it never does. With the session line they stay under 1 KB
-// and identical across sessions, so the prompt's cached prefix keeps them.
-const (
-	kmpGuidance = "Memory (KMP): the console recalled the workspace's memory in the [AXLR · recall] note of your first prompt and records every turn itself; you never register, wake or page KMP for bookkeeping. For a question use axlr_recall; UNKNOWN is a valid answer, never invent a memory. Save a KMP about the person or the repository's instructions name with axlr_session.\n"
-	// kmpRecordGuidance asks for the model's own records where it keeps
-	// them (modelRecordsMemory); the bridged form serves a session without
-	// axlr_remember.
-	kmpRecordGuidance        = "Record what the work settles: a decision, constraint, fix or outcome worth reusing goes to axlr_remember (summary_en when not in English) before your final answer; say what you recorded, or that nothing durable came out. Never record transcripts, guesses or facts nothing settled.\n"
-	kmpRecordBridgedGuidance = "Record what the work settles: a decision, constraint, fix or outcome worth reusing goes to kmp_write_memory through axlr_call_tool, under the session's exact about (axlr_session shows it) with its source evidence and a stable idempotency key, before your final answer; say what you recorded, or that nothing durable came out. Never record transcripts, guesses or facts nothing settled.\n"
-	madeGuidance             = "Ceremonies (MADE): the console runs them, this session included; you cannot start, claim or transition one. Read definitions and instances when needed; to run or publish one, ask the person.\n"
-)
-
-// modelHostGuidance is stable for a frozen catalog and does not embed session data.
-func modelHostGuidance(s *domain.Session) root.Message {
+// modelHostGuidance is stable for a frozen catalog and does not embed
+// session data. engines words each registered plugin's paragraph; nil
+// writes none.
+func modelHostGuidance(s *domain.Session, engines EngineGuidancePort) root.Message {
 	var guidance strings.Builder
 	guidance.WriteString("You are AXLR, an agent working in the user's local workspace. The supplied tools are real capabilities; use their schemas rather than guessing names. Respect user intent and tool errors. Tool approval is enforced by the host. Never claim a tool is unavailable when it is listed.\n")
 	if run, _, planning := focusedRun(*s); planning && run.Plan != nil {
@@ -86,12 +74,22 @@ func modelHostGuidance(s *domain.Session) root.Message {
 		guidance.WriteString(ceremonyStanding(run))
 	}
 	plugins := map[root.PluginID][]string{}
+	// Entry names must be cheap orientation: a guide and the memory write.
+	// Capability discovery returns a whole catalogue, so it is reached
+	// through axlr_tools only when needed.
+	entries := map[root.PluginID][]string{}
 	for _, tool := range s.ToolSnapshot() {
 		if _, hidden := hiddenFromModel(tool); tool.Identity.Kind == domain.ToolKindPlugin && !hidden {
 			id := tool.Identity.Plugin.PluginID
-			plugins[id] = append(plugins[id], fmt.Sprintf("%s = %s", tool.Identity.Plugin.ToolName, tool.Definition.Name))
+			line := fmt.Sprintf("%s = %s", tool.Identity.Plugin.ToolName, tool.Definition.Name)
+			plugins[id] = append(plugins[id], line)
+			if strings.Contains(line, "guide") || tool.Surface.MemoryWrite {
+				entries[id] = append(entries[id], line)
+			}
 		}
 	}
+	_, remembers := findTool(s, HostRememberName)
+	facts := PluginGuidanceFacts{RecordsMemory: modelRecordsMemory(*s), Remembers: remembers}
 	ids := make([]string, 0, len(plugins))
 	for id := range plugins {
 		ids = append(ids, string(id))
@@ -100,27 +98,10 @@ func modelHostGuidance(s *domain.Session) root.Message {
 	for ordinal, raw := range ids {
 		var pluginGuidance strings.Builder
 		id := root.PluginID(raw)
-		switch id {
-		case "kmp":
-			pluginGuidance.WriteString(kmpGuidance)
-			if modelRecordsMemory(*s) {
-				if _, remembers := findTool(s, HostRememberName); remembers {
-					pluginGuidance.WriteString(kmpRecordGuidance)
-				} else {
-					pluginGuidance.WriteString(kmpRecordBridgedGuidance)
-				}
-			}
-		case "made":
-			pluginGuidance.WriteString(madeGuidance)
+		if engines != nil {
+			pluginGuidance.WriteString(engines.Paragraph(id, facts))
 		}
-		// Entry names must be cheap orientation. Capability discovery returns a
-		// whole catalogue, so it is reached through axlr_tools only when needed.
-		entries := []string{}
-		for _, name := range plugins[id] {
-			if strings.Contains(name, "guide") || id == "kmp" && strings.HasPrefix(name, "kmp_write_memory =") {
-				entries = append(entries, name)
-			}
-		}
+		entries := entries[id]
 		sort.Strings(entries)
 		if len(entries) > 4 {
 			entries = entries[:4]
@@ -141,5 +122,5 @@ func modelHostGuidance(s *domain.Session) root.Message {
 
 // modelMessages is the unabridged capability view; request assembly uses ModelContextPort.
 func modelMessages(s *domain.Session) []root.Message {
-	return append([]root.Message{modelHostGuidance(s)}, s.Messages()...)
+	return append([]root.Message{modelHostGuidance(s, nil)}, s.Messages()...)
 }

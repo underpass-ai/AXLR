@@ -150,7 +150,7 @@ func TestGuidanceDescribesTheActiveModeAndNoLongerRoutesToTheSkill(t *testing.T)
 		if err := s.SetMode(mode); err != nil {
 			t.Fatal(err)
 		}
-		text := string(modelHostGuidance(&s).Content)
+		text := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 		if strings.Contains(text, "axlr-ceremonies") {
 			t.Fatalf("%s guidance still routes work to the 1.0 skill", mode)
 		}
@@ -181,7 +181,7 @@ func TestModeDenialForbidsWorkingAroundIt(t *testing.T) {
 		if err := s.SetMode(mode); err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(string(modelHostGuidance(&s).Content), "Never use local_exec to create or change files") {
+		if !strings.Contains(string(modelHostGuidance(&s, engineParagraphs{}).Content), "Never use local_exec to create or change files") {
 			t.Fatalf("%s guidance allows working around the mode", mode)
 		}
 	}
