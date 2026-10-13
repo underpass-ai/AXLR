@@ -303,8 +303,9 @@ func TestSweepAbandonedEndsOnlyUnheldOpenInstances(t *testing.T) {
 	engine := &fakeEngine{}
 	c, store, _, _ := sessionCeremonyFor(t, engine)
 	lister := &listerStub{memoryStore: store, sessions: map[domain.SessionID]domain.Session{}, held: map[domain.SessionID]bool{}}
+	workspace, elsewhere := domain.Workspace(t.TempDir()), domain.Workspace(t.TempDir())
 	open := func(id string, fence string) domain.Session {
-		s, err := domain.NewSession(domain.SessionID(id), "/w", "test/model")
+		s, err := domain.NewSession(domain.SessionID(id), workspace, "test/model")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -320,9 +321,9 @@ func TestSweepAbandonedEndsOnlyUnheldOpenInstances(t *testing.T) {
 	lister.sessions["b123456789abcdef0123456789abcdef"] = open("b123456789abcdef0123456789abcdef", "")
 	lister.held["b123456789abcdef0123456789abcdef"] = true
 	lister.sessions["c123456789abcdef0123456789abcdef"] = open("c123456789abcdef0123456789abcdef", "")
-	other, _ := domain.NewSession("d123456789abcdef0123456789abcdef", "/elsewhere", "test/model")
+	other, _ := domain.NewSession("d123456789abcdef0123456789abcdef", elsewhere, "test/model")
 	lister.sessions["d123456789abcdef0123456789abcdef"] = other
-	ended, err := c.SweepAbandoned(context.Background(), lister, "/w", "c123456789abcdef0123456789abcdef")
+	ended, err := c.SweepAbandoned(context.Background(), lister, workspace, "c123456789abcdef0123456789abcdef")
 	if err != nil || ended != 1 {
 		t.Fatalf("ended %d %v calls %v", ended, err, engine.calls)
 	}
