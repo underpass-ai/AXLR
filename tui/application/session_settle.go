@@ -116,7 +116,7 @@ func (c *SessionCeremony) settle(ctx context.Context, s domain.Session, instance
 	if (kind.Choice == "preference" || kind.Choice == "feedback") && c.Identity != nil && c.Identity.UserAbout != "" {
 		about = c.Identity.UserAbout
 	}
-	entry := SettledEntry{About: about, Kind: kind.Choice, Text: text, SummaryEN: fmt.Sprintf("%s settled in turn %d (%s, %s): \"%s\"", kind.Choice, record.Turn, record.Model, record.Mode, text),
+	entry := SettledEntry{About: about, Kind: kind.Choice, Text: text, SummaryEN: settledSummaryEN(kind.Choice, record),
 		Evidence: append([]string{stepRef, fmt.Sprintf("Jev judged the turn durable with p=%.2f", *gate.Yes)}, actions...), Key: fmt.Sprintf("axlr:settled:%s:%d:1", stateOf.ID, record.PromptIndex), ContextID: instance.KMPContext, Probability: *gate.Yes,
 		Labels: map[string][]string{"session": {string(stateOf.ID)}, "ws": {string(stateOf.Workspace)}, "judged_by": {"jev"}, "model": {record.Model}, "mode": {record.Mode}}}
 	if link := c.supersedes(ctx, instance, text, actions); link != nil {
@@ -128,6 +128,22 @@ func (c *SessionCeremony) settle(ctx context.Context, s domain.Session, instance
 		return
 	}
 	c.log("turn %d settled a %s in %s: %s", record.Turn, entry.Kind, entry.About, ref)
+}
+
+// settledSummaryEN is the English search summary of a settled memory. It
+// carries what the console knows in English (the kind, the turn, the
+// model and the files written) and not the sentence: a strict store
+// refuses a summary_en that leans to the sentence's language, however it
+// is framed (seen on 13 October 2026 with a Spanish answer).
+func settledSummaryEN(kind string, record TurnRecord) string {
+	summary := fmt.Sprintf("%s settled in turn %d by %s (%s mode)", kind, record.Turn, record.Model, record.Mode)
+	if len(record.Files) > 0 {
+		summary += "; files written: " + strings.Join(record.Files, ", ")
+	}
+	if len(record.Commands) > 0 {
+		summary += fmt.Sprintf("; %s run", plural(len(record.Commands), "command"))
+	}
+	return summary
 }
 
 // supersedes asks Jev whether the settled text replaces or contradicts one

@@ -132,7 +132,7 @@ func TestJevSettlesATurnIntoTheProjectAbout(t *testing.T) {
 	}
 	entry := journal.settled[0]
 	id := string(s.ID())
-	if entry.Kind != "decision" || entry.Text != "Las fechas del parser se guardan en UTC, como pide la RFC 3339" || entry.Key != "axlr:settled:"+id+":0:1" || entry.Labels["judged_by"][0] != "jev" || !strings.HasPrefix(entry.SummaryEN, "decision settled in turn 1") || !strings.Contains(entry.SummaryEN, entry.Text) || !strings.HasPrefix(entry.Evidence[0], "MADE axlr-session-") || !strings.Contains(entry.Evidence[1], "p=0.80") || entry.Probability != 0.8 {
+	if entry.Kind != "decision" || entry.Text != "Las fechas del parser se guardan en UTC, como pide la RFC 3339" || entry.Key != "axlr:settled:"+id+":0:1" || entry.Labels["judged_by"][0] != "jev" || !strings.HasPrefix(entry.SummaryEN, "decision settled in turn 1 by ") || !strings.Contains(entry.SummaryEN, "files written: parser.go") || strings.Contains(entry.SummaryEN, entry.Text) || !strings.HasPrefix(entry.Evidence[0], "MADE axlr-session-") || !strings.Contains(entry.Evidence[1], "p=0.80") || entry.Probability != 0.8 {
 		t.Fatalf("entry %+v", entry)
 	}
 	if entry.About != "project:"+defaultAboutName(t, s) {
