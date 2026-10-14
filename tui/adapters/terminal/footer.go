@@ -109,6 +109,7 @@ func (m AppModel) footerStatus(detail int) string {
 	status := m.Status
 	status.Waiting, status.Executing, status.ToolName = m.providerWaiting, m.toolExecuting, m.toolName
 	status.PreparingTool, status.PreparingBytes = m.toolCallName, m.toolCallBytes
+	status.ReasoningBytes = m.reasoningBytes
 	parts := []string{}
 	if notice := m.visibleNotice(); notice != "" {
 		parts = append(parts, notice)
@@ -197,6 +198,9 @@ func (m AppModel) activityLabel(status StatusBar) string {
 		switch status.Phase {
 		case domain.ProviderReasoning:
 			label = m.Theme.T("status.reasoning")
+			if status.ReasoningBytes > 0 {
+				label = m.Theme.Tf("status.reasoningProgress", formatBytes(status.ReasoningBytes))
+			}
 		case domain.ProviderToolCall:
 			label = m.Theme.T("status.preparingTools")
 			if status.PreparingTool != "" {

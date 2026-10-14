@@ -67,8 +67,11 @@ type AppModel struct {
 	toolStarted         time.Time
 	toolName            string
 	// toolCallName and toolCallBytes describe the tool call being streamed.
-	toolCallName      string
-	toolCallBytes     int
+	toolCallName  string
+	toolCallBytes int
+	// reasoningBytes is how much the model has reasoned in the request
+	// that streams, for the footer's "Model is reasoning · 3.1 KB".
+	reasoningBytes    int
 	updatingBatch     bool
 	operationID       uint64
 	operationMessages int
@@ -481,6 +484,12 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Kind == application.EventProviderActivity && m.Busy && m.streamPending {
 			m.Status.Phase = v.ProviderPhase
 			m.providerWaiting = v.ProviderPhase != domain.ProviderContent
+		}
+		if v.Kind == application.EventReasoningProgress && m.Busy && m.streamPending {
+			m.reasoningBytes = v.ReasoningBytes
+		}
+		if v.Kind == application.EventStreamStart || v.Kind == application.EventTextDelta || v.Kind == application.EventToolExecutionStarted {
+			m.reasoningBytes = 0
 		}
 		if v.Kind == application.EventToolCallProgress && m.Busy && m.streamPending {
 			m.toolCallName = singleLine(v.ToolCallName)
