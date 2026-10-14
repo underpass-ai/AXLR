@@ -103,7 +103,8 @@ func (d *CeremonyDriver) role(run domain.CeremonyRun) string {
 // report sends one host status report for the run's claimed step; a
 // failure is logged through the observer's absence, never returned.
 func (d *CeremonyDriver) report(ctx context.Context, s domain.Session, run *domain.CeremonyRun, status, activity string) {
-	if d == nil || d.Engine == nil || run.Fence == "" || run.OperationID == "" {
+	// MADE refuses a report without the step's attempt.
+	if d == nil || d.Engine == nil || run.Fence == "" || run.OperationID == "" || run.ClaimAttempt == 0 {
 		return
 	}
 	state := s.Export()

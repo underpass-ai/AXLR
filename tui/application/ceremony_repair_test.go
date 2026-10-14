@@ -491,3 +491,20 @@ func TestRepairModeRefusesModelMemoryWrites(t *testing.T) {
 		t.Fatalf("verdict %v %q", verdict, reason)
 	}
 }
+
+// An operation id kept while its attempt could not be read is not
+// reported: MADE refuses a report without the step's attempt.
+func TestNoHostReportWithoutTheClaimsAttempt(t *testing.T) {
+	engine := &fakeEngine{}
+	d := &CeremonyDriver{Engine: engine}
+	run := domain.CeremonyRun{Instance: "i", Step: "watch", Fence: "f", OperationID: "op-f"}
+	d.report(context.Background(), turnSession(t), &run, "running", "step")
+	if len(engine.reports) != 0 {
+		t.Fatalf("reports %+v", engine.reports)
+	}
+	run.ClaimAttempt = 1
+	d.report(context.Background(), turnSession(t), &run, "running", "step")
+	if len(engine.reports) != 1 || engine.reports[0].Attempt != 1 {
+		t.Fatalf("reports %+v", engine.reports)
+	}
+}

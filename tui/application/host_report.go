@@ -47,7 +47,9 @@ const (
 // report sends one status report for the session's turn and keeps the
 // sequence; a failure is logged once per report.
 func (c *SessionCeremony) report(ctx context.Context, s domain.Session, instance *domain.SessionInstance, status, activity string) {
-	if c == nil || c.Engine == nil || instance.Fence == "" || instance.OperationID == "" {
+	// MADE refuses a report without the step's attempt; an operation id
+	// kept without one (its read failed) waits for the next claim.
+	if c == nil || c.Engine == nil || instance.Fence == "" || instance.OperationID == "" || instance.ClaimAttempt == 0 {
 		return
 	}
 	state := s.Export()
