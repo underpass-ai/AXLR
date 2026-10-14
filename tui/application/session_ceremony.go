@@ -297,6 +297,8 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 	// as interrupted, at the next claim: it is counted then, not twice.
 	final := true
 	if instance.Fence != "" {
+		// A turn longer than its lease completes on a live claim.
+		c.keepClaim(ctx, *s, &instance)
 		// The finished report goes before the completion: MADE takes a
 		// report only on an accepted lease, which the completion ends
 		// (seen on 13 October 2026: "ceremony agent status step has no

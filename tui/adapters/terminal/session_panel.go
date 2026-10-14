@@ -69,7 +69,7 @@ func sessionPanelContent(state domain.SessionState, theme Theme, project string)
 	fmt.Fprintf(&b, "\n%s\n", theme.Tf("session.lastTurn", record.Turn))
 	fmt.Fprintf(&b, "  %s %s\n", theme.T("session.prompt"), singleLine(record.Prompt))
 	if record.Answer != "" {
-		fmt.Fprintf(&b, "  %s %s (%s)\n", theme.T("session.answer"), singleLine(record.Answer), record.AnswerKind)
+		fmt.Fprintf(&b, "  %s %s (%s)\n", theme.T("session.answer"), singleLine(record.Answer), translatedWord(theme, "session.kind.", record.AnswerKind))
 	}
 	if record.Cost != nil {
 		fmt.Fprintf(&b, "  %s %d · %s\n", theme.T("session.cost"), record.Cost.Requests, FormatUSD(record.Cost.USD))
@@ -86,17 +86,26 @@ func sessionPanelContent(state domain.SessionState, theme Theme, project string)
 	for _, action := range record.Actions {
 		line := fmt.Sprintf("  %s %s", action.Tool, action.Target)
 		if action.ExitCode != nil {
-			line += fmt.Sprintf(" → exit %d", *action.ExitCode)
+			line += " → " + theme.Tf("session.exit", *action.ExitCode)
 		}
 		b.WriteString(singleLine(line) + "\n")
 		if action.Why != "" {
 			fmt.Fprintf(&b, "    %s\n", singleLine(theme.Tf("approval.why", action.Why)))
 		}
-		outcome := action.Decision + " · " + action.Outcome
+		outcome := translatedWord(theme, "session.decision.", action.Decision) + " · " + translatedWord(theme, "session.outcome.", action.Outcome)
 		if action.Reason != "" {
 			outcome += " (" + action.Reason + ")"
 		}
 		fmt.Fprintf(&b, "    %s\n", singleLine(outcome))
 	}
 	return b.String()
+}
+
+// translatedWord shows a recorded word (a decision, an outcome, an answer
+// kind) in the person's language when the catalog has it, else as stored.
+func translatedWord(theme Theme, prefix, word string) string {
+	if _, ok := enMessages[prefix+word]; ok {
+		return theme.T(prefix + word)
+	}
+	return word
 }

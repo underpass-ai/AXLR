@@ -9,7 +9,9 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-type definitionsStub struct{ listed []application.CeremonyDefinitionSummary }
+type definitionsStub struct {
+	listed []application.CeremonyDefinitionSummary
+}
 
 func (d definitionsStub) Describe(context.Context, string, string) (application.CeremonyDefinition, error) {
 	return application.CeremonyDefinition{}, nil

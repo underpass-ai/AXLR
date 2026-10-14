@@ -206,3 +206,32 @@ func TestCloseWritesASessionClosedEntry(t *testing.T) {
 		t.Fatalf("%+v", journal.entries)
 	}
 }
+
+// A turn longer than its lease (a card answered after an hour, a long
+// stream with no tool) completes on a claim taken again: on 14 October 2026
+// review found renewal only before tool calls, and an expired fence refused.
+func TestATurnPastItsLeaseClaimsTheStepAgainToComplete(t *testing.T) {
+	engine := &fakeEngine{failRenews: true}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	clock := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
+	c.Now = func() time.Time { return clock }
+	s := turnSession(t)
+	if err := s.BeginTurn("una tarjeta que espera", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	clock = clock.Add(sessionLease + time.Minute)
+	if err := s.CompleteAssistant(assistant("hecho")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.EndTurn(context.Background(), &s); err != nil {
+		t.Fatal(err)
+	}
+	calls := strings.Join(engine.calls, ";")
+	if !strings.Contains(calls, "renew turn;claim turn ") || !strings.Contains(calls, "complete turn") || strings.Index(calls, "claim turn ") > strings.LastIndex(calls, "complete turn") {
+		t.Fatalf("calls %s", calls)
+	}
+	if instance, _ := s.Instance(); instance.Fence != "" || instance.Turns != 1 {
+		t.Fatalf("instance %+v", instance)
+	}
+}

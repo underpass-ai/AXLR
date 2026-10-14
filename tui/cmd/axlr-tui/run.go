@@ -1100,9 +1100,9 @@ func engineFacts(kmp kmpStore, hasKMP bool, host application.HostIdentity, hasMA
 	if hasKMP {
 		facts["kmp"] = []terminal.EngineFact{
 			{Key: "mcp.store", Value: kmp.Selection.Path},
-			{Key: "mcp.reason", Value: string(kmp.Selection.Reason)},
+			{Key: "mcp.reason", Value: string(kmp.Selection.Reason), ValueKey: "mcp.reason." + string(kmp.Selection.Reason)},
 			{Key: "mcp.about", Value: kmp.About},
-			{Key: "mcp.identity", Value: "axlr:" + host.AgentID + " (one agent per store, one context per session)"},
+			{Key: "mcp.identity", Value: "axlr:" + host.AgentID, NoteKey: "mcp.identityNote"},
 		}
 	}
 	if hasMADE {

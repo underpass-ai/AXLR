@@ -31,8 +31,6 @@ type PluginPanel struct {
 	w, h         int
 }
 
-// Facts are the lines /mcp shows under an engine, keyed by plugin id.
-
 func NewPluginPanel() PluginPanel {
 	search := textinput.New()
 	search.Placeholder = Translate(English, "plugins.searchPlaceholder")
@@ -117,7 +115,14 @@ func (p *PluginPanel) refresh() {
 	for _, fact := range p.Facts[string(item.Profile.ID)] {
 		// An engine's store, selection reason, about and work identity
 		// (decision J1).
-		fmt.Fprintf(&b, "%s %s\n", p.Theme.T(fact.Key), fact.Value)
+		value := fact.Value
+		if fact.ValueKey != "" {
+			value = p.Theme.T(fact.ValueKey)
+		}
+		if fact.NoteKey != "" {
+			value += " " + p.Theme.T(fact.NoteKey)
+		}
+		fmt.Fprintf(&b, "%s %s\n", p.Theme.T(fact.Key), value)
 	}
 	if item.Error != "" {
 		fmt.Fprintln(&b, p.Theme.Tf("plugins.unavailable", item.Error))
