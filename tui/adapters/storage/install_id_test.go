@@ -3,6 +3,7 @@ package storage
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -35,7 +36,8 @@ func TestInstallIDIsOneAcrossRacingStarts(t *testing.T) {
 			t.Fatalf("ids differ: %s and %s", first, id)
 		}
 	}
-	if info, err := os.Stat(filepath.Join(dir, "install-id")); err != nil || info.Mode().Perm() != 0o600 {
+	// Windows has no owner-only mode bits to check.
+	if info, err := os.Stat(filepath.Join(dir, "install-id")); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("install-id: %v %v", info, err)
 	}
 }
