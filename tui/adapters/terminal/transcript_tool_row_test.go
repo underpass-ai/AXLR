@@ -193,3 +193,17 @@ func TestToolRowsNameThePathNotTheBodyOrTheWhy(t *testing.T) {
 		}
 	}
 }
+
+// On 14 October 2026 glm-5.3-flash sent " " before its tool calls and three
+// blank rows stood between the prompt and its tool row.
+func TestWhitespaceBeforeToolCallsDrawsNothing(t *testing.T) {
+	s := toolRowState(domain.DecisionAutoApprove, "", nil)
+	s.Messages[1].Content = " \n "
+	tr := NewTranscript()
+	tr.SetWidth(120)
+	tr.SetSession(s, "\n", Theme{ID: domain.ThemeInk})
+	lines := strings.Split(ansi.Strip(tr.Text()), "\n")
+	if len(lines) != 3 || strings.TrimSpace(lines[1]) != "" || !strings.Contains(lines[2], "read") {
+		t.Fatalf("rows between the prompt and its tool row:\n%q", lines)
+	}
+}
