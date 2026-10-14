@@ -147,6 +147,10 @@ type AppModel struct {
 	// went back. undoAsking waits for the key that answers /undo.
 	restoreOperation uint64
 	undoAsking       bool
+	// noticeAt is when the footer's notice was raised; lastingNotice is a
+	// notice no time ends (see footer_notice.go).
+	noticeAt      time.Time
+	lastingNotice string
 	// turnCosts are the finished turns' usage by the number of messages
 	// each ended after, drawn under them; turnLog the last ones, for
 	// /usage. Both are this console's, from the ledger's totals.
@@ -267,6 +271,7 @@ func (m AppModel) Init() tea.Cmd {
 	if os.Getenv("TERM") != "dumb" {
 		repairs = tea.Batch(repairs, startTitle())
 	}
+	repairs = tea.Batch(repairs, nextNoticeTick())
 	if m.Theme.Monochrome {
 		return repairs
 	}
@@ -279,8 +284,13 @@ func (m AppModel) Init() tea.Cmd {
 // Update handles a message, then rings and sets the terminal's title as
 // what it changed asks.
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(noticeTick); ok {
+		// Every two seconds while idle: no trace span, nothing to signal.
+		return m.noticeTicked()
+	}
+	before := m.footerBefore()
 	next, cmd := m.handle(msg)
-	return next.(AppModel).signal(cmd)
+	return next.(AppModel).settleFooter(before, msg).signal(cmd)
 }
 
 func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
