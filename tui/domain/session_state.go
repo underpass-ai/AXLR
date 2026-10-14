@@ -125,8 +125,9 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 		case axlr.RoleUser:
 			// A previous stream can have ended without a complete assistant response.
 			if s.Status() == StatusStreaming {
-				// A budget note joined the running turn; it began none.
-				if BudgetNote(message.Content) {
+				// A budget or restore note joined the running turn; it
+				// began none.
+				if JoinsRunningTurn(message.Content) {
 					err = s.Note(message.Content)
 					break
 				}

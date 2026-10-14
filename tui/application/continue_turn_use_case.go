@@ -105,6 +105,15 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
 	}
+	// Files the person restored while the turn was interrupted are told
+	// before the resumed turn's next request.
+	if delivered, err := deliverRestoreNote(ctx, session, u.Store); err != nil {
+		return interrupt(err)
+	} else if delivered {
+		if err := emitSession(session, emit); err != nil {
+			return interrupt(err)
+		}
+	}
 	// What the person wrote during the last tool step joins this turn here,
 	// before the next request is built, rather than cancelling it.
 	if steered, err := applySteer(ctx, session, u.Store, u.Diagnostics); err != nil {

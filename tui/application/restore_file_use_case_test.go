@@ -272,3 +272,56 @@ func TestUndoSkipsAChangeRestoredFromThePanel(t *testing.T) {
 		t.Fatalf("restored turn still offered: %d", turn)
 	}
 }
+
+// A restore made while the turn is interrupted reached the model only with
+// a new prompt: Ctrl+R resumed without one and the model went on over
+// files that no longer held what it wrote. The resumed turn's next request
+// carries the note once, as a console note that joins the turn, and the
+// saved session replays.
+func TestAResumedTurnIsToldWhatThePersonRestored(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn("cambia calc", repairTools(t)); err != nil {
+		t.Fatal(err)
+	}
+	call := root.ToolCall{ID: "w1", Name: "local_write", Arguments: mustObject(t, `{}`)}
+	if err := s.CompleteAssistant(assistant("", call)); err != nil {
+		t.Fatal(err)
+	}
+	change := domain.FileChange{Path: "calc/calc.go", Before: "one", After: "two"}
+	if err := s.RecordToolOutcome("w1", domain.DecisionApprove, domain.ToolOutcome{Content: "{}", Change: &change}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PauseTurn(); err != nil {
+		t.Fatal(err)
+	}
+	store := &memoryStore{}
+	files := &workspaceFiles{files: map[string]string{"calc/calc.go": "two"}}
+	if _, err := (RestoreFileUseCase{Tools: files, Store: store}).Restore(context.Background(), &s, "w1"); err != nil {
+		t.Fatal(err)
+	}
+	var requests [][]root.Message
+	model := streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		requests = append(requests, r.Messages)
+		return assistant("listo"), nil
+	})
+	u := SessionControlUseCase{Store: store, Agent: AgentTurnUseCase{Continue: ContinueTurnUseCase{Models: model, Store: store}}}
+	if err := u.Resume(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("%d requests", len(requests))
+	}
+	last := requests[0][len(requests[0])-1]
+	if last.Role != root.RoleUser || !strings.HasPrefix(string(last.Content), RestoreNotePrefix+" Since your last answer the person restored calc/calc.go to what it held before your call w1") {
+		t.Fatalf("last message %+v", last)
+	}
+	if note := restoreNote(s.Export()); note != "" {
+		t.Fatalf("the note is still pending: %q", note)
+	}
+	if _, err := domain.RestoreSession(s.Export()); err != nil {
+		t.Fatalf("the saved session does not replay: %v", err)
+	}
+	if s.Export().TurnCallCount != 1 {
+		t.Fatalf("the note began a turn: count %d", s.Export().TurnCallCount)
+	}
+}

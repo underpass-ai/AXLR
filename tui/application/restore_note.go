@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -15,12 +16,12 @@ import (
 // October 2026 glm-5.3-flash found calc/calc.go "reverted by someone",
 // distrusted its own memory and spent a 382k-token debug ceremony
 // investigating.
-const RestoreNotePrefix = "[AXLR · restore]"
+const RestoreNotePrefix = domain.RestoreNotePrefix
 
 // restoreNote is the note for the restores recorded since the last
 // message, or "" when there were none. It is derived from the session's
-// console lines, so it rides the next prompt once and nothing more is
-// stored.
+// console lines, so it rides the next prompt once (or joins a resumed turn,
+// deliverRestoreNote) and nothing more is stored.
 func restoreNote(state domain.SessionState) string {
 	var parts []string
 	for _, line := range state.ConsoleLines {
@@ -65,4 +66,25 @@ func held(files int) string {
 		return "it held"
 	}
 	return "they held"
+}
+
+// deliverRestoreNote adds the note for restores made while the turn was
+// interrupted to the resumed turn, before its next request: Ctrl+R resumes
+// without a prompt, and the note rode only a new prompt, so the model
+// continued over files that no longer held what it wrote. It does nothing
+// when there is no such restore or the turn cannot take a note.
+func deliverRestoreNote(ctx context.Context, session *domain.Session, store SessionStorePort) (bool, error) {
+	note := restoreNote(session.Export())
+	if note == "" || session.Status() != domain.StatusStreaming || len(session.Pending()) != 0 {
+		return false, nil
+	}
+	next := *session
+	if err := next.Note(root.Text(note)); err != nil {
+		return false, err
+	}
+	if err := store.Save(ctx, next); err != nil {
+		return false, err
+	}
+	*session = next
+	return true, nil
 }
