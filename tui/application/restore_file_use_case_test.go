@@ -168,3 +168,39 @@ func TestUndoLastTurnIsAllOrNothing(t *testing.T) {
 		t.Fatalf("undid a created file: %v", err)
 	}
 }
+
+// A restore is told to the model once, on the next prompt, as a console
+// note: the history stays as it was, and the model no longer takes the
+// restored file for someone else's change (14 October 2026: glm-5.3-flash
+// found calc/calc.go "reverted by someone" and spent a 382k-token debug
+// ceremony on it).
+func TestTheNextPromptTellsTheModelWhatThePersonRestored(t *testing.T) {
+	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "calc/calc.go", Before: "one", After: "two"}}}, []changeStep{{"l1", domain.FileChange{Path: "a.go", Before: "a0", After: "a1"}}, {"l2", domain.FileChange{Path: "b.go", Before: "b0", After: "b1"}}})
+	files := &workspaceFiles{files: map[string]string{"calc/calc.go": "two", "a.go": "a1", "b.go": "b1"}}
+	store := &memoryStore{}
+	restore := RestoreFileUseCase{Tools: files, Store: store}
+	if _, err := restore.Restore(context.Background(), &s, "w1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restore.UndoLastTurn(context.Background(), &s); err != nil {
+		t.Fatal(err)
+	}
+	var prompts []string
+	model := streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		prompts = append(prompts, string(r.Messages[len(r.Messages)-1].Content))
+		return assistant("ok"), nil
+	})
+	u := StartTurnUseCase{Catalog: &catalogStub{}, Store: store, Continue: ContinueTurnUseCase{Models: model, Store: store}}
+	for _, prompt := range []root.Text{"sigue", "y ahora"} {
+		if err := u.Execute(context.Background(), &s, prompt, ignoreEvent); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := "sigue\n\n" + RestoreNotePrefix + " Since your last answer the person restored calc/calc.go to what it held before your call w1 (from the file-changes panel); and b.go, a.go to what they held before your last turn (with /undo). That was the person's decision, not a fault"
+	if len(prompts) != 2 || !strings.HasPrefix(prompts[0], want) {
+		t.Fatalf("first prompt %q", prompts[0])
+	}
+	if prompts[1] != "y ahora" {
+		t.Fatalf("the note was repeated: %q", prompts[1])
+	}
+}
