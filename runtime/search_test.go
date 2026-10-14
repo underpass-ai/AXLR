@@ -431,3 +431,30 @@ func TestSearchAndListPassOverUnreadableDirectories(t *testing.T) {
 		t.Fatalf("unreadable scope: %s %+v", r.Status, r.Error)
 	}
 }
+
+// A walk from a parent never enters the console's own stores, .axlr and
+// .kernel, as it never enters .git; a scope inside them is still walked.
+// On 14 October 2026 a search for "func" filled its page with a 544 KB
+// session export under .axlr and a recursive listing ran out before calc/.
+func TestSearchAndListLeaveTheConsoleStoresOut(t *testing.T) {
+	_, e := searchTree(t, map[string]string{
+		".axlr/exports/session.json": "func hit\n",
+		".kernel/logs/kmp.log":       "func hit\n",
+		"calc/calc.go":               "func hit\n",
+	})
+	if got := hits(searchFor(t, e, `{"pattern":"hit"}`)); !reflect.DeepEqual(got, []string{"calc/calc.go:1"}) {
+		t.Fatalf("matches %v", got)
+	}
+	if got := hits(searchFor(t, e, `{"pattern":"hit","path":".axlr"}`)); !reflect.DeepEqual(got, []string{".axlr/exports/session.json:1"}) {
+		t.Fatalf("explicit .axlr search %v", got)
+	}
+	if got := hits(searchFor(t, e, `{"pattern":"hit","path":".kernel/logs"}`)); !reflect.DeepEqual(got, []string{".kernel/logs/kmp.log:1"}) {
+		t.Fatalf("explicit .kernel search %v", got)
+	}
+	if got := entryNames(listFor(t, e, `{"recursive":true}`)); !reflect.DeepEqual(got, []string{".axlr", ".kernel", "calc", "calc/calc.go"}) {
+		t.Fatalf("recursive listing %v", got)
+	}
+	if got := entryNames(listFor(t, e, `{"recursive":true,"path":".axlr"}`)); !reflect.DeepEqual(got, []string{".axlr/exports", ".axlr/exports/session.json"}) {
+		t.Fatalf("explicit .axlr listing %v", got)
+	}
+}
