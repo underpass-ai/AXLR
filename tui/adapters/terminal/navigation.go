@@ -95,6 +95,13 @@ func (m *AppModel) syncApproval() {
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
+		if onDisk, ok := m.writtenFile(p); ok {
+			// A write over an existing file is shown as what it changes.
+			if rows, ok := writeDiffRows(p.Call.Arguments.Bytes(), onDisk, m.Theme); ok {
+				m.Approval.Details.setRows(rows)
+				m.Approval.Details.Viewport.GotoTop()
+			}
+		}
 		m.cardShownAt = time.Now()
 		// A reason being typed was for another call.
 		m.denying = false

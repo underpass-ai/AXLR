@@ -2,10 +2,15 @@ package terminal
 
 import (
 	"encoding/json"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/aymanbagabas/go-udiff"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // writePreviewLines caps how much of a written file the card lists; the
@@ -109,4 +114,80 @@ func editRows(oldText, newText string) ([]transcriptRow, bool) {
 func (t *Transcript) setRows(rows []transcriptRow) {
 	t.rows = rows
 	t.renderRows()
+}
+
+// writeDiffRows lays a local_write over an existing file out as its diff
+// against the file on disk, like an edit's card: the reason, the path and
+// mode, how many lines it adds and removes, then removed lines red, added
+// lines green and unchanged ones once as context. On 14 October 2026 a
+// replace card listed the whole new calc.go and the person had to find the
+// two lines it changed. ok is false for other calls and when the diff
+// cannot be drawn; the card then shows the content.
+func writeDiffRows(arguments []byte, onDisk string, theme Theme) ([]transcriptRow, bool) {
+	var call struct {
+		Path    string  `json:"path"`
+		Content *string `json:"content"`
+		Mode    string  `json:"mode"`
+		Why     string  `json:"why"`
+	}
+	if json.Unmarshal(arguments, &call) != nil || call.Content == nil {
+		return nil, false
+	}
+	change := domain.FileChange{Path: root.RelativePath(call.Path), Before: root.Text(onDisk), After: root.Text(*call.Content)}
+	diff, ok := changeResultRows(change, theme)
+	if !ok || len(diff) < 2 {
+		return nil, false
+	}
+	preview := previewChange(change)
+	var rows []transcriptRow
+	if why := strings.TrimSpace(call.Why); why != "" {
+		rows = append(rows, transcriptRow{Text: theme.Tf("approval.why", strings.ReplaceAll(why, "\n", " ")), Kind: transcriptRowSpeaker})
+	}
+	header := "── " + call.Path + " ──"
+	if call.Mode != "" {
+		header = "── " + call.Path + " · " + call.Mode + " ──"
+	}
+	rows = append(rows, transcriptRow{Text: header, Kind: transcriptRowSpeaker}, transcriptRow{Text: theme.Tf("approval.writeDiff", preview.Added, preview.Removed), Kind: transcriptRowConsole})
+	body := diff[1:] // changeResultRows names the path first
+	if hidden := len(body) - writePreviewLines; hidden > 0 {
+		body = append(body[:writePreviewLines], transcriptRow{Text: theme.Tn("approval.moreLines", hidden, hidden), Kind: transcriptRowPlain})
+	}
+	return append(rows, body...), true
+}
+
+// writtenFile is what a pending local_write's file holds on disk, read
+// inside the workspace (a path that leaves it is not read), when it exists
+// and fits a change preview.
+func (m AppModel) writtenFile(p domain.PendingTool) (string, bool) {
+	if p.Call.Name != "local_write" {
+		return "", false
+	}
+	var call struct {
+		Path string `json:"path"`
+	}
+	workspace := string(m.deps.Workspace)
+	if workspace == "" {
+		workspace = string(m.Header.State.Workspace)
+	}
+	if json.Unmarshal(p.Call.Arguments.Bytes(), &call) != nil || workspace == "" || !filepath.IsLocal(filepath.FromSlash(call.Path)) {
+		return "", false
+	}
+	dir, err := os.OpenRoot(workspace)
+	if err != nil {
+		return "", false
+	}
+	defer dir.Close()
+	file, err := dir.Open(filepath.FromSlash(call.Path))
+	if err != nil {
+		return "", false
+	}
+	defer file.Close()
+	if info, err := file.Stat(); err != nil || !info.Mode().IsRegular() || info.Size() > domain.MaxChangePreviewBytes {
+		return "", false
+	}
+	data, err := io.ReadAll(io.LimitReader(file, domain.MaxChangePreviewBytes+1))
+	if err != nil || !domain.ChangePreviewFits(string(data)) || !utf8.Valid(data) {
+		return "", false
+	}
+	return string(data), true
 }
