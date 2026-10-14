@@ -309,7 +309,7 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 			stepRef += " (not completed: " + bounded(err.Error(), 200) + ")"
 			final = false
 		} else {
-			instance.Fence, instance.OperationID = "", ""
+			instance.Fence, instance.OperationID, instance.ClaimAttempt = "", "", 0
 		}
 	} else {
 		stepRef += " (not claimed)"

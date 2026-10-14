@@ -49,14 +49,16 @@ type SessionInstance struct {
 	// Recalled is the intent the console last woke memory for; "" before
 	// the first prompt's recall.
 	Recalled string
-	// OperationID, ClaimedAt and LeaseMS describe the live claim for the
-	// host reports and the lease renewal (decision H5); Reported is the
-	// time of the last report and Reports their count on this instance.
-	OperationID string
-	ClaimedAt   time.Time
-	LeaseMS     int64
-	Reported    time.Time
-	Reports     int
+	// OperationID, ClaimAttempt, ClaimedAt and LeaseMS describe the live
+	// claim for the host reports and the lease renewal (decision H5);
+	// Reported is the time of the last report and Reports their count on
+	// this instance.
+	OperationID  string
+	ClaimAttempt int
+	ClaimedAt    time.Time
+	LeaseMS      int64
+	Reported     time.Time
+	Reports      int
 	// ClaimIncarnation is the console incarnation that made the live claim
 	// (install id and run token); another incarnation finding it declares
 	// a handoff (decision H6).
@@ -97,7 +99,7 @@ func (i SessionInstance) Validate() error {
 			return errors.New("session instance predecessor: " + err.Error())
 		}
 	}
-	if i.Turns < 0 || i.TurnIndex < 0 || i.ClaimRequests < 0 || i.ClaimCost < 0 || i.LeaseMS < 0 || i.Reports < 0 {
+	if i.Turns < 0 || i.TurnIndex < 0 || i.ClaimRequests < 0 || i.ClaimCost < 0 || i.LeaseMS < 0 || i.Reports < 0 || i.ClaimAttempt < 0 {
 		return errors.New("invalid session instance counters")
 	}
 	if len(i.LastRecord) > MaxSessionRecordBytes {
