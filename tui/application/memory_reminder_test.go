@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -171,5 +172,45 @@ func TestMemoryReminderAndJevEachActOncePerRequest(t *testing.T) {
 	}
 	if !strings.Contains(stub.questions[0].State, "fix the parser") {
 		t.Fatalf("Jev judged another request: %s", stub.questions[0].State)
+	}
+}
+
+// Jev settles a turn at its record: where the turn ends in none (MADE
+// unavailable, so no instance), the reminder still asks the model.
+func TestMemoryReminderStandsWhereNoRecordSettlesTheTurn(t *testing.T) {
+	durableTurn := func() domain.Session {
+		s := turnSession(t)
+		if err := s.BeginTurn("fix the parser", memoryTools(t)); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	finish := func(s *domain.Session) {
+		edit := toolCall(t, "e1", "local_edit", `{}`)
+		if err := s.CompleteAssistant(assistant("", edit)); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.RecordToolOutcome("e1", domain.DecisionAutoApprove, domain.ToolOutcome{Content: `{"status":"completed","output":{}}`}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.CompleteAssistant(assistant("done")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	engine := &fakeEngine{ready: errors.New("connection refused")}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	c.Judge = &scriptedJudge{}
+	s := durableTurn()
+	c.BeginTurn(context.Background(), &s)
+	finish(&s)
+	if reminded, err := remindMemory(context.Background(), &s, ContinueTurnUseCase{Store: &memoryStore{}, Session: c}, ignoreEvent); !reminded || err != nil {
+		t.Fatalf("no record, no reminder: %v %v", reminded, err)
+	}
+	engine.ready = nil
+	s = durableTurn()
+	c.BeginTurn(context.Background(), &s)
+	finish(&s)
+	if reminded, err := remindMemory(context.Background(), &s, ContinueTurnUseCase{Store: &memoryStore{}, Session: c}, ignoreEvent); reminded || err != nil {
+		t.Fatalf("reminded where Jev settles: %v %v", reminded, err)
 	}
 }

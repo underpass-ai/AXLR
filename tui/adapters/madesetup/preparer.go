@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/mcpclient"
 	"github.com/underpass-ai/AXLR/plugins"
@@ -348,5 +349,9 @@ func bounded(text string, limit int) string {
 	if len(text) <= limit {
 		return text
 	}
-	return text[:limit] + "…"
+	cut := limit
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "…"
 }

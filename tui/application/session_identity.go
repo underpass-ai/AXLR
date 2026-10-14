@@ -86,6 +86,12 @@ func withSessionContext(s domain.Session, tool domain.AvailableTool, arguments r
 	if json.Unmarshal(arguments.Bytes(), &call) != nil || call == nil {
 		return arguments
 	}
+	if _, resumes := call["continuation"]; resumes {
+		// A continuation goes alone: any other argument, the context
+		// included, starts a different call (KMP 0.25.0, 13 October 2026;
+		// see ceremonyhost/memory_forget.go).
+		return arguments
+	}
 	call[argument] = json.RawMessage(fmt.Sprintf("%q", instance.MemoryContext))
 	data, err := json.Marshal(call)
 	if err != nil {

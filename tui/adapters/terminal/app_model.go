@@ -28,14 +28,19 @@ type AppModel struct {
 	tokens     int
 	// cached is the share, in percent, of the last request's prompt that the
 	// provider read from its prompt cache; zero without a cache.
-	cached           int
-	cost             costView
-	Status           StatusBar
-	Layout           Layout
-	Theme            Theme
-	UIPreferences    domain.UIPreferences
-	ThemePicker      ThemePicker
-	Busy             bool
+	cached        int
+	cost          costView
+	Status        StatusBar
+	Layout        Layout
+	Theme         Theme
+	UIPreferences domain.UIPreferences
+	ThemePicker   ThemePicker
+	Busy          bool
+	// typedAt is when a key last changed the composer's text; an approval
+	// card ignores letters typed right after it (see typingIntoCard).
+	typedAt time.Time
+	// cardShownAt is when the approval card on screen opened.
+	cardShownAt      time.Time
 	Approval         ApprovalDialog
 	SearchBox        SearchBox
 	Palette          ActionPalette
@@ -233,6 +238,9 @@ func New(deps Dependencies) AppModel {
 	if deps.ApprovalSettings != nil {
 		m.Status.Autonomous = deps.ApprovalSettings.Autonomous()
 	}
+	if deps.StartupNotice != "" {
+		m.Status.Notice = deps.StartupNotice
+	}
 	if deps.InitialDraft != "" {
 		m.Composer.Input.SetValue(deps.InitialDraft)
 	}
@@ -251,6 +259,10 @@ func (m AppModel) Init() tea.Cmd {
 	}
 	if git := m.readGitState(); git != nil {
 		repairs = tea.Batch(repairs, git)
+	}
+	if m.Header.About != m.deps.About {
+		// The session's about is not the launch's the start counted.
+		repairs = tea.Batch(repairs, m.countMemories())
 	}
 	if os.Getenv("TERM") != "dumb" {
 		repairs = tea.Batch(repairs, startTitle())
@@ -478,9 +490,24 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.waitingCommand(nil)
 		return m, cmd
 	case resubmitPrompt:
-		// The successor session takes the prompt the capped one could not.
+		// The successor session takes the prompt the capped one could not;
+		// a draft the person was writing stays in the composer.
+		draft := m.Composer.Input.Value()
 		m.Composer.Input.SetValue(v.prompt)
-		return m.submitDraft()
+		next, cmd := m.submitDraft()
+		changed := next.(AppModel)
+		if draft != "" && changed.Composer.Input.Value() == "" {
+			changed.Composer.Input.SetValue(draft)
+		}
+		return changed, cmd
+	case ceremonyArmMsg:
+		return m.armCeremony(v.listed, v.arm)
+	case memoryCounted:
+		if v.about == m.Header.About {
+			// Unknown means nothing is recorded under the about yet.
+			m.Header.Memories, m.Header.MemoriesKnown = v.count, true
+		}
+		return m, nil
 	case operationComplete:
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
@@ -492,9 +519,18 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				*m.deps.Session = capped.Successor
 			}
 			v.Session, v.Err, v.Fresh = capped.Successor, nil, true
+			queued := m.steer.Peek() != ""
+			if queued {
+				// A message queued meanwhile starts the successor's turn:
+				// the capped prompt goes first in it, not behind it.
+				m.steer.Restore(root.Text(capped.Prompt))
+			}
 			next, cmd := m.Update(v)
 			changed := next.(AppModel)
 			changed.Status.Notice = changed.Theme.Tf("notice.continued", capped.Tokens/1000, capped.Cap/1000, string(capped.Predecessor)[:8])
+			if queued {
+				return changed, cmd
+			}
 			prompt := capped.Prompt
 			return changed, tea.Batch(cmd, func() tea.Msg { return resubmitPrompt{prompt: prompt} })
 		}
@@ -506,6 +542,8 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return next, tea.Batch(cmd, next.(AppModel).readGitState())
 		}
 		wasTurn := m.turnRunning()
+		// followUp runs after this completion, on a settled console.
+		var followUp tea.Cmd
 		if m.cancel != nil {
 			m.cancel()
 		}
@@ -561,10 +599,34 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Notice = m.Theme.Tf("notice.ceremonyPublished", v.Published)
 		}
 		if v.MemorySaved != nil && v.Err == nil {
-			m.Status.Notice = m.Theme.Tf("notice.memorySaved", v.MemorySaved.Events, v.MemorySaved.About, shortenHome(v.MemorySaved.Path))
+			if v.MemorySaved.About == m.Header.About && v.MemorySaved.Events >= 0 {
+				m.Header.Memories, m.Header.MemoriesKnown = v.MemorySaved.Events, true
+			}
+			m.Status.Notice = m.Theme.Tf("notice.memorySaved", v.MemorySaved.Events, v.MemorySaved.About, m.workspacePath(v.MemorySaved.Path))
+			switch {
+			case v.MemorySaved.Events == 1:
+				m.Status.Notice = m.Theme.Tf("notice.memorySavedOne", v.MemorySaved.About, m.workspacePath(v.MemorySaved.Path))
+			case v.MemorySaved.Events < 0:
+				// kmp-mcp printed no count.
+				m.Status.Notice = m.Theme.Tf("notice.memorySavedUncounted", v.MemorySaved.About, m.workspacePath(v.MemorySaved.Path))
+			}
 		}
 		if v.MemoryForgotten != nil && v.Err == nil {
 			m.Status.Notice = m.Theme.Tf("notice.memoryForgotten", v.MemoryForgotten.Ref, v.MemoryForgotten.Superseding)
+		}
+		if v.Ceremonies != nil && v.CeremonyArm == nil && m.overlay == "ceremonies" {
+			m.Info.SetContent(ceremoniesContent(*v.Ceremonies, v.Err, m.Theme))
+			m.Info.Viewport.GotoTop()
+		}
+		if v.Ceremonies != nil && v.CeremonyArm != nil {
+			m.Status.Notice = ""
+			if v.Err != nil {
+				m.Status.Error = v.Err.Error()
+			} else {
+				// Armed once this completion has settled the console.
+				arm, listed := *v.CeremonyArm, *v.Ceremonies
+				followUp = func() tea.Msg { return ceremonyArmMsg{arm: arm, listed: listed} }
+			}
 		}
 		if v.MemoryCompared != nil && m.overlay == "memory" {
 			content := memoryCompareContent(*v.MemoryCompared, m.Theme)
@@ -744,15 +806,20 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.autoOpenIncidentCard()
 			m = m.autoOpenRepairPanel()
 		}
+		recount := followUp
+		if wasTurn || switched {
+			// The turn may have recorded memories: the header counts again.
+			recount = tea.Batch(followUp, m.countMemories())
+		}
 		if failed != nil {
 			if record := m.recordTurnFailure(*failed); record != nil {
 				// A queued prompt starts when the line is recorded.
-				return m, record
+				return m, tea.Batch(record, recount)
 			}
 		}
 		if record := m.recordPlanOutcomes(); record != nil {
 			// A queued prompt starts when the outcome is recorded.
-			return m, record
+			return m, tea.Batch(record, recount)
 		}
 		if queued, ok := m.steer.Take(); ok {
 			prompt := queued
@@ -783,14 +850,14 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return start.Execute(ctx, s, prompt, emit)
 			})
-			return m, cmd
+			return m, tea.Batch(cmd, recount)
 		}
-		return m, nil
+		return m, recount
 	case ControlIntent:
 		switch v {
 		case "send":
 			command := strings.TrimSpace(m.Composer.Input.Value())
-			if suggestions := slashSuggestions(command); len(suggestions) > 0 && m.overlay == "" {
+			if suggestions := slashSuggestions(slashDraft(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
 				// Enter on a partial command runs the highlighted suggestion.
 				command = suggestions[min(m.slashSelected, len(suggestions)-1)].name
 			}
@@ -968,7 +1035,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return next, cmd
 			}
 		}
-		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
+		if suggestions := slashSuggestions(slashDraft(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
 			switch v.String() {
 			case "up":
 				m.slashSelected = max(0, min(m.slashSelected, len(suggestions)-1)-1)
@@ -979,7 +1046,13 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions), m.slashLimit())
 				return m, nil
 			case "tab":
-				m.Composer.Input.SetValue(suggestions[min(m.slashSelected, len(suggestions)-1)].name)
+				name := suggestions[min(m.slashSelected, len(suggestions)-1)].name
+				if word, _, _ := strings.Cut(name, " "); slashUsage(word) != word {
+					// A command that takes text is completed ready for it.
+					name += " "
+				}
+				m.Composer.Input.SetValue(name)
+				m.Composer.Input.CursorEnd()
 				m.slashSelected = 0
 				return m, nil
 			}
@@ -1051,7 +1124,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-			suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value()))
+			suggestions := slashSuggestions(slashDraft(m.Composer.Input.Value()))
 			for i := range suggestions {
 				if m.zones.Get(fmt.Sprintf("%sslash-%d", m.prefix, i)).InBounds(v) {
 					m.slashSelected = i
@@ -1085,6 +1158,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.Composer.Input.Value()
 	m.Composer, cmd = m.Composer.Update(msg)
 	if m.Composer.Input.Value() != before {
+		if _, typed := msg.(tea.KeyPressMsg); typed {
+			m.typedAt = time.Now()
+		}
 		m.slashSelected = 0
 		m.mention.selected, m.mention.top = 0, 0
 	}
@@ -1115,7 +1191,7 @@ func (m AppModel) View() tea.View {
 		}
 		body := m.mainTranscript()
 		var menu []string
-		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
+		if suggestions := slashSuggestions(slashDraft(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
 			menu = m.slashMenu(suggestions)
 		} else if m.mentionActive() {
 			menu = m.mentionMenu()

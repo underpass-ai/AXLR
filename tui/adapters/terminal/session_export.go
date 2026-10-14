@@ -35,7 +35,7 @@ func (m AppModel) exportSession(path string) (tea.Model, tea.Cmd) {
 	}
 	m.Composer.Input.Reset()
 	m.Status.Error = ""
-	m.Status.Notice = m.Theme.Tf("export.done", shortenHome(written))
+	m.Status.Notice = m.Theme.Tf("export.done", m.workspacePath(written))
 	return m, nil
 }
 
@@ -69,6 +69,6 @@ func (m AppModel) exportSessionBundle(id string) (tea.Model, tea.Cmd) {
 	}
 	m.Composer.Input.Reset()
 	m.Status.Error = ""
-	m.Status.Notice = m.Theme.Tf("export.done", shortenHome(written))
+	m.Status.Notice = m.Theme.Tf("export.done", m.workspacePath(written))
 	return m, nil
 }

@@ -49,7 +49,15 @@ func (SessionBundles) Encode(session domain.Session, meta application.SessionBun
 	if notes := notesOf(state); !notes.empty() {
 		bundle.Console = &sessionConsole{Version: sessionConsoleVersion, StoppedCeremony: notes.StoppedCeremony, ChosenCeremony: notes.Chosen.Definition, ChosenVersion: notes.Chosen.Version, Lines: encodeConsoleLines(notes.Lines)}
 	}
-	return json.MarshalIndent(bundle, "", " ")
+	// Arguments keep their bytes (<, > and &) as the store keeps them.
+	var out bytes.Buffer
+	encoder := json.NewEncoder(&out)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", " ")
+	if err := encoder.Encode(bundle); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 // Decode reads a bundle back into a session, its instance as the origin

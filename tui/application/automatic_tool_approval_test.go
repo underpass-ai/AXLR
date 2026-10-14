@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -142,4 +143,21 @@ func TestModelContextReflectsRegisteredCapabilitiesAndPreservesHistory(t *testin
 	if len(s.Messages()) != 1 || s.Messages()[0].Role != root.RoleUser || messages[1].Content != "hello" {
 		t.Fatal("changed persisted history")
 	}
+}
+
+// The destructive rules read the command as a tolerant session runs it: a
+// whole command line sent as the program is split first (14 October 2026).
+func TestDestructiveReasonReadsTheNormalisedCommand(t *testing.T) {
+	s := turnSession(t)
+	for program, want := range map[string]string{"git push --force origin main": domain.RuleGitPush, "`git push`": domain.RuleGitPush, "git status": ""} {
+		arguments := mustObject(t, `{"program":`+strconvQuote(program)+`}`)
+		if got := DestructiveReason(nil, s, localIdentity("exec"), arguments); got != want {
+			t.Fatalf("%s: got %q want %q", program, got, want)
+		}
+	}
+}
+
+func strconvQuote(text string) string {
+	encoded, _ := json.Marshal(text)
+	return string(encoded)
 }

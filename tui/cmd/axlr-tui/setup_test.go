@@ -358,3 +358,27 @@ func TestRunUsesTheKeyTheSetupSaved(t *testing.T) {
 		t.Fatalf("a readable credentials file was used: %d\n%s", code, &out)
 	}
 }
+
+// Review of 14 October 2026: on a platform without engine packages the
+// setup wrote the engines required, so no launch could start; a re-run
+// with a TypeSafe key left Jev off although it said "Jev on"; and LANG
+// replaced the language a saved settings file had.
+func TestSetupRerunKeepsTheLanguageTurnsJevOnAndRequiresNoMissingEngines(t *testing.T) {
+	env := cliEnv(t)
+	env["LANG"] = "en_US.UTF-8"
+	w, out := wizard(t, env, "", &fakeEngines{err: application.ErrEngineUpdatePlatform})
+	if err := w.settings.Change(context.Background(), func(s *storage.UserSettings) {
+		s.Language = "es"
+		s.Jev = &storage.JevSettings{FinalThreshold: 0.5, Model: "jev-1.13.0", TimeoutMS: 20000}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	env["TYPESAFE_API_KEY"] = "ts-env"
+	if err := w.run(context.Background()); err != nil {
+		t.Fatal(err, out)
+	}
+	settings := savedSettings(t, w)
+	if settings.Language != "es" || settings.Jev == nil || !settings.Jev.Tool || !settings.Jev.FinalCheck || settings.Engines == nil || settings.Engines.Required {
+		t.Fatalf("language %q jev %+v engines %+v\n%s", settings.Language, settings.Jev, settings.Engines, out)
+	}
+}

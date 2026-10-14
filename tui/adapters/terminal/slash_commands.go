@@ -44,9 +44,17 @@ var slashCommands = []slashCommand{
 	{"/export", "slash.export"},
 	{"/usage", "slash.usage"},
 	{"/session", "slash.session"},
+	{"/session export", "slash.sessionExport"},
 	{"/memory", "slash.memory"},
+	{"/memory save", "slash.memorySave"},
+	{"/memory compare", "slash.memoryCompare"},
+	{"/memory forget", "slash.memoryForget"},
 	{"/exit", "slash.exit"},
 }
+
+// slashVerbs are the commands whose menu rows after a space ("/memory
+// save") appear only once the command and a space are typed.
+var slashVerbs = map[string]bool{"/memory": true, "/session": true}
 
 // slashAliases run the same command under another name.
 var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo"}
@@ -63,7 +71,9 @@ func (m AppModel) slashLimit() int {
 	return max(1, min(slashSuggestionMax, m.Layout.BodyHeight-2))
 }
 
-var slashWord = regexp.MustCompile(`^/[a-zA-Z-]+$`)
+// slashWord is a draft that reads as a command: "/memoría", a typo with an
+// accent, is refused like "/memroy" rather than sent to the model.
+var slashWord = regexp.MustCompile(`^/[\p{L}-]+$`)
 
 // slashAliasesOf lists each command's other names, sorted, to show dim
 // after it in the menu.
@@ -77,6 +87,12 @@ var slashAliasesOf = func() map[string][]string {
 	}
 	return out
 }()
+
+// slashDraft is the composer's text as the menu reads it: a space after a
+// command ("/memory ") asks for its verbs, so only leading space goes.
+func slashDraft(value string) string {
+	return strings.TrimLeft(value, " \t")
+}
 
 // slashSuggestions lists the commands a single-line draft starting with "/"
 // could complete to, whatever its case: those whose name starts with it,
@@ -94,9 +110,17 @@ func slashSuggestions(draft string) []slashCommand {
 		return nil
 	}
 	lower := strings.ToLower(draft)
+	if word, rest, spaced := strings.Cut(lower, " "); spaced && slashAliases[word] != "" {
+		// "/memoria " offers the verbs of /memory.
+		lower = slashAliases[word] + " " + rest
+	}
 	var out []slashCommand
 	seen := map[string]bool{}
 	add := func(c slashCommand) {
+		if word, _, sub := strings.Cut(c.name, " "); sub && slashVerbs[word] && !strings.HasPrefix(lower, word+" ") {
+			// A command's verbs are offered once the command is typed.
+			return
+		}
 		if !seen[c.name] && c.name != lower {
 			seen[c.name] = true
 			out = append(out, c)
@@ -231,7 +255,7 @@ func (m AppModel) slashMenu(suggestions []slashCommand) []string {
 	nameWidth, aliasWidth := 0, 0
 	for _, c := range shown {
 		nameWidth = max(nameWidth, len(c.name))
-		aliasWidth = max(aliasWidth, len(aliases(c)))
+		aliasWidth = max(aliasWidth, ansi.StringWidth(aliases(c)))
 	}
 	lines := make([]string, 0, len(shown)+1)
 	for offset, c := range shown {
@@ -255,13 +279,13 @@ func (m AppModel) slashMenu(suggestions []slashCommand) []string {
 		row := marker + c.name + strings.Repeat(" ", nameWidth-len(c.name)+2)
 		aliasStart := len(row)
 		if aliasWidth > 0 {
-			row += alias + strings.Repeat(" ", aliasWidth-len(alias)+2)
+			row += alias + strings.Repeat(" ", aliasWidth-ansi.StringWidth(alias)+2)
 		} else {
 			row += " "
 		}
 		rendered := style.Render(ansi.Truncate(row+m.Theme.T(c.summary), width, "…"))
 		if alias != "" && !m.Theme.Monochrome && aliasStart < width {
-			rendered = lipgloss.StyleRanges(rendered, lipgloss.NewRange(aliasStart, min(width, aliasStart+len(alias)), aliasStyle))
+			rendered = lipgloss.StyleRanges(rendered, lipgloss.NewRange(aliasStart, min(width, aliasStart+ansi.StringWidth(alias)), aliasStyle))
 		}
 		lines = append(lines, m.zones.Mark(fmt.Sprintf("%sslash-%d", m.prefix, i), rendered))
 	}

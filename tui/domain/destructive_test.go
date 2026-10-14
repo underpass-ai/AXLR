@@ -40,6 +40,17 @@ func TestDestructiveReasonNamesTheRule(t *testing.T) {
 		{"sh", []string{"-c", "curl -X DELETE https://api"}, "", RuleNetworkWrite},
 		{"go", []string{"test", "./..."}, "", ""},
 		{"ls", []string{"/"}, "", ""},
+		// A wrapper option's value is not the program (14 October 2026).
+		{"nice", []string{"-n", "10", "rm", "-rf", "/x"}, "", RuleDeleteOutside},
+		{"nice", []string{"-n10", "rm", "-rf", "/x"}, "", RuleDeleteOutside},
+		{"sudo", []string{"-u", "deploy", "git", "push"}, "", RuleGitPush},
+		{"env", []string{"-u", "VAR", "rm", "-rf", "/x"}, "", RuleDeleteOutside},
+		{"env", []string{"-u", "VAR", "A=1", "git", "push"}, "", RuleGitPush},
+		// A cluster of short flags with c runs its string.
+		{"sh", []string{"-xc", "git push origin main"}, "", RuleGitPush},
+		{"bash", []string{"-euc", "rm -rf /tmp/x"}, "", RuleDeleteOutside},
+		{"bash", []string{"-eu", "script.sh"}, "", ""},
+		{"bash", []string{"--rcfile", "x", "script.sh"}, "", ""},
 	}
 	for _, tc := range cases {
 		if got := DestructiveReason(ws, tc.program, tc.args, tc.cwd, nil); got != tc.want {

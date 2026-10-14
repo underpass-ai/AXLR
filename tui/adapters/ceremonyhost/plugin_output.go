@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -14,7 +15,14 @@ import (
 // refusal is a tool error the plugin returned with a machine code.
 type refusal struct{ Code, Message string }
 
-func (r *refusal) Error() string { return r.Code + ": " + r.Message }
+func (r *refusal) Error() string {
+	// MADE's messages may already start with their code: "conflict:
+	// conflict: …" read twice in the log.
+	if strings.HasPrefix(r.Message, r.Code+":") {
+		return r.Message
+	}
+	return r.Code + ": " + r.Message
+}
 
 // callPlugin runs one plugin tool through AXLR's executor, as the work
 // identity, and decodes its JSON result. Host-initiated calls do not pass

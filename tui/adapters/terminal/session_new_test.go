@@ -190,7 +190,7 @@ func TestExportWritesTheSessionAsMarkdown(t *testing.T) {
 		t.Fatalf("/export: files=%d draft=%q error=%q", len(files), m.Composer.Input.Value(), m.Status.Error)
 	}
 	for path, text := range files {
-		if !strings.Contains(path, ".axlr") || !strings.Contains(text, "earlier") || m.Status.Notice != m.Theme.Tf("export.done", shortenHome(path)) {
+		if !strings.Contains(path, ".axlr") || !strings.Contains(text, "earlier") || m.Status.Notice != m.Theme.Tf("export.done", m.workspacePath(path)) {
 			t.Fatalf("default export %s: notice=%q\n%s", path, m.Status.Notice, text)
 		}
 	}

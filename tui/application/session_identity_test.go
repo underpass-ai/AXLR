@@ -48,4 +48,8 @@ func TestWithSessionContextPutsTheSessionContextWhereTheSurfaceSays(t *testing.T
 	if got := withSessionContext(other, kmp("kmp_ask"), args(`{"about":"x"}`)); string(got.Compact().Bytes()) != `{"about":"x"}` {
 		t.Fatalf("without a context: %s", got.Bytes())
 	}
+	// A continuation goes alone: KMP starts a different call otherwise.
+	if got := withSessionContext(s, kmp("kmp_write_memory"), args(`{"continuation":"c_1"}`)); string(got.Compact().Bytes()) != `{"continuation":"c_1"}` {
+		t.Fatalf("continuation: %s", got.Bytes())
+	}
 }

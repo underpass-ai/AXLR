@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func approvalModel(t *testing.T) AppModel {
@@ -474,5 +475,40 @@ func TestADenialCarriesTheReasonToTheModel(t *testing.T) {
 	}
 	if m.Composer.Input.Value() != "" {
 		t.Fatal("the reason leaked into the composer")
+	}
+}
+
+// On 14 October 2026 the "a" of a prompt the person was typing when a card
+// opened approved an rm. Letters that continue typing are not answers; a
+// key pressed after a pause is.
+func TestLettersTypedAsTheCardOpensAreNotAnswers(t *testing.T) {
+	m := approvalModel(t)
+	m.deps.Resolve.Tools = navTool{}
+	m.typedAt = time.Now()
+	n, c := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m = drain(t, n.(AppModel), c)
+	if p := m.deps.Session.Export().Activity[0]; p.Decision != "" || m.Status.Notice != m.Theme.T("approval.typingGuard") {
+		t.Fatalf("a typed letter decided the card: %q, notice %q", p.Decision, m.Status.Notice)
+	}
+	// Read for a second, then answered.
+	m.typedAt, m.cardShownAt = time.Now().Add(-time.Second), time.Now().Add(-time.Second)
+	n, c = m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m = drain(t, n.(AppModel), c)
+	if p := m.deps.Session.Export().Activity[0]; p.Decision != domain.DecisionApprove {
+		t.Fatalf("a deliberate a did not approve: %q", p.Decision)
+	}
+}
+
+// A person who paused writing and resumes as a card opens is still typing:
+// a letter within half a second of the card is not its answer.
+func TestALetterAsTheCardOpensAfterAPauseIsNotAnAnswer(t *testing.T) {
+	m := approvalModel(t)
+	m.deps.Resolve.Tools = navTool{}
+	m.typedAt = time.Now().Add(-2 * time.Second)
+	m.cardShownAt = time.Now()
+	n, c := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m = drain(t, n.(AppModel), c)
+	if p := m.deps.Session.Export().Activity[0]; p.Decision != "" {
+		t.Fatalf("a letter right after the card decided it: %q", p.Decision)
 	}
 }

@@ -1,12 +1,14 @@
 package terminal
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -158,5 +160,31 @@ func TestTheExecCardShowsTheWhy(t *testing.T) {
 	defer m.zones.Close()
 	if got := m.Approval.Details.Text(); got != "$ go test ./parser/...\nwhy: run the parser tests after the fix" {
 		t.Fatalf("card %q", got)
+	}
+}
+
+// A destructive card hides L and F; on 14 October 2026 review found the
+// keys still answered it: L saved a rule for the whole tool and F turned
+// autonomy on, both approving the command.
+func TestADestructiveCardIgnoresAlwaysAllowAndAutonomy(t *testing.T) {
+	m := execApprovalModel(t, domain.ModeNormal, `{"program":"git","args":["push","--force","origin","main"],"why":"publish"}`)
+	defer m.zones.Close()
+	settings, err := storage.NewApprovalSettings(filepath.Join(t.TempDir(), "approvals.json"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.deps.ApprovalSettings = settings
+	m.deps.Resolve.Approval = settings
+	m.deps.Resolve.Tools = navTool{}
+	m.deps.Resolve.Continue.Models = navStream{}
+	if m.destructiveRule(m.Approval.Pending) == "" {
+		t.Fatal("git push --force is not destructive")
+	}
+	for _, key := range []rune{'l', 'f'} {
+		next, cmd := m.Update(tea.KeyPressMsg{Code: key, Text: string(key)})
+		got := drain(t, next.(AppModel), cmd)
+		if p := got.deps.Session.Export().Activity[0]; p.Decision != "" || settings.Autonomous() || len(settings.Allowed()) != 0 {
+			t.Fatalf("%c answered a destructive card: decision %q, autonomous %v, allowed %v", key, p.Decision, settings.Autonomous(), settings.Allowed())
+		}
 	}
 }

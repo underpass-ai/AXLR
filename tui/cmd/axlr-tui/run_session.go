@@ -64,7 +64,8 @@ func consoleSessionID(session *domain.Session, newID domain.SessionID) domain.Se
 }
 
 // ensureWorkGrant issues the console's current MADE work grant once per
-// grant id: the id changes when its actions do (madesetup.WorkGrantID), and
+// grant id: the id changes when its actions or the work identity do
+// (madesetup.WorkGrantFor), and
 // an install prepared under the previous id would otherwise see MADE
 // refuse the new verbs (the handoff, the draft explanation) until the
 // person pressed P in /mcp. The marker file remembers the id issued; the

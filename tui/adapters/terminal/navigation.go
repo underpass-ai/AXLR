@@ -11,6 +11,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"strings"
+	"time"
 )
 
 func (m AppModel) pending() (domain.PendingTool, bool) {
@@ -21,6 +22,32 @@ func (m AppModel) pending() (domain.PendingTool, bool) {
 	}
 	return domain.PendingTool{}, false
 }
+
+// approvalTypingWindow is how long after the person's last keystroke in
+// the composer a letter is still taken as typing, not as a card's answer.
+const approvalTypingWindow = 800 * time.Millisecond
+
+// approvalReadWindow is how soon after a card opens a letter is too quick
+// to be an answer to it, for a person who was writing a message: someone
+// who paused, then resumed typing as the card appeared, is still typing.
+const approvalReadWindow = 500 * time.Millisecond
+
+// writingWindow is how recent the composer's last keystroke must be for
+// the person to count as writing a message.
+const writingWindow = 10 * time.Second
+
+// typingIntoCard says whether k is a letter that continues what the person
+// was typing when the approval card opened.
+func (m AppModel) typingIntoCard(k tea.KeyPressMsg) bool {
+	if k.Text == "" || m.denying || m.typedAt.IsZero() {
+		return false
+	}
+	if time.Since(m.typedAt) < approvalTypingWindow {
+		return true
+	}
+	return time.Since(m.typedAt) < writingWindow && !m.cardShownAt.IsZero() && time.Since(m.cardShownAt) < approvalReadWindow
+}
+
 func (m AppModel) approvalFocus() bool {
 	_, ok := m.pending()
 	// A decision operation owns the pending call until it publishes a new
@@ -68,6 +95,7 @@ func (m *AppModel) syncApproval() {
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
+		m.cardShownAt = time.Now()
 		// A reason being typed was for another call.
 		m.denying = false
 		// An exec card is the command as it will run, not its JSON: the
@@ -233,6 +261,14 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if m.approvalFocus() && m.denying {
 			return m.denyReasonKey(k)
 		}
+		if m.approvalFocus() && m.typingIntoCard(k) {
+			// On 14 October 2026 the "a" of a prompt being typed when a
+			// card opened approved an rm: letters that keep coming are the
+			// person's message, not an answer.
+			m.typedAt = time.Now()
+			m.Status.Notice = m.Theme.T("approval.typingGuard")
+			return m, nil, true
+		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))
 			if k.String() == "A" && m.pendingCalls() > 1 {
@@ -249,8 +285,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if intent == ControlIntent(domain.DecisionAutoApprove) {
 				intent = "always-allow"
 			}
-			if (intent == "always-allow" || intent == "autonomy-on") && m.modeAsksForEachCall(m.Approval.Pending) {
-				intent = "" // not offered: the mode keeps this call under approval
+			if (intent == "always-allow" || intent == "autonomy-on") && (m.modeAsksForEachCall(m.Approval.Pending) || m.destructiveRule(m.Approval.Pending) != "") {
+				// Not offered: the mode, or the destructive list, keeps this
+				// call under approval; the card hid L and F but on 14 October
+				// 2026 the keys still answered it.
+				intent = ""
 			}
 			if intent == "always-allow" && !savesAlwaysAllow(m.Header.State.ToolSnapshot, m.Approval.Pending) {
 				intent = "" // not offered: a host tool has no saved rule
@@ -292,6 +331,13 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					// F1 opens the help and F1 closes it.
 					m.overlay = ""
 					return m, nil, true
+				}
+				if k.Text != "" && k.Mod == 0 {
+					// Typing closes the help and writes in the composer: on 14
+					// October 2026 a prompt typed over it was dropped unseen.
+					m.overlay = ""
+					next, cmd := m.handle(msg)
+					return next, cmd, true
 				}
 			}
 			if k.String() == "esc" {

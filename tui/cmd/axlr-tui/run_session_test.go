@@ -96,3 +96,13 @@ func TestMissingEnginesNamesWhatIsNotConnected(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
+
+// A successor of a successor is "(3)", not "(2) (2)" (review of 14 October
+// 2026).
+func TestSuccessorTitlesCount(t *testing.T) {
+	for title, want := range map[string]string{"Parser": "Parser (2)", "Parser (2)": "Parser (3)", "Parser (9)": "Parser (10)", "Año (x)": "Año (x) (2)"} {
+		if got := successorTitle(title); got != want {
+			t.Errorf("successorTitle(%q) = %q, want %q", title, got, want)
+		}
+	}
+}

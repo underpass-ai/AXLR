@@ -27,6 +27,8 @@ type fakeEngine struct {
 	inputs          map[string]string
 	failReports     bool
 	noOperation     bool
+	// failRenews refuses lease renewals, as MADE does once a lease ran out.
+	failRenews bool
 	// existing names instance ids Start refuses as taken.
 	existing map[string]bool
 }
@@ -108,6 +110,9 @@ func (f *fakeEngine) Report(_ context.Context, report HostReport) error {
 func (f *fakeEngine) Renew(_ context.Context, _, step, _ string, lease time.Duration) error {
 	f.calls = append(f.calls, "renew "+step)
 	f.leases = append(f.leases, lease)
+	if f.failRenews {
+		return errors.New("refused: lease expired")
+	}
 	return nil
 }
 func (f *fakeEngine) Handoff(_ context.Context, handoff HostHandoff) error {

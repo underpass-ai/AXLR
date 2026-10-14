@@ -26,8 +26,34 @@ func InstallID(dir string) (string, error) {
 		return "", err
 	}
 	id := hex.EncodeToString(raw[:])
-	if err := os.WriteFile(path, []byte(id+"\n"), 0o600); err != nil {
+	// The id appears whole or not at all, and two consoles starting at once
+	// agree on the first one linked: a torn or replaced id would register
+	// the console again under another name.
+	temporary, err := os.CreateTemp(dir, ".install-id-*")
+	if err != nil {
 		return "", err
+	}
+	defer os.Remove(temporary.Name())
+	if _, err := temporary.WriteString(id + "\n"); err != nil {
+		temporary.Close()
+		return "", err
+	}
+	if err := temporary.Close(); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(temporary.Name(), 0o600); err != nil {
+		return "", err
+	}
+	if err := os.Link(temporary.Name(), path); err != nil {
+		if data, readErr := os.ReadFile(path); readErr == nil {
+			if existing := strings.TrimSpace(string(data)); isHexID(existing) {
+				return existing, nil
+			}
+		}
+		// An unreadable or invalid file is replaced.
+		if err := os.Rename(temporary.Name(), path); err != nil {
+			return "", err
+		}
 	}
 	return id, nil
 }

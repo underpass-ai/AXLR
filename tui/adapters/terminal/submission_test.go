@@ -157,3 +157,23 @@ func TestAFailedPromptSaysWhereItWent(t *testing.T) {
 		m.zones.Close()
 	}
 }
+
+// The successor of a capped session takes the capped prompt; a draft the
+// person was writing meanwhile stays in the composer (review of 14 October
+// 2026: it was replaced and lost).
+func TestTheCappedPromptKeepsTheDraft(t *testing.T) {
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := submissionStore{}
+	start := application.StartTurnUseCase{Catalog: submissionCatalog{}, Store: store, Continue: application.ContinueTurnUseCase{Store: store}}
+	m := update(New(Dependencies{Session: &s, Start: start, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
+	defer m.zones.Close()
+	m.Composer.Input.SetValue("half a thought")
+	n, _ := m.Update(resubmitPrompt{prompt: "the capped prompt"})
+	m = n.(AppModel)
+	if !m.Busy || m.submittedPrompt != "the capped prompt" || m.Composer.Input.Value() != "half a thought" {
+		t.Fatalf("busy %v, submitted %q, composer %q", m.Busy, m.submittedPrompt, m.Composer.Input.Value())
+	}
+}

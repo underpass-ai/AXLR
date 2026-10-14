@@ -22,6 +22,10 @@ import (
 func (m AppModel) memoryCommand(args string) (tea.Model, tea.Cmd) {
 	fields := strings.Fields(args)
 	if len(fields) == 0 {
+		// The bare command only names its verbs: the composer keeps it,
+		// ready for one, instead of "/memory" plus whatever is typed next.
+		m.Composer.Input.SetValue("/memory ")
+		m.Composer.Input.CursorEnd()
 		m.Status.Notice = m.Theme.Tf("notice.slashUsage", slashUsage("/memory"))
 		return m, nil
 	}
@@ -206,3 +210,26 @@ func writeRelation(b *strings.Builder, relation application.MemoryRelation) {
 	}
 	b.WriteString("\n")
 }
+
+// countMemories reads the header's memory count again; nil without a
+// counter or an about.
+func (m AppModel) countMemories() tea.Cmd {
+	counter, about := m.deps.MemoryCount, m.Header.About
+	if counter == nil || about == "" {
+		return nil
+	}
+	// The store's listing catches up with the turn's last writes a moment
+	// later: counted at once on 14 October 2026, the header lagged a turn.
+	return tea.Tick(memoryRecountDelay, func(time.Time) tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		count, known, err := counter.Count(ctx, about)
+		if err != nil {
+			return nil
+		}
+		return memoryCounted{about: about, count: count, known: known}
+	})
+}
+
+// memoryRecountDelay is how long after a turn the header counts again.
+var memoryRecountDelay = 2 * time.Second

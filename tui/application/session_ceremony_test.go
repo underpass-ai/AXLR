@@ -51,6 +51,24 @@ func TestJournalDropsAnEntryRecordedAlready(t *testing.T) {
 	}
 }
 
+// An entry KMP refuses for what it is is dropped: kept, it would block
+// the queue behind it for good. One KMP could not take stays.
+func TestJournalDropsAnEntryKMPRefusedForWhatItIs(t *testing.T) {
+	c, _, journal, _ := sessionCeremonyFor(t, &fakeEngine{})
+	journal.errFor = map[string]error{"k1": fmt.Errorf("KMP refused the turn entry (invalid_request): bad: %w", ErrEntryRefused), "k3": errors.New("io_error: disk full")}
+	var pending []string
+	for _, key := range []string{"k1", "k2", "k3", "k4"} {
+		pending = append(pending, encodeEntry(TurnEntry{Key: key, About: "ws:x", Summary: key}))
+	}
+	kept := c.journal(context.Background(), pending)
+	if len(journal.entries) != 3 || len(kept) != 2 {
+		t.Fatalf("written %+v kept %d", journal.entries, len(kept))
+	}
+	if k3, _ := decodeEntry(kept[0]); k3.Key != "k3" {
+		t.Fatalf("kept %+v", k3)
+	}
+}
+
 func (j *journalStub) RecordSettled(_ context.Context, entry SettledEntry) (string, error) {
 	j.settled = append(j.settled, entry)
 	return entry.About + ":entry:" + entry.Kind + ":1", j.err
@@ -254,11 +272,137 @@ func TestSessionCeremonyKeepsTheFenceWhenACompletionFails(t *testing.T) {
 		t.Fatal(err)
 	}
 	instance, _ := s.Instance()
-	if instance.Fence != "fence-turn" || instance.Turns != 1 {
+	// The turn is not counted until its completion lands: the next claim
+	// completes it as interrupted and counts it then, once.
+	if instance.Fence != "fence-turn" || instance.Turns != 0 {
 		t.Fatalf("instance %+v", instance)
 	}
-	if !errors.Is(context.Canceled, context.Canceled) {
-		t.Fatal("sanity")
+	if err := s.BeginTurn("segundo", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, _ = s.Instance()
+	if instance.Turns != 1 || len(engine.completed) != 1 || engine.completed[0]["turn"] != float64(1) || engine.completed[0]["interrupted"] != true {
+		t.Fatalf("instance %+v completed %+v", instance, engine.completed)
+	}
+}
+
+// The turn's record is saved even when the person pressed Esc while the
+// turn ended (the turn's context cancelled).
+func TestSessionCeremonyEndTurnSavesAfterCancellation(t *testing.T) {
+	c, store, _, _ := sessionCeremonyFor(t, &fakeEngine{})
+	s := turnSession(t)
+	if err := s.BeginTurn("primero", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	if err := s.CompleteAssistant(assistant("ok")); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := c.EndTurn(ctx, &s); err != nil || len(store.states) != 1 {
+		t.Fatalf("%v saves %d", err, len(store.states))
+	}
+}
+
+// A turn whose record is larger than LastRecord's bound still completes
+// and the instance takes the next turn (14 October 2026: the cut record
+// failed Validate, and every later turn with it).
+func TestSessionCeremonyBoundsAnOversizedRecord(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	s := turnSession(t)
+	if err := s.BeginTurn("muchos comandos", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	var calls []root.ToolCall
+	for i := 0; i < 12; i++ {
+		calls = append(calls, root.ToolCall{ID: root.ToolCallID(fmt.Sprintf("c%d", i)), Name: "local_exec", Arguments: mustObject(t, `{"program":"go","args":["test"],"why":"check"}`)})
+	}
+	if err := s.CompleteAssistant(assistant("", calls...)); err != nil {
+		t.Fatal(err)
+	}
+	output := strings.Repeat(`"quoted" `, 600)
+	for _, call := range calls {
+		content := fmt.Sprintf(`{"status":"completed","output":{"exit_code":0,"stdout":%q,"stderr":""}}`, output)
+		if err := s.RecordToolOutcome(call.ID, domain.DecisionAutoApprove, domain.ToolOutcome{Content: root.Text(content)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.CompleteAssistant(assistant("hecho")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.EndTurn(context.Background(), &s); err != nil {
+		t.Fatal(err)
+	}
+	instance, _ := s.Instance()
+	if instance.Turns != 1 || instance.Fence != "" || instance.LastRecord == "" || len(instance.LastRecord) > domain.MaxSessionRecordBytes {
+		t.Fatalf("turns %d fence %q record %d bytes", instance.Turns, instance.Fence, len(instance.LastRecord))
+	}
+	if err := s.BeginTurn("siguiente", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	if instance, _ = s.Instance(); instance.Fence != "fence-turn" || instance.TurnIndex != len(s.Messages())-1 {
+		t.Fatalf("next turn not claimed: %+v", instance)
+	}
+}
+
+// An instance that started continues once MADE is back: starting its id
+// again is refused, which left the session without a record for good. An
+// open instance is marked unavailable when the successor its exhausted
+// turns asked for could not be opened.
+func TestSessionCeremonyContinuesItsInstanceAfterMADEWasUnavailable(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	s := turnSession(t)
+	if err := s.BeginTurn("primero", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	if err := s.CompleteAssistant(assistant("ok")); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.EndTurn(context.Background(), &s); err != nil {
+		t.Fatal(err)
+	}
+	opened, _ := s.Instance()
+	opened.Unavailable = "connection refused"
+	if err := s.SetInstance(opened); err != nil {
+		t.Fatal(err)
+	}
+	engine.calls = nil
+	engine.existing = map[string]bool{opened.Instance: true}
+	if err := s.BeginTurn("tercero", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, _ := s.Instance()
+	if instance.Unavailable != "" || instance.Instance != opened.Instance || instance.Fence != "fence-turn" {
+		t.Fatalf("instance %+v", instance)
+	}
+	if strings.Contains(strings.Join(engine.calls, ";"), "start") {
+		t.Fatalf("started again: %v", engine.calls)
+	}
+}
+
+// A first instance MADE has already (the sidecar that named it was lost)
+// continues in a successor, with the taken one as its predecessor.
+func TestSessionCeremonyOpensASuccessorWhenTheFirstInstanceExists(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	s := turnSession(t)
+	first := instanceID(s.ID(), 1)
+	engine.existing = map[string]bool{first: true}
+	if err := s.BeginTurn("primero", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, _ := s.Instance()
+	if instance.Instance != first+"-2" || instance.Unavailable != "" || engine.inputs["predecessor"] != first {
+		t.Fatalf("instance %+v inputs %v", instance, engine.inputs)
 	}
 }
 

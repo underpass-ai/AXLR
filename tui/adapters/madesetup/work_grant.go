@@ -16,6 +16,11 @@ const WorkGrantID = "axlr-default-work-v2"
 // grantID is the id of family's grant for grantee: the family and eight hex
 // digits of the grantee's digest, so a conflict from MADE can only mean the
 // family's actions changed under the same version.
+// WorkGrantFor is the grant id the console issues to one work identity.
+func WorkGrantFor(identity string) string {
+	return grantID(WorkGrantID, identity)
+}
+
 func grantID(family, grantee string) string {
 	digest := sha256.Sum256([]byte(grantee))
 	return family + "-" + hex.EncodeToString(digest[:4])

@@ -158,3 +158,33 @@ func TestCallsBehindTheApprovalCardAreQueued(t *testing.T) {
 		t.Fatal("queued label wording")
 	}
 }
+
+// On 14 October 2026 a write whose model sent the content before the path
+// read "local_write  # Ideas para mejorar…", and reads showed the model's
+// "why" ("No needed for reads") as if it were an argument.
+func TestToolRowsNameThePathNotTheBodyOrTheWhy(t *testing.T) {
+	for _, tc := range []struct {
+		name      root.ToolName
+		args      string
+		want, not string
+	}{
+		{"local_write", `{"content":"# Ideas\n1. one","mode":"create","path":"NOTES.md","why":"keep the ideas"}`, "local_write  NOTES.md create ·", "Ideas"},
+		{"local_read", `{"path":"README.md","why":"No needed for reads"}`, "local_read  README.md ·", "needed"},
+		{"local_edit", `{"old_text":"x","new_text":"y","path":"a.go","why":"rename"}`, "local_edit  a.go ·", "rename"},
+		{"local_write", `{"content":"` + strings.Repeat("z", 2048) + `","path":"big.md","why":"store it"}`, "local_write  big.md", "store it"},
+	} {
+		args, err := root.NewJSONObject([]byte(tc.args))
+		if err != nil {
+			t.Fatal(err)
+		}
+		call := root.ToolCall{ID: "c1", Name: tc.name, Arguments: args}
+		s := domain.SessionState{
+			Messages: []root.Message{{Role: root.RoleUser, Content: "do it"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{call}}},
+			Activity: []domain.PendingTool{{Call: call, Decision: domain.DecisionAutoApprove}},
+		}
+		row := renderedToolRow(t, s)
+		if !strings.Contains(row, tc.want) || strings.Contains(row, tc.not) {
+			t.Errorf("%s: row %q, want %q without %q", tc.name, row, tc.want, tc.not)
+		}
+	}
+}

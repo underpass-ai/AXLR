@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -75,5 +76,51 @@ func TestSessionInstanceSidecarKeepsTheKeysOnDisk(t *testing.T) {
 		if !strings.Contains(strings.ReplaceAll(string(data), " ", ""), key) {
 			t.Fatalf("written %s lacks %s", data, key)
 		}
+	}
+}
+
+// The largest instance the domain allows is read back whole: at 64 KiB a
+// full pending queue was written and read as no sidecar (14 October 2026).
+func TestSessionInstanceSidecarRoundTripsAMaximalInstance(t *testing.T) {
+	store, _ := openStore(t)
+	s := fixture(t)
+	must(t, s.BeginTurn("hola", nil))
+	evidence := make([]string, 8)
+	for i := range evidence {
+		evidence[i] = strings.Repeat(`"q" <&> `, 125)
+	}
+	entry, err := json.Marshal(map[string]any{"About": "ws:x", "Key": "axlr:turn:x:1", "Summary": strings.Repeat(`"s" `, 100), "Evidence": evidence, "Labels": map[string][]string{"ws": {"/ws"}, "session": {"x"}}})
+	must(t, err)
+	instance := domain.SessionInstance{Instance: "axlr-session-" + string(s.Export().ID), Turns: 9, Fence: "fence-9", MemoryContext: "ctx_1", LastRecord: `{"answer":"` + strings.Repeat(`\"`, (domain.MaxSessionRecordBytes-20)/2) + `"}`}
+	for i := 0; i < domain.MaxPendingEntries; i++ {
+		instance.Pending = append(instance.Pending, string(entry))
+	}
+	for i := 0; i < 8; i++ {
+		instance.RecalledMemories = append(instance.RecalledMemories, strings.Repeat(`"r" `, 75))
+	}
+	must(t, s.SetInstance(instance))
+	must(t, store.Save(context.Background(), s))
+	loaded, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	got, has := loaded.Instance()
+	if !has || got.Fence != "fence-9" || got.MemoryContext != "ctx_1" || got.LastRecord != instance.LastRecord || len(got.Pending) != domain.MaxPendingEntries || got.Pending[0] != string(entry) || len(got.RecalledMemories) != 8 {
+		t.Fatalf("loaded has=%v fence %q context %q pending %d", has, got.Fence, got.MemoryContext, len(got.Pending))
+	}
+}
+
+// A sidecar over the bound is trimmed when written, the last record first,
+// then the oldest entries, so what is written is read back.
+func TestFitInstanceTrimsWhatTheReadWouldRefuse(t *testing.T) {
+	big := strings.Repeat("x", maxSessionInstanceBytes/10)
+	record := sessionInstance{Version: sessionInstanceVersion, Instance: "axlr-session-x", Fence: "f", LastRecord: "{}"}
+	for i := 0; i < 12; i++ {
+		record.Pending = append(record.Pending, big)
+	}
+	data, err := fitInstance(record)
+	must(t, err)
+	var fitted sessionInstance
+	must(t, json.Unmarshal(data, &fitted))
+	if len(data) > maxSessionInstanceBytes || fitted.LastRecord != "" || fitted.Fence != "f" || len(fitted.Pending) == 0 || len(fitted.Pending) >= 12 {
+		t.Fatalf("%d bytes, record %q, pending %d", len(data), fitted.LastRecord, len(fitted.Pending))
 	}
 }

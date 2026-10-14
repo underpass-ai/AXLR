@@ -34,6 +34,10 @@ func openAppLog(getenv func(string) string, secrets ...string) (*diagnostics.App
 // warningWords mark a console note on stderr that reports trouble.
 var warningWords = regexp.MustCompile(`(?i)\b(ignoring|unavailable|refused|incomplete|needs|unsandboxed|invalid|failed|error)\b`)
 
+// startupTrouble marks a start line that reports a problem the person
+// should see: a missing definition, a refused or conflicting grant.
+var startupTrouble = regexp.MustCompile(`(?i)\b(missing|conflict|refused|denied|failed|error|unavailable)\b`)
+
 // consoleNotes copies each line the console writes on stderr to the app
 // log: the notes before the terminal opens are hidden once it does.
 type consoleNotes struct {
@@ -182,6 +186,26 @@ func logReader(log *diagnostics.AppLog) application.AppLogPort {
 
 // failureLogger records the tool calls that failed inside AXLR, nil
 // without an app log.
+// ceremonyTrouble marks a session-lifecycle line that reports a failure:
+// on 14 October 2026 MADE refusals and unavailable instances were logged
+// at INFO, so `axlr-tui logs --level WARN` hid them.
+var ceremonyTrouble = regexp.MustCompile(`(?i)\b(conflict|refused|denied|failed|error|unavailable|missing|cannot|could not|timed out|timeout)\b|not recorded|not connected`)
+
+// leveledLogger writes a lifecycle line at WARN when it reports trouble,
+// else at INFO.
+func leveledLogger(log *diagnostics.AppLog) func(string) {
+	if log == nil {
+		return nil
+	}
+	return func(line string) {
+		level := diagnostics.AppInfo
+		if ceremonyTrouble.MatchString(line) {
+			level = diagnostics.AppWarn
+		}
+		log.Logf(level, "%s", line)
+	}
+}
+
 func failureLogger(log *diagnostics.AppLog) func(string) {
 	if log == nil {
 		return nil

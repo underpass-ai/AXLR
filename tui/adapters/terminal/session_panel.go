@@ -17,18 +17,25 @@ func (m AppModel) openSessionPanel() AppModel {
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)
-	m.Info.SetContent(sessionPanelContent(m.Header.State, m.Theme))
+	m.Info.SetContent(sessionPanelContent(m.Header.State, m.Theme, m.sessionAbout()))
 	m.Info.Viewport.GotoTop()
 	m.overlay = "session"
 	return m
 }
 
-// sessionPanelContent renders the session's instance and last turn record.
-func sessionPanelContent(state domain.SessionState, theme Theme) string {
+// sessionPanelContent renders the session's instance and last turn record;
+// project is the about its settled memories go to.
+func sessionPanelContent(state domain.SessionState, theme Theme, project string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n", theme.T("session.id"), state.ID)
 	fmt.Fprintf(&b, "%s ws:%s\n", theme.T("session.about"), state.ID)
+	if project != "" {
+		fmt.Fprintf(&b, "%s %s\n", theme.T("session.project"), project)
+	}
 	instance := state.Instance
+	if instance != nil && instance.Predecessor != "" {
+		fmt.Fprintf(&b, "%s %s\n", theme.T("session.predecessor"), instance.Predecessor)
+	}
 	if instance != nil && instance.MemoryContext != "" {
 		fmt.Fprintf(&b, "%s %s\n", theme.T("session.context"), instance.MemoryContext)
 	}
@@ -62,7 +69,7 @@ func sessionPanelContent(state domain.SessionState, theme Theme) string {
 	fmt.Fprintf(&b, "\n%s\n", theme.Tf("session.lastTurn", record.Turn))
 	fmt.Fprintf(&b, "  %s %s\n", theme.T("session.prompt"), singleLine(record.Prompt))
 	if record.Answer != "" {
-		fmt.Fprintf(&b, "  %s %s (%s)\n", theme.T("session.answer"), singleLine(record.Answer), record.AnswerKind)
+		fmt.Fprintf(&b, "  %s %s (%s)\n", theme.T("session.answer"), singleLine(record.Answer), translatedWord(theme, "session.kind.", record.AnswerKind))
 	}
 	if record.Cost != nil {
 		fmt.Fprintf(&b, "  %s %d · %s\n", theme.T("session.cost"), record.Cost.Requests, FormatUSD(record.Cost.USD))
@@ -79,17 +86,26 @@ func sessionPanelContent(state domain.SessionState, theme Theme) string {
 	for _, action := range record.Actions {
 		line := fmt.Sprintf("  %s %s", action.Tool, action.Target)
 		if action.ExitCode != nil {
-			line += fmt.Sprintf(" → exit %d", *action.ExitCode)
+			line += " → " + theme.Tf("session.exit", *action.ExitCode)
 		}
 		b.WriteString(singleLine(line) + "\n")
 		if action.Why != "" {
 			fmt.Fprintf(&b, "    %s\n", singleLine(theme.Tf("approval.why", action.Why)))
 		}
-		outcome := action.Decision + " · " + action.Outcome
+		outcome := translatedWord(theme, "session.decision.", action.Decision) + " · " + translatedWord(theme, "session.outcome.", action.Outcome)
 		if action.Reason != "" {
 			outcome += " (" + action.Reason + ")"
 		}
 		fmt.Fprintf(&b, "    %s\n", singleLine(outcome))
 	}
 	return b.String()
+}
+
+// translatedWord shows a recorded word (a decision, an outcome, an answer
+// kind) in the person's language when the catalog has it, else as stored.
+func translatedWord(theme Theme, prefix, word string) string {
+	if _, ok := enMessages[prefix+word]; ok {
+		return theme.T(prefix + word)
+	}
+	return word
 }

@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -63,5 +64,31 @@ func TestSessionBundleRoundTrip(t *testing.T) {
 		if _, _, err := (SessionBundles{}).Decode([]byte(bad)); err == nil {
 			t.Fatalf("%q accepted", bad)
 		}
+	}
+}
+
+// A bundle of a session with tool calls imports: on 14 October 2026 the
+// indented bundle laid the arguments out differently in the transcript and
+// in the activity, and every such bundle was refused as inconsistent.
+func TestSessionBundleWithToolCallsRoundTrips(t *testing.T) {
+	s := fixture(t)
+	schema, e := root.NewJSONObject([]byte(`{"type":"object","properties":{"path":{"type":"string"}}}`))
+	must(t, e)
+	identity, e := domain.NewLocalToolIdentity("read")
+	must(t, e)
+	args, e := root.NewJSONObject([]byte(`{"path":"a.go","note":"go test 2>&1 && echo <done>","nested":{"k":[1,2]}}`))
+	must(t, e)
+	must(t, s.BeginTurn("read", []domain.AvailableTool{{Definition: root.ToolDefinition{Name: "read", Parameters: schema}, Identity: identity}}))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "one", Name: "read", Arguments: args}}}}))
+	must(t, s.RecordToolOutcome("one", domain.DecisionApprove, domain.ToolOutcome{Content: "package a"}))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "read"}}))
+	data, err := SessionBundles{}.Encode(s, application.SessionBundleMeta{})
+	must(t, err)
+	back, _, err := SessionBundles{}.Decode(data)
+	if err != nil {
+		t.Fatalf("decode: %v\n%s", err, data)
+	}
+	if got, want := argumentBytes(back.Messages()), argumentBytes(s.Messages()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("arguments = %q, want %q", got, want)
 	}
 }

@@ -20,7 +20,22 @@ const toolRowHeadBytes = 1024
 
 const toolRowArgumentWidth = 48
 
-var shortStringField = regexp.MustCompile(`"\w+":"([^"\\]{1,80})"`)
+var shortStringField = regexp.MustCompile(`"(\w+)":"([^"\\]{1,80})"`)
+
+var pathField = regexp.MustCompile(`"path":\s*"([^"\\]{1,240})"`)
+
+// summaryHidden names arguments a row never lists: the model's reason (the
+// approval card and the turn record carry it) and file bodies, which would
+// push the path out of the row.
+var summaryHidden = map[string]bool{"why": true}
+
+// fileBodies are the local file tools' body arguments, hidden from their
+// rows; another tool's "content" may be what identifies the call.
+var fileBodies = map[string]bool{"content": true, "old_text": true, "new_text": true}
+
+func hiddenFromRow(tool root.ToolName, key string) bool {
+	return summaryHidden[key] || (fileBodies[key] && (tool == "local_write" || tool == "local_edit"))
+}
 
 // toolRow condenses one call, its decision and its result into a single line:
 // status glyph, tool, a short argument summary, then size, duration and any
@@ -119,8 +134,19 @@ func toolArgumentSummary(call root.ToolCall) string {
 		// Large arguments (a file's content) are not decoded; short string
 		// fields at their head (a path) still identify the call.
 		var values []string
+		path := false
 		for _, match := range shortStringField.FindAllStringSubmatch(string(raw[:toolRowHeadBytes]), -1) {
-			values = append(values, match[1])
+			if hiddenFromRow(call.Name, match[1]) {
+				continue
+			}
+			path = path || match[1] == "path"
+			values = summaryValue(values, match[1], match[2])
+		}
+		if !path {
+			// A model may send the body first: the path is looked up after it.
+			if match := pathField.FindSubmatch(raw); match != nil {
+				values = summaryValue(values, "path", string(match[1]))
+			}
 		}
 		return ansi.Truncate(singleLine(strings.Join(values, " ")), toolRowArgumentWidth, "…")
 	}
@@ -139,16 +165,28 @@ func toolArgumentSummary(call root.ToolCall) string {
 		if err := decoder.Decode(&value); err != nil {
 			return ""
 		}
+		if name, _ := key.(string); hiddenFromRow(call.Name, name) {
+			continue
+		}
 		switch v := value.(type) {
 		case string:
 			if v != "" {
-				values = append(values, v)
+				values = summaryValue(values, key, v)
 			}
 		case json.Number, bool:
 			values = append(values, fmt.Sprintf("%v=%v", key, v))
 		}
 	}
 	return ansi.Truncate(singleLine(strings.Join(values, " ")), toolRowArgumentWidth, "…")
+}
+
+// summaryValue appends a value, or puts it first when it is the call's path:
+// a model may send the path after the other arguments.
+func summaryValue(values []string, key any, value string) []string {
+	if key == "path" {
+		return append([]string{value}, values...)
+	}
+	return append(values, value)
 }
 
 // localListingSummary reads a search as its question, `"pattern" in path

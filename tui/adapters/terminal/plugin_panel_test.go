@@ -220,3 +220,19 @@ func TestSpanishInstallInputShowsTheSpanishPlaceholder(t *testing.T) {
 		t.Fatalf("the install input is not in Spanish:\n%s", view)
 	}
 }
+
+// /mcp's engine facts read in the person's language: the selection reason
+// and the identity note were English on 14 October 2026.
+func TestEngineFactsAreTranslated(t *testing.T) {
+	p := NewPluginPanel()
+	p.Theme = Theme{Monochrome: true, Locale: Spanish}
+	p.Facts = map[string][]EngineFact{"kmp": {{Key: "mcp.reason", Value: "project", ValueKey: "mcp.reason.project"}, {Key: "mcp.identity", Value: "axlr:1", NoteKey: "mcp.identityNote"}}}
+	p.Resize(160, 40)
+	p.SetItems([]domain.PluginState{{Profile: domain.PluginProfile{ID: "kmp", Name: "KMP"}}})
+	text := p.Details.View()
+	for _, want := range []string{"Elegido por: el .kernel del repositorio", "axlr:1 (un agente por almacén"} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("details lack %q:\n%s", want, text)
+		}
+	}
+}

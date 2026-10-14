@@ -2,7 +2,8 @@ package application
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,7 +29,7 @@ func (s *bundleStore) Load(_ context.Context, id domain.SessionID) (domain.Sessi
 	if session, ok := s.saved[id]; ok {
 		return session, nil
 	}
-	return domain.Session{}, errors.New("not found")
+	return domain.Session{}, fs.ErrNotExist
 }
 
 type bundleCodecStub struct {
@@ -141,5 +142,41 @@ func TestRefAboutReadsTheAboutOfARef(t *testing.T) {
 		if _, err := RefAbout(bad); err == nil {
 			t.Fatalf("%q accepted", bad)
 		}
+	}
+}
+
+// A second /session export within the minute takes a suffix; on 14
+// October 2026 review found it refused with no way to name another file.
+func TestASecondBundleExportWithinTheMinuteTakesASuffix(t *testing.T) {
+	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "a.go", Before: "one", After: "two"}}})
+	files := exclusiveFiles{}
+	now := time.Date(2026, 10, 14, 9, 35, 0, 0, time.UTC)
+	u := ExportSessionBundleUseCase{Codec: &bundleCodecStub{}, Files: files, Now: func() time.Time { return now }}
+	first, err := u.Execute(context.Background(), s, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := u.Execute(context.Background(), s, "")
+	if err != nil || second == first || !strings.HasSuffix(second, "-2"+SessionBundleSuffix) {
+		t.Fatalf("second export %q (first %q): %v", second, first, err)
+	}
+}
+
+// A bundle whose queue is full keeps its newest entries and the handoff:
+// one more would fail Validate and the import with it.
+func TestImportedInstanceWithAFullQueueKeepsTheHandoff(t *testing.T) {
+	origin := &domain.SessionInstance{Instance: "axlr-session-0123456789abcdef0123456789abcdef"}
+	for i := 0; i < domain.MaxPendingEntries; i++ {
+		origin.Pending = append(origin.Pending, encodeEntry(TurnEntry{About: "ws:x", Key: fmt.Sprintf("k%d", i), Summary: "s"}))
+	}
+	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
+	instance := ImportedInstance(origin, "0123456789abcdef0123456789abcdef", "/ws", SessionBundleMeta{Host: "laptop"}, "gx10", "/tmp/b.json", now)
+	if err := instance.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := decodeEntry(instance.Pending[0])
+	last, _ := decodeEntry(instance.Pending[len(instance.Pending)-1])
+	if len(instance.Pending) != domain.MaxPendingEntries || first.Key != "k1" || !strings.HasPrefix(last.Key, "axlr:import:") {
+		t.Fatalf("pending %d first %s last %s", len(instance.Pending), first.Key, last.Key)
 	}
 }

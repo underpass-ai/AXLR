@@ -87,6 +87,12 @@ func DestructiveReason(policy ToolApprovalPolicyPort, s domain.Session, id domai
 	if id.Kind != domain.ToolKindLocal || id.LocalOperation != "exec" {
 		return ""
 	}
+	// The rules read the command as it would run: a tolerant session splits
+	// "git push --force origin main" sent as the program before running it
+	// (normalizeExec), which the rules missed until 14 October 2026. The
+	// split applies in every session here: a card for a command that would
+	// not run costs a keypress.
+	arguments, _ = normalizeExec(arguments)
 	var call struct {
 		Program string   `json:"program"`
 		Args    []string `json:"args"`

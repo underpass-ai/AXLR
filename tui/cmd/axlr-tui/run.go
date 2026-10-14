@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -102,6 +103,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	if *importFlag != "" && (*sessionFlag != "" || continueFlag || *repairFlag != "" || *improveFlag != "") {
 		return fail(errors.New("--import resumes the imported session; it cannot be combined with --session, --continue, --repair or --improve"))
+	}
+	if *importFlag != "" && *modelFlag != "" {
+		// The bundle's session keeps its model; checked after the import,
+		// the session stayed saved and the next try was refused as known.
+		return fail(errors.New("--import resumes the session with its own model; drop --model and change it with /model"))
 	}
 	if continueFlag {
 		switch {
@@ -508,6 +514,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(e)
 		}
 		loaded, loadErr := loggedStore.Load(ctx, id)
+		if errors.Is(loadErr, domain.ErrSessionHeld) {
+			// On 14 October 2026 a second --continue printed only
+			// "resource temporarily unavailable".
+			return fail(fmt.Errorf("session %s is open in another console: close it there, or launch without --continue/--session for a new session", id))
+		}
 		if loadErr != nil {
 			return fail(loadErr)
 		}
@@ -569,11 +580,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// the context the console opens for the session (decision D3).
 	var sessionCeremony *application.SessionCeremony
 	if ceremonies != nil || hasKMP {
-		sessionCeremony = &application.SessionCeremony{Labels: sessionLabels, Usage: store, Store: loggedStore, Log: func(line string) {
-			if appLog != nil {
-				appLog.Logf(diagnostics.AppInfo, "%s", line)
-			}
-		}}
+		sessionCeremony = &application.SessionCeremony{Labels: sessionLabels, Usage: store, Store: loggedStore, Log: leveledLogger(appLog)}
 	}
 	installID, err := storage.InstallID(filepath.Join(stateBase, "axlr"))
 	if err != nil {
@@ -594,6 +601,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		kmpMemory = &memory
 		sessionCeremony.Identity = &application.MemoryIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewMemoryAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: memory, Recall: memory, UserAbout: userAbout(getenv)}
 	}
+	var startupWarnings []string
 	if ceremonies != nil {
 		sessionCeremony.Engine = ceremonies.Engine
 		if journal, ok := ceremonies.Memory.(application.JournalPort); ok {
@@ -604,12 +612,22 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			sessionCeremony.Judge = judge.Port
 		}
 		for _, line := range []string{
-			ensureWorkGrant(ctx, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}, filepath.Join(stateBase, "axlr", "made-grant"), madesetup.WorkGrantID),
+			ensureWorkGrant(ctx, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}, filepath.Join(stateBase, "axlr", "made-grant"), madesetup.WorkGrantFor(madeWorkIdentity(configPath, registrations))),
 			prepareSessionDefinition(ctx, ceremonies.Engine, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}),
 			sweepAbandonedSessions(ctx, sessionCeremony, store, workspace, consoleSessionID(session, newID)),
 		} {
-			if line != "" && appLog != nil {
-				appLog.Logf(diagnostics.AppInfo, "%s", line)
+			if line == "" {
+				continue
+			}
+			level := diagnostics.AppInfo
+			if startupTrouble.MatchString(line) {
+				// The person sees trouble in the console, not only in the
+				// log (review of 14 October 2026).
+				level = diagnostics.AppWarn
+				startupWarnings = append(startupWarnings, line)
+			}
+			if appLog != nil {
+				appLog.Logf(level, "%s", line)
 			}
 		}
 	}
@@ -756,8 +774,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Sessions:                store,
 		Hostname:                hostname,
 	}
+	if len(startupWarnings) > 0 {
+		deps.StartupNotice = startupWarnings[0] + " · axlr-tui logs --level WARN"
+	}
 	if hasKMP && kmp.Save != nil {
 		deps.MemoryBundle = memoryBundle(kmp.Save)
+	}
+	if hasKMP && kmp.Count != nil && kmp.Counted {
+		deps.MemoryCount = memoryCounter(kmp.Count)
 	}
 	if kmpMemory != nil {
 		deps.MemoryCompare, deps.MemoryForget = *kmpMemory, *kmpMemory
@@ -1035,7 +1059,7 @@ func (s successorSessions) Continue(ctx context.Context, predecessor domain.Sess
 			previous := labels[state.ID]
 			title := previous.Title
 			if title != "" {
-				title = root.Text(bounded(string(title), 100) + " (2)")
+				title = root.Text(successorTitle(string(title)))
 			}
 			_, _ = s.labels.Initialize(ctx, session.ID(), domain.SessionLabel{Title: title, About: previous.About})
 		}
@@ -1044,6 +1068,17 @@ func (s successorSessions) Continue(ctx context.Context, predecessor domain.Sess
 		return domain.Session{}, err
 	}
 	return session, nil
+}
+
+// successorTitle numbers a continued session's title: "X" becomes "X (2)"
+// and "X (2)" becomes "X (3)", not "X (2) (2)".
+func successorTitle(title string) string {
+	if open := strings.LastIndex(title, " ("); open >= 0 && strings.HasSuffix(title, ")") {
+		if n, err := strconv.Atoi(title[open+2 : len(title)-1]); err == nil && n >= 2 {
+			return fmt.Sprintf("%s (%d)", bounded(title[:open], 100), n+1)
+		}
+	}
+	return bounded(title, 100) + " (2)"
 }
 
 func bounded(text string, limit int) string {
@@ -1065,15 +1100,15 @@ func engineFacts(kmp kmpStore, hasKMP bool, host application.HostIdentity, hasMA
 	if hasKMP {
 		facts["kmp"] = []terminal.EngineFact{
 			{Key: "mcp.store", Value: kmp.Selection.Path},
-			{Key: "mcp.reason", Value: string(kmp.Selection.Reason)},
+			{Key: "mcp.reason", Value: string(kmp.Selection.Reason), ValueKey: "mcp.reason." + string(kmp.Selection.Reason)},
 			{Key: "mcp.about", Value: kmp.About},
-			{Key: "mcp.identity", Value: "axlr:" + host.AgentID + " (one agent per store, one context per session)"},
+			{Key: "mcp.identity", Value: "axlr:" + host.AgentID, NoteKey: "mcp.identityNote"},
 		}
 	}
 	if hasMADE {
 		facts["made"] = []terminal.EngineFact{
 			{Key: "mcp.identity", Value: host.Owner},
-			{Key: "mcp.grant", Value: madesetup.WorkGrantID},
+			{Key: "mcp.grant", Value: madesetup.WorkGrantFor(host.Owner)},
 		}
 	}
 	return facts

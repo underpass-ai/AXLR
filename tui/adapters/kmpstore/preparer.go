@@ -42,11 +42,13 @@ func (p Preparer) Prepare(ctx context.Context, selection Selection, env []string
 		return report, nil
 	}
 	report.Created = true
-	if err := os.MkdirAll(selection.Path, 0o755); err != nil {
+	// Memories are personal: the store is the owner's alone, as the
+	// console's own state is.
+	if err := os.MkdirAll(selection.Path, 0o700); err != nil {
 		return report, err
 	}
 	if ignore := filepath.Join(selection.Path, ".gitignore"); !fileExists(ignore) {
-		if err := os.WriteFile(ignore, []byte("*\n"), 0o644); err != nil {
+		if err := os.WriteFile(ignore, []byte("*\n"), 0o600); err != nil {
 			return report, err
 		}
 	}

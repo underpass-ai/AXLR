@@ -171,6 +171,23 @@ func TestBridgeAndDiscoveryKeepAHiddenToolToTheConsole(t *testing.T) {
 	}
 }
 
+// A hidden tool called by its own name, not through the bridge, is
+// refused the same way (until 14 October 2026 it resolved and ran).
+func TestADirectCallOfAHiddenToolIsRefused(t *testing.T) {
+	guide := hostPlugin(t, "kmp_guide", "kmp", "kmp_guide")
+	guide.Surface = engineSurface(root.PluginRef{PluginID: "kmp", ToolName: "kmp_guide"})
+	wake := hostPlugin(t, "kmp_wake", "kmp", "kmp_wake")
+	snapshot := append(HostTools(), guide, wake)
+	call := root.ToolCall{ID: "c1", Name: "kmp_guide", Arguments: hostJSON(t, `{"registration_key":"session-1"}`)}
+	if _, _, known, err := ResolveToolCall(snapshot, call); !known || err == nil || !strings.Contains(err.Error(), guide.Surface.Hidden) {
+		t.Fatalf("%v %v", known, err)
+	}
+	call = root.ToolCall{ID: "c2", Name: "kmp_wake", Arguments: hostJSON(t, `{"about":"project:x"}`)}
+	if tool, _, _, err := ResolveToolCall(snapshot, call); err != nil || tool.Identity.Plugin.ToolName != "kmp_wake" {
+		t.Fatalf("%+v %v", tool, err)
+	}
+}
+
 // The orchestrator's write surface is the console's (decision D6): the
 // verbs the adapter leaves visible are bridged and described; the ones it
 // hides are refused by the bridge and hidden by discovery, which also

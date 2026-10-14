@@ -364,6 +364,10 @@ func CompleteDefaults(s *UserSettings, jev bool) {
 	}
 	if s.Jev == nil {
 		s.Jev = &JevSettings{Tool: jev, FinalCheck: jev, FinalThreshold: 0.5, Model: "jev-1.13.0", TimeoutMS: 20000}
+	} else if jev && !s.Jev.Tool && !s.Jev.FinalCheck {
+		// A setup run that gets the key turns on the Jev it announces; an
+		// earlier run without one had written it off.
+		s.Jev.Tool, s.Jev.FinalCheck = true, true
 	}
 	if s.PromptTokens == 0 {
 		s.PromptTokens = DefaultContextCapTokens

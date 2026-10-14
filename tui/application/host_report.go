@@ -52,7 +52,9 @@ func (c *SessionCeremony) report(ctx context.Context, s domain.Session, instance
 	report := HostReport{Instance: instance.Instance, Step: sessionTurnStep, Fence: instance.Fence, OperationID: instance.OperationID, Status: status, Activity: activity,
 		Summary: fmt.Sprintf("turn %d of session %s, mode %s", instance.Turns+1, state.ID, s.Mode()), Execution: string(state.ID), Worker: string(state.ID), Role: sessionRole, Model: string(state.Model), Sequence: instance.Reports, Host: c.Host}
 	if err := c.Engine.Report(ctx, report); err != nil {
-		c.log("session %s report %s: %v", instance.Instance, status, err)
+		if c.firstRefusal(err.Error()) {
+			c.log("session %s report %s: %v (an identical refusal is not logged again)", instance.Instance, status, err)
+		}
 		return
 	}
 	instance.Reported = c.now()
@@ -79,14 +81,8 @@ func (c *SessionCeremony) Heartbeat(ctx context.Context, s *domain.Session) {
 		c.report(ctx, *s, &instance, "running", "heartbeat")
 		changed = true
 	}
-	lease := time.Duration(instance.LeaseMS) * time.Millisecond
-	if lease > 0 && !instance.ClaimedAt.IsZero() && now.Sub(instance.ClaimedAt) >= lease*3/4 {
-		if err := c.Engine.Renew(ctx, instance.Instance, sessionTurnStep, instance.Fence, lease); err != nil {
-			c.log("session %s lease renewal: %v", instance.Instance, err)
-		} else {
-			instance.ClaimedAt = now
-			changed = true
-		}
+	if c.keepClaim(ctx, *s, &instance) {
+		changed = true
 	}
 	if changed {
 		_ = s.SetInstance(instance)
@@ -128,4 +124,54 @@ func (c *SessionCeremony) handoff(ctx context.Context, instance domain.SessionIn
 		return
 	}
 	c.log("session %s: handoff from run %s recorded", instance.Instance, instance.ClaimIncarnation)
+}
+
+// firstRefusal says whether this report error is new to this console.
+func (c *SessionCeremony) firstRefusal(text string) bool {
+	c.refusalsMu.Lock()
+	defer c.refusalsMu.Unlock()
+	if c.refusals[text] {
+		return false
+	}
+	if c.refusals == nil {
+		c.refusals = map[string]bool{}
+	}
+	c.refusals[text] = true
+	return true
+}
+
+// keepClaim keeps the turn's claim alive: it renews a lease three quarters
+// spent and, when the lease ran out (a card answered after an hour, a long
+// model stream with no tool), claims the step again so the turn can still
+// be completed. Review of 14 October 2026: renewal ran only before a tool
+// call, and a completion on an expired fence was refused. It reports
+// whether the instance changed.
+func (c *SessionCeremony) keepClaim(ctx context.Context, s domain.Session, instance *domain.SessionInstance) bool {
+	lease := time.Duration(instance.LeaseMS) * time.Millisecond
+	if instance.Fence == "" || lease <= 0 || instance.ClaimedAt.IsZero() {
+		return false
+	}
+	now := c.now()
+	spent := now.Sub(instance.ClaimedAt)
+	if spent < lease*3/4 {
+		return false
+	}
+	err := c.Engine.Renew(ctx, instance.Instance, sessionTurnStep, instance.Fence, lease)
+	if err == nil {
+		instance.ClaimedAt = now
+		return true
+	}
+	c.log("session %s lease renewal: %v", instance.Instance, err)
+	if spent < lease {
+		return false
+	}
+	key := fmt.Sprintf("axlr:turn:%s:%d:reclaim:%d", s.ID(), instance.TurnIndex, now.Unix())
+	fence, err := c.Engine.Claim(ctx, instance.Instance, sessionTurnStep, key, lease)
+	if err != nil {
+		c.log("session %s claim after an expired lease: %v", instance.Instance, err)
+		return false
+	}
+	c.log("session %s: lease expired after %s, step claimed again", instance.Instance, spent.Round(time.Second))
+	c.claimed(ctx, s, instance, fence, lease)
+	return true
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -37,6 +38,10 @@ func (u ImportSessionUseCase) Execute(ctx context.Context, data []byte) (domain.
 	state := session.Export()
 	if _, err := u.Store.Load(ctx, state.ID); err == nil {
 		return domain.Session{}, meta, fmt.Errorf("session %s is saved in this console already: resume it with --session %s", state.ID, state.ID)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		// A saved copy that cannot be read, or one another console holds,
+		// is not overwritten.
+		return domain.Session{}, meta, fmt.Errorf("session %s may be saved in this console already: %w", state.ID, err)
 	}
 	now := time.Now()
 	if u.Now != nil {

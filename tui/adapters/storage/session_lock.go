@@ -3,6 +3,8 @@ package storage
 import (
 	"fmt"
 	"os"
+
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // sessionLock retains a stable inode across snapshot replacement. Never unlink it.
@@ -19,7 +21,7 @@ func acquireLock(path string) (*sessionLock, error) {
 	}
 	if e = tryLock(file); e != nil {
 		file.Close()
-		return nil, fmt.Errorf("session already has a writer: %w", e)
+		return nil, fmt.Errorf("%w: %w", domain.ErrSessionHeld, e)
 	}
 	return &sessionLock{file: file}, nil
 }

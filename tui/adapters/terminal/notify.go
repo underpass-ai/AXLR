@@ -114,10 +114,16 @@ func (m *AppModel) loadTitleLabel() {
 	}
 	if labels, err := m.deps.SessionLabels.Load(m.lifetime.ctx); err == nil {
 		m.titleLabel = singleLine(string(labels[m.Header.State.ID].Title))
+		previous := m.Header.About
 		if about := labels[m.Header.State.ID].About; about != "" {
 			m.Header.About = about
 		} else {
 			m.Header.About = m.deps.About
+		}
+		if m.Header.About != previous && previous != "" {
+			// A count of another about is not shown beside this one; the
+			// next count fills it (see countMemories).
+			m.Header.MemoriesKnown = false
 		}
 	}
 }

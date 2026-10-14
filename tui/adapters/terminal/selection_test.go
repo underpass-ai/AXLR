@@ -200,9 +200,14 @@ func TestHelpExplainsCopying(t *testing.T) {
 	for _, size := range []tea.WindowSizeMsg{{Width: 100, Height: 30}, {Width: 70, Height: 30}, {Width: 55, Height: 30}, {Width: 70, Height: 18}} {
 		m := update(sized(), size)
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
-		m = update(m, tea.KeyPressMsg{Code: tea.KeyEnd})
-		if content := m.View().Content; !strings.Contains(content, "/copy") {
-			t.Fatalf("%dx%d help omits copying:\n%s", size.Width, size.Height, content)
+		// The help scrolls; somewhere in it, copying is explained.
+		seen := m.View().Content
+		for range 12 {
+			m = update(m, tea.KeyPressMsg{Code: tea.KeyPgDown})
+			seen += m.View().Content
+		}
+		if !strings.Contains(seen, "/copy") {
+			t.Fatalf("%dx%d help omits copying:\n%s", size.Width, size.Height, seen)
 		}
 	}
 }
@@ -271,5 +276,21 @@ func TestEmojiWithAVariationSelectorAreTwoCellsWide(t *testing.T) {
 	}
 	if left, right := wordAt("⛩️⛩️ x", 1); left != 0 || right != 3 {
 		t.Fatalf("two emoji span cells %d–%d, want 0–3", left, right)
+	}
+}
+
+// Typing over the help closes it and writes in the composer (14 October
+// 2026: the letters were dropped unseen).
+func TestTypingOverTheHelpWritesInTheComposer(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "help" {
+		t.Fatalf("overlay %q", m.overlay)
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'h', Text: "h"})
+	m = update(m, tea.KeyPressMsg{Code: 'o', Text: "o"})
+	if m.overlay != "" || m.Composer.Input.Value() != "ho" {
+		t.Fatalf("overlay %q composer %q", m.overlay, m.Composer.Input.Value())
 	}
 }

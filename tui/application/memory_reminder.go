@@ -35,8 +35,11 @@ func remindMemory(ctx context.Context, s *domain.Session, u ContinueTurnUseCase,
 	if s.Status() != domain.StatusComplete || !modelRecordsMemory(*s) {
 		return false, nil
 	}
-	if u.Session.settles() {
-		return false, nil // Jev decides what the turn settled (decision D5)
+	if u.Session.settles() && u.Session.recordsTurn(*s) {
+		// Jev decides what the turn settled (decision D5), at the turn's
+		// record: without one (MADE unavailable, the instance closed) Jev is
+		// never asked and the reminder is the only prompt to record.
+		return false, nil
 	}
 	messages := s.Messages()
 	if len(messages) == 0 || messages[len(messages)-1].Role != root.RoleAssistant || len(messages[len(messages)-1].ToolCalls) > 0 {

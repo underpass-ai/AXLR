@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -15,9 +17,23 @@ func encodeCall(c root.ToolCall) dto.ToolCall {
 	return dto.ToolCall{ID: string(c.ID), Name: string(c.Name), Arguments: c.Arguments.Bytes()}
 }
 func decodeCall(c dto.ToolCall) (root.ToolCall, error) {
-	args, e := root.NewJSONObject(c.Arguments)
+	args, e := root.NewJSONObject(compactJSON(c.Arguments))
 	return root.ToolCall{ID: root.ToolCallID(c.ID), Name: root.ToolName(c.Name), Arguments: args}, e
 }
+
+// compactJSON drops the layout of a raw value: an indented session bundle
+// indents a call's arguments differently in the transcript and in the
+// activity, and the restore compares them byte for byte (on 14 October 2026
+// every bundle with a tool call failed to import). The store writes
+// compact JSON already.
+func compactJSON(raw []byte) []byte {
+	var out bytes.Buffer
+	if json.Compact(&out, raw) != nil {
+		return raw
+	}
+	return out.Bytes()
+}
+
 func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 	state := s.Export()
 	if _, e := domain.RestoreSession(state); e != nil {
@@ -77,7 +93,7 @@ func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Ti
 		s.ArchivedDrafts = append(s.ArchivedDrafts, domain.ArchivedDraft{AfterMessage: archived.AfterMessage, Content: root.Text(archived.Content)})
 	}
 	for _, t := range d.ToolSnapshot {
-		params, e := root.NewJSONObject(t.Parameters)
+		params, e := root.NewJSONObject(compactJSON(t.Parameters))
 		if e != nil {
 			return domain.Session{}, e
 		}
