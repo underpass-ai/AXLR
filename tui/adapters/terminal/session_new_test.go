@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -242,4 +243,73 @@ type exportRecorder map[string]string
 func (e exportRecorder) Create(_ context.Context, path string, data []byte) error {
 	e[path] = string(data)
 	return nil
+}
+
+// On 14 October 2026 a console that switched sessions with Ctrl+O still
+// held the old session's lock (both .lock files in /proc/<pid>/fd), and
+// --continue in a second console called it "open in another console".
+// Opening another session and /new give the left session's lock back.
+func TestSwitchingSessionsReleasesTheLeftSessionsLock(t *testing.T) {
+	dir := t.TempDir()
+	open := func() *storage.SessionStore {
+		store, err := storage.New(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { store.Close() })
+		return store
+	}
+	console, other := open(), open()
+	a, b := usedSession(t), usedSession(t)
+	bState := b.Export()
+	bState.ID = "fedcba9876543210fedcba9876543210"
+	b, err := domain.RestoreSession(bState)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []domain.Session{a, b} {
+		if err := console.Save(context.Background(), s); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The console writes the session it opens into its Session.
+	aID, bID := a.Export().ID, b.Export().ID
+	m := update(New(Dependencies{Session: &a, Workspace: testWorkspace(), NewSessionID: "0123456789abcdef0123456789abcde0", Store: console, Sessions: console, Create: application.CreateSessionUseCase{Store: console}, Monochrome: true}), tea.WindowSizeMsg{Width: 100, Height: 30})
+	t.Cleanup(m.Close)
+	if _, err := other.Load(context.Background(), aID); err == nil {
+		t.Fatal("the open session's lock is not held")
+	}
+	n, cmd := m.Update(ControlIntent("sessions"))
+	m = drain(t, n.(AppModel), cmd)
+	for i, row := range m.Picker.Visible() {
+		if row.ID == bID {
+			m.Picker.Selected = i
+		}
+	}
+	n, cmd = m.Update(ControlIntent("open-session"))
+	m = drain(t, n.(AppModel), cmd)
+	if m.Header.State.ID != bID {
+		t.Fatalf("the other session did not open: %s", m.Status.Error)
+	}
+	if _, err := other.Load(context.Background(), aID); err != nil {
+		t.Fatalf("the left session is still held: %v", err)
+	}
+	if _, err := other.Load(context.Background(), bID); err == nil {
+		t.Fatal("the opened session's lock is not held")
+	}
+	if err := other.Release(aID); err != nil {
+		t.Fatal(err)
+	}
+	// /new leaves b: its lock goes back too, and the new session's is held.
+	n, cmd = m.Update(NewSessionIntent)
+	m = drain(t, n.(AppModel), cmd)
+	if m.Header.State.ID == bID {
+		t.Fatalf("no new session: %s %s", m.Status.Notice, m.Status.Error)
+	}
+	if _, err := other.Load(context.Background(), bID); err != nil {
+		t.Fatalf("the session left by /new is still held: %v", err)
+	}
+	if _, err := other.Load(context.Background(), m.Header.State.ID); err == nil {
+		t.Fatal("the new session's lock is not held")
+	}
 }

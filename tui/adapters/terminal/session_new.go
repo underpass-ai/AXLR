@@ -33,7 +33,7 @@ func (m AppModel) newSession() (AppModel, tea.Cmd) {
 		m.Status.Notice = m.Theme.T("notice.newAlready")
 		return m, nil
 	}
-	create, leave := m.deps.Create, m.deps.Leave
+	create, leave, sessions := m.deps.Create, m.deps.Leave, m.deps.Sessions
 	workspace, model := m.Header.State.Workspace, m.Header.State.Model
 	if workspace == "" {
 		workspace = m.deps.Workspace
@@ -48,6 +48,7 @@ func (m AppModel) newSession() (AppModel, tea.Cmd) {
 			// The session left closes its MADE instance for this console.
 			_ = leave(ctx, s)
 		}
+		releaseLeft(sessions, s, created.Export().ID)
 		*s = created
 		return nil
 	})
@@ -68,4 +69,20 @@ func (m AppModel) hasPendingCalls() bool {
 		return true
 	}
 	return m.deps.Session != nil && len(m.deps.Session.Pending()) != 0
+}
+
+// releaseLeft gives back the writer lock of the session the console
+// switched away from, once whatever leaving it saved is written: on 14
+// October 2026 a console that had opened another session with Ctrl+O still
+// held both locks, and --continue in a second console called the old one
+// "open in another console". The store's lock serializes the release with
+// any save, and a later save of the left session takes the lock again.
+// nil sessions (no store that locks) release nothing.
+func releaseLeft(sessions application.SessionLister, left *domain.Session, opened domain.SessionID) {
+	if sessions == nil || left == nil {
+		return
+	}
+	if id := left.Export().ID; id != "" && id != opened {
+		_ = sessions.Release(id)
+	}
 }
