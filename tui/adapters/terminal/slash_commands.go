@@ -46,6 +46,7 @@ var slashCommands = []slashCommand{
 	{"/clean-screen", "slash.cleanScreen"},
 	{"/export", "slash.export"},
 	{"/usage", "slash.usage"},
+	{"/axlr-info", "slash.axlrInfo"},
 	{"/session", "slash.session"},
 	{"/session export", "slash.sessionExport"},
 	{"/memory", "slash.memory"},

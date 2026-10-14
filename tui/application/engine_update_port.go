@@ -55,3 +55,9 @@ type EngineRegistration struct {
 type EngineInstallPort interface {
 	InstallEngine(ctx context.Context, engine, packageRoot string) (detail string, err error)
 }
+
+// EngineVersionPort reads the version of each engine installed for this
+// console, by engine ("kmp", "made"); an engine it cannot run is absent.
+type EngineVersionPort interface {
+	InstalledVersions(context.Context) (map[string]string, error)
+}

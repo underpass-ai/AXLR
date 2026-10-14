@@ -777,6 +777,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Memories:                kmp.Memories,
 		MemoriesKnown:           kmp.Counted,
 		EngineFacts:             engineFacts(kmp, hasKMP, host, ceremonies != nil),
+		Jev:                     jevInfo(judge, settings.Jev),
+		LocalEndpoints:          locals.endpointsByModel(),
 		Usage:                   store,
 		MaxSessionUSD:           settings.MaxSessionUSD,
 		PromptCeiling:           locals.windows.PromptCeiling,
