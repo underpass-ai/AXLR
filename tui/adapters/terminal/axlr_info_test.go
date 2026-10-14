@@ -118,7 +118,7 @@ func TestAxlrInfoSaysJevOffAndALocalModel(t *testing.T) {
 	m.Header.State.Model = "qwen-local"
 	m.deps.LocalEndpoints = map[root.ModelID]string{"qwen-local": "http://127.0.0.1:8080/v1"}
 	m.Theme.Locale = Spanish
-	m, cmd := m.openAxlrInfo()
+	m, cmd := m.openAxlrInfo(false)
 	m, _ = drive(t, m, cmd, 2000)
 	view := ansi.Strip(m.View().Content)
 	for _, want := range []string{"qwen-local vía servidor local http://127.0.0.1:8080/v1", "Jev desactivado", "Ejecuta con AXLR."} {

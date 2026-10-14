@@ -86,7 +86,7 @@ const emblemMarkEnd = 21
 var emblemLetters = [4][2]int{{21, 31}, {33, 43}, {45, 55}, {57, 67}}
 
 const (
-	axlrInfoFPS     = 60
+	axlrInfoFPS     = 30
 	axlrInfoTagline = "axlrInfo.tagline"
 	// axlrInfoShine is the colour the sweep across the letters blends to.
 	axlrInfoShine = "#FFF4D6"
@@ -170,11 +170,11 @@ func axlrInfoNext(gen uint64) tea.Cmd {
 	return tea.Tick(axlrInfoFrame, func(time.Time) tea.Msg { return axlrInfoTick{gen: gen} })
 }
 
-// openAxlrInfo starts the animation and reads the engines' versions.
-func (m AppModel) openAxlrInfo() (AppModel, tea.Cmd) {
+// openAxlrInfo starts the animation and reads the engines' versions; a
+// replay keeps those it read, so only /axlr-info sees an /update.
+func (m AppModel) openAxlrInfo(replay bool) (AppModel, tea.Cmd) {
 	m.Composer.Input.Reset()
-	versions := m.AxlrInfo.versions
-	loaded := m.AxlrInfo.loaded
+	versions, loaded := m.AxlrInfo.versions, m.AxlrInfo.loaded && replay
 	m.axlrInfoGen++
 	m.AxlrInfo = newAxlrInfo(m.axlrInfoGen, len([]rune(m.Theme.T(axlrInfoTagline))))
 	m.AxlrInfo.versions, m.AxlrInfo.loaded = versions, loaded
@@ -223,7 +223,7 @@ func (m AppModel) axlrInfoUpdate(msg tea.Msg) (AppModel, tea.Cmd, bool) {
 func (m AppModel) axlrInfoKey(key string) (AppModel, tea.Cmd) {
 	switch key {
 	case "r":
-		return m.openAxlrInfo()
+		return m.openAxlrInfo(true)
 	case "enter", "q":
 		m.overlay = ""
 	}

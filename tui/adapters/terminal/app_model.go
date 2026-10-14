@@ -955,7 +955,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.copyLatest()
 			}
 			if command == "/axlr-info" {
-				return m.openAxlrInfo()
+				return m.openAxlrInfo(false)
 			}
 			if command == "/export" {
 				return m.exportSession("")
