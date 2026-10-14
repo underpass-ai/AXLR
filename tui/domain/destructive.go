@@ -29,6 +29,28 @@ func DestructiveRules() []string {
 // deleters are programs whose path arguments remove or overwrite.
 var deleters = map[string]bool{"rm": true, "rmdir": true, "unlink": true, "shred": true, "mv": true, "cp": true, "dd": true, "truncate": true, "chmod": true, "chown": true}
 
+// fileRemovers delete, move or cut files whatever path they name.
+var fileRemovers = map[string]bool{"rm": true, "rmdir": true, "unlink": true, "shred": true, "mv": true, "truncate": true}
+
+// RemovesFiles reports a command that deletes, moves or truncates files,
+// behind sudo, env or nice too, with at least one argument that is not a
+// flag. It is no rule: the console warns on the command's card, since
+// undo restores only what the session's writes and edits changed. On
+// 14 October 2026 glm-5.3-flash deleted calc/calc.go "to test path
+// resolution" and its card read like any command.
+func RemovesFiles(program string, args []string) bool {
+	program, args = unwrapPrivilege(program, args)
+	if !fileRemovers[filepath.Base(program)] {
+		return false
+	}
+	for _, arg := range args {
+		if arg != "" && !strings.HasPrefix(arg, "-") {
+			return true
+		}
+	}
+	return false
+}
+
 // shells run a command string; their string is matched literally.
 var shells = map[string]bool{"sh": true, "bash": true, "zsh": true, "dash": true, "fish": true, "ksh": true}
 

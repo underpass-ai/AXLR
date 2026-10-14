@@ -111,6 +111,9 @@ func (m *AppModel) syncApproval() {
 			if warning := m.hiddenInputWarning(p); warning != "" {
 				command = warning + "\n\n" + command
 			}
+			if warning := m.removalWarning(p); warning != "" {
+				command = warning + "\n\n" + command
+			}
 			m.Approval.Details.SetContent(command)
 			m.Approval.Details.Viewport.GotoTop()
 		}

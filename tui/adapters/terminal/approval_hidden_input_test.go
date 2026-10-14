@@ -188,3 +188,24 @@ func TestADestructiveCardIgnoresAlwaysAllowAndAutonomy(t *testing.T) {
 		}
 	}
 }
+
+// On 14 October 2026 glm-5.3-flash deleted calc/calc.go "to test path
+// resolution" and its card looked like any command: a command that
+// deletes, moves or truncates files says so, and that /undo cannot bring
+// them back.
+func TestTheCardWarnsWhenACommandRemovesFiles(t *testing.T) {
+	for _, args := range []string{`{"program":"rm","args":["calc/calc.go"]}`, `{"program":"sudo","args":["-u","me","mv","a.go","b.go"]}`, `{"program":"truncate","args":["-s","0","log.txt"]}`} {
+		m := execApprovalModel(t, domain.ModeNormal, args)
+		if plain := ansi.Strip(m.View().Content); !strings.Contains(plain, "deletes or moves files; /undo cannot restore") {
+			t.Fatalf("%s not flagged:\n%s", args, plain)
+		}
+		m.zones.Close()
+	}
+	for _, args := range []string{`{"program":"rm","args":["--help"]}`, `{"program":"git","args":["rm","x"]}`, `{"program":"ls","args":["calc"]}`} {
+		m := execApprovalModel(t, domain.ModeNormal, args)
+		if strings.Contains(ansi.Strip(m.View().Content), "deletes or moves files") {
+			t.Fatalf("%s was flagged", args)
+		}
+		m.zones.Close()
+	}
+}

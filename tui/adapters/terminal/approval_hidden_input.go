@@ -36,6 +36,24 @@ func (m AppModel) hiddenInputWarning(p domain.PendingTool) string {
 	return ""
 }
 
+// removalWarning warns that a local exec deletes, moves or truncates files,
+// which /undo cannot put back; a command a destructive rule already names
+// says so in the card's title instead.
+func (m AppModel) removalWarning(p domain.PendingTool) string {
+	tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
+	if !known || err != nil || tool.Identity.Kind != domain.ToolKindLocal || tool.Identity.LocalOperation != "exec" {
+		return ""
+	}
+	var command struct {
+		Program string   `json:"program"`
+		Args    []string `json:"args"`
+	}
+	if json.Unmarshal(p.Call.Arguments.Bytes(), &command) != nil || !domain.RemovesFiles(command.Program, command.Args) || m.destructiveRule(p) != "" {
+		return ""
+	}
+	return m.Theme.Icon("attention") + " " + m.Theme.T("approval.removesFiles")
+}
+
 // execCardCommand is a known local exec call's card: the command line as a
 // shell would read it, then the working directory, timeout, output limit
 // and stdin only when the call sets them. On 12 October 2026 an exec card
