@@ -10,10 +10,10 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// /clean_screen empties the screen and keeps the session: the messages, the
+// /clean-screen empties the screen and keeps the session: the messages, the
 // last reply /copy takes, and what is said afterwards, drawn alone.
 func TestCleanScreenClearsTheScreenAndKeepsTheSession(t *testing.T) {
-	for _, command := range []string{"/clean_screen", "/Clean_Screen", "/clean-screen", "/cls", "/limpiar"} {
+	for _, command := range []string{"/clean-screen", "/Clean-Screen", "/clean_screen", "/cls", "/limpiar"} {
 		m := conversation(t)
 		m.Header.State.ID = "s1"
 		m.Header.State.ConsoleLines = append(m.Header.State.ConsoleLines, domain.ConsoleLine{AfterMessage: 2, Failure: &domain.TurnFailure{Message: "console note"}})
@@ -63,7 +63,7 @@ func TestCleanScreenClearsTheScreenAndKeepsTheSession(t *testing.T) {
 	}
 }
 
-// A mistyped /clean_screen is refused, never a paid prompt.
+// A mistyped /clean_screen alias is refused, never a paid prompt.
 func TestCleanScreenTypoIsRefused(t *testing.T) {
 	if word, unknown := unknownSlashWord("/clean_scren", ""); !unknown || word != "/clean_scren" {
 		t.Fatalf("/clean_scren read as unknown=%v %q", unknown, word)

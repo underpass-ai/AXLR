@@ -44,7 +44,7 @@ type Transcript struct {
 	TurnCosts   map[int]string
 	rowLines    map[int]int
 	visualIndex []int
-	// cleared hides what /clean_screen found on the screen: the rows of the
+	// cleared hides what /clean-screen found on the screen: the rows of the
 	// first messages and console lines of the session clearedFor. The
 	// session keeps them; only the screen starts again.
 	cleared    transcriptCut
@@ -143,7 +143,7 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 		t.cleared, t.clearedFor = transcriptCut{}, s.ID
 	}
 	// start is the first row after the cut: the rows of the messages and
-	// console lines /clean_screen hid come before it.
+	// console lines /clean-screen hid come before it.
 	start, cut := -1, t.cleared
 	mark := func(messages, lines int) {
 		if start < 0 && messages >= cut.messages && lines >= cut.lines {
