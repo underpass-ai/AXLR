@@ -156,6 +156,7 @@ Roles in a definition describe responsibilities and do not spawn agents. Indepen
    - known, acyclic dependencies, from which it computes the waves;
    - paths inside the workspace;
    - disjoint scopes within a wave;
+   - a test-first task's scope holds both a test file and a file that is not one: one with only tests cannot make code fail first, and one with no test cannot write the failing test (refused since 14 October 2026, after a plan gave test-first `add-max` only `calc/calc.go` while `calc/calc_test.go` belonged to another task of its wave, and the worker blocked at `red`);
    - each citation's quote, at least 12 characters, present on its line with whitespace collapsed;
    - commands that run, with their exit recorded as the baseline;
    - a context pack of at most 12 KiB per task: the task, the scope with new files marked, the interfaces, the check, the protected files, and the cited regions with 20 lines of margin.
