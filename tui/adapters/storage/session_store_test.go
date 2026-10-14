@@ -446,3 +446,19 @@ func TestReleasingAnEmptySessionDiscardsIt(t *testing.T) {
 		t.Fatalf("the empty session stayed: %v %v", err, discarded)
 	}
 }
+
+// The session list shows and searches what the person typed: on 14
+// October 2026 a one-prompt session was listed as "Di hola. [AXLR ·
+// recall] Memory of project:ws6: …".
+func TestSessionListLeavesConsoleNotesOutOfTitlesAndSearch(t *testing.T) {
+	store, _ := openStore(t)
+	s := fixture(t)
+	must(t, s.BeginTurn("Di hola.\n\n[AXLR · recall] Memory of project:ws6: secret plan", nil))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "Hola"}}))
+	must(t, store.Save(context.Background(), s))
+	list, err := store.List(context.Background())
+	must(t, err)
+	if len(list) != 1 || list[0].Title != "Di hola." || strings.Contains(string(list[0].Text), "AXLR") {
+		t.Fatalf("summary %+v", list)
+	}
+}

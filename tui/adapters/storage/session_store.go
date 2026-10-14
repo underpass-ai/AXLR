@@ -275,7 +275,10 @@ func (s *SessionStore) List(ctx context.Context) ([]domain.SessionSummary, error
 		summary := domain.SessionSummary{ID: state.ID, Workspace: state.Workspace, Model: state.Model, Status: state.Status, MessageCount: len(state.Messages), Mode: state.Mode}
 		for _, message := range state.Messages {
 			if message.Role == root.RoleUser {
-				summary.Title = message.Content
+				// The title is what the person typed: on 14 October 2026 a
+				// one-prompt session was listed as "Di hola. [AXLR · recall]
+				// Memory of project:ws6: …".
+				summary.Title = root.Text(application.PersonTyped(string(message.Content)))
 				break
 			}
 		}
@@ -296,7 +299,11 @@ func summaryText(messages []root.Message) root.Text {
 		if message.Role != root.RoleUser && message.Role != root.RoleAssistant || message.Content == "" {
 			continue
 		}
-		text := string(message.Content)
+		// Console notes are not what the person searches for.
+		if strings.HasPrefix(string(message.Content), "[AXLR") {
+			continue
+		}
+		text := application.PersonTyped(string(message.Content))
 		if room := domain.MaxSummaryTextBytes - b.Len() - 1; len(text) > room {
 			for room > 0 && !utf8.RuneStart(text[room]) {
 				room--

@@ -160,7 +160,7 @@ func finalCheckState(turn []root.Message) (string, error) {
 		}
 	}
 	state, err := json.Marshal(map[string]any{
-		"request":       cut(personTyped(string(turn[0].Content)), finalRequestBytes),
+		"request":       cut(PersonTyped(string(turn[0].Content)), finalRequestBytes),
 		"answer":        cut(string(turn[len(turn)-1].Content), finalAnswerBytes),
 		"tool_activity": tools,
 	})

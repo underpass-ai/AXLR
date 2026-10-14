@@ -55,7 +55,7 @@ func undoneTurn(state domain.SessionState, call root.ToolCallID) string {
 		return "your last turn"
 	}
 	prompt, _ := state.TurnPrompt(turn)
-	return fmt.Sprintf("your turn %d of %d, not your last, the one the person began with %q", turn, last, excerpt(personTyped(string(prompt)), restoreNotePromptBytes))
+	return fmt.Sprintf("your turn %d of %d, not your last, the one the person began with %q", turn, last, excerpt(PersonTyped(string(prompt)), restoreNotePromptBytes))
 }
 
 // restoreNotePromptBytes bounds the prompt that names an undone turn.
