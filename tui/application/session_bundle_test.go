@@ -2,7 +2,7 @@ package application
 
 import (
 	"context"
-	"errors"
+	"io/fs"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -28,7 +28,7 @@ func (s *bundleStore) Load(_ context.Context, id domain.SessionID) (domain.Sessi
 	if session, ok := s.saved[id]; ok {
 		return session, nil
 	}
-	return domain.Session{}, errors.New("not found")
+	return domain.Session{}, fs.ErrNotExist
 }
 
 type bundleCodecStub struct {

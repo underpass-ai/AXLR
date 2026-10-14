@@ -586,12 +586,16 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Notice = m.Theme.Tf("notice.ceremonyPublished", v.Published)
 		}
 		if v.MemorySaved != nil && v.Err == nil {
-			if v.MemorySaved.About == m.Header.About {
+			if v.MemorySaved.About == m.Header.About && v.MemorySaved.Events >= 0 {
 				m.Header.Memories, m.Header.MemoriesKnown = v.MemorySaved.Events, true
 			}
 			m.Status.Notice = m.Theme.Tf("notice.memorySaved", v.MemorySaved.Events, v.MemorySaved.About, m.workspacePath(v.MemorySaved.Path))
-			if v.MemorySaved.Events == 1 {
+			switch {
+			case v.MemorySaved.Events == 1:
 				m.Status.Notice = m.Theme.Tf("notice.memorySavedOne", v.MemorySaved.About, m.workspacePath(v.MemorySaved.Path))
+			case v.MemorySaved.Events < 0:
+				// kmp-mcp printed no count.
+				m.Status.Notice = m.Theme.Tf("notice.memorySavedUncounted", v.MemorySaved.About, m.workspacePath(v.MemorySaved.Path))
 			}
 		}
 		if v.MemoryForgotten != nil && v.Err == nil {

@@ -99,6 +99,8 @@ type setupWizard struct {
 	probe   func(ctx context.Context, base string) []localCandidate
 	engines func(kmpApproval string) application.EngineUpdatePort
 	bases   []string
+	// noEngines records that this platform has no engine packages.
+	noEngines bool
 }
 
 func newSetupWizard(getenv func(string) string, paths setupPaths, settings *storage.UserSettingsStore, stdin io.Reader, out io.Writer) *setupWizard {
@@ -142,7 +144,14 @@ func newSetupWizard(getenv func(string) string, paths setupPaths, settings *stor
 func (w *setupWizard) run(ctx context.Context) error {
 	w.lang = setupLanguage(w.getenv)
 	fmt.Fprintf(w.out, "\n%s\n%s\n", w.t("title"), w.t("intro"))
-	if err := w.settings.Change(ctx, func(s *storage.UserSettings) { s.Language = w.lang }); err != nil {
+	_, statErr := os.Stat(w.paths.settings)
+	if err := w.settings.Change(ctx, func(s *storage.UserSettings) {
+		// LANG chooses the language of a new settings file; a saved one
+		// keeps the language the person has (review of 14 October 2026).
+		if errors.Is(statErr, os.ErrNotExist) || s.Language == "" {
+			s.Language = w.lang
+		}
+	}); err != nil {
 		return err
 	}
 	if err := w.chooseModel(ctx); err != nil {
@@ -155,7 +164,14 @@ func (w *setupWizard) run(ctx context.Context) error {
 	if err := w.installEngines(ctx); err != nil {
 		return err
 	}
-	if err := w.settings.Change(ctx, func(s *storage.UserSettings) { storage.CompleteDefaults(s, jev) }); err != nil {
+	if err := w.settings.Change(ctx, func(s *storage.UserSettings) {
+		storage.CompleteDefaults(s, jev)
+		if w.noEngines && s.Engines != nil {
+			// Required engines this platform has no package for would stop
+			// every launch (review of 14 October 2026).
+			s.Engines.Required = false
+		}
+	}); err != nil {
 		return err
 	}
 	fmt.Fprintln(w.out, w.t("settings.complete", map[bool]string{true: w.t("jev.on"), false: w.t("jev.off")}[jev]))
@@ -210,6 +226,12 @@ func (w *setupWizard) chooseModel(ctx context.Context) error {
 		return w.chooseOpenRouter(ctx)
 	case 2:
 		return w.chooseLocal(ctx, locals)
+	}
+	if len(locals) == 0 && w.openRouterKey() == "" {
+		// Nothing would answer in the console: on 14 October 2026 review
+		// found it exiting right after "press Enter to open the console".
+		fmt.Fprintln(w.out, w.t("model.skippedNoProvider"))
+		return nil
 	}
 	fmt.Fprintln(w.out, w.t("model.skipped"))
 	return nil
@@ -345,12 +367,20 @@ func (w *setupWizard) chooseLocal(ctx context.Context, locals []localCandidate) 
 	if window == 0 {
 		window = 32768
 	}
-	answer, err := w.ask(w.t("local.context"), strconv.Itoa(window))
-	if err != nil {
-		return err
-	}
-	if window, err = strconv.Atoi(answer); err != nil || window < domain.MinimumContextWindow {
-		return fmt.Errorf("the context window must be a number of at least %d tokens", domain.MinimumContextWindow)
+	for {
+		// A wrong answer is asked again rather than ending the setup.
+		answer, err := w.ask(w.t("local.context"), strconv.Itoa(window))
+		if err != nil {
+			return err
+		}
+		if n, err := strconv.Atoi(answer); err == nil && n >= domain.MinimumContextWindow {
+			window = n
+			break
+		}
+		if w.quiet {
+			return fmt.Errorf("the context window must be a number of at least %d tokens", domain.MinimumContextWindow)
+		}
+		fmt.Fprintln(w.out, w.t("local.contextInvalid", domain.MinimumContextWindow))
 	}
 	local := picked.localModel(window)
 	if err := w.settings.Change(ctx, func(s *storage.UserSettings) {
@@ -371,8 +401,6 @@ func (w *setupWizard) chooseLocal(ctx context.Context, locals []localCandidate) 
 	return nil
 }
 
-// installEngines downloads, verifies, prepares and connects KMP and MADE,
-// the console's default memory and ceremony engines.
 // chooseJev asks for the TypeSafe key, once, hidden; Enter skips. The
 // environment's key is used as it is.
 func (w *setupWizard) chooseJev(ctx context.Context) (bool, error) {
@@ -427,6 +455,7 @@ func (w *setupWizard) installEngines(ctx context.Context) error {
 	results, err := w.engines("auto").Update(ctx)
 	if errors.Is(err, application.ErrEngineUpdatePlatform) {
 		fmt.Fprintln(w.out, w.t("engines.platform"))
+		w.noEngines = true
 		return nil
 	}
 	for _, result := range results {

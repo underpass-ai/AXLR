@@ -63,7 +63,9 @@ func (m AppModel) slashLimit() int {
 	return max(1, min(slashSuggestionMax, m.Layout.BodyHeight-2))
 }
 
-var slashWord = regexp.MustCompile(`^/[a-zA-Z-]+$`)
+// slashWord is a draft that reads as a command: "/memoría", a typo with an
+// accent, is refused like "/memroy" rather than sent to the model.
+var slashWord = regexp.MustCompile(`^/[\p{L}-]+$`)
 
 // slashAliasesOf lists each command's other names, sorted, to show dim
 // after it in the menu.
@@ -231,7 +233,7 @@ func (m AppModel) slashMenu(suggestions []slashCommand) []string {
 	nameWidth, aliasWidth := 0, 0
 	for _, c := range shown {
 		nameWidth = max(nameWidth, len(c.name))
-		aliasWidth = max(aliasWidth, len(aliases(c)))
+		aliasWidth = max(aliasWidth, ansi.StringWidth(aliases(c)))
 	}
 	lines := make([]string, 0, len(shown)+1)
 	for offset, c := range shown {
@@ -255,13 +257,13 @@ func (m AppModel) slashMenu(suggestions []slashCommand) []string {
 		row := marker + c.name + strings.Repeat(" ", nameWidth-len(c.name)+2)
 		aliasStart := len(row)
 		if aliasWidth > 0 {
-			row += alias + strings.Repeat(" ", aliasWidth-len(alias)+2)
+			row += alias + strings.Repeat(" ", aliasWidth-ansi.StringWidth(alias)+2)
 		} else {
 			row += " "
 		}
 		rendered := style.Render(ansi.Truncate(row+m.Theme.T(c.summary), width, "…"))
 		if alias != "" && !m.Theme.Monochrome && aliasStart < width {
-			rendered = lipgloss.StyleRanges(rendered, lipgloss.NewRange(aliasStart, min(width, aliasStart+len(alias)), aliasStyle))
+			rendered = lipgloss.StyleRanges(rendered, lipgloss.NewRange(aliasStart, min(width, aliasStart+ansi.StringWidth(alias)), aliasStyle))
 		}
 		lines = append(lines, m.zones.Mark(fmt.Sprintf("%sslash-%d", m.prefix, i), rendered))
 	}

@@ -55,8 +55,19 @@ func (s *MemoryAgentStore) Remember(_ context.Context, store string, agentID dom
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o700); err != nil {
 		return err
 	}
-	temporary := s.path + ".tmp"
-	if err := os.WriteFile(temporary, append(data, '\n'), 0o600); err != nil {
+	// A temporary file of its own: consoles in other processes write this
+	// file too.
+	file, err := os.CreateTemp(filepath.Dir(s.path), ".kmp-agents-*")
+	if err != nil {
+		return err
+	}
+	temporary := file.Name()
+	defer os.Remove(temporary)
+	if _, err := file.Write(append(data, '\n')); err != nil {
+		file.Close()
+		return err
+	}
+	if err := file.Close(); err != nil {
 		return err
 	}
 	return os.Rename(temporary, s.path)

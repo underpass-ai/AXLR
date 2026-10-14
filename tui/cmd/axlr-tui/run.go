@@ -103,6 +103,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if *importFlag != "" && (*sessionFlag != "" || continueFlag || *repairFlag != "" || *improveFlag != "") {
 		return fail(errors.New("--import resumes the imported session; it cannot be combined with --session, --continue, --repair or --improve"))
 	}
+	if *importFlag != "" && *modelFlag != "" {
+		// The bundle's session keeps its model; checked after the import,
+		// the session stayed saved and the next try was refused as known.
+		return fail(errors.New("--import resumes the session with its own model; drop --model and change it with /model"))
+	}
 	if continueFlag {
 		switch {
 		case *sessionFlag != "":
@@ -609,7 +614,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			sessionCeremony.Judge = judge.Port
 		}
 		for _, line := range []string{
-			ensureWorkGrant(ctx, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}, filepath.Join(stateBase, "axlr", "made-grant"), madesetup.WorkGrantID),
+			ensureWorkGrant(ctx, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}, filepath.Join(stateBase, "axlr", "made-grant"), madesetup.WorkGrantFor(madeWorkIdentity(configPath, registrations))),
 			prepareSessionDefinition(ctx, ceremonies.Engine, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}),
 			sweepAbandonedSessions(ctx, sessionCeremony, store, workspace, consoleSessionID(session, newID)),
 		} {
