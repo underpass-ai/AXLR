@@ -1323,6 +1323,10 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 		m.Composer.Input.Reset()
 		m.clearStaleError()
 		m.refreshTranscript()
+		// A person who sends goes to what they sent: on 14 October 2026 a
+		// prompt sent while scrolled up left it, its tool rows and its
+		// approval card below the view behind "↓ 34 new lines · End".
+		m.jumpBottom()
 		// The queued message waits for the current model step: the turn
 		// takes it after its next tool step, or it starts the next turn.
 		return m, nil
@@ -1368,6 +1372,7 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	}
 	m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: prompt})
 	m.refreshTranscript()
+	m.jumpBottom()
 	cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 		return m.deps.Start.Execute(ctx, s, prompt, emit)
 	})

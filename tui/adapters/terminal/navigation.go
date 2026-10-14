@@ -862,6 +862,8 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		m.overlay = ""
 		m.resumeTurnClock()
+		// Continuing is sending too: the turn's rows and cards come in below.
+		m.jumpBottom()
 		u := application.SessionControlUseCase{Store: m.deps.Store, Agent: m.deps.Agent}
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			return u.Resume(ctx, s, emit)
