@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -191,8 +192,16 @@ func TestClosedTurnsLeaveExactSchemasOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var stub map[string]any
-	if err := json.Unmarshal([]byte(projection.Messages[2].Content), &stub); err != nil || stub["name"] != "kmp_write_memory" || stub["schema_omitted_bytes"] != float64(len(schema)) || !strings.Contains(stub["recover"].(string), "axlr_tools") {
+	// The stub has the shortened writes' shape (B26): the name, and what
+	// was left out under "[omitted]", never the flat schema_omitted_bytes
+	// and recover keys.
+	var stub struct {
+		Name    string         `json:"name"`
+		Omitted map[string]any `json:"[omitted]"`
+		Flat    *int           `json:"schema_omitted_bytes"`
+		Recover *string        `json:"recover"`
+	}
+	if err := json.Unmarshal([]byte(projection.Messages[2].Content), &stub); err != nil || stub.Name != "kmp_write_memory" || stub.Omitted["schema_bytes"] != float64(len(schema)) || !strings.Contains(fmt.Sprint(stub.Omitted["note"]), "axlr_tools") || stub.Flat != nil || stub.Recover != nil {
 		t.Fatalf("closed schema: %s (%v)", projection.Messages[2].Content, err)
 	}
 	if string(projection.Messages[3].Content) != listing || string(projection.Messages[7].Content) != schema || string(original[2].Content) != schema {

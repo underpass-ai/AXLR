@@ -11,7 +11,7 @@ import (
 const closedSchemaBytes = 512
 
 // closedSchemaRecover is the note in place of the schema.
-const closedSchemaRecover = "The turn has closed and this exact schema was left out of the context; call axlr_tools with this name again if you need it."
+const closedSchemaRecover = "The turn has closed and this exact schema was left out of the context; call axlr_tools with this name again if you need it. This is a record of the result, not a schema to call with."
 
 // closedSchemaResult shortens the result of an axlr_tools call of a closed
 // turn that returned one exact schema (called with name): it kept 7.4 KB of
@@ -35,7 +35,11 @@ func closedSchemaResult(call root.ToolCall, result string) (root.Text, bool) {
 	if json.Unmarshal([]byte(result), &failure) == nil && failure.Error != "" {
 		return "", false // a refusal says what went wrong: keep it
 	}
-	stub := map[string]any{"name": args.Name, "schema_omitted_bytes": len(result), "recover": closedSchemaRecover}
+	// What was left out sits under omittedKey, as a shortened write's text
+	// does since 14 October 2026: the earlier flat form
+	// ({"schema_omitted_bytes","recover"}) was the shape glm-5.3-flash
+	// copied back into a call when it met it on a write.
+	stub := map[string]any{"name": args.Name, omittedKey: map[string]any{"schema_bytes": len(result), "note": closedSchemaRecover}}
 	if args.Path != "" {
 		stub["path"] = args.Path
 	}
