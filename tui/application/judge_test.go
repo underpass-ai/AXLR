@@ -233,3 +233,42 @@ func TestJudgeFinalCheckIsSkippedWithNoCallsLeft(t *testing.T) {
 		}
 	}
 }
+
+// On 14 October 2026 Jev was sent "Di hola en una palabra." with the
+// console's [AXLR · recall] note glued on, and after a denied call its
+// doubt sent the model into 60k tokens of bookkeeping. Jev now reads only
+// what the person wrote, and a request in which the person denied or
+// cancelled a call is not checked: the person already decided.
+func TestJudgeFinalCheckReadsThePersonAndSkipsTheirDecisions(t *testing.T) {
+	state, err := finalCheckState([]root.Message{
+		{Role: root.RoleUser, Content: "Di hola en una palabra.\n\n" + RecallNotePrefix + " Memory of project:ws:\n- calc.Max returns the largest"},
+		{Role: root.RoleAssistant, Content: "Hola"},
+	})
+	if err != nil || !strings.Contains(state, `"request":"Di hola en una palabra."`) || strings.Contains(state, "calc.Max") {
+		t.Fatalf("%s %v", state, err)
+	}
+	for result, checked := range map[string]bool{"tool call denied by user: no": false, cancelledByPerson: false, "contents": true} {
+		stub := &judgeStub{verdict: JudgementVerdict{Yes: yes(0.9)}}
+		s := turnSession(t)
+		if err := s.BeginTurn("lee calc.go", turnTools()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.CompleteAssistant(assistant("", call("r1", "read"))); err != nil {
+			t.Fatal(err)
+		}
+		decision := domain.DecisionApprove
+		if !checked {
+			decision = domain.DecisionDeny
+		}
+		if err := s.RecordToolOutcome("r1", decision, domain.ToolOutcome{Content: root.Text(result), IsError: !checked}); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.CompleteAssistant(assistant("No lo leí.")); err != nil {
+			t.Fatal(err)
+		}
+		u := ContinueTurnUseCase{Store: &memoryStore{}, Judge: &Judge{Port: stub, FinalCheck: true}}
+		if _, err := checkFinalAnswer(context.Background(), &s, u, ignoreEvent); err != nil || (len(stub.questions) == 1) != checked {
+			t.Fatalf("%q: judged %d, want checked=%v (%v)", result, len(stub.questions), checked, err)
+		}
+	}
+}

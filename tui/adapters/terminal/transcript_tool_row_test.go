@@ -226,3 +226,20 @@ func TestLocalReadRowShowsTheBytesRead(t *testing.T) {
 		t.Fatalf("exec result size %d, want %d", got, len(result))
 	}
 }
+
+// On 14 October 2026 a Jev follow-up's reply read " Hola", with the
+// model's leading space: a reply is shown without its leading whitespace.
+func TestAReplyIsShownWithoutLeadingWhitespace(t *testing.T) {
+	tr := NewTranscript()
+	tr.SetWidth(80)
+	tr.SetSession(domain.SessionState{Messages: []root.Message{{Role: root.RoleUser, Content: "Di hola"}, {Role: root.RoleAssistant, Content: " \n Hola"}}}, "", Theme{ID: domain.ThemeInk})
+	var reply *transcriptRow
+	for i := range tr.rows {
+		if tr.rows[i].Kind == transcriptRowAssistant {
+			reply = &tr.rows[i]
+		}
+	}
+	if reply == nil || reply.Text != "Hola" {
+		t.Fatalf("reply row %+v", reply)
+	}
+}

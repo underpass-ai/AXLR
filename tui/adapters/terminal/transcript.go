@@ -172,8 +172,10 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 		case m.Role == root.RoleAssistant && strings.TrimSpace(string(m.Content)) != "":
 			// On 14 October 2026 glm-5.3-flash sent " " before its tool
 			// calls, and three blank rows stood between a prompt and its
-			// tool row: whitespace alone is not a reply.
-			t.appendRow(transcriptRow{Text: string(m.Content), Kind: transcriptRowAssistant, Markdown: true, At: at})
+			// tool row: whitespace alone is not a reply. The same day a
+			// follow-up reply read " Hola": a reply is shown without the
+			// whitespace it starts with.
+			t.appendRow(transcriptRow{Text: strings.TrimLeft(string(m.Content), " \t\r\n"), Kind: transcriptRowAssistant, Markdown: true, At: at})
 		case m.Role != root.RoleAssistant && m.Role != root.RoleTool:
 			t.appendRow(transcriptRow{Text: theme.T("role."+string(m.Role)) + ": " + string(m.Content), Kind: transcriptRowPlain})
 		}
