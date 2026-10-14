@@ -27,10 +27,25 @@ func (m AppModel) pending() (domain.PendingTool, bool) {
 // the composer a letter is still taken as typing, not as a card's answer.
 const approvalTypingWindow = 800 * time.Millisecond
 
+// approvalReadWindow is how soon after a card opens a letter is too quick
+// to be an answer to it, for a person who was writing a message: someone
+// who paused, then resumed typing as the card appeared, is still typing.
+const approvalReadWindow = 500 * time.Millisecond
+
+// writingWindow is how recent the composer's last keystroke must be for
+// the person to count as writing a message.
+const writingWindow = 10 * time.Second
+
 // typingIntoCard says whether k is a letter that continues what the person
 // was typing when the approval card opened.
 func (m AppModel) typingIntoCard(k tea.KeyPressMsg) bool {
-	return k.Text != "" && !m.denying && !m.typedAt.IsZero() && time.Since(m.typedAt) < approvalTypingWindow
+	if k.Text == "" || m.denying || m.typedAt.IsZero() {
+		return false
+	}
+	if time.Since(m.typedAt) < approvalTypingWindow {
+		return true
+	}
+	return time.Since(m.typedAt) < writingWindow && !m.cardShownAt.IsZero() && time.Since(m.cardShownAt) < approvalReadWindow
 }
 
 func (m AppModel) approvalFocus() bool {
@@ -80,6 +95,7 @@ func (m *AppModel) syncApproval() {
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
+		m.cardShownAt = time.Now()
 		// A reason being typed was for another call.
 		m.denying = false
 		// An exec card is the command as it will run, not its JSON: the

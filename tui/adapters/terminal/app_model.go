@@ -38,7 +38,9 @@ type AppModel struct {
 	Busy          bool
 	// typedAt is when a key last changed the composer's text; an approval
 	// card ignores letters typed right after it (see typingIntoCard).
-	typedAt          time.Time
+	typedAt time.Time
+	// cardShownAt is when the approval card on screen opened.
+	cardShownAt      time.Time
 	Approval         ApprovalDialog
 	SearchBox        SearchBox
 	Palette          ActionPalette
