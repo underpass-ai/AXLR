@@ -171,6 +171,17 @@ func (s SessionState) promptIndexes() []int {
 	return prompts
 }
 
+// TurnPrompt is the message that began the person's turn number turn
+// (from 1), console notes appended to it included; false for a turn that
+// is not there.
+func (s SessionState) TurnPrompt(turn int) (axlr.Text, bool) {
+	prompts := s.promptIndexes()
+	if turn < 1 || turn > len(prompts) {
+		return "", false
+	}
+	return s.Messages[prompts[turn-1]].Content, true
+}
+
 // TurnOf is the turn (from 1) whose calls include call, or 0.
 func (s SessionState) TurnOf(call axlr.ToolCallID) int {
 	prompts := s.promptIndexes()

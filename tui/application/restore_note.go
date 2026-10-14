@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -31,7 +32,7 @@ func restoreNote(state domain.SessionState) string {
 			paths = append(paths, string(file.Path))
 		}
 		if line.Restore.Undo {
-			parts = append(parts, fmt.Sprintf("%s to what %s before your last turn (with /undo)", strings.Join(paths, ", "), held(len(paths))))
+			parts = append(parts, fmt.Sprintf("%s to what %s before %s (with /undo)", strings.Join(paths, ", "), held(len(paths)), undoneTurn(state, line.Restore.Files[0].To)))
 			continue
 		}
 		file := line.Restore.Files[0]
@@ -42,6 +43,22 @@ func restoreNote(state domain.SessionState) string {
 	}
 	return RestoreNotePrefix + " Since your last answer the person restored " + strings.Join(parts, "; and ") + ". That was the person's decision, not a fault: the files on disk now hold the restored content, so local_read a file before relying on what you wrote to it or changing it again."
 }
+
+// undoneTurn names the turn an undo put back, by the call it went back
+// before. /undo reaches the most recent turn that changed files, which is
+// not always the last one: the note said "your last turn" whatever turn it
+// was, and the model looked for the restored change in the wrong place.
+func undoneTurn(state domain.SessionState, call root.ToolCallID) string {
+	turn, last := state.TurnOf(call), state.TurnsBefore(len(state.Messages))
+	if turn == 0 || turn == last {
+		return "your last turn"
+	}
+	prompt, _ := state.TurnPrompt(turn)
+	return fmt.Sprintf("your turn %d of %d, not your last, the one the person began with %q", turn, last, excerpt(personTyped(string(prompt)), restoreNotePromptBytes))
+}
+
+// restoreNotePromptBytes bounds the prompt that names an undone turn.
+const restoreNotePromptBytes = 120
 
 func held(files int) string {
 	if files == 1 {

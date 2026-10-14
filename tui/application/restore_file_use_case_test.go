@@ -205,3 +205,20 @@ func TestTheNextPromptTellsTheModelWhatThePersonRestored(t *testing.T) {
 		t.Fatalf("the note was repeated: %q", prompts[1])
 	}
 }
+
+// /undo reaches the most recent turn that changed files, which need not be
+// the last one; the note said "before your last turn" whatever turn it
+// undid. It now names the turn and the person's prompt that began it.
+func TestTheRestoreNoteNamesTheTurnAnUndoReached(t *testing.T) {
+	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "calc/calc.go", Before: "one", After: "two"}}}, []changeStep{{"w2", domain.FileChange{Path: "b.go", Before: "b0", After: "b1"}}})
+	files := &workspaceFiles{files: map[string]string{"calc/calc.go": "two", "b.go": "b1"}}
+	store := &memoryStore{}
+	restore := RestoreFileUseCase{Tools: files, Store: store}
+	if _, err := restore.UndoTurn(context.Background(), &s, 1); err != nil {
+		t.Fatal(err)
+	}
+	note := restoreNote(s.Export())
+	if !strings.Contains(note, `calc/calc.go to what it held before your turn 1 of 2, not your last, the one the person began with "turn 1" (with /undo)`) || strings.Contains(note, "your last turn") {
+		t.Fatalf("note %q", note)
+	}
+}
