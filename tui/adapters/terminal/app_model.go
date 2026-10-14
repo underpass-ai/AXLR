@@ -787,6 +787,8 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.restoreOperation = 0
 			if v.Err == nil {
 				m.Status.Notice = m.restoredNotice(v.Session.Export())
+			} else if changed := (application.FileChangedError{}); errors.As(v.Err, &changed) {
+				m.Status.Error = m.Theme.Tf("changes.restoreChanged", singleLine(string(changed.Path)))
 			}
 		}
 		if v.Fresh && v.Err == nil {

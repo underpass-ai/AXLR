@@ -157,9 +157,20 @@ func (u RestoreFileUseCase) unchanged(ctx context.Context, target restoreTarget)
 		ContentSHA256 string `json:"content_sha256"`
 	}
 	if json.Unmarshal(output, &read) != nil || read.Truncated || read.ContentSHA256 != string(root.DigestOf([]byte(target.current))) {
-		return fmt.Errorf("cannot restore %s: it changed after step %s; nothing was restored", target.path, target.from)
+		return FileChangedError{Path: target.path}
 	}
 	return nil
+}
+
+// FileChangedError refuses a restore of a file that no longer holds what
+// the session wrote, so the console can say so in the person's language.
+// On 14 October 2026 the refusal named the step by its call id
+// ("it changed after step chatcmpl-tool-961032f2…"), which the person never
+// sees anywhere else.
+type FileChangedError struct{ Path root.RelativePath }
+
+func (e FileChangedError) Error() string {
+	return fmt.Sprintf("cannot restore %s: it changed after the session wrote it; nothing was restored", e.Path)
 }
 
 func (u RestoreFileUseCase) write(ctx context.Context, target restoreTarget) error {

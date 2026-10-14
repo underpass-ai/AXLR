@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -207,6 +209,31 @@ func TestExportWritesTheSessionAsMarkdown(t *testing.T) {
 	m = update(m, ControlIntent("send"))
 	if !strings.Contains(m.Status.Error, "nothing to export") || m.Composer.Input.Value() != "/export" {
 		t.Fatalf("empty session: error=%q", m.Status.Error)
+	}
+}
+
+// On 14 October 2026 a failed /export read "…/s.md already exists; export
+// to another path" and "mkdir …/notas/s.md: not a directory" in English in
+// a Spanish console: it is said in the person's language, with the path
+// they typed or the file in the way.
+func TestExportFailuresAreSaidInThePersonsLanguage(t *testing.T) {
+	s := usedSession(t)
+	m, _ := selectionModel(t, &s)
+	m.deps.ExportFiles = storage.ExportFiles{}
+	m.Theme.Locale = Spanish
+	existing := filepath.Join(t.TempDir(), "s.md")
+	if err := os.WriteFile(existing, []byte("kept"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m.Composer.Input.SetValue("/export " + existing)
+	m = update(m, ControlIntent("send"))
+	if m.Status.Error != "No se ha exportado: "+existing+" ya existe; indica otra ruta" {
+		t.Fatalf("collision: %q", m.Status.Error)
+	}
+	m.Composer.Input.SetValue("/export " + filepath.Join(existing, "x"))
+	m = update(m, ControlIntent("send"))
+	if m.Status.Error != "No se ha exportado: "+shortenHome(existing)+" es un archivo, no una carpeta; indica otra ruta" {
+		t.Fatalf("file in the way: %q", m.Status.Error)
 	}
 }
 

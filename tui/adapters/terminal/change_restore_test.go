@@ -123,7 +123,7 @@ func TestUInChangesRestoresTheSelectedStep(t *testing.T) {
 	m = update(m, typed('u'))
 	next, cmd = m.Update(typed('y'))
 	m = drain(t, next.(AppModel), cmd)
-	if files["b.go"] != "edited by hand\n" || !strings.Contains(m.Status.Error, "changed after step w3") {
+	if files["b.go"] != "edited by hand\n" || m.Status.Error != "Not restored: b.go changed after the session wrote it, and nothing was put back" {
 		t.Fatalf("b.go %q, error %q", files["b.go"], m.Status.Error)
 	}
 }
