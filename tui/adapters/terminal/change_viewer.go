@@ -400,11 +400,22 @@ func (v *ChangeViewer) renderDetail() {
 	if c.Unavailable != "" {
 		content = v.Theme.Muted(ansi.Wrap(v.Theme.T("changes."+c.Unavailable), max(1, v.Details.Width()), ""))
 	} else if content == "" {
-		content = v.Theme.Muted(v.Theme.T("changes.emptyFile"))
+		content = v.Theme.Muted(ansi.Wrap(v.Theme.T(emptyDiffKey(c)), max(1, v.Details.Width()), ""))
 	}
 	offset := v.Details.YOffset()
 	v.Details.SetContent(content)
 	v.Details.SetYOffset(offset)
+}
+
+// emptyDiffKey says why a change has no diff lines: a file created empty,
+// or a file back to what it held before, as after a restore. On 14 October
+// 2026 a file put back with u read "Empty file created." under +0 -0,
+// though it held its 3 KB intact.
+func emptyDiffKey(c domain.FileChange) string {
+	if c.Created && c.Before == "" && c.After == "" {
+		return "changes.emptyFile"
+	}
+	return "changes.noNetChange"
 }
 
 func (v *ChangeViewer) View(zones *zone.Manager, prefix string, width, height int) string {
