@@ -22,6 +22,11 @@ func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domai
 	if err != nil || !known {
 		return domain.AvailableTool{}, root.JSONValue{}, known, err
 	}
+	if refusal, hidden := hiddenFromModel(tool); hidden {
+		// Called by its own name, not through the bridge: refused all the
+		// same (until 14 October 2026 such a call resolved and ran).
+		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New(refusal)
+	}
 	if tool.Identity.Kind != domain.ToolKindHost || tool.Identity.LocalOperation != domain.HostOperationCallTool {
 		return tool, call.Arguments, true, nil
 	}
@@ -55,9 +60,9 @@ func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domai
 
 // hiddenFromModel reports a plugin tool the console keeps to itself and
 // the refusal the model reads (decisions D6 and G6 of the lifecycle
-// integration design): the bridge refuses it and axlr_tools neither lists
-// nor describes it, so the model never sees its schema; the console's own
-// calls do not pass here. The engine adapter decides it (the tool's
+// integration design): the bridge and a direct call by its name refuse it
+// and axlr_tools neither lists nor describes it, so the model never sees
+// its schema; the console's own calls do not pass here. The engine adapter decides it (the tool's
 // surface).
 func hiddenFromModel(tool domain.AvailableTool) (string, bool) {
 	if tool.Identity.Kind != domain.ToolKindPlugin || tool.Surface.Hidden == "" {

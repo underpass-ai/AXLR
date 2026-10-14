@@ -89,15 +89,31 @@ func DestructiveReason(workspace Workspace, program string, args []string, cwd s
 	return ""
 }
 
+// wrapperValues are the options of each wrapper that take the next word
+// as their value: "nice -n 10 rm" runs rm, not 10 (read as the program
+// until 14 October 2026).
+var wrapperValues = map[string]map[string]bool{
+	"sudo":  {"-u": true, "-g": true, "-C": true, "-D": true, "-h": true, "-p": true, "-r": true, "-t": true, "-T": true, "-U": true, "--user": true, "--group": true, "--chdir": true, "--host": true, "--prompt": true, "--role": true, "--type": true, "--other-user": true, "--close-from": true, "--command-timeout": true},
+	"doas":  {"-u": true, "-C": true},
+	"env":   {"-u": true, "-C": true, "-S": true, "--unset": true, "--chdir": true, "--split-string": true},
+	"nice":  {"-n": true, "--adjustment": true},
+	"time":  {"-f": true, "-o": true, "--format": true, "--output": true},
+	"nohup": {},
+}
+
 // unwrapPrivilege strips sudo, doas and env prefixes.
 func unwrapPrivilege(program string, args []string) (string, []string) {
 	for {
 		base := filepath.Base(program)
-		if (base != "sudo" && base != "doas" && base != "env" && base != "nice" && base != "nohup" && base != "time") || len(args) == 0 {
+		values, wrapper := wrapperValues[base]
+		if !wrapper || len(args) == 0 {
 			return program, args
 		}
 		i := 0
 		for i < len(args) && (strings.HasPrefix(args[i], "-") || (base == "env" && strings.Contains(args[i], "="))) {
+			if values[args[i]] {
+				i++ // the option's value
+			}
 			i++
 		}
 		if i >= len(args) {
@@ -108,13 +124,28 @@ func unwrapPrivilege(program string, args []string) (string, []string) {
 }
 
 // shellScript is the -c string of a shell call, "" when it runs a file.
+// Any cluster of short flags with c in it counts: sh -xc and bash -euc run
+// their string as -c does.
 func shellScript(args []string) string {
 	for i, arg := range args {
-		if (arg == "-c" || arg == "-lc" || arg == "-ec" || arg == "-ic") && i+1 < len(args) {
+		if commandFlag(arg) && i+1 < len(args) {
 			return args[i+1]
 		}
 	}
 	return ""
+}
+
+// commandFlag reports a cluster of short shell flags that holds -c.
+func commandFlag(arg string) bool {
+	if len(arg) < 2 || arg[0] != '-' || arg[1] == '-' {
+		return false
+	}
+	for _, r := range arg[1:] {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
+			return false
+		}
+	}
+	return strings.ContainsRune(arg[1:], 'c')
 }
 
 // destructiveScript matches a shell string literally: a card for a false
