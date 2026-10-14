@@ -172,12 +172,12 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 		for _, cite := range task.Context {
 			t.Context = append(t.Context, domain.Citation{Path: cite.Path, Line: cite.Line, Quote: cite.Quote})
 		}
-		if task.TestFirst && len(t.Scope) > 0 && !slices.ContainsFunc(t.Scope, func(p string) bool { return !testLikePath(p) }) {
+		if task.TestFirst && len(t.Scope) > 0 && !slices.ContainsFunc(t.Scope, func(p string) bool { return !testFilePath(p) }) {
 			// The red step must fail first; a task that may change only tests
 			// cannot make code an earlier task wrote fail.
 			defect("task %s: test_first needs a file to change after the failing test, but its scope holds only tests; add the code it tests to its scope, or set test_first false when an earlier task writes that code", task.ID)
 		}
-		if task.TestFirst && len(t.Scope) > 0 && !slices.ContainsFunc(t.Scope, testLikePath) {
+		if task.TestFirst && len(t.Scope) > 0 && !slices.ContainsFunc(t.Scope, mayHoldTests) {
 			// The mirror case: the red step writes a failing test first, and
 			// a task that may change no test cannot. On 14 October 2026 a
 			// plan gave test-first add-max only calc/calc.go while

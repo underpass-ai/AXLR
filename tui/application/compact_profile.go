@@ -165,7 +165,7 @@ func compactRefusal(s domain.Session, pending domain.PendingTool) error {
 		var target struct {
 			Path string `json:"path"`
 		}
-		if json.Unmarshal(pending.Call.Arguments.Bytes(), &target) == nil && !testLikePath(target.Path) {
+		if json.Unmarshal(pending.Call.Arguments.Bytes(), &target) == nil && !mayHoldTests(target.Path) {
 			return fmt.Errorf("%s %s refused: in red write only the failing test; change the code in green, after handing red back", name, target.Path)
 		}
 	}
@@ -541,9 +541,61 @@ func normalizeExec(arguments root.JSONValue) (root.JSONValue, bool) {
 	return value, true
 }
 
-// testLikePath reports a file that holds tests by the usual naming of most
-// languages: a base name containing "test" or "spec".
-func testLikePath(p string) bool {
-	base := strings.ToLower(p[strings.LastIndex(p, "/")+1:])
-	return strings.Contains(base, "test") || strings.Contains(base, "spec")
+// testFilePath reports a file that holds tests by its language's naming:
+// Go's _test.go, Python's test_*.py and *_test.py, JavaScript's and
+// TypeScript's .test. and .spec., Java's and Kotlin's *Test, *Tests and
+// *IT, Ruby's _spec.rb, and the like; or any file under a test directory
+// (test, tests, __tests__, spec: Rust's integration tests, Maven's
+// src/test). It replaced a base name containing "test" or "spec", which
+// took latest.go, contest.go and inspector.go for tests (desk review of 14
+// October 2026).
+func testFilePath(p string) bool {
+	p = strings.ReplaceAll(p, "\\", "/")
+	segments := strings.Split(p, "/")
+	for _, dir := range segments[:len(segments)-1] {
+		switch strings.ToLower(dir) {
+		case "test", "tests", "__tests__", "spec", "specs":
+			return true
+		}
+	}
+	base := segments[len(segments)-1]
+	dot := strings.LastIndex(base, ".")
+	if dot <= 0 {
+		return false
+	}
+	name, ext := base[:dot], strings.ToLower(base[dot+1:])
+	lower := strings.ToLower(name)
+	switch ext {
+	case "go", "dart", "exs", "ex":
+		return strings.HasSuffix(lower, "_test")
+	case "py":
+		return strings.HasPrefix(lower, "test_") || strings.HasSuffix(lower, "_test") || lower == "conftest"
+	case "js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts":
+		return strings.HasSuffix(lower, ".test") || strings.HasSuffix(lower, ".spec") || strings.HasSuffix(lower, "_test")
+	case "rb":
+		return strings.HasSuffix(lower, "_spec") || strings.HasSuffix(lower, "_test") || strings.HasPrefix(lower, "test_")
+	case "java", "kt", "kts", "scala", "groovy", "cs", "php", "swift", "m":
+		// Class-named tests are capitalized: FooTest, FooTests, FooIT,
+		// FooSpec, TestFoo.
+		return strings.HasSuffix(name, "Test") || strings.HasSuffix(name, "Tests") || strings.HasSuffix(name, "IT") || strings.HasSuffix(name, "Spec") || len(name) > 4 && strings.HasPrefix(name, "Test") && name[4] >= 'A' && name[4] <= 'Z'
+	case "c", "cc", "cpp", "cxx", "h", "hpp":
+		return strings.HasSuffix(lower, "_test") || strings.HasSuffix(lower, "_unittest") || strings.HasPrefix(lower, "test_")
+	case "bats":
+		return true
+	}
+	return false
+}
+
+// inFileTests reports a source file whose language keeps its unit tests
+// in the file itself, as Rust does in a #[cfg(test)] module: such a file
+// may be the test a red step writes, so a test-first task in Rust is not
+// refused for having no separate test file.
+func inFileTests(p string) bool {
+	return strings.HasSuffix(strings.ToLower(p), ".rs")
+}
+
+// mayHoldTests reports a file a test can be written in: a test file, or a
+// source file of a language with in-file tests.
+func mayHoldTests(p string) bool {
+	return testFilePath(p) || inFileTests(p)
 }

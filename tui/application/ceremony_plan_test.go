@@ -266,3 +266,38 @@ func TestThePlannerIsToldItsRoleAndToolsFirst(t *testing.T) {
 		}
 	}
 }
+
+// The test-first checks guessed tests by a base name containing "test" or
+// "spec": latest.go, contest.go and inspector.go passed for tests and a
+// Rust task, whose tests live in the source file, was refused (desk
+// review of 14 October 2026). Each language's own naming decides now, and
+// a Rust source may hold the failing test.
+func TestTestFilesAreRecognisedByTheirLanguagesNaming(t *testing.T) {
+	tests := []string{"calc/calc_test.go", "pkg/test_parser.py", "pkg/parser_test.py", "conftest.py", "src/app.test.ts", "src/app.spec.js", "web/Button.test.tsx",
+		"src/test/java/calc/CalcTest.java", "app/CalcTests.kt", "app/CalcIT.java", "lib/calc_spec.rb", "test/calc_test.rb", "tests/integration.rs", "__tests__/app.js",
+		"CalcTests.cs", "calc_unittest.cc", "test_calc.c", "calc_test.exs", "check.bats"}
+	for _, p := range tests {
+		if !testFilePath(p) || !mayHoldTests(p) {
+			t.Errorf("%s is a test file", p)
+		}
+	}
+	code := []string{"latest.go", "contest.go", "inspector.go", "calc/testing.go", "attestation.py", "spectrum.ts", "Contest.java", "Testament.java", "test.go", "README.md"}
+	for _, p := range code {
+		if testFilePath(p) {
+			t.Errorf("%s is not a test file", p)
+		}
+	}
+	if testFilePath("src/lib.rs") || !mayHoldTests("src/lib.rs") {
+		t.Error("a Rust source holds its unit tests")
+	}
+	// A test-first Rust task with only its source in scope is a plan; a Go
+	// task whose only "test" is latest.go is not.
+	d, _, _, _, s := planDriver(t)
+	rust := strings.Replace(goodTasks, `"scope":["textstat.go","textstat_test.go"]`, `"scope":["src/lib.rs"]`, 1)
+	rust = strings.Replace(rust, `"scope":["lines.go","lines_test.go"]`, `"scope":["latest.go"],"test_first":true`, 1)
+	report := step(t, d, &s, planArgs(t, rust))
+	text, _ := json.Marshal(report["defects"])
+	if strings.Contains(string(text), "task wordcount: test_first") || !strings.Contains(string(text), "task linecount: test_first needs a test to write first") {
+		t.Fatalf("defects %s", text)
+	}
+}

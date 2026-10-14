@@ -132,7 +132,7 @@ Under the compact profile:
 | A malformed hand-back | refused | fields the step does not take are dropped and named in the reply (`ignored_fields`); a `check_command`, or its `args`, sent as one string is split on spaces unless it holds shell syntax, and still reaches the approval card |
 | The same call twice in a row | runs | refused with "same call as before; change something" |
 | A malformed `local_exec` (also in plan workers) | runs as sent | one layer of wrapping quotes (`` ` ``, `«»`, `“”`, `‘’`, `<|"|>`) is removed from the program and each argument, and a program holding spaces without shell syntax is split; seen with Gemma 4 on vLLM |
-| `red` of a plan task | — | `local_write` and `local_edit` reach only test files (a base name containing `test` or `spec`); the code changes in `green` |
+| `red` of a plan task | — | `local_write` and `local_edit` reach only test files, by each language's naming (`_test.go`, `test_*.py`, `.test.ts`, `FooTest.java`, `_spec.rb`, a file under `test/`, `tests/` or `__tests__/`, …) or a Rust source, which keeps its tests in the file; the code changes in `green` (until 14 October 2026 any base name containing `test` or `spec` passed, `latest.go` included) |
 | Between steps | the transcript continues | the next step starts from a ledger: the request that began the ceremony, one line per accepted step with the transcript messages it spanned, then the hand-back that opened the step; the saved transcript keeps everything and `axlr_history` reads any message |
 | Memory recall / check output shown | 2 KiB / the full tail | 1 KiB / the last 2 KiB; MADE keeps the full evidence |
 
@@ -156,7 +156,7 @@ Roles in a definition describe responsibilities and do not spawn agents. Indepen
    - known, acyclic dependencies, from which it computes the waves;
    - paths inside the workspace;
    - disjoint scopes within a wave;
-   - a test-first task's scope holds both a test file and a file that is not one: one with only tests cannot make code fail first, and one with no test cannot write the failing test (refused since 14 October 2026, after a plan gave test-first `add-max` only `calc/calc.go` while `calc/calc_test.go` belonged to another task of its wave, and the worker blocked at `red`);
+   - a test-first task's scope holds both a test file and a file that is not one: one with only tests cannot make code fail first, and one with no test cannot write the failing test, a Rust source counting as one since its tests live in the file (refused since 14 October 2026, after a plan gave test-first `add-max` only `calc/calc.go` while `calc/calc_test.go` belonged to another task of its wave, and the worker blocked at `red`);
    - each citation's quote, at least 12 characters, present on its line with whitespace collapsed;
    - commands that run, with their exit recorded as the baseline;
    - a context pack of at most 12 KiB per task: the task, the scope with new files marked, the interfaces, the check, the protected files, and the cited regions with 20 lines of margin.
