@@ -99,15 +99,18 @@ func TestPreparationGrantsTheConfiguredWorkIdentityAsTheTrustedHost(t *testing.T
 	if slices.ContainsFunc(issue.env, func(e string) bool { return strings.HasPrefix(e, hostIdentityKey+"=") }) {
 		t.Fatal("grant issued under the work identity instead of the trusted host")
 	}
-	if issue.args["grant_id"] != WorkGrantID || issue.args["grantee_id"] != "made-local-host-abc-axlr-work" {
+	if issue.args["grant_id"] != grantID(WorkGrantID, "made-local-host-abc-axlr-work") || !strings.HasPrefix(issue.args["grant_id"].(string), WorkGrantID+"-") || issue.args["grantee_id"] != "made-local-host-abc-axlr-work" {
 		t.Fatalf("%v", issue.args)
+	}
+	if grantID(WorkGrantID, "made-local-host-abc-axlr-work") == grantID(WorkGrantID, "axlr-work-other") {
+		t.Fatal("two grantees share a grant id")
 	}
 	for _, action := range issue.args["actions"].([]string) {
 		if slices.Contains([]string{"approve_ceremony_guard", "issue_authorization_grant", "revoke_authorization_grant", "publish_ceremony_definition", "validate_ceremony_draft"}, action) {
 			t.Fatalf("work grant includes privileged action %s", action)
 		}
 	}
-	if approver.args["grant_id"] != ApproverGrantID || approver.args["grantee_id"] != "made-local-host-abc-axlr-work-approver" || !slices.Equal(approver.args["actions"].([]string), []string{"approve_ceremony_guard", "get_ceremony_instance"}) {
+	if approver.args["grant_id"] != grantID(ApproverGrantID, "made-local-host-abc-axlr-work-approver") || approver.args["grantee_id"] != "made-local-host-abc-axlr-work-approver" || !slices.Equal(approver.args["actions"].([]string), []string{"approve_ceremony_guard", "get_ceremony_instance"}) {
 		t.Fatalf("approver grant: %v", approver.args)
 	}
 	if slices.ContainsFunc(approver.env, func(e string) bool { return strings.HasPrefix(e, hostIdentityKey+"=") }) {

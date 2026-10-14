@@ -25,25 +25,6 @@ const (
 	maxRepairFeedback = 4 << 10
 )
 
-// RepairMarkerFile is the launcher's record of what the clone is for.
-type RepairMarkerFile struct {
-	Version    int    `json:"version"`
-	Repository string `json:"repository"`
-	Base       string `json:"base"`
-	Slug       string `json:"slug"`
-	Brief      string `json:"brief"`
-	About      string `json:"about"`
-	Issue      string `json:"issue,omitempty"`
-	// Kind is ImproveKind for an improvement clone, empty for a repair.
-	Kind    string `json:"kind,omitempty"`
-	Created string `json:"created"`
-	// Origin is the session that requested the repair from a running
-	// console, empty for a launcher clone; Build the console build that
-	// detected the defect.
-	Origin string `json:"origin_session,omitempty"`
-	Build  string `json:"build,omitempty"`
-}
-
 // repairConsoleSteps never reach the model.
 var repairConsoleSteps = map[string]bool{"propose": true, "watch": true, "decide": true, "merge": true}
 
@@ -91,13 +72,6 @@ func init() {
 	for _, rel := range strings.Fields("follows answers uses_background depends_on chosen_because triggers authorizes verified_by semantic_delta_from updates_state supports supersedes contradicts satisfies_constraint violates_constraint contributes_to excluded_from checked_against derived_from confirms_selection restates corrects component_of total_of same_event_as same_entity_as qualifies_as matches_requirement contains member_of scoped_to") {
 		memoryRelations[rel] = true
 	}
-}
-
-type memoryLinkArgument struct {
-	Ref      string `json:"ref"`
-	Rel      string `json:"rel"`
-	Why      string `json:"why"`
-	Evidence string `json:"evidence"`
 }
 
 // repairLinks keeps only the links whose ref the recall exposed. The refused
@@ -166,7 +140,7 @@ func (d *CeremonyDriver) beginRepair(ctx context.Context, s *domain.Session, run
 		case err != nil:
 			run.Memory = "KMP recall unavailable: " + bounded(err.Error(), 300)
 		case len(text) > maxCeremonyMemoryBytes:
-			prefix := "Partial KMP recall: console context shortened; recover the full about with kmp_wake before relying on omitted evidence.\n"
+			prefix := "Partial memory recall: console context shortened; recover the full about with axlr_recall (mode wake) before relying on omitted evidence.\n"
 			run.Memory = prefix + bounded(text, maxCeremonyMemoryBytes-len(prefix))
 		default:
 			run.Memory = text

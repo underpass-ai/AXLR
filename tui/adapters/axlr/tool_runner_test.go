@@ -52,9 +52,11 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 	defer e.Close()
 	runner := ToolRunner{Executor: e}
 	operations := []struct{ op, args, want string }{
-		{"write", `{"path":"file","content":"hello","mode":"create"}`, "written_bytes"},
+		// The why is the console's: the runtime, which decodes strictly,
+		// never sees it.
+		{"write", `{"path":"file","content":"hello","mode":"create","why":"create the fixture"}`, "written_bytes"},
 		{"read", `{"path":"file"}`, "hello"},
-		{"edit", `{"path":"file","old_text":"hello","new_text":"bye"}`, "written_bytes"},
+		{"edit", `{"path":"file","old_text":"hello","new_text":"bye","why":"change the fixture"}`, "written_bytes"},
 		{"read", `{"path":"file"}`, "bye"},
 		{"exec", `{"program":"/bin/echo","args":["worked"]}`, "worked"},
 	}

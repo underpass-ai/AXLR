@@ -42,90 +42,13 @@ type sessionCeremony struct {
 	Ledger       []sessionLedger  `json:"ledger,omitempty"`
 	StepCall     string           `json:"step_call,omitempty"`
 	Model        string           `json:"model,omitempty"`
+	OperationID  string           `json:"operation_id,omitempty"`
+	Reports      int              `json:"reports,omitempty"`
+	Generic      *sessionGeneric  `json:"generic,omitempty"`
 	Plan         *sessionPlan     `json:"plan,omitempty"`
 	Task         *sessionTask     `json:"task,omitempty"`
 	Incident     *sessionIncident `json:"incident,omitempty"`
 	Repair       *sessionRepair   `json:"repair,omitempty"`
-}
-
-// sessionCheck is a command the person approved; sidecars written before
-// approvals were kept have none.
-type sessionCheck struct {
-	Program string   `json:"program"`
-	Args    []string `json:"args,omitempty"`
-}
-
-type sessionTask struct {
-	Plan      string            `json:"plan"`
-	Task      string            `json:"task"`
-	Scope     []string          `json:"scope,omitempty"`
-	Protect   []string          `json:"protect,omitempty"`
-	Program   string            `json:"check_program,omitempty"`
-	Args      []string          `json:"check_args,omitempty"`
-	TestFirst bool              `json:"test_first,omitempty"`
-	Start     map[string]string `json:"start,omitempty"`
-	Frozen    map[string]string `json:"frozen,omitempty"`
-	Git       bool              `json:"git,omitempty"`
-}
-
-type sessionPlan struct {
-	ID           string   `json:"id"`
-	Awaiting     string   `json:"awaiting,omitempty"`
-	Decided      string   `json:"decided,omitempty"`
-	Granted      bool     `json:"granted,omitempty"`
-	Returns      int      `json:"returns,omitempty"`
-	ReturnReason string   `json:"return_reason,omitempty"`
-	Defects      []string `json:"defects,omitempty"`
-}
-
-type sessionLedger struct {
-	Step         string `json:"step"`
-	Iteration    int    `json:"iteration"`
-	Text         string `json:"text"`
-	FirstMessage int    `json:"first_message"`
-	LastMessage  int    `json:"last_message"`
-}
-
-type sessionRepair struct {
-	Improvement   bool     `json:"improvement,omitempty"`
-	Repository    string   `json:"repository,omitempty"`
-	Base          string   `json:"base,omitempty"`
-	Branch        string   `json:"branch,omitempty"`
-	Slug          string   `json:"slug,omitempty"`
-	Title         string   `json:"title,omitempty"`
-	CauseRef      string   `json:"cause_ref,omitempty"`
-	PullRequest   int      `json:"pull_request,omitempty"`
-	URL           string   `json:"url,omitempty"`
-	HeadSHA       string   `json:"head_sha,omitempty"`
-	Rounds        int      `json:"rounds,omitempty"`
-	Feedback      string   `json:"feedback,omitempty"`
-	Cause         string   `json:"cause,omitempty"`
-	Fix           string   `json:"fix,omitempty"`
-	Summary       string   `json:"summary,omitempty"`
-	Criteria      string   `json:"criteria,omitempty"`
-	Scope         string   `json:"scope,omitempty"`
-	WakeRefs      []string `json:"wake_refs,omitempty"`
-	Awaiting      string   `json:"awaiting,omitempty"`
-	Decided       string   `json:"decided,omitempty"`
-	Granted       bool     `json:"granted,omitempty"`
-	MergeSHA      string   `json:"merge_sha,omitempty"`
-	CauseRecorded bool     `json:"cause_recorded,omitempty"`
-}
-
-type sessionIncident struct {
-	Slug           string   `json:"slug,omitempty"`
-	Service        string   `json:"service,omitempty"`
-	Severity       string   `json:"severity,omitempty"`
-	DraftPath      string   `json:"draft_path,omitempty"`
-	DraftDigest    string   `json:"draft_digest,omitempty"`
-	Findings       []string `json:"findings,omitempty"`
-	ReturnReason   string   `json:"return_reason,omitempty"`
-	Returns        int      `json:"returns,omitempty"`
-	ReviewFailures int      `json:"review_failures,omitempty"`
-	Awaiting       string   `json:"awaiting,omitempty"`
-	Decided        string   `json:"decided,omitempty"`
-	Granted        bool     `json:"granted,omitempty"`
-	Published      string   `json:"published,omitempty"`
 }
 
 func (s *SessionStore) ceremonyPath(id domain.SessionID) string {
@@ -152,7 +75,10 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 	if decoder.Decode(&record) != nil || record.Version != sessionCeremonyVersion {
 		return nil
 	}
-	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, LimitStep: record.LimitStep, LimitResumes: record.LimitResumes, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model}
+	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, LimitStep: record.LimitStep, LimitResumes: record.LimitResumes, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model, OperationID: record.OperationID, Reports: record.Reports}
+	if record.Generic != nil {
+		run.Generic = &domain.GenericRun{Prompts: record.Generic.Prompts, Terminal: record.Generic.Terminal}
+	}
 	for _, command := range record.Approved {
 		run.Approved = append(run.Approved, domain.CheckCommand{Program: command.Program, Args: command.Args})
 	}
@@ -184,7 +110,10 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 		}
 		return nil
 	}
-	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, LimitStep: run.LimitStep, LimitResumes: run.LimitResumes, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model}
+	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, LimitStep: run.LimitStep, LimitResumes: run.LimitResumes, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model, OperationID: run.OperationID, Reports: run.Reports}
+	if run.Generic != nil {
+		record.Generic = &sessionGeneric{Prompts: run.Generic.Prompts, Terminal: run.Generic.Terminal}
+	}
 	for _, command := range run.Approved {
 		record.Approved = append(record.Approved, sessionCheck{Program: command.Program, Args: command.Args})
 	}

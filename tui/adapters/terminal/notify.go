@@ -114,6 +114,11 @@ func (m *AppModel) loadTitleLabel() {
 	}
 	if labels, err := m.deps.SessionLabels.Load(m.lifetime.ctx); err == nil {
 		m.titleLabel = singleLine(string(labels[m.Header.State.ID].Title))
+		if about := labels[m.Header.State.ID].About; about != "" {
+			m.Header.About = about
+		} else {
+			m.Header.About = m.deps.About
+		}
 	}
 }
 

@@ -1,0 +1,323 @@
+package kmpstore
+
+import (
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+func checkout(t *testing.T) (top, workspace string) {
+	t.Helper()
+	top = filepath.Join(t.TempDir(), "AXLR")
+	workspace = filepath.Join(top, "tui", "cmd")
+	if err := os.MkdirAll(filepath.Join(top, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return top, workspace
+}
+
+func TestResolvePrefersTheOperatorThenTheCheckoutThenTheUserDefault(t *testing.T) {
+	top, workspace := checkout(t)
+	data := filepath.Join(t.TempDir(), "share")
+	user := filepath.Join(data, "kmp", "default")
+	operator := filepath.Join(t.TempDir(), "memory")
+	if got := Resolve(workspace, []string{"HOME=/h", DataDirVariable + "=" + operator}, data); got != (Selection{Path: operator, Reason: ReasonOperator}) {
+		t.Fatalf("operator: %+v", got)
+	}
+	// The installer's old pin of the per-user default is not an operator's choice.
+	if got := Resolve(workspace, []string{DataDirVariable + "=" + user}, data); got != (Selection{Path: filepath.Join(top, StoreDirectory), Reason: ReasonProject, TopLevel: top, Replaced: user}) {
+		t.Fatalf("replaced pin: %+v", got)
+	}
+	if got := Resolve(workspace, nil, data); got != (Selection{Path: filepath.Join(top, StoreDirectory), Reason: ReasonProject, TopLevel: top}) {
+		t.Fatalf("project: %+v", got)
+	}
+	outside := t.TempDir()
+	if got := Resolve(outside, []string{DataDirVariable + "=" + user}, data); got != (Selection{Path: user, Reason: ReasonUser}) {
+		t.Fatalf("user: %+v", got)
+	}
+}
+
+func TestGitTopLevelResolvesWorktreesSubmodulesAndStoreDirectories(t *testing.T) {
+	main := filepath.Join(t.TempDir(), "main")
+	if err := os.MkdirAll(filepath.Join(main, ".git", "worktrees", "x"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	worktree := filepath.Join(t.TempDir(), "x")
+	inner := filepath.Join(worktree, "a", "b")
+	if err := os.MkdirAll(inner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: "+filepath.Join(main, ".git", "worktrees", "x")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := GitTopLevel(inner); !ok || got != main {
+		t.Fatalf("worktree: %q %v, want %q", got, ok, main)
+	}
+	// A submodule's .git file points into .git/modules: its own project.
+	submodule := filepath.Join(t.TempDir(), "sub")
+	if err := os.MkdirAll(submodule, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(submodule, ".git"), []byte("gitdir: ../.git/modules/sub\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := GitTopLevel(submodule); !ok || got != submodule {
+		t.Fatalf("submodule: %q %v", got, ok)
+	}
+	// A directory that already holds a store is a project root without git.
+	holder := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(holder, StoreDirectory), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(holder, StoreDirectory, "FORMAT_VERSION"), []byte("4"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := GitTopLevel(filepath.Join(holder)); !ok || got != holder {
+		t.Fatalf("store holder: %q %v", got, ok)
+	}
+	if _, ok := GitTopLevel(t.TempDir()); ok {
+		t.Fatal("a directory without .git or a store is not a project")
+	}
+}
+
+func TestWithStorePinsTheStoreAndTheEmbeddedBackendOnce(t *testing.T) {
+	got := WithStore([]string{"PATH=/bin", DataDirVariable + "=/old", "HOME=/h"}, "/new")
+	want := []string{"HOME=/h", BackendVariable + "=embedded", DataDirVariable + "=/new", "PATH=/bin"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("%v", got)
+	}
+	got = WithStore([]string{BackendVariable + "=grpc"}, "/new")
+	if !reflect.DeepEqual(got, []string{BackendVariable + "=grpc", DataDirVariable + "=/new"}) {
+		t.Fatalf("a set backend is kept: %v", got)
+	}
+}
+
+func TestBinaryFindsTheEngineBesideThePackageLauncher(t *testing.T) {
+	root := t.TempDir()
+	launcher := filepath.Join(root, "scripts", Launcher)
+	if binary, plugin := Binary(launcher); binary != filepath.Join(root, "bin", "kmp-mcp") || plugin != "" {
+		t.Fatalf("without guide assets: %q %q", binary, plugin)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "guide"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "guide", "guide.requests.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if binary, plugin := Binary(launcher); binary != filepath.Join(root, "bin", "kmp-mcp") || plugin != root {
+		t.Fatalf("with guide assets: %q %q", binary, plugin)
+	}
+	bare := filepath.Join(root, "kmp-mcp")
+	if binary, plugin := Binary(bare); binary != bare || plugin != "" {
+		t.Fatalf("bare binary: %q %q", binary, plugin)
+	}
+}
+
+type run struct {
+	command string
+	args    []string
+	env     []string
+}
+
+func TestPrepareCreatesImportsConfiguresAndSyncsANewProjectStore(t *testing.T) {
+	top, _ := checkout(t)
+	if err := os.MkdirAll(filepath.Join(top, ".kmp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bundle := filepath.Join(top, ".kmp", "memory.jsonl")
+	if err := os.WriteFile(bundle, []byte(`{"abouts":["project:AXLR"],"event_count":7}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	user := filepath.Join(t.TempDir(), "default")
+	if err := os.MkdirAll(user, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"typesafe.json", "rerank.json", "agent-users.sqlite3"} {
+		if err := os.WriteFile(filepath.Join(user, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var runs []run
+	p := Preparer{PluginRoot: "/opt/kmp", UserStore: user, CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
+		runs = append(runs, run{command, args, env})
+		if args[0] == "import" {
+			return []byte("note\n" + `{"events_imported":7,"mutations_applied":99}` + "\n"), nil
+		}
+		return nil, nil
+	}}}
+	selection := Resolve(top, []string{"HOME=/h", "PATH=/bin"}, t.TempDir())
+	report, err := p.Prepare(context.Background(), selection, []string{"HOME=/h", "PATH=/bin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Created || report.Imported != 7 || !report.GuideSynced || !reflect.DeepEqual(report.Configured, []string{"typesafe.json", "rerank.json"}) {
+		t.Fatalf("%+v", report)
+	}
+	child := []string{"HOME=/h", BackendVariable + "=embedded", DataDirVariable + "=" + selection.Path, "PATH=/bin"}
+	want := []run{{"/opt/kmp/bin/kmp-mcp", []string{"import", bundle}, child}, {"/opt/kmp/bin/kmp-mcp", []string{"guide", "sync", "--plugin-root", "/opt/kmp"}, child}}
+	if !reflect.DeepEqual(runs, want) {
+		t.Fatalf("runs %+v", runs)
+	}
+	if data, err := os.ReadFile(filepath.Join(selection.Path, ".gitignore")); err != nil || string(data) != "*\n" {
+		t.Fatalf("gitignore %q %v", data, err)
+	}
+	if data, err := os.ReadFile(filepath.Join(selection.Path, "typesafe.json")); err != nil || string(data) != "typesafe.json" {
+		t.Fatalf("configuration %q %v", data, err)
+	}
+	if _, err := os.Stat(filepath.Join(selection.Path, "agent-users.sqlite3")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("agents are not copied")
+	}
+}
+
+func TestPrepareLeavesAnExistingStoreAlone(t *testing.T) {
+	store := t.TempDir()
+	if err := os.WriteFile(filepath.Join(store, "FORMAT_VERSION"), []byte("4"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
+		t.Fatal("nothing runs on an existing store")
+		return nil, nil
+	}}}
+	report, err := p.Prepare(context.Background(), Selection{Path: store, Reason: ReasonOperator}, nil)
+	if err != nil || report.Created || report.Imported != 0 || report.GuideSynced || len(report.Configured) != 0 {
+		t.Fatalf("%+v %v", report, err)
+	}
+}
+
+func TestPrepareWithoutABinaryOrBundleOnlyCreatesTheDirectory(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "default")
+	report, err := Preparer{}.Prepare(context.Background(), Selection{Path: store, Reason: ReasonUser}, nil)
+	if err != nil || !report.Created || report.Imported != 0 || report.GuideSynced {
+		t.Fatalf("%+v %v", report, err)
+	}
+	if _, err := os.Stat(filepath.Join(store, ".gitignore")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := (Preparer{}).Prepare(context.Background(), Selection{Path: "relative"}, nil); err == nil {
+		t.Fatal("a relative path is refused")
+	}
+}
+
+// A bundle kmp-mcp refuses (an unreadable header, seen on 13 October 2026
+// with a hand-written one) is reported, and the store it initialised
+// before refusing is still configured and given the guide, so the next
+// start does not find a bare store it will never fill.
+func TestPrepareReportsAFailedImportAndStillFinishesTheStore(t *testing.T) {
+	top, _ := checkout(t)
+	if err := os.MkdirAll(filepath.Join(top, ".kmp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(top, ".kmp", "memory.jsonl"), []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var runs []run
+	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
+		runs = append(runs, run{command, args, env})
+		if args[0] == "import" {
+			return nil, errors.New("could not decode bundle header")
+		}
+		return nil, nil
+	}}}
+	report, err := p.Prepare(context.Background(), Resolve(top, nil, t.TempDir()), nil)
+	if err != nil || !strings.Contains(report.ImportFailed, "bundle header") || report.Imported != 0 || !report.GuideSynced || len(runs) != 2 {
+		t.Fatalf("%+v %v %+v", report, err, runs)
+	}
+}
+
+func TestPrepareReportsAFailedGuideSync(t *testing.T) {
+	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
+		return nil, errors.New("no guide assets")
+	}}}
+	_, err := p.Prepare(context.Background(), Selection{Path: filepath.Join(t.TempDir(), "default"), Reason: ReasonUser}, nil)
+	if err == nil || !strings.Contains(err.Error(), "guide") {
+		t.Fatalf("%v", err)
+	}
+}
+
+func TestImportedEventsReadsTheLastReceipt(t *testing.T) {
+	if got := importedEvents([]byte("x\n{\"events_imported\":468}\n")); got != 468 {
+		t.Fatal(got)
+	}
+	if got := importedEvents([]byte("no receipt")); got != -1 {
+		t.Fatal(got)
+	}
+}
+
+func TestBundleAboutTakesTheProjectAboutOrTheDirectoryMatch(t *testing.T) {
+	top := filepath.Join(t.TempDir(), "AXLR")
+	if about, err := BundleAbout(top); err != nil || about != "" {
+		t.Fatalf("no bundle: %q %v", about, err)
+	}
+	if err := os.MkdirAll(filepath.Join(top, ".kmp"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bundle := filepath.Join(top, ".kmp", "memory.jsonl")
+	write := func(header string) {
+		if err := os.WriteFile(bundle, []byte(header+"\n{\"event\":1}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(`{"abouts":["guide:kmp","project:Axlr"]}`)
+	if about, err := BundleAbout(top); err != nil || about != "project:Axlr" {
+		t.Fatalf("one project about: %q %v", about, err)
+	}
+	write(`{"abouts":["project:other","project:axlr"]}`)
+	if about, err := BundleAbout(top); err != nil || about != "project:axlr" {
+		t.Fatalf("directory match: %q %v", about, err)
+	}
+	write(`{"abouts":["project:other","project:another"]}`)
+	if about, err := BundleAbout(top); err != nil || about != "" {
+		t.Fatalf("no match: %q %v", about, err)
+	}
+	write(`not json`)
+	if _, err := BundleAbout(top); err == nil {
+		t.Fatal("an unreadable header is an error")
+	}
+	if about, err := BundleAbout(""); err != nil || about != "" {
+		t.Fatalf("no top level: %q %v", about, err)
+	}
+}
+
+func TestCountReadsTheAboutsEventsFromTheMemoriesListing(t *testing.T) {
+	listing := `{"memories":[{"path":"/s/.kernel","abouts":[{"about":"project:X","events":7},{"about":"ws:a","events":2}]},{"path":"/other","abouts":[{"about":"project:X","events":99}]}]}`
+	var args []string
+	p := Counter{CLI: CLI{Binary: "/bin/kmp-mcp", Run: func(_ context.Context, _ string, a, env []string) ([]byte, error) {
+		args = a
+		for _, entry := range env {
+			if entry == "KMP_MCP_DATA_DIR=/s/.kernel" {
+				return []byte("note\n" + listing), nil
+			}
+		}
+		return []byte(listing), nil
+	}}}
+	count, known, err := p.Count(context.Background(), Selection{Path: "/s/.kernel"}, "project:X", nil)
+	if err != nil || !known || count != 7 || args[0] != "memories" || args[1] != "--json" {
+		t.Fatalf("%d %v %v %v", count, known, err, args)
+	}
+	if count, known, err := p.Count(context.Background(), Selection{Path: "/s/.kernel"}, "project:Y", nil); err != nil || known || count != 0 {
+		t.Fatalf("%d %v %v", count, known, err)
+	}
+	if _, known, err := p.Count(context.Background(), Selection{Path: "/none"}, "project:X", nil); err != nil || known {
+		t.Fatalf("%v %v", known, err)
+	}
+}
+
+func TestExportedEventsReadsTheLastJSONLine(t *testing.T) {
+	output := "log line\n{\"abouts\":[\"project:Repo-B\"],\"event_count\":2,\"exported_to\":\"/x/.kmp/memory.jsonl\"}\n"
+	if got := exportedEvents([]byte(output)); got != 2 {
+		t.Fatalf("events %d", got)
+	}
+	if got := exportedEvents([]byte("nothing")); got != -1 {
+		t.Fatalf("no JSON: %d", got)
+	}
+	if _, _, err := (Exporter{CLI: CLI{Binary: "/bin/true"}}).Export(context.Background(), Selection{Path: "/tmp/store"}, "project:X", nil); err == nil || !strings.Contains(err.Error(), "git checkout") {
+		t.Fatalf("no top level: %v", err)
+	}
+}

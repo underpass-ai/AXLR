@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // wakeBytes is the packet budget. Below it KMP shortens the core prose to
@@ -14,9 +17,67 @@ import (
 const wakeBytes = 12000
 
 // Memory is application.MemoryPort over the connected KMP plugin.
-type Memory struct{ Tools application.ToolExecutionPort }
+type Memory struct {
+	Tools application.ToolExecutionPort
+	// SyncGuide writes the guide into the store when kmp_guide reports it
+	// missing; nil leaves the refusal to the caller.
+	SyncGuide func(context.Context) error
+	// Now is the clock a history read rewinds from; nil is time.Now.
+	Now func() time.Time
+}
 
 var _ application.MemoryPort = Memory{}
+var _ application.MemoryIdentityPort = Memory{}
+
+// guideMissing reports kmp_guide's refusal for a store without the guide
+// (seen on 13 October 2026: "The selected store cannot serve guide node
+// `guide:kmp-agent:overview`… Run `kmp-mcp guide sync --plugin-root`").
+func guideMissing(err error) bool {
+	var refused *refusal
+	if !errors.As(err, &refused) {
+		return false
+	}
+	text := strings.ToLower(refused.Message)
+	return strings.Contains(text, "guide sync") || strings.Contains(text, "cannot serve guide node")
+}
+
+// Guide registers the console's agent (registrationKey) or opens a context
+// for a known agent (agentID with contextKey). A store without the guide is
+// synced once and the call repeated.
+func (m Memory) Guide(ctx context.Context, registrationKey string, agentID domain.MemoryAgentID, contextKey string) (application.GuideResult, error) {
+	arguments := map[string]any{}
+	if registrationKey != "" {
+		arguments["registration_key"] = registrationKey
+	} else {
+		arguments["agent_id"], arguments["context_key"] = string(agentID), contextKey
+	}
+	packet, err := callPlugin(ctx, m.Tools, "kmp", "kmp_guide", arguments)
+	if err != nil && guideMissing(err) && m.SyncGuide != nil {
+		if syncErr := m.SyncGuide(ctx); syncErr != nil {
+			return application.GuideResult{}, fmt.Errorf("%w; %v", err, syncErr)
+		}
+		packet, err = callPlugin(ctx, m.Tools, "kmp", "kmp_guide", arguments)
+	}
+	if err != nil {
+		return application.GuideResult{}, err
+	}
+	agent, _ := packet["agent"].(map[string]any)
+	agentText, _ := agent["id"].(string)
+	contextText, _ := packet["context_id"].(string)
+	if contextText == "" || (registrationKey != "" && agentText == "") {
+		return application.GuideResult{}, errors.New("kmp_guide returned no agent or context")
+	}
+	var result application.GuideResult
+	if result.ContextID, err = domain.NewMemoryContextID(contextText); err != nil {
+		return application.GuideResult{}, fmt.Errorf("kmp_guide: %w", err)
+	}
+	if agentText != "" {
+		if result.AgentID, err = domain.NewMemoryAgentID(agentText); err != nil {
+			return application.GuideResult{}, fmt.Errorf("kmp_guide: %w", err)
+		}
+	}
+	return result, nil
+}
 
 func (m Memory) Wake(ctx context.Context, about string) (string, error) {
 	text, _, err := m.WakeFocused(ctx, about, "")
@@ -132,4 +193,96 @@ func (m Memory) RecordLinked(ctx context.Context, about string, labels map[strin
 		return "", errors.New("KMP outcome needs writer review; inspect the returned context before resuming")
 	}
 	return "", errors.New("KMP did not accept the ceremony outcome")
+}
+
+var _ application.JournalPort = Memory{}
+
+// RecordTurn writes a turn's results under the session's about as one
+// turn entry: the console's English summary serves as summary_en too, so
+// a strict store accepts it, and the evidence is one line per action.
+func (m Memory) RecordTurn(ctx context.Context, entry application.TurnEntry) (string, error) {
+	kind := entry.Kind
+	if kind == "" {
+		kind = "turn"
+	}
+	memory := map[string]any{"id": "turn", "kind": kind, "summary": entry.Summary, "summary_en": entry.Summary, "evidence": strings.Join(entry.Evidence, "\n")}
+	if !entry.OccurredAt.IsZero() {
+		memory["occurred_at"] = entry.OccurredAt.UTC().Format(time.RFC3339)
+	}
+	arguments := map[string]any{"about": entry.About, "actor": "axlr", "idempotency_key": entry.Key, "labels": entry.Labels, "memories": []any{memory}}
+	if entry.ContextID != "" {
+		arguments["context_id"] = string(entry.ContextID)
+	}
+	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
+	if err != nil {
+		var refused *refusal
+		if errors.As(err, &refused) {
+			if refused.Code == "conflict" && strings.Contains(refused.Message, "idempotency key") {
+				// The key was accepted by an earlier write (seen on 13
+				// October 2026 when a close entry was queued twice).
+				return "", fmt.Errorf("KMP refused the turn entry (%s): %s: %w", refused.Code, bounded(refused.Message, 600), application.ErrEntryRecorded)
+			}
+			return "", fmt.Errorf("KMP refused the turn entry (%s): %s", refused.Code, bounded(refused.Message, 600))
+		}
+		return "", err
+	}
+	if accepted, _ := result["accepted"].(bool); accepted {
+		refs, _ := result["local_refs"].(map[string]any)
+		ref, _ := refs["turn"].(string)
+		return ref, nil
+	}
+	status, _ := result["status"].(string)
+	return "", fmt.Errorf("KMP did not write the turn entry (status %q)", status)
+}
+
+// RecordSettled writes what Jev selected from a turn: the quoted text as
+// the summary, an English frame as summary_en, the step and the actions as
+// evidence, and the supersedes link when Jev found the memory it replaces.
+func (m Memory) RecordSettled(ctx context.Context, entry application.SettledEntry) (string, error) {
+	memory := map[string]any{"id": "settled", "kind": entry.Kind, "summary": entry.Text, "summary_en": entry.SummaryEN, "evidence": strings.Join(entry.Evidence, "\n")}
+	if len(entry.Links) > 0 {
+		var links []any
+		for _, link := range entry.Links {
+			item := map[string]any{"ref": link.Ref, "rel": link.Rel, "why": link.Why, "confidence": "medium"}
+			if link.Evidence != "" {
+				item["evidence"] = link.Evidence
+			}
+			links = append(links, item)
+		}
+		memory["connect_to"] = links
+	}
+	arguments := map[string]any{"about": entry.About, "actor": "axlr", "idempotency_key": entry.Key, "labels": entry.Labels, "memories": []any{memory}}
+	if entry.ContextID != "" {
+		arguments["context_id"] = string(entry.ContextID)
+	}
+	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
+	if err != nil {
+		var refused *refusal
+		if errors.As(err, &refused) {
+			return "", fmt.Errorf("KMP refused the settled memory (%s): %s", refused.Code, bounded(refused.Message, 600))
+		}
+		return "", err
+	}
+	if accepted, _ := result["accepted"].(bool); accepted {
+		refs, _ := result["local_refs"].(map[string]any)
+		ref, _ := refs["settled"].(string)
+		return ref, nil
+	}
+	status, _ := result["status"].(string)
+	if status == "needs_review" {
+		// The links point at refs the wake exposed (decision F4): the
+		// console resumes the review itself.
+		if continuation, _ := result["continuation"].(string); continuation != "" {
+			resumed, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", map[string]any{"continuation": continuation})
+			if err != nil {
+				return "", err
+			}
+			if accepted, _ := resumed["accepted"].(bool); accepted {
+				refs, _ := resumed["local_refs"].(map[string]any)
+				ref, _ := refs["settled"].(string)
+				return ref, nil
+			}
+		}
+	}
+	return "", fmt.Errorf("KMP did not write the settled memory (status %q)", status)
 }

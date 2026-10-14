@@ -87,9 +87,12 @@ func TestSetupSavesTheKeyARecommendedLightModelAndInstallsTheEngines(t *testing.
 		{Engine: "made", Status: "installed", Version: "0.10.0", Detail: "work identity axlr-work-1"},
 		{Engine: "kmp", Status: "installed", Version: "0.25.0", Detail: "memory store /m"},
 	}}
-	// Spanish, OpenRouter, the first recommendation, install, auto memory.
-	w, out := wizard(t, env, "2\n1\n\n\n\n", engines)
-	w.secret = func() (string, error) { return "sk-or-typed", nil }
+	// Spanish from the environment; OpenRouter, the first recommendation,
+	// a Jev key; the engines install without a question.
+	env["LANG"] = "es_ES.UTF-8"
+	w, out := wizard(t, env, "1\n\n", engines)
+	secrets := []string{"sk-or-typed", "ts-typed"}
+	w.secret = func() (string, error) { key := secrets[0]; secrets = secrets[1:]; return key, nil }
 	var usedKey string
 	w.catalog = func(_ context.Context, key string) ([]domain.AvailableModel, error) {
 		usedKey = key
@@ -106,51 +109,64 @@ func TestSetupSavesTheKeyARecommendedLightModelAndInstallsTheEngines(t *testing.
 		t.Fatalf("settings %+v key %q\n%s", settings, usedKey, out)
 	}
 	credentials, err := storage.CredentialsStore{Path: w.paths.credentials}.Load()
-	if err != nil || credentials.OpenRouterAPIKey != "sk-or-typed" {
+	if err != nil || credentials.OpenRouterAPIKey != "sk-or-typed" || credentials.TypeSafeAPIKey != "ts-typed" {
 		t.Fatalf("%+v %v", credentials, err)
 	}
 	if len(engines.approvals) != 1 || engines.approvals[0] != "auto" {
 		t.Fatalf("approvals %v", engines.approvals)
+	}
+	// The settings file is complete (decision D9).
+	if settings.Approvals == nil || !settings.Approvals.Autonomous || len(settings.Approvals.AlwaysAsk) != 7 || !settings.EnginesRequired() || !settings.SharedEngines() || !settings.ForgedToolsEnabled() || !settings.Jev.Enabled() || settings.PromptTokens != storage.DefaultContextCapTokens || settings.Jobs == nil || settings.Plan == nil || settings.TraceRetentionDays == nil {
+		t.Fatalf("incomplete settings %+v", settings)
 	}
 	for _, want := range []string{"KMP 0.25.0 · instalado y conectado · memory store /m", "MADE 0.10.0", "Modelo por defecto: z-ai/glm-5.3-flash"} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("output lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out.String(), "sk-or-typed") {
-		t.Fatal("the key was printed")
+	if strings.Contains(out.String(), "sk-or-typed") || strings.Contains(out.String(), "ts-typed") {
+		t.Fatal("a key was printed")
 	}
 }
 
 func TestSetupUsesTheEnvironmentKeyWithoutSavingIt(t *testing.T) {
 	env := cliEnv(t)
 	engines := &fakeEngines{}
-	// English, OpenRouter, another id, typed id, no engines.
-	w, out := wizard(t, env, "1\n1\n3\nvendor/chosen\nn\n", engines)
-	w.secret = func() (string, error) { t.Fatal("asked for a key the environment has"); return "", nil }
+	// The environment's key decides the provider and the light model; no
+	// Jev key (Enter); the engines install without a question.
+	env["TYPESAFE_API_KEY"] = ""
+	w, out := wizard(t, env, "\n", engines)
 	w.catalog = func(context.Context, string) ([]domain.AvailableModel, error) {
 		return []domain.AvailableModel{available(t, "z-ai/glm-5.3-flash", 1048576, "0.00000015", "0.0000005"), available(t, "anthropic/claude-haiku-5.5", 1000000, "0.0000001", "0.0000005")}, nil
 	}
 	if err := w.run(context.Background()); err != nil {
 		t.Fatal(err, out)
 	}
-	if settings := savedSettings(t, w); settings.Model != "vendor/chosen" || settings.Language != "en" {
+	settings := savedSettings(t, w)
+	if settings.Model != "z-ai/glm-5.3-flash" || settings.Language != "en" || settings.Jev == nil || settings.Jev.Enabled() {
 		t.Fatalf("%+v", settings)
 	}
 	if _, err := os.Stat(w.paths.credentials); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("the environment key was copied to credentials.json")
 	}
-	if len(engines.approvals) != 0 || !strings.Contains(out.String(), "/update") {
-		t.Fatalf("engines installed after no:\n%s", out)
+	if len(engines.approvals) != 1 || engines.approvals[0] != "auto" || !strings.Contains(out.String(), "OPENROUTER_API_KEY is set") {
+		t.Fatalf("approvals %v\n%s", engines.approvals, out)
 	}
 }
 
 func TestSetupRetriesARefusedKeyAndNeverSavesIt(t *testing.T) {
 	env := cliEnv(t)
 	delete(env, "OPENROUTER_API_KEY")
-	w, out := wizard(t, env, "1\n1\nn\n", &fakeEngines{})
+	w, out := wizard(t, env, "1\n", &fakeEngines{})
 	keys := []string{"bad-1", "bad-2", "bad-3"}
-	w.secret = func() (string, error) { key := keys[0]; keys = keys[1:]; return key, nil }
+	w.secret = func() (string, error) {
+		if len(keys) == 0 {
+			return "", nil // the Jev question
+		}
+		key := keys[0]
+		keys = keys[1:]
+		return key, nil
+	}
 	w.catalog = func(context.Context, string) ([]domain.AvailableModel, error) {
 		return nil, errors.New("OpenRouter model catalog request failed (HTTP 401)")
 	}
@@ -172,9 +188,9 @@ func TestSetupConfiguresADetectedLocalServer(t *testing.T) {
 	env := cliEnv(t)
 	delete(env, "OPENROUTER_API_KEY")
 	engines := &fakeEngines{}
-	// English; the local server is preferred without a key; first model;
-	// keep the detected window; skip the engines.
-	w, out := wizard(t, env, "1\n\n\n\nn\n", engines)
+	// The local server is preferred without a key; first model; keep the
+	// detected window; no Jev key.
+	w, out := wizard(t, env, "\n\n\n\n", engines)
 	w.probe = func(_ context.Context, base string) []localCandidate {
 		if base != "http://127.0.0.1:8080/v1" {
 			return nil
@@ -193,7 +209,7 @@ func TestSetupConfiguresADetectedLocalServer(t *testing.T) {
 		t.Fatalf("%+v", local)
 	}
 	// Running it again replaces the entry instead of duplicating it.
-	w2, out2 := wizard(t, env, "1\n2\n\n8192\nn\n", engines)
+	w2, out2 := wizard(t, env, "2\n\n8192\n\n", engines)
 	w2.probe = w.probe
 	if err := w2.run(context.Background()); err != nil {
 		t.Fatal(err, out2)
@@ -207,7 +223,7 @@ func TestSetupConfiguresADetectedLocalServer(t *testing.T) {
 func TestSetupSkipsEnginesAlreadyConnected(t *testing.T) {
 	env := cliEnv(t)
 	engines := &fakeEngines{}
-	w, out := wizard(t, env, "1\n3\n", engines)
+	w, out := wizard(t, env, "\n", engines)
 	store := storage.MCPConfigStore{Path: w.paths.mcp}
 	for _, engine := range []string{"kmp", "made"} {
 		launcher := filepath.Join(t.TempDir(), "scripts", "run-embedded-mcp.sh")
@@ -225,7 +241,7 @@ func TestSetupSkipsEnginesAlreadyConnected(t *testing.T) {
 
 func TestSetupReportsAnUnsupportedPlatform(t *testing.T) {
 	env := cliEnv(t)
-	w, out := wizard(t, env, "1\n3\n\n\n", &fakeEngines{err: application.ErrEngineUpdatePlatform})
+	w, out := wizard(t, env, "\n", &fakeEngines{err: application.ErrEngineUpdatePlatform})
 	if err := w.run(context.Background()); err != nil {
 		t.Fatal(err)
 	}

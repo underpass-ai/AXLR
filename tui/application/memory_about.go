@@ -11,17 +11,22 @@ import (
 )
 
 // ProjectAbout is the KMP about the console gives the model's memory by
-// default: "project:" and the workspace root's base name in lower case, with
-// each run of spaces or control characters as one "-" ("/home/t/ai/AXLR"
-// gives "project:axlr", the convention self-repair already uses for its
-// repository). It is derived from the path alone, so every session in the
-// same checkout gets the same about without asking KMP or git; a clone
+// default: "project:" and the workspace root's base name with its case,
+// with each run of spaces or control characters as one "-"
+// ("/home/t/ai/AXLR" gives "project:AXLR", what KMP's own hosts write for
+// that checkout). It is derived from the path alone, so every session in
+// the same checkout gets the same about without asking KMP or git; a clone
 // under another directory name gets its own. It is empty when the root has
-// no usable name ("/").
+// no usable name ("/"). A checkout whose committed bundle names a project
+// about gets that one instead, selected for the session at its start.
 //
 // On 10 October 2026 claude-haiku-5.5 never selected an about, so session A
 // recorded under ws:<session A>, and session B in the same workspace looked
-// for project:AXLR and project:axlr and answered "nothing recorded".
+// for project:AXLR and project:axlr and answered "nothing recorded". Until
+// 13 October 2026 the name was lower-cased, which split this repository's
+// memory between project:AXLR (the person's hosts) and project:axlr (the
+// console); abouts are case-sensitive, so the case is kept (decision D2 of
+// the lifecycle integration design).
 func ProjectAbout(workspace domain.Workspace) string {
 	name := filepath.Base(filepath.Clean(string(workspace)))
 	if name == "." || name == string(filepath.Separator) || name == "" {
@@ -29,7 +34,7 @@ func ProjectAbout(workspace domain.Workspace) string {
 	}
 	var b strings.Builder
 	dash := false
-	for _, r := range strings.ToLower(name) {
+	for _, r := range name {
 		if unicode.IsSpace(r) || unicode.IsControl(r) || r == utf8.RuneError {
 			dash = b.Len() > 0
 			continue

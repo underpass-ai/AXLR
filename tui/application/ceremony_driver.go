@@ -1,7 +1,6 @@
 package application
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,19 +18,6 @@ import (
 const ceremonyRepeatLimit = 3
 
 const maxCeremonyMemoryBytes = 2 << 10
-
-type ceremonySpec struct {
-	definition, version, first, briefInput string
-}
-
-var ceremonySpecs = map[domain.WorkMode]ceremonySpec{
-	domain.ModeDebug:    {definition: "axlr_debug", version: "2.0", first: "reproduce", briefInput: "failure_brief"},
-	domain.ModeDelivery: {definition: "axlr_delivery", version: "2.0", first: "brief", briefInput: "task_brief"},
-	domain.ModeIncident: {definition: "axlr_incident", version: "1.0", first: "triage", briefInput: "incident_brief"},
-	domain.ModeRepair:   {definition: "axlr_repair", version: "1.0", first: "reproduce", briefInput: "failure_brief"},
-	domain.ModeImprove:  {definition: "axlr_improve", version: "1.0", first: "brief", briefInput: "improvement_brief"},
-	domain.ModePlan:     {definition: "axlr_plan", version: "1.0", first: "decompose", briefInput: "brief"},
-}
 
 // terminalStates end a ceremony: COMPLETED and BLOCKED for the 2.0 and 1.0
 // definitions, READY for a plan, DONE for a task and SYNCED for a sync.
@@ -89,6 +75,35 @@ type CeremonyDriver struct {
 	Plan  PlanSettings
 	// Starter runs a plan once the person approved it; nil leaves it READY.
 	Starter PlanStarter
+	// Host names the console in MADE's host reports; Roles gives the
+	// console's role in a definition (nil: AXLR).
+	Host  HostIdentity
+	Roles func(definition, version string) string
+	// Definitions reads published definitions for /ceremony; nil offers
+	// none.
+	Definitions CeremonyDefinitionPort
+}
+
+// role is the console's role in the run's definition.
+func (d *CeremonyDriver) role(run domain.CeremonyRun) string {
+	if d != nil && d.Roles != nil {
+		if role := d.Roles(run.Definition, run.Version); role != "" {
+			return role
+		}
+	}
+	return sessionRole
+}
+
+// report sends one host status report for the run's claimed step; a
+// failure is logged through the observer's absence, never returned.
+func (d *CeremonyDriver) report(ctx context.Context, s domain.Session, run *domain.CeremonyRun, status, activity string) {
+	if d == nil || d.Engine == nil || run.Fence == "" || run.OperationID == "" {
+		return
+	}
+	state := s.Export()
+	run.Reports++
+	_ = d.Engine.Report(ctx, HostReport{Instance: run.Instance, Step: run.Step, Fence: run.Fence, OperationID: run.OperationID, Status: status, Activity: activity,
+		Summary: fmt.Sprintf("step %s of %s %s, attempt %d, session %s", run.Step, run.Definition, run.Version, run.Iteration, state.ID), Execution: run.Instance, Worker: string(state.ID), Role: d.role(*run), Model: string(state.Model), Sequence: run.Reports, Host: d.Host})
 }
 
 // observe tells the observer where the ceremony stands. The report is copied
@@ -109,55 +124,6 @@ func (d *CeremonyDriver) observe(run domain.CeremonyRun, state string, report ma
 		progress.Repair = &repair
 	}
 	d.Observer.Observe(progress)
-}
-
-// StepResult is what one axlr_step_done call did. When accepted, Run is nil
-// once the ceremony reached a terminal state. A refusal leaves Run nil unless
-// the console must still remember something, such as a reviewer failure.
-type StepResult struct {
-	Outcome  domain.ToolOutcome
-	Run      *domain.CeremonyRun
-	Accepted bool
-}
-
-type stepDone struct {
-	CheckCommand *struct {
-		Program string   `json:"program"`
-		Args    []string `json:"args"`
-	} `json:"check_command"`
-	Reproducible *bool                `json:"reproducible"`
-	Feasible     *bool                `json:"feasible"`
-	Expected     string               `json:"expected"`
-	Observed     string               `json:"observed"`
-	RootCause    string               `json:"root_cause"`
-	Evidence     string               `json:"evidence"`
-	ProposedFix  string               `json:"proposed_fix"`
-	Criteria     string               `json:"criteria"`
-	Scope        string               `json:"scope"`
-	Summary      string               `json:"summary"`
-	Report       string               `json:"report"`
-	SummaryEN    string               `json:"summary_en"`
-	ConnectTo    []memoryLinkArgument `json:"connect_to"`
-	incidentDone
-	planDone
-	taskDone
-}
-
-func decodeStepDone(arguments root.JSONValue) (stepDone, error) {
-	var done stepDone
-	decoder := json.NewDecoder(bytes.NewReader(arguments.Bytes()))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&done); err != nil {
-		return stepDone{}, fmt.Errorf("axlr_step_done arguments: %w; send only the fields the current step asks for", err)
-	}
-	return done, nil
-}
-
-func (d stepDone) command() (domain.CheckCommand, bool) {
-	if d.CheckCommand == nil || strings.TrimSpace(d.CheckCommand.Program) == "" {
-		return domain.CheckCommand{}, false
-	}
-	return domain.CheckCommand{Program: d.CheckCommand.Program, Args: append([]string(nil), d.CheckCommand.Args...)}, true
 }
 
 // stepDoneNeedsApproval is true when the call proposes a check command the
@@ -217,14 +183,16 @@ func unapproved(run domain.CeremonyRun, commands []domain.CheckCommand) bool {
 // carries the user's request.
 func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt root.Text) error {
 	spec, ok := ceremonySpecs[s.Mode()]
-	if !ok {
+	if !ok && s.Mode() != domain.ModeCeremony {
 		return errors.New("this mode starts no ceremony")
 	}
 	if d == nil || d.Engine == nil || d.Checks == nil {
 		return errors.New("MADE is not connected; ceremonies are unavailable")
 	}
-	if err := d.Engine.Ready(ctx, spec.definition, spec.version); err != nil {
-		return err
+	if ok {
+		if err := d.Engine.Ready(ctx, spec.definition, spec.version); err != nil {
+			return err
+		}
 	}
 	state := s.Export()
 	// A ceremony keeps the session's own about unless one was selected
@@ -258,7 +226,7 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		// the evidence relevant to it instead of the about's whole history.
 		if text, _, err := d.Memory.WakeFocused(ctx, about, string(prompt)); err == nil {
 			if len(text) > memoryLimit {
-				prefix := "Partial KMP recall: console context shortened; recover the full about with kmp_wake before relying on omitted evidence.\n"
+				prefix := "Partial memory recall: console context shortened; recover the full about with axlr_recall (mode wake) before relying on omitted evidence.\n"
 				memory = prefix + bounded(text, memoryLimit-len(prefix))
 			} else {
 				memory = text
@@ -270,6 +238,9 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 	now := time.Now
 	if d.Now != nil {
 		now = d.Now
+	}
+	if s.Mode() == domain.ModeCeremony {
+		return d.beginGeneric(ctx, s, prompt, about, memory, now)
 	}
 	instance := fmt.Sprintf("axlr-%s-%d", state.ID, now().UTC().Unix())
 	inputs := map[string]string{spec.briefInput: string(prompt), "workspace": string(state.Workspace), "memory_about": about}
@@ -317,6 +288,8 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		return fmt.Errorf("claim %s: %w", run.Step, err)
 	}
 	run.Fence = fence
+	run.OperationID, _ = d.Engine.OperationID(ctx, instance, run.Step, fence)
+	d.report(ctx, *s, &run, "running", "step")
 	return s.SetCeremony(run)
 }
 
@@ -431,6 +404,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 	}
 	if run.AwaitingPerson() {
 		return refuse("the draft is with the person for approval; tell the user to decide on the approval card (/incident) and end your turn"), nil
+	}
+	if run.Generic != nil {
+		return d.genericStepDone(ctx, s, run, arguments)
 	}
 	done, ignored, err := decodeStepDoneFor(run, arguments)
 	if err != nil {
@@ -607,6 +583,9 @@ func (d *CeremonyDriver) StepDone(ctx context.Context, s domain.Session, argumen
 		appendLedger(&run, s, output)
 		compactCheckEvidence(report)
 	}
+	// The finished report goes before the completion, which ends the lease
+	// a report needs.
+	d.report(ctx, s, &run, "finished", "step")
 	if err := d.Engine.Complete(ctx, run.Instance, run.Step, run.Fence, output); err != nil {
 		return d.reconcile(ctx, s, run, output, report, fmt.Errorf("complete %s: %w", run.Step, err))
 	}
@@ -648,6 +627,11 @@ func (d *CeremonyDriver) enter(ctx context.Context, s domain.Session, run domain
 		}
 		report["ceremony"] = state
 		report["instruction"] = "The ceremony is over and the session is back in normal mode. Tell the user the outcome in their language."
+		if state == "BLOCKED" {
+			// Decision H10: the state stays in MADE and the outcome under
+			// ws:<session>; the person hears what to do next.
+			report["instruction"] = "The ceremony ended BLOCKED and the session is back in normal mode; its state stays with the orchestrator and its outcome in memory. Tell the user the outcome in their language and propose the next step: " + blockedNextSteps + "."
+		}
 		if run.Plan != nil && state == "READY" {
 			report["instruction"] = "The plan is approved and the console now runs its tasks in separate worker sessions in this workspace. Do not read, run or change anything: answer the user in one or two sentences in their language and end your turn."
 		}
@@ -691,6 +675,9 @@ func (d *CeremonyDriver) enterStep(ctx context.Context, s domain.Session, run do
 
 // stepInstruction is the next step's instruction under the run's profile.
 func stepInstruction(run domain.CeremonyRun) string {
+	if run.Generic != nil {
+		return genericInstruction(run)
+	}
 	if step, ok := compactSteps[run.Step]; ok && run.Compact {
 		return step.instruction
 	}
@@ -700,6 +687,9 @@ func stepInstruction(run domain.CeremonyRun) string {
 // baseInstruction is the standard instruction for the run's step; an
 // improvement words brief and build its own way.
 func baseInstruction(run domain.CeremonyRun) string {
+	if run.Generic != nil {
+		return genericInstruction(run)
+	}
 	if text, ok := improveInstructions[run.Step]; ok && improving(run) {
 		return text
 	}
@@ -782,6 +772,7 @@ func (d *CeremonyDriver) claimFor(ctx context.Context, run *domain.CeremonyRun, 
 	}
 	run.Fence = fence
 	run.Reminded = false
+	run.OperationID, _ = d.Engine.OperationID(ctx, run.Instance, run.Step, fence)
 	return nil
 }
 

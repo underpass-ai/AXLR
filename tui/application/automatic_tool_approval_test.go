@@ -126,15 +126,15 @@ func TestAutomaticDecisionCannotBypassPublicHumanResolver(t *testing.T) {
 func TestModelContextReflectsRegisteredCapabilitiesAndPreservesHistory(t *testing.T) {
 	s := turnSession(t)
 	tools := turnTools()
-	for _, id := range []root.PluginID{"made", "kmp"} {
-		identity, _ := domain.NewPluginToolIdentity(root.PluginRef{PluginID: id, ToolName: "guide"})
-		tools = append(tools, domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{Name: root.ToolName(string(id) + "_guide"), Description: "guide", Parameters: turnTools()[0].Definition.Parameters}})
+	for id, name := range map[root.PluginID]string{"made": "made_get_help", "kmp": "kmp_wake"} {
+		identity, _ := domain.NewPluginToolIdentity(root.PluginRef{PluginID: id, ToolName: root.PluginToolName(name)})
+		tools = append(tools, domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{Name: root.ToolName(name), Description: "read", Parameters: turnTools()[0].Definition.Parameters}})
 	}
 	if err := s.BeginTurn("hello", tools); err != nil {
 		t.Fatal(err)
 	}
-	messages := modelMessages(&s)
-	for _, text := range []string{"MADE", "KMP", "specific extended topic", "made_guide", "kmp_guide"} {
+	messages := append([]root.Message{modelHostGuidance(&s, engineParagraphs{})}, s.Messages()...)
+	for _, text := range []string{"Ceremonies (MADE)", "Memory (KMP)", "axlr_recall", "Registered MCP plugin made: 1 tools"} {
 		if !strings.Contains(string(messages[0].Content), text) {
 			t.Fatalf("missing %s", text)
 		}

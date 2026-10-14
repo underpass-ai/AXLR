@@ -3,15 +3,12 @@ package main
 import (
 	"bufio"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -52,52 +49,12 @@ var localPorts = []int{8080, 8081, 8082, 8000, 11434, 1234}
 
 var errSetupInterrupted = errors.New("setup interrupted; run axlr-tui setup to finish it")
 
-type setupPaths struct {
-	settings, credentials, mcp, data string
-}
-
-// resolveSetupPaths finds settings.json, credentials.json, mcp.json and the
-// data directory exactly as the console does.
-func resolveSetupPaths(getenv func(string) string, mcpConfig string) (setupPaths, error) {
-	home := getenv("HOME")
-	base := func(variable string, fallback ...string) (string, error) {
-		if dir := getenv(variable); filepath.IsAbs(dir) {
-			return dir, nil
-		}
-		if !filepath.IsAbs(home) {
-			return "", fmt.Errorf("absolute HOME or %s is required", variable)
-		}
-		return filepath.Join(append([]string{home}, fallback...)...), nil
-	}
-	config, err := base("XDG_CONFIG_HOME", ".config")
-	if err != nil {
-		return setupPaths{}, err
-	}
-	data, err := base("XDG_DATA_HOME", ".local", "share")
-	if err != nil {
-		return setupPaths{}, err
-	}
-	if mcpConfig == "" {
-		mcpConfig = filepath.Join(config, "axlr", "mcp.json")
-	}
-	return setupPaths{
-		settings:    filepath.Join(config, "axlr", "settings.json"),
-		credentials: filepath.Join(config, "axlr", "credentials.json"),
-		mcp:         mcpConfig,
-		data:        data,
-	}, nil
-}
-
 // runSetupCommand is axlr-tui setup: the assistant on demand, for a person
 // who skipped a step or wants another model or the engines.
 func runSetupCommand(ctx context.Context, args []string, getenv func(string) string, stdin io.Reader, stderr io.Writer) int {
 	if len(args) != 0 {
 		fmt.Fprintln(stderr, "usage: axlr-tui setup")
 		return 2
-	}
-	if !setupTerminal() {
-		fmt.Fprintln(stderr, "axlr-tui: setup asks questions and needs an interactive terminal")
-		return 1
 	}
 	paths, err := resolveSetupPaths(getenv, "")
 	if err != nil {
@@ -109,7 +66,14 @@ func runSetupCommand(ctx context.Context, args []string, getenv func(string) str
 		fmt.Fprintln(stderr, "axlr-tui:", err)
 		return 1
 	}
-	if err := newSetupWizard(getenv, paths, settings, stdin, stderr).run(ctx); err != nil {
+	wizard := newSetupWizard(getenv, paths, settings, stdin, stderr)
+	if !setupTerminal() {
+		// Without a terminal nothing is asked (decision B12): the key comes
+		// from the environment or the model stays unset, Jev from its key,
+		// and the engines install and configure themselves.
+		wizard.quiet = true
+	}
+	if err := wizard.run(ctx); err != nil {
 		fmt.Fprintln(stderr, "axlr-tui:", err)
 		return 1
 	}
@@ -125,6 +89,9 @@ type setupWizard struct {
 	lang     string
 	// pause waits for Enter after the summary, before the console opens.
 	pause bool
+	// quiet asks nothing: every question takes its default, a secret is
+	// empty.
+	quiet bool
 	// Seams the tests replace: hidden input, the OpenRouter catalog, the
 	// local servers' discovery and the engine installation.
 	secret  func() (string, error)
@@ -156,7 +123,7 @@ func newSetupWizard(getenv func(string) string, paths setupPaths, settings *stor
 			Configuration: store,
 			Root:          filepath.Join(paths.data, "axlr", "engines"),
 			Install: &enginesetup.Installer{
-				Configuration: store, DataBase: paths.data, Getenv: getenv, KMPApproval: kmpApproval,
+				Configuration: store, Getenv: getenv, KMPApproval: kmpApproval, MADEApproval: kmpApproval,
 				PrepareMADE: (&madesetup.Preparer{ConfigPath: paths.mcp, Getenv: getenv, Store: store}).Prepare,
 			},
 		}
@@ -167,23 +134,31 @@ func newSetupWizard(getenv func(string) string, paths setupPaths, settings *stor
 	return w
 }
 
+// run asks for the model (nothing when OPENROUTER_API_KEY is set) and,
+// optionally, the TypeSafe key for Jev; the language comes from the
+// environment, the engines are installed and configured without a
+// question, and settings.json is written complete (decision D9 of the
+// lifecycle integration design).
 func (w *setupWizard) run(ctx context.Context) error {
 	w.lang = setupLanguage(w.getenv)
 	fmt.Fprintf(w.out, "\n%s\n%s\n", w.t("title"), w.t("intro"))
-	choice, err := w.choose(w.t("language.question"), []string{"English", "Español"}, map[string]int{"en": 1, "es": 2}[w.lang])
-	if err != nil {
-		return err
-	}
-	w.lang = []string{"en", "es"}[choice-1]
 	if err := w.settings.Change(ctx, func(s *storage.UserSettings) { s.Language = w.lang }); err != nil {
 		return err
 	}
 	if err := w.chooseModel(ctx); err != nil {
 		return err
 	}
+	jev, err := w.chooseJev(ctx)
+	if err != nil {
+		return err
+	}
 	if err := w.installEngines(ctx); err != nil {
 		return err
 	}
+	if err := w.settings.Change(ctx, func(s *storage.UserSettings) { storage.CompleteDefaults(s, jev) }); err != nil {
+		return err
+	}
+	fmt.Fprintln(w.out, w.t("settings.complete", map[bool]string{true: w.t("jev.on"), false: w.t("jev.off")}[jev]))
 	fmt.Fprintf(w.out, "\n%s\n", w.t("done", w.paths.settings))
 	if w.pause {
 		// The console takes the whole screen next; the summary stays until
@@ -200,6 +175,20 @@ func (w *setupWizard) run(ctx context.Context) error {
 // choice as the default model.
 func (w *setupWizard) chooseModel(ctx context.Context) error {
 	fmt.Fprintf(w.out, "\n%s\n", w.t("model.title"))
+	if key := strings.TrimSpace(w.getenv("OPENROUTER_API_KEY")); key != "" {
+		// The key decides the provider; a light model is the default.
+		model := lightModels[0]
+		if models, err := w.catalog(ctx, key); err == nil {
+			if recommended := recommendLightModels(models); len(recommended) > 0 {
+				model = string(recommended[0].ID)
+			}
+		}
+		if err := w.settings.Change(ctx, func(s *storage.UserSettings) { s.Model = model }); err != nil {
+			return err
+		}
+		fmt.Fprintln(w.out, w.t("model.auto", model))
+		return nil
+	}
 	var locals []localCandidate
 	for _, base := range w.bases {
 		locals = append(locals, w.probe(ctx, base)...)
@@ -244,6 +233,10 @@ func (w *setupWizard) chooseOpenRouter(ctx context.Context) error {
 	}
 	var models []domain.AvailableModel
 	for attempt := 0; ; attempt++ {
+		if key == "" && w.quiet {
+			fmt.Fprintln(w.out, w.t("model.skipped"))
+			return nil
+		}
 		if key == "" {
 			fmt.Fprint(w.out, w.t("openrouter.keyPrompt"))
 			entered, err := w.secret()
@@ -380,6 +373,41 @@ func (w *setupWizard) chooseLocal(ctx context.Context, locals []localCandidate) 
 
 // installEngines downloads, verifies, prepares and connects KMP and MADE,
 // the console's default memory and ceremony engines.
+// chooseJev asks for the TypeSafe key, once, hidden; Enter skips. The
+// environment's key is used as it is.
+func (w *setupWizard) chooseJev(ctx context.Context) (bool, error) {
+	fmt.Fprintf(w.out, "\n%s\n", w.t("jev.title"))
+	if strings.TrimSpace(w.getenv("TYPESAFE_API_KEY")) != "" {
+		fmt.Fprintln(w.out, w.t("jev.found"))
+		return true, nil
+	}
+	if credentials, err := (storage.CredentialsStore{Path: w.paths.credentials}).Load(); err == nil && credentials.TypeSafeAPIKey != "" {
+		fmt.Fprintln(w.out, w.t("jev.found"))
+		return true, nil
+	}
+	if w.quiet {
+		fmt.Fprintln(w.out, w.t("jev.skipped"))
+		return false, nil
+	}
+	fmt.Fprint(w.out, w.t("jev.question"))
+	entered, err := w.secret()
+	if err != nil {
+		return false, errSetupInterrupted
+	}
+	key := strings.TrimSpace(entered)
+	if key == "" {
+		fmt.Fprintln(w.out, w.t("jev.skipped"))
+		return false, nil
+	}
+	if err := (storage.CredentialsStore{Path: w.paths.credentials}).SaveTypeSafeKey(ctx, key); err != nil {
+		return false, err
+	}
+	fmt.Fprintln(w.out, w.t("jev.saved", w.paths.credentials))
+	return true, nil
+}
+
+// installEngines downloads, verifies, prepares and connects KMP and MADE
+// without a question, both at auto (decisions B11 and B12).
 func (w *setupWizard) installEngines(ctx context.Context) error {
 	fmt.Fprintf(w.out, "\n%s\n%s\n", w.t("engines.title"), w.t("engines.intro"))
 	targets, err := (&storage.MCPConfigStore{Path: w.paths.mcp}).EngineTargets(ctx)
@@ -395,26 +423,8 @@ func (w *setupWizard) installEngines(ctx context.Context) error {
 		fmt.Fprintln(w.out, w.t("engines.connected"))
 		return nil
 	}
-	install, err := w.yes(w.t("engines.question"), true)
-	if err != nil {
-		return err
-	}
-	if !install {
-		fmt.Fprintln(w.out, w.t("engines.later"))
-		return nil
-	}
-	approval := "manual"
-	if !connected["kmp"] {
-		auto, err := w.yes(w.t("engines.kmpAuto"), true)
-		if err != nil {
-			return err
-		}
-		if auto {
-			approval = "auto"
-		}
-	}
 	fmt.Fprintln(w.out, w.t("engines.working"))
-	results, err := w.engines(approval).Update(ctx)
+	results, err := w.engines("auto").Update(ctx)
 	if errors.Is(err, application.ErrEngineUpdatePlatform) {
 		fmt.Fprintln(w.out, w.t("engines.platform"))
 		return nil
@@ -440,6 +450,9 @@ func (w *setupWizard) installEngines(ctx context.Context) error {
 
 // choose prints numbered options and returns the 1-based answer.
 func (w *setupWizard) choose(question string, options []string, preferred int) (int, error) {
+	if w.quiet {
+		return preferred, nil
+	}
 	for {
 		fmt.Fprintln(w.out, question)
 		for i, option := range options {
@@ -461,6 +474,9 @@ func (w *setupWizard) choose(question string, options []string, preferred int) (
 }
 
 func (w *setupWizard) yes(question string, preferred bool) (bool, error) {
+	if w.quiet {
+		return preferred, nil
+	}
 	hints := map[bool]string{true: "[Y/n]", false: "[y/N]"}
 	if w.lang == "es" {
 		hints = map[bool]string{true: "[S/n]", false: "[s/N]"}
@@ -485,6 +501,9 @@ func (w *setupWizard) yes(question string, preferred bool) (bool, error) {
 }
 
 func (w *setupWizard) ask(question, preferred string) (string, error) {
+	if w.quiet {
+		return preferred, nil
+	}
 	if preferred != "" {
 		fmt.Fprintf(w.out, "%s [%s]: ", question, preferred)
 	} else {
@@ -621,117 +640,4 @@ func describeModel(m domain.AvailableModel) string {
 // perMillion is a rate's USD per million tokens without its unit.
 func perMillion(rate domain.ModelRate) string {
 	return strings.TrimPrefix(strings.TrimSuffix(rate.Display(), " / 1M tokens"), "$")
-}
-
-// localCandidate is one model a local OpenAI-compatible server serves.
-type localCandidate struct {
-	URL     string
-	Served  string
-	Context int
-}
-
-func (c localCandidate) describe() string {
-	text := c.Served + " · " + c.URL
-	if c.Context > 0 {
-		text += fmt.Sprintf(" · %dk", c.Context/1000)
-	}
-	return text
-}
-
-// localModel is the local_models entry: local/<name>, the served name when
-// the server needs it, and the window the person confirmed.
-func (c localCandidate) localModel(window int) storage.LocalModel {
-	name := strings.ToLower(path.Base(strings.ReplaceAll(c.Served, "\\", "/")))
-	if c.Served == "" {
-		// A server that names no model is known by its address.
-		if parsed, err := url.Parse(c.URL); err == nil {
-			name = parsed.Hostname() + "-" + parsed.Port()
-		}
-	}
-	name = strings.TrimSuffix(name, ".gguf")
-	var slug strings.Builder
-	dash := false
-	for _, r := range name {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '.' || r == '_' {
-			slug.WriteRune(r)
-			dash = false
-		} else if !dash && slug.Len() > 0 {
-			slug.WriteByte('-')
-			dash = true
-		}
-	}
-	id := strings.Trim(slug.String(), "-.")
-	if len(id) > 64 {
-		id = id[:64]
-	}
-	if id == "" || id == "." {
-		id = "model"
-	}
-	local := storage.LocalModel{ID: "local/" + id, Name: c.Served, URL: c.URL, ContextTokens: window}
-	if _, err := root.NewModelID(c.Served); err == nil && c.Served != "" {
-		local.Model = c.Served
-	}
-	if local.Name == "" {
-		local.Name = local.ID
-	}
-	return local
-}
-
-// probeLocalServer lists the models of an OpenAI-compatible server at base
-// (…/v1). llama.cpp reports its configured window on /props, vLLM as
-// max_model_len, and LM Studio or Ollama report none.
-func probeLocalServer(ctx context.Context, client *http.Client, base string) []localCandidate {
-	parsed, err := url.Parse(base)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
-		return nil
-	}
-	var listing struct {
-		Data []struct {
-			ID            string `json:"id"`
-			MaxModelLen   int    `json:"max_model_len"`
-			ContextLength int    `json:"context_length"`
-			Meta          struct {
-				TrainContext int `json:"n_ctx_train"`
-			} `json:"meta"`
-		} `json:"data"`
-	}
-	if !getJSON(ctx, client, base+"/models", &listing) {
-		return nil
-	}
-	var props struct {
-		Settings struct {
-			Context int `json:"n_ctx"`
-		} `json:"default_generation_settings"`
-	}
-	getJSON(ctx, client, strings.TrimSuffix(base, "/v1")+"/props", &props)
-	var found []localCandidate
-	for _, model := range listing.Data {
-		if model.ID == "" || len(found) == 8 {
-			continue
-		}
-		window := props.Settings.Context
-		for _, other := range []int{model.MaxModelLen, model.ContextLength, model.Meta.TrainContext} {
-			if window == 0 {
-				window = other
-			}
-		}
-		found = append(found, localCandidate{URL: base, Served: model.ID, Context: window})
-	}
-	return found
-}
-
-func getJSON(ctx context.Context, client *http.Client, address string, into any) bool {
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, address, nil)
-	if err != nil {
-		return false
-	}
-	response, err := client.Do(request)
-	if err != nil {
-		return false
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return false
-	}
-	return json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(into) == nil
 }

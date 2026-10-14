@@ -67,6 +67,12 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 				return err
 			}
 			if !reminded {
+				// The turn is over: its record goes to the session's MADE
+				// step and its results to KMP, after any memory the model
+				// recorded on the reminder.
+				if err := u.Continue.Session.EndTurn(ctx, s); err != nil {
+					return err
+				}
 				titleUntitled(ctx, *s, u.Continue.SessionLabels)
 				return nil
 			}
@@ -92,28 +98,8 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 	return domain.AvailableTool{}, false
 }
 
-// headAdmission is what rejectUnknown checks the call at the head against
-// before any card or automatic approval.
-type headAdmission struct {
-	Store SessionStorePort
-	Trace DiagnosticPort
-	// Validation checks local arguments against their schema; nil leaves
-	// that to the runtime.
-	Validation ToolArgumentValidationPort
-	// TurnLimit is the turn's tool-call budget; zero means
-	// domain.MaxTurnToolCalls.
-	TurnLimit int
-}
-
 func (u ContinueTurnUseCase) admission() headAdmission {
 	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, TurnLimit: u.turnLimit()}
-}
-
-func (a headAdmission) turnLimit() int {
-	if a.TurnLimit > 0 {
-		return a.TurnLimit
-	}
-	return domain.MaxTurnToolCalls
 }
 
 func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, emit func(Event) error) error {
@@ -143,8 +129,12 @@ func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, 
 			verdict, reason := s.Mode().Judge(tool.Identity, args)
 			if verdict != domain.VerdictDeny {
 				if resolveErr = compactRefusal(*s, p); resolveErr == nil {
-					if resolveErr = localArgumentError(admit.Validation, tool, args); resolveErr == nil {
-						return nil
+					// The missing why is named before the schema check, so
+					// the model reads what to send rather than a schema rule.
+					if resolveErr = whyError(tool, args); resolveErr == nil {
+						if resolveErr = localArgumentError(admit.Validation, tool, args); resolveErr == nil {
+							return nil
+						}
 					}
 				}
 			} else {

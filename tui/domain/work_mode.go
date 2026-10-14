@@ -32,6 +32,9 @@ const (
 	// ModeTask is a worker session the console starts for one task of an
 	// approved plan; it is never selected by the person.
 	ModeTask WorkMode = "task"
+	// ModeCeremony runs the published definition the person chose with
+	// /ceremony through the generic loop (decision H3).
+	ModeCeremony WorkMode = "ceremony"
 )
 
 func ParseWorkMode(raw string) (WorkMode, error) {
@@ -41,7 +44,7 @@ func ParseWorkMode(raw string) (WorkMode, error) {
 
 func (m WorkMode) Validate() error {
 	switch m {
-	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident, ModeRepair, ModeImprove, ModePlan, ModeTask:
+	case ModeNormal, ModeReview, ModeWriter, ModeResearch, ModeDebug, ModeDelivery, ModeIncident, ModeRepair, ModeImprove, ModePlan, ModeTask, ModeCeremony:
 		return nil
 	}
 	return errors.New("unknown work mode")
@@ -53,5 +56,5 @@ func (m WorkMode) ForgesPullRequest() bool { return m == ModeRepair || m == Mode
 
 // StartsCeremony reports modes whose first prompt starts a MADE ceremony.
 func (m WorkMode) StartsCeremony() bool {
-	return m == ModeDebug || m == ModeDelivery || m == ModeIncident || m == ModeRepair || m == ModeImprove || m == ModePlan
+	return m == ModeDebug || m == ModeDelivery || m == ModeIncident || m == ModeRepair || m == ModeImprove || m == ModePlan || m == ModeCeremony
 }

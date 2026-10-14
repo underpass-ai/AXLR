@@ -36,7 +36,6 @@ func installer(t *testing.T, r *registrar, calls *[]call, fail error) *Installer
 	env := map[string]string{"HOME": home, "PATH": "/usr/bin:/bin", "OPENROUTER_API_KEY": "secret", "XDG_CONFIG_HOME": "/elsewhere"}
 	return &Installer{
 		Configuration: r,
-		DataBase:      filepath.Join(home, ".local", "share"),
 		Getenv:        func(name string) string { return env[name] },
 		KMPApproval:   "auto",
 		run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
@@ -46,7 +45,9 @@ func installer(t *testing.T, r *registrar, calls *[]call, fail error) *Installer
 	}
 }
 
-func TestInstallKMPSynchronisesTheGuideIntoThePinnedStoreBeforeRegistering(t *testing.T) {
+// The store is the console's choice per workspace since 13 October 2026:
+// the installer pins the backend only, runs nothing and syncs no guide.
+func TestInstallKMPRegistersTheLauncherWithoutPinningAStore(t *testing.T) {
 	r := &registrar{}
 	var calls []call
 	root := filepath.Join(t.TempDir(), "kmp-0.25.0-abc")
@@ -54,12 +55,10 @@ func TestInstallKMPSynchronisesTheGuideIntoThePinnedStoreBeforeRegistering(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	store := filepath.Join(home, ".local", "share", "kmp", "default")
-	if detail != "memory store "+store {
+	if detail != "connected; the memory store is chosen per workspace at launch" {
 		t.Fatalf("detail %q", detail)
 	}
-	want := call{filepath.Join(root, "bin", "kmp-mcp"), []string{"guide", "sync", "--plugin-root", root}, []string{"HOME=" + home, "PATH=/usr/bin:/bin", "KMP_MCP_BACKEND=embedded", "KMP_MCP_DATA_DIR=" + store}}
-	if len(calls) != 1 || !reflect.DeepEqual(calls[0], want) {
+	if len(calls) != 0 {
 		t.Fatalf("calls %+v", calls)
 	}
 	if len(r.got) != 1 {
@@ -67,7 +66,7 @@ func TestInstallKMPSynchronisesTheGuideIntoThePinnedStoreBeforeRegistering(t *te
 	}
 	got := r.got[0]
 	if got.Engine != "kmp" || got.Launcher != filepath.Join(root, "scripts", "run-embedded-mcp.sh") || got.Purpose != "memory" || got.Approval != "auto" ||
-		!reflect.DeepEqual(got.Env, map[string]string{"KMP_MCP_BACKEND": "embedded", "KMP_MCP_DATA_DIR": store}) ||
+		!reflect.DeepEqual(got.Env, map[string]string{"KMP_MCP_BACKEND": "embedded"}) ||
 		!reflect.DeepEqual(got.EnvFrom, map[string]string{"HOME": "HOME", "PATH": "PATH"}) {
 		t.Fatalf("registration %+v", got)
 	}
@@ -79,12 +78,12 @@ func TestInstallMADEConfiguresWithTheLauncherEnvironmentThenPrepares(t *testing.
 	root := filepath.Join(t.TempDir(), "made-0.10.0-abc")
 	i := installer(t, r, &calls, nil)
 	prepared := false
-	i.PrepareMADE = func(context.Context) (application.MADEPreparation, error) {
+	i.PrepareMADE = func(context.Context) (application.OrchestratorPreparation, error) {
 		if len(r.got) != 1 {
 			t.Fatal("prepared before MADE was registered")
 		}
 		prepared = true
-		return application.MADEPreparation{Status: "granted", WorkIdentity: "axlr-work-1", Published: []string{"axlr_debug 2.0", "axlr_plan 1.0"}}, nil
+		return application.OrchestratorPreparation{Status: "granted", WorkIdentity: "axlr-work-1", Published: []string{"axlr_debug 2.0", "axlr_plan 1.0"}}, nil
 	}
 	detail, err := i.InstallEngine(context.Background(), "made", root)
 	if err != nil || !prepared {
@@ -109,8 +108,8 @@ func TestInstallMADEStaysConnectedWhenPreparationFails(t *testing.T) {
 	r := &registrar{}
 	var calls []call
 	i := installer(t, r, &calls, nil)
-	i.PrepareMADE = func(context.Context) (application.MADEPreparation, error) {
-		return application.MADEPreparation{}, errors.New("grant refused")
+	i.PrepareMADE = func(context.Context) (application.OrchestratorPreparation, error) {
+		return application.OrchestratorPreparation{}, errors.New("grant refused")
 	}
 	detail, err := i.InstallEngine(context.Background(), "made", t.TempDir())
 	if err != nil || len(r.got) != 1 || !strings.Contains(detail, "grant refused") || !strings.Contains(detail, "/mcp") {
@@ -118,14 +117,14 @@ func TestInstallMADEStaysConnectedWhenPreparationFails(t *testing.T) {
 	}
 }
 
+// Only MADE runs a setup command here; KMP's store is prepared by the
+// console per workspace.
 func TestInstallStopsBeforeRegisteringWhenTheStoreSetupFails(t *testing.T) {
-	for _, engine := range []string{"kmp", "made"} {
-		r := &registrar{}
-		var calls []call
-		_, err := installer(t, r, &calls, errors.New("boom")).InstallEngine(context.Background(), engine, t.TempDir())
-		if err == nil || len(r.got) != 0 {
-			t.Fatalf("%s: %v %+v", engine, err, r.got)
-		}
+	r := &registrar{}
+	var calls []call
+	_, err := installer(t, r, &calls, errors.New("boom")).InstallEngine(context.Background(), "made", t.TempDir())
+	if err == nil || len(r.got) != 0 {
+		t.Fatalf("%v %+v", err, r.got)
 	}
 }
 

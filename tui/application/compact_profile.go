@@ -178,7 +178,7 @@ func compactRefusal(s domain.Session, pending domain.PendingTool) error {
 			previous := activity[i-1].Call
 			if previous.Name == name && bytes.Equal(canonicalJSON(previous.Arguments.Bytes()), canonicalJSON(pending.Call.Arguments.Bytes())) {
 				if name == "local_exec" {
-					return errors.New(`same call as before; change something. A local_exec call is {"program":"go","args":["test","./..."]}: the program alone, then one list item per argument, with no extra quotes`)
+					return errors.New(`same call as before; change something. A local_exec call is {"program":"go","args":["test","./..."],"why":"run the tests"}: the program alone, then one list item per argument, with no extra quotes, and a one-sentence why`)
 				}
 				return errors.New("same call as before; change something")
 			}

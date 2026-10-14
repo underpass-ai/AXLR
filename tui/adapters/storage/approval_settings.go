@@ -16,12 +16,6 @@ import (
 
 const maxApprovalSettingsBytes = 65536
 
-type approvalSettingsFile struct {
-	Version    int                   `json:"version"`
-	Autonomous bool                  `json:"autonomous"`
-	Allowed    []domain.ToolIdentity `json:"allowed"`
-}
-
 // ApprovalSettings stores exact tool identities. A saved choice applies on the
 // next call too; the global autonomous switch includes every known tool.
 type ApprovalSettings struct {
@@ -82,6 +76,17 @@ func NewApprovalSettingsInUserSettings(store *UserSettingsStore, legacyPath stri
 	}
 	legacy.settings = store
 	return legacy, nil
+}
+
+// AlwaysAsk names the destructive rules in force: those settings list,
+// or every rule when settings name none.
+func (s *ApprovalSettings) AlwaysAsk() []string {
+	if s.settings != nil {
+		if user, err := s.settings.Load(context.Background()); err == nil && user.Approvals != nil && user.Approvals.AlwaysAsk != nil {
+			return append([]string(nil), user.Approvals.AlwaysAsk...)
+		}
+	}
+	return domain.DestructiveRules()
 }
 
 func (s *ApprovalSettings) Autonomous() bool {

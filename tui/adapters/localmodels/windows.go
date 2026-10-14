@@ -68,3 +68,13 @@ func (w Windows) PromptCeiling(id root.ModelID) int {
 	}
 	return ceiling
 }
+
+// ContextCap is the cap, in tokens, of a request's whole context for a
+// model (decision D10): three quarters of a local model's window, leaving
+// the rest for the reply; a remote model's prompt ceiling.
+func (w Windows) ContextCap(id root.ModelID) int {
+	if _, local := w.Local[id]; local {
+		return int(w.ContextWindow(id)) / 4 * 3
+	}
+	return w.PromptCeiling(id)
+}

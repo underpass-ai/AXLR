@@ -90,3 +90,30 @@ func TestStalePickerLabelPreservesNewMemoryScope(t *testing.T) {
 		t.Fatalf("clearing title erased memory scope: %+v", got[id])
 	}
 }
+
+// Forget removes a label whole, about included, which Set cannot do.
+func TestForgetRemovesALabelWithItsAbout(t *testing.T) {
+	store, err := NewSessionLabelStore(filepath.Join(t.TempDir(), "axlr", "session-labels.json"))
+	must(t, err)
+	ctx := context.Background()
+	id := domain.SessionID("0123456789abcdef0123456789abcdef")
+	if _, err := store.Initialize(ctx, id, domain.SessionLabel{About: "project:AXLR"}); err != nil {
+		t.Fatal(err)
+	}
+	must(t, store.Set(ctx, id, domain.SessionLabel{}))
+	labels, err := store.Load(ctx)
+	must(t, err)
+	if labels[id].About != "project:AXLR" {
+		t.Fatalf("Set must keep the about: %+v", labels[id])
+	}
+	must(t, store.Forget(ctx, id))
+	must(t, store.Forget(ctx, id))
+	labels, err = store.Load(ctx)
+	must(t, err)
+	if _, ok := labels[id]; ok {
+		t.Fatalf("label kept: %+v", labels[id])
+	}
+	if err := store.Forget(ctx, "not-an-id"); err == nil {
+		t.Fatal("invalid session id accepted")
+	}
+}

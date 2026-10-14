@@ -3,6 +3,7 @@ package ceremonyhost
 import (
 	"embed"
 	"fmt"
+	"regexp"
 )
 
 //go:embed definitions/*.yaml
@@ -25,6 +26,10 @@ var definitions = []Definition{
 	{Name: "axlr_plan", Version: "1.0", Digest: "379619a6f6b49c799f64b43e23c2686507d30f1b1b27e368d14f512d52ef2ad4"},
 	{Name: "axlr_task", Version: "1.0", Digest: "5b678bc6b5cc1078b2a92dd8fff948dc85aeb547b4dd615bbb81827ae006d763"},
 	{Name: "axlr_sync", Version: "1.0", Digest: "1a76afda71cc5d9941beb927e5d20b5fb11d2312028e433200f11952406bf090"},
+	// axlr_session is every console session (decision D4 of the lifecycle
+	// integration design): one turn step per prompt, claimed and completed
+	// by the console alone.
+	{Name: "axlr_session", Version: "1.0", Digest: "ac1273df75166b7a7f42ae5ff7b79a877fc8902643f2fb68543d3f9b4a596e80"},
 }
 
 // Definitions lists the pinned definitions.
@@ -43,4 +48,25 @@ func pinned(name, version string) (Definition, bool) {
 		}
 	}
 	return Definition{}, false
+}
+
+// roleLine tolerates CRLF: a Windows checkout converts the embedded YAML
+// (seen in CI on 13 October 2026).
+var roleLine = regexp.MustCompile(`(?m)^roles:\r?\n- id: (\S+)`)
+
+// RoleOf is the console's role in a pinned definition: the first role it
+// declares ("" for an unpinned one).
+func RoleOf(name, version string) string {
+	definition, ok := pinned(name, version)
+	if !ok {
+		return ""
+	}
+	text, err := definition.YAML()
+	if err != nil {
+		return ""
+	}
+	if m := roleLine.FindStringSubmatch(text); m != nil {
+		return m[1]
+	}
+	return ""
 }

@@ -205,6 +205,8 @@ func New(deps Dependencies) AppModel {
 	ctx, cancel := context.WithCancel(parent)
 	z := zone.New()
 	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}, pasted: map[string]bool{}}
+	m.Header.About, m.Header.Memories, m.Header.MemoriesKnown = deps.About, deps.Memories, deps.MemoriesKnown
+	m.Plugins.Facts = deps.EngineFacts
 	m.withCommandAllows()
 	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()
@@ -475,9 +477,26 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmd := m.waitingCommand(nil)
 		return m, cmd
+	case resubmitPrompt:
+		// The successor session takes the prompt the capped one could not.
+		m.Composer.Input.SetValue(v.prompt)
+		return m.submitDraft()
 	case operationComplete:
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
+		}
+		if capped, ok := application.IsContextCap(v.Err); ok {
+			// The context cap (decision D10): the turn stopped, the session
+			// closed, and the prompt continues in the successor.
+			if m.deps.Session != nil {
+				*m.deps.Session = capped.Successor
+			}
+			v.Session, v.Err, v.Fresh = capped.Successor, nil, true
+			next, cmd := m.Update(v)
+			changed := next.(AppModel)
+			changed.Status.Notice = changed.Theme.Tf("notice.continued", capped.Tokens/1000, capped.Cap/1000, string(capped.Predecessor)[:8])
+			prompt := capped.Prompt
+			return changed, tea.Batch(cmd, func() tea.Msg { return resubmitPrompt{prompt: prompt} })
 		}
 		if !v.gitRead && m.turnRunning() {
 			// A turn may have committed or switched branches: the header
@@ -538,8 +557,25 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// m.Info is shared by several overlays: a result is written only
 		// while its own panel is open, never over one opened since.
-		if v.MADEPreparation != nil && m.overlay == "made-setup" {
-			m.Info.SetContent(madePreparationContent(*v.MADEPreparation, v.Err, m.Theme))
+		if v.Published != "" && v.Err == nil {
+			m.Status.Notice = m.Theme.Tf("notice.ceremonyPublished", v.Published)
+		}
+		if v.MemorySaved != nil && v.Err == nil {
+			m.Status.Notice = m.Theme.Tf("notice.memorySaved", v.MemorySaved.Events, v.MemorySaved.About, shortenHome(v.MemorySaved.Path))
+		}
+		if v.MemoryForgotten != nil && v.Err == nil {
+			m.Status.Notice = m.Theme.Tf("notice.memoryForgotten", v.MemoryForgotten.Ref, v.MemoryForgotten.Superseding)
+		}
+		if v.MemoryCompared != nil && m.overlay == "memory" {
+			content := memoryCompareContent(*v.MemoryCompared, m.Theme)
+			if v.Err != nil {
+				content = v.Err.Error()
+			}
+			m.Info.SetContent(content)
+			m.Info.Viewport.GotoTop()
+		}
+		if v.OrchestratorPreparation != nil && m.overlay == "made-setup" {
+			m.Info.SetContent(madePreparationContent(*v.OrchestratorPreparation, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
 		}
 		if v.EngineUpdates != nil && m.overlay == "updates" {
@@ -813,6 +849,10 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m.openUsagePanel(), nil
 			}
+			if command == "/session" {
+				m.Composer.Input.Reset()
+				return m.openSessionPanel(), nil
+			}
 			if command == "/jobs" {
 				m.Composer.Input.Reset()
 				return m.openJobsPanel(), nil
@@ -820,6 +860,12 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/stop-ceremony" {
 				m.Composer.Input.Reset()
 				return m.stopCeremony()
+			}
+			if command == "/ceremony" {
+				return m.ceremonyCommand("")
+			}
+			if command == "/memory" {
+				return m.memoryCommand("")
 			}
 			if command == "/changes" || command == "/diff" {
 				m.Composer.Input.Reset()
@@ -1268,6 +1314,17 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 		return changed, cmd
 	case command == "/export":
 		return m.exportSession(text)
+	case command == "/ceremony":
+		return m.ceremonyCommand(text)
+	case command == "/memory":
+		return m.memoryCommand(text)
+	case command == "/session":
+		fields := strings.Fields(text)
+		if strings.EqualFold(fields[0], "export") {
+			return m.exportSessionBundle(strings.Join(fields[1:], " "))
+		}
+		m.Status.Notice = m.Theme.Tf("notice.slashUsage", slashUsage("/session"))
+		return m, nil
 	case command == "/copy" && (strings.EqualFold(text, "code") || strings.Trim(text, "0123456789") == ""):
 		m.Composer.Input.Reset()
 		return m, m.copyCode(strings.ToLower(text))

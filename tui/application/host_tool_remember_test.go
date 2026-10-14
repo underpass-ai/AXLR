@@ -77,7 +77,7 @@ func TestAxlrRememberIsOfferedWhereTheModelRecordsMemory(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s := rememberSession(t, tc.mode)
 			var request root.CompletionRequest
-			u := ContinueTurnUseCase{Store: &memoryStore{}, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			u := ContinueTurnUseCase{Store: &memoryStore{}, Engines: engineParagraphs{}, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
 				request = req
 				return assistant("ok"), nil
 			})}
@@ -91,7 +91,7 @@ func TestAxlrRememberIsOfferedWhereTheModelRecordsMemory(t *testing.T) {
 				t.Fatalf("offered = %v", !tc.offered)
 			}
 			guidance := string(request.Messages[0].Content)
-			if tc.offered != strings.Contains(guidance, "write it with axlr_remember") {
+			if tc.offered != strings.Contains(guidance, "goes to axlr_remember") {
 				t.Fatalf("guidance: %s", guidance)
 			}
 		})
@@ -132,7 +132,7 @@ func TestHostRememberBuildsTheRequestFromTheSession(t *testing.T) {
 		}
 	}
 	// Without KMP, or while a ceremony records the outcome, it refuses.
-	if outcome, _ := (HostToolUseCase{}).Execute(context.Background(), s, rememberIdentity(t), mustObject(t, `{"kind":"decision","text":"x","evidence":["e"]}`)); !outcome.IsError || !strings.Contains(string(outcome.Content), "KMP is not connected") {
+	if outcome, _ := (HostToolUseCase{}).Execute(context.Background(), s, rememberIdentity(t), mustObject(t, `{"kind":"decision","text":"x","evidence":["e"]}`)); !outcome.IsError || !strings.Contains(string(outcome.Content), "memory is not connected") {
 		t.Fatalf("without KMP: %s", outcome.Content)
 	}
 	if err := s.SetCeremony(domain.CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "repair", Iteration: 1}); err != nil {
@@ -145,7 +145,7 @@ func TestHostRememberBuildsTheRequestFromTheSession(t *testing.T) {
 
 func TestAxlrRememberCountsAsTheRequestsMemoryWrite(t *testing.T) {
 	edit := toolCall(t, "e1", "local_edit", `{"path":"a.go","old_text":"x","new_text":"y"}`)
-	if needsMemoryReminder(memoryRequest(t, edit, toolCall(t, "m1", HostRememberName, `{"kind":"decision","text":"x","evidence":["e"]}`)), "kmp_write_memory") {
+	if needsMemoryReminder(memoryRequest(t, edit, toolCall(t, "m1", HostRememberName, `{"kind":"decision","text":"x","evidence":["e"]}`)), memoryWriteSnapshot()) {
 		t.Fatal("a request that called axlr_remember was reminded")
 	}
 	// The checkpoint lists what it recorded, from its answer.
@@ -242,5 +242,20 @@ func TestHostRememberReadsEvidenceLinesAndArrays(t *testing.T) {
 	var example map[string]any
 	if err := json.Unmarshal([]byte(description[start:start+end]), &example); err != nil || example["evidence"] == nil {
 		t.Fatalf("example %q: %v", description[start:start+end], err)
+	}
+}
+
+func TestHostRememberPassesSummaryEN(t *testing.T) {
+	s := rememberSession(t, domain.ModeNormal)
+	recorder := &rememberRecorder{answer: map[string]any{"accepted": true}}
+	u := HostToolUseCase{Memory: recorder}
+	if outcome, err := u.Execute(context.Background(), s, rememberIdentity(t), mustObject(t, `{"kind":"decision","text":"Las fechas se guardan en UTC.","summary_en":"Dates are stored in UTC.","evidence":["parser.go:12"]}`)); err != nil || outcome.IsError {
+		t.Fatalf("%+v %v", outcome, err)
+	}
+	if recorder.requests[0].SummaryEN != "Dates are stored in UTC." || recorder.requests[0].Text != "Las fechas se guardan en UTC." {
+		t.Fatalf("%+v", recorder.requests[0])
+	}
+	if !strings.Contains(string(RememberTool().Definition.Description), "summary_en") || !strings.Contains(rememberSchema, `"summary_en"`) {
+		t.Fatal("summary_en is not described")
 	}
 }

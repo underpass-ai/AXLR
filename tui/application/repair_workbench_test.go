@@ -245,13 +245,13 @@ func hasDefinition(tools []root.ToolDefinition, name root.ToolName) bool {
 
 func TestModelGuidanceExplainsSelfRepairOutsideRepairSessions(t *testing.T) {
 	s := turnSession(t)
-	if !strings.Contains(string(modelHostGuidance(&s).Content), "axlr_request_repair") {
+	if !strings.Contains(string(modelHostGuidance(&s, engineParagraphs{}).Content), "axlr_request_repair") {
 		t.Fatal("normal sessions are told how to request a repair")
 	}
 	if err := s.SetMode(domain.ModeRepair); err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(string(modelHostGuidance(&s).Content), "axlr_request_repair") {
+	if strings.Contains(string(modelHostGuidance(&s, engineParagraphs{}).Content), "axlr_request_repair") {
 		t.Fatal("repair sessions are not")
 	}
 	var schema map[string]any

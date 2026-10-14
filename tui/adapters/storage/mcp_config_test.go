@@ -77,8 +77,12 @@ func TestLoadMCPConfigRejectsUnsafeOrInvalidFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if runtime.GOOS != "windows" {
-		if _, err := LoadMCPConfig(config, func(string) string { return "" }); err == nil {
-			t.Fatal("public config accepted")
+		// A public file is made private, not refused (13 October 2026).
+		if _, err := LoadMCPConfig(config, func(string) string { return "" }); err != nil {
+			t.Fatal("public config refused:", err)
+		}
+		if info, err := os.Stat(config); err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatalf("public config left as it was: %v %v", info.Mode(), err)
 		}
 	}
 	if err := os.Remove(config); err != nil {
@@ -129,8 +133,15 @@ func TestLoadMCPConfigErrorNamesPathAndSpecificReason(t *testing.T) {
 			if err := os.Chmod(path, 0644); err != nil {
 				t.Fatal(err)
 			}
-			expect(t, path, "has mode 0644")
-			expect(t, path, "chmod 600 "+path)
+			// The console owns the file: a wide mode is made private, not
+			// refused (13 October 2026).
+			if _, err := LoadMCPConfiguration(path, func(string) string { return "" }); err != nil {
+				t.Fatal(err)
+			}
+			info, err := os.Stat(path)
+			if err != nil || info.Mode().Perm() != 0o600 {
+				t.Fatalf("mode %v %v", info.Mode(), err)
+			}
 		})
 	}
 }

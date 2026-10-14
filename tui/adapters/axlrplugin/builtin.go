@@ -1,43 +1,27 @@
 package axlrplugin
 
 import (
-	"embed"
 	"errors"
-	"io/fs"
-	"strings"
 	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
-const builtinSessionSkill = "axlr-session"
-const builtinSessionRoot = "builtin/axlr/skills/" + builtinSessionSkill + "/"
-
-// Built-in guidance is available without a copied package or a live MCP engine.
-// The ceremony definitions the console drives are not a skill: they live in
+// The console ships no built-in skill: the axlr-session skill, which asked
+// the model to settle the session's context, read KMP's guide and compare
+// abouts, was retired on 13 October 2026 (decision D8 of the lifecycle
+// integration design) when the console took over the session's memory
+// protocol; its title duty is one sentence of the system prompt and its
+// inter-about reference is in docs/runbooks/kmp.md. The ceremony
+// definitions the console drives are not a skill either: they live in
 // tui/adapters/ceremonyhost/definitions and are published through /mcp → P.
-//
-//go:embed builtin/axlr/skills/axlr-session
-var builtinResources embed.FS
+// The axlr and made namespaces stay reserved, so a copied package cannot
+// pose as the console's own guidance.
 
-func builtinSkillIndex() (string, error) {
-	data, err := builtinResources.ReadFile(builtinSessionRoot + "SKILL.md")
-	if err != nil {
-		return "", err
-	}
-	return "\n- axlr:" + builtinSessionSkill + ": " + skillDescription(data), nil
-}
+func builtinSkillIndex() (string, error) { return "", nil }
 
-func readBuiltinSkill(plugin, skill, resource string) ([]byte, error) {
-	root := ""
-	if plugin == "axlr" && skill == builtinSessionSkill {
-		root = builtinSessionRoot
-	}
-	if root == "" || !fs.ValidPath(resource) ||
-		(resource != "SKILL.md" && resource != "agents/openai.yaml" && !strings.HasPrefix(resource, "references/")) {
-		return nil, errors.New("built-in skill resource is unavailable")
-	}
-	return builtinResources.ReadFile(root + resource)
+func readBuiltinSkill(string, string, string) ([]byte, error) {
+	return nil, errors.New("built-in skill resource is unavailable")
 }
 
 func skillPage(plugin, skill, resource string, data []byte, offset, limit int) (application.SkillPage, error) {

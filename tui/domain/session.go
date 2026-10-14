@@ -101,6 +101,9 @@ func (s *Session) SetMode(mode WorkMode) error {
 		return err
 	}
 	s.state.Mode = mode
+	if mode != ModeCeremony {
+		s.state.ChosenCeremony = CeremonyChoice{}
+	}
 	return nil
 }
 

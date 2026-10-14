@@ -65,6 +65,11 @@ func (m AppModel) approvalCard() string {
 		// nothing said why: the card now says the mode asks.
 		note = m.Theme.Tf("approval.modeAsks", m.Theme.T("mode."+string(m.Header.State.Mode)))
 	}
+	if rule := m.destructiveRule(m.Approval.Pending); rule != "" {
+		// The destructive list keeps its card under autonomy (decision K5a).
+		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "always-allow" || h.zone == "autonomy-on" })
+		note = m.Theme.Tf("approval.destructive", rule)
+	}
 	var actions []string
 	for _, h := range hints {
 		actions = append(actions, m.zones.Mark(m.prefix+h.zone, m.footerKey(h.key)+m.Theme.Muted(" "+h.label)))

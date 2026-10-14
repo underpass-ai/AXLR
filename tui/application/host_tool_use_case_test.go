@@ -47,7 +47,7 @@ func hostExecute(t *testing.T, s domain.Session, op, args string) domain.ToolOut
 }
 
 func TestHostDiscoveryListsStableSummariesAndExactSchema(t *testing.T) {
-	s := hostSession(t, "reply", hostPlugin(t, "zeta", "made", "run"), hostPlugin(t, "alpha", "kmp", "kmp_wake"))
+	s := hostSession(t, "reply", hostPlugin(t, "zeta", "made", "made_get_ceremony_instance"), hostPlugin(t, "alpha", "kmp", "kmp_wake"))
 	out := hostExecute(t, s, domain.HostOperationTools, `{"limit":1}`)
 	var result struct {
 		Tools        []struct{ Name string }
@@ -82,7 +82,7 @@ func TestHostDiscoveryRejectsInvalidRangesAndSchemaWithoutTruncation(t *testing.
 	if out := hostExecute(t, s, domain.HostOperationTools, string(query)); !out.IsError {
 		t.Fatal("unbounded query")
 	}
-	huge := hostPlugin(t, "huge", "kmp", "kmp_guide")
+	huge := hostPlugin(t, "huge", "kmp", "kmp_inspect")
 	schema, _ := json.Marshal(map[string]any{"type": "object", "description": strings.Repeat("z", MaxHostResultBytes)})
 	huge.Definition.Parameters = hostJSON(t, string(schema))
 	s = hostSession(t, "reply", huge)

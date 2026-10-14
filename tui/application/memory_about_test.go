@@ -11,9 +11,9 @@ import (
 
 func TestProjectAboutIsDerivedFromTheWorkspaceRoot(t *testing.T) {
 	for workspace, want := range map[domain.Workspace]string{
-		"/home/tirso/ai/AXLR":        "project:axlr",
-		"/home/tirso/ai/AXLR/":       "project:axlr",
-		"/srv/My Service":            "project:my-service",
+		"/home/tirso/ai/AXLR":        "project:AXLR",
+		"/home/tirso/ai/AXLR/":       "project:AXLR",
+		"/srv/My Service":            "project:My-Service",
 		"/home/tirso/ai/kmp\tengine": "project:kmp-engine",
 		"/":                          "",
 	} {
@@ -73,5 +73,39 @@ func TestSessionToolAndPromptCarryTheDefaultAbout(t *testing.T) {
 	guidance, err := sessionContextGuidance(context.Background(), s, labels)
 	if err != nil || !strings.Contains(guidance, `"about":"`+ProjectAbout(state.Workspace)+`"`) {
 		t.Fatalf("prompt metadata: %s %v", guidance, err)
+	}
+}
+
+// A workspace whose bundle names the project's about binds every session
+// the console creates to it, the launched one and the ones /new or a plan
+// add later; a session already bound keeps its about.
+func TestCreateSessionBindsTheBundlesAbout(t *testing.T) {
+	store := &repairStore{}
+	labels := &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{}}
+	u := CreateSessionUseCase{Store: store, Labels: labels, About: "project:AXLR"}
+	workspace := domain.Workspace(t.TempDir())
+	created, err := u.ExecuteNew(context.Background(), workspace, "openai/gpt-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := labels.labels[created.ID()].About; got != "project:AXLR" {
+		t.Fatalf("about %q", got)
+	}
+	labels.labels["b"] = domain.SessionLabel{About: "project:Other"}
+	if _, err := u.Execute(context.Background(), "b", workspace, "openai/gpt-test"); err == nil {
+		t.Fatal("an invalid id is refused")
+	}
+	id, _ := NewRandomSessionID()
+	labels.labels[id] = domain.SessionLabel{About: "project:Other"}
+	if _, err := u.Execute(context.Background(), id, workspace, "openai/gpt-test"); err != nil {
+		t.Fatal(err)
+	}
+	if got := labels.labels[id].About; got != "project:Other" {
+		t.Fatalf("a bound about is kept: %q", got)
+	}
+	plain := CreateSessionUseCase{Store: store}
+	other, err := plain.ExecuteNew(context.Background(), workspace, "openai/gpt-test")
+	if err != nil || labels.labels[other.ID()].About != "" {
+		t.Fatalf("without a bundle about nothing is bound: %v %+v", err, labels.labels[other.ID()])
 	}
 }

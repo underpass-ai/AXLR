@@ -66,9 +66,13 @@ func omittedTurnRecords(original []root.Message, first, cut int) map[int]turnRec
 		}
 		record := records[turn]
 		for _, call := range message.ToolCalls {
-			local := strings.HasPrefix(string(call.Name), "local_")
-			if local {
-				record.worked = record.worked || call.Name == "local_write" || call.Name == "local_edit"
+			// A turn worked when it changed a file or ran a command, as the
+			// memory reminder counts it (decision F2).
+			switch call.Name {
+			case "local_write", "local_edit":
+				record.worked = record.worked || writeSucceeded(results[call.ID])
+			case "local_exec", HostRunToolName:
+				record.worked = record.worked || commandRan(results[call.ID])
 			}
 			switch call.Name {
 			case "local_write", "local_edit":
@@ -95,9 +99,6 @@ func omittedTurnRecords(original []root.Message, first, cut int) map[int]turnRec
 		records[turn] = record
 	}
 	for index, record := range records {
-		if !record.worked && localCalls(original, index, cut) >= memoryReminderCalls {
-			record.worked = true
-		}
 		record.unrecorded = usesMemory && record.worked && len(record.memory) == 0
 		records[index] = record
 	}
@@ -154,24 +155,6 @@ func argumentString(arguments root.JSONValue, key string) string {
 		return ""
 	}
 	return value
-}
-
-// localCalls counts the local tool calls other than reads, searches and
-// listings of the person's turn that starts at index, console messages
-// included, up to end.
-func localCalls(original []root.Message, index, end int) int {
-	count := 0
-	for i := index + 1; i < end; i++ {
-		if original[i].Role == root.RoleUser && !strings.HasPrefix(string(original[i].Content), "[AXLR") {
-			break
-		}
-		for _, call := range original[i].ToolCalls {
-			if countsForMemory(call.Name) {
-				count++
-			}
-		}
-	}
-	return count
 }
 
 func contains(values []string, value string) bool {

@@ -3,8 +3,10 @@ package ceremonyhost
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -112,5 +114,57 @@ func TestRememberNamesWhatKMPRefused(t *testing.T) {
 	_, err := m.Remember(context.Background(), rememberRequest())
 	if err == nil || !strings.Contains(err.Error(), "KMP refused the memory (invalid_argument): unsupported or vague kmp_write_memory relation `refines`") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// A turn entry is one kind turn memory under the session's about, with
+// the console's English summary as summary_en and one evidence line per
+// action.
+func TestRecordTurnWritesOneTurnEntry(t *testing.T) {
+	var requests []map[string]any
+	m := kmpAnswers(t, &requests, map[string]any{"accepted": true, "status": "committed", "local_refs": map[string]any{"turn": "ws:abc:entry:turn:turn-3-1-file-written"}})
+	when := time.Date(2026, 10, 13, 15, 0, 0, 0, time.UTC)
+	ref, err := m.RecordTurn(context.Background(), application.TurnEntry{About: "ws:abc", Key: "axlr:turn:abc:4", Summary: "Turn 3: 1 file written (a.go).", Evidence: []string{"MADE axlr-session-abc step turn #3", "local_write a.go (create) — why: add it — auto_approve, completed"}, OccurredAt: when, Labels: map[string][]string{"session": {"abc"}}})
+	if err != nil || ref != "ws:abc:entry:turn:turn-3-1-file-written" {
+		t.Fatalf("%q %v", ref, err)
+	}
+	request := requests[0]
+	memory := request["memories"].([]any)[0].(map[string]any)
+	if request["about"] != "ws:abc" || request["actor"] != "axlr" || request["idempotency_key"] != "axlr:turn:abc:4" || memory["kind"] != "turn" || memory["summary_en"] != memory["summary"] || memory["occurred_at"] != "2026-10-13T15:00:00Z" || !strings.Contains(memory["evidence"].(string), "\n") {
+		t.Fatalf("request %+v", request)
+	}
+	var more []map[string]any
+	refused := kmpAnswers(t, &more, map[string]any{"accepted": false, "status": "needs_review"})
+	if _, err := refused.RecordTurn(context.Background(), application.TurnEntry{About: "ws:abc", Key: "k", Summary: "s", Evidence: []string{"e"}}); err == nil {
+		t.Fatal("an unaccepted write is an error")
+	}
+	// A key the store accepted already is the journal's "recorded".
+	var dup []map[string]any
+	recorded := kmpAnswers(t, &dup, map[string]any{"status": "rejected", "error": map[string]any{"code": "conflict", "message": "embedded kernel ingest conflict for `ws:abc`: idempotency key 'k' was already accepted"}})
+	if _, err := recorded.RecordTurn(context.Background(), application.TurnEntry{About: "ws:abc", Key: "k", Summary: "s", Evidence: []string{"e"}}); !errors.Is(err, application.ErrEntryRecorded) {
+		t.Fatalf("duplicate key: %v", err)
+	}
+}
+
+func TestRememberSendsSummaryENAndNamesItOnRefusal(t *testing.T) {
+	var requests []map[string]any
+	m := kmpAnswers(t, &requests, map[string]any{"accepted": true, "status": "committed", "local_refs": map[string]any{"m1": "project:probe:entry:decision:x"}},
+		map[string]any{"status": "rejected", "error": map[string]any{"code": "invalid_request", "message": "SEARCH_SUMMARY_REQUIRED@memories[0].summary_en"}})
+	request := rememberRequest()
+	request.Text, request.SummaryEN = "Las fechas se guardan en UTC.", "Dates are stored in UTC."
+	if _, err := m.Remember(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	memory := requests[0]["memories"].([]any)[0].(map[string]any)
+	if memory["summary_en"] != "Dates are stored in UTC." || memory["summary"] != "Las fechas se guardan en UTC." {
+		t.Fatalf("%+v", memory)
+	}
+	plain := rememberRequest()
+	_, err := m.Remember(context.Background(), plain)
+	if err == nil || !strings.Contains(err.Error(), "add summary_en") {
+		t.Fatalf("%v", err)
+	}
+	if _, has := requests[1]["memories"].([]any)[0].(map[string]any)["summary_en"]; has {
+		t.Fatalf("summary_en sent empty: %+v", requests[1])
 	}
 }

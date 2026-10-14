@@ -21,7 +21,7 @@ Files in `<config>`:
 |:--|:--|:--|
 | [`settings.json`](#settingsjson) | Every user setting: model, language, appearance, approvals, local models, budgets, ceremonies, sandbox, Jev, diagnostics | You, and the console for the keys listed in [who writes settings.json](#who-writes-settingsjson) |
 | `settings.json.lock` | Empty lock file that serializes writers of `settings.json` | The console (`0600`) |
-| [`credentials.json`](#credentialsjson) | The OpenRouter key the setup assistant saved | The setup assistant |
+| [`credentials.json`](#credentialsjson) | The OpenRouter key and the TypeSafe (Jev) key the setup assistant saved; `OPENROUTER_API_KEY` and `TYPESAFE_API_KEY` win when set | The setup assistant |
 | [`mcp.json`](#mcpjson) | MCP server registrations and their approval policy | You, `/mcp`, `/plugin`, `/update`, `P` on MADE |
 | `mcp.json.lock` | Lock file that serializes writers of `mcp.json` | The console (`0600`) |
 | [`approvals.json`](#approvalsjson-legacy) | Legacy approval choices, read until `settings.json` has an `approvals` section | Older consoles only |
@@ -34,7 +34,10 @@ Files in `<state>` and `<data>` are AXLR's own records, not configuration, but t
 
 | Path | Contents |
 |:--|:--|
-| `<state>/sessions/` | Saved sessions, their usage ledgers (`<id>.usage.json`) and side files |
+| `<state>/sessions/` | Saved sessions, their usage ledgers (`<id>.usage.json`) and side files, among them `<id>.instance`, the session's MADE instance with the live claim's fence, the last turn's record, the KMP entries still to write (see [the session ceremony](ceremonies.md#the-session-ceremony)), the session's KMP agent and context and the prompt its memory was last recalled for (see [what the model sees](runbooks/kmp.md#what-the-model-sees)) |
+| `<state>/install-id` | This install's id, drawn once: the console registers with KMP as `axlr:<install id>` and reports to MADE with it as its incarnation |
+| `<state>/made-grant` | The id of the MADE work grant this console last issued (or found it could not issue: a remote or operator-managed engine), so a changed grant is issued once |
+| `<state>/kmp-agents.json` | The agent the console registered in each KMP store, keyed by the store's path; a lost entry is registered again |
 | `<state>/logs/` | Diagnostics traces (`trace-<pid>-<n>.jsonl`), payload captures (`*.jsonl.payloads-<n>/`) and the app log `axlr.log`; see [diagnostics and privacy](console.md#diagnostics-and-privacy) |
 | `<state>/session-labels.json` | Session titles, abouts and archive marks |
 | `<state>/bytes-per-token.json` | Measured bytes per prompt token per remote model, shared by every console |
@@ -45,7 +48,7 @@ Files in `<state>` and `<data>` are AXLR's own records, not configuration, but t
 | `<data>/plugins/` | Packages installed with `/plugin` |
 | `<data>/repairs/` | Default clone directory of `/repair` and `/improve` (`repair.directory` overrides it) |
 | `<data>/engines/` | KMP and MADE packages downloaded by `/update` or the setup assistant |
-| `$XDG_DATA_HOME/kmp/default` | The KMP store AXLR's installer pins with `KMP_MCP_DATA_DIR` (KMP's own data, outside `<data>`) |
+| `<git top level>/.kernel`, `$XDG_DATA_HOME/kmp/default` | The KMP store the console opens for a workspace: the checkout's own inside a git repository, the per-user default outside one, unless the `kmp` entry's `env` pins another directory (KMP's own data; see the [KMP runbook](runbooks/kmp.md#let-axlr-install-it)) |
 | `$HOME/.local/state/underpass-made/`, `$HOME/.config/underpass-made/embedded/` | MADE's default embedded store and its private configuration, created by the package's setup (MADE's own files). The launcher receives only `HOME` and `PATH`, so these paths ignore the XDG variables |
 
 ## settings.json
@@ -117,16 +120,16 @@ Wherever a key takes a model id (`model`, `reviewer_model`, `favorite_models`, `
 | `icons` | string | `"safe"` | [icons](#icons) |
 | `reduce_motion` | boolean | `false` | [reduce_motion](#reduce_motion) |
 | `notify` | `"bell"` \| `"osc"` \| `"off"` | `"bell"` | [notify](#notify) |
-| `approvals` | object | absent (manual approval) | [approvals](#approvals) |
+| `approvals` | object | absent (manual approval); a clean install writes `autonomous: true` with `always_ask` | [approvals](#approvals) |
 | `context_tokens` | integer | `0` (no cap) | [context_tokens](#context_tokens) |
-| `prompt_tokens` | integer | `0` (64,000) | [prompt_tokens](#prompt_tokens) |
+| `prompt_tokens` | integer | `0` (75,000); a clean install writes it | [prompt_tokens](#prompt_tokens) |
 | `turn_tool_calls` | integer | `0` (32) | [turn_tool_calls](#turn_tool_calls) |
 | `max_session_usd` | number | `0` (no limit) | [max_session_usd](#max_session_usd) |
 | `local_models` | array of objects | `[]` | [local_models](#local_models) |
 | `models` | object | `{}` | [models](#models-per-model-openrouter-options) |
 | `exec_sandbox` | object | absent (`mode: off`) | [exec_sandbox](#exec_sandbox) |
 | `forged_tools` | boolean | `true` | [forged_tools](#forged_tools) |
-| `engines` | object | absent (`shared: false`) | [engines](#engines) |
+| `engines` | object | absent (`shared: false`, `required: false`); a clean install writes both true | [engines](#engines) |
 | `ceremonies` | object | absent (`profile: auto`) | [ceremonies](#ceremonies) |
 | `plan` | object | absent (session model, manual approval) | [plan](#plan) |
 | `repair` | object | absent (repairs `underpass-ai/AXLR`) | [repair](#repair) |
@@ -197,6 +200,7 @@ Object; absent means every tool call that needs a card asks for one, except the 
 |:--|:--|:--|:--|
 | `autonomous` | boolean | `false` | Full autonomy: every known tool the work mode permits runs without a card. Set by `/autonomy on` and `F` on a card, cleared by `/autonomy off` |
 | `allowed` | array of tool identities, or `null` | `null` | Exact tools that always run without a card, added by `L` on a card. `/approvals` lists them |
+| `always_ask` | array of strings | absent (every rule) | The destructive list (decision K5a of the [lifecycle integration design](plans/2026-10-13-lifecycle-integration-design.md)): the rules that keep a card for a `local_exec` even under autonomy or a saved rule. Rule names: `delete-outside-workspace` (`rm`, `rmdir`, `mv`, `cp`, `dd`… with a path outside the workspace, `~` included, also inside a shell string), `git-push`, `git-reset-hard`, `git-clean`, `git-branch-delete`, `git-rebase`, `network-write` (`curl`/`wget` with a method other than GET or a body, `gh pr create|merge`, `gh release`, `npm`/`cargo` publish, `docker push`, `kubectl apply|delete`, `terraform apply|destroy`, `helm install|upgrade`, deploys). The card says which rule asked. An empty list disables them all |
 
 Unknown keys inside `approvals` are kept, as at the top level. Work modes still restrict or refuse a call whatever these say; see [work modes](console.md#work-modes).
 
@@ -234,7 +238,7 @@ Integer. Absent or `0`: no cap. Otherwise from 4,096 to 16,777,216 (`settings co
 
 #### prompt_tokens
 
-Integer. Absent or `0`: 64,000. Otherwise from 16,384 to 16,777,216 (`settings prompt_tokens must be between 16384 and 16777216`). The prompt, in tokens, a request to a model without a known window (every OpenRouter model) may reach; the console turns it into a byte budget at the bytes per token it has measured for that model (2.44 until five requests are measured). 64,000 stays under the 100K prompt tokens above which Claude Haiku 5.5 costs five times as much. Local models use their window instead. See [model context](console.md#model-context).
+Integer. Absent or `0`: 75,000. Otherwise from 16,384 to 16,777,216 (`settings prompt_tokens must be between 16384 and 16777216`). The cap, in tokens, of a request's whole context (guidance, tool schemas and messages) for a model without a known window (every OpenRouter model), counted by the console with one tokenizer (tiktoken's `o200k`) for every model (decision D10 of the [lifecycle integration design](plans/2026-10-13-lifecycle-integration-design.md)); a local model's cap is three quarters of its window. Under the cap nothing is dropped or compacted, so the provider's prompt cache keeps its prefix; the per-result excerpt bounds still derive from this value at the bytes per token measured for the model (2.44 until five requests are measured). A request that would exceed the cap stops the turn, closes the session's MADE instance and continues the prompt in a successor session whose first prompt recalls the predecessor's memory (`ws:<predecessor>`); the footer says so and the previous session stays readable. 75,000 stays under the 100K prompt tokens above which Claude Haiku 5.5 costs five times as much. Local models use their window instead. See [model context](console.md#model-context).
 
 #### turn_tool_calls
 
@@ -387,6 +391,7 @@ These keys matter only when the MCP registrations with the ids [`kmp` and `made`
 
 | Key | Type | Default | Meaning |
 |:--|:--|:--|:--|
+| `required` | boolean | `false` | Refuse to start without KMP and MADE connected (decision A2): a launch that lacks one installs and configures it first, without a question, and stops with a message naming `axlr-tui setup` when that fails. A clean install writes `true` |
 | `shared` | boolean | `false` | Run one KMP and one MADE process per identical launch (same command, arguments and whole environment) for every console of the user, through a small daemon and a private unix socket, instead of one per console. Unix only |
 
 See [shared engines](console.md#shared-engines). Source: [user_settings_engines.go](../tui/adapters/storage/user_settings_engines.go).
@@ -418,7 +423,7 @@ Configures `/repair`, the agent's self-repair (`axlr_request_repair`), `/improve
 | `directory` | string | `<data>/repairs` | Absolute path where clones are made |
 | `auto_merge` | boolean | `false` | Merge a green repair pull request without you |
 | `watch_minutes` | integer | `0` (45) | How long one round of checks may take; `0` to 720 |
-| `about` | string | `project:<name>` | The KMP project scope of repairs. Not validated |
+| `about` | string | `project:<name>` | The KMP project scope of repairs: the repository name with its case (`underpass-ai/AXLR` gives `project:AXLR`). Not validated |
 | `autonomous` | boolean | `true` | Let a repair session the agent started run local tools in its clone without a card. The reproduction command and the merge always wait for you; an explicit `false` is kept on save |
 | `max_attempts` | integer | `0` (2) | Repair sessions one failure may start; `0` to 5 |
 | `install` | boolean | `false` | Replace the running `axlr-tui` with the repaired build once its pull request merges, without the panel's `i` |
@@ -431,7 +436,7 @@ Refused: `settings repair.repository must be owner/name`, `settings repair.direc
   "directory": "/home/you/repairs",
   "auto_merge": false,
   "watch_minutes": 45,
-  "about": "project:axlr",
+  "about": "project:AXLR",
   "autonomous": true,
   "max_attempts": 2,
   "install": false
@@ -488,6 +493,7 @@ Command-line flags and environment variables win over `settings.json` for one la
 | `--plugin PATH` | Adds an MCP manifest for this launch, with purpose `tools` and approval `manual`; not saved |
 | `--plugin-env-from ID:KEY=HOST_VAR` | Child environment for a `--plugin` server; refuses `OPENROUTER_API_KEY` and every `api_key_env` as `HOST_VAR`, and an `ID` no `--plugin` registers |
 | `--root`, `--session`, `-c`/`--continue`, `--repair`, `--improve` | Choose the workspace and session; not configuration. `--repair` and `--improve` use the `repair` section |
+| `--import FILE` | Save the session bundle `/session export` wrote on another console (or this one) in this store, bound to `--root`, and resume it; refused when the session is saved here already (resume it with `--session`) and when combined with `--session`, `--continue`, `--repair` or `--improve`. Its MADE instance continues in a successor and the handoff is recorded in KMP under `ws:<id>` |
 
 | Variable | Effect |
 |:--|:--|
@@ -592,7 +598,7 @@ Package-generated registrations are usually named `<package>-<server>` and do no
 
 ### Full examples
 
-The KMP entry the installer writes (`purpose` `memory`, the store pinned before first discovery, `HOME` and `PATH` passed through). Its `approval` is `auto` from `/update` and from the assistant unless you answer no to recording memories without a card, which gives `manual`:
+The KMP entry the installer writes (`purpose` `memory`, the embedded backend pinned, `HOME` and `PATH` passed through; no store, which the console chooses per workspace at launch and pins into the child environment itself). Its `approval` is `auto` from `/update` and from the assistant unless you answer no to recording memories without a card, which gives `manual`:
 
 ```json
 {
@@ -601,13 +607,12 @@ The KMP entry the installer writes (`purpose` `memory`, the store pinned before 
   "description": "Underpass graph-temporal agent memory",
   "purpose": "memory",
   "approval": "auto",
-  "env": {
-    "KMP_MCP_BACKEND": "embedded",
-    "KMP_MCP_DATA_DIR": "/home/you/.local/share/kmp/default"
-  },
+  "env": {"KMP_MCP_BACKEND": "embedded"},
   "env_from": {"HOME": "HOME", "PATH": "PATH"}
 }
 ```
+
+An entry written before 13 October 2026 also carries `"KMP_MCP_DATA_DIR": "/home/you/.local/share/kmp/default"`; the console treats that value as the old pin and still opens a checkout's `.kernel`. Any other directory in `KMP_MCP_DATA_DIR` is yours and wins.
 
 A MADE entry for the installed embedded launcher, which finds its private store configuration through `HOME`:
 
@@ -759,7 +764,7 @@ Every key with a value. The file passes validation as written; to launch with it
     "directory": "/home/you/repairs",
     "auto_merge": false,
     "watch_minutes": 45,
-    "about": "project:axlr",
+    "about": "project:AXLR",
     "autonomous": true,
     "max_attempts": 2,
     "install": false

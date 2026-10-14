@@ -17,7 +17,7 @@ func TestModelHostGuidanceBoundsManifestAndKeepsDiscovery(t *testing.T) {
 	if err := s.BeginTurn(root.Text("hello"), tools); err != nil {
 		t.Fatal(err)
 	}
-	guidance := modelHostGuidance(&s)
+	guidance := modelHostGuidance(&s, engineParagraphs{})
 	if len(guidance.Content) > 13*1024 || !strings.Contains(string(guidance.Content), "omitted") || !strings.Contains(string(guidance.Content), "axlr_tools query/offset") {
 		t.Fatal("unbounded or undiscoverable plugin manifest")
 	}
@@ -48,11 +48,11 @@ func TestModelHostGuidanceDoesNotOfferCatalogueDiscoveryAsEntry(t *testing.T) {
 	if err := s.BeginTurn(root.Text("hello"), tools); err != nil {
 		t.Fatal(err)
 	}
-	guidance := string(modelHostGuidance(&s).Content)
+	guidance := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 	if strings.Contains(guidance, "made_discover_capabilities") {
 		t.Fatal("whole-catalogue discovery offered as an entry name")
 	}
-	if !strings.Contains(guidance, "Entry names: kmp_guide") {
-		t.Fatal("cheap guide entry lost")
+	if strings.Contains(guidance, "Entry names: kmp_guide") {
+		t.Fatal("kmp_guide is the console's and is not offered as an entry")
 	}
 }

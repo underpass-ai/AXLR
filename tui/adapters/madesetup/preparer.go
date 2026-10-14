@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/mcpclient"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
@@ -23,11 +22,6 @@ const (
 	hostIdentityKey  = "MADE_AUTH_TRUSTED_HOST_ID"
 	embeddedLauncher = "run-embedded-mcp.sh"
 )
-
-// EnvironmentStore persists the work identity on the MADE entry of mcp.json.
-type EnvironmentStore interface {
-	SetPluginEnvironment(ctx context.Context, id root.PluginID, key, value string) error
-}
 
 // ToolCaller runs one MCP tool in a fresh process with a complete environment.
 type ToolCaller func(ctx context.Context, server mcpclient.Server, tool string, arguments map[string]any) (map[string]any, error)
@@ -43,10 +37,10 @@ type Preparer struct {
 	Now        func() time.Time
 }
 
-var _ application.MADEPreparationPort = (*Preparer)(nil)
+var _ application.OrchestratorPreparationPort = (*Preparer)(nil)
 
-func (p *Preparer) Prepare(ctx context.Context) (application.MADEPreparation, error) {
-	result := application.MADEPreparation{GrantID: WorkGrantID}
+func (p *Preparer) Prepare(ctx context.Context) (application.OrchestratorPreparation, error) {
+	result := application.OrchestratorPreparation{GrantID: WorkGrantID}
 	if p.ConfigPath == "" || !filepath.IsAbs(p.ConfigPath) || p.Store == nil {
 		return result, errors.New("MADE preparation is not configured")
 	}
@@ -84,15 +78,16 @@ func (p *Preparer) Prepare(ctx context.Context) (application.MADEPreparation, er
 		return result, nil
 	}
 	result.WorkIdentity = work
+	result.GrantID = grantID(WorkGrantID, work)
 	admin := server(made, without(made.Env, hostIdentityKey))
 	issued, err := p.call(ctx, admin, "made_issue_authorization_grant", map[string]any{
-		"grant_id": WorkGrantID, "grantee_id": work, "scope": map[string]any{"kind": "global"},
+		"grant_id": result.GrantID, "grantee_id": work, "scope": map[string]any{"kind": "global"},
 		"valid_from": "2000-01-01T00:00:00Z", "delegation_depth": 0, "actions": append([]string(nil), workGrantActions...),
 	})
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) && refused.Code == "conflict" {
-			result.Status, result.Detail = "conflict", "a grant with this id already exists with different actions"
+			result.Status, result.Detail = "conflict", "a grant with this id already exists for another grantee or with other actions"
 			return result, nil
 		}
 		return result, err
@@ -104,13 +99,13 @@ func (p *Preparer) Prepare(ctx context.Context) (application.MADEPreparation, er
 	// The approver acts for the person at the console: it may grant human
 	// guards, which the work identity may not.
 	approved, err := p.call(ctx, admin, "made_issue_authorization_grant", map[string]any{
-		"grant_id": ApproverGrantID, "grantee_id": approverIdentity(work), "scope": map[string]any{"kind": "global"},
+		"grant_id": grantID(ApproverGrantID, approverIdentity(work)), "grantee_id": approverIdentity(work), "scope": map[string]any{"kind": "global"},
 		"valid_from": "2000-01-01T00:00:00Z", "delegation_depth": 0, "actions": append([]string(nil), approverActions...),
 	})
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) && refused.Code == "conflict" {
-			result.Status, result.Detail = "conflict", "an approver grant with this id already exists with different actions"
+			result.Status, result.Detail = "conflict", "an approver grant with this id already exists for another grantee or with other actions"
 			return result, nil
 		}
 		return result, fmt.Errorf("issue the approver grant: %w", err)
@@ -229,10 +224,6 @@ func without(env []string, key string) []string {
 	return out
 }
 
-type refusal struct{ Code, Message string }
-
-func (r *refusal) Error() string { return r.Code + ": " + r.Message }
-
 // CallOnce starts the server, calls one tool and stops it.
 func CallOnce(ctx context.Context, s mcpclient.Server, tool string, arguments map[string]any) (map[string]any, error) {
 	name, err := mcpclient.NewToolName(tool)
@@ -267,4 +258,95 @@ func CallOnce(ctx context.Context, s mcpclient.Server, tool string, arguments ma
 		return nil, &refusal{Code: code, Message: message}
 	}
 	return payload, nil
+}
+
+// WorkIdentity is the identity the console's MADE registration works as:
+// the configured work identity, or the one this setup derives from the
+// configuration path when the entry sets none; "" when the entry names an
+// operator's trusted host or is absent.
+func WorkIdentity(configPath string, env []string) string {
+	configured := environment(env)[hostIdentityKey]
+	switch {
+	case configured == "":
+		digest := sha256.Sum256([]byte(configPath))
+		return "axlr-work-" + hex.EncodeToString(digest[:8])
+	case isWorkIdentity(configured):
+		return configured
+	}
+	return ""
+}
+
+// Publish validates and publishes one definition under a five-minute
+// install grant, as publishCeremonies does for the console's own; the work
+// identity never keeps publication rights.
+func (p *Preparer) Publish(ctx context.Context, definitionYAML string) (string, error) {
+	if strings.TrimSpace(definitionYAML) == "" {
+		return "", errors.New("the definition is empty")
+	}
+	if p.ConfigPath == "" || !filepath.IsAbs(p.ConfigPath) || p.Store == nil {
+		return "", errors.New("MADE preparation is not configured")
+	}
+	configuration, err := storage.LoadMCPConfiguration(p.ConfigPath, p.Getenv)
+	if err != nil {
+		return "", err
+	}
+	var made *plugins.Registration
+	for i := range configuration.Registrations {
+		if configuration.Registrations[i].Manifest.ID == "made" {
+			made = &configuration.Registrations[i]
+		}
+	}
+	if made == nil {
+		return "", errors.New("MADE is not registered")
+	}
+	values := environment(made.Env)
+	if made.Manifest.URL != "" || values["MADE_MCP_BACKEND"] == "grpc" || filepath.Base(made.Manifest.Command) != embeddedLauncher {
+		return "", errors.New("only the embedded MADE launcher can publish from this console; the remote operator publishes")
+	}
+	work := WorkIdentity(p.ConfigPath, made.Env)
+	if work == "" {
+		return "", errors.New("the MADE entry sets an explicit trusted host; publish as that operator")
+	}
+	admin := server(made, without(made.Env, hostIdentityKey))
+	worker := server(made, append(without(made.Env, hostIdentityKey), hostIdentityKey+"="+work))
+	now := p.now().UTC()
+	grant := fmt.Sprintf("axlr-ceremony-install-%d", now.Unix())
+	if _, err := p.call(ctx, admin, "made_issue_authorization_grant", map[string]any{
+		"grant_id": grant, "grantee_id": work, "scope": map[string]any{"kind": "global"},
+		"valid_from": "2000-01-01T00:00:00Z", "valid_until": now.Add(5 * time.Minute).Format(time.RFC3339), "delegation_depth": 0,
+		"actions": []string{"validate_ceremony_draft", "publish_ceremony_definition"},
+	}); err != nil {
+		return "", fmt.Errorf("issue the install grant: %w", err)
+	}
+	var name string
+	report, err := p.call(ctx, worker, "made_validate_ceremony_draft", map[string]any{"definition_yaml": definitionYAML})
+	if err == nil {
+		if valid, ok := report["valid"].(bool); ok && !valid {
+			err = fmt.Errorf("the definition is not publishable: %v", bounded(fmt.Sprint(report["problems"]), 600))
+		}
+	}
+	if err == nil {
+		var published map[string]any
+		published, err = p.call(ctx, worker, "made_publish_ceremony_definition", map[string]any{"definition_yaml": definitionYAML})
+		if err == nil {
+			ceremony, _ := published["ceremony"].(string)
+			version, _ := published["version"].(string)
+			name = strings.TrimSpace(ceremony + " " + version)
+		}
+	}
+	_, revokeErr := p.call(ctx, admin, "made_revoke_authorization_grant", map[string]any{"grant_id": grant, "reason": "AXLR ceremony definition published"})
+	if revokeErr != nil {
+		revokeErr = fmt.Errorf("revoke install grant %s (it expires in five minutes): %w", grant, revokeErr)
+	}
+	if err != nil {
+		return "", errors.Join(err, revokeErr)
+	}
+	return name, revokeErr
+}
+
+func bounded(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	return text[:limit] + "…"
 }

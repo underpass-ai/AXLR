@@ -15,14 +15,14 @@ import (
 // attempts and check command.
 func TestStandardCeremonyKeepsTheSystemPromptAcrossSteps(t *testing.T) {
 	_, _, s := stalledDelivery(t)
-	before := string(modelHostGuidance(&s).Content)
+	before := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 	run, _ := s.Ceremony()
 	run.Step, run.Iteration, run.Memory = "build", 2, "recalled evidence"
 	run.Check = domain.CheckCommand{Program: "go", Args: []string{"test", "./..."}}
 	if err := s.SetCeremony(run); err != nil {
 		t.Fatal(err)
 	}
-	after := string(modelHostGuidance(&s).Content)
+	after := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 	if before != after || !strings.Contains(after, "Ceremony axlr_delivery 2.0 is running") || strings.Contains(after, "Current step") || strings.Contains(after, "recalled evidence") {
 		t.Fatalf("guidance changed or carries the step:\n%s\n---\n%s", before, after)
 	}

@@ -177,3 +177,17 @@ func TestPromptCeilingIsTheWindowOrThePromptBudget(t *testing.T) {
 		t.Fatalf("capped local %d", got)
 	}
 }
+
+func TestContextCapIsThreeQuartersOfALocalWindowAndThePromptCeilingElsewhere(t *testing.T) {
+	w := Windows{Local: map[root.ModelID]domain.ContextWindow{"local/qwen": 32768}, Prompt: 75000}
+	if got := w.ContextCap("local/qwen"); got != 24576 {
+		t.Fatalf("local cap %d", got)
+	}
+	if got := w.ContextCap("anthropic/claude-haiku-5.5"); got != 75000 {
+		t.Fatalf("remote cap %d", got)
+	}
+	w.Cap = 40000
+	if got := w.ContextCap("anthropic/claude-haiku-5.5"); got != 40000 {
+		t.Fatalf("capped remote cap %d", got)
+	}
+}

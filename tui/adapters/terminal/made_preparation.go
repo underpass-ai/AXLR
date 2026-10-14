@@ -15,7 +15,7 @@ func (m AppModel) prepareMADE() (AppModel, tea.Cmd) {
 		m.Status.Error = m.Theme.T("madeSetup.busy")
 		return m, nil
 	}
-	preparer := m.deps.MADEPreparation
+	preparer := m.deps.OrchestratorPreparation
 	if preparer == nil {
 		m.Status.Error = m.Theme.T("madeSetup.unavailable")
 		return m, nil
@@ -27,7 +27,7 @@ func (m AppModel) prepareMADE() (AppModel, tea.Cmd) {
 	m.Info.Viewport.SetHeight(height)
 	m.Info.SetContent(m.Theme.T("madeSetup.loading"))
 	m.Info.Viewport.GotoTop()
-	var result application.MADEPreparation
+	var result application.OrchestratorPreparation
 	cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 		var err error
 		result, err = preparer.Prepare(ctx)
@@ -36,14 +36,14 @@ func (m AppModel) prepareMADE() (AppModel, tea.Cmd) {
 	return m, func() tea.Msg {
 		msg := cmd()
 		if done, ok := msg.(operationComplete); ok {
-			done.MADEPreparation = &result
+			done.OrchestratorPreparation = &result
 			return done
 		}
 		return msg
 	}
 }
 
-func madePreparationContent(result application.MADEPreparation, err error, theme Theme) string {
+func madePreparationContent(result application.OrchestratorPreparation, err error, theme Theme) string {
 	var b strings.Builder
 	if err != nil {
 		fmt.Fprintf(&b, "%s\n%s", theme.T("madeSetup.failed"), err)

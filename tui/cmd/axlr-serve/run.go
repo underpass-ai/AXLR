@@ -18,6 +18,7 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
+	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/service"
 )
@@ -93,9 +94,9 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	pluginManager := axlr.NewPluginManager(manager, profiles, nil)
 	validator := axlr.NewToolArgumentValidator()
-	continuation := application.ContinueTurnUseCase{Validation: validator, Models: axlr.ModelStream{UseCase: rootApplication.StreamModelUseCase{Models: client}}}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: axlr.ModelStream{UseCase: rootApplication.StreamModelUseCase{Models: client}}}
 	runner := axlr.ToolRunner{Executor: executor}
-	catalog := axlr.ToolCatalog{Plugins: manager, Profiles: pluginManager.Profiles}
+	catalog := axlr.ToolCatalog{Plugins: manager, Profiles: pluginManager.Profiles, Surfaces: ceremonyhost.Surface}
 	deps := service.Dependencies{
 		Start:   application.StartTurnUseCase{Catalog: catalog, Continue: continuation, Tools: runner, Approval: pluginManager},
 		Resolve: application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: pluginManager, Continue: continuation},

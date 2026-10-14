@@ -54,12 +54,17 @@ func (m AppModel) execCardCommand(p domain.PendingTool) string {
 		Stdin          string   `json:"stdin"`
 		TimeoutMS      int64    `json:"timeout_ms"`
 		MaxOutputBytes int      `json:"max_output_bytes"`
+		Why            string   `json:"why"`
 	}
 	raw := p.Call.Arguments.Bytes()
 	if json.Unmarshal(raw, &call) != nil || strings.TrimSpace(call.Program) == "" {
 		return ""
 	}
 	lines := []string{"$ " + singleLine(formatCommand(call.Program, call.Args))}
+	if why := strings.TrimSpace(call.Why); why != "" {
+		// The model's reason for the command, the first thing to weigh.
+		lines = append(lines, m.Theme.Tf("approval.why", singleLine(why)))
+	}
 	if cwd := strings.TrimSpace(call.Cwd); cwd != "" && cwd != "." && cwd != "./" {
 		lines = append(lines, m.Theme.Tf("approval.execCwd", singleLine(cwd)))
 	}
@@ -79,7 +84,7 @@ func (m AppModel) execCardCommand(p domain.PendingTool) string {
 	if json.Unmarshal(raw, &fields) == nil {
 		for key := range fields {
 			switch key {
-			case "program", "args", "cwd", "stdin", "timeout_ms", "max_output_bytes":
+			case "program", "args", "cwd", "stdin", "timeout_ms", "max_output_bytes", "why":
 			default:
 				var indented bytes.Buffer
 				_ = json.Indent(&indented, raw, "", "  ")
@@ -93,6 +98,15 @@ func (m AppModel) execCardCommand(p domain.PendingTool) string {
 // modeAsksForEachCall is true when the session's mode, not the user's
 // approval settings, keeps this call under approval; "always allow" would
 // then only add a global rule the mode ignores until it leaves.
+// destructiveRule names the destructive rule a pending command falls under.
+func (m AppModel) destructiveRule(p domain.PendingTool) string {
+	tool, args, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
+	if !known || err != nil || m.deps.Session == nil {
+		return ""
+	}
+	return application.DestructiveReason(m.deps.ApprovalSettings, *m.deps.Session, tool.Identity, args)
+}
+
 func (m AppModel) modeAsksForEachCall(p domain.PendingTool) bool {
 	tool, args, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
 	if !known || err != nil {

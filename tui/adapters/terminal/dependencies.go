@@ -9,30 +9,44 @@ import (
 )
 
 type Dependencies struct {
-	Context           context.Context
-	Diagnostics       application.DiagnosticPort
-	Plugins           application.PluginManagementPort
-	InstalledPlugins  application.InstalledPluginPort
-	EngineUpdates     application.EngineUpdatePort
-	MADEPreparation   application.MADEPreparationPort
-	Models            application.ListModelsUseCase
-	ModelPreference   application.ModelPreferencePort
-	SessionLabels     application.SessionLabelsPort
-	ModelFavorites    application.ModelFavoritesPort
-	UIPreferenceStore application.UIPreferencePort
-	UIPreferences     domain.UIPreferences
-	ApprovalSettings  application.ApprovalSettingsPort
-	Locale            Locale
-	Create            application.CreateSessionUseCase
-	Change            application.ChangeSessionModelUseCase
-	Workspace         domain.Workspace
-	NewSessionID      domain.SessionID
-	Start             application.StartTurnUseCase
-	Resolve           application.ResolveToolUseCase
-	Agent             application.AgentTurnUseCase
-	Store             application.SessionStorePort
+	Context                 context.Context
+	Diagnostics             application.DiagnosticPort
+	Plugins                 application.PluginManagementPort
+	InstalledPlugins        application.InstalledPluginPort
+	EngineUpdates           application.EngineUpdatePort
+	OrchestratorPreparation application.OrchestratorPreparationPort
+	Models                  application.ListModelsUseCase
+	ModelPreference         application.ModelPreferencePort
+	SessionLabels           application.SessionLabelsPort
+	ModelFavorites          application.ModelFavoritesPort
+	UIPreferenceStore       application.UIPreferencePort
+	UIPreferences           domain.UIPreferences
+	ApprovalSettings        application.ApprovalSettingsPort
+	Locale                  Locale
+	Create                  application.CreateSessionUseCase
+	// Leave closes what the console keeps open for a session it switches
+	// away from (its MADE instance); nil leaves nothing to close.
+	Leave        func(context.Context, *domain.Session) error
+	Change       application.ChangeSessionModelUseCase
+	Workspace    domain.Workspace
+	NewSessionID domain.SessionID
+	Start        application.StartTurnUseCase
+	Resolve      application.ResolveToolUseCase
+	Agent        application.AgentTurnUseCase
+	Store        application.SessionStorePort
 	// ExportFiles writes /export's Markdown; nil refuses /export.
 	ExportFiles application.ExportFilePort
+	// SessionBundles encodes /session export's bundle; nil refuses it.
+	// Sessions loads a saved session for it (nil: only the open one), and
+	// Hostname names this machine in the bundle.
+	SessionBundles application.SessionBundleCodec
+	Sessions       application.SessionLister
+	Hostname       string
+	// MemoryBundle, MemoryCompare and MemoryForget serve /memory save,
+	// compare and forget; nil refuses the command.
+	MemoryBundle  application.MemoryBundlePort
+	MemoryCompare application.MemoryComparePort
+	MemoryForget  application.MemoryForgetPort
 	// DeleteSession removes a saved session from Ctrl+O; nil offers no
 	// delete.
 	DeleteSession application.SessionDeletePort
@@ -45,6 +59,18 @@ type Dependencies struct {
 	Repairs RepairPanelPort
 	// Plans shows the plans and their tasks; nil without MADE.
 	Plans PlanPanelPort
+	// Definitions lists and reads published MADE definitions for
+	// /ceremony; nil without MADE.
+	Definitions application.CeremonyDefinitionPort
+	// About is the launch's project about and Memories how many events
+	// the store holds under it (MemoriesKnown false: not counted), for the
+	// header (decision J2). EngineFacts are the lines /mcp shows under an
+	// engine (store, selection reason, about, work identity), keyed by
+	// plugin id (decision J1).
+	About         string
+	Memories      int
+	MemoriesKnown bool
+	EngineFacts   map[string][]EngineFact
 	// Usage is the session's usage ledger for the footer's cost and
 	// /usage, where + raises the session's limit by MaxSessionUSD.
 	Usage         application.SessionUsagePort

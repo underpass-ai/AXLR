@@ -25,7 +25,7 @@ func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domai
 	if tool.Identity.Kind != domain.ToolKindHost || tool.Identity.LocalOperation != domain.HostOperationCallTool {
 		return tool, call.Arguments, true, nil
 	}
-	args, err := decodeHostArguments(call.Arguments, "name", "arguments")
+	args, err := decodeHostArguments(call.Arguments, "name", "arguments", WhyArgument)
 	if err != nil {
 		return domain.AvailableTool{}, root.JSONValue{}, true, err
 	}
@@ -47,7 +47,23 @@ func ResolveToolCall(snapshot []domain.AvailableTool, call root.ToolCall) (domai
 	if target.Identity.Kind != domain.ToolKindPlugin {
 		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New("axlr_call_tool can only call registered plugin tools")
 	}
+	if refusal, hidden := hiddenFromModel(target); hidden {
+		return domain.AvailableTool{}, root.JSONValue{}, true, errors.New(refusal)
+	}
 	return target, arguments, true, nil
+}
+
+// hiddenFromModel reports a plugin tool the console keeps to itself and
+// the refusal the model reads (decisions D6 and G6 of the lifecycle
+// integration design): the bridge refuses it and axlr_tools neither lists
+// nor describes it, so the model never sees its schema; the console's own
+// calls do not pass here. The engine adapter decides it (the tool's
+// surface).
+func hiddenFromModel(tool domain.AvailableTool) (string, bool) {
+	if tool.Identity.Kind != domain.ToolKindPlugin || tool.Surface.Hidden == "" {
+		return "", false
+	}
+	return tool.Surface.Hidden, true
 }
 
 // malformedArgumentsKey names the object the model adapter
@@ -122,6 +138,15 @@ func decodeHostArguments(value root.JSONValue, allowed ...string) (map[string]js
 			return nil, err
 		}
 		key, ok := token.(string)
+		if ok && key == WhyArgument && !fields[key] {
+			// A why on a host tool that asks none is read and dropped, as
+			// on a local read: the model gives them to everything once told.
+			var ignored json.RawMessage
+			if err := d.Decode(&ignored); err != nil {
+				return nil, err
+			}
+			continue
+		}
 		if !ok || !fields[key] {
 			return nil, fmt.Errorf("unknown host argument %q; accepted: %s", key, strings.Join(allowed, ", "))
 		}

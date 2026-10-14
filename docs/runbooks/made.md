@@ -2,7 +2,7 @@
 
 MADE owns ceremony definitions, claims, state transitions and decision records. AXLR performs the work. Use the exact MCP registration ID `made` for console-driven ceremonies and setup. A built-in `/plugin` row is not proof of connectivity or authorization.
 
-The distribution locks MADE 0.9.1 in [engines.lock.json](../../distribution/engines.lock.json). Use a release-matched binary, plugin assets and the [upstream embedded setup](https://github.com/underpass-ai/made/blob/main/docs/embedded/README.md) for engine installation and store lifecycle. Record the binary version, SQLite path, policy, trusted-host identity and stable cursor key without exposing the key.
+The distribution locks the MADE release in [engines.lock.json](../../distribution/engines.lock.json); the file is the only place the version is stated. Use a release-matched binary, plugin assets and the [upstream embedded setup](https://github.com/underpass-ai/made/blob/main/docs/embedded/README.md) for engine installation and store lifecycle. Record the binary version, SQLite path, policy, trusted-host identity and stable cursor key without exposing the key.
 
 ## Choose the connection route
 
@@ -56,7 +56,7 @@ Restart AXLR and verify discovery in `/mcp`. Avoid duplicate package-generated r
 
 When the console has no active turn or pending calls, select MADE in `/mcp` and press `P`:
 
-1. AXLR invokes the embedded launcher with the trusted-host override removed and issues `axlr-default-work-v1` to a work identity. It recognizes existing `axlr-work-…` or `…-axlr-work` identities; a different explicit trusted-host override requires manual operator setup.
+1. AXLR invokes the embedded launcher with the trusted-host override removed and issues `axlr-default-work-v2-<grantee digest>` to a work identity (one grant per identity: a store shared by several installs keeps each one's). It recognizes existing `axlr-work-…` or `…-axlr-work` identities; a different explicit trusted-host override requires manual operator setup.
 2. If needed, it persists an `axlr-work-…` identity in `mcp.json`. Restart when requested so the running connection uses it.
 3. It verifies the work identity can read definitions and compares the published digests of `axlr_debug` 2.0, `axlr_delivery` 2.0, `axlr_incident` 1.0, `axlr_repair` 1.0, `axlr_improve` 1.0, `axlr_plan` 1.0, `axlr_task` 1.0 and `axlr_sync` 1.0 with the [shipped pins](../../tui/adapters/ceremonyhost/definitions.go).
 4. It publishes missing definitions with a temporary five-minute install grant, then revokes that grant. Conflicting content under an existing immutable name/version is an error, not an overwrite.
@@ -65,7 +65,7 @@ The permanent grant allows running, inspecting and resuming published ceremonies
 
 Preparation is repeatable for matching identities and definitions. If it partially fails, inspect the displayed error, persisted work identity, published versions and temporary grant before retrying. If revocation failed, the install grant expires after five minutes; report and verify its state rather than assuming it was removed.
 
-`P` installs only the eight driver definitions, and of those only the ones the store lacks: debug/delivery **2.0**, and incident, repair, improve, plan, task and sync **1.0**. It also prepares a separate approver identity for the incident and merge approval cards; the work identity cannot approve those guards. See [ceremonies](../ceremonies.md).
+`P` installs only the nine pinned definitions, and of those only the ones the store lacks: debug/delivery **2.0**, incident, repair, improve, plan, task and sync **1.0**, and session **1.0**, the instance the console runs for every session. It also prepares a separate approver identity for the incident and merge approval cards; the work identity cannot approve those guards. See [ceremonies](../ceremonies.md).
 
 ## Direct binary or remote operator setup
 

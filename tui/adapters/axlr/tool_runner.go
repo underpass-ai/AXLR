@@ -53,7 +53,9 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 	if _, err := root.NewJSONObject(args.Bytes()); err != nil {
 		return domain.ToolOutcome{}, err
 	}
-	request := dto.Request{ProtocolVersion: runtime.ProtocolVersion, RequestID: "tui-tool", Tool: id.LocalOperation, Arguments: args.Bytes()}
+	// The why is the console's: the runtime decodes a local tool's
+	// arguments strictly and would refuse it.
+	request := dto.Request{ProtocolVersion: runtime.ProtocolVersion, RequestID: "tui-tool", Tool: id.LocalOperation, Arguments: application.StripWhy(args).Bytes()}
 	if id.Kind == domain.ToolKindPlugin {
 		request.Tool = "plugins.call"
 		encoded, err := json.Marshal(dto.PluginCallArgs{PluginID: id.Plugin.PluginID.String(), ToolName: id.Plugin.ToolName.String(), Arguments: args.Bytes()})

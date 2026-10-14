@@ -22,6 +22,13 @@ type fakeEngine struct {
 	view            CeremonyView
 	leases          []time.Duration
 	definition      string
+	reports         []HostReport
+	handoffs        []HostHandoff
+	inputs          map[string]string
+	failReports     bool
+	noOperation     bool
+	// existing names instance ids Start refuses as taken.
+	existing map[string]bool
 }
 
 var fakeTransitions = map[string]string{
@@ -34,8 +41,13 @@ var fakeTransitions = map[string]string{
 
 func (f *fakeEngine) Ready(context.Context, string, string) error { return f.ready }
 func (f *fakeEngine) Start(_ context.Context, definition, version, instance string, inputs map[string]string) error {
+	if f.existing[instance] {
+		f.calls = append(f.calls, "start refused "+instance)
+		return errors.New("refused: already exists: ceremony_instance")
+	}
 	f.calls = append(f.calls, "start "+definition+" "+version+" about="+inputs["memory_about"])
 	f.definition = definition
+	f.inputs = inputs
 	return nil
 }
 func (f *fakeEngine) Claim(_ context.Context, _, step, key string, lease time.Duration) (string, error) {
@@ -84,6 +96,30 @@ func (f *fakeEngine) Cancel(_ context.Context, _, reason string) error {
 func (f *fakeEngine) Inspect(context.Context, string) (CeremonyView, error) {
 	f.calls = append(f.calls, "inspect")
 	return f.view, nil
+}
+func (f *fakeEngine) Report(_ context.Context, report HostReport) error {
+	f.calls = append(f.calls, "report "+report.Status+" "+report.Activity)
+	f.reports = append(f.reports, report)
+	if f.failReports {
+		return errors.New("conflict: status claim changed")
+	}
+	return nil
+}
+func (f *fakeEngine) Renew(_ context.Context, _, step, _ string, lease time.Duration) error {
+	f.calls = append(f.calls, "renew "+step)
+	f.leases = append(f.leases, lease)
+	return nil
+}
+func (f *fakeEngine) Handoff(_ context.Context, handoff HostHandoff) error {
+	f.calls = append(f.calls, "handoff "+handoff.Incarnation)
+	f.handoffs = append(f.handoffs, handoff)
+	return nil
+}
+func (f *fakeEngine) OperationID(_ context.Context, _, step, fence string) (string, error) {
+	if f.noOperation {
+		return "", errors.New("no operation id")
+	}
+	return "op-" + fence, nil
 }
 
 type fakeChecks struct {

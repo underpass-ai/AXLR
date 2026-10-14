@@ -36,11 +36,18 @@ type SessionState struct {
 	// Ceremony is the live console-driven ceremony, if any. Like Mode, it is
 	// kept outside the snapshot.
 	Ceremony *CeremonyRun
+	// Instance is the session's own MADE instance (axlr_session), kept
+	// outside the snapshot like Ceremony and never inside it, so the
+	// ceremony driver never takes it for a driven ceremony.
+	Instance *SessionInstance
 	// FinishedBudgetBase keeps the call budget a ceremony restarted after
 	// the ceremony closes mid-turn, so the closing answer is not counted
 	// against calls the steps already paid for, and the one a resume
 	// restarted. It lives for one turn.
 	FinishedBudgetBase int
+	// ChosenCeremony is the published definition /ceremony selected for the
+	// next prompt; it lives with the mode and is cleared with it.
+	ChosenCeremony CeremonyChoice
 	// StoppedCeremony is the definition of a ceremony the person stopped
 	// since the last prompt, "" when none: the next prompt tells the model
 	// once. Finishing the ceremony and returning to normal mode keep it.
@@ -82,6 +89,11 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	}
 	if state.Ceremony != nil {
 		if err = state.Ceremony.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
+	if state.Instance != nil {
+		if err = state.Instance.Validate(); err != nil {
 			return Session{}, err
 		}
 	}
@@ -194,6 +206,11 @@ func cloneState(state SessionState) SessionState {
 	if state.Ceremony != nil {
 		run := state.Ceremony.clone()
 		state.Ceremony = &run
+	}
+	if state.Instance != nil {
+		instance := *state.Instance
+		instance.Pending = append([]string(nil), instance.Pending...)
+		state.Instance = &instance
 	}
 	if len(state.MessageTimes) > len(state.Messages) {
 		state.MessageTimes = state.MessageTimes[:len(state.Messages)]

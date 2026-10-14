@@ -46,43 +46,6 @@ var (
 	forgedProgram  = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$`)
 )
 
-// ForgedTool is one registered tool of a workspace: what the model sees, the
-// command the console runs from the workspace root with the arguments as JSON
-// on stdin, and the SHA-256 of each file it was forged with.
-type ForgedTool struct {
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	InputSchema json.RawMessage   `json:"input_schema"`
-	Program     string            `json:"program"`
-	Args        []string          `json:"args"`
-	Files       map[string]string `json:"files"`
-	ForgedAt    string            `json:"forged_at,omitempty"`
-	Session     string            `json:"session,omitempty"`
-}
-
-// ForgedFile is one file of a tool, its path relative to the tool's directory.
-type ForgedFile struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-}
-
-// ForgedToolsPort keeps a workspace's forged tools. Only Forge registers a
-// tool: a file written another way into ForgedToolsDir, or brought by a
-// checkout, is never one, and Verify refuses a tool whose files changed
-// since it was forged.
-type ForgedToolsPort interface {
-	List(ctx context.Context, workspace string) ([]ForgedTool, error)
-	// Forge replaces the tool's directory with files, fills Files and
-	// ForgedAt and registers the tool; replaced reports a previous version.
-	Forge(ctx context.Context, workspace string, tool ForgedTool, files []ForgedFile) (stored ForgedTool, replaced bool, err error)
-	Verify(ctx context.Context, workspace string, tool ForgedTool) error
-	// Remove deletes a registered tool's directory and unregisters it; it
-	// does not verify the files first, so a tool whose files are already
-	// gone can still be removed. found is false, and nothing is deleted,
-	// for a name that is not registered.
-	Remove(ctx context.Context, workspace, name string) (found bool, err error)
-}
-
 func forgeSchema() string {
 	return `{"type":"object","properties":{` +
 		`"name":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,47}$"},` +
@@ -108,10 +71,10 @@ func ForgeTool() domain.AvailableTool {
 // RunTool is axlr_run_tool.
 func RunTool() domain.AvailableTool {
 	identity, _ := domain.NewHostToolIdentity(domain.HostOperationRunTool)
-	schema, _ := root.NewJSONObject([]byte(`{"type":"object","properties":{"name":{"type":"string","minLength":1},"arguments":{"type":"object"}},"required":["name","arguments"],"additionalProperties":false}`))
+	schema, _ := root.NewJSONObject([]byte(`{"type":"object","properties":{"name":{"type":"string","minLength":1},"arguments":{"type":"object"},"why":{"type":"string","minLength":1,"maxLength":240,"description":"` + whyDescription + `"}},"required":["name","arguments","why"],"additionalProperties":false}`))
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostRunToolName,
-		Description: "Run a tool forged with axlr_forge_tool in this workspace by its exact name, with arguments that match its input_schema (axlr_tools with name returns it). The result is its exit code, stdout and stderr. A tool whose files changed since it was forged is refused until it is forged again. Approved like local_exec.",
+		Description: "Run a tool forged with axlr_forge_tool in this workspace by its exact name, with arguments that match its input_schema (axlr_tools with name returns it) and a one-sentence why. The result is its exit code, stdout and stderr. A tool whose files changed since it was forged is refused until it is forged again. Approved like local_exec.",
 		Parameters:  schema,
 	}}
 }
@@ -280,11 +243,13 @@ func (u HostToolUseCase) hostRun(ctx context.Context, session domain.Session, ar
 	var args struct {
 		Name      string          `json:"name"`
 		Arguments json.RawMessage `json:"arguments"`
+		// Why is the console's, shown on the card and kept with the turn.
+		Why string `json:"why"`
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&args); err != nil || args.Name == "" {
-		return hostFailure(errors.New("axlr_run_tool arguments must be name and arguments")), nil
+		return hostFailure(errors.New("axlr_run_tool arguments must be name, arguments and why")), nil
 	}
 	input, err := root.NewJSONObject(args.Arguments)
 	if err != nil {

@@ -72,10 +72,16 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		{"an edit without a result", []root.Message{{Role: root.RoleUser, Content: "fix the parser"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{edit}}, {Role: root.RoleAssistant, Content: "done"}}, false},
 		{"a denied and a completed write", withResult(memoryRequest(t, edit, toolCall(t, "w2", "local_write", `{}`)), "e1", "tool call denied by user"), true},
 		{"five commands", memoryRequest(t, commands...), true},
-		{"commands and reads", memoryRequest(t, append([]root.ToolCall{reads[0], reads[1]}, commands[:3]...)...), false},
+		// One command that ran can settle an outcome (decision F2); one
+		// the person denied, or that never started, settled nothing.
+		{"one command and reads", memoryRequest(t, reads[0], reads[1], commands[0]), true},
+		{"a denied command", withResult(memoryRequest(t, commands[0]), "x1", "tool call denied by user"), false},
+		{"a refused command", withResult(memoryRequest(t, commands[0]), "x1", "give why: one sentence saying what this call is for"), false},
+		{"a command without a result", []root.Message{{Role: root.RoleUser, Content: "run the tests"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{commands[0]}}, {Role: root.RoleAssistant, Content: "done"}}, false},
+		{"a forged tool run", memoryRequest(t, toolCall(t, "f1", HostRunToolName, `{"name":"t"}`)), true},
 		{"eight reads", memoryRequest(t, reads...), false},
 		{"searches and listings", memoryRequest(t, searches...), false},
-		{"commands and searches", memoryRequest(t, append(append([]root.ToolCall{}, searches[:4]...), commands[:4]...)...), false},
+		{"searches and a recall", memoryRequest(t, searches[0], searches[1], toolCall(t, "q1", HostRecallName, `{}`)), false},
 		{"a question", memoryRequest(t, reads[:2]...), false},
 		{"session startup", memoryRequest(t, toolCall(t, "b1", HostSessionName, `{}`), toolCall(t, "b2", HostSkillName, `{}`), toolCall(t, "b3", HostToolsName, `{}`), toolCall(t, "b4", HostCallToolName, `{"name":"kmp_guide","arguments":{}}`), toolCall(t, "b5", HostCallToolName, `{"name":"kmp_wake","arguments":{}}`), toolCall(t, "b6", "kmp_wake", `{}`)), false},
 		{"bridged write", memoryRequest(t, edit, toolCall(t, "w1", HostCallToolName, `{"name":"kmp_write_memory","arguments":{}}`)), false},
@@ -83,7 +89,7 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		{"a ceremony", memoryRequest(t, edit, toolCall(t, "s1", HostStepDoneName, `{}`)), false},
 		{"already reminded", append(memoryRequest(t, edit), root.Message{Role: root.RoleUser, Content: memoryReminder}, root.Message{Role: root.RoleAssistant, Content: "nothing durable"}), false},
 	} {
-		if got := needsMemoryReminder(tc.request, "kmp_write_memory"); got != tc.want {
+		if got := needsMemoryReminder(tc.request, memoryWriteSnapshot()); got != tc.want {
 			t.Fatalf("%s: got %v", tc.name, got)
 		}
 	}
@@ -98,7 +104,7 @@ func TestModelIsToldToRecordOnlyWhereItRecordsMemory(t *testing.T) {
 	if err := s.BeginTurn("fix the parser", memoryTools(t)); err != nil {
 		t.Fatal(err)
 	}
-	text := string(modelHostGuidance(&s).Content)
+	text := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 	if !strings.Contains(text, "Record what the work settles") || !strings.Contains(text, "kmp_write_memory = kmp_write_memory") {
 		t.Fatalf("normal mode guidance: %s", text)
 	}
@@ -108,7 +114,7 @@ func TestModelIsToldToRecordOnlyWhereItRecordsMemory(t *testing.T) {
 	if err := s.SetMode(domain.ModeIncident); err != nil {
 		t.Fatal(err)
 	}
-	if modelRecordsMemory(s) || strings.Contains(string(modelHostGuidance(&s).Content), "Record what the work settles") {
+	if modelRecordsMemory(s) || strings.Contains(string(modelHostGuidance(&s, engineParagraphs{}).Content), "Record what the work settles") {
 		t.Fatal("incident mode refuses the model's memory writes; it must not be told to record")
 	}
 	noKMP := turnSession(t)
@@ -139,6 +145,10 @@ func TestMemoryReminderAndJevEachActOncePerRequest(t *testing.T) {
 		case 4:
 			if !strings.HasPrefix(last, MemoryReminderPrefix) {
 				t.Fatalf("fourth request should carry the memory reminder: %q", last)
+			}
+			// The reminder names the memory write the snapshot holds.
+			if strings.Contains(last, "%!") || !strings.Contains(last, "axlr_remember") && !strings.Contains(last, "kmp_write_memory through axlr_call_tool") {
+				t.Fatalf("the reminder names no memory write: %q", last)
 			}
 			return assistant("Nothing durable to record: a one-line fix."), nil
 		}

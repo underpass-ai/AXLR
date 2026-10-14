@@ -38,15 +38,18 @@ var slashCommands = []slashCommand{
 	{"/improve", "slash.improve"},
 	{"/plan", "slash.plan"},
 	{"/jobs", "slash.jobs"},
+	{"/ceremony", "slash.ceremony"},
 	{"/stop-ceremony", "slash.stopCeremony"},
 	{"/copy", "slash.copy"},
 	{"/export", "slash.export"},
 	{"/usage", "slash.usage"},
+	{"/session", "slash.session"},
+	{"/memory", "slash.memory"},
 	{"/exit", "slash.exit"},
 }
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo"}
 
 // slashSuggestionMax is how many suggestions the menu shows at once on a
 // screen tall enough; the selection scrolls the rest into view. On 12
@@ -199,7 +202,7 @@ var slashPromptModes = map[string]bool{"/normal": true, "/review": true, "/write
 
 // slashUsages are how the commands that take text are written; any other
 // command takes none.
-var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]"}
+var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]", "/ceremony": "/ceremony [<definition> [version] [brief]] · /ceremony publish <file.yaml>", "/memory": "/memory save · /memory compare <about>… · /memory forget <ref> [why]", "/session": "/session [export [id]]"}
 
 func slashUsage(command string) string {
 	if usage, ok := slashUsages[command]; ok {

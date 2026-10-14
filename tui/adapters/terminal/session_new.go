@@ -33,7 +33,7 @@ func (m AppModel) newSession() (AppModel, tea.Cmd) {
 		m.Status.Notice = m.Theme.T("notice.newAlready")
 		return m, nil
 	}
-	create := m.deps.Create
+	create, leave := m.deps.Create, m.deps.Leave
 	workspace, model := m.Header.State.Workspace, m.Header.State.Model
 	if workspace == "" {
 		workspace = m.deps.Workspace
@@ -43,6 +43,10 @@ func (m AppModel) newSession() (AppModel, tea.Cmd) {
 		created, err := create.ExecuteNew(ctx, workspace, model)
 		if err != nil {
 			return err
+		}
+		if leave != nil && s != nil {
+			// The session left closes its MADE instance for this console.
+			_ = leave(ctx, s)
 		}
 		*s = created
 		return nil

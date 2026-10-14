@@ -24,6 +24,8 @@ type HostToolUseCase struct {
 	Windows ModelContextWindowPort
 	// Memory serves axlr_remember; nil without KMP.
 	Memory RememberPort
+	// Recall serves axlr_recall; nil without KMP.
+	Recall RecallPort
 	// Forge keeps the workspace's forged tools, which Tools runs as
 	// local_exec after Validation checks their arguments; nil offers none.
 	Forge      ForgedToolsPort
@@ -99,6 +101,8 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		}
 	case domain.HostOperationRemember:
 		result, err = u.hostRemember(ctx, session, arguments)
+	case domain.HostOperationRecall:
+		result, err = u.hostRecall(ctx, session, arguments)
 	case domain.HostOperationLogs:
 		result, err = hostLogs(ctx, u.Logs, arguments)
 	case domain.HostOperationJudge:

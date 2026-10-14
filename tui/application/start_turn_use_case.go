@@ -42,6 +42,7 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 		return err
 	}
 	next := *session
+	person := string(prompt)
 	if u.Continue.Ceremonies != nil {
 		// A console step interrupted earlier (a cancelled watch, a crash
 		// after propose) continues before the model is asked anything.
@@ -93,9 +94,16 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 			prompt = root.Text(string(prompt) + "\n\n" + CurrentStepNote(run, began))
 		}
 	}
+	// The workspace's memory, recalled by the console, rides the first
+	// prompt (and a prompt that changes topic) as a console note.
+	if note := u.Continue.Session.Recall(ctx, &next, person); note != "" {
+		prompt = root.Text(string(prompt) + "\n\n" + note)
+	}
 	if err := next.BeginTurn(prompt, tools); err != nil {
 		return err
 	}
+	// The session's own MADE step is claimed before the model is asked.
+	u.Continue.Session.BeginTurn(ctx, &next)
 	if err := u.Store.Save(ctx, next); err != nil {
 		return err
 	}

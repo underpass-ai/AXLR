@@ -28,6 +28,10 @@ type SessionStore struct {
 	closed         bool
 	preserveActive bool
 	replace        func(string, string) error
+	// OnDiscard is told each session Close discarded because it never
+	// received a message, so what the console kept about it elsewhere (its
+	// label) goes too.
+	OnDiscard func(domain.SessionID)
 }
 
 var _ application.SessionStorePort = (*SessionStore)(nil)
@@ -93,6 +97,21 @@ func (s *SessionStore) claim(id domain.SessionID) error {
 	s.locks[id] = lock
 	return nil
 }
+
+// Release gives a session's lock back without closing the store: a session
+// the console loaded only to look at it (the abandoned-instance sweep at
+// start) stays openable by another console afterwards.
+func (s *SessionStore) Release(id domain.SessionID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	lock := s.locks[id]
+	if lock == nil {
+		return nil
+	}
+	delete(s.locks, id)
+	return lock.close()
+}
+
 func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -144,6 +163,9 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 		return e
 	}
 	if e = s.writeCeremony(session.Export().ID, session.Export().Ceremony); e != nil {
+		return e
+	}
+	if e = s.writeInstance(session.Export().ID, session.Export().Instance); e != nil {
 		return e
 	}
 	if e = s.writeConsole(session.Export().ID, notesOf(session.Export())); e != nil {
@@ -199,7 +221,7 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	if record.ID != string(id) {
 		return domain.Session{}, errors.New("snapshot ID does not match filename")
 	}
-	return restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id), s.readCeremony(id), s.readConsole(id))
+	return restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id), s.readCeremony(id), s.readInstance(id), s.readConsole(id))
 }
 
 // List is deterministic by session ID; malformed snapshots surface as errors.
@@ -292,9 +314,13 @@ func (s *SessionStore) Close() error {
 		}
 		errs = append(errs, lock.close())
 		if empty {
+			if s.OnDiscard != nil {
+				s.OnDiscard(id)
+			}
 			_ = os.Remove(s.timesPath(id))
 			_ = os.Remove(s.modePath(id))
 			_ = os.Remove(s.ceremonyPath(id))
+			_ = os.Remove(s.instancePath(id))
 			_ = os.Remove(s.consolePath(id))
 			_ = os.Remove(s.usagePath(id))
 			_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))

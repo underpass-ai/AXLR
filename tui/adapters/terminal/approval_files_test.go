@@ -129,3 +129,19 @@ func TestALongEditStaysScrollableInTheCard(t *testing.T) {
 func jsonString(s string) string {
 	return `"` + strings.ReplaceAll(s, "\n", `\n`) + `"`
 }
+
+// The model's why opens a write or edit card, before the path and the diff.
+func TestFileCardsShowTheWhyFirst(t *testing.T) {
+	p := pendingCall(t, "local_write", `{"path":"notes/plan.md","mode":"create","content":"# Plan\n","why":"keep the plan beside the code"}`)
+	d := NewApprovalDialog(p, "target", Theme{Monochrome: true})
+	d.Details.SetWidth(80)
+	text := d.Details.Text()
+	if !strings.HasPrefix(text, "why: keep the plan beside the code") || !strings.Contains(text, "notes/plan.md") {
+		t.Fatalf("write card:\n%s", text)
+	}
+	e := NewApprovalDialog(pendingCall(t, "local_edit", `{"path":"a.go","old_text":"x","new_text":"y","why":"rename the field"}`), "target", Theme{Monochrome: true})
+	e.Details.SetWidth(80)
+	if text := e.Details.Text(); !strings.HasPrefix(text, "why: rename the field") {
+		t.Fatalf("edit card:\n%s", text)
+	}
+}

@@ -95,6 +95,16 @@ func TestToolCatalogKeepsUniqueNativeNamesUsableFromGuides(t *testing.T) {
 	if err != nil || id.Plugin.PluginID != "guide-plugin" || id.Plugin.ToolName != "echo" {
 		t.Fatalf("native name lost exact identity: %+v %v", id, err)
 	}
+	if pluginSnapshot[0].Surface != (domain.ToolSurface{}) {
+		t.Fatalf("a catalog without surfaces set one: %+v", pluginSnapshot[0].Surface)
+	}
+	// The engine adapters' surfaces reach each plugin tool of the snapshot.
+	surface := domain.ToolSurface{Role: domain.PluginRoleMemory, ContextArgument: "context_id"}
+	var asked root.PluginRef
+	owned, err := (ToolCatalog{Plugins: manager, Surfaces: func(ref root.PluginRef) domain.ToolSurface { asked = ref; return surface }}).Snapshot(context.Background())
+	if tools := pluginTools(owned); err != nil || len(tools) != 1 || tools[0].Surface != surface || asked.ToolName != "echo" {
+		t.Fatalf("surface %+v asked %+v %v", tools, asked, err)
+	}
 }
 
 func pluginTools(snapshot []domain.AvailableTool) []domain.AvailableTool {

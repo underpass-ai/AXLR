@@ -206,7 +206,7 @@ func TestThePlannerSeesOnlyWhatDecomposeNeeds(t *testing.T) {
 	if strings.Join(names, ",") != "axlr_history,axlr_step_done,local_exec,local_read" {
 		t.Fatalf("planner tools = %v", names)
 	}
-	guidance := string(modelHostGuidance(&s).Content)
+	guidance := string(modelHostGuidance(&s, engineParagraphs{}).Content)
 	if strings.Contains(guidance, "axlr_call_tool") || strings.Contains(guidance, "Self-repair") || !strings.Contains(guidance, "Mode: plan") || !strings.Contains(guidance, "atomic tasks") {
 		t.Fatalf("planner guidance: %s", guidance)
 	}
