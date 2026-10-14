@@ -436,11 +436,15 @@ func TestSearchAndListPassOverUnreadableDirectories(t *testing.T) {
 // .kernel, as it never enters .git; a scope inside them is still walked.
 // On 14 October 2026 a search for "func" filled its page with a 544 KB
 // session export under .axlr and a recursive listing ran out before calc/.
+// A listing of their parent leaves them out too, .git staying listed: the
+// same day a top-level listing showed .kernel/ and the model offered to
+// explore the KMP store.
 func TestSearchAndListLeaveTheConsoleStoresOut(t *testing.T) {
 	_, e := searchTree(t, map[string]string{
 		".axlr/exports/session.json": "func hit\n",
 		".kernel/logs/kmp.log":       "func hit\n",
 		"calc/calc.go":               "func hit\n",
+		".git/HEAD":                  "ref: refs/heads/main\n",
 	})
 	if got := hits(searchFor(t, e, `{"pattern":"hit"}`)); !reflect.DeepEqual(got, []string{"calc/calc.go:1"}) {
 		t.Fatalf("matches %v", got)
@@ -451,8 +455,14 @@ func TestSearchAndListLeaveTheConsoleStoresOut(t *testing.T) {
 	if got := hits(searchFor(t, e, `{"pattern":"hit","path":".kernel/logs"}`)); !reflect.DeepEqual(got, []string{".kernel/logs/kmp.log:1"}) {
 		t.Fatalf("explicit .kernel search %v", got)
 	}
-	if got := entryNames(listFor(t, e, `{"recursive":true}`)); !reflect.DeepEqual(got, []string{".axlr", ".kernel", "calc", "calc/calc.go"}) {
+	if got := entryNames(listFor(t, e, `{"recursive":true}`)); !reflect.DeepEqual(got, []string{".git", "calc", "calc/calc.go"}) {
 		t.Fatalf("recursive listing %v", got)
+	}
+	if got := entryNames(listFor(t, e, `{}`)); !reflect.DeepEqual(got, []string{".git", "calc"}) {
+		t.Fatalf("top-level listing %v", got)
+	}
+	if got := entryNames(listFor(t, e, `{"path":".kernel"}`)); !reflect.DeepEqual(got, []string{".kernel/logs"}) {
+		t.Fatalf("explicit .kernel listing %v", got)
 	}
 	if got := entryNames(listFor(t, e, `{"recursive":true,"path":".axlr"}`)); !reflect.DeepEqual(got, []string{".axlr/exports", ".axlr/exports/session.json"}) {
 		t.Fatalf("explicit .axlr listing %v", got)
