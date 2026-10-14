@@ -139,7 +139,7 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 	clock := transcriptNow()
 	lines := 0
 	for lines < len(s.ConsoleLines) && s.ConsoleLines[lines].AfterMessage == 0 {
-		t.appendRow(consoleLineRow(s.ConsoleLines[lines], theme))
+		t.appendRow(sessionLineRow(s, s.ConsoleLines[lines], theme))
 		lines++
 	}
 	for index, m := range s.Messages {
@@ -205,7 +205,7 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			archived++
 		}
 		for lines < len(s.ConsoleLines) && s.ConsoleLines[lines].AfterMessage == index+1 {
-			t.appendRow(consoleLineRow(s.ConsoleLines[lines], theme))
+			t.appendRow(sessionLineRow(s, s.ConsoleLines[lines], theme))
 			lines++
 		}
 	}

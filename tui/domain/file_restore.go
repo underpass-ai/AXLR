@@ -106,19 +106,23 @@ func (s SessionState) RestoreChange(f RestoredFile) (FileChange, bool) {
 // the calls after the person's last prompt. A console note or a budget note
 // is not a prompt; a message the person steered into a running turn is.
 func (s SessionState) LastTurnChanges() []RestorableChange {
-	start := -1
-	for i := len(s.Messages) - 1; i >= 0; i-- {
-		message := s.Messages[i]
-		if message.Role == axlr.RoleUser && !strings.HasPrefix(string(message.Content), "[AXLR") && !BudgetNote(message.Content) {
-			start = i
-			break
-		}
-	}
-	if start < 0 {
+	return s.TurnChanges(len(s.promptIndexes()))
+}
+
+// TurnChanges is the restorable changes of the turn the person's prompt
+// number turn (from 1) began, newest first; none for a turn that is not
+// there.
+func (s SessionState) TurnChanges(turn int) []RestorableChange {
+	prompts := s.promptIndexes()
+	if turn < 1 || turn > len(prompts) {
 		return nil
 	}
+	end := len(s.Messages)
+	if turn < len(prompts) {
+		end = prompts[turn]
+	}
 	var calls []axlr.ToolCallID
-	for _, message := range s.Messages[start+1:] {
+	for _, message := range s.Messages[prompts[turn-1]+1 : end] {
 		for _, call := range message.ToolCalls {
 			calls = append(calls, call.ID)
 		}
@@ -133,4 +137,64 @@ func (s SessionState) LastTurnChanges() []RestorableChange {
 		}
 	}
 	return changes
+}
+
+// LatestChangingTurn is the most recent turn whose writes and edits can be
+// restored and were not undone yet, numbered from 1, or 0: /undo after a
+// turn that changed nothing offers it.
+func (s SessionState) LatestChangingTurn() int {
+	undone := map[axlr.ToolCallID]bool{}
+	for _, line := range s.ConsoleLines {
+		if line.Restore != nil && line.Restore.Undo {
+			for _, f := range line.Restore.Files {
+				undone[f.From], undone[f.To] = true, true
+			}
+		}
+	}
+	for turn := len(s.promptIndexes()); turn > 0; turn-- {
+		changes := s.TurnChanges(turn)
+		if len(changes) > 0 && !slices.ContainsFunc(changes, func(c RestorableChange) bool { return undone[c.Call] }) {
+			return turn
+		}
+	}
+	return 0
+}
+
+// promptIndexes are the indexes of the person's prompts in the messages.
+func (s SessionState) promptIndexes() []int {
+	var prompts []int
+	for i, message := range s.Messages {
+		if message.Role == axlr.RoleUser && !strings.HasPrefix(string(message.Content), "[AXLR") && !BudgetNote(message.Content) {
+			prompts = append(prompts, i)
+		}
+	}
+	return prompts
+}
+
+// TurnOf is the turn (from 1) whose calls include call, or 0.
+func (s SessionState) TurnOf(call axlr.ToolCallID) int {
+	prompts := s.promptIndexes()
+	for i, message := range s.Messages {
+		for _, c := range message.ToolCalls {
+			if c.ID == call {
+				turn := 0
+				for turn < len(prompts) && prompts[turn] < i {
+					turn++
+				}
+				return turn
+			}
+		}
+	}
+	return 0
+}
+
+// TurnsBefore is how many turns began before message index end.
+func (s SessionState) TurnsBefore(end int) int {
+	count := 0
+	for _, i := range s.promptIndexes() {
+		if i < end {
+			count++
+		}
+	}
+	return count
 }

@@ -7,6 +7,16 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
+// sessionLineRow is consoleLineRow with the session at hand, which names
+// the turn an undo of an earlier turn put back.
+func sessionLineRow(s domain.SessionState, line domain.ConsoleLine, theme Theme) transcriptRow {
+	row := consoleLineRow(line, theme)
+	if line.Restore != nil {
+		row.Text = restoreLineTextIn(s, line, theme)
+	}
+	return row
+}
+
 // consoleLineRow draws a line the console added to the session for the
 // person, such as a finished plan's outcome. On 10 October 2026 a plan
 // synced green and its planning session still ended with the planner's

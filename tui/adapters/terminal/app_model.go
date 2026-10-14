@@ -148,6 +148,8 @@ type AppModel struct {
 	// went back. undoAsking waits for the key that answers /undo.
 	restoreOperation uint64
 	undoAsking       bool
+	// undoTurn is the earlier turn /undo asks to undo, 0 for the last.
+	undoTurn int
 	// noticeAt is when the footer's notice was raised; lastingNotice is a
 	// notice no time ends (see footer_notice.go).
 	noticeAt      time.Time
