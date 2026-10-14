@@ -14,9 +14,15 @@ import (
 
 const sessionInstanceVersion = 1
 
-// maxSessionInstanceBytes bounds <id>.instance; the last turn record is
-// capped before it is stored.
-const maxSessionInstanceBytes = 64 << 10
+// maxSessionInstanceBytes bounds <id>.instance. It covers what the domain
+// bounds: LastRecord at 16 KiB (twice that escaped as a string), fifty
+// pending entries of about 9 KiB each (eight evidence lines of 1000 bytes;
+// up to seven times that once JSON escapes them twice, a "<" in a command
+// line becoming \\u003c) and eight recalled lines of 300 bytes. At 64 KiB a
+// full queue was written and then read as no sidecar, losing the entries,
+// the memory context and the fence (14 October 2026); a sidecar over the
+// bound is trimmed when written (fitInstance).
+const maxSessionInstanceBytes = 4 << 20
 
 // sessionInstance is the session's MADE instance kept in <id>.instance,
 // beside the snapshot for the same reason as <id>.ceremony: a pointer to a
@@ -81,12 +87,31 @@ func (s *SessionStore) writeInstance(id domain.SessionID, instance *domain.Sessi
 		}
 		return nil
 	}
-	record := sessionInstance{Version: sessionInstanceVersion, Instance: instance.Instance, Turns: instance.Turns, Fence: instance.Fence, TurnIndex: instance.TurnIndex, ClaimRequests: instance.ClaimRequests, ClaimCost: instance.ClaimCost, Closed: instance.Closed, LastRecord: instance.LastRecord, Unavailable: instance.Unavailable, Pending: instance.Pending, MemoryAgent: string(instance.MemoryAgent), MemoryContext: string(instance.MemoryContext), Recalled: instance.Recalled, OperationID: instance.OperationID, ClaimedAt: formatInstant(instance.ClaimedAt), LeaseMS: instance.LeaseMS, ReportedAt: formatInstant(instance.Reported), Reports: instance.Reports, Incarnation: instance.ClaimIncarnation, Recalled2: instance.RecalledMemories, Predecessor: string(instance.Predecessor)}
-	data, err := json.Marshal(record)
+	data, err := fitInstance(sessionInstance{Version: sessionInstanceVersion, Instance: instance.Instance, Turns: instance.Turns, Fence: instance.Fence, TurnIndex: instance.TurnIndex, ClaimRequests: instance.ClaimRequests, ClaimCost: instance.ClaimCost, Closed: instance.Closed, LastRecord: instance.LastRecord, Unavailable: instance.Unavailable, Pending: instance.Pending, MemoryAgent: string(instance.MemoryAgent), MemoryContext: string(instance.MemoryContext), Recalled: instance.Recalled, OperationID: instance.OperationID, ClaimedAt: formatInstant(instance.ClaimedAt), LeaseMS: instance.LeaseMS, ReportedAt: formatInstant(instance.Reported), Reports: instance.Reports, Incarnation: instance.ClaimIncarnation, Recalled2: instance.RecalledMemories, Predecessor: string(instance.Predecessor)})
 	if err != nil {
 		return err
 	}
 	return s.writeSidecar(".instance-*", s.instancePath(id), data)
+}
+
+// fitInstance encodes the sidecar within the bound readInstance reads: the
+// last record goes first (it is for /session), then the oldest pending
+// entries, so what is written is always read back.
+func fitInstance(record sessionInstance) ([]byte, error) {
+	for {
+		data, err := json.Marshal(record)
+		if err != nil || len(data) <= maxSessionInstanceBytes {
+			return data, err
+		}
+		switch {
+		case record.LastRecord != "":
+			record.LastRecord = ""
+		case len(record.Pending) > 0:
+			record.Pending = record.Pending[1:]
+		default:
+			return nil, errors.New("session instance is too large")
+		}
+	}
 }
 
 // parseInstant reads an RFC 3339 instant, zero when absent or unreadable.
