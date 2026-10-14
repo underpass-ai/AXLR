@@ -144,7 +144,8 @@ func TestTheApprovalCardGrowsToSixtyPercent(t *testing.T) {
 	m := execApprovalModel(t, domain.ModeNormal, `{"program":"python3","args":["-"],"stdin":"`+strings.Repeat(`print(1)\n`, 40)+`"}`)
 	defer m.zones.Close()
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 50})
-	if rows := m.approvalDetailRows(); rows != 27 {
+	// The keys take two rows at 100 columns (S is offered), so 26 are left.
+	if rows := m.approvalDetailRows(); rows != 26 {
 		t.Fatalf("detail rows %d at 50 rows", rows)
 	}
 	if card := lipglossHeight(m.approvalCard()); card != 30 {
