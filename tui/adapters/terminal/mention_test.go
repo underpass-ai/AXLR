@@ -27,7 +27,7 @@ func writeTree(t *testing.T, root string, files ...string) {
 
 func TestTheWorkspaceListingSkipsDependenciesAndIgnoredFiles(t *testing.T) {
 	root := t.TempDir()
-	writeTree(t, root, "main.go", "tui/app_model.go", "node_modules/x/index.js", ".git/config", "build/out.bin", "debug.log", "docs/console.md", "gen/keep.txt")
+	writeTree(t, root, "main.go", "tui/app_model.go", "node_modules/x/index.js", ".git/config", "build/out.bin", "debug.log", "docs/console.md", "gen/keep.txt", ".kernel/log.jsonl")
 	if err := os.WriteFile(filepath.Join(root, ".gitignore"), []byte("# comment\nbuild/\n*.log\n!keep.txt\n/gen/*.tmp\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestTheWorkspaceListingSkipsDependenciesAndIgnoredFiles(t *testing.T) {
 			t.Errorf("listing lacks %s: %s", want, got)
 		}
 	}
-	for _, unwanted := range []string{"node_modules", ".git/", "build", "debug.log", "linked/"} {
+	for _, unwanted := range []string{"node_modules", ".git/", "build", "debug.log", "linked/", ".kernel"} {
 		if strings.Contains(got, unwanted) {
 			t.Errorf("listing has %s: %s", unwanted, got)
 		}
