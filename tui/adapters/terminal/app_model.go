@@ -258,6 +258,10 @@ func (m AppModel) Init() tea.Cmd {
 	if git := m.readGitState(); git != nil {
 		repairs = tea.Batch(repairs, git)
 	}
+	if m.Header.About != m.deps.About {
+		// The session's about is not the launch's the start counted.
+		repairs = tea.Batch(repairs, m.countMemories())
+	}
 	if os.Getenv("TERM") != "dumb" {
 		repairs = tea.Batch(repairs, startTitle())
 	}
@@ -783,7 +787,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.autoOpenRepairPanel()
 		}
 		var recount tea.Cmd
-		if wasTurn {
+		if wasTurn || switched {
 			// The turn may have recorded memories: the header counts again.
 			recount = m.countMemories()
 		}
@@ -833,7 +837,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch v {
 		case "send":
 			command := strings.TrimSpace(m.Composer.Input.Value())
-			if suggestions := slashSuggestions(command); len(suggestions) > 0 && m.overlay == "" {
+			if suggestions := slashSuggestions(slashDraft(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
 				// Enter on a partial command runs the highlighted suggestion.
 				command = suggestions[min(m.slashSelected, len(suggestions)-1)].name
 			}
@@ -1011,7 +1015,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return next, cmd
 			}
 		}
-		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
+		if suggestions := slashSuggestions(slashDraft(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" {
 			switch v.String() {
 			case "up":
 				m.slashSelected = max(0, min(m.slashSelected, len(suggestions)-1)-1)
@@ -1100,7 +1104,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
-			suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value()))
+			suggestions := slashSuggestions(slashDraft(m.Composer.Input.Value()))
 			for i := range suggestions {
 				if m.zones.Get(fmt.Sprintf("%sslash-%d", m.prefix, i)).InBounds(v) {
 					m.slashSelected = i
@@ -1167,7 +1171,7 @@ func (m AppModel) View() tea.View {
 		}
 		body := m.mainTranscript()
 		var menu []string
-		if suggestions := slashSuggestions(strings.TrimSpace(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
+		if suggestions := slashSuggestions(slashDraft(m.Composer.Input.Value())); len(suggestions) > 0 && m.overlay == "" && !m.inlineApproval() {
 			menu = m.slashMenu(suggestions)
 		} else if m.mentionActive() {
 			menu = m.mentionMenu()

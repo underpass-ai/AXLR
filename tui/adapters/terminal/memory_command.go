@@ -218,7 +218,9 @@ func (m AppModel) countMemories() tea.Cmd {
 	if counter == nil || about == "" {
 		return nil
 	}
-	return func() tea.Msg {
+	// The store's listing catches up with the turn's last writes a moment
+	// later: counted at once on 14 October 2026, the header lagged a turn.
+	return tea.Tick(memoryRecountDelay, func(time.Time) tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		count, known, err := counter.Count(ctx, about)
@@ -226,5 +228,8 @@ func (m AppModel) countMemories() tea.Cmd {
 			return nil
 		}
 		return memoryCounted{about: about, count: count, known: known}
-	}
+	})
 }
+
+// memoryRecountDelay is how long after a turn the header counts again.
+var memoryRecountDelay = 2 * time.Second

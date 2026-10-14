@@ -88,6 +88,12 @@ var slashAliasesOf = func() map[string][]string {
 	return out
 }()
 
+// slashDraft is the composer's text as the menu reads it: a space after a
+// command ("/memory ") asks for its verbs, so only leading space goes.
+func slashDraft(value string) string {
+	return strings.TrimLeft(value, " \t")
+}
+
 // slashSuggestions lists the commands a single-line draft starting with "/"
 // could complete to, whatever its case: those whose name starts with it,
 // then those with an alias that does, then those whose name or an alias

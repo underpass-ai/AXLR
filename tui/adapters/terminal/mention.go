@@ -66,7 +66,7 @@ func (m AppModel) mentionKey(line, start int) string { return fmt.Sprintf("%d:%d
 // mentionActive reports the @ menu open: a token under the cursor in the
 // main composer that Esc did not close, and no slash menu.
 func (m AppModel) mentionActive() bool {
-	if m.overlay != "" || m.inlineApproval() || len(slashSuggestions(strings.TrimSpace(m.Composer.Input.Value()))) > 0 {
+	if m.overlay != "" || m.inlineApproval() || len(slashSuggestions(slashDraft(m.Composer.Input.Value()))) > 0 {
 		return false
 	}
 	_, line, start, ok := m.mentionToken()
