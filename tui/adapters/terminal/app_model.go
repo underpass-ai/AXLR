@@ -481,9 +481,16 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.waitingCommand(nil)
 		return m, cmd
 	case resubmitPrompt:
-		// The successor session takes the prompt the capped one could not.
+		// The successor session takes the prompt the capped one could not;
+		// a draft the person was writing stays in the composer.
+		draft := m.Composer.Input.Value()
 		m.Composer.Input.SetValue(v.prompt)
-		return m.submitDraft()
+		next, cmd := m.submitDraft()
+		changed := next.(AppModel)
+		if draft != "" && changed.Composer.Input.Value() == "" {
+			changed.Composer.Input.SetValue(draft)
+		}
+		return changed, cmd
 	case memoryCounted:
 		if v.about == m.Header.About {
 			// Unknown means nothing is recorded under the about yet.
@@ -501,9 +508,18 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				*m.deps.Session = capped.Successor
 			}
 			v.Session, v.Err, v.Fresh = capped.Successor, nil, true
+			queued := m.steer.Peek() != ""
+			if queued {
+				// A message queued meanwhile starts the successor's turn:
+				// the capped prompt goes first in it, not behind it.
+				m.steer.Restore(root.Text(capped.Prompt))
+			}
 			next, cmd := m.Update(v)
 			changed := next.(AppModel)
 			changed.Status.Notice = changed.Theme.Tf("notice.continued", capped.Tokens/1000, capped.Cap/1000, string(capped.Predecessor)[:8])
+			if queued {
+				return changed, cmd
+			}
 			prompt := capped.Prompt
 			return changed, tea.Batch(cmd, func() tea.Msg { return resubmitPrompt{prompt: prompt} })
 		}

@@ -269,8 +269,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			if intent == ControlIntent(domain.DecisionAutoApprove) {
 				intent = "always-allow"
 			}
-			if (intent == "always-allow" || intent == "autonomy-on") && m.modeAsksForEachCall(m.Approval.Pending) {
-				intent = "" // not offered: the mode keeps this call under approval
+			if (intent == "always-allow" || intent == "autonomy-on") && (m.modeAsksForEachCall(m.Approval.Pending) || m.destructiveRule(m.Approval.Pending) != "") {
+				// Not offered: the mode, or the destructive list, keeps this
+				// call under approval; the card hid L and F but on 14 October
+				// 2026 the keys still answered it.
+				intent = ""
 			}
 			if intent == "always-allow" && !savesAlwaysAllow(m.Header.State.ToolSnapshot, m.Approval.Pending) {
 				intent = "" // not offered: a host tool has no saved rule

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"time"
 
@@ -60,9 +61,19 @@ func (u ExportSessionBundleUseCase) Execute(ctx context.Context, open domain.Ses
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(string(state.Workspace), ExportDirectory, string(state.ID)+"-"+now.Format("20060102-1504")+SessionBundleSuffix)
-	if err := u.Files.Create(ctx, path, data); err != nil {
-		return "", err
+	// A second export within the minute gets a suffix, as /export does.
+	base := filepath.Join(string(state.Workspace), filepath.FromSlash(ExportDirectory), string(state.ID)+"-"+now.Format("20060102-1504"))
+	for n := 1; ; n++ {
+		path := base + SessionBundleSuffix
+		if n > 1 {
+			path = fmt.Sprintf("%s-%d%s", base, n, SessionBundleSuffix)
+		}
+		err := u.Files.Create(ctx, path, data)
+		if err == nil {
+			return path, nil
+		}
+		if !errors.Is(err, fs.ErrExist) || n == maxExportSuffix {
+			return "", err
+		}
 	}
-	return path, nil
 }

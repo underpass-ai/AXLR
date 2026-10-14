@@ -143,3 +143,20 @@ func TestRefAboutReadsTheAboutOfARef(t *testing.T) {
 		}
 	}
 }
+
+// A second /session export within the minute takes a suffix; on 14
+// October 2026 review found it refused with no way to name another file.
+func TestASecondBundleExportWithinTheMinuteTakesASuffix(t *testing.T) {
+	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "a.go", Before: "one", After: "two"}}})
+	files := exclusiveFiles{}
+	now := time.Date(2026, 10, 14, 9, 35, 0, 0, time.UTC)
+	u := ExportSessionBundleUseCase{Codec: &bundleCodecStub{}, Files: files, Now: func() time.Time { return now }}
+	first, err := u.Execute(context.Background(), s, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := u.Execute(context.Background(), s, "")
+	if err != nil || second == first || !strings.HasSuffix(second, "-2"+SessionBundleSuffix) {
+		t.Fatalf("second export %q (first %q): %v", second, first, err)
+	}
+}
