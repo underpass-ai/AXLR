@@ -325,7 +325,7 @@ Open a session with `Ctrl+O` or start with:
 /tmp/axlr-tui --root "$PWD" --session 0123456789abcdef0123456789abcdef
 ```
 
-`-c` (or `--continue`) opens the workspace's most recently saved session instead: one with messages, not archived and not a plan task's worker. It refuses a workspace without one, and cannot be combined with `--session`, `--repair` or `--improve`; a session another console has open is refused as with `--session`.
+`-c` (or `--continue`) opens the workspace's most recently saved session instead: one with messages, not archived and not a plan task's worker. It refuses a workspace without one, and cannot be combined with `--session`, `--repair` or `--improve`. When the session `-c` or `--session` names is open in another console, the console starts a new session in the same workspace (with `--model`, or the default model) and the footer says so, `Session 01234567 is open in another console: this is a new session in the same workspace · Ctrl+O lists both`; until 14 October 2026 it exited with `open in another console`. A bundle `--import` names is still refused when its session is open elsewhere.
 
 ```bash
 /tmp/axlr-tui --root "$PWD" -c
