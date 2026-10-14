@@ -1,8 +1,10 @@
 package application
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -166,5 +168,43 @@ func TestClassifyOutcomeReadsEveryResultShape(t *testing.T) {
 	code, tail := execResult(`{"status":"completed","output":{"exit_code":2,"stdout":"","stderr":"boom: TOKEN=abcdef"}}`)
 	if code == nil || *code != 2 || tail != "boom: [redacted]" {
 		t.Fatalf("%v %q", code, tail)
+	}
+}
+
+// LastRecord holds valid JSON within the domain's bound: cutting the JSON
+// left it over the bound and unparseable, which froze the instance (14
+// October 2026).
+func TestBoundedJSONStaysValidAndWithinTheLimit(t *testing.T) {
+	record := TurnRecord{Turn: 3, PromptIndex: 7, AnswerKind: "changed", Prompt: "p", Answer: "a"}
+	for i := 0; i < 30; i++ {
+		record.Actions = append(record.Actions, TurnAction{Tool: "local_exec", Target: "go test ./...", Why: strings.Repeat("why ", 100), OutputTail: strings.Repeat(`"x" `, 1024), CallID: "c"})
+	}
+	if len(record.JSON()) <= domain.MaxSessionRecordBytes {
+		t.Fatal("the record should start over the limit")
+	}
+	for _, limit := range []int{domain.MaxSessionRecordBytes, 2000, 200} {
+		text := record.BoundedJSON(limit)
+		var decoded map[string]any
+		if len(text) > limit || json.Unmarshal([]byte(text), &decoded) != nil || decoded["turn"] != float64(3) {
+			t.Fatalf("limit %d: %d bytes %.80q", limit, len(text), text)
+		}
+	}
+	if len(record.Actions[0].OutputTail) == 0 {
+		t.Fatal("BoundedJSON changed the caller's actions")
+	}
+	small := TurnRecord{Turn: 1}
+	if small.BoundedJSON(domain.MaxSessionRecordBytes) != small.JSON() {
+		t.Fatal("a record within the limit is kept whole")
+	}
+}
+
+// The tail of a long output starts on a character, not inside one.
+func TestExecResultTailStartsOnACharacter(t *testing.T) {
+	// An odd number of bytes after the é's puts the cut inside one.
+	stdout := strings.Repeat("é", turnOutputTail)
+	encoded, _ := json.Marshal(map[string]any{"status": "completed", "output": map[string]any{"exit_code": 0, "stdout": stdout + "x", "stderr": ""}})
+	_, tail := execResult(string(encoded))
+	if tail == "" || !utf8.ValidString(tail) || len(tail) > turnOutputTail {
+		t.Fatalf("tail %d bytes, valid %v", len(tail), utf8.ValidString(tail))
 	}
 }

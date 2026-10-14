@@ -222,6 +222,9 @@ func (m Memory) RecordTurn(ctx context.Context, entry application.TurnEntry) (st
 				// October 2026 when a close entry was queued twice).
 				return "", fmt.Errorf("KMP refused the turn entry (%s): %s: %w", refused.Code, bounded(refused.Message, 600), application.ErrEntryRecorded)
 			}
+			if refusesEntry(refused.Code) {
+				return "", fmt.Errorf("KMP refused the turn entry (%s): %s: %w", refused.Code, bounded(refused.Message, 600), application.ErrEntryRefused)
+			}
 			return "", fmt.Errorf("KMP refused the turn entry (%s): %s", refused.Code, bounded(refused.Message, 600))
 		}
 		return "", err
@@ -233,6 +236,16 @@ func (m Memory) RecordTurn(ctx context.Context, entry application.TurnEntry) (st
 	}
 	status, _ := result["status"].(string)
 	return "", fmt.Errorf("KMP did not write the turn entry (status %q)", status)
+}
+
+// refusesEntry reports a refusal code that judges the entry itself (its
+// arguments invalid, the write not permitted): retried, the entry is
+// refused again and the queue behind it never moves. An I/O failure, a
+// timeout, an internal error, an ingest conflict or an about not found yet
+// may pass at the next turn end.
+func refusesEntry(code string) bool {
+	code = strings.ToLower(code)
+	return strings.HasPrefix(code, "invalid") || strings.Contains(code, "validation") || code == "permission_denied"
 }
 
 // RecordSettled writes what Jev selected from a turn: the quoted text as

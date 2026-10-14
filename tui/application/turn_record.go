@@ -249,6 +249,43 @@ func (r TurnRecord) JSON() string {
 	return string(data)
 }
 
+// BoundedJSON is the record as LastRecord keeps it: valid JSON of at most
+// limit bytes. Cutting the JSON (as bounded did until 14 October 2026)
+// left it over the limit and unparseable, Validate refused the instance
+// and every later turn of the session failed. What /session needs least
+// goes first: the output tails, the whys, then the actions, the prompt and
+// the answer; a record still too large keeps its numbers alone.
+func (r TurnRecord) BoundedJSON(limit int) string {
+	if text := r.JSON(); len(text) <= limit {
+		return text
+	}
+	r.Actions = append([]TurnAction(nil), r.Actions...)
+	for i := range r.Actions {
+		r.Actions[i].OutputTail = ""
+	}
+	if text := r.JSON(); len(text) <= limit {
+		return text
+	}
+	for i := range r.Actions {
+		r.Actions[i].Why = ""
+	}
+	if text := r.JSON(); len(text) <= limit {
+		return text
+	}
+	for len(r.Actions) > 0 {
+		r.Actions = r.Actions[:len(r.Actions)/2]
+		if text := r.JSON(); len(text) <= limit {
+			return text
+		}
+	}
+	r.Prompt, r.Answer, r.Files, r.Commands, r.Memories = "", "", nil, nil, nil
+	if text := r.JSON(); len(text) <= limit {
+		return text
+	}
+	minimal, _ := json.Marshal(map[string]any{"turn": r.Turn, "prompt_index": r.PromptIndex, "answer_kind": r.AnswerKind, "truncated": true})
+	return string(minimal)
+}
+
 // Output is the record as the MADE step's output object.
 func (r TurnRecord) Output() map[string]any {
 	var output map[string]any
@@ -371,6 +408,11 @@ func execResult(result string) (*int, string) {
 	}
 	if len(text) > turnOutputTail {
 		text = text[len(text)-turnOutputTail:]
+		// The cut can fall inside a character: the tail starts at the next
+		// one, so the record stays valid UTF-8.
+		for len(text) > 0 && !utf8.RuneStart(text[0]) {
+			text = text[1:]
+		}
 		if i := strings.IndexByte(text, '\n'); i >= 0 && i < 200 {
 			text = text[i+1:]
 		}

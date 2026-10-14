@@ -46,6 +46,12 @@ func ImportedInstance(instance *domain.SessionInstance, id domain.SessionID, wor
 		Summary:  fmt.Sprintf("Session imported from %s (exported %s) and continued on %s.", origin, exported, host),
 		Evidence: []string{"axlr-tui --import " + source},
 		Labels:   map[string][]string{"ws": {string(workspace)}, "session": {string(id)}, "event": {"import"}}}
+	if keep := domain.MaxPendingEntries - 1; len(next.Pending) > keep {
+		// The handoff makes one more: a full queue would fail Validate and
+		// the import with it. The oldest entries go, as the journal drops
+		// them.
+		next.Pending = next.Pending[len(next.Pending)-keep:]
+	}
 	next.Pending = append(next.Pending, encodeEntry(entry))
 	if next.Instance == "" {
 		// The origin had no instance: the record needs a reason to exist

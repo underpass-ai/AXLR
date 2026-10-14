@@ -144,6 +144,18 @@ func TestRecordTurnWritesOneTurnEntry(t *testing.T) {
 	if _, err := recorded.RecordTurn(context.Background(), application.TurnEntry{About: "ws:abc", Key: "k", Summary: "s", Evidence: []string{"e"}}); !errors.Is(err, application.ErrEntryRecorded) {
 		t.Fatalf("duplicate key: %v", err)
 	}
+	// An entry KMP refuses for what it is would be refused at every retry:
+	// the journal drops it. An I/O failure may pass next time.
+	var invalid []map[string]any
+	invalidEntry := kmpAnswers(t, &invalid, map[string]any{"status": "rejected", "error": map[string]any{"code": "invalid_request", "message": "SEARCH_SUMMARY_REQUIRED@memories[0].summary_en"}})
+	if _, err := invalidEntry.RecordTurn(context.Background(), application.TurnEntry{About: "ws:abc", Key: "k", Summary: "s", Evidence: []string{"e"}}); !errors.Is(err, application.ErrEntryRefused) {
+		t.Fatalf("invalid entry: %v", err)
+	}
+	var failed []map[string]any
+	ioFailure := kmpAnswers(t, &failed, map[string]any{"status": "rejected", "error": map[string]any{"code": "io_error", "message": "disk full"}})
+	if _, err := ioFailure.RecordTurn(context.Background(), application.TurnEntry{About: "ws:abc", Key: "k", Summary: "s", Evidence: []string{"e"}}); err == nil || errors.Is(err, application.ErrEntryRefused) || errors.Is(err, application.ErrEntryRecorded) {
+		t.Fatalf("io failure: %v", err)
+	}
 }
 
 func TestRememberSendsSummaryENAndNamesItOnRefusal(t *testing.T) {

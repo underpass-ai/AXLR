@@ -28,6 +28,11 @@ const (
 // key the store accepted already: nothing to retry.
 var ErrEntryRecorded = errors.New("entry recorded already")
 
+// ErrEntryRefused is the journal's answer to an entry the store refused
+// for what it is (its arguments invalid), not for being unreachable: the
+// same entry would be refused at every retry.
+var ErrEntryRefused = errors.New("entry refused by the store")
+
 // SessionCeremony runs the session's MADE instance. Every failure of the
 // engines is logged and leaves the turn to run: the record is the
 // console's bookkeeping, not the person's work.
@@ -127,6 +132,18 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 		c.unavailable(s, current, has, err)
 		return domain.SessionInstance{}, false
 	}
+	if has && current.Instance != "" && !current.Closed && successor <= 1 {
+		// MADE was unavailable at an earlier prompt of an instance that
+		// started: it continues. Starting its id again is refused ("already
+		// exists"), which left the session without a record for good until
+		// 14 October 2026.
+		current.Unavailable = ""
+		if err := c.setInstance(s, current); err != nil {
+			return domain.SessionInstance{}, false
+		}
+		c.log("session instance %s available again", current.Instance)
+		return current, true
+	}
 	id := instanceID(state.ID, successor)
 	inputs := map[string]string{"workspace": string(state.Workspace), "model": string(state.Model), "about": c.about(ctx, state), "session": string(state.ID)}
 	if successor > 1 {
@@ -135,10 +152,14 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 		inputs["predecessor"] = instanceID(current.Predecessor, 1)
 	}
 	err := c.Engine.Start(ctx, SessionDefinition, SessionDefinitionVersion, id, inputs)
-	for tries := 0; err != nil && successor > 1 && instanceExists(err) && tries < successorTries; tries++ {
+	for tries := 0; err != nil && instanceExists(err) && tries < successorTries; tries++ {
 		// The successor exists already (the same bundle imported twice on
-		// one machine): the next number is tried.
-		successor++
+		// one machine), or the session's first instance does while the
+		// sidecar that named it was lost: the next number is tried.
+		if successor <= 1 && inputs["predecessor"] == "" {
+			inputs["predecessor"] = id
+		}
+		successor = max(successor, 1) + 1
 		id = instanceID(state.ID, successor)
 		err = c.Engine.Start(ctx, SessionDefinition, SessionDefinitionVersion, id, inputs)
 	}
@@ -150,8 +171,7 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 	// imported session's handoff among them); until 13 October 2026 they
 	// were lost with the predecessor.
 	instance := domain.SessionInstance{Instance: id, MemoryAgent: current.MemoryAgent, MemoryContext: current.MemoryContext, Recalled: current.Recalled, Predecessor: current.Predecessor, RecalledMemories: current.RecalledMemories, Pending: current.Pending}
-	if err := s.SetInstance(instance); err != nil {
-		c.log("session instance: %v", err)
+	if err := c.setInstance(s, instance); err != nil {
 		return domain.SessionInstance{}, false
 	}
 	c.log("session instance %s opened", id)
@@ -165,7 +185,24 @@ func (c *SessionCeremony) unavailable(s *domain.Session, current domain.SessionI
 		c.log("session instance unavailable: %s", reason)
 	}
 	current.Unavailable = reason
-	_ = s.SetInstance(current)
+	_ = c.setInstance(s, current)
+}
+
+// setInstance records the instance in the session. A last record the
+// domain refuses is dropped rather than the update: the record is for
+// /session, the instance is what every later turn claims on (on 14 October
+// 2026 an oversized record froze the instance and failed every turn).
+func (c *SessionCeremony) setInstance(s *domain.Session, instance domain.SessionInstance) error {
+	err := s.SetInstance(instance)
+	if err != nil && instance.LastRecord != "" {
+		c.log("session instance: %v; last record dropped", err)
+		instance.LastRecord = ""
+		err = s.SetInstance(instance)
+	}
+	if err != nil {
+		c.log("session instance: %v", err)
+	}
+	return err
 }
 
 // BeginTurn opens the session's KMP context at its first prompt and claims
@@ -201,31 +238,41 @@ func (c *SessionCeremony) BeginTurn(ctx context.Context, s *domain.Session) {
 	if err != nil {
 		c.log("session turn claim: %v", err)
 		instance.Fence, instance.TurnIndex = "", index
-		_ = s.SetInstance(instance)
+		_ = c.setInstance(s, instance)
 		return
 	}
 	instance.TurnIndex = index
 	instance.ClaimRequests, instance.ClaimCost = c.usage(ctx, s.ID())
 	c.claimed(ctx, *s, &instance, fence, sessionLease)
-	_ = s.SetInstance(instance)
+	_ = c.setInstance(s, instance)
 }
 
 // EndTurn completes the turn step with the turn's record and writes its
 // results to KMP, then saves the session.
 func (c *SessionCeremony) EndTurn(ctx context.Context, s *domain.Session) error {
-	if !c.records(*s) {
+	if !c.recordsTurn(*s) {
 		return nil
 	}
-	instance, has := s.Instance()
-	if !has || instance.Instance == "" || instance.Closed {
-		return nil
-	}
+	instance, _ := s.Instance()
 	record := c.record(ctx, *s, instance, false)
 	instance = c.complete(ctx, s, instance, record)
-	if err := s.SetInstance(instance); err != nil {
+	if err := c.setInstance(s, instance); err != nil {
 		return err
 	}
-	return c.Store.Save(ctx, *s)
+	// The turn is over even when the person pressed Esc while Jev judged
+	// it: the record is saved regardless.
+	return c.Store.Save(context.WithoutCancel(ctx), *s)
+}
+
+// recordsTurn reports whether the session's turn ends in a record:
+// EndTurn's own condition, an instance that started and is not closed.
+// The memory reminder reads it to know whether Jev settles the turn.
+func (c *SessionCeremony) recordsTurn(s domain.Session) bool {
+	if !c.records(s) {
+		return false
+	}
+	instance, has := s.Instance()
+	return has && instance.Instance != "" && !instance.Closed
 }
 
 // record builds the turn's record with its share of the session's cost.
@@ -246,6 +293,9 @@ func (c *SessionCeremony) record(ctx context.Context, s domain.Session, instance
 // fails keeps the fence, so the next claim completes it as interrupted.
 func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, instance domain.SessionInstance, record TurnRecord) domain.SessionInstance {
 	stepRef := fmt.Sprintf("ceremony %s step %s #%d", instance.Instance, sessionTurnStep, record.Turn)
+	// A turn whose completion failed keeps its fence and is completed again,
+	// as interrupted, at the next claim: it is counted then, not twice.
+	final := true
 	if instance.Fence != "" {
 		// The finished report goes before the completion: MADE takes a
 		// report only on an accepted lease, which the completion ends
@@ -255,14 +305,17 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 		if err := c.Engine.Complete(ctx, instance.Instance, sessionTurnStep, instance.Fence, record.Output()); err != nil {
 			c.log("session turn %d completion: %v", record.Turn, err)
 			stepRef += " (not completed: " + bounded(err.Error(), 200) + ")"
+			final = false
 		} else {
 			instance.Fence, instance.OperationID = "", ""
 		}
 	} else {
 		stepRef += " (not claimed)"
 	}
-	instance.Turns++
-	instance.LastRecord = bounded(record.JSON(), domain.MaxSessionRecordBytes)
+	if final {
+		instance.Turns++
+	}
+	instance.LastRecord = record.BoundedJSON(domain.MaxSessionRecordBytes)
 	if c.Journal != nil && record.HasResults() {
 		state := s.Export()
 		entry := TurnEntry{About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:turn:%s:%d", state.ID, record.PromptIndex), Summary: record.Summary(), Evidence: record.Evidence(stepRef), OccurredAt: record.FinishedAt,
@@ -284,6 +337,7 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 // journal writes the queued entries to KMP, oldest first, and returns what
 // KMP did not take: the engine down or a refusal keeps the entry for the
 // next turn end or the close (decision E10), bounded by MaxPendingEntries.
+// An entry KMP has already, or refuses for what it is, is dropped.
 func (c *SessionCeremony) journal(ctx context.Context, pending []string) []string {
 	if c.Journal == nil {
 		return pending
@@ -300,6 +354,10 @@ func (c *SessionCeremony) journal(ctx context.Context, pending []string) []strin
 			// queued after a write whose receipt was lost): retrying
 			// would block every entry behind it.
 			c.log("session memory %s: recorded already; dropped", entry.Key)
+		} else if errors.Is(err, ErrEntryRefused) {
+			// Kept, it would block every entry behind it for good: KMP
+			// refuses it the same way at each retry.
+			c.log("session memory %s: %v; dropped", entry.Key, err)
 		} else if err != nil {
 			c.log("session memory %s: %v; kept for the next turn", entry.Key, err)
 			kept = append(kept, pending[i:]...)
@@ -443,7 +501,7 @@ func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, tr
 			instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
 		}
 	}
-	if err := s.SetInstance(instance); err != nil {
+	if err := c.setInstance(s, instance); err != nil {
 		return err
 	}
 	return c.Store.Save(ctx, *s)

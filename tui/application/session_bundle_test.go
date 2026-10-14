@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"strings"
@@ -158,5 +159,24 @@ func TestASecondBundleExportWithinTheMinuteTakesASuffix(t *testing.T) {
 	second, err := u.Execute(context.Background(), s, "")
 	if err != nil || second == first || !strings.HasSuffix(second, "-2"+SessionBundleSuffix) {
 		t.Fatalf("second export %q (first %q): %v", second, first, err)
+	}
+}
+
+// A bundle whose queue is full keeps its newest entries and the handoff:
+// one more would fail Validate and the import with it.
+func TestImportedInstanceWithAFullQueueKeepsTheHandoff(t *testing.T) {
+	origin := &domain.SessionInstance{Instance: "axlr-session-0123456789abcdef0123456789abcdef"}
+	for i := 0; i < domain.MaxPendingEntries; i++ {
+		origin.Pending = append(origin.Pending, encodeEntry(TurnEntry{About: "ws:x", Key: fmt.Sprintf("k%d", i), Summary: "s"}))
+	}
+	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
+	instance := ImportedInstance(origin, "0123456789abcdef0123456789abcdef", "/ws", SessionBundleMeta{Host: "laptop"}, "gx10", "/tmp/b.json", now)
+	if err := instance.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	first, _ := decodeEntry(instance.Pending[0])
+	last, _ := decodeEntry(instance.Pending[len(instance.Pending)-1])
+	if len(instance.Pending) != domain.MaxPendingEntries || first.Key != "k1" || !strings.HasPrefix(last.Key, "axlr:import:") {
+		t.Fatalf("pending %d first %s last %s", len(instance.Pending), first.Key, last.Key)
 	}
 }
