@@ -169,7 +169,7 @@ func classifyCall(snapshot []domain.AvailableTool, record domain.PendingTool) (c
 	}
 	content := string(record.Outcome.Content)
 	switch {
-	case content == "tool call cancelled" || strings.HasPrefix(content, "tool call denied"):
+	case strings.HasPrefix(content, "tool call cancelled") || strings.HasPrefix(content, "tool call denied"):
 		return cited, fmt.Sprintf("call %s was cancelled or denied; that is not a defect", record.Call.ID)
 	case strings.HasPrefix(content, "tool execution failed; effect unknown: "):
 		detail := strings.TrimPrefix(content, "tool execution failed; effect unknown: ")
