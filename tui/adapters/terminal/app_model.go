@@ -28,14 +28,14 @@ type AppModel struct {
 	tokens     int
 	// cached is the share, in percent, of the last request's prompt that the
 	// provider read from its prompt cache; zero without a cache.
-	cached           int
-	cost             costView
-	Status           StatusBar
-	Layout           Layout
-	Theme            Theme
-	UIPreferences    domain.UIPreferences
-	ThemePicker      ThemePicker
-	Busy             bool
+	cached        int
+	cost          costView
+	Status        StatusBar
+	Layout        Layout
+	Theme         Theme
+	UIPreferences domain.UIPreferences
+	ThemePicker   ThemePicker
+	Busy          bool
 	// typedAt is when a key last changed the composer's text; an approval
 	// card ignores letters typed right after it (see typingIntoCard).
 	typedAt          time.Time

@@ -22,6 +22,7 @@ func (m AppModel) pending() (domain.PendingTool, bool) {
 	}
 	return domain.PendingTool{}, false
 }
+
 // approvalTypingWindow is how long after the person's last keystroke in
 // the composer a letter is still taken as typing, not as a card's answer.
 const approvalTypingWindow = 800 * time.Millisecond

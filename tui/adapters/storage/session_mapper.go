@@ -20,6 +20,7 @@ func decodeCall(c dto.ToolCall) (root.ToolCall, error) {
 	args, e := root.NewJSONObject(compactJSON(c.Arguments))
 	return root.ToolCall{ID: root.ToolCallID(c.ID), Name: root.ToolName(c.Name), Arguments: args}, e
 }
+
 // compactJSON drops the layout of a raw value: an indented session bundle
 // indents a call's arguments differently in the transcript and in the
 // activity, and the restore compares them byte for byte (on 14 October 2026
