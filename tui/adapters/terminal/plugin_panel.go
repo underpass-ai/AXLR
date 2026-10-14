@@ -36,7 +36,11 @@ func NewPluginPanel() PluginPanel {
 	search.Placeholder = Translate(English, "plugins.searchPlaceholder")
 	install := textinput.New()
 	install.Placeholder = Translate(English, "mcp.manifestPlaceholder")
-	return PluginPanel{Details: viewport.New(), Search: search, InstallInput: install}
+	// Long values wrap: on 14 October 2026 the store path ended "…4c2" and
+	// the work identity "(un agente por almacén, un cont" at the edge.
+	details := viewport.New()
+	details.SoftWrap = true
+	return PluginPanel{Details: details, Search: search, InstallInput: install}
 }
 
 func (p *PluginPanel) SetItems(items []domain.PluginState) {
@@ -256,6 +260,9 @@ func (p *PluginPanel) Update(msg tea.Msg, mode ControlIntent) ControlIntent {
 			}
 			return ""
 		}
+	}
+	if key, ok := msg.(tea.KeyPressMsg); ok && jumpViewport(&p.Details, key.String()) {
+		return ""
 	}
 	p.Details, _ = p.Details.Update(msg)
 	return ""

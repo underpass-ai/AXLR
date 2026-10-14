@@ -59,8 +59,12 @@ func (a *commandAllows) reset() {
 }
 
 // execAllowKey is what an allowed command must repeat exactly: every
-// argument of the call but its timeout and output limit, with the
-// workspace root written one way ("", "." and "./").
+// argument of the call but its timeout, its output limit and the model's
+// why, with the workspace root written one way ("", "." and "./"). On
+// 14 October 2026 glm-5.3-flash ran `go test ./...` again after S with a
+// reworded why ("Run the exact go test ./... command again…") and a second
+// card asked for the same command: the why says what the call is for, not
+// what it runs.
 func execAllowKey(arguments []byte) (string, bool) {
 	decoder := json.NewDecoder(bytes.NewReader(arguments))
 	decoder.UseNumber()
@@ -73,6 +77,7 @@ func execAllowKey(arguments []byte) (string, bool) {
 	}
 	delete(fields, "timeout_ms")
 	delete(fields, "max_output_bytes")
+	delete(fields, application.WhyArgument)
 	if cwd, ok := fields["cwd"].(string); ok && (cwd == "" || cwd == "." || cwd == "./") {
 		delete(fields, "cwd")
 	}

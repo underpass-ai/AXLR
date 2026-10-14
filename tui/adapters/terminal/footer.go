@@ -23,7 +23,9 @@ const maxErrorRows = 3
 // row instead, so the activity and its cancel hint stay in view.
 func (m AppModel) footerView() string {
 	if m.Status.Error != "" {
-		if m.Busy {
+		if m.Busy || m.visibleNotice() != "" {
+			// A notice shows under an error that stays: "press Ctrl+C again
+			// to quit" must never hide behind one.
 			return strings.Join(append(m.errorRows(maxErrorRows-1), m.hintRow()), "\n")
 		}
 		return strings.Join(m.errorRows(maxErrorRows), "\n")
@@ -106,8 +108,8 @@ func (m AppModel) footerStatus(detail int) string {
 	status.Waiting, status.Executing, status.ToolName = m.providerWaiting, m.toolExecuting, m.toolName
 	status.PreparingTool, status.PreparingBytes = m.toolCallName, m.toolCallBytes
 	parts := []string{}
-	if status.Notice != "" {
-		parts = append(parts, status.Notice)
+	if notice := m.visibleNotice(); notice != "" {
+		parts = append(parts, notice)
 	}
 	if activity := m.statusActivity(status); activity != "" {
 		parts = append(parts, activity)

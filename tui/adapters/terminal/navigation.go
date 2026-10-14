@@ -95,6 +95,13 @@ func (m *AppModel) syncApproval() {
 	}
 	if m.Approval.Target != target || m.Approval.Pending.Call.ID != p.Call.ID || m.Approval.Pending.Call.Name != p.Call.Name || string(m.Approval.Pending.Call.Arguments.Bytes()) != string(p.Call.Arguments.Bytes()) {
 		m.Approval = NewApprovalDialog(p, target, m.Theme)
+		if onDisk, ok := m.writtenFile(p); ok {
+			// A write over an existing file is shown as what it changes.
+			if rows, ok := writeDiffRows(p.Call.Arguments.Bytes(), onDisk, m.Theme); ok {
+				m.Approval.Details.setRows(rows)
+				m.Approval.Details.Viewport.GotoTop()
+			}
+		}
 		m.cardShownAt = time.Now()
 		// A reason being typed was for another call.
 		m.denying = false
@@ -102,6 +109,9 @@ func (m *AppModel) syncApproval() {
 		// arguments array reads as a command line, not a list.
 		if command := m.execCardCommand(p); command != "" {
 			if warning := m.hiddenInputWarning(p); warning != "" {
+				command = warning + "\n\n" + command
+			}
+			if warning := m.removalWarning(p); warning != "" {
 				command = warning + "\n\n" + command
 			}
 			m.Approval.Details.SetContent(command)
@@ -364,7 +374,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
 				case "info", "approvals", "updates", "made-setup", "session", "ceremonies", "memory":
-					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
+					if !jumpViewport(&m.Info.Viewport, k.String()) {
+						m.Info.Viewport, _ = m.Info.Viewport.Update(k)
+					}
 				case "sessions":
 					m.Picker.Page = m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width)
 					// Enter while renaming or confirming a delete is the
@@ -511,6 +523,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.overlay = ""
 		cmd := m.copyLatest()
 		return m, cmd, true
+	case "tool-result":
+		m.overlay = ""
+		return m.toggleLastToolResult(), nil, true
 	case "jobs":
 		return m.openJobsPanel(), nil, true
 	case "plugins", "catalog-refresh", "catalog-change", "catalog-marketplace":
@@ -862,6 +877,8 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		m.overlay = ""
 		m.resumeTurnClock()
+		// Continuing is sending too: the turn's rows and cards come in below.
+		m.jumpBottom()
 		u := application.SessionControlUseCase{Store: m.deps.Store, Agent: m.deps.Agent}
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			return u.Resume(ctx, s, emit)
@@ -903,6 +920,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		label := m.Picker.Labels[current.ID]
 		if intent == SessionRenameIntent {
 			label.Title = root.Text(strings.TrimSpace(m.Picker.RenameText))
+			label.TitleDerived = false // the person's title
 		} else {
 			label.Archived = !label.Archived
 		}
@@ -1205,4 +1223,4 @@ func (m AppModel) paletteAction(intent ControlIntent) (tea.Model, tea.Cmd, bool)
 }
 
 // helpScrollKeys move the help list when it is taller than the overlay.
-var helpScrollKeys = map[string]int{"up": -1, "k": -1, "down": 1, "j": 1, "pgup": -10, "pgdown": 10, "home": -1 << 20, "end": 1 << 20}
+var helpScrollKeys = map[string]int{"up": -1, "k": -1, "down": 1, "j": 1, "pgup": -10, "pgdown": 10, "home": -1 << 20, "end": 1 << 20, "ctrl+home": -1 << 20, "ctrl+end": 1 << 20}

@@ -68,6 +68,26 @@ func (u RestoreFileUseCase) UndoLastTurn(ctx context.Context, session *domain.Se
 	if len(changes) == 0 {
 		return nil, errors.New("the last turn changed no file")
 	}
+	return u.undo(ctx, session, changes)
+}
+
+// UndoTurn puts every file the person's turn number turn (from 1)
+// changed back to what it held before it, as UndoLastTurn does for the
+// last one: /undo after a turn that changed nothing offers the most recent
+// turn that did. A file changed since that turn is refused, as always.
+func (u RestoreFileUseCase) UndoTurn(ctx context.Context, session *domain.Session, turn int) ([]domain.RestoredFile, error) {
+	if err := u.ready(session); err != nil {
+		return nil, err
+	}
+	changes := session.Export().TurnChanges(turn)
+	if len(changes) == 0 {
+		return nil, fmt.Errorf("turn %d changed no file", turn)
+	}
+	return u.undo(ctx, session, changes)
+}
+
+// undo puts back the files of one turn's changes, newest first.
+func (u RestoreFileUseCase) undo(ctx context.Context, session *domain.Session, changes []domain.RestorableChange) ([]domain.RestoredFile, error) {
 	var order []root.RelativePath
 	byPath := map[root.RelativePath][]domain.RestorableChange{}
 	for _, c := range changes {
@@ -157,9 +177,20 @@ func (u RestoreFileUseCase) unchanged(ctx context.Context, target restoreTarget)
 		ContentSHA256 string `json:"content_sha256"`
 	}
 	if json.Unmarshal(output, &read) != nil || read.Truncated || read.ContentSHA256 != string(root.DigestOf([]byte(target.current))) {
-		return fmt.Errorf("cannot restore %s: it changed after step %s; nothing was restored", target.path, target.from)
+		return FileChangedError{Path: target.path}
 	}
 	return nil
+}
+
+// FileChangedError refuses a restore of a file that no longer holds what
+// the session wrote, so the console can say so in the person's language.
+// On 14 October 2026 the refusal named the step by its call id
+// ("it changed after step chatcmpl-tool-961032f2…"), which the person never
+// sees anywhere else.
+type FileChangedError struct{ Path root.RelativePath }
+
+func (e FileChangedError) Error() string {
+	return fmt.Sprintf("cannot restore %s: it changed after the session wrote it; nothing was restored", e.Path)
 }
 
 func (u RestoreFileUseCase) write(ctx context.Context, target restoreTarget) error {

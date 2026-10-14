@@ -1,9 +1,12 @@
 package terminal
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -143,5 +146,51 @@ func TestFileCardsShowTheWhyFirst(t *testing.T) {
 	e.Details.SetWidth(80)
 	if text := e.Details.Text(); !strings.HasPrefix(text, "why: rename the field") {
 		t.Fatalf("edit card:\n%s", text)
+	}
+}
+
+// On 14 October 2026 a local_write replace card listed the whole new
+// calc.go: over an existing file it now shows the diff against the file on
+// disk and how many lines change; a new file still shows its content.
+func TestAWriteOverAFileShowsItsDiffAgainstTheDisk(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "calc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "calc", "calc.go"), []byte("package calc\n\nfunc Add(a, b int) int {\n\treturn a - b\n}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	card := func(path, mode string) string {
+		t.Helper()
+		s, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(dir), "model")
+		if err != nil {
+			t.Fatal(err)
+		}
+		schema, _ := root.NewJSONValue([]byte(`{"type":"object"}`))
+		s.BeginTurn("fix it", []domain.AvailableTool{{Definition: root.ToolDefinition{Name: "local_write", Description: "write", Parameters: schema}, Identity: domain.ToolIdentity{Kind: domain.ToolKindLocal, LocalOperation: "write"}}})
+		args, _ := root.NewJSONValue([]byte(`{"path":"` + path + `","mode":"` + mode + `","content":"package calc\n\nfunc Add(a, b int) int {\n\treturn a + b\n}\n","why":"fix the sum"}`))
+		if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "w", Name: "local_write", Arguments: args}}}}); err != nil {
+			t.Fatal(err)
+		}
+		m := navModel(t, &s)
+		defer m.zones.Close()
+		m = update(m, tea.WindowSizeMsg{Width: 100, Height: 40})
+		return ansi.Strip(m.Approval.Details.Text())
+	}
+	replace := card("calc/calc.go", "replace")
+	for _, want := range []string{"why: fix the sum", "calc/calc.go · replace", "against the file on disk: +1 -1 lines", "- ", "return a - b", "+ ", "return a + b"} {
+		if !strings.Contains(replace, want) {
+			t.Fatalf("replace card lacks %q:\n%s", want, replace)
+		}
+	}
+	if strings.Count(replace, "func Add") != 1 {
+		t.Fatalf("an unchanged line is not context once:\n%s", replace)
+	}
+	created := card("calc/new.go", "create")
+	if strings.Contains(created, "against the file on disk") || !strings.Contains(created, "return a + b") {
+		t.Fatalf("create card:\n%s", created)
+	}
+	if escape := card("../outside.go", "replace"); strings.Contains(escape, "against the file on disk") {
+		t.Fatalf("a path outside the workspace was read:\n%s", escape)
 	}
 }

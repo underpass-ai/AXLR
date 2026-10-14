@@ -129,3 +129,30 @@ func TestReadableResult(t *testing.T) {
 		}
 	}
 }
+
+// On 14 October 2026 a tool row's result opened only with the mouse:
+// Ctrl+P → L opens the last call's result under its row and shows it, and
+// again folds it.
+func TestCtrlPLOpensTheLastToolResult(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	if m = update(update(m, ControlIntent("palette")), typed('l')); m.overlay != "" || m.Status.Notice != m.Theme.T("notice.noToolResult") {
+		t.Fatalf("no call: overlay %q notice %q", m.overlay, m.Status.Notice)
+	}
+	m.Header.State = resultSession(t)
+	m.refreshTranscript()
+	m.Header.State.Messages = m.Header.State.Messages[:3] // the go test call and its result last
+	m.Header.State.Messages[1].ToolCalls = m.Header.State.Messages[1].ToolCalls[:1]
+	for i := 0; i < 40; i++ {
+		m.Header.State.Messages = append([]root.Message{{Role: root.RoleUser, Content: "earlier"}}, m.Header.State.Messages...)
+	}
+	m.refreshTranscript()
+	m.Transcript.Viewport.GotoTop()
+	m = update(update(m, ControlIntent("palette")), typed('L'))
+	if m.overlay != "" || !strings.Contains(m.Transcript.Text(), "--- FAIL: TestX") || !strings.Contains(ansi.Strip(m.View().Content), "go test ./...") {
+		t.Fatalf("Ctrl+P L did not open and show the last result:\n%s", ansi.Strip(m.View().Content))
+	}
+	if m = update(update(m, ControlIntent("palette")), typed('l')); strings.Contains(m.Transcript.Text(), "--- FAIL: TestX") {
+		t.Fatal("a second Ctrl+P L did not fold the result")
+	}
+}

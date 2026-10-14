@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -114,5 +115,28 @@ func TestHeaderShowsTheAboutTheMemoriesAndTheInstance(t *testing.T) {
 	narrow := ansi.Strip(Header{State: s, About: "project:AXLR", Memories: 12, MemoriesKnown: true}.View(60, theme))
 	if strings.Contains(narrow, "12 memories") || !strings.Contains(narrow, "claude-haiku-5.5") {
 		t.Fatalf("narrow header kept the memory segment: %s", narrow)
+	}
+}
+
+// On 14 October 2026 the header showed no "● kmp ● made" nor the MADE
+// instance until the first prompt, at launch and after /new, although MADE
+// had connected at launch: the engines the launch connected show until a
+// turn's catalog names the session's plugins.
+func TestHeaderShowsTheLaunchEnginesBeforeTheFirstPrompt(t *testing.T) {
+	session, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := update(New(Dependencies{Session: &session, Monochrome: true, EngineFacts: map[string][]EngineFact{"made": nil, "kmp": nil}}), tea.WindowSizeMsg{Width: 160, Height: 30})
+	defer m.zones.Close()
+	view := ansi.Strip(m.Header.View(160, m.Theme))
+	if !strings.Contains(view, "kmp  ") || !strings.Contains(view, " made") || !strings.Contains(view, "MADE instance at the first prompt") {
+		t.Fatalf("header before the first prompt: %s", view)
+	}
+	s := m.Header.State
+	s.ToolSnapshot = []domain.AvailableTool{{Identity: domain.ToolIdentity{Kind: domain.ToolKindPlugin, Plugin: root.PluginRef{PluginID: "kmp", ToolName: "t"}}}}
+	s.Messages = []root.Message{{Role: root.RoleUser, Content: "hola"}}
+	if view := ansi.Strip(Header{State: s, Engines: m.Header.Engines}.View(160, m.Theme)); strings.Contains(view, "made") {
+		t.Fatalf("the launch's engines outlived the session's catalog: %s", view)
 	}
 }

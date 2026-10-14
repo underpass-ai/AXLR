@@ -20,8 +20,9 @@ const titlePartRunes = 56
 // first prompt. The title is derived from the person's first two prompts:
 // no model request, and the system prompt does not carry the title, so the
 // prompt cache is untouched. A title set by the person or the model is never
-// replaced (Initialize fills missing fields only). Best effort: a label store
-// failure does not fail the turn.
+// replaced (Initialize fills missing fields only); the derived title is
+// marked so theirs replaces it. Best effort: a label store failure does not
+// fail the turn.
 func titleUntitled(ctx context.Context, s domain.Session, labels SessionLabelsPort) {
 	if labels == nil || s.Status() != domain.StatusComplete {
 		return
@@ -38,7 +39,7 @@ func titleUntitled(ctx context.Context, s domain.Session, labels SessionLabelsPo
 	if title == "" {
 		return
 	}
-	_, _ = labels.Initialize(ctx, s.Export().ID, domain.SessionLabel{Title: root.Text(title)})
+	_, _ = labels.Initialize(ctx, s.Export().ID, domain.SessionLabel{Title: root.Text(title), TitleDerived: true})
 }
 
 // personPrompts returns up to limit of the person's prompts, oldest first.

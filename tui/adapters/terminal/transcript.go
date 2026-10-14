@@ -139,7 +139,7 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 	clock := transcriptNow()
 	lines := 0
 	for lines < len(s.ConsoleLines) && s.ConsoleLines[lines].AfterMessage == 0 {
-		t.appendRow(consoleLineRow(s.ConsoleLines[lines], theme))
+		t.appendRow(sessionLineRow(s, s.ConsoleLines[lines], theme))
 		lines++
 	}
 	for index, m := range s.Messages {
@@ -169,7 +169,10 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 				row.At = at
 				t.appendRow(row)
 			}
-		case m.Role == root.RoleAssistant && m.Content != "":
+		case m.Role == root.RoleAssistant && strings.TrimSpace(string(m.Content)) != "":
+			// On 14 October 2026 glm-5.3-flash sent " " before its tool
+			// calls, and three blank rows stood between a prompt and its
+			// tool row: whitespace alone is not a reply.
 			t.appendRow(transcriptRow{Text: string(m.Content), Kind: transcriptRowAssistant, Markdown: true, At: at})
 		case m.Role != root.RoleAssistant && m.Role != root.RoleTool:
 			t.appendRow(transcriptRow{Text: theme.T("role."+string(m.Role)) + ": " + string(m.Content), Kind: transcriptRowPlain})
@@ -202,14 +205,14 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			archived++
 		}
 		for lines < len(s.ConsoleLines) && s.ConsoleLines[lines].AfterMessage == index+1 {
-			t.appendRow(consoleLineRow(s.ConsoleLines[lines], theme))
+			t.appendRow(sessionLineRow(s, s.ConsoleLines[lines], theme))
 			lines++
 		}
 	}
 	if s.Draft != "" {
 		t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.Draft), Kind: transcriptRowAssistant, Markdown: true})
 	}
-	if draft != "" {
+	if strings.TrimSpace(draft) != "" {
 		t.appendRow(transcriptRow{Text: draft, Kind: transcriptRowAssistant, Markdown: true})
 	}
 	if theme.editorial() {
@@ -413,6 +416,17 @@ func (t Transcript) NoteAt(line int) (string, bool) {
 	}
 	key := t.rows[t.visualIndex[line]].Note
 	return key, key != ""
+}
+
+// NoteLine is the first wrapped line of the row a note key opens, if it
+// is drawn.
+func (t Transcript) NoteLine(key string) (int, bool) {
+	for line, row := range t.visualIndex {
+		if row >= 0 && row < len(t.rows) && t.rows[row].Note == key {
+			return line, true
+		}
+	}
+	return 0, false
 }
 
 // ToggleNote expands a folded console note or folds an expanded one; the

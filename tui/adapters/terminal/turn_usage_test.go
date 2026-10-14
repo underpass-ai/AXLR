@@ -72,3 +72,28 @@ func TestTurnLines(t *testing.T) {
 		t.Fatal("a turn without a request has a line")
 	}
 }
+
+// On 14 October 2026 /usage listed a turn begun at 15:46 as "15:49 · 8
+// requests", its end time, and nothing said which turn it was: it shows
+// when the turn began and its prompt's first words.
+func TestUsageTurnsShowTheirStartAndPrompt(t *testing.T) {
+	var m AppModel
+	m.Header.State.Messages = []root.Message{
+		{Role: root.RoleUser, Content: "  arregla el bug de la calculadora que resta en vez de sumar\ny añade tests"},
+		{Role: root.RoleUser, Content: "[AXLR · budget] note"},
+		{Role: root.RoleAssistant, Content: "hecho"},
+	}
+	m.cost.ledger.Requests = 8
+	m.finishTurnUsage(3, 3*time.Minute)
+	turn := m.turnLog[0]
+	if since := time.Since(turn.At); since < 3*time.Minute || since > 3*time.Minute+5*time.Second {
+		t.Fatalf("the turn began %s ago", since)
+	}
+	if turn.Prompt != "arregla el bug de la…" {
+		t.Fatalf("prompt %q", turn.Prompt)
+	}
+	lines := turnLogLines(m.turnLog, Theme{Monochrome: true})
+	if len(lines) != 2 || !strings.Contains(lines[1], " · arregla el bug de la… · 8 requests") {
+		t.Fatalf("lines %q", lines)
+	}
+}

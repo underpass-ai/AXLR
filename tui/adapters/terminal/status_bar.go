@@ -23,7 +23,7 @@ type StatusBar struct {
 	PreparingBytes int
 	Autonomous     bool
 	// Notice is a short confirmation, such as a copy, shown until the next
-	// key press.
+	// key press or for ten seconds (footer_notice.go).
 	Notice string
 }
 

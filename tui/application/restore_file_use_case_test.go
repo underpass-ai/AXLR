@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -100,7 +101,7 @@ func TestRestoreFilePutsAStepsFileBack(t *testing.T) {
 		t.Fatalf("restore change %+v", change)
 	}
 	// The file now holds "one", not what w1 wrote: a second restore refuses.
-	if _, err := u.Restore(context.Background(), &s, "w1"); err == nil || !strings.Contains(err.Error(), "changed after step w1") {
+	if _, err := u.Restore(context.Background(), &s, "w1"); !errors.As(err, new(FileChangedError)) || !strings.Contains(err.Error(), "changed after the session wrote it") {
 		t.Fatalf("restored a changed file: %v", err)
 	}
 	if _, err := u.Restore(context.Background(), &s, "w2"); err == nil || !strings.Contains(err.Error(), "created it") {

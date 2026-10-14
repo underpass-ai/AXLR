@@ -42,6 +42,7 @@ func TestToolRowMergesCallDecisionAndResult(t *testing.T) {
 		{"human approval is shown", toolRowState(domain.DecisionApprove, `ok`, nil), []string{"✓ read", "2\u00a0B", "approved by you"}, nil},
 		{"denied", toolRowState(domain.DecisionDeny, "", nil), []string{"✗ read", "denied"}, []string{"✓"}},
 		{"malformed arguments", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "invalid tool invocation rejected: the call's arguments were not a valid JSON object", IsError: true}), []string{"✗ read", "invalid arguments, the model retries"}, []string{"denied"}},
+		{"not in this step", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "invalid tool invocation rejected: local_write is not available in this step: it only reads; hand the step back first", IsError: true}), []string{"✗ read", "not available in this step"}, []string{"invalid arguments", "denied"}},
 		{"unknown tool", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: `unknown tool "read" rejected`, IsError: true}), []string{"✗ read", "unknown tool, refused"}, []string{"denied"}},
 		// On 10 October 2026 all 93 calls of a batch past the turn's budget
 		// read "denied", as if the person had refused each of them.
@@ -168,7 +169,11 @@ func TestToolRowsNameThePathNotTheBodyOrTheWhy(t *testing.T) {
 		args      string
 		want, not string
 	}{
-		{"local_write", `{"content":"# Ideas\n1. one","mode":"create","path":"NOTES.md","why":"keep the ideas"}`, "local_write  NOTES.md create ·", "Ideas"},
+		{"local_write", `{"content":"# Ideas\n1. one","mode":"create","path":"NOTES.md","why":"keep the ideas"}`, "local_write  NOTES.md · create ·", "Ideas"},
+		{"local_write", `{"path":"calc/calc.go","expected_sha256":"36dc0cc81d1ed029f7759dcdece8dd289b","content":"package calc","mode":"replace","why":"fix"}`, "local_write  calc/calc.go · replace ·", "36dc0"},
+		{"local_write", `{"content_omitted_bytes":866,"expected_sha256":"bcd70903aa","path":"calc/calc.go","mode":"replace"}`, "local_write  calc/calc.go · replace ·", "866"},
+		{"axlr_step_done", `{"scope":"calc/calc.go","draft_path":"calc/calc.go"}`, "axlr_step_done  calc/calc.go ·", "calc/calc.go calc/calc.go"},
+		{"axlr_step_done", `{"check_command":{"program":"go","args":["test","./calc/..."]},"expected":"tests pass","observed":"FAIL TestAdd"}`, "axlr_step_done  FAIL TestAdd ·", "tests pass"},
 		{"local_read", `{"path":"README.md","why":"No needed for reads"}`, "local_read  README.md ·", "needed"},
 		{"local_edit", `{"old_text":"x","new_text":"y","path":"a.go","why":"rename"}`, "local_edit  a.go ·", "rename"},
 		{"local_write", `{"content":"` + strings.Repeat("z", 2048) + `","path":"big.md","why":"store it"}`, "local_write  big.md", "store it"},
@@ -186,5 +191,19 @@ func TestToolRowsNameThePathNotTheBodyOrTheWhy(t *testing.T) {
 		if !strings.Contains(row, tc.want) || strings.Contains(row, tc.not) {
 			t.Errorf("%s: row %q, want %q without %q", tc.name, row, tc.want, tc.not)
 		}
+	}
+}
+
+// On 14 October 2026 glm-5.3-flash sent " " before its tool calls and three
+// blank rows stood between the prompt and its tool row.
+func TestWhitespaceBeforeToolCallsDrawsNothing(t *testing.T) {
+	s := toolRowState(domain.DecisionAutoApprove, "", nil)
+	s.Messages[1].Content = " \n "
+	tr := NewTranscript()
+	tr.SetWidth(120)
+	tr.SetSession(s, "\n", Theme{ID: domain.ThemeInk})
+	lines := strings.Split(ansi.Strip(tr.Text()), "\n")
+	if len(lines) != 3 || strings.TrimSpace(lines[1]) != "" || !strings.Contains(lines[2], "read") {
+		t.Fatalf("rows between the prompt and its tool row:\n%q", lines)
 	}
 }
