@@ -29,10 +29,14 @@ type AppModel struct {
 	tokens     int
 	// cached is the share, in percent, of the last request's prompt that the
 	// provider read from its prompt cache; zero without a cache.
-	cached        int
-	cost          costView
-	Status        StatusBar
-	Layout        Layout
+	cached int
+	cost   costView
+	Status StatusBar
+	Layout Layout
+	// AxlrInfo is the /axlr-info screen; axlrInfoGen numbers its openings
+	// so a tick of an earlier one stops.
+	AxlrInfo      AxlrInfo
+	axlrInfoGen   uint64
 	Theme         Theme
 	UIPreferences domain.UIPreferences
 	ThemePicker   ThemePicker
@@ -369,6 +373,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.waitTickScheduled = false
 		cmd := m.waitingCommand(nil)
 		return m, cmd
+	case axlrInfoTick, axlrInfoVersions:
+		next, cmd, _ := m.axlrInfoUpdate(msg)
+		return next, cmd
 	case providerAnimationTick:
 		if v.OperationID != m.operationID || !m.Busy {
 			return m, nil
@@ -946,6 +953,12 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/copy" {
 				m.Composer.Input.Reset()
 				return m, m.copyLatest()
+			}
+			if command == "/clean-screen" {
+				return m.cleanScreen(), nil
+			}
+			if command == "/axlr-info" {
+				return m.openAxlrInfo(false)
 			}
 			if command == "/export" {
 				return m.exportSession("")

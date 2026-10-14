@@ -10,6 +10,7 @@ import (
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
+	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
 	"github.com/underpass-ai/AXLR/tui/adapters/typesafe"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -107,6 +108,30 @@ func jevJudge(settings *storage.JevSettings, getenv func(string) string) (*appli
 		return nil, fmt.Errorf("jev: %w", err)
 	}
 	return &application.Judge{Port: client, Tool: settings.Tool, FinalCheck: settings.FinalCheck, Threshold: settings.FinalThreshold}, nil
+}
+
+// jevInfo is what /axlr-info says of Jev: off without a judge.
+func jevInfo(judge *application.Judge, settings *storage.JevSettings) terminal.JevInfo {
+	if judge == nil || settings == nil {
+		return terminal.JevInfo{}
+	}
+	info := terminal.JevInfo{Model: settings.Model, Tool: judge.Tool, FinalCheck: judge.FinalCheck, Threshold: judge.Threshold}
+	if info.Model == "" {
+		info.Model = typesafe.DefaultModel
+	}
+	if info.Threshold == 0 {
+		info.Threshold = application.DefaultJudgeThreshold
+	}
+	return info
+}
+
+// endpointsByModel is each local model's server.
+func (s localModelSetup) endpointsByModel() map[root.ModelID]string {
+	out := map[root.ModelID]string{}
+	for _, model := range s.models {
+		out[root.ModelID(model.ID)] = model.URL
+	}
+	return out
 }
 
 // compactProfile decides the ceremony profile per session model: always or

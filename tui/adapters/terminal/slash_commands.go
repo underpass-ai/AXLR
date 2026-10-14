@@ -43,8 +43,10 @@ var slashCommands = []slashCommand{
 	{"/ceremony", "slash.ceremony"},
 	{"/stop-ceremony", "slash.stopCeremony"},
 	{"/copy", "slash.copy"},
+	{"/clean-screen", "slash.cleanScreen"},
 	{"/export", "slash.export"},
 	{"/usage", "slash.usage"},
+	{"/axlr-info", "slash.axlrInfo"},
 	{"/session", "slash.session"},
 	{"/session export", "slash.sessionExport"},
 	{"/memory", "slash.memory"},
@@ -59,7 +61,7 @@ var slashCommands = []slashCommand{
 var slashVerbs = map[string]bool{"/memory": true, "/session": true}
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo", "/clean_screen": "/clean-screen", "/cls": "/clean-screen", "/limpiar": "/clean-screen"}
 
 // slashSuggestionMax is how many suggestions the menu shows at once on a
 // screen tall enough; the selection scrolls the rest into view. On 12
@@ -74,8 +76,9 @@ func (m AppModel) slashLimit() int {
 }
 
 // slashWord is a draft that reads as a command: "/memoría", a typo with an
-// accent, is refused like "/memroy" rather than sent to the model.
-var slashWord = regexp.MustCompile(`^/[\p{L}-]+$`)
+// accent, is refused like "/memroy" rather than sent to the model, and
+// "/clean_scren" like "/clean-scren".
+var slashWord = regexp.MustCompile(`^/[\p{L}_-]+$`)
 
 // slashAliasesOf lists each command's other names, sorted, to show dim
 // after it in the menu.

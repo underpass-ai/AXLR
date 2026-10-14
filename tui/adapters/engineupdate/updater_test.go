@@ -366,3 +366,23 @@ func TestUpdateWithoutAnInstallerSkipsMissingEngines(t *testing.T) {
 		t.Fatalf("%+v %v", results, err)
 	}
 }
+
+// /axlr-info shows the installed versions: each configured engine's
+// executable is asked, and one that does not answer is left out.
+func TestInstalledVersionsAsksEachConfiguredEngine(t *testing.T) {
+	skipWithoutPOSIXLaunchers(t)
+	dir := t.TempDir()
+	kmp := filepath.Join(dir, "kmp-mcp")
+	if err := os.WriteFile(kmp, []byte("#!/bin/sh\necho kmp-mcp v0.25.0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	made := filepath.Join(dir, "made-mcp")
+	if err := os.WriteFile(made, []byte("#!/bin/sh\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	u := &Updater{Configuration: &config{targets: []application.EngineUpdateTarget{{Engine: "kmp", Command: kmp}, {Engine: "made", Command: made}, {Engine: "other", Command: kmp}}}}
+	versions, err := u.InstalledVersions(context.Background())
+	if err != nil || len(versions) != 1 || versions["kmp"] != "0.25.0" {
+		t.Fatalf("versions %v, err %v", versions, err)
+	}
+}
