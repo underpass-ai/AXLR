@@ -253,3 +253,16 @@ func TestApprovingAPlanAsksTheModelNothingMore(t *testing.T) {
 		t.Fatalf("the planner was asked again (%d) or the mode stayed %s", asked, s.Mode())
 	}
 }
+
+// On 14 October 2026 the planner called local_edit twice before it saw
+// that decompose only reads: its instruction starts with its role and the
+// tools the step offers, in the system prompt and on its reminder.
+func TestThePlannerIsToldItsRoleAndToolsFirst(t *testing.T) {
+	run := domain.CeremonyRun{Definition: "axlr_plan", Version: "1.0", Step: "decompose"}
+	for _, text := range []string{baseInstruction(run), string(stepReminder(run))} {
+		at := strings.Index(text, "Your role: the planner. This step only reads")
+		if at < 0 || at > strings.Index(text, "Read the repository") || !strings.Contains(text, "local_write and local_edit are not offered") {
+			t.Fatalf("instruction %q", text)
+		}
+	}
+}
