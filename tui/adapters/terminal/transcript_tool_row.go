@@ -60,6 +60,14 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 			facts.State = toolFailed
 		}
 		details = append(details, theme.T(label))
+	case result != nil && cancelledCall(string(result.Content)):
+		// The person's Esc stopped it while it ran. Live, the turn's
+		// "Cancelled by you" row said so; a reopened or imported session
+		// has no such row, and on 14 October 2026 the call read "153 B ·
+		// approved by you".
+		glyph, tone = theme.Icon("failed"), toneError
+		facts.State = toolFailed
+		details = append(details, theme.T("transcript.toolCancelled"))
 	case result != nil:
 		glyph, tone = theme.Icon("done"), toneGood
 		facts.State = toolDone
@@ -85,7 +93,7 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 	if memory && tone == toneGood {
 		glyph, tone = theme.Icon("memory"), toneAccent
 	}
-	if record != nil && record.Decision == domain.DecisionApprove {
+	if record != nil && record.Decision == domain.DecisionApprove && (result == nil || !cancelledCall(string(result.Content))) {
 		details = append(details, theme.T("transcript.toolApproved"))
 	}
 	text := label
@@ -328,9 +336,18 @@ func deniedLabel(record *domain.PendingTool) string {
 			return "transcript.toolUnknown"
 		case overCallBudget(content):
 			return "transcript.toolOverBudget"
+		case cancelledCall(content):
+			return "transcript.toolCancelled"
 		}
 	}
 	return "transcript.toolDenied"
+}
+
+// cancelledCall reports a call the person cancelled, waiting or running:
+// its result starts "tool call cancelled", which every reader of results
+// matches by prefix.
+func cancelledCall(content string) bool {
+	return strings.HasPrefix(content, "tool call cancelled")
 }
 
 // notInStep reports a call refused because the ceremony step does not

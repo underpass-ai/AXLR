@@ -48,6 +48,10 @@ func TestToolRowMergesCallDecisionAndResult(t *testing.T) {
 		// read "denied", as if the person had refused each of them.
 		{"over the call budget", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: "not run: the turn reached its 32 tool-call limit; send a message to continue", IsError: true}), []string{"✗ read", "over the call limit"}, []string{"denied"}},
 		{"over the call budget, partial batch", toolRowState(domain.DecisionDeny, "", &domain.ToolOutcome{Content: domain.OverBudgetOutcomePrefix + " of 32 calls: 31 of this answer's 93 calls ran, in order; this one did not.", IsError: true}), []string{"✗ read", "over the call limit"}, []string{"denied"}},
+		// On 14 October 2026 an imported session showed a call the person
+		// stopped with Esc as "153 B · approved by you".
+		{"cancelled while it ran", toolRowState(domain.DecisionApprove, "tool call cancelled by the person before it finished: its effect is unknown (it may have run in part). Do not run it again unless the person asks for it.", &domain.ToolOutcome{IsError: true}), []string{"✗ read", "cancelled by you"}, []string{"approved", "B ·"}},
+		{"cancelled while waiting", toolRowState(domain.DecisionDeny, "tool call cancelled", &domain.ToolOutcome{Content: "tool call cancelled", IsError: true}), []string{"✗ read", "cancelled by you"}, []string{"denied"}},
 		{"failed result", toolRowState(domain.DecisionAutoApprove, `{"status":"failed","duration_ms":4}`, nil), []string{"✗ read", "4\u00a0ms"}, nil},
 		{"error outcome", toolRowState(domain.DecisionAutoApprove, `boom`, &domain.ToolOutcome{IsError: true}), []string{"✗ read"}, nil},
 		{"awaiting approval", toolRowState("", "", nil), []string{"◌ read", "waiting for approval"}, nil},
