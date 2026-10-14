@@ -110,3 +110,20 @@ func TestPluginSecretsAreTheValuesOfSecretLookingVariables(t *testing.T) {
 		t.Fatalf("secrets = %v", got)
 	}
 }
+
+// Lifecycle failures are warnings, its progress is information (review of
+// 14 October 2026: MADE refusals were INFO and hidden by --level WARN).
+func TestCeremonyTroubleSeparatesFailuresFromProgress(t *testing.T) {
+	for line, warn := range map[string]bool{
+		"session axlr-session-x report running: conflict: current ceremony agent status claim was changed": true,
+		"session instance unavailable: refused by MADE":                                                    true,
+		"settle turn 3: nothing durable (p=0.12)":                                                          false,
+		"session instance axlr-session-x opened":                                                           false,
+		"memory recalled for session x: project:A (83 bytes)":                                              false,
+		"turn 2 not recorded: memory is not connected":                                                     true,
+	} {
+		if got := ceremonyTrouble.MatchString(line); got != warn {
+			t.Errorf("%q: warn %v, want %v", line, got, warn)
+		}
+	}
+}

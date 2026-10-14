@@ -17,6 +17,10 @@ type operationComplete struct {
 	Fresh bool
 	// Published names the definition /ceremony publish published.
 	Published string
+	// Ceremonies are the definitions /ceremony listed; CeremonyArm, when
+	// set, is the definition to arm with them.
+	Ceremonies  *[]application.CeremonyDefinitionSummary
+	CeremonyArm *ceremonyArm
 	// MemorySaved, MemoryCompared and MemoryForgotten are /memory's
 	// results: the bundle written, the comparison read, the entry closed.
 	MemorySaved             *application.BundleSaved

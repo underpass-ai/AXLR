@@ -498,6 +498,8 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			changed.Composer.Input.SetValue(draft)
 		}
 		return changed, cmd
+	case ceremonyArmMsg:
+		return m.armCeremony(v.listed, v.arm)
 	case memoryCounted:
 		if v.about == m.Header.About {
 			// Unknown means nothing is recorded under the about yet.
@@ -538,6 +540,8 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return next, tea.Batch(cmd, next.(AppModel).readGitState())
 		}
 		wasTurn := m.turnRunning()
+		// followUp runs after this completion, on a settled console.
+		var followUp tea.Cmd
 		if m.cancel != nil {
 			m.cancel()
 		}
@@ -607,6 +611,20 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.MemoryForgotten != nil && v.Err == nil {
 			m.Status.Notice = m.Theme.Tf("notice.memoryForgotten", v.MemoryForgotten.Ref, v.MemoryForgotten.Superseding)
+		}
+		if v.Ceremonies != nil && v.CeremonyArm == nil && m.overlay == "ceremonies" {
+			m.Info.SetContent(ceremoniesContent(*v.Ceremonies, v.Err, m.Theme))
+			m.Info.Viewport.GotoTop()
+		}
+		if v.Ceremonies != nil && v.CeremonyArm != nil {
+			m.Status.Notice = ""
+			if v.Err != nil {
+				m.Status.Error = v.Err.Error()
+			} else {
+				// Armed once this completion has settled the console.
+				arm, listed := *v.CeremonyArm, *v.Ceremonies
+				followUp = func() tea.Msg { return ceremonyArmMsg{arm: arm, listed: listed} }
+			}
 		}
 		if v.MemoryCompared != nil && m.overlay == "memory" {
 			content := memoryCompareContent(*v.MemoryCompared, m.Theme)
@@ -786,10 +804,10 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.autoOpenIncidentCard()
 			m = m.autoOpenRepairPanel()
 		}
-		var recount tea.Cmd
+		recount := followUp
 		if wasTurn || switched {
 			// The turn may have recorded memories: the header counts again.
-			recount = m.countMemories()
+			recount = tea.Batch(followUp, m.countMemories())
 		}
 		if failed != nil {
 			if record := m.recordTurnFailure(*failed); record != nil {

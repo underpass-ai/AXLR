@@ -580,11 +580,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// the context the console opens for the session (decision D3).
 	var sessionCeremony *application.SessionCeremony
 	if ceremonies != nil || hasKMP {
-		sessionCeremony = &application.SessionCeremony{Labels: sessionLabels, Usage: store, Store: loggedStore, Log: func(line string) {
-			if appLog != nil {
-				appLog.Logf(diagnostics.AppInfo, "%s", line)
-			}
-		}}
+		sessionCeremony = &application.SessionCeremony{Labels: sessionLabels, Usage: store, Store: loggedStore, Log: leveledLogger(appLog)}
 	}
 	installID, err := storage.InstallID(filepath.Join(stateBase, "axlr"))
 	if err != nil {

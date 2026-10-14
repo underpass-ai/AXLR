@@ -186,6 +186,26 @@ func logReader(log *diagnostics.AppLog) application.AppLogPort {
 
 // failureLogger records the tool calls that failed inside AXLR, nil
 // without an app log.
+// ceremonyTrouble marks a session-lifecycle line that reports a failure:
+// on 14 October 2026 MADE refusals and unavailable instances were logged
+// at INFO, so `axlr-tui logs --level WARN` hid them.
+var ceremonyTrouble = regexp.MustCompile(`(?i)\b(conflict|refused|denied|failed|error|unavailable|missing|cannot|could not|timed out|timeout)\b|not recorded|not connected`)
+
+// leveledLogger writes a lifecycle line at WARN when it reports trouble,
+// else at INFO.
+func leveledLogger(log *diagnostics.AppLog) func(string) {
+	if log == nil {
+		return nil
+	}
+	return func(line string) {
+		level := diagnostics.AppInfo
+		if ceremonyTrouble.MatchString(line) {
+			level = diagnostics.AppWarn
+		}
+		log.Logf(level, "%s", line)
+	}
+}
+
 func failureLogger(log *diagnostics.AppLog) func(string) {
 	if log == nil {
 		return nil
