@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -439,6 +440,11 @@ func TestRepairResumeReusesALiveWatchClaim(t *testing.T) {
 		if strings.HasPrefix(call, "claim watch") {
 			t.Fatalf("the watch must not be claimed again: %v", engine.calls[before:])
 		}
+	}
+	// The reused claim's operation and attempt are read for its own fence,
+	// not kept from the run's last recorded claim (the diagnose step's).
+	if !slices.Contains(engine.operations, "watch fence-watch") {
+		t.Fatalf("operations read: %v", engine.operations)
 	}
 }
 

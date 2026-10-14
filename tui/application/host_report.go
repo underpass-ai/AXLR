@@ -101,6 +101,8 @@ func (c *SessionCeremony) claimed(ctx context.Context, s domain.Session, instanc
 	instance.Fence, instance.ClaimedAt, instance.LeaseMS, instance.OperationID, instance.ClaimAttempt, instance.Reported, instance.ClaimIncarnation = fence, c.now(), lease.Milliseconds(), "", 0, time.Time{}, c.Host.incarnation()
 	operation, err := c.Engine.Operation(ctx, instance.Instance, sessionTurnStep, fence)
 	if err != nil {
+		// An id read before the attempt failed is still the claim's.
+		instance.OperationID = operation.ID
 		c.log("session %s operation id: %v", instance.Instance, err)
 		return
 	}
