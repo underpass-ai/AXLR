@@ -685,6 +685,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.Sessions != nil {
 			m.Picker = NewSessionPicker(*v.Sessions, m.Header.State.Workspace)
+			m.Picker.Held, m.Picker.Open = v.Held, m.Header.State.ID
 			m.Picker.Tasks = planTaskSessions(m.PlanPanel.Records)
 			m.Picker.NewRow = m.Header.State.Model != ""
 			if m.deps.SessionLabels != nil {

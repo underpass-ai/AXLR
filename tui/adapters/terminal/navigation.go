@@ -894,13 +894,22 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, nil, true
 		}
 		store := m.deps.Store
+		heldBy := m.deps.SessionHeld
 		var summaries []domain.SessionSummary
+		held := map[domain.SessionID]bool{}
 		cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 			if store == nil {
 				return errors.New(m.Theme.T("error.sessionStoreUnavailable"))
 			}
 			var err error
 			summaries, err = store.List(ctx)
+			if heldBy != nil {
+				for _, summary := range summaries {
+					if summary.MessageCount > 0 && heldBy(summary.ID) {
+						held[summary.ID] = true
+					}
+				}
+			}
 			return err
 		})
 		return m, func() tea.Msg {
@@ -912,7 +921,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				return message
 			}
 			if done.Err == nil {
-				done.Sessions = &summaries
+				done.Sessions, done.Held = &summaries, held
 			}
 			return done
 		}, true
@@ -983,6 +992,13 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.overlay = ""
 			return m, nil, true
 		}
+		if m.Picker.Held[id] {
+			// On 14 October 2026 Enter on it ran a load that failed with
+			// the lock's errno, cut to "Error:…" behind the last notice.
+			m.Status.Notice = ""
+			m.Status.Error = m.Theme.T("sessions.heldOpen")
+			return m, nil, true
+		}
 		store := m.deps.Store
 		workspace := m.Header.State.Workspace
 		leave := m.deps.Leave
@@ -991,6 +1007,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				return errors.New(m.Theme.T("error.sessionStoreUnavailable"))
 			}
 			loaded, err := store.Load(ctx, id)
+			if errors.Is(err, domain.ErrSessionHeld) {
+				// Opened in another console since the list was read.
+				return errors.New(m.Theme.T("sessions.heldOpen"))
+			}
 			if err != nil {
 				return err
 			}
@@ -1096,12 +1116,14 @@ func (m *AppModel) showHit() {
 
 func (m AppModel) overlayView(base string) string {
 	status := m.statusView()
+	// The overlay gives up the rows a long error under it takes.
+	height := m.Layout.Height - strings.Count(status, "\n") - 1
 	if m.approvalFocus() {
 		if m.knownPending() {
 			return base
 		}
 		footer := m.zones.Mark(m.prefix+"continue", "["+m.Theme.T("approval.rejectContinue")+"]") + "  " + m.zones.Mark(m.prefix+"cancel", "["+m.Theme.T("common.cancel")+"]")
-		return m.Theme.Overlay(m.Theme.T("approval.unknownTitle"), m.Theme.T("approval.unknownSubtitle")+" · "+string(m.Approval.Pending.Call.Name), m.Approval.Details.View(), footer, m.Layout.Width, m.Layout.Height-1) + "\n" + status
+		return fitOverlay(m.Theme.Overlay(m.Theme.T("approval.unknownTitle"), m.Theme.T("approval.unknownSubtitle")+" · "+string(m.Approval.Pending.Call.Name), m.Approval.Details.View(), footer, m.Layout.Width, m.Layout.Height-1), m.Layout.Width, height) + "\n" + status
 	}
 	var body string
 	switch m.overlay {
@@ -1159,7 +1181,7 @@ func (m AppModel) overlayView(base string) string {
 		return base
 	}
 	if body != "" {
-		return fitOverlay(body, m.Layout.Width, m.Layout.Height-1) + "\n" + status
+		return fitOverlay(body, m.Layout.Width, height) + "\n" + status
 	}
 	return base
 }
