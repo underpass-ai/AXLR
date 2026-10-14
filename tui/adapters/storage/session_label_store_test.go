@@ -179,7 +179,7 @@ func TestSessionLabelsKeepWhereAnImportedSessionCameFrom(t *testing.T) {
 	origin := domain.Workspace(filepath.Join(t.TempDir(), "ws"))
 	_, err = store.Initialize(ctx, id, domain.SessionLabel{ImportedFrom: origin, ImportedAfter: 7})
 	must(t, err)
-	_, err = store.Initialize(ctx, id, domain.SessionLabel{Title: "derived", TitleDerived: true, ImportedFrom: "/elsewhere", ImportedAfter: 1})
+	_, err = store.Initialize(ctx, id, domain.SessionLabel{Title: "derived", TitleDerived: true, ImportedFrom: domain.Workspace(filepath.Join(t.TempDir(), "elsewhere")), ImportedAfter: 1})
 	must(t, err)
 	must(t, store.Set(ctx, id, domain.SessionLabel{Title: "mine", Archived: true}))
 	labels, err := store.Load(ctx)

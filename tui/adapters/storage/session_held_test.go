@@ -21,7 +21,7 @@ func TestHeldElsewhereTellsAnotherConsolesSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer other.Close()
-	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", "/ws", "model")
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "model")
 	if err != nil {
 		t.Fatal(err)
 	}
