@@ -418,6 +418,17 @@ func (t Transcript) NoteAt(line int) (string, bool) {
 	return key, key != ""
 }
 
+// NoteLine is the first wrapped line of the row a note key opens, if it
+// is drawn.
+func (t Transcript) NoteLine(key string) (int, bool) {
+	for line, row := range t.visualIndex {
+		if row >= 0 && row < len(t.rows) && t.rows[row].Note == key {
+			return line, true
+		}
+	}
+	return 0, false
+}
+
 // ToggleNote expands a folded console note or folds an expanded one; the
 // next SetSession draws it so.
 func (t *Transcript) ToggleNote(key string) {

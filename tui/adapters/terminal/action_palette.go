@@ -37,6 +37,7 @@ var actionItems = []list.Item{
 	actionItem{"changes", "palette.changesTitle", "palette.changesDescription", "d"},
 	actionItem{"jobs", "palette.jobsTitle", "palette.jobsDescription", "j"},
 	actionItem{"copy", "palette.copyTitle", "palette.copyDescription", "y"},
+	actionItem{"tool-result", "palette.toolResultTitle", "palette.toolResultDescription", "l"},
 	actionItem{"usage", "palette.usageTitle", "palette.usageDescription", "$"},
 	actionItem{"session", "palette.sessionTitle", "palette.sessionDescription", "g"},
 }

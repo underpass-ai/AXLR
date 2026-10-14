@@ -523,6 +523,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.overlay = ""
 		cmd := m.copyLatest()
 		return m, cmd, true
+	case "tool-result":
+		m.overlay = ""
+		return m.toggleLastToolResult(), nil, true
 	case "jobs":
 		return m.openJobsPanel(), nil, true
 	case "plugins", "catalog-refresh", "catalog-change", "catalog-marketplace":
