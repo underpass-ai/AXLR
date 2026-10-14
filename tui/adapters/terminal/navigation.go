@@ -905,6 +905,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		label := m.Picker.Labels[current.ID]
 		if intent == SessionRenameIntent {
 			label.Title = root.Text(strings.TrimSpace(m.Picker.RenameText))
+			label.TitleDerived = false // the person's title
 		} else {
 			label.Archived = !label.Archived
 		}

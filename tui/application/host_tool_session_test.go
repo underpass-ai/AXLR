@@ -98,3 +98,35 @@ func TestSessionContextTitlesAfterTwoPromptsAndSurvivesResume(t *testing.T) {
 		}
 	}
 }
+
+// On 14 October 2026 axlr_session {"title":…} returned the console's
+// derived title and the model reported the console kept its own.
+func TestSessionContextTitleReplacesTheConsolesDerivedOne(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	labels, err := storage.NewSessionLabelStore(filepath.Join(dir, "labels.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(dir), "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prompt := range []string{"arregla calc", "y los tests"} {
+		if err := s.BeginTurn(root.Text(prompt), application.HostTools()); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "done"}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := labels.Initialize(ctx, s.ID(), domain.SessionLabel{Title: "arregla calc · y los tests", TitleDerived: true}); err != nil {
+		t.Fatal(err)
+	}
+	identity, _ := domain.NewHostToolIdentity(domain.HostOperationSession)
+	args, _ := root.NewJSONObject([]byte(`{"title":"calc: bugfix con errores y tests"}`))
+	out, err := (application.HostToolUseCase{Labels: labels}).Execute(ctx, s, identity, args)
+	if err != nil || out.IsError || !strings.Contains(string(out.Content), `"title":"calc: bugfix con errores y tests"`) {
+		t.Fatalf("err %v, result %s", err, out.Content)
+	}
+}

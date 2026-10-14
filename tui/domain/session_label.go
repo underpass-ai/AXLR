@@ -15,8 +15,14 @@ const MaxSessionTitleRunes = 120
 // SessionLabel keeps the display title, archive flag and selected memory scope
 // apart from the session transcript. Manual titles take precedence.
 type SessionLabel struct {
-	Title    axlr.Text
-	Archived bool
+	Title axlr.Text
+	// TitleDerived marks a title the console derived from the first two
+	// prompts: a title from the person or the model replaces it, while a
+	// derived title never replaces theirs. On 14 October 2026 axlr_session
+	// returned the derived title unchanged and glm-5.3-flash told the
+	// person the console kept its own.
+	TitleDerived bool
+	Archived     bool
 	// About is the exact KMP scope selected for continuity across sessions.
 	About string
 }

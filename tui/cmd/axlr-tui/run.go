@@ -1061,7 +1061,7 @@ func (s successorSessions) Continue(ctx context.Context, predecessor domain.Sess
 			if title != "" {
 				title = root.Text(successorTitle(string(title)))
 			}
-			_, _ = s.labels.Initialize(ctx, session.ID(), domain.SessionLabel{Title: title, About: previous.About})
+			_, _ = s.labels.Initialize(ctx, session.ID(), domain.SessionLabel{Title: title, TitleDerived: previous.TitleDerived, About: previous.About})
 		}
 	}
 	if err := s.store.Save(ctx, session); err != nil {
