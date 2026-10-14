@@ -785,6 +785,13 @@ func (d *CeremonyDriver) claimFor(ctx context.Context, run *domain.CeremonyRun, 
 	return nil
 }
 
+// planBriefNote rides the person's /plan brief. The planner's instruction
+// lives in the system prompt, and on 14 October 2026, with it there,
+// glm-5.3-flash still read "Añade a calc una función Min … con su test" as
+// an order, called local_edit twice and was refused both times: the brief
+// itself now says it is a brief.
+const planBriefNote = "[AXLR · plan] This message is the brief of a plan, not an order to edit: you are the planner, the decompose step only reads, and the worker sessions make the changes once the person approves the plan. Hand back the tasks with axlr_step_done."
+
 // stepReminder is the console's message when a turn ended with the step open.
 func stepReminder(run domain.CeremonyRun) root.Text {
 	return root.Text(fmt.Sprintf("[AXLR] The %s step of ceremony %s is still open. If its work is done, hand it back now with axlr_step_done. %s%s", run.Step, run.Definition, stepInstruction(run), stepProgress(run)))

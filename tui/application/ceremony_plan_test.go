@@ -301,3 +301,32 @@ func TestTestFilesAreRecognisedByTheirLanguagesNaming(t *testing.T) {
 		t.Fatalf("defects %s", text)
 	}
 }
+
+// On 14 October 2026, with the planner's role in the system prompt,
+// glm-5.3-flash still read the person's /plan brief as an order and called
+// local_edit twice: the brief itself carries a note that it is a brief.
+func TestAPlanBriefSaysItIsABriefOnThePersonsMessage(t *testing.T) {
+	engine, plans := &fakeEngine{}, &memoryPlans{}
+	files := &fakeFiles{files: map[string][]byte{"textstat.go": []byte(textstatSource)}}
+	d := &CeremonyDriver{Engine: engine, Checks: &fakeChecks{}, Files: files, Plans: plans, Approver: &planApprover{}, Now: func() time.Time { return time.Unix(1, 0) }}
+	s := turnSession(t)
+	if err := s.SetMode(domain.ModePlan); err != nil {
+		t.Fatal(err)
+	}
+	var sent root.Text
+	u := StartTurnUseCase{Catalog: &catalogStub{}, Store: &memoryStore{}, Continue: ContinueTurnUseCase{Store: &memoryStore{}, Ceremonies: d, Models: streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		if sent == "" {
+			sent = r.Messages[len(r.Messages)-1].Content
+		}
+		return assistant("planning"), nil
+	})}}
+	if err := u.Execute(context.Background(), &s, "Add LineCount with its test", ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(sent), "Add LineCount with its test\n\n"+planBriefNote) {
+		t.Fatalf("brief sent as %q", sent)
+	}
+	if record := BuildTurnRecord(s, 0, 1, "project:x", nil); record.Prompt != "Add LineCount with its test" {
+		t.Fatalf("record prompt %q", record.Prompt)
+	}
+}

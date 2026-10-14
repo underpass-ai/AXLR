@@ -98,6 +98,8 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 		// the system prompt; the planner and compact steps keep theirs there.
 		if _, _, focused := focusedRun(next); !focused {
 			prompt = root.Text(string(prompt) + "\n\n" + CurrentStepNote(run, began))
+		} else if began && run.Plan != nil {
+			prompt = root.Text(string(prompt) + "\n\n" + planBriefNote)
 		}
 	}
 	// The workspace's memory, recalled by the console, rides the first

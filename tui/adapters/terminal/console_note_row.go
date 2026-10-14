@@ -94,6 +94,8 @@ func consoleNoteSummary(note string, theme Theme) string {
 		return theme.T("console.recall")
 	case strings.HasPrefix(first, "[AXLR · restore]"):
 		return theme.T("console.restore")
+	case strings.HasPrefix(first, "[AXLR · plan]"):
+		return theme.T("console.planBrief")
 	case strings.HasPrefix(first, "[AXLR] The person approved the plan"):
 		return theme.T("console.planApproved")
 	case strings.HasPrefix(first, "[AXLR] The person declined the plan"):
