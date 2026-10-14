@@ -75,6 +75,40 @@ func TestABudgetNoteJoinsTheTurnWithoutRestartingTheBudget(t *testing.T) {
 	}
 }
 
+// A Jev follow-up gets what the person's request left of the allowance, not
+// a new one, and a saved session with one replays to the same count. On 14
+// October 2026, with turn_tool_calls 8, a request used 8 calls and its Jev
+// follow-up ran 8 more.
+func TestAJevFollowUpGetsWhatTheRequestLeft(t *testing.T) {
+	s := budgetSession(t)
+	must(t, answerCalls(t, &s, 8, "a", 5))
+	must(t, s.CompleteAssistantWithin(completion(t), 8))
+	if used := s.RequestCallsUsed(); used != 5 {
+		t.Fatalf("request used %d calls", used)
+	}
+	must(t, s.BeginTurn(JevNotePrefix+" check", s.ToolSnapshot()))
+	if left, limit := s.CallsLeft(8); left != 3 || limit != 3 {
+		t.Fatalf("follow-up has %d of %d", left, limit)
+	}
+	must(t, answerCalls(t, &s, 8, "b", 3))
+	if err := s.CompleteAssistantWithin(completion(t, "c0"), 8); err != ErrToolCallLimit {
+		t.Fatalf("a follow-up past the request's allowance: %v", err)
+	}
+	restored, err := RestoreSession(s.Export())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if left, _ := restored.CallsLeft(8); left != 0 || restored.Export().TurnCallCount != s.Export().TurnCallCount {
+		t.Fatalf("restored %d left, count %d", left, restored.Export().TurnCallCount)
+	}
+	// The person's next message starts a new allowance.
+	must(t, s.CancelPending())
+	must(t, s.BeginTurn("next", s.ToolSnapshot()))
+	if left, _ := s.CallsLeft(8); left != 8 {
+		t.Fatalf("a new request has %d", left)
+	}
+}
+
 func TestACeremonyStepResumesAtTheLimitTwicePerStep(t *testing.T) {
 	s := budgetSession(t)
 	must(t, s.SetCeremony(CeremonyRun{Definition: "axlr_debug", Version: "2.0", Instance: "i", Step: "repair", Iteration: 1}))

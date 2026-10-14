@@ -2,6 +2,7 @@ package application
 
 import (
 	"encoding/json"
+	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 )
@@ -73,17 +74,12 @@ func closedWriteArguments(call root.ToolCall, result, recover string) root.JSONV
 }
 
 // writeSucceeded reads a local_write or local_edit result: a runtime
-// envelope without an error whose status, when present, is completed. A
-// denied, refused or uncertain call's plain text is not, nor is a failure.
+// envelope that classifyOutcome reads as completed. A denied, cancelled,
+// refused or uncertain call's plain text is not, nor is a failure.
 func writeSucceeded(result string) bool {
-	value, err := decodeContextJSON([]byte(result))
-	if err != nil {
+	if outcome, _ := classifyOutcome(result); outcome != turnCompleted {
 		return false
 	}
-	envelope, ok := value.(map[string]any)
-	if !ok || envelope["error"] != nil {
-		return false
-	}
-	status, present := envelope["status"]
-	return !present || status == "completed"
+	_, err := decodeContextJSON([]byte(result))
+	return err == nil && strings.HasPrefix(strings.TrimSpace(result), "{")
 }
