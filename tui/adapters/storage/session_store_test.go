@@ -431,3 +431,18 @@ func TestReleaseGivesTheLockBack(t *testing.T) {
 		t.Fatal("the second store holds the lock now")
 	}
 }
+
+// Leaving a session releases it, and an empty one goes, as on Close: on 14
+// October 2026, once Ctrl+O released the session it left, a /new the
+// person left without writing stayed behind as an empty saved session.
+func TestReleasingAnEmptySessionDiscardsIt(t *testing.T) {
+	store, dir := openStore(t)
+	var discarded []domain.SessionID
+	store.OnDiscard = func(id domain.SessionID) { discarded = append(discarded, id) }
+	empty := fixture(t)
+	must(t, store.Save(context.Background(), empty))
+	must(t, store.Release(empty.Export().ID))
+	if _, err := os.Stat(filepath.Join(dir, string(empty.Export().ID)+".json")); !errors.Is(err, os.ErrNotExist) || len(discarded) != 1 {
+		t.Fatalf("the empty session stayed: %v %v", err, discarded)
+	}
+}
