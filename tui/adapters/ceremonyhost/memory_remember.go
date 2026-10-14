@@ -47,7 +47,7 @@ func (m Memory) Remember(ctx context.Context, request application.RememberReques
 	if request.ContextID != "" {
 		arguments["context_id"] = string(request.ContextID)
 	}
-	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
+	result, err := m.writeMemory(ctx, arguments)
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -25,14 +26,20 @@ const HostRememberName root.ToolName = "axlr_remember"
 // per line: on 10 October 2026 claude-haiku-5.5's first call wrote the
 // array as repeated "evidence" keys with bare text, twice out of two, and
 // each write cost an extra request. An array is still accepted.
-const rememberSchema = `{"type":"object","properties":{` +
-	`"kind":{"type":"string","enum":["decision","constraint","observation","feedback","preference","error_path","success_path","semantic_delta","derived_value"]},` +
+var rememberSchema = `{"type":"object","properties":{` +
+	`"kind":{"type":"string","enum":["` + strings.Join(rememberKinds, `","`) + `"]},` +
 	`"text":{"type":"string","minLength":1,"maxLength":4000},` +
 	`"summary_en":{"type":"string","minLength":1,"maxLength":4000,"description":"An English summary of text when text is not in English; a strict store refuses such a memory without it."},` +
 	`"evidence":{"type":"string","minLength":1,"maxLength":8200,"description":"One to eight evidence items, one per line (a file:line and what it shows, a command and its result); each line at most 1000 characters."},` +
 	`"links":{"type":"array","maxItems":8,"items":{"type":"object","properties":{"ref":{"type":"string","minLength":1},"rel":{"type":"string","minLength":1},"why":{"type":"string","minLength":1,"maxLength":1000},"evidence":{"type":"string","maxLength":1000}},"required":["ref","rel","why"],"additionalProperties":false}},` +
 	`"about":{"type":"string","minLength":1,"maxLength":256},` +
 	`"continuation":{"type":"string","minLength":1,"maxLength":256}},"additionalProperties":false}`
+
+// rememberKinds are the memory kinds kmp_write_memory accepts. The console
+// checks a kind before calling KMP: on 14 October 2026 glm-5.3-flash sent
+// "fix" despite the schema's enum, and KMP's refusal ("invalid
+// kmp_write_memory kind") did not say which kinds it takes.
+var rememberKinds = []string{"decision", "constraint", "observation", "feedback", "preference", "error_path", "success_path", "semantic_delta", "derived_value"}
 
 // RememberTool is axlr_remember, offered while the model records memory
 // itself: KMP has kmp_write_memory and no ceremony or mode refuses it.
@@ -79,6 +86,9 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	}
 	if args.Kind == "" || strings.TrimSpace(args.Text) == "" || len(args.Evidence) == 0 {
 		return nil, errors.New("axlr_remember needs kind, text and at least one evidence item, or a continuation")
+	}
+	if !slices.Contains(rememberKinds, args.Kind) {
+		return nil, fmt.Errorf("axlr_remember kind %q is not one KMP takes: use one of %s", args.Kind, strings.Join(rememberKinds, ", "))
 	}
 	evidence, err := rememberEvidence(args.Evidence)
 	if err != nil {
