@@ -154,3 +154,17 @@ func TestADerivedTitleYieldsToAGivenOne(t *testing.T) {
 		t.Fatalf("stored %+v", labels[id])
 	}
 }
+
+func TestSessionLabelsIgnoreFieldsOfANewerVersion(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "axlr", "session-labels.json")
+	must(t, os.MkdirAll(filepath.Dir(path), 0700))
+	id := "0123456789abcdef0123456789abcdef"
+	must(t, os.WriteFile(path, []byte(`{"version":1,"labels":{"`+id+`":{"title":"Plan","future_field":true}},"later":1}`), 0600))
+	store, err := NewSessionLabelStore(path)
+	must(t, err)
+	labels, err := store.Load(context.Background())
+	must(t, err)
+	if got := labels[domain.SessionID(id)]; got.Title != "Plan" {
+		t.Fatalf("label = %+v", got)
+	}
+}

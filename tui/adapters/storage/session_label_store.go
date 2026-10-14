@@ -166,8 +166,10 @@ func (s *SessionLabelStore) read() (sessionLabelsRecord, error) {
 	if err != nil {
 		return record, err
 	}
+	// A field this version does not know is ignored, not refused: on 14
+	// October 2026 title_derived was added, and a console that refused
+	// unknown fields read the whole file as invalid while a newer one ran.
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&record); err != nil || record.Version != sessionLabelsVersion {
 		return record, errors.New("invalid session labels file")
 	}
