@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
-// Every turn claim reads its operation id and reports running; the
-// completion reports finished; the sidecar keeps what the reports need.
+// Every turn claim reads its operation id and step attempt and reports
+// running with both; the completion reports finished; the sidecar keeps
+// what the reports need. On 14 October 2026 MADE refused every report of
+// v0.8.1, which sent no attempt.
 func TestSessionCeremonyReportsEachTurnToMADE(t *testing.T) {
 	engine := &fakeEngine{}
 	c, _, _, _ := sessionCeremonyFor(t, engine)
@@ -19,7 +21,7 @@ func TestSessionCeremonyReportsEachTurnToMADE(t *testing.T) {
 	}
 	c.BeginTurn(context.Background(), &s)
 	instance, _ := s.Instance()
-	if instance.OperationID != "op-fence-turn" || instance.LeaseMS != sessionLease.Milliseconds() || instance.ClaimedAt.IsZero() || instance.Reports != 1 || instance.Reported.IsZero() {
+	if instance.OperationID != "op-fence-turn" || instance.ClaimAttempt != 2 || engine.reports[0].Attempt != 2 || instance.LeaseMS != sessionLease.Milliseconds() || instance.ClaimedAt.IsZero() || instance.Reports != 1 || instance.Reported.IsZero() {
 		t.Fatalf("instance %+v", instance)
 	}
 	if len(engine.reports) != 1 || engine.reports[0].Status != "running" || engine.reports[0].Execution != string(s.ID()) || engine.reports[0].Role != "AXLR" || engine.reports[0].Host.Incarnation != "run" || !strings.Contains(engine.reports[0].Summary, "turn 1 of session") || engine.leases[0] != sessionLease {
@@ -32,7 +34,7 @@ func TestSessionCeremonyReportsEachTurnToMADE(t *testing.T) {
 		t.Fatal(err)
 	}
 	instance, _ = s.Instance()
-	if len(engine.reports) != 2 || engine.reports[1].Status != "finished" || engine.reports[1].Sequence != 2 || instance.OperationID != "" || instance.Fence != "" {
+	if len(engine.reports) != 2 || engine.reports[1].Status != "finished" || engine.reports[1].Sequence != 2 || engine.reports[1].Attempt != 2 || instance.OperationID != "" || instance.ClaimAttempt != 0 || instance.Fence != "" {
 		t.Fatalf("reports %+v instance %+v", engine.reports, instance)
 	}
 	// A report MADE refuses is logged and changes nothing else.
@@ -77,7 +79,7 @@ func TestHeartbeatReportsAndRenewsALongTurn(t *testing.T) {
 	}
 	clock = clock.Add(hostHeartbeat)
 	c.Heartbeat(context.Background(), &s)
-	if len(engine.reports) != 2 || engine.reports[1].Activity != "heartbeat" || engine.reports[1].Status != "running" {
+	if len(engine.reports) != 2 || engine.reports[1].Activity != "heartbeat" || engine.reports[1].Status != "running" || engine.reports[1].Attempt != 2 {
 		t.Fatalf("%+v", engine.reports)
 	}
 	instance, _ := s.Instance()
@@ -117,7 +119,7 @@ func TestCeremonyDriverReportsItsSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 	run, _ := s.Ceremony()
-	if run.OperationID != "op-fence-reproduce" || run.Reports != 1 || len(engine.reports) != 1 || engine.reports[0].Status != "running" || engine.reports[0].Role != "DRIVER" || engine.reports[0].Execution != run.Instance {
+	if run.OperationID != "op-fence-reproduce" || run.ClaimAttempt != 2 || engine.reports[0].Attempt != 2 || run.Reports != 1 || len(engine.reports) != 1 || engine.reports[0].Status != "running" || engine.reports[0].Role != "DRIVER" || engine.reports[0].Execution != run.Instance {
 		t.Fatalf("run %+v reports %+v", run, engine.reports)
 	}
 	if err := s.BeginTurn("falla", turnTools()); err != nil {

@@ -86,7 +86,7 @@ func citedFriction(s domain.Session, request repairRequest) ([]citedFailure, str
 			return nil, fmt.Sprintf("call %s is %s, an MCP plugin tool of %s: improving it belongs to that server, not to AXLR", id, record.Call.Name, tool.Identity.Plugin.PluginID)
 		}
 		content := string(record.Outcome.Content)
-		if content == "tool call cancelled" || strings.HasPrefix(content, "tool call denied") {
+		if strings.HasPrefix(content, "tool call cancelled") || strings.HasPrefix(content, "tool call denied") {
 			return nil, fmt.Sprintf("call %s was cancelled or denied; that is not friction of AXLR", id)
 		}
 		calls = append(calls, citedFailure{ID: record.Call.ID, Tool: record.Call.Name, Class: classFriction})

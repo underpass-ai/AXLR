@@ -70,6 +70,7 @@ var (
 	noteJobBlocked    = regexp.MustCompile(`^\[AXLR\] Self-(?:repair|improvement) (\S+) ended BLOCKED`)
 	noteJobFailed     = regexp.MustCompile(`^\[AXLR\] Self-(?:repair|improvement) (\S+) failed`)
 	noteJobInterrupt  = regexp.MustCompile(`^\[AXLR\] Self-(?:repair|improvement) (\S+) was interrupted`)
+	noteJevEstimate   = regexp.MustCompile(`estimates an? (\d+)% probability`)
 	noteTag           = regexp.MustCompile(`^\[AXLR[^\]]*\]\s*`)
 	noteFirstSentence = regexp.MustCompile(`^(.*?[.:;])(\s|$)`)
 )
@@ -83,9 +84,16 @@ func consoleNoteSummary(note string, theme Theme) string {
 	case strings.HasPrefix(first, "[AXLR · budget]"):
 		return theme.T("console.budget")
 	case strings.HasPrefix(first, "[AXLR · Jev]"):
+		// The line carries Jev's estimate, so the person sees how strong
+		// the doubt was without expanding it (14 October 2026).
+		if m := noteJevEstimate.FindStringSubmatch(first); m != nil {
+			return theme.Tf("console.jevEstimate", m[1])
+		}
 		return theme.T("console.jev")
 	case strings.HasPrefix(first, "[AXLR · recall]"):
 		return theme.T("console.recall")
+	case strings.HasPrefix(first, "[AXLR · restore]"):
+		return theme.T("console.restore")
 	case strings.HasPrefix(first, "[AXLR] The person approved the plan"):
 		return theme.T("console.planApproved")
 	case strings.HasPrefix(first, "[AXLR] The person declined the plan"):

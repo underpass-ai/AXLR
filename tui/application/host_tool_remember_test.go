@@ -131,6 +131,12 @@ func TestHostRememberBuildsTheRequestFromTheSession(t *testing.T) {
 			t.Fatalf("accepted %s", refused)
 		}
 	}
+	// A kind KMP does not take is refused before KMP is called, with the
+	// kinds it takes (14 October 2026: glm-5.3-flash sent "fix").
+	before := len(recorder.requests)
+	if outcome, _ := run(`{"kind":"fix","text":"Divide checks b==0.","evidence":"calc/calc.go:12"}`); !outcome.IsError || !strings.Contains(string(outcome.Content), `fix\" is not one KMP takes: use one of decision, constraint, observation`) || len(recorder.requests) != before {
+		t.Fatalf("kind fix: %s", outcome.Content)
+	}
 	// Without KMP, or while a ceremony records the outcome, it refuses.
 	if outcome, _ := (HostToolUseCase{}).Execute(context.Background(), s, rememberIdentity(t), mustObject(t, `{"kind":"decision","text":"x","evidence":["e"]}`)); !outcome.IsError || !strings.Contains(string(outcome.Content), "memory is not connected") {
 		t.Fatalf("without KMP: %s", outcome.Content)

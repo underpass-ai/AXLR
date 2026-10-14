@@ -62,6 +62,17 @@ func TestConsoleNotesAreOneDimLineNotPrompts(t *testing.T) {
 	if got := consoleNoteSummary("[AXLR] Something new happened. Then more.", Theme{}); got != "Something new happened" {
 		t.Fatalf("fallback summary = %q", got)
 	}
+	// Jev's line carries its estimate (14 October 2026).
+	jev := "[AXLR · Jev] An independent check that saw only the person's request, your last answer and the tool activity estimates a 27% probability that your answer completes the request."
+	if got := consoleNoteSummary(jev, Theme{Locale: Spanish}); got != "trasladó al modelo la duda de Jev sobre la respuesta final (27 %)" {
+		t.Fatalf("Jev summary = %q", got)
+	}
+	if got := consoleNoteSummary(jev, Theme{}); got != "passed on Jev's doubt about the final answer (27%)" {
+		t.Fatalf("Jev summary = %q", got)
+	}
+	if got := consoleNoteSummary("[AXLR · restore] Since your last answer the person restored calc/calc.go to what it held before your call w1.", Theme{Locale: Spanish}); got != "avisó al modelo de los archivos que restauraste" {
+		t.Fatalf("restore summary = %q", got)
+	}
 	if got := consoleNoteSummary("[AXLR] Nobody is reading this repair session: the build step of axlr_repair is still open (reminder 1 of 3).", Theme{}); got != "reminded the model to hand back the build step" {
 		t.Fatalf("repair nudge summary = %q", got)
 	}

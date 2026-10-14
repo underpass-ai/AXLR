@@ -177,6 +177,15 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 			// cannot make code an earlier task wrote fail.
 			defect("task %s: test_first needs a file to change after the failing test, but its scope holds only tests; add the code it tests to its scope, or set test_first false when an earlier task writes that code", task.ID)
 		}
+		if task.TestFirst && len(t.Scope) > 0 && !slices.ContainsFunc(t.Scope, testLikePath) {
+			// The mirror case: the red step writes a failing test first, and
+			// a task that may change no test cannot. On 14 October 2026 a
+			// plan gave test-first add-max only calc/calc.go while
+			// calc/calc_test.go belonged to add-testmax in the same wave; the
+			// worker blocked at red, and add-testmax's test could not
+			// compile without Max.
+			defect("task %s: test_first needs a test to write first, but its scope holds no test file; put the test and the code it tests in one task's scope, or set test_first false", task.ID)
+		}
 		command, ok := task.UnitCheck.command()
 		if !ok {
 			defect("task %s: unit_check {program, args} is missing", task.ID)

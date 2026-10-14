@@ -11,8 +11,8 @@ type EditUseCase struct {
 }
 
 func (u EditUseCase) Execute(c domain.EditCommand) (domain.WriteResult, error) {
-	if c.OldText == "" {
-		return domain.WriteResult{}, domain.Reject("invalid_arguments", "old_text must not be empty")
+	if err := domain.CheckOldText(c.OldText); err != nil {
+		return domain.WriteResult{}, err
 	}
 	snapshot, err := u.Files.Load(c.Path, u.MaxFileBytes)
 	if err != nil {

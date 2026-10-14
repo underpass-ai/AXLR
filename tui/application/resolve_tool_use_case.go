@@ -25,6 +25,15 @@ type ResolveToolUseCase struct {
 // MaxDenyReasonRunes bounds the reason a denial carries to the model.
 const MaxDenyReasonRunes = 500
 
+// cancelledByPerson is the result of a call the person cancelled (Esc)
+// while it ran. It starts like the result of a pending call the person
+// cancelled, "tool call cancelled", so every reader that tells a
+// cancellation from a failure keeps doing so. On 14 October 2026 such a
+// call read "tool execution failed; effect unknown: context canceled" and
+// glm-5.3-flash ran it again on the next, unrelated prompt ("Retry the
+// sleep command the user asked for after the canceled sleep 40").
+const cancelledByPerson = "tool call cancelled by the person before it finished: its effect is unknown (it may have run in part). Do not run it again unless the person asks for it."
+
 // Deny denies the first pending call and tells the model why in the call's
 // result, "tool call denied by user: <reason>", so it can change course
 // instead of guessing; on 12 October 2026 a bare denial left the model
@@ -211,6 +220,9 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		runErr = joinCause(runErr, ctx.Err())
 		if runErr != nil {
 			outcome = domain.ToolOutcome{Content: root.Text(fmt.Sprintf("tool execution failed; effect unknown: %v", runErr)), IsError: true, Uncertain: true}
+			if errors.Is(ctx.Err(), context.Canceled) {
+				outcome.Content = cancelledByPerson
+			}
 		}
 		if outcome.Uncertain && runErr == nil {
 			runErr = errors.New("tool effect is uncertain; turn paused")

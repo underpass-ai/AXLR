@@ -120,11 +120,11 @@ func (f *fakeEngine) Handoff(_ context.Context, handoff HostHandoff) error {
 	f.handoffs = append(f.handoffs, handoff)
 	return nil
 }
-func (f *fakeEngine) OperationID(_ context.Context, _, step, fence string) (string, error) {
+func (f *fakeEngine) Operation(_ context.Context, _, step, fence string) (ClaimOperation, error) {
 	if f.noOperation {
-		return "", errors.New("no operation id")
+		return ClaimOperation{}, errors.New("no operation id")
 	}
-	return "op-" + fence, nil
+	return ClaimOperation{ID: "op-" + fence, Attempt: 2}, nil
 }
 
 type fakeChecks struct {

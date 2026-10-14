@@ -248,6 +248,68 @@ func refusesEntry(code string) bool {
 	return strings.HasPrefix(code, "invalid") || strings.Contains(code, "validation") || code == "permission_denied"
 }
 
+// droppedIdentifiersMarker opens the fault a strict KMP store reports when
+// a memory's summary_en leaves out identifiers its text carries; the list
+// follows, joined by ", ", up to the fault's end ("; " before another
+// fault, ". " before the instruction, or the message's end).
+const droppedIdentifiersMarker = "drops identifiers the text carries: "
+
+// droppedIdentifiers reads the identifiers a strict store says summary_en
+// dropped, as KMP lists them; none when the refusal is another.
+func droppedIdentifiers(message string) []string {
+	_, list, found := strings.Cut(message, droppedIdentifiersMarker)
+	if !found {
+		return nil
+	}
+	for _, end := range []string{"; ", ". "} {
+		list, _, _ = strings.Cut(list, end)
+	}
+	var identifiers []string
+	for _, identifier := range strings.Split(strings.TrimSuffix(strings.TrimSpace(list), "."), ", ") {
+		if identifier = strings.TrimSpace(identifier); identifier != "" {
+			identifiers = append(identifiers, identifier)
+		}
+	}
+	return identifiers
+}
+
+// writeMemory calls kmp_write_memory with one memory and, when a strict
+// store refuses its summary_en for dropping identifiers the text carries,
+// copies them into summary_en as KMP lists them (it matches them folded)
+// and writes once more. On 14 October 2026 the console's settled memory
+// was lost to "drops identifiers the text carries: example.com/ws/calc",
+// and an axlr_remember call cost the model a retry for "b==0,
+// calc/calc.go, …"; the store says what to add, so the console adds it.
+// Any other refusal, and a second one, is returned as it came.
+func (m Memory) writeMemory(ctx context.Context, arguments map[string]any) (map[string]any, error) {
+	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
+	var refused *refusal
+	if err == nil || !errors.As(err, &refused) {
+		return result, err
+	}
+	memories, _ := arguments["memories"].([]any)
+	dropped := droppedIdentifiers(refused.Message)
+	if len(memories) != 1 || len(dropped) == 0 {
+		return result, err
+	}
+	memory, _ := memories[0].(map[string]any)
+	summary, _ := memory["summary_en"].(string)
+	if summary == "" {
+		return result, err
+	}
+	retry := make(map[string]any, len(memory))
+	for key, value := range memory {
+		retry[key] = value
+	}
+	retry["summary_en"] = strings.TrimRight(strings.TrimSpace(summary), ".") + "; identifiers: " + strings.Join(dropped, ", ")
+	again := make(map[string]any, len(arguments))
+	for key, value := range arguments {
+		again[key] = value
+	}
+	again["memories"] = []any{retry}
+	return callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", again)
+}
+
 // RecordSettled writes what Jev selected from a turn: the quoted text as
 // the summary, an English frame as summary_en, the step and the actions as
 // evidence, and the supersedes link when Jev found the memory it replaces.
@@ -268,7 +330,7 @@ func (m Memory) RecordSettled(ctx context.Context, entry application.SettledEntr
 	if entry.ContextID != "" {
 		arguments["context_id"] = string(entry.ContextID)
 	}
-	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
+	result, err := m.writeMemory(ctx, arguments)
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) {

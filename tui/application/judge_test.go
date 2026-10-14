@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -139,6 +140,96 @@ func TestJudgeFinalCheckLetsConfidentOrFailedJudgementsPass(t *testing.T) {
 		}
 		if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil || calls != 1 || len(stub.questions) != 1 {
 			t.Fatalf("%s: calls=%d judged=%d err=%v", name, calls, len(stub.questions), err)
+		}
+	}
+}
+
+// Jev reads how each call ended from its envelope: `"error":null` is a
+// success, a denial or cancellation is the person's. On 14 October 2026
+// every local result read "error" because it holds `"error":null`, and Jev
+// doubted three of four correct answers.
+func TestJudgeFinalCheckReadsHowEachCallEnded(t *testing.T) {
+	for result, want := range map[string]string{
+		`{"protocol_version":1,"tool":"read","status":"completed","error":null,"output":{"content":"x"}}`: "ok",
+		`{"status":"completed","error":null,"output":{"exit_code":1,"stdout":"FAIL"}}`:                    "ok, exit 1",
+		`{"status":"failed","error":{"code":"not_found","message":"x"}}`:                                  "error",
+		"tool call denied by user: no hace falta vet, ya basta":                                           "denied by the person",
+		cancelledByPerson:                             "cancelled by the person",
+		"tool call cancelled":                         "cancelled by the person",
+		"tool execution failed; effect unknown: boom": "error",
+	} {
+		if got := finalCallStatus(result); got != want {
+			t.Fatalf("%q: %q, want %q", result, got, want)
+		}
+	}
+	state, err := finalCheckState([]root.Message{
+		{Role: root.RoleUser, Content: "vet it"},
+		{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{call("v", "exec")}},
+		{Role: root.RoleTool, ToolCallID: "v", Content: "tool call denied by user: ya basta"},
+		{Role: root.RoleAssistant, Content: "Not run: you denied it."},
+	})
+	if err != nil || !strings.Contains(state, "exec {}: denied by the person") {
+		t.Fatalf("%s %v", state, err)
+	}
+	// The question and the note say a denied or cancelled call is not
+	// missing work; the note asks for an answer to the person, never to
+	// the check, one sentence when nothing is missing.
+	if !strings.Contains(finalCheckQuestion, "denied or cancelled by the person is the person's decision, not missing work") {
+		t.Fatal(finalCheckQuestion)
+	}
+	note := string(finalCheckNote(0.27, 3))
+	for _, want := range []string{"27%", "3 tool calls left", "Never repeat a call the person denied or cancelled", "in one sentence", "Write to the person, not to this check, and do not mention it"} {
+		if !strings.Contains(note, want) {
+			t.Fatalf("note lacks %q: %s", want, note)
+		}
+	}
+	if strings.Contains(note, "judge") || strings.Contains(note, "say briefly why the answer is complete") {
+		t.Fatalf("the note invites an answer to the judge: %s", note)
+	}
+}
+
+// The follow-up gets the allowance the request left; with none left Jev is
+// not asked (14 October 2026: turn_tool_calls 8, the request used 8 and the
+// follow-up ran 8 more).
+func TestJudgeFinalCheckIsSkippedWithNoCallsLeft(t *testing.T) {
+	for _, limit := range []int{8, 9} {
+		stub := &judgeStub{verdict: JudgementVerdict{Yes: yes(0.2)}}
+		calls := 0
+		var note string
+		u := agentWith(&Judge{Port: stub, FinalCheck: true}, func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			calls++
+			switch calls {
+			case 1:
+				var batch []root.ToolCall
+				for i := 0; i < 8; i++ {
+					batch = append(batch, call(root.ToolCallID(fmt.Sprintf("r%d", i)), "read"))
+				}
+				return assistant("", batch...), nil
+			case 2:
+				return assistant("Read them all."), nil
+			}
+			note = string(r.Messages[len(r.Messages)-1].Content)
+			return assistant("Nothing is missing."), nil
+		})
+		u.Continue.TurnToolCalls = limit
+		u.Approval = approvesAll{}
+		u.Tools = toolFunc(func(context.Context, domain.ToolIdentity, root.JSONValue) (domain.ToolOutcome, error) {
+			return domain.ToolOutcome{Content: `{"status":"completed","error":null,"output":{}}`}, nil
+		})
+		s := turnSession(t)
+		if err := s.BeginTurn("read the files", turnTools()); err != nil {
+			t.Fatal(err)
+		}
+		if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+			t.Fatal(err)
+		}
+		if limit == 8 && (calls != 2 || len(stub.questions) != 0) {
+			t.Fatalf("with no calls left: model calls %d, Jev asked %d times", calls, len(stub.questions))
+		}
+		if limit == 9 {
+			if left, _ := s.CallsLeft(limit); calls != 3 || len(stub.questions) != 1 || !strings.Contains(note, "1 tool call left") || left != 1 {
+				t.Fatalf("with one call left: model calls %d, Jev %d, left %d, note %q", calls, len(stub.questions), left, note)
+			}
 		}
 	}
 }
