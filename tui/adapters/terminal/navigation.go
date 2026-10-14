@@ -331,6 +331,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				next, cmd := m.usageKey(k)
 				return next, cmd, true
 			}
+			if m.overlay == "axlr-info" && k.String() != "esc" {
+				next, cmd := m.axlrInfoKey(k.String())
+				return next, cmd, true
+			}
 			if m.overlay == "repairs" && (k.String() != "esc" || m.RepairPanel.Reasoning) {
 				next, cmd := m.repairKey(k)
 				return next, cmd, true
@@ -1179,6 +1183,8 @@ func (m AppModel) overlayView(base string) string {
 		body = m.Picker.View(m.Theme, m.zones, m.prefix, m.Layout.Height-1, m.Layout.Width)
 	case "usage":
 		body = m.usagePanelView()
+	case "axlr-info":
+		body = m.axlrInfoView(m.Layout.Width, height)
 	case "search":
 		// Search lives in the main view, in place of the composer.
 		return base

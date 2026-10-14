@@ -100,6 +100,28 @@ func (u *Updater) Update(ctx context.Context) ([]application.EngineUpdateResult,
 	return results, nil
 }
 
+// InstalledVersions asks each configured engine's executable for its
+// version, as /update does before updating it.
+func (u *Updater) InstalledVersions(ctx context.Context) (map[string]string, error) {
+	if u.Configuration == nil {
+		return nil, errors.New("engine updater is not configured")
+	}
+	targets, err := u.Configuration.EngineTargets(ctx)
+	if err != nil {
+		return nil, err
+	}
+	versions := map[string]string{}
+	for _, target := range targets {
+		if target.Command == "" || (target.Engine != "kmp" && target.Engine != "made") {
+			continue
+		}
+		if v := installedVersion(ctx, target); v != "" {
+			versions[target.Engine] = v
+		}
+	}
+	return versions, nil
+}
+
 func (u *Updater) update(ctx context.Context, target application.EngineUpdateTarget) (application.EngineUpdateResult, error) {
 	r := application.EngineUpdateResult{Engine: target.Engine}
 	r.PreviousVersion = installedVersion(ctx, target)

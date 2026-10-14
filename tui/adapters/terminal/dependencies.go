@@ -80,6 +80,11 @@ type Dependencies struct {
 	Memories      int
 	MemoriesKnown bool
 	EngineFacts   map[string][]EngineFact
+	// Jev is how the launch connected TypeSafe Jev; the zero value is off.
+	Jev JevInfo
+	// LocalEndpoints are the servers of the local models, by model ID;
+	// every other model goes through OpenRouter.
+	LocalEndpoints map[root.ModelID]string
 	// Usage is the session's usage ledger for the footer's cost and
 	// /usage, where + raises the session's limit by MaxSessionUSD.
 	Usage         application.SessionUsagePort
