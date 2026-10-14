@@ -120,6 +120,23 @@ func TestRestoreFilePutsAStepsFileBack(t *testing.T) {
 	}
 }
 
+// A file the workspace does not have is refused as missing, so the console
+// can say so in the person's language: on 14 October 2026 it read "cannot
+// restore calc/calc.go: local_read not_found: file or directory not found".
+func TestRestoreFileRefusesAMissingFileAsMissing(t *testing.T) {
+	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "calc/calc.go", Before: "one", After: "two"}}})
+	files := &workspaceFiles{files: map[string]string{}}
+	u := RestoreFileUseCase{Tools: files, Store: &memoryStore{}}
+	_, err := u.Restore(context.Background(), &s, "w1")
+	var missing FileMissingError
+	if !errors.As(err, &missing) || missing.Path != "calc/calc.go" || files.writes != 0 {
+		t.Fatalf("missing file refused as %v", err)
+	}
+	if _, err := u.UndoLastTurn(context.Background(), &s); !errors.As(err, &missing) {
+		t.Fatalf("undo refused a missing file as %v", err)
+	}
+}
+
 // A truncated or unavailable snapshot is not restored.
 func TestRestoreFileRefusesASnapshotThatWasNotKept(t *testing.T) {
 	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "big.go", Unavailable: "too_large"}}})

@@ -811,6 +811,8 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Status.Notice = m.restoredNotice(v.Session.Export())
 			} else if changed := (application.FileChangedError{}); errors.As(v.Err, &changed) {
 				m.Status.Error = m.Theme.Tf("changes.restoreChanged", singleLine(string(changed.Path)))
+			} else if missing := (application.FileMissingError{}); errors.As(v.Err, &missing) {
+				m.Status.Error = m.Theme.Tf("changes.restoreMissing", singleLine(string(missing.Path)))
 			}
 		}
 		if v.Fresh && v.Err == nil {
