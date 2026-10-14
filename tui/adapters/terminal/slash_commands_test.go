@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -121,8 +122,28 @@ func TestUnknownSlashWordIsNotSentToTheModel(t *testing.T) {
 	if m.Busy || m.Composer.Input.Value() != "/foo" || !strings.Contains(m.Status.Error, "Unknown command /foo") {
 		t.Fatalf("unknown command handled wrongly: busy=%v draft=%q error=%q", m.Busy, m.Composer.Input.Value(), m.Status.Error)
 	}
-	if unknownSlashWord("/home/u/file is broken") || unknownSlashWord("/tmp/x") {
-		t.Fatal("a path or sentence was treated as a command")
+	workspace := t.TempDir()
+	if err := os.Mkdir(filepath.Join(workspace, "calc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	prompts := []string{"/home/u/file is broken", "/tmp/x", "/tmp/foo explain", "/calc what does it do"}
+	if pathExists("/etc") {
+		prompts = append(prompts, "/etc what is this") // an absolute path, where one exists
+	}
+	for _, prompt := range prompts {
+		if word, unknown := unknownSlashWord(prompt, workspace); unknown {
+			t.Fatalf("%q was treated as the command %s", prompt, word)
+		}
+	}
+	for _, command := range []string{"/foo", "/foo bar", "/memroy save it"} {
+		if word, unknown := unknownSlashWord(command, workspace); !unknown || word != strings.Fields(command)[0] {
+			t.Fatalf("%q was not refused: %q", command, word)
+		}
+	}
+	m.Composer.Input.SetValue("/foo bar")
+	m = update(m, ControlIntent("send"))
+	if m.Busy || m.Composer.Input.Value() != "/foo bar" || !strings.Contains(m.Status.Error, "Unknown command /foo ·") {
+		t.Fatalf("/foo bar handled wrongly: busy=%v draft=%q error=%q", m.Busy, m.Composer.Input.Value(), m.Status.Error)
 	}
 }
 

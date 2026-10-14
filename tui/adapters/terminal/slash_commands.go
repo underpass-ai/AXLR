@@ -2,6 +2,8 @@ package terminal
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -212,12 +214,33 @@ func isSlashCommand(draft string) (string, bool) {
 	return command, known && args == ""
 }
 
-// unknownSlashWord is a lone "/word" that names no command: almost always a
-// mistyped command, never worth a model turn. "/tmp/foo explain" is a
-// prompt.
-func unknownSlashWord(draft string) bool {
-	_, _, known := parseSlash(draft)
-	return !known && slashWord.MatchString(strings.TrimSpace(draft))
+// unknownSlashWord is the "/word" a draft starts with when it names no
+// command: almost always a mistyped command, never worth a model turn. A
+// lone word is refused; with text after it, it is refused unless the word
+// names a path, absolute or in the workspace: on 14 October 2026 "/foo bar"
+// cost four requests to hear the model say it did not know "/foo bar".
+// "/tmp/foo explain" and "/etc what is this" are prompts.
+func unknownSlashWord(draft, workspace string) (string, bool) {
+	draft = strings.TrimSpace(draft)
+	if _, _, known := parseSlash(draft); known {
+		return "", false
+	}
+	word, rest := draft, ""
+	if i := strings.IndexFunc(draft, unicode.IsSpace); i >= 0 {
+		word, rest = draft[:i], strings.TrimSpace(draft[i:])
+	}
+	if !slashWord.MatchString(word) {
+		return "", false
+	}
+	if rest != "" && (pathExists(word) || workspace != "" && pathExists(filepath.Join(workspace, word[1:]))) {
+		return "", false
+	}
+	return word, true
+}
+
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // slashPromptModes are the work modes that take a prompt after them:

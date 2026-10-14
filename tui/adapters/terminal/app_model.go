@@ -876,8 +876,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m.quit()
 			}
-			if !known && unknownSlashWord(command) {
-				m.Status.Error = m.Theme.Tf("error.unknownCommand", command)
+			if word, unknown := unknownSlashWord(command, string(m.Header.State.Workspace)); unknown {
+				// The draft stays in the composer to be corrected.
+				m.Status.Error = m.Theme.Tf("error.unknownCommand", word)
 				return m, nil
 			}
 			if !known {
