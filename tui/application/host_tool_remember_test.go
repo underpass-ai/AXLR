@@ -274,3 +274,24 @@ func TestHostRememberPassesSummaryEN(t *testing.T) {
 		t.Fatal("summary_en is not described")
 	}
 }
+
+// On 14 October 2026 every axlr_remember of a Spanish session came without
+// summary_en and a strict KMP refused it, so each memory cost a refused
+// call and a retry. The tool asks for summary_en with every text.
+func TestRememberAsksForSummaryENWithEveryText(t *testing.T) {
+	tool := RememberTool().Definition
+	if !strings.Contains(string(tool.Description), "summary_en (always") {
+		t.Fatalf("description %q", tool.Description)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Parameters.Bytes(), &schema); err != nil {
+		t.Fatal(err)
+	}
+	if got := schema.Properties["summary_en"].Description; !strings.HasPrefix(got, "Required with every text") || !strings.Contains(got, "verbatim") {
+		t.Fatalf("summary_en description %q", got)
+	}
+}

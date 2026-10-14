@@ -20,7 +20,7 @@ const MemoryReminderPrefix = "[AXLR · memory]"
 
 // memoryReminder is the console's message; it leaves the judgement to the
 // model and says how to decline.
-const memoryReminder = MemoryReminderPrefix + " Memory is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with axlr_remember (kind, text and its evidence, with summary_en when the text is not in English; the console uses the session's exact about and a stable idempotency key), then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
+const memoryReminder = MemoryReminderPrefix + " Memory is connected and this request did real work without recording anything. If it settled a decision, constraint, fix or outcome worth reusing, record it now with axlr_remember (kind, text, summary_en and its evidence; the console uses the session's exact about and a stable idempotency key), then say in one sentence what you recorded. If nothing durable came out of it, or the user asked not to record, say so in one sentence without recording. The console asks this once per request."
 
 // memoryReminderBridgedFormat is the reminder where axlr_remember is not
 // offered; %s is the memory engine's write, by its own name.
