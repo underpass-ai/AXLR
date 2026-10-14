@@ -947,6 +947,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Composer.Input.Reset()
 				return m, m.copyLatest()
 			}
+			if command == "/clean_screen" {
+				return m.cleanScreen(), nil
+			}
 			if command == "/export" {
 				return m.exportSession("")
 			}

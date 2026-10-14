@@ -44,6 +44,20 @@ type Transcript struct {
 	TurnCosts   map[int]string
 	rowLines    map[int]int
 	visualIndex []int
+	// cleared hides what /clean_screen found on the screen: the rows of the
+	// first messages and console lines of the session clearedFor. The
+	// session keeps them; only the screen starts again.
+	cleared    transcriptCut
+	clearedFor domain.SessionID
+}
+
+// transcriptCut counts a session's messages and console lines.
+type transcriptCut struct{ messages, lines int }
+
+// Clear hides every row drawn from s so far; what s gains later is drawn.
+// Another session shows everything again.
+func (t *Transcript) Clear(s domain.SessionState) {
+	t.cleared, t.clearedFor = transcriptCut{len(s.Messages), len(s.ConsoleLines)}, s.ID
 }
 
 func NewTranscript() Transcript {
@@ -125,6 +139,17 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 	if s.ID != t.expandedFor {
 		t.expanded, t.expandedFor = nil, s.ID
 	}
+	if s.ID != t.clearedFor {
+		t.cleared, t.clearedFor = transcriptCut{}, s.ID
+	}
+	// start is the first row after the cut: the rows of the messages and
+	// console lines /clean_screen hid come before it.
+	start, cut := -1, t.cleared
+	mark := func(messages, lines int) {
+		if start < 0 && messages >= cut.messages && lines >= cut.lines {
+			start = len(t.rows)
+		}
+	}
 	archived := 0
 	results := make(map[string]*root.Message)
 	for i := range s.Messages {
@@ -138,9 +163,11 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 	}
 	clock := transcriptNow()
 	lines := 0
+	mark(0, 0)
 	for lines < len(s.ConsoleLines) && s.ConsoleLines[lines].AfterMessage == 0 {
 		t.appendRow(sessionLineRow(s, s.ConsoleLines[lines], theme))
 		lines++
+		mark(0, lines)
 	}
 	for index, m := range s.Messages {
 		var at time.Time
@@ -206,9 +233,18 @@ func (t *Transcript) SetSession(s domain.SessionState, draft string, theme Theme
 			t.appendRow(transcriptRow{Label: theme.T("transcript.interruptedDraft"), Text: string(s.ArchivedDrafts[archived].Content), Kind: transcriptRowAssistant, Markdown: true})
 			archived++
 		}
+		mark(index+1, lines)
 		for lines < len(s.ConsoleLines) && s.ConsoleLines[lines].AfterMessage == index+1 {
 			t.appendRow(sessionLineRow(s, s.ConsoleLines[lines], theme))
 			lines++
+			mark(index+1, lines)
+		}
+	}
+	mark(len(s.Messages), len(s.ConsoleLines))
+	if start > 0 {
+		t.rows = append(t.rows[:0], t.rows[start:]...)
+		if len(t.rows) > 0 {
+			t.rows[0].GapBefore = false
 		}
 	}
 	if s.Draft != "" {
