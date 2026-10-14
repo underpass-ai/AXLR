@@ -144,7 +144,8 @@ func TestTheApprovalCardGrowsToSixtyPercent(t *testing.T) {
 	m := execApprovalModel(t, domain.ModeNormal, `{"program":"python3","args":["-"],"stdin":"`+strings.Repeat(`print(1)\n`, 40)+`"}`)
 	defer m.zones.Close()
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 50})
-	if rows := m.approvalDetailRows(); rows != 27 {
+	// The keys take two rows at 100 columns (S is offered), so 26 are left.
+	if rows := m.approvalDetailRows(); rows != 26 {
 		t.Fatalf("detail rows %d at 50 rows", rows)
 	}
 	if card := lipglossHeight(m.approvalCard()); card != 30 {
@@ -207,5 +208,29 @@ func TestTheCardWarnsWhenACommandRemovesFiles(t *testing.T) {
 			t.Fatalf("%s was flagged", args)
 		}
 		m.zones.Close()
+	}
+}
+
+// On 14 October 2026 the model sent {"program":"echo","args":["echo","hola"]}
+// and the card showed "$ echo echo hola" without a word.
+func TestTheExecCardWarnsWhenTheFirstArgumentRepeatsTheProgram(t *testing.T) {
+	m := execApprovalModel(t, domain.ModeNormal, `{"program":"echo","args":["echo","hola"]}`)
+	defer m.zones.Close()
+	m.Theme.Locale = Spanish
+	if got := m.repeatedProgramWarning(m.Approval.Pending); !strings.Contains(got, `el primer argumento repite el programa: se ejecuta echo con "echo" como primer argumento`) {
+		t.Fatalf("warning %q", got)
+	}
+	if got := m.Approval.Details.Text(); !strings.HasPrefix(got, "! the first argument repeats the program") || !strings.Contains(got, "$ echo echo hola") {
+		t.Fatalf("card %q", got)
+	}
+	plain := execApprovalModel(t, domain.ModeNormal, `{"program":"/usr/bin/go","args":["go","test"]}`)
+	defer plain.zones.Close()
+	if plain.repeatedProgramWarning(plain.Approval.Pending) == "" {
+		t.Fatal("a path's base name is the program too")
+	}
+	fine := execApprovalModel(t, domain.ModeNormal, `{"program":"echo","args":["hola","echo"]}`)
+	defer fine.zones.Close()
+	if fine.repeatedProgramWarning(fine.Approval.Pending) != "" {
+		t.Fatal("warned about a later argument")
 	}
 }

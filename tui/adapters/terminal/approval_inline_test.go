@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 func TestInlineApprovalKeepsTheConversationInView(t *testing.T) {
@@ -33,5 +34,32 @@ func TestInlineApprovalKeepsTheConversationInView(t *testing.T) {
 			t.Fatalf("%v: the editor cursor shows while a decision is pending", size)
 		}
 		m.zones.Close()
+	}
+}
+
+// On 14 October 2026, at 70 columns, the card's keys were cut at
+// "l permitir siem…" and d (deny) and esc were not shown at all.
+func TestTheApprovalCardWrapsItsKeysOnNarrowTerminals(t *testing.T) {
+	m := execApprovalModel(t, domain.ModeNormal, `{"program":"go","args":["test","./..."]}`)
+	defer m.zones.Close()
+	m.Theme.Locale = Spanish
+	m = update(m, tea.WindowSizeMsg{Width: 70, Height: 18})
+	card := ansi.Strip(m.approvalCard())
+	for _, want := range []string{"a aprobar", "l permitir siempre", "d denegar", "esc cancelar"} {
+		if !strings.Contains(card, want) {
+			t.Fatalf("the card lost %q:\n%s", want, card)
+		}
+	}
+	for _, line := range strings.Split(card, "\n") {
+		if ansi.StringWidth(line) > 70 {
+			t.Fatalf("a row is wider than the screen: %q", line)
+		}
+	}
+	// The view keeps its height: the conversation gives up the rows.
+	if lines := strings.Split(m.View().Content, "\n"); len(lines) != 18 {
+		t.Fatalf("the view is %d rows", len(lines))
+	}
+	if rows := wrapActions([]string{"a", "bb", "c"}, []int{1, 2, 1}, " ", "  ", 6); len(rows) != 2 || rows[0] != " a  bb" || rows[1] != " c" {
+		t.Fatalf("%q", rows)
 	}
 }

@@ -221,3 +221,27 @@ func TestChangeReviewExplainsUnavailableAndEmptyPreviews(t *testing.T) {
 func selectedChangePath(v ChangeViewer) root.RelativePath {
 	return v.files[v.rows[v.selected].File].Path
 }
+
+// On 14 October 2026 a file put back to its original content read "Empty
+// file created." in Ctrl+D, though it held its 3 KB intact.
+func TestChangeReviewSaysNoNetChangeAfterRestore(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Theme.Locale, m.Changes.Theme.Locale = Spanish, Spanish
+	state := domain.SessionState{ID: "0123456789abcdef0123456789abcdef",
+		Messages:     []root.Message{{Role: root.RoleUser, Content: "go"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "edit"}}}, {Role: root.RoleTool, ToolCallID: "edit", Content: "{}"}},
+		Activity:     []domain.PendingTool{{Call: root.ToolCall{ID: "edit"}, Decision: domain.DecisionApprove, Outcome: &domain.ToolOutcome{Change: &domain.FileChange{Path: "calc/calc_test.go", Before: "package calc\n", After: "package calc\n\nfunc TestMax() {}\n"}}}},
+		ConsoleLines: []domain.ConsoleLine{{AfterMessage: 3, Restore: &domain.FileRestore{Files: []domain.RestoredFile{{Path: "calc/calc_test.go", From: "edit", To: "edit"}}}}},
+	}
+	m.Header.State = state
+	m.refreshTranscript()
+	m = update(m, ControlIntent("changes"))
+	content := m.Changes.Details.GetContent()
+	if strings.Contains(content, "Archivo vacío creado") || !strings.Contains(content, "Sin cambio neto") {
+		t.Fatalf("a file back to its content was not said so: %q", ansi.Strip(content))
+	}
+	// A file created empty is still said so.
+	if key := emptyDiffKey(domain.FileChange{Path: "e", Created: true}); key != "changes.emptyFile" {
+		t.Fatal(key)
+	}
+}

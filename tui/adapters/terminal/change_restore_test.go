@@ -182,3 +182,29 @@ func TestUndoOffersTheLatestTurnThatChangedFiles(t *testing.T) {
 		t.Fatalf("an undone turn is offered again: %d", turn)
 	}
 }
+
+// absentFiles plays a workspace without the session's files, as one a
+// session was imported into.
+type absentFiles struct{}
+
+func (absentFiles) Execute(context.Context, domain.ToolIdentity, root.JSONValue) (domain.ToolOutcome, error) {
+	data, _ := json.Marshal(map[string]any{"status": "failed", "error": map[string]string{"code": "not_found", "message": "file or directory not found"}})
+	return domain.ToolOutcome{Content: root.Text(data), IsError: true}, nil
+}
+
+// On 14 October 2026 a restore of a file the workspace did not have read
+// "! cannot restore calc/calc.go: local_read not_found: file or directory
+// not found" in a Spanish console.
+func TestRestoreOfAMissingFileIsRefusedInThePersonsLanguage(t *testing.T) {
+	m, _ := restoreModel(t)
+	defer m.zones.Close()
+	m.Theme.Locale, m.Changes.Theme.Locale = Spanish, Spanish
+	m.deps.Start.Tools = absentFiles{}
+	m = update(m, ControlIntent("changes"))
+	m = update(m, typed('u'))
+	next, cmd := m.Update(typed('y'))
+	m = drain(t, next.(AppModel), cmd)
+	if m.Status.Error != "No se ha restaurado: b.go no está en este espacio de trabajo (se borró después, o cambió en otra carpeta), y no se ha devuelto nada" {
+		t.Fatalf("error %q", m.Status.Error)
+	}
+}

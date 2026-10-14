@@ -44,7 +44,7 @@ func consoleLineRow(line domain.ConsoleLine, theme Theme) transcriptRow {
 		// on 12 October 2026 an invalid model id left a prompt with no reply
 		// and no reason.
 		row.Label, row.LabelTone = theme.Icon("failed")+" ", toneError
-		row.Text = failure.Message
+		row.Text = streamTimeoutMessage(failure.Message, theme)
 		if hint := theme.providerHint(failure.Hint); hint != "" {
 			row.Text += " · " + hint
 		}

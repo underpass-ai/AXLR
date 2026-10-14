@@ -169,6 +169,10 @@ func (u RestoreFileUseCase) apply(ctx context.Context, session *domain.Session, 
 // wrote.
 func (u RestoreFileUseCase) unchanged(ctx context.Context, target restoreTarget) error {
 	output, err := u.run(ctx, "read", map[string]any{"path": string(target.path), "max_bytes": domain.MaxChangePreviewBytes})
+	var local localOperationError
+	if errors.As(err, &local) && local.Code == "not_found" {
+		return FileMissingError{Path: target.path}
+	}
 	if err != nil {
 		return fmt.Errorf("cannot restore %s: %w", target.path, err)
 	}
@@ -191,6 +195,29 @@ type FileChangedError struct{ Path root.RelativePath }
 
 func (e FileChangedError) Error() string {
 	return fmt.Sprintf("cannot restore %s: it changed after the session wrote it; nothing was restored", e.Path)
+}
+
+// FileMissingError refuses a restore of a file that is not in the
+// workspace: deleted since, or never there, as for a session imported
+// from another workspace. On 14 October 2026 the console showed "cannot
+// restore calc/calc.go: local_read not_found: file or directory not
+// found" in a Spanish console.
+type FileMissingError struct{ Path root.RelativePath }
+
+func (e FileMissingError) Error() string {
+	return fmt.Sprintf("cannot restore %s: it is not in this workspace; nothing was restored", e.Path)
+}
+
+// localOperationError is a local operation's refusal, with its code.
+type localOperationError struct {
+	Operation, Code, Message string
+}
+
+func (e localOperationError) Error() string {
+	if e.Message == "" {
+		return fmt.Sprintf("local_%s %s", e.Operation, e.Code)
+	}
+	return fmt.Sprintf("local_%s %s: %s", e.Operation, e.Code, e.Message)
 }
 
 func (u RestoreFileUseCase) write(ctx context.Context, target restoreTarget) error {
@@ -230,7 +257,7 @@ func (u RestoreFileUseCase) run(ctx context.Context, operation string, arguments
 	}
 	if outcome.IsError || response.Status != "completed" {
 		if response.Error != nil {
-			return nil, fmt.Errorf("local_%s %s: %s", operation, response.Error.Code, strings.TrimSpace(response.Error.Message))
+			return nil, localOperationError{Operation: operation, Code: response.Error.Code, Message: strings.TrimSpace(response.Error.Message)}
 		}
 		return nil, fmt.Errorf("local_%s %s", operation, response.Status)
 	}

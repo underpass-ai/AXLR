@@ -53,8 +53,11 @@ type Dependencies struct {
 	// DeleteSession removes a saved session from Ctrl+O; nil offers no
 	// delete.
 	DeleteSession application.SessionDeletePort
-	Session       *domain.Session
-	Monochrome    bool
+	// SessionHeld reports a saved session another console has open, which
+	// Ctrl+O marks and does not try to open; nil knows of none.
+	SessionHeld func(domain.SessionID) bool
+	Session     *domain.Session
+	Monochrome  bool
 	// InitialDraft fills the composer at launch, such as the repair brief;
 	// the person still presses Enter.
 	InitialDraft string

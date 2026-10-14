@@ -254,6 +254,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	modelCtx = WithToolCallProgress(modelCtx, func(name string, bytes int) {
 		_ = emit(Event{Kind: EventToolCallProgress, ToolCallName: name, ToolCallBytes: bytes})
 	})
+	modelCtx = WithReasoningProgress(modelCtx, func(bytes int) {
+		_ = emit(Event{Kind: EventReasoningProgress, ReasoningBytes: bytes})
+	})
 	meter := &usageMeter{started: started}
 	modelCtx = meter.watch(modelCtx)
 	if u.Diagnostics != nil {

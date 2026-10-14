@@ -3,6 +3,7 @@ package terminal
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -52,6 +53,27 @@ func (m AppModel) removalWarning(p domain.PendingTool) string {
 		return ""
 	}
 	return m.Theme.Icon("attention") + " " + m.Theme.T("approval.removesFiles")
+}
+
+// repeatedProgramWarning warns that a local exec's first argument repeats
+// its program: the model sent {"program":"echo","args":["echo","hola"]},
+// which runs "echo echo hola", on 14 October 2026.
+func (m AppModel) repeatedProgramWarning(p domain.PendingTool) string {
+	tool, _, known, err := application.ResolveToolCall(m.Header.State.ToolSnapshot, p.Call)
+	if !known || err != nil || tool.Identity.Kind != domain.ToolKindLocal || tool.Identity.LocalOperation != "exec" {
+		return ""
+	}
+	var command struct {
+		Program string   `json:"program"`
+		Args    []string `json:"args"`
+	}
+	if json.Unmarshal(p.Call.Arguments.Bytes(), &command) != nil || len(command.Args) == 0 || strings.TrimSpace(command.Program) == "" {
+		return ""
+	}
+	if first := command.Args[0]; first != command.Program && first != filepath.Base(command.Program) {
+		return ""
+	}
+	return m.Theme.Icon("attention") + " " + m.Theme.Tf("approval.repeatsProgram", singleLine(command.Program))
 }
 
 // execCardCommand is a known local exec call's card: the command line as a

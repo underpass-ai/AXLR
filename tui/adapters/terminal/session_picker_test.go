@@ -1,6 +1,8 @@
 package terminal
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -258,5 +260,59 @@ func TestSessionPickerFiltersByConversation(t *testing.T) {
 	view := ansi.Strip(p.View(Theme{Monochrome: true}, zone.New(), "", 30, 100))
 	if !strings.Contains(view, Theme{}.T("sessions.contentMatch")) {
 		t.Fatalf("a content match is not marked:\n%s", view)
+	}
+}
+
+// On 14 October 2026 Ctrl+O listed a session open in another console like
+// any other, and Enter on it failed with "Error:…" cut short behind the
+// notice before it.
+func TestSessionPickerMarksSessionsOpenHereAndElsewhere(t *testing.T) {
+	s := navSession(t)
+	if err := s.BeginTurn("mine", nil); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	m.Header.State = s.Export()
+	if err := m.deps.Store.Save(context.Background(), s); err != nil {
+		t.Fatal(err)
+	}
+	other, _ := domain.NewSession("1123456789abcdef0123456789abcdef", testWorkspace(), "model")
+	if err := other.BeginTurn("theirs", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.deps.Store.Save(context.Background(), other); err != nil {
+		t.Fatal(err)
+	}
+	m.deps.SessionHeld = func(id domain.SessionID) bool { return id == other.ID() }
+	n, c := m.Update(ControlIntent("sessions"))
+	m = drain(t, n.(AppModel), c)
+	view := ansi.Strip(m.View().Content)
+	if !strings.Contains(view, "open in another console") || !strings.Contains(view, "open here") {
+		t.Fatalf("no marks:\n%s", view)
+	}
+	for m.Picker.Visible()[m.Picker.Selected].ID != other.ID() {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	m.Status.Notice = "Exported to /tmp/a.md"
+	n, c = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = n.(AppModel)
+	if c != nil || m.Busy || m.Status.Error != m.Theme.T("sessions.heldOpen") || m.Status.Notice != "" {
+		t.Fatalf("Enter on a held session: busy=%v error=%q notice=%q", m.Busy, m.Status.Error, m.Status.Notice)
+	}
+	view = ansi.Strip(m.View().Content)
+	if lines := strings.Split(view, "\n"); len(lines) != m.Layout.Height || !strings.Contains(strings.Join(strings.Fields(strings.Join(lines[len(lines)-2:], " ")), " "), "close it there to open it here") {
+		t.Fatalf("the reason is not readable:\n%s", view)
+	}
+}
+
+// A new error displaces a notice an earlier update left.
+func TestANewErrorDisplacesAnOldNotice(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Status.Notice = "Exported to /tmp/a.md"
+	m.Busy, m.operationID = true, 1
+	m = update(m, operationComplete{ID: 1, Session: *m.deps.Session, Err: errors.New("could not open it")})
+	if m.Status.Notice != "" || !strings.Contains(m.Status.Error, "could not open it") {
+		t.Fatalf("notice %q error %q", m.Status.Notice, m.Status.Error)
 	}
 }
