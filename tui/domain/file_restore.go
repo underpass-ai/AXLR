@@ -111,7 +111,12 @@ func (s SessionState) LastTurnChanges() []RestorableChange {
 
 // TurnChanges is the restorable changes of the turn the person's prompt
 // number turn (from 1) began, newest first; none for a turn that is not
-// there.
+// there. A change the person already restored from the file-changes panel
+// is left out: its file is back to what it held before that step, so an
+// undo of the turn undoes what remains. On 14 October 2026 /undo offered a
+// turn whose calc_test.go the person had restored from Ctrl+D, found the
+// file "changed after the session wrote it" and refused the whole undo, so
+// calc.go was not undone either.
 func (s SessionState) TurnChanges(turn int) []RestorableChange {
 	prompts := s.promptIndexes()
 	if turn < 1 || turn > len(prompts) {
@@ -127,8 +132,12 @@ func (s SessionState) TurnChanges(turn int) []RestorableChange {
 			calls = append(calls, call.ID)
 		}
 	}
+	restored := s.panelRestored()
 	var changes []RestorableChange
 	for i := len(calls) - 1; i >= 0; i-- {
+		if restored[calls[i]] {
+			continue
+		}
 		for _, a := range s.Activity {
 			if a.Call.ID == calls[i] && a.Outcome != nil && a.Outcome.Change != nil && !a.Outcome.IsError && !a.Outcome.Uncertain && a.Decision != DecisionDeny {
 				changes = append(changes, RestorableChange{Call: calls[i], Change: *a.Outcome.Change})
@@ -139,9 +148,24 @@ func (s SessionState) TurnChanges(turn int) []RestorableChange {
 	return changes
 }
 
+// panelRestored is the steps whose change the person restored one at a
+// time, from the file-changes panel.
+func (s SessionState) panelRestored() map[axlr.ToolCallID]bool {
+	restored := map[axlr.ToolCallID]bool{}
+	for _, line := range s.ConsoleLines {
+		if line.Restore != nil && !line.Restore.Undo {
+			for _, f := range line.Restore.Files {
+				restored[f.From] = true
+			}
+		}
+	}
+	return restored
+}
+
 // LatestChangingTurn is the most recent turn whose writes and edits can be
 // restored and were not undone yet, numbered from 1, or 0: /undo after a
-// turn that changed nothing offers it.
+// turn that changed nothing offers it. A turn whose every change the
+// person restored from the panel has nothing left to undo.
 func (s SessionState) LatestChangingTurn() int {
 	undone := map[axlr.ToolCallID]bool{}
 	for _, line := range s.ConsoleLines {

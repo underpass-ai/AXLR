@@ -222,3 +222,53 @@ func TestTheRestoreNoteNamesTheTurnAnUndoReached(t *testing.T) {
 		t.Fatalf("note %q", note)
 	}
 }
+
+// Confirmed live on 14 October 2026: a turn wrote calc.go and
+// calc_test.go, the person restored calc_test.go from Ctrl+D, and /undo
+// offered the turn, found calc_test.go "changed after the session wrote
+// it" and undid nothing, calc.go included. A change restored from the
+// panel counts as undone: the undo puts back what remains.
+func TestUndoSkipsAChangeRestoredFromThePanel(t *testing.T) {
+	s := changedSession(t, []changeStep{
+		{"w1", domain.FileChange{Path: "calc/calc.go", Before: "calc0", After: "calc1"}},
+		{"w2", domain.FileChange{Path: "calc/calc_test.go", Before: "test0", After: "test1"}},
+	})
+	// A later turn ran only reads: the session's last turn changed no file.
+	if err := s.BeginTurn("¿pasan los tests?", repairTools(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteAssistant(assistant("sí")); err != nil {
+		t.Fatal(err)
+	}
+	files := &workspaceFiles{files: map[string]string{"calc/calc.go": "calc1", "calc/calc_test.go": "test1"}}
+	u := RestoreFileUseCase{Tools: files, Store: &memoryStore{}}
+	if _, err := u.Restore(context.Background(), &s, "w2"); err != nil {
+		t.Fatal(err)
+	}
+	// /undo offers turn 1, without the restored test file.
+	state := s.Export()
+	if turn, changes := state.LatestChangingTurn(), state.TurnChanges(1); turn != 1 || len(changes) != 1 || changes[0].Call != "w1" {
+		t.Fatalf("turn %d changes %+v", turn, changes)
+	}
+	restored, err := u.UndoTurn(context.Background(), &s, 1)
+	if err != nil || len(restored) != 1 || restored[0] != (domain.RestoredFile{Path: "calc/calc.go", From: "w1", To: "w1"}) {
+		t.Fatalf("undo %+v %v", restored, err)
+	}
+	if files.files["calc/calc.go"] != "calc0" || files.files["calc/calc_test.go"] != "test0" {
+		t.Fatalf("files %v", files.files)
+	}
+	// Everything turn 1 changed is back: it is not offered again.
+	if turn := s.Export().LatestChangingTurn(); turn == 1 {
+		t.Fatal("turn 1 offered again")
+	}
+	// A turn whose every change the panel restored has nothing to undo.
+	only := changedSession(t, []changeStep{{"o1", domain.FileChange{Path: "a.go", Before: "a0", After: "a1"}}})
+	files = &workspaceFiles{files: map[string]string{"a.go": "a1"}}
+	u.Tools = files
+	if _, err := u.Restore(context.Background(), &only, "o1"); err != nil {
+		t.Fatal(err)
+	}
+	if turn := only.Export().LatestChangingTurn(); turn != 0 || len(only.Export().LastTurnChanges()) != 0 {
+		t.Fatalf("restored turn still offered: %d", turn)
+	}
+}
