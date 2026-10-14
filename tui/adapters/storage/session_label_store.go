@@ -49,7 +49,7 @@ func (s *SessionLabelStore) Load(ctx context.Context) (map[domain.SessionID]doma
 	}
 	labels := make(map[domain.SessionID]domain.SessionLabel, len(record.Labels))
 	for id, entry := range record.Labels {
-		labels[domain.SessionID(id)] = domain.SessionLabel{Title: root.Text(entry.Title), TitleDerived: entry.TitleDerived, Archived: entry.Archived, About: entry.About}
+		labels[domain.SessionID(id)] = domain.SessionLabel{Title: root.Text(entry.Title), TitleDerived: entry.TitleDerived, Archived: entry.Archived, About: entry.About, ImportedFrom: domain.Workspace(entry.ImportedFrom), ImportedAfter: entry.ImportedAfter}
 	}
 	return labels, nil
 }
@@ -130,10 +130,14 @@ func (s *SessionLabelStore) update(ctx context.Context, id domain.SessionID, lab
 		// its about. Renaming/archiving must not erase that newer binding.
 		label.About = record.Labels[string(id)].About
 	}
+	if entry := record.Labels[string(id)]; entry.ImportedFrom != "" && (initialize || label.ImportedFrom == "") {
+		// Where an imported session came from is written once, at import.
+		label.ImportedFrom, label.ImportedAfter = domain.Workspace(entry.ImportedFrom), entry.ImportedAfter
+	}
 	if label == (domain.SessionLabel{}) {
 		delete(record.Labels, string(id))
 	} else {
-		record.Labels[string(id)] = sessionLabelEntry{Title: string(label.Title), TitleDerived: label.TitleDerived && label.Title != "", Archived: label.Archived, About: label.About}
+		record.Labels[string(id)] = sessionLabelEntry{Title: string(label.Title), TitleDerived: label.TitleDerived && label.Title != "", Archived: label.Archived, About: label.About, ImportedFrom: string(label.ImportedFrom), ImportedAfter: label.ImportedAfter}
 	}
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {

@@ -25,6 +25,14 @@ type SessionLabel struct {
 	Archived     bool
 	// About is the exact KMP scope selected for continuity across sessions.
 	About string
+	// ImportedFrom is the workspace a session imported with --import was
+	// exported from, when it differs from the one it was imported into;
+	// ImportedAfter is how many messages it had then. The file changes of
+	// those messages were made in ImportedFrom. On 14 October 2026 an
+	// imported session listed the other workspace's changes in Ctrl+D as
+	// its own and offered to restore them here.
+	ImportedFrom  Workspace
+	ImportedAfter int
 }
 
 func (l SessionLabel) Validate() error {
@@ -33,6 +41,14 @@ func (l SessionLabel) Validate() error {
 	}
 	if utf8.RuneCountInString(l.About) > 256 || strings.TrimSpace(l.About) != l.About || strings.IndexFunc(l.About, unicode.IsControl) >= 0 {
 		return errors.New("invalid session memory about")
+	}
+	if l.ImportedFrom != "" {
+		if _, err := NewWorkspace(string(l.ImportedFrom)); err != nil {
+			return errors.New("invalid imported-from workspace")
+		}
+	}
+	if l.ImportedAfter < 0 || l.ImportedFrom == "" && l.ImportedAfter != 0 {
+		return errors.New("invalid imported-after message count")
 	}
 	_, err := axlr.NewText(string(l.Title))
 	return err

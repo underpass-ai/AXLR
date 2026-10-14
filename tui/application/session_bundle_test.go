@@ -112,7 +112,8 @@ func TestImportSessionMakesTheBundleThisConsoles(t *testing.T) {
 	if handoff.About != "ws:"+string(state.ID) || handoff.Kind != "observation" || handoff.Summary != "Session imported from laptop (exported 2026-10-13T20:00:00Z) and continued on gx10." || handoff.Evidence[0] != "axlr-tui --import /tmp/b.json" || handoff.Labels["event"][0] != "import" {
 		t.Fatalf("handoff %+v", handoff)
 	}
-	if label := labels.labels[state.ID]; string(label.Title) != "Parser UTC" || label.About != "project:Repo-B" {
+	// Its changes so far were made in the origin's workspace.
+	if label := labels.labels[state.ID]; string(label.Title) != "Parser UTC" || label.About != "project:Repo-B" || label.ImportedFrom != state.Workspace || label.ImportedAfter != len(state.Messages) {
 		t.Fatalf("labels %+v", label)
 	}
 	if _, _, err := u.Execute(context.Background(), []byte("x")); err == nil || !strings.Contains(err.Error(), "saved in this console already") {

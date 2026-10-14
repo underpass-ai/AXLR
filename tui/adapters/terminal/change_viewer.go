@@ -25,6 +25,11 @@ type changeRecord struct {
 	// Restore marks a file the person put back (Undo: with /undo), drawn
 	// from the snapshots of the steps it went back over.
 	Restore, Undo bool
+	// Message is how many messages came before the change's result (a
+	// restore: before its line), -1 when unknown; Foreign marks a change
+	// made in another workspace before the session was imported here.
+	Message int
+	Foreign bool
 }
 
 // changeFile groups a session's changes to one path. Its net change runs
@@ -63,6 +68,12 @@ type ChangeViewer struct {
 	// answers; notice says why u did nothing.
 	confirm root.ToolCallID
 	notice  string
+	// importedFrom is the workspace the session was imported from, and
+	// importedAfter how many messages it had then; importFor is the
+	// session they were read for (change_import.go).
+	importedFrom  domain.Workspace
+	importedAfter int
+	importFor     domain.SessionID
 }
 
 func NewChangeViewer() ChangeViewer {
@@ -71,7 +82,8 @@ func NewChangeViewer() ChangeViewer {
 
 func (v *ChangeViewer) SetSession(state domain.SessionState) {
 	records := changeRecords(state)
-	if state.ID == v.sessionID && slices.EqualFunc(records, v.records, func(a, b changeRecord) bool { return a.ID == b.ID && a.Change == b.Change }) {
+	v.markForeign(records)
+	if state.ID == v.sessionID && slices.EqualFunc(records, v.records, func(a, b changeRecord) bool { return a.ID == b.ID && a.Change == b.Change && a.Foreign == b.Foreign }) {
 		return
 	}
 	var keep changeRow
@@ -143,9 +155,10 @@ func changeRecords(state domain.SessionState) []changeRecord {
 		if a.Outcome == nil || a.Outcome.IsError || a.Outcome.Uncertain || a.Decision == domain.DecisionDeny || a.Outcome.Change == nil {
 			continue
 		}
-		record := changeRecord{ID: a.Call.ID, Change: *a.Outcome.Change}
+		record := changeRecord{ID: a.Call.ID, Change: *a.Outcome.Change, Message: -1}
 		record.Tool, _ = toolCallPresentation(state, a.Call)
 		if index, ok := resultAt[a.Call.ID]; ok {
+			record.Message = index
 			record.Turn = turnAt(index)
 			if index < len(state.MessageTimes) {
 				record.At = state.MessageTimes[index]
@@ -161,7 +174,7 @@ func changeRecords(state domain.SessionState) []changeRecord {
 		}
 		for k, f := range line.Restore.Files {
 			change, _ := state.RestoreChange(f)
-			records = append(records, changeRecord{ID: root.ToolCallID(fmt.Sprintf("restore.%d.%d", i, k)), Change: change, Turn: turnAt(line.AfterMessage), At: line.At, Restore: true, Undo: line.Restore.Undo})
+			records = append(records, changeRecord{ID: root.ToolCallID(fmt.Sprintf("restore.%d.%d", i, k)), Change: change, Turn: turnAt(line.AfterMessage), At: line.At, Restore: true, Undo: line.Restore.Undo, Message: line.AfterMessage - 1})
 			places = append(places, 2*line.AfterMessage-1)
 		}
 	}
@@ -502,6 +515,9 @@ func (v ChangeViewer) listRow(i, width int) string {
 		if len(file.Steps) > 1 {
 			label += fmt.Sprintf(" ×%d", len(file.Steps))
 		}
+		if v.fileForeign(file) {
+			label += " · " + v.Theme.T("changes.elsewhereMark")
+		}
 	} else {
 		label = "    " + v.stepLabel(*record)
 	}
@@ -537,6 +553,9 @@ func (v ChangeViewer) stepLabel(r changeRecord) string {
 	case r.Tool != "":
 		parts = append(parts, singleLine(r.Tool))
 	}
+	if r.Foreign {
+		parts = append(parts, v.Theme.T("changes.elsewhereMark"))
+	}
 	return strings.Join(parts, " · ")
 }
 
@@ -559,7 +578,12 @@ func (v ChangeViewer) detailHeader() string {
 	if c.Unavailable == "" {
 		what += "  " + v.Theme.changeColor(fmt.Sprintf("+%d", preview.Added), true) + " " + v.Theme.changeColor(fmt.Sprintf("-%d", preview.Removed), false)
 	}
-	return path + "\n" + v.Theme.reviewLine(ansi.Truncate(what, width, "…"), v.Theme.palette().Text) + "\n" + v.Theme.reviewLine(v.Theme.T("changes.columns"), v.Theme.palette().Muted)
+	columns := v.Theme.T("changes.columns")
+	if record != nil && record.Foreign || record == nil && v.fileForeign(file) {
+		// In place of the columns' legend: where the change was made.
+		columns = v.Theme.Tf("changes.importedFrom", shortenHome(singleLine(string(v.importedFrom))))
+	}
+	return path + "\n" + v.Theme.reviewLine(ansi.Truncate(what, width, "…"), v.Theme.palette().Text) + "\n" + v.Theme.reviewLine(ansi.Truncate(columns, width, "…"), v.Theme.palette().Muted)
 }
 
 // position is one numbering for list, header and footer: file i of n, and

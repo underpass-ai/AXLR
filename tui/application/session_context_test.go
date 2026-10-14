@@ -30,6 +30,9 @@ func (l *contextLabels) Initialize(_ context.Context, id domain.SessionID, label
 	if old.About == "" {
 		old.About = label.About
 	}
+	if old.ImportedFrom == "" {
+		old.ImportedFrom, old.ImportedAfter = label.ImportedFrom, label.ImportedAfter
+	}
 	l.labels[id] = old
 	return old, nil
 }

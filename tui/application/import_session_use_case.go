@@ -53,6 +53,12 @@ func (u ImportSessionUseCase) Execute(ctx context.Context, data []byte) (domain.
 	if u.Now != nil {
 		now = u.Now()
 	}
+	label := domain.SessionLabel{Title: root.Text(meta.Title), About: meta.About}
+	if state.Workspace != u.Workspace {
+		// Its file changes so far were made there: Ctrl+D says so and
+		// does not restore them here.
+		label.ImportedFrom, label.ImportedAfter = state.Workspace, len(state.Messages)
+	}
 	state.Workspace = u.Workspace
 	state.Ceremony = nil // a driven ceremony is bound to the origin's orchestrator
 	state.Instance = ImportedInstance(state.Instance, state.ID, u.Workspace, meta, u.Host, u.Source, now)
@@ -63,8 +69,8 @@ func (u ImportSessionUseCase) Execute(ctx context.Context, data []byte) (domain.
 	if err := u.Store.Save(ctx, restored); err != nil {
 		return domain.Session{}, meta, err
 	}
-	if u.Labels != nil && (meta.Title != "" || meta.About != "") {
-		if _, err := u.Labels.Initialize(ctx, state.ID, domain.SessionLabel{Title: root.Text(meta.Title), About: meta.About}); err != nil {
+	if u.Labels != nil && label != (domain.SessionLabel{}) {
+		if _, err := u.Labels.Initialize(ctx, state.ID, label); err != nil {
 			return domain.Session{}, meta, err
 		}
 	}

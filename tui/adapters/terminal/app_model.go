@@ -1334,6 +1334,7 @@ func (m *AppModel) refreshTranscript() {
 	}
 	m.markBottom()
 	defer m.markBottom()
+	m.syncChangeImport()
 	m.Changes.SetSession(m.Header.State)
 	m.Transcript.Pastes = m.pasted
 	m.Transcript.TurnCosts = m.turnCostLines()
