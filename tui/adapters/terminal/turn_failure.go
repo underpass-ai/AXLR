@@ -62,6 +62,18 @@ func (m AppModel) streamTimeoutText(err error, text string) string {
 	return strings.Replace(text, timeout.Error(), m.Theme.Tf(label, timeout.Provider()), 1)
 }
 
+// streamTimeoutMessage reads a saved failure the adapter's stream timeout
+// left, which the session keeps in English, in the person's language as
+// the footer said it; any other message stays as saved.
+func streamTimeoutMessage(message string, theme Theme) string {
+	for suffix, label := range map[string]string{" stream maximum duration exceeded": "error.streamMaxDuration", " stream inactivity timeout": "error.streamInactivity"} {
+		if provider, ok := strings.CutSuffix(message, suffix); ok && provider != "" && !strings.ContainsAny(provider, ":·") {
+			return theme.Tf(label, provider)
+		}
+	}
+	return message
+}
+
 // turnFailure is the console line a failed turn leaves, or false for an
 // ending that is not a failure: the person's cancel, the tool-call limit
 // and the budget pause say how to go on in the footer.
