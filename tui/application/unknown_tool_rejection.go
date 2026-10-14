@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	root "github.com/underpass-ai/AXLR/domain"
@@ -58,6 +59,57 @@ func localArgumentError(validation ToolArgumentValidationPort, tool domain.Avail
 	}
 	if err := validation.Validate(tool.Definition, arguments); err != nil {
 		return fmt.Errorf("%s: %w", tool.Definition.Name, err)
+	}
+	if err := localCommandError(tool.Identity.LocalOperation, arguments); err != nil {
+		return fmt.Errorf("%s: %w", tool.Definition.Name, err)
+	}
+	return nil
+}
+
+// localCommandError runs, before the card, the runtime's checks of a local
+// call that read no file, with the runtime's own functions and so its
+// exact messages: a path relative to the workspace, a digest that is one,
+// create without and replace with expected_sha256, an edit with old_text.
+// On 14 October 2026 a local_write replace without expected_sha256 raised
+// a card, the person approved it, the runtime refused it, and the person
+// approved the same content a second time. The filesystem checks (the
+// file exists, its digest matches) stay with the runtime.
+func localCommandError(operation string, arguments root.JSONValue) error {
+	var args struct {
+		Path     *string `json:"path"`
+		Mode     string  `json:"mode"`
+		Expected string  `json:"expected_sha256"`
+		OldText  *string `json:"old_text"`
+	}
+	switch operation {
+	case "read", "write", "edit":
+	default:
+		return nil
+	}
+	if json.Unmarshal(arguments.Bytes(), &args) != nil || args.Path == nil {
+		return nil // the schema check names what is missing
+	}
+	path, err := root.NewRelativePath(*args.Path)
+	if err != nil {
+		return err
+	}
+	var expected root.Digest
+	if args.Expected != "" && operation != "read" {
+		if expected, err = root.NewDigest(args.Expected); err != nil {
+			return err
+		}
+	}
+	switch operation {
+	case "write":
+		mode, err := root.NewWriteMode(args.Mode)
+		if err != nil {
+			return err
+		}
+		return root.CheckDigestForMode(path, mode, expected)
+	case "edit":
+		if args.OldText != nil {
+			return root.CheckOldText(root.Text(*args.OldText))
+		}
 	}
 	return nil
 }

@@ -124,8 +124,8 @@ func (m RequestMapper) Map(req dto.Request) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if old == "" {
-			return nil, errors.New("old_text must not be empty")
+		if err := domain.CheckOldText(old); err != nil {
+			return nil, err
 		}
 		next, err := domain.NewText(a.NewText)
 		if err != nil {
