@@ -1006,7 +1006,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		next, cmd := m.newSession()
 		return next, cmd, true
 	case "palette":
-		m.Palette = NewActionPalette(m.Theme.Locale)
+		m.Palette = newActionPalette(m.inapplicableActions(), m.Theme.Locale)
 		m.overlay = intent
 		return m, nil, true
 	case "help", "info", "approvals":
@@ -1206,6 +1206,20 @@ func (m AppModel) paletteClick(click tea.MouseClickMsg) ControlIntent {
 		}
 	}
 	return ""
+}
+
+// inapplicableActions are the palette's actions that would do nothing now:
+// continuing with no interrupted turn or while one runs, cancelling with
+// nothing running or waiting.
+func (m AppModel) inapplicableActions() map[ControlIntent]bool {
+	hidden := map[ControlIntent]bool{}
+	if m.Busy || !m.continuable() {
+		hidden["continue"] = true
+	}
+	if m.cancel == nil && !m.continuable() {
+		hidden["cancel"] = true
+	}
+	return hidden
 }
 
 // paletteAction closes the palette and runs its action. A refused action
