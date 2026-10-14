@@ -26,7 +26,24 @@ const WhyMaxRunes = 240
 const MissingWhy = "give why: one sentence saying what this call is for"
 
 // whyDescription is the property's description in the patched schemas.
-const whyDescription = "One sentence saying what this call is for (required): the console shows it on the approval card and records it with the turn."
+const whyDescription = "One sentence in the person's language saying what this call is for (required): the console shows it on the approval card and records it with the turn."
+
+// consoleLanguages names the console's languages for the model.
+var consoleLanguages = map[string]string{"en": "English", "es": "Spanish"}
+
+// languageGuidance tells the model the console's language, in which it
+// writes each why: the person reads it on the approval card, among the
+// console's own words. On 14 October 2026 glm-5.3-flash wrote every why in
+// English in a Spanish console, the card reading "por qué: run the tests".
+// The line is the same for every request of a console, so the prompt's
+// cached prefix keeps it; an unknown or empty language adds none.
+func languageGuidance(language string) string {
+	name, ok := consoleLanguages[strings.ToLower(language)]
+	if !ok {
+		return ""
+	}
+	return "The person's console is in " + name + ": write each call's why in " + name + ".\n"
+}
 
 // whyTools are the tools whose calls carry a why.
 var whyTools = map[root.ToolName]bool{"local_write": true, "local_edit": true, "local_exec": true, HostCallToolName: true, HostRunToolName: true}

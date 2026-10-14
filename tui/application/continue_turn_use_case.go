@@ -71,6 +71,10 @@ type ContinueTurnUseCase struct {
 	// reaches it (zero, no limit); nil keeps no ledger (session_usage.go).
 	Usage         SessionUsagePort
 	MaxSessionUSD float64
+	// Language is the console's language code (en, es): the model writes
+	// what the console shows of its calls, the why, in it. Empty says
+	// nothing.
+	Language string
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {
@@ -182,6 +186,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	snapshot := session.ToolSnapshot()
 	guidance := modelHostGuidance(session, u.Engines)
 	guidance.Content += root.Text(callBudgetGuidance(u.turnLimit()))
+	guidance.Content += root.Text(languageGuidance(u.Language))
 	_, _, focused := focusedRun(*session)
 	if u.SessionLabels != nil && !focused {
 		text, err := sessionContextGuidance(ctx, *session, u.SessionLabels)

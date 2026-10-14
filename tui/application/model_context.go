@@ -25,11 +25,11 @@ var modeGuidance = map[domain.WorkMode]string{
 // whyGuidance asks for the one-sentence why every side effect carries
 // (decision E2 of the lifecycle integration design). It is the same for
 // every session, so the prompt's cached prefix keeps it.
-const whyGuidance = "Give each local_write, local_edit, local_exec, axlr_call_tool and axlr_run_tool call a why: one sentence in its arguments saying what the call is for, such as \"run the parser tests after the fix\". A call without it is refused; the person reads it on the approval card and the console records it with the turn.\n"
+const whyGuidance = "Give each local_write, local_edit, local_exec, axlr_call_tool and axlr_run_tool call a why: one sentence in its arguments, in the person's language, saying what the call is for, such as \"run the parser tests after the fix\". A call without it is refused; the person reads it on the approval card and the console records it with the turn.\n"
 
 // compactWhyGuidance is the same rule for a compact step, which has only
 // the local tools; the planner, which reads only, gets neither.
-const compactWhyGuidance = "Give each local_write, local_edit and local_exec call a why: one sentence in its arguments saying what the call is for. A call without it is refused.\n"
+const compactWhyGuidance = "Give each local_write, local_edit and local_exec call a why: one sentence in its arguments, in the person's language, saying what the call is for. A call without it is refused.\n"
 
 // modelHostGuidance is stable for a frozen catalog and does not embed
 // session data. engines words each registered plugin's paragraph; nil

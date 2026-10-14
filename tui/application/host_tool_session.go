@@ -109,5 +109,7 @@ func sessionContextGuidance(ctx context.Context, s domain.Session, store Session
 
 // SessionTitleGuidance is the session's one duty left to the model
 // (decision G3 of the lifecycle integration design); the about is the
-// console's and the recall note carries the memory.
-const SessionTitleGuidance = "The about above is the session's memory scope. After the second user prompt, if axlr_session shows no title, set a short one with it; otherwise the console titles the session itself.\n"
+// console's and the recall note carries the memory. Titling is silent: on
+// 14 October 2026 glm-5.3-flash told the person "como es el segundo
+// mensaje, pongo título a la sesión".
+const SessionTitleGuidance = "The about above is the session's memory scope. After the second user prompt, if axlr_session shows no title, set a short one with it, silently: never mention it to the person.\n"
