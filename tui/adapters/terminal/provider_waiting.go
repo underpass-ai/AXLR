@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -41,9 +42,13 @@ func (m *AppModel) waitingCommand(next tea.Cmd) tea.Cmd {
 	}
 	return tea.Batch(cmds...)
 }
+
+// statusView is the row under an overlay; an error alone takes up to two
+// rows there, so a reason such as why a session would not open is read
+// whole (on 14 October 2026 Ctrl+O cut it to "Error:…").
 func (m AppModel) statusView() string {
 	if m.Status.Error != "" && !m.Busy && m.visibleNotice() == "" {
-		return m.errorRow()
+		return strings.Join(m.errorRows(2), "\n")
 	}
 	// While an operation runs, or a notice shows, the status line keeps its
 	// activity and its notice and adds the error after them.
@@ -53,6 +58,7 @@ func (m AppModel) statusView() string {
 	status.Executing = m.toolExecuting
 	status.ToolName = m.toolName
 	status.PreparingTool, status.PreparingBytes = m.toolCallName, m.toolCallBytes
+	status.ReasoningBytes = m.reasoningBytes
 	if m.providerWaiting || m.toolExecuting {
 		if m.UIPreferences.ReduceMotion {
 			status.Indicator = m.Theme.Icon("waiting")

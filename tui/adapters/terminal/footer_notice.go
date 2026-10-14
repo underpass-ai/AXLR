@@ -50,6 +50,13 @@ func (m AppModel) settleFooter(before footerBefore, msg tea.Msg) AppModel {
 	if (raised || asked) && m.Status.Error != "" && m.Status.Error == before.err {
 		m.clearStaleError()
 	}
+	// Likewise a new error displaces a notice an earlier update left: on
+	// 14 October 2026 the error of opening a session from Ctrl+O was cut to
+	// "Error:…" behind the notice before it. A question waiting for its
+	// answer stays.
+	if m.Status.Error != "" && m.Status.Error != before.err && m.Status.Notice != "" && m.Status.Notice == before.notice && !m.noticeLasts() && !raised {
+		m.Status.Notice = ""
+	}
 	if raised {
 		m.noticeAt = time.Now()
 	}

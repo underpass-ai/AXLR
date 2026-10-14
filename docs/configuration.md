@@ -34,7 +34,7 @@ Files in `<state>` and `<data>` are AXLR's own records, not configuration, but t
 
 | Path | Contents |
 |:--|:--|
-| `<state>/sessions/` | Saved sessions, their usage ledgers (`<id>.usage.json`) and side files, among them `<id>.instance`, the session's MADE instance with the live claim's fence, the last turn's record, the KMP entries still to write (see [the session ceremony](ceremonies.md#the-session-ceremony)), the session's KMP agent and context and the prompt its memory was last recalled for (see [what the model sees](runbooks/kmp.md#what-the-model-sees)) |
+| `<state>/sessions/` | Saved sessions, their usage ledgers (`<id>.usage.json`), the tool definitions they offered (`tools/<sha256>.json`, one file per distinct tool set, named by the session file since 14 October 2026; a deleted session's set goes once no session names it, after an hour) and side files, among them `<id>.instance`, the session's MADE instance with the live claim's fence, the last turn's record, the KMP entries still to write (see [the session ceremony](ceremonies.md#the-session-ceremony)), the session's KMP agent and context and the prompt its memory was last recalled for (see [what the model sees](runbooks/kmp.md#what-the-model-sees)) |
 | `<state>/install-id` | This install's id, drawn once: the console registers with KMP as `axlr:<install id>` and reports to MADE with it as its incarnation |
 | `<state>/made-grant` | The id of the MADE work grant this console last issued (or found it could not issue: a remote or operator-managed engine), so a changed grant is issued once |
 | `<state>/kmp-agents.json` | The agent the console registered in each KMP store, keyed by the store's path; a lost entry is registered again |

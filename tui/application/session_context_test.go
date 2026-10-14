@@ -30,6 +30,9 @@ func (l *contextLabels) Initialize(_ context.Context, id domain.SessionID, label
 	if old.About == "" {
 		old.About = label.About
 	}
+	if old.ImportedFrom == "" {
+		old.ImportedFrom, old.ImportedAfter = label.ImportedFrom, label.ImportedAfter
+	}
 	l.labels[id] = old
 	return old, nil
 }
@@ -184,5 +187,40 @@ func TestConsoleMessagesDoNotCountAsUserPrompts(t *testing.T) {
 		if count := userPromptCount(s); count != 1 {
 			t.Fatalf("%.20q counted: %d prompts", console, count)
 		}
+	}
+}
+
+// On 14 October 2026 the card of a Spanish console read "por qué: run the
+// tests": the model wrote every why in English. The system prompt names
+// the console's language for the why, and says nothing without one.
+func TestTheSystemPromptNamesTheConsoleLanguageForTheWhy(t *testing.T) {
+	for language, want := range map[string]string{"es": "The person's console is in Spanish: write each call's why in Spanish.", "en": "The person's console is in English", "": "", "fr": ""} {
+		s := turnSession(t)
+		if err := s.BeginTurn("Ejecuta los tests", HostTools()); err != nil {
+			t.Fatal(err)
+		}
+		var system string
+		u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: &memoryStore{}, Language: language, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			system = string(req.Messages[0].Content)
+			return assistant("Hecho"), nil
+		})}}
+		if err := u.Execute(context.Background(), &s, nil); err != nil {
+			t.Fatal(err)
+		}
+		if want == "" && strings.Contains(system, "The person's console is in") || want != "" && !strings.Contains(system, want) {
+			t.Fatalf("language %q: system prompt %q", language, system)
+		}
+		if !strings.Contains(system, "in the person's language, saying what the call is for") {
+			t.Fatalf("why guidance %q", system)
+		}
+	}
+}
+
+// The model narrated the console's bookkeeping: "como es el segundo
+// mensaje, pongo título a la sesión" (14 October 2026). Titling is asked
+// for silently.
+func TestTitleGuidanceAsksForSilence(t *testing.T) {
+	if !strings.Contains(SessionTitleGuidance, "silently: never mention it to the person") {
+		t.Fatalf("title guidance %q", SessionTitleGuidance)
 	}
 }

@@ -49,6 +49,11 @@ type SessionPicker struct {
 	// Deleting asks to confirm deleting the selected session: y deletes it,
 	// any other key keeps it.
 	Deleting bool
+	// Held marks the sessions another console has open, which Enter does
+	// not open; Open is the session this console shows. On 14 October 2026
+	// neither was told apart from the rest of the list.
+	Held map[domain.SessionID]bool
+	Open domain.SessionID
 	// content holds each session's prompts and replies, lowercased.
 	content map[domain.SessionID]string
 }
@@ -407,6 +412,12 @@ func (p SessionPicker) view(theme Theme, z *zone.Manager, prefix string, height,
 			count = theme.T("sessions.oneMessage")
 		}
 		meta := []string{singleLine(string(s.Model)), count}
+		switch {
+		case s.ID == p.Open:
+			meta = append(meta, theme.T("sessions.openHere"))
+		case p.Held[s.ID]:
+			meta = append(meta, theme.T("sessions.openElsewhere"))
+		}
 		if s.Status == domain.StatusInterrupted || s.Status == domain.StatusApproval {
 			meta = append(meta, theme.T("status."+string(s.Status)))
 		}

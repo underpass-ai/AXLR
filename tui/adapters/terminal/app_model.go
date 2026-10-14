@@ -67,8 +67,11 @@ type AppModel struct {
 	toolStarted         time.Time
 	toolName            string
 	// toolCallName and toolCallBytes describe the tool call being streamed.
-	toolCallName      string
-	toolCallBytes     int
+	toolCallName  string
+	toolCallBytes int
+	// reasoningBytes is how much the model has reasoned in the request
+	// that streams, for the footer's "Model is reasoning · 3.1 KB".
+	reasoningBytes    int
 	updatingBatch     bool
 	operationID       uint64
 	operationMessages int
@@ -85,7 +88,10 @@ type AppModel struct {
 	draft             string
 	submittedPrompt   string
 	submittedAt       int
-	unsentPrompts     []string
+	// sending is the turn sent or continued that has not reported its state
+	// yet; see turn_sending.go.
+	sending       uint64
+	unsentPrompts []string
 	// steer holds what the person wrote while the operation ran; the running
 	// turn takes it after a tool step, or it starts the next turn.
 	steer *steerQueue
@@ -428,6 +434,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case application.Event:
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticEventConsumed, Chunks: 1, Bytes: len(v.Text)})
+		m.sentEvent(v)
 		if v.Kind == application.EventSession && v.Snapshot != nil {
 			m.providerWaiting = false
 			m.toolExecuting = false
@@ -477,6 +484,12 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Kind == application.EventProviderActivity && m.Busy && m.streamPending {
 			m.Status.Phase = v.ProviderPhase
 			m.providerWaiting = v.ProviderPhase != domain.ProviderContent
+		}
+		if v.Kind == application.EventReasoningProgress && m.Busy && m.streamPending {
+			m.reasoningBytes = v.ReasoningBytes
+		}
+		if v.Kind == application.EventStreamStart || v.Kind == application.EventTextDelta || v.Kind == application.EventToolExecutionStarted {
+			m.reasoningBytes = 0
 		}
 		if v.Kind == application.EventToolCallProgress && m.Busy && m.streamPending {
 			m.toolCallName = singleLine(v.ToolCallName)
@@ -681,6 +694,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.Sessions != nil {
 			m.Picker = NewSessionPicker(*v.Sessions, m.Header.State.Workspace)
+			m.Picker.Held, m.Picker.Open = v.Held, m.Header.State.ID
 			m.Picker.Tasks = planTaskSessions(m.PlanPanel.Records)
 			m.Picker.NewRow = m.Header.State.Model != ""
 			if m.deps.SessionLabels != nil {
@@ -788,6 +802,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Status.Error = strings.Replace(m.Status.Error, domain.ErrToolCallLimit.Error(), m.Theme.T("error.toolCallLimit"), 1)
 			}
 			m.Status.Error = m.budgetErrorText(v.Err, m.Status.Error)
+			m.Status.Error = m.streamTimeoutText(v.Err, m.Status.Error)
 			m.Status.Error = m.withProviderHint(v.Err, m.Status.Error)
 			if failure, ok := turnFailure(v.Err); ok && wasTurn && returned == "" {
 				// The transcript keeps the failure once the footer moves on.
@@ -806,6 +821,8 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Status.Notice = m.restoredNotice(v.Session.Export())
 			} else if changed := (application.FileChangedError{}); errors.As(v.Err, &changed) {
 				m.Status.Error = m.Theme.Tf("changes.restoreChanged", singleLine(string(changed.Path)))
+			} else if missing := (application.FileMissingError{}); errors.As(v.Err, &missing) {
+				m.Status.Error = m.Theme.Tf("changes.restoreMissing", singleLine(string(missing.Path)))
 			}
 		}
 		if v.Fresh && v.Err == nil {
@@ -869,6 +886,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return start.Execute(ctx, s, prompt, emit)
 			})
+			m.markSending()
 			return m, tea.Batch(cmd, recount)
 		}
 		return m, recount
@@ -1316,6 +1334,7 @@ func (m *AppModel) refreshTranscript() {
 	}
 	m.markBottom()
 	defer m.markBottom()
+	m.syncChangeImport()
 	m.Changes.SetSession(m.Header.State)
 	m.Transcript.Pastes = m.pasted
 	m.Transcript.TurnCosts = m.turnCostLines()
@@ -1396,6 +1415,7 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 		return m.deps.Start.Execute(ctx, s, prompt, emit)
 	})
+	m.markSending()
 	return m, cmd
 }
 
@@ -1429,6 +1449,8 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 	case command == "/copy" && (strings.EqualFold(text, "code") || strings.Trim(text, "0123456789") == ""):
 		m.Composer.Input.Reset()
 		return m, m.copyCode(strings.ToLower(text))
+	case command == "/plan":
+		return m.planWithGoal(text)
 	case slashPromptModes[command]:
 		changed, cmd := m.switchMode(slashModes[command])
 		if changed.Status.Error != "" {

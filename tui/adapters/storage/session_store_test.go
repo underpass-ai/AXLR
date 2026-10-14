@@ -88,7 +88,7 @@ func TestSessionStoreRestoresChangedModelFromVersionOneSnapshot(t *testing.T) {
 	must(t, err)
 	var record map[string]any
 	must(t, json.Unmarshal(raw, &record))
-	if record["version"] != float64(2) {
+	if record["version"] != float64(storedSnapshotVersion) {
 		t.Fatalf("snapshot version changed: %v", record["version"])
 	}
 	got, err := store.Load(context.Background(), s.Export().ID)
@@ -429,5 +429,36 @@ func TestReleaseGivesTheLockBack(t *testing.T) {
 	must(t, first.Release(s.Export().ID)) // twice is fine
 	if _, err := first.Load(context.Background(), s.Export().ID); err == nil {
 		t.Fatal("the second store holds the lock now")
+	}
+}
+
+// Leaving a session releases it, and an empty one goes, as on Close: on 14
+// October 2026, once Ctrl+O released the session it left, a /new the
+// person left without writing stayed behind as an empty saved session.
+func TestReleasingAnEmptySessionDiscardsIt(t *testing.T) {
+	store, dir := openStore(t)
+	var discarded []domain.SessionID
+	store.OnDiscard = func(id domain.SessionID) { discarded = append(discarded, id) }
+	empty := fixture(t)
+	must(t, store.Save(context.Background(), empty))
+	must(t, store.Release(empty.Export().ID))
+	if _, err := os.Stat(filepath.Join(dir, string(empty.Export().ID)+".json")); !errors.Is(err, os.ErrNotExist) || len(discarded) != 1 {
+		t.Fatalf("the empty session stayed: %v %v", err, discarded)
+	}
+}
+
+// The session list shows and searches what the person typed: on 14
+// October 2026 a one-prompt session was listed as "Di hola. [AXLR ·
+// recall] Memory of project:ws6: …".
+func TestSessionListLeavesConsoleNotesOutOfTitlesAndSearch(t *testing.T) {
+	store, _ := openStore(t)
+	s := fixture(t)
+	must(t, s.BeginTurn("Di hola.\n\n[AXLR · recall] Memory of project:ws6: secret plan", nil))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "Hola"}}))
+	must(t, store.Save(context.Background(), s))
+	list, err := store.List(context.Background())
+	must(t, err)
+	if len(list) != 1 || list[0].Title != "Di hola." || strings.Contains(string(list[0].Text), "AXLR") {
+		t.Fatalf("summary %+v", list)
 	}
 }

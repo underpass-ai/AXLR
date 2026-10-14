@@ -48,3 +48,20 @@ func TestOpaqueReasoningNotifiesWithoutExposingText(t *testing.T) {
 		t.Fatal("opaque reasoning left model waiting")
 	}
 }
+
+// Reasoning progress counts the reasoning bytes, never its text, at the
+// first frame and then every reasoningStep bytes, so a model that
+// reasons for minutes shows it is still at work.
+func TestReasoningProgressCountsBytesInSteps(t *testing.T) {
+	var told []int
+	ctx := application.WithReasoningProgress(context.Background(), func(bytes int) { told = append(told, bytes) })
+	body := &streamBody{ctx: ctx}
+	frame := []byte(`{"choices":[{"delta":{"reasoning":"0123456789abcdef"}}]}`) // 16 bytes
+	for range 70 {
+		body.observeFrame(frame)
+	}
+	// 16 at once, then each time 512 more have come: 528, 1040.
+	if !reflect.DeepEqual(told, []int{16, 528, 1040}) {
+		t.Fatalf("progress %v", told)
+	}
+}

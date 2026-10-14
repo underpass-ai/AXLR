@@ -45,7 +45,14 @@ type streamBody struct {
 	drainErr        error
 	toolName        string
 	toolBytes       int
+	// reasoningBytes is the reasoning streamed so far; reasoningTold what
+	// the console was last told of it.
+	reasoningBytes, reasoningTold int
 }
+
+// reasoningStep is how much more reasoning a stream reports progress
+// after: a frame carries a few bytes, and each report redraws the console.
+const reasoningStep = 512
 
 func (b *streamBody) record(stage application.DiagnosticStage, size, count int) {
 	if b.trace != nil {
@@ -181,6 +188,11 @@ func (b *streamBody) observeFrame(data []byte) {
 		if size > 0 || len(choice.Delta.ReasoningDetails) > 0 {
 			b.activity(domain.ProviderReasoning)
 			b.record(application.DiagnosticReasoning, size, 1)
+			b.reasoningBytes += size
+			if b.reasoningBytes-b.reasoningTold >= reasoningStep || b.reasoningTold == 0 && b.reasoningBytes > 0 {
+				b.reasoningTold = b.reasoningBytes
+				application.NotifyReasoningProgress(b.ctx, b.reasoningBytes)
+			}
 		}
 		size = 0
 		for _, call := range choice.Delta.ToolCalls {

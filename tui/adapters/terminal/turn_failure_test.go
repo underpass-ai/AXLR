@@ -68,3 +68,22 @@ func TestTurnFailureKinds(t *testing.T) {
 		t.Fatalf("unknown hint %q", hint)
 	}
 }
+
+// The conversation's row of a stream the provider cut reads as the footer
+// did, in the person's language, though the session keeps the English.
+func TestAStreamTimeoutRowReadsInThePersonsLanguage(t *testing.T) {
+	failure, ok := turnFailure(openrouter.NewStreamTimeoutError("", true))
+	if !ok || failure.Message != "OpenRouter stream maximum duration exceeded" {
+		t.Fatalf("%+v", failure)
+	}
+	es := Theme{Locale: Spanish}
+	if got := streamTimeoutMessage(failure.Message, es); got != "OpenRouter cortó la respuesta: superó la duración máxima del stream" {
+		t.Fatal(got)
+	}
+	if got := streamTimeoutMessage("llama stream inactivity timeout", es); !strings.HasPrefix(got, "llama dejó de enviar datos") {
+		t.Fatal(got)
+	}
+	if got := streamTimeoutMessage("OpenRouter invalid_request (HTTP 400): x", es); got != "OpenRouter invalid_request (HTTP 400): x" {
+		t.Fatal(got)
+	}
+}

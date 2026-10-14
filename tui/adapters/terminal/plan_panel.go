@@ -199,6 +199,25 @@ func (m AppModel) armPlanMode() (AppModel, tea.Cmd) {
 	return m, cmd
 }
 
+// planWithGoal is /plan with the goal after it: plan mode, then the goal
+// sent as its brief, in one step. On 14 October 2026 "/plan Añade Min…"
+// was refused with "usage: /plan", and the goal had to go in a second
+// message after n in the plans panel. A ceremony waiting for the person
+// shows its card first, as bare /plan does; the draft stays.
+func (m AppModel) planWithGoal(goal string) (tea.Model, tea.Cmd) {
+	if _, awaiting := m.incidentRun(); awaiting {
+		return m.openIncidentCard(), nil
+	}
+	changed, cmd := m.armPlanMode()
+	if changed.Status.Error != "" {
+		// Refused (busy, a call pending): the draft stays as typed.
+		return changed, cmd
+	}
+	changed.Status.Notice = ""
+	changed.Composer.Input.SetValue(goal)
+	return changed.submitDraft()
+}
+
 // planBadge is the footer's word about a running plan:
 // plan <slug> · wave 2/3 · t4 green 2/3.
 func (m AppModel) planBadge() string {

@@ -71,6 +71,10 @@ type ContinueTurnUseCase struct {
 	// reaches it (zero, no limit); nil keeps no ledger (session_usage.go).
 	Usage         SessionUsagePort
 	MaxSessionUSD float64
+	// Language is the console's language code (en, es): the model writes
+	// what the console shows of its calls, the why, in it. Empty says
+	// nothing.
+	Language string
 }
 
 func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Session, emit func(Event) error) error {
@@ -100,6 +104,15 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if err := ctx.Err(); err != nil {
 		return interrupt(err)
+	}
+	// Files the person restored while the turn was interrupted are told
+	// before the resumed turn's next request.
+	if delivered, err := deliverRestoreNote(ctx, session, u.Store); err != nil {
+		return interrupt(err)
+	} else if delivered {
+		if err := emitSession(session, emit); err != nil {
+			return interrupt(err)
+		}
 	}
 	// What the person wrote during the last tool step joins this turn here,
 	// before the next request is built, rather than cancelling it.
@@ -182,6 +195,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	snapshot := session.ToolSnapshot()
 	guidance := modelHostGuidance(session, u.Engines)
 	guidance.Content += root.Text(callBudgetGuidance(u.turnLimit()))
+	guidance.Content += root.Text(languageGuidance(u.Language))
 	_, _, focused := focusedRun(*session)
 	if u.SessionLabels != nil && !focused {
 		text, err := sessionContextGuidance(ctx, *session, u.SessionLabels)
@@ -253,6 +267,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	modelCtx = WithProviderActivity(modelCtx, func(phase domain.ProviderPhase) { _ = emit(Event{Kind: EventProviderActivity, ProviderPhase: phase}) })
 	modelCtx = WithToolCallProgress(modelCtx, func(name string, bytes int) {
 		_ = emit(Event{Kind: EventToolCallProgress, ToolCallName: name, ToolCallBytes: bytes})
+	})
+	modelCtx = WithReasoningProgress(modelCtx, func(bytes int) {
+		_ = emit(Event{Kind: EventReasoningProgress, ReasoningBytes: bytes})
 	})
 	meter := &usageMeter{started: started}
 	modelCtx = meter.watch(modelCtx)

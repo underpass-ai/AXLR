@@ -23,12 +23,14 @@ type operationComplete struct {
 	CeremonyArm *ceremonyArm
 	// MemorySaved, MemoryCompared and MemoryForgotten are /memory's
 	// results: the bundle written, the comparison read, the entry closed.
-	MemorySaved             *application.BundleSaved
-	MemoryCompared          *application.CompareResult
-	MemoryForgotten         *application.ForgetReceipt
-	Session                 domain.Session
-	Err                     error
-	Sessions                *[]domain.SessionSummary
+	MemorySaved     *application.BundleSaved
+	MemoryCompared  *application.CompareResult
+	MemoryForgotten *application.ForgetReceipt
+	Session         domain.Session
+	Err             error
+	Sessions        *[]domain.SessionSummary
+	// Held marks the listed sessions another console has open.
+	Held                    map[domain.SessionID]bool
 	Plugins                 *[]domain.PluginState
 	InstalledPlugins        *[]application.InstalledPlugin
 	PluginApproval          *domain.PluginProfile

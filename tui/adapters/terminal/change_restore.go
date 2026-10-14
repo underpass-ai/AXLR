@@ -34,12 +34,19 @@ func (v ChangeViewer) restoreStep() (changeRecord, string) {
 	if record.Restore {
 		return changeRecord{}, "changes.restoreRestore"
 	}
+	if record.Foreign {
+		return changeRecord{}, "changes.restoreForeign"
+	}
 	return record, ""
 }
 
 // askRestore asks to confirm u on the selection, or says why it cannot.
 func (v *ChangeViewer) askRestore() {
 	record, refused := v.restoreStep()
+	if refused == "changes.restoreForeign" {
+		v.notice = v.Theme.Tf(refused, shortenHome(singleLine(string(v.importedFrom))))
+		return
+	}
 	if refused != "" {
 		v.notice = v.Theme.T(refused)
 		return
@@ -95,6 +102,10 @@ func (m AppModel) askUndo() (AppModel, tea.Cmd) {
 		if turn := state.LatestChangingTurn(); turn > 0 {
 			m.undoTurn, changes = turn, state.TurnChanges(turn)
 		}
+	}
+	if m.Changes.foreignCalls(changes) {
+		m.Status.Notice = m.Theme.Tf("changes.restoreForeign", shortenHome(singleLine(string(m.Changes.importedFrom))))
+		return m, nil
 	}
 	var files []string
 	for _, change := range changes {

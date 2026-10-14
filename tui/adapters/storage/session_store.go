@@ -28,6 +28,8 @@ type SessionStore struct {
 	closed         bool
 	preserveActive bool
 	replace        func(string, string) error
+	// toolSets caches the tool sets this store wrote or read, by reference.
+	toolSets map[string][]dto.AvailableTool
 	// OnDiscard is told each session Close discarded because it never
 	// received a message, so what the console kept about it elsewhere (its
 	// label) goes too.
@@ -61,7 +63,7 @@ func New(stateDir string) (*SessionStore, error) {
 	if e = os.Chmod(stateDir, 0700); e != nil {
 		return nil, e
 	}
-	return &SessionStore{dir: stateDir, locks: make(map[domain.SessionID]*sessionLock), replace: os.Rename}, nil
+	return &SessionStore{dir: stateDir, locks: make(map[domain.SessionID]*sessionLock), replace: os.Rename, toolSets: map[string][]dto.AvailableTool{}}, nil
 }
 
 // NewService preserves active states on ordinary reads. The service performs
@@ -100,7 +102,8 @@ func (s *SessionStore) claim(id domain.SessionID) error {
 
 // Release gives a session's lock back without closing the store: a session
 // the console loaded only to look at it (the abandoned-instance sweep at
-// start) stays openable by another console afterwards.
+// start) stays openable by another console afterwards. An empty session is
+// discarded, as Close does.
 func (s *SessionStore) Release(id domain.SessionID) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -109,7 +112,7 @@ func (s *SessionStore) Release(id domain.SessionID) error {
 		return nil
 	}
 	delete(s.locks, id)
-	return lock.close()
+	return s.releaseLock(id, lock)
 }
 
 func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
@@ -125,6 +128,10 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	if e = s.claim(session.Export().ID); e != nil {
 		return e
 	}
+	if record.ToolSnapshotRef, e = s.storeToolSet(record.ToolSnapshot); e != nil {
+		return e
+	}
+	record.ToolSnapshot, record.Version = nil, storedSnapshotVersion
 	// json.Marshal would escape <, > and & inside tool call arguments, so a
 	// loaded session would no longer send the bytes the live one sent.
 	var encoded bytes.Buffer
@@ -221,6 +228,19 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	if record.ID != string(id) {
 		return domain.Session{}, errors.New("snapshot ID does not match filename")
 	}
+	if record.Version == storedSnapshotVersion {
+		if record.ToolSnapshot != nil {
+			return domain.Session{}, errors.New("a version 3 snapshot names its tools, it does not carry them")
+		}
+		if record.ToolSnapshotRef != "" {
+			if record.ToolSnapshot, e = s.loadToolSet(record.ToolSnapshotRef); e != nil {
+				return domain.Session{}, e
+			}
+			record.ToolSnapshotRef = ""
+		}
+	} else if record.ToolSnapshotRef != "" {
+		return domain.Session{}, errors.New("only a version 3 snapshot names a tool set")
+	}
 	return restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id), s.readCeremony(id), s.readInstance(id), s.readConsole(id))
 }
 
@@ -255,7 +275,10 @@ func (s *SessionStore) List(ctx context.Context) ([]domain.SessionSummary, error
 		summary := domain.SessionSummary{ID: state.ID, Workspace: state.Workspace, Model: state.Model, Status: state.Status, MessageCount: len(state.Messages), Mode: state.Mode}
 		for _, message := range state.Messages {
 			if message.Role == root.RoleUser {
-				summary.Title = message.Content
+				// The title is what the person typed: on 14 October 2026 a
+				// one-prompt session was listed as "Di hola. [AXLR · recall]
+				// Memory of project:ws6: …".
+				summary.Title = root.Text(application.PersonTyped(string(message.Content)))
 				break
 			}
 		}
@@ -276,7 +299,11 @@ func summaryText(messages []root.Message) root.Text {
 		if message.Role != root.RoleUser && message.Role != root.RoleAssistant || message.Content == "" {
 			continue
 		}
-		text := string(message.Content)
+		// Console notes are not what the person searches for.
+		if strings.HasPrefix(string(message.Content), "[AXLR") {
+			continue
+		}
+		text := application.PersonTyped(string(message.Content))
 		if room := domain.MaxSummaryTextBytes - b.Len() - 1; len(text) > room {
 			for room > 0 && !utf8.RuneStart(text[room]) {
 				room--
@@ -303,28 +330,37 @@ func (s *SessionStore) Close() error {
 	s.closed = true
 	var errs []error
 	for id, lock := range s.locks {
-		// A session that never received a message is discarded while its lock
-		// is still held, so every launch does not leave an empty session.
-		empty := s.isEmpty(id)
-		if empty {
-			if err := os.Remove(filepath.Join(s.dir, string(id)+".json")); err != nil && !errors.Is(err, os.ErrNotExist) {
-				errs = append(errs, err)
-				empty = false
-			}
+		errs = append(errs, s.releaseLock(id, lock))
+	}
+	return errors.Join(errs...)
+}
+
+// releaseLock gives a held session's lock back. A session that never
+// received a message is discarded while its lock is still held, so every
+// launch does not leave an empty session; nor does a /new the person left
+// with Ctrl+O, now that leaving a session releases it (on 14 October 2026
+// two empty sessions were left behind that way).
+func (s *SessionStore) releaseLock(id domain.SessionID, lock *sessionLock) error {
+	var errs []error
+	empty := s.isEmpty(id)
+	if empty {
+		if err := os.Remove(filepath.Join(s.dir, string(id)+".json")); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+			empty = false
 		}
-		errs = append(errs, lock.close())
-		if empty {
-			if s.OnDiscard != nil {
-				s.OnDiscard(id)
-			}
-			_ = os.Remove(s.timesPath(id))
-			_ = os.Remove(s.modePath(id))
-			_ = os.Remove(s.ceremonyPath(id))
-			_ = os.Remove(s.instancePath(id))
-			_ = os.Remove(s.consolePath(id))
-			_ = os.Remove(s.usagePath(id))
-			_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))
+	}
+	errs = append(errs, lock.close())
+	if empty {
+		if s.OnDiscard != nil {
+			s.OnDiscard(id)
 		}
+		_ = os.Remove(s.timesPath(id))
+		_ = os.Remove(s.modePath(id))
+		_ = os.Remove(s.ceremonyPath(id))
+		_ = os.Remove(s.instancePath(id))
+		_ = os.Remove(s.consolePath(id))
+		_ = os.Remove(s.usagePath(id))
+		_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))
 	}
 	return errors.Join(errs...)
 }

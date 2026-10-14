@@ -13,7 +13,8 @@ func TestActionPaletteUsesListSelectionAndFilter(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()
 	m = update(m, ControlIntent("palette"))
-	if len(m.Palette.List.Items()) != len(actionItems) {
+	// Idle: continue and cancel do not apply.
+	if len(m.Palette.List.Items()) != len(actionItems)-2 {
 		t.Fatal("palette did not load its actions into the list component")
 	}
 	m = update(m, tea.KeyPressMsg{Code: '/'})
@@ -127,4 +128,37 @@ func TestEveryPaletteActionClosesItAndARefusedOneSaysWhy(t *testing.T) {
 			t.Fatalf("overlay=%q error=%q", m.overlay, m.Status.Error)
 		}
 	})
+}
+
+// On 14 October 2026 an idle console listed "Continue interrupted turn"
+// and "Cancel turn" with nothing to continue or cancel.
+func TestPaletteHidesActionsThatDoNotApply(t *testing.T) {
+	s := navSession(t)
+	m := navModel(t, &s)
+	m = update(m, ControlIntent("palette"))
+	listed := func(m AppModel) map[ControlIntent]bool {
+		found := map[ControlIntent]bool{}
+		for _, item := range m.Palette.List.Items() {
+			found[item.(actionItem).intent] = true
+		}
+		return found
+	}
+	if got := listed(m); got["continue"] || got["cancel"] || !got["sessions"] {
+		t.Fatalf("idle palette lists %v", got)
+	}
+	// Its shortcut still says why it does nothing.
+	if n := update(m, tea.KeyPressMsg{Code: 'c', Text: "c"}); n.Status.Notice != n.Theme.T("notice.nothingToCancel") {
+		t.Fatalf("a hidden action's shortcut said %q", n.Status.Notice)
+	}
+	if err := s.BeginTurn("go", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft("partial"); err != nil {
+		t.Fatal(err)
+	}
+	m.Header.State = s.Export()
+	m = update(m, ControlIntent("palette"))
+	if got := listed(m); !got["continue"] || !got["cancel"] {
+		t.Fatalf("interrupted palette lists %v", got)
+	}
 }

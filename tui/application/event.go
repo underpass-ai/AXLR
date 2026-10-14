@@ -19,6 +19,8 @@ type Event struct {
 	// ToolCallName and ToolCallBytes describe the call being streamed.
 	ToolCallName  string
 	ToolCallBytes int
+	// ReasoningBytes is how much reasoning the request has streamed.
+	ReasoningBytes int
 	// SessionUsage is the session's ledger after a request, and
 	// BudgetWarning marks the request that took it past 80 % of its budget.
 	SessionUsage  *domain.UsageLedger

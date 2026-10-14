@@ -113,3 +113,26 @@ func TestEngineDeclaresAHandoffForTheOwner(t *testing.T) {
 		t.Fatalf("%+v", request)
 	}
 }
+
+// An operation id read from the resume inspection was dropped when
+// made_get_ceremony_instance failed afterwards; it comes back with the
+// error, so a report can still name the claim's operation.
+func TestEngineOperationKeepsTheIDWhenTheAttemptCannotBeRead(t *testing.T) {
+	engine := Engine{Tools: madeAnswers(map[string]any{
+		"made_inspect_ceremony_resume": map[string]any{"claims": []any{map[string]any{"claim_fence": "f1", "step_id": "turn", "operation_id": "op-1"}}},
+		"made_get_ceremony_instance":   fmt.Errorf("journal is being compacted"),
+	})}
+	op, err := engine.Operation(context.Background(), "i", "turn", "f1")
+	if err == nil || op.ID != "op-1" || op.Attempt != 0 {
+		t.Fatalf("%+v %v", op, err)
+	}
+	// A step listed once per attempt is claimed on its highest attempt,
+	// whatever the order of the records.
+	engine = Engine{Tools: madeAnswers(map[string]any{
+		"made_inspect_ceremony_resume": map[string]any{"claims": []any{map[string]any{"claim_fence": "f1", "step_id": "turn", "operation_id": "op-1"}}},
+		"made_get_ceremony_instance":   map[string]any{"steps": []any{map[string]any{"step_id": "turn", "attempt": 3}, map[string]any{"step_id": "turn", "attempt": 1}}},
+	})}
+	if op, err := engine.Operation(context.Background(), "i", "turn", "f1"); err != nil || op.Attempt != 3 {
+		t.Fatalf("%+v %v", op, err)
+	}
+}

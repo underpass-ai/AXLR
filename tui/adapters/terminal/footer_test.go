@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"fmt"
+	"github.com/underpass-ai/AXLR/adapters/openrouter"
 	"strings"
 	"testing"
 
@@ -25,13 +26,40 @@ func TestFooterHintsStateAndTokensFitOneRow(t *testing.T) {
 	}
 }
 
-func TestFooterGivesErrorsTheWholeRow(t *testing.T) {
+// An error gets rows of its own above the hints, which stay: on 14 October
+// 2026 a provider failure took the whole row, state and Ctrl+R included.
+func TestFooterGivesErrorsTheirOwnRowAboveTheHints(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()
 	m.Status.Error = "session workspace /home/a/kmp differs from active workspace /home/a/AXLR"
 	footer := ansi.Strip(m.footerView())
-	if strings.Contains(footer, "enter send") || !strings.Contains(footer, "differs from active workspace /home/a/AXLR") {
-		t.Fatalf("error not shown in full: %q", footer)
+	if !strings.Contains(footer, "enter send") || !strings.Contains(footer, "differs from active workspace /home/a/AXLR") {
+		t.Fatalf("error not shown in full above the hints: %q", footer)
+	}
+}
+
+// A stream the provider cut leaves the hints, says so in the person's
+// language and offers Ctrl+R to retry.
+func TestFooterKeepsRetryHintAfterAProviderFailure(t *testing.T) {
+	s := navSession(t)
+	if err := s.BeginTurn("escribe", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.InterruptDraft(""); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	m.Theme.Locale = Spanish
+	m.Busy, m.operationID = true, 1
+	m = update(m, operationComplete{ID: 1, Session: s, Err: openrouter.NewStreamTimeoutError("", true)})
+	footer := ansi.Strip(m.footerView())
+	for _, want := range []string{"OpenRouter cortó la respuesta", "ctrl+r reintentar", "enter enviar"} {
+		if !strings.Contains(footer, want) {
+			t.Fatalf("footer lost %q: %q", want, footer)
+		}
+	}
+	if strings.Contains(footer, "maximum duration exceeded") {
+		t.Fatalf("raw English in a Spanish footer: %q", footer)
 	}
 }
 
@@ -48,10 +76,10 @@ func TestFooterWrapsALongErrorInsteadOfCuttingIt(t *testing.T) {
 	if len(lines) != m.Layout.Height {
 		t.Fatalf("the view is %d rows; want %d", len(lines), m.Layout.Height)
 	}
-	footer := strings.Join(strings.Fields(strings.Join(lines[len(lines)-3:], " ")), " ")
+	footer := strings.Join(strings.Fields(strings.Join(lines[len(lines)-4:], " ")), " ")
 	for _, want := range []string{"press p.", "send it again when ready."} {
 		if !strings.Contains(footer, want) {
-			t.Fatalf("the error lost %q:\n%s", want, strings.Join(lines[len(lines)-3:], "\n"))
+			t.Fatalf("the error lost %q:\n%s", want, strings.Join(lines[len(lines)-4:], "\n"))
 		}
 	}
 	if v.Cursor == nil || !strings.Contains(lines[v.Cursor.Y], "draft text") {
@@ -76,7 +104,7 @@ func TestFooterWrapsALongErrorInsteadOfCuttingIt(t *testing.T) {
 		}
 	}
 	m.Status.Error = strings.Repeat("very long error ", 60)
-	if footer := strings.Split(m.footerView(), "\n"); len(footer) != 3 || !strings.HasSuffix(strings.TrimRight(ansi.Strip(footer[2]), " "), "…") {
+	if footer := strings.Split(m.footerView(), "\n"); len(footer) != 4 || !strings.HasSuffix(strings.TrimRight(ansi.Strip(footer[2]), " "), "…") {
 		t.Fatalf("an error past three rows is not cut on the third: %q", footer)
 	}
 }

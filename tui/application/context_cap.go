@@ -110,7 +110,7 @@ func (u ContinueTurnUseCase) continueInSuccessor(ctx context.Context, session *d
 func lastPersonPrompt(messages []root.Message) string {
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Role == root.RoleUser && !strings.HasPrefix(string(messages[i].Content), "[AXLR") {
-			return personTyped(string(messages[i].Content))
+			return PersonTyped(string(messages[i].Content))
 		}
 	}
 	return ""

@@ -76,16 +76,26 @@ func (d actionDelegate) Render(w io.Writer, m list.Model, index int, item list.I
 type ActionPalette struct{ List list.Model }
 
 func NewActionPalette(locales ...Locale) ActionPalette {
+	return newActionPalette(nil, locales...)
+}
+
+// newActionPalette lists every action but the hidden ones. On 14 October
+// 2026 an idle console listed "Continue interrupted turn" and "Cancel
+// turn" with nothing to continue or cancel.
+func newActionPalette(hidden map[ControlIntent]bool, locales ...Locale) ActionPalette {
 	locale := English
 	if len(locales) > 0 {
 		locale = locales[0]
 	}
-	items := make([]list.Item, len(actionItems))
-	for i, item := range actionItems {
+	items := make([]list.Item, 0, len(actionItems))
+	for _, item := range actionItems {
 		a := item.(actionItem)
+		if hidden[a.intent] {
+			continue
+		}
 		a.title = Translate(locale, a.title)
 		a.description = Translate(locale, a.description)
-		items[i] = a
+		items = append(items, a)
 	}
 	l := list.New(items, actionDelegate{}, 40, 12)
 	l.SetShowTitle(false)
@@ -111,6 +121,8 @@ func (p ActionPalette) Update(msg tea.Msg) (ActionPalette, ControlIntent, tea.Cm
 				return p, "", nil
 			default:
 				// Shortcuts are drawn uppercase: Shift+letter is the same key.
+				// A hidden action's shortcut still runs, so the console
+				// says why it does nothing (nothing to cancel).
 				for _, item := range actionItems {
 					a := item.(actionItem)
 					if strings.ToLower(key.String()) == a.shortcut {

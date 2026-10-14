@@ -285,6 +285,24 @@ func TestSlashCommandsIgnoreCaseAndSpacingAndNeverSendTheirText(t *testing.T) {
 			}
 		}
 	})
+	// On 14 October 2026 "/plan Añade Min…" was refused with "usage: /plan".
+	t.Run("/plan with a goal arms plan mode and sends the goal", func(t *testing.T) {
+		for _, draft := range []string{"/plan add Min to calc", "/planificar add Min to calc"} {
+			session := navSession(t)
+			m, _ := selectionModel(t, &session)
+			m.Composer.Input.SetValue(draft)
+			m = update(m, ControlIntent("send"))
+			if m.deps.Session.Mode() != domain.ModePlan || m.Header.State.Mode != domain.ModePlan {
+				t.Fatalf("%q: mode = %q", draft, m.deps.Session.Mode())
+			}
+			if !sent(t, m) || m.Header.State.Messages[len(m.Header.State.Messages)-1].Content != "add Min to calc" || m.Composer.Input.Value() != "" {
+				t.Fatalf("%q: goal not sent: busy=%v messages=%v", draft, m.Busy, m.Header.State.Messages)
+			}
+		}
+		if usage := slashUsage("/plan"); usage != "/plan [goal]" {
+			t.Fatal(usage)
+		}
+	})
 	t.Run("/review with a prompt while busy keeps the draft", func(t *testing.T) {
 		session := navSession(t)
 		m, _ := selectionModel(t, &session)
@@ -309,7 +327,7 @@ func TestSlashCommandsIgnoreCaseAndSpacingAndNeverSendTheirText(t *testing.T) {
 		}
 	})
 	t.Run("other commands with text show their usage", func(t *testing.T) {
-		for draft, usage := range map[string]string{"/copy extra": "/copy [code|N]", "/usage now": "/usage", "/autonomy maybe": "/autonomy [on|off]", "/plan add a thing": "/plan"} {
+		for draft, usage := range map[string]string{"/copy extra": "/copy [code|N]", "/usage now": "/usage", "/autonomy maybe": "/autonomy [on|off]"} {
 			session := navSession(t)
 			m, _ := selectionModel(t, &session)
 			m.Composer.Input.SetValue(draft)

@@ -21,6 +21,8 @@ type StatusBar struct {
 	// the argument bytes received so far.
 	PreparingTool  string
 	PreparingBytes int
+	// ReasoningBytes is how much the model has reasoned so far.
+	ReasoningBytes int
 	Autonomous     bool
 	// Notice is a short confirmation, such as a copy, shown until the next
 	// key press or for ten seconds (footer_notice.go).
@@ -50,6 +52,9 @@ func (s StatusBar) View(w int) string {
 		switch s.Phase {
 		case domain.ProviderReasoning:
 			label = Translate(s.Locale, "status.reasoning")
+			if s.ReasoningBytes > 0 {
+				label = Translatef(s.Locale, "status.reasoningProgress", formatBytes(s.ReasoningBytes))
+			}
 		case domain.ProviderToolCall:
 			label = Translate(s.Locale, "status.preparingTools")
 			if s.PreparingTool != "" {

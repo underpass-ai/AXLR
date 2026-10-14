@@ -253,3 +253,80 @@ func TestApprovingAPlanAsksTheModelNothingMore(t *testing.T) {
 		t.Fatalf("the planner was asked again (%d) or the mode stayed %s", asked, s.Mode())
 	}
 }
+
+// On 14 October 2026 the planner called local_edit twice before it saw
+// that decompose only reads: its instruction starts with its role and the
+// tools the step offers, in the system prompt and on its reminder.
+func TestThePlannerIsToldItsRoleAndToolsFirst(t *testing.T) {
+	run := domain.CeremonyRun{Definition: "axlr_plan", Version: "1.0", Step: "decompose"}
+	for _, text := range []string{baseInstruction(run), string(stepReminder(run))} {
+		at := strings.Index(text, "Your role: the planner. This step only reads")
+		if at < 0 || at > strings.Index(text, "Read the repository") || !strings.Contains(text, "local_write and local_edit are not offered") {
+			t.Fatalf("instruction %q", text)
+		}
+	}
+}
+
+// The test-first checks guessed tests by a base name containing "test" or
+// "spec": latest.go, contest.go and inspector.go passed for tests and a
+// Rust task, whose tests live in the source file, was refused (desk
+// review of 14 October 2026). Each language's own naming decides now, and
+// a Rust source may hold the failing test.
+func TestTestFilesAreRecognisedByTheirLanguagesNaming(t *testing.T) {
+	tests := []string{"calc/calc_test.go", "pkg/test_parser.py", "pkg/parser_test.py", "conftest.py", "src/app.test.ts", "src/app.spec.js", "web/Button.test.tsx",
+		"src/test/java/calc/CalcTest.java", "app/CalcTests.kt", "app/CalcIT.java", "lib/calc_spec.rb", "test/calc_test.rb", "tests/integration.rs", "__tests__/app.js",
+		"CalcTests.cs", "calc_unittest.cc", "test_calc.c", "calc_test.exs", "check.bats"}
+	for _, p := range tests {
+		if !testFilePath(p) || !mayHoldTests(p) {
+			t.Errorf("%s is a test file", p)
+		}
+	}
+	code := []string{"latest.go", "contest.go", "inspector.go", "calc/testing.go", "attestation.py", "spectrum.ts", "Contest.java", "Testament.java", "test.go", "README.md"}
+	for _, p := range code {
+		if testFilePath(p) {
+			t.Errorf("%s is not a test file", p)
+		}
+	}
+	if testFilePath("src/lib.rs") || !mayHoldTests("src/lib.rs") {
+		t.Error("a Rust source holds its unit tests")
+	}
+	// A test-first Rust task with only its source in scope is a plan; a Go
+	// task whose only "test" is latest.go is not.
+	d, _, _, _, s := planDriver(t)
+	rust := strings.Replace(goodTasks, `"scope":["textstat.go","textstat_test.go"]`, `"scope":["src/lib.rs"]`, 1)
+	rust = strings.Replace(rust, `"scope":["lines.go","lines_test.go"]`, `"scope":["latest.go"],"test_first":true`, 1)
+	report := step(t, d, &s, planArgs(t, rust))
+	text, _ := json.Marshal(report["defects"])
+	if strings.Contains(string(text), "task wordcount: test_first") || !strings.Contains(string(text), "task linecount: test_first needs a test to write first") {
+		t.Fatalf("defects %s", text)
+	}
+}
+
+// On 14 October 2026, with the planner's role in the system prompt,
+// glm-5.3-flash still read the person's /plan brief as an order and called
+// local_edit twice: the brief itself carries a note that it is a brief.
+func TestAPlanBriefSaysItIsABriefOnThePersonsMessage(t *testing.T) {
+	engine, plans := &fakeEngine{}, &memoryPlans{}
+	files := &fakeFiles{files: map[string][]byte{"textstat.go": []byte(textstatSource)}}
+	d := &CeremonyDriver{Engine: engine, Checks: &fakeChecks{}, Files: files, Plans: plans, Approver: &planApprover{}, Now: func() time.Time { return time.Unix(1, 0) }}
+	s := turnSession(t)
+	if err := s.SetMode(domain.ModePlan); err != nil {
+		t.Fatal(err)
+	}
+	var sent root.Text
+	u := StartTurnUseCase{Catalog: &catalogStub{}, Store: &memoryStore{}, Continue: ContinueTurnUseCase{Store: &memoryStore{}, Ceremonies: d, Models: streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		if sent == "" {
+			sent = r.Messages[len(r.Messages)-1].Content
+		}
+		return assistant("planning"), nil
+	})}}
+	if err := u.Execute(context.Background(), &s, "Add LineCount with its test", ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(string(sent), "Add LineCount with its test\n\n"+planBriefNote) {
+		t.Fatalf("brief sent as %q", sent)
+	}
+	if record := BuildTurnRecord(s, 0, 1, "project:x", nil); record.Prompt != "Add LineCount with its test" {
+		t.Fatalf("record prompt %q", record.Prompt)
+	}
+}

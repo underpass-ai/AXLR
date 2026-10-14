@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -440,6 +441,11 @@ func TestRepairResumeReusesALiveWatchClaim(t *testing.T) {
 			t.Fatalf("the watch must not be claimed again: %v", engine.calls[before:])
 		}
 	}
+	// The reused claim's operation and attempt are read for its own fence,
+	// not kept from the run's last recorded claim (the diagnose step's).
+	if !slices.Contains(engine.operations, "watch fence-watch") {
+		t.Fatalf("operations read: %v", engine.operations)
+	}
 }
 
 // When MADE cannot say whether the console's own claim is live, a console
@@ -483,5 +489,22 @@ func TestRepairModeRefusesModelMemoryWrites(t *testing.T) {
 	verdict, reason := domain.ModeRepair.Judge(id, mustObject(t, `{}`))
 	if verdict != domain.VerdictDeny || !strings.Contains(reason, "connect_to") {
 		t.Fatalf("verdict %v %q", verdict, reason)
+	}
+}
+
+// An operation id kept while its attempt could not be read is not
+// reported: MADE refuses a report without the step's attempt.
+func TestNoHostReportWithoutTheClaimsAttempt(t *testing.T) {
+	engine := &fakeEngine{}
+	d := &CeremonyDriver{Engine: engine}
+	run := domain.CeremonyRun{Instance: "i", Step: "watch", Fence: "f", OperationID: "op-f"}
+	d.report(context.Background(), turnSession(t), &run, "running", "step")
+	if len(engine.reports) != 0 {
+		t.Fatalf("reports %+v", engine.reports)
+	}
+	run.ClaimAttempt = 1
+	d.report(context.Background(), turnSession(t), &run, "running", "step")
+	if len(engine.reports) != 1 || engine.reports[0].Attempt != 1 {
+		t.Fatalf("reports %+v", engine.reports)
 	}
 }

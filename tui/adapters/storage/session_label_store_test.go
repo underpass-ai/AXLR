@@ -168,3 +168,26 @@ func TestSessionLabelsIgnoreFieldsOfANewerVersion(t *testing.T) {
 		t.Fatalf("label = %+v", got)
 	}
 }
+
+// Where an imported session came from is written once, at import, and a
+// later rename, archive or title keeps it.
+func TestSessionLabelsKeepWhereAnImportedSessionCameFrom(t *testing.T) {
+	store, err := NewSessionLabelStore(filepath.Join(t.TempDir(), "session-labels.json"))
+	must(t, err)
+	ctx := context.Background()
+	id := domain.SessionID("0123456789abcdef0123456789abcdef")
+	origin := domain.Workspace(filepath.Join(t.TempDir(), "ws"))
+	_, err = store.Initialize(ctx, id, domain.SessionLabel{ImportedFrom: origin, ImportedAfter: 7})
+	must(t, err)
+	_, err = store.Initialize(ctx, id, domain.SessionLabel{Title: "derived", TitleDerived: true, ImportedFrom: domain.Workspace(filepath.Join(t.TempDir(), "elsewhere")), ImportedAfter: 1})
+	must(t, err)
+	must(t, store.Set(ctx, id, domain.SessionLabel{Title: "mine", Archived: true}))
+	labels, err := store.Load(ctx)
+	must(t, err)
+	if got := labels[id]; got.ImportedFrom != origin || got.ImportedAfter != 7 || got.Title != "mine" || !got.Archived {
+		t.Fatalf("label = %+v", got)
+	}
+	if err := store.Set(ctx, id, domain.SessionLabel{ImportedFrom: "relative"}); err == nil {
+		t.Fatal("a relative workspace was accepted")
+	}
+}

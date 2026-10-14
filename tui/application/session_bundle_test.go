@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"path/filepath"
@@ -111,11 +112,30 @@ func TestImportSessionMakesTheBundleThisConsoles(t *testing.T) {
 	if handoff.About != "ws:"+string(state.ID) || handoff.Kind != "observation" || handoff.Summary != "Session imported from laptop (exported 2026-10-13T20:00:00Z) and continued on gx10." || handoff.Evidence[0] != "axlr-tui --import /tmp/b.json" || handoff.Labels["event"][0] != "import" {
 		t.Fatalf("handoff %+v", handoff)
 	}
-	if label := labels.labels[state.ID]; string(label.Title) != "Parser UTC" || label.About != "project:Repo-B" {
+	// Its changes so far were made in the origin's workspace.
+	if label := labels.labels[state.ID]; string(label.Title) != "Parser UTC" || label.About != "project:Repo-B" || label.ImportedFrom != state.Workspace || label.ImportedAfter != len(state.Messages) {
 		t.Fatalf("labels %+v", label)
 	}
 	if _, _, err := u.Execute(context.Background(), []byte("x")); err == nil || !strings.Contains(err.Error(), "saved in this console already") {
 		t.Fatalf("second import: %v", err)
+	}
+}
+
+// heldStore has every session open in another console.
+type heldStore struct{ bundleStore }
+
+func (heldStore) Load(context.Context, domain.SessionID) (domain.Session, error) {
+	return domain.Session{}, fmt.Errorf("%w: %w", domain.ErrSessionHeld, errors.New("resource temporarily unavailable"))
+}
+
+// A bundle of a session open in another console is refused in plain words,
+// without the lock's errno.
+func TestImportRefusesASessionOpenInAnotherConsolePlainly(t *testing.T) {
+	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "a.go", Before: "one", After: "two"}}})
+	u := ImportSessionUseCase{Codec: &bundleCodecStub{session: s}, Store: &heldStore{}, Workspace: "/ws"}
+	_, _, err := u.Execute(context.Background(), []byte("x"))
+	if err == nil || !strings.Contains(err.Error(), "open in another console") || strings.Contains(err.Error(), "temporarily unavailable") || strings.Contains(err.Error(), "writer") {
+		t.Fatalf("refusal %v", err)
 	}
 }
 

@@ -39,7 +39,16 @@ var errWalkStop = errors.New("walk stopped")
 // .axlr and a recursive listing ran out before calc/. A scope inside one
 // of them is still walked: the caller asked for it.
 func unwalked(name string) bool {
-	return name == ".git" || name == ".axlr" || name == ".kernel"
+	return name == ".git" || consoleStore(name)
+}
+
+// consoleStore reports the console's own stores, which a listing of their
+// parent leaves out, while .git stays listed and unentered. On 14 October
+// 2026 a top-level local_list showed .kernel/ and glm-5.3-flash offered the
+// person to "explore what is inside .kernel", the KMP store. A scope inside
+// one of them still lists it: the caller asked for it.
+func consoleStore(name string) bool {
+	return name == ".axlr" || name == ".kernel"
 }
 
 // Search walks c.Scope through the workspace root in name order, depth
@@ -147,8 +156,9 @@ func (a *FileAdapter) Search(ctx context.Context, c domain.SearchCommand) (domai
 }
 
 // List reports the entries under c.Scope in name order, depth first, down
-// to c.Depth levels. A symlink is listed as one and never followed; .git,
-// .axlr and .kernel are listed but not entered. A scope that is not a directory lists itself.
+// to c.Depth levels. A symlink is listed as one and never followed; .git is
+// listed but not entered, and .axlr and .kernel are left out. A scope that
+// is not a directory lists itself.
 func (a *FileAdapter) List(ctx context.Context, c domain.ListCommand) (domain.ListResult, error) {
 	result := domain.ListResult{Entries: []domain.ListEntry{}, Offset: c.Offset}
 	info, err := a.root.Lstat(string(c.Scope))
@@ -165,6 +175,9 @@ func (a *FileAdapter) List(ctx context.Context, c domain.ListCommand) (domain.Li
 	err = a.walk(string(c.Scope), 1, c.Depth, func(rel string, info fs.FileInfo, _ int) (bool, error) {
 		if err := ctx.Err(); err != nil {
 			return false, cancelled()
+		}
+		if consoleStore(info.Name()) {
+			return false, nil
 		}
 		visits++
 		if visits > c.MaxVisits {

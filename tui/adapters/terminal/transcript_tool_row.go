@@ -60,6 +60,14 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 			facts.State = toolFailed
 		}
 		details = append(details, theme.T(label))
+	case result != nil && cancelledCall(string(result.Content)):
+		// The person's Esc stopped it while it ran. Live, the turn's
+		// "Cancelled by you" row said so; a reopened or imported session
+		// has no such row, and on 14 October 2026 the call read "153 B ·
+		// approved by you".
+		glyph, tone = theme.Icon("failed"), toneError
+		facts.State = toolFailed
+		details = append(details, theme.T("transcript.toolCancelled"))
 	case result != nil:
 		glyph, tone = theme.Icon("done"), toneGood
 		facts.State = toolDone
@@ -68,8 +76,8 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 			glyph, tone = theme.Icon("failed"), toneError
 			facts.State = toolFailed
 		}
-		facts.Bytes = len(result.Content)
-		details = append(details, formatBytes(len(result.Content)))
+		facts.Bytes = resultBytes(call, result.Content)
+		details = append(details, formatBytes(facts.Bytes))
 		if duration, ok := durationMS(head); ok {
 			facts.DurationMS, facts.HasTime = duration, true
 			details = append(details, formatDuration(duration))
@@ -85,7 +93,7 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 	if memory && tone == toneGood {
 		glyph, tone = theme.Icon("memory"), toneAccent
 	}
-	if record != nil && record.Decision == domain.DecisionApprove {
+	if record != nil && record.Decision == domain.DecisionApprove && (result == nil || !cancelledCall(string(result.Content))) {
 		details = append(details, theme.T("transcript.toolApproved"))
 	}
 	text := label
@@ -294,6 +302,24 @@ func durationMS(head string) (int64, bool) {
 	return value, err == nil
 }
 
+// resultBytes is the size a row shows for a call's result: the bytes a
+// local_read returned from the file, otherwise the result's own size. On
+// 14 October 2026 a read of an 809-byte file showed 1.2 KB, the size of
+// its JSON envelope.
+func resultBytes(call root.ToolCall, content root.Text) int {
+	if call.Name == "local_read" {
+		var read struct {
+			Output struct {
+				ReturnedBytes *int `json:"returned_bytes"`
+			} `json:"output"`
+		}
+		if json.Unmarshal([]byte(content), &read) == nil && read.Output.ReturnedBytes != nil {
+			return *read.Output.ReturnedBytes
+		}
+	}
+	return len(content)
+}
+
 func formatBytes(n int) string {
 	switch {
 	case n < 1024:
@@ -328,9 +354,18 @@ func deniedLabel(record *domain.PendingTool) string {
 			return "transcript.toolUnknown"
 		case overCallBudget(content):
 			return "transcript.toolOverBudget"
+		case cancelledCall(content):
+			return "transcript.toolCancelled"
 		}
 	}
 	return "transcript.toolDenied"
+}
+
+// cancelledCall reports a call the person cancelled, waiting or running:
+// its result starts "tool call cancelled", which every reader of results
+// matches by prefix.
+func cancelledCall(content string) bool {
+	return strings.HasPrefix(content, "tool call cancelled")
 }
 
 // notInStep reports a call refused because the ceremony step does not

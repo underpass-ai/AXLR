@@ -68,10 +68,10 @@ func Redact(text string) string {
 	return secretPattern.ReplaceAllString(text, "[redacted]")
 }
 
-// personTyped is what the person typed: a prompt without the console notes
+// PersonTyped is what the person typed: a prompt without the console notes
 // appended to it ("\n\n[AXLR · recall] …", a ceremony step), which the
 // record would otherwise repeat in MADE, in LastRecord and in /session.
-func personTyped(content string) string {
+func PersonTyped(content string) string {
 	if at := strings.Index(content, "\n\n[AXLR"); at >= 0 {
 		return content[:at]
 	}
@@ -88,7 +88,7 @@ func BuildTurnRecord(s domain.Session, index, turn int, about string, cost *Turn
 	if index < 0 || index >= len(messages) {
 		return record
 	}
-	record.Prompt = Redact(excerpt(personTyped(string(messages[index].Content)), turnExcerptBytes))
+	record.Prompt = Redact(excerpt(PersonTyped(string(messages[index].Content)), turnExcerptBytes))
 	record.StartedAt = messageTime(state, index)
 	decisions := map[root.ToolCallID]domain.PendingTool{}
 	for _, activity := range state.Activity {

@@ -8,8 +8,15 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// approvalCardChrome is the card's fixed rows: rule, title and actions.
-const approvalCardChrome = 3
+// approvalCardChrome is the card's fixed rows besides its keys: rule and
+// title (the Editorial sheet: a blank row and the title).
+const approvalCardChrome = 2
+
+// approvalChrome is the card's rows besides its details: the fixed ones
+// and as many rows as its keys wrap to.
+func (m AppModel) approvalChrome() int {
+	return approvalCardChrome + len(m.approvalKeyRows())
+}
 
 // approvalDetailRows is how many argument rows the inline card shows: all of
 // them when they fit, otherwise what keeps the whole card within 60 % of
@@ -17,7 +24,7 @@ const approvalCardChrome = 3
 // October 2026 the card stopped at ten rows with thirty free, so a
 // 12-line diff needed scrolling.
 func (m AppModel) approvalDetailRows() int {
-	limit := max(3, m.Layout.Height*3/5-approvalCardChrome)
+	limit := max(3, m.Layout.Height*3/5-m.approvalChrome())
 	return max(1, min(m.Approval.Details.VisualLineCount(), limit))
 }
 
@@ -35,6 +42,34 @@ func (m AppModel) approvalCard() string {
 	title := " " + warn(m.Theme.Icon("attention")+" "+m.Theme.T("approval.title")) + "  " + m.Approval.Target
 	details := m.Approval.Details
 	details.Gutter = (width - details.Viewport.Width()) / 2
+	_, note := m.approvalHints()
+	if m.denying {
+		// The reason takes the keys' row; its keys go on the title's.
+		note = m.Theme.T("approval.denyHints")
+	}
+	if m.Theme.editorial() {
+		return m.approvalSheet(details)
+	}
+	line := func(s string) string {
+		return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(s, width, "…"))
+	}
+	if note != "" {
+		// On the title's row: the keys' row is full with S offered.
+		title += m.Theme.Muted("  · " + note)
+	}
+	if m.Approval.Details.VisualLineCount() > m.approvalDetailRows() {
+		title += m.Theme.Muted("  " + m.Theme.T("approval.scroll"))
+	}
+	rows := []string{rule, line(title), details.View()}
+	for _, keys := range m.approvalKeyRows() {
+		rows = append(rows, line(keys))
+	}
+	return strings.Join(rows, "\n")
+}
+
+// approvalHints are the keys the card offers for its call, and the note
+// that says why some are missing.
+func (m AppModel) approvalHints() ([]footerHint, string) {
 	hints := []footerHint{
 		{"approve", "a", m.Theme.T("approval.hintApprove")},
 		{"approve-all", "A", m.Theme.Tf("approval.hintApproveAll", m.pendingCalls())},
@@ -70,33 +105,67 @@ func (m AppModel) approvalCard() string {
 		hints = slices.DeleteFunc(hints, func(h footerHint) bool { return h.zone == "always-allow" || h.zone == "autonomy-on" })
 		note = m.Theme.Tf("approval.destructive", rule)
 	}
+	return hints, note
+}
+
+// approvalKeyRows are the card's key rows: its keys, wrapped onto as many
+// rows as the width needs, or the reason being typed for a denial. On 14
+// October 2026, at 70 columns, the keys were cut at "l permitir siem…" and
+// d (deny) and esc were not shown at all.
+func (m AppModel) approvalKeyRows() []string {
+	if m.denying {
+		lead := " "
+		if m.Theme.editorial() {
+			lead = "  "
+		}
+		return []string{lead + m.denyInput.View()}
+	}
+	hints, note := m.approvalHints()
 	var actions []string
+	var widths []int
 	for _, h := range hints {
-		actions = append(actions, m.zones.Mark(m.prefix+h.zone, m.footerKey(h.key)+m.Theme.Muted(" "+h.label)))
+		plain := h.key + " " + h.label
+		if m.Theme.editorial() {
+			actions = append(actions, m.zones.Mark(m.prefix+h.zone, plain))
+		} else {
+			actions = append(actions, m.zones.Mark(m.prefix+h.zone, m.footerKey(h.key)+m.Theme.Muted(" "+h.label)))
+		}
+		widths = append(widths, ansi.StringWidth(plain))
 	}
-	line := func(s string) string {
-		return lipgloss.NewStyle().Width(width).Render(ansi.Truncate(s, width, "…"))
-	}
-	if m.denying {
-		// The reason takes the keys' row; its keys go on the title's.
-		hints = nil
-		note = m.Theme.T("approval.denyHints")
-	}
+	lead := " "
 	if m.Theme.editorial() {
-		return m.approvalSheet(details, hints, note)
+		// The sheet's note follows its keys.
+		lead = "  "
+		if note != "" {
+			actions = append(actions, "· "+note)
+			widths = append(widths, ansi.StringWidth("· "+note))
+		}
 	}
-	if note != "" {
-		// On the title's row: the keys' row is full with S offered.
-		title += m.Theme.Muted("  · " + note)
+	return wrapActions(actions, widths, lead, "   ", max(1, m.Layout.Width))
+}
+
+// wrapActions packs actions, whose plain widths are given, into rows of
+// width cells: each row starts with lead and separates its actions with
+// sep. An action wider than a row has a row of its own.
+func wrapActions(actions []string, widths []int, lead, sep string, width int) []string {
+	var rows []string
+	row, used := "", 0
+	for i, action := range actions {
+		switch {
+		case row == "":
+			row, used = lead+action, ansi.StringWidth(lead)+widths[i]
+		case used+ansi.StringWidth(sep)+widths[i] <= width:
+			row += sep + action
+			used += ansi.StringWidth(sep) + widths[i]
+		default:
+			rows = append(rows, row)
+			row, used = lead+action, ansi.StringWidth(lead)+widths[i]
+		}
 	}
-	if m.Approval.Details.VisualLineCount() > m.approvalDetailRows() {
-		title += m.Theme.Muted("  " + m.Theme.T("approval.scroll"))
+	if row != "" || len(rows) == 0 {
+		rows = append(rows, row)
 	}
-	keys := line(" " + strings.Join(actions, "   "))
-	if m.denying {
-		keys = line(" " + m.denyInput.View())
-	}
-	return strings.Join([]string{rule, line(title), details.View(), keys}, "\n")
+	return rows
 }
 
 // mainTranscript is the conversation sized to the rows the composer or the
@@ -120,7 +189,7 @@ func (m AppModel) shownTranscript() Transcript {
 	t := m.Transcript
 	height := t.Viewport.Height()
 	if m.inlineApproval() {
-		height = m.Layout.Height - 2 - approvalCardChrome - m.approvalDetailRows()
+		height = m.Layout.Height - 2 - m.approvalChrome() - m.approvalDetailRows()
 	}
 	height = max(1, height-(m.footerRows()-1))
 	if height != t.Viewport.Height() {
@@ -139,7 +208,7 @@ func (m AppModel) inlineApproval() bool {
 
 // approvalSheet is the Editorial card: a raised sheet instead of a warning
 // rule, titled with what AXLR wants to do. Same rows, same keys.
-func (m AppModel) approvalSheet(details Transcript, hints []footerHint, note string) string {
+func (m AppModel) approvalSheet(details Transcript) string {
 	width := max(1, m.Layout.Width)
 	sheet := lipgloss.NewStyle().Width(width)
 	if !m.Theme.Monochrome {
@@ -157,16 +226,11 @@ func (m AppModel) approvalSheet(details Transcript, hints []footerHint, note str
 	}
 	// Plain text keeps the sheet's background across the row; the zone marks
 	// keep each action clickable.
-	var actions []string
-	for _, h := range hints {
-		actions = append(actions, m.zones.Mark(m.prefix+h.zone, h.key+" "+h.label))
-	}
-	if note != "" {
-		actions = append(actions, "· "+note)
-	}
-	rows = append(rows, row("  "+strings.Join(actions, "   ")))
-	if m.denying {
-		rows[len(rows)-1] = row("  " + ansi.Strip(m.denyInput.View()))
+	for _, keys := range m.approvalKeyRows() {
+		if m.denying {
+			keys = ansi.Strip(keys)
+		}
+		rows = append(rows, row(keys))
 	}
 	return strings.Join(rows, "\n")
 }

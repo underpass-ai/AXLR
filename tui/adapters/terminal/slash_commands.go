@@ -249,7 +249,7 @@ var slashPromptModes = map[string]bool{"/normal": true, "/review": true, "/write
 
 // slashUsages are how the commands that take text are written; any other
 // command takes none.
-var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]", "/ceremony": "/ceremony [<definition> [version] [brief]] · /ceremony publish <file.yaml>", "/memory": "/memory save · /memory compare <about>… · /memory forget <ref> [why]", "/session": "/session [export [id]]"}
+var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]", "/ceremony": "/ceremony [<definition> [version] [brief]] · /ceremony publish <file.yaml>", "/memory": "/memory save · /memory compare <about>… · /memory forget <ref> [why]", "/session": "/session [export [id]]", "/plan": "/plan [goal]"}
 
 func slashUsage(command string) string {
 	if usage, ok := slashUsages[command]; ok {
