@@ -278,3 +278,19 @@ func TestEmojiWithAVariationSelectorAreTwoCellsWide(t *testing.T) {
 		t.Fatalf("two emoji span cells %d–%d, want 0–3", left, right)
 	}
 }
+
+// Typing over the help closes it and writes in the composer (14 October
+// 2026: the letters were dropped unseen).
+func TestTypingOverTheHelpWritesInTheComposer(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyF1})
+	if m.overlay != "help" {
+		t.Fatalf("overlay %q", m.overlay)
+	}
+	m = update(m, tea.KeyPressMsg{Code: 'h', Text: "h"})
+	m = update(m, tea.KeyPressMsg{Code: 'o', Text: "o"})
+	if m.overlay != "" || m.Composer.Input.Value() != "ho" {
+		t.Fatalf("overlay %q composer %q", m.overlay, m.Composer.Input.Value())
+	}
+}

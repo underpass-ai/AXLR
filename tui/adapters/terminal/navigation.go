@@ -316,6 +316,13 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					m.overlay = ""
 					return m, nil, true
 				}
+				if k.Text != "" && k.Mod == 0 {
+					// Typing closes the help and writes in the composer: on 14
+					// October 2026 a prompt typed over it was dropped unseen.
+					m.overlay = ""
+					next, cmd := m.handle(msg)
+					return next, cmd, true
+				}
 			}
 			if k.String() == "esc" {
 				if m.overlay == "sessions" && (m.Picker.Renaming || m.Picker.Deleting) {
