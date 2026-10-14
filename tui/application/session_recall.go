@@ -71,43 +71,56 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 	var sections []string
 	remaining := limit
 	instance.RecalledMemories = nil
+	empty := true
 	for i, about := range abouts {
 		if remaining <= 0 {
 			break
 		}
-		section, lines := c.recallSection(ctx, about, prompt, instance.MemoryContext, i == 0, remaining)
+		section, lines, nothing := c.recallSection(ctx, about, prompt, instance.MemoryContext, i == 0, remaining)
 		remaining -= len(section) + 1
 		sections = append(sections, section)
+		empty = empty && nothing
 		if i == 0 {
 			instance.RecalledMemories = lines
 		}
 	}
+	// The wake is remembered even when it found nothing, so the cadence
+	// (first prompt, resumed session, new topic) holds.
 	instance.Recalled = bounded(prompt, recalledIntentBytes)
 	if err := s.SetInstance(instance); err != nil {
 		c.log("session instance: %v", err)
 	}
 	c.log("memory recalled for session %s: %s (%d bytes)", id, strings.Join(abouts, ", "), limit-remaining)
+	if empty {
+		// Nothing recorded under any about is no note at all: on 14 October
+		// 2026 every prompt of a new project carried "project:ws3: new
+		// project, nothing recorded yet. user:gx10a: nothing recorded yet.",
+		// tokens on each prompt that Jev and the model read as part of the
+		// person's request.
+		return ""
+	}
 	return RecallNotePrefix + " " + strings.Join(sections, "\n")
 }
 
 // recallSection wakes one about and renders it within limit bytes. Nothing
 // recorded is said in one line (decision D6: "new project, nothing
-// recorded", nothing more); a failure is disclosed, never hidden. The
-// memories exposed come back too, "ref text" per line, for Jev.
-func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt string, contextID domain.MemoryContextID, project bool, limit int) (string, []string) {
+// recorded", nothing more) and reported as empty; a failure is disclosed,
+// never hidden. The memories exposed come back too, "ref text" per line,
+// for Jev.
+func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt string, contextID domain.MemoryContextID, project bool, limit int) (string, []string, bool) {
 	result, err := c.Identity.Recall.Recall(ctx, RecallRequest{Mode: RecallWake, About: about, Intent: prompt, ContextID: contextID})
 	if err != nil {
 		c.log("recall of %s: %v", about, err)
-		return bounded(fmt.Sprintf("%s: memory recall unavailable: %s", about, bounded(err.Error(), 200)), limit), nil
+		return bounded(fmt.Sprintf("%s: memory recall unavailable: %s", about, bounded(err.Error(), 200)), limit), nil, false
 	}
 	if result.Empty || strings.TrimSpace(result.Text) == "" {
 		if project {
-			return bounded(about+": new project, nothing recorded yet.", limit), nil
+			return bounded(about+": new project, nothing recorded yet.", limit), nil, true
 		}
-		return bounded(about+": nothing recorded yet.", limit), nil
+		return bounded(about+": nothing recorded yet.", limit), nil, true
 	}
 	header := "Memory of " + about + ":\n"
-	return header + bounded(result.Text, max(0, limit-len(header))), recalledMemories(result.Text, result.Refs)
+	return header + bounded(result.Text, max(0, limit-len(header))), recalledMemories(result.Text, result.Refs), false
 }
 
 // recalledMemoryLines bounds what the sidecar keeps of a recall for Jev.
