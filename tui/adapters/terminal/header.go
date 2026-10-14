@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -25,6 +26,12 @@ type Header struct {
 	About         string
 	Memories      int
 	MemoriesKnown bool
+	// Engines are the engines the launch connected (kmp, made), shown
+	// until a turn's catalog names the session's plugins. On 14 October
+	// 2026 the header showed no "● kmp ● made", nor the MADE instance,
+	// until the first prompt, at launch and after /new, although MADE had
+	// connected at launch.
+	Engines []string
 }
 
 // memory is the header's memory segment: the about, the count and the
@@ -47,6 +54,9 @@ func (h Header) memory(theme Theme) string {
 		} else {
 			parts = append(parts, theme.T("header.instanceOpen"))
 		}
+	} else if instance == nil && len(h.State.Messages) == 0 && slices.Contains(h.Engines, "made") {
+		// The session's instance opens with its first prompt.
+		parts = append(parts, theme.T("header.instancePending"))
 	}
 	if len(parts) == 0 {
 		return ""
@@ -92,6 +102,10 @@ func (h Header) View(width int, theme Theme) string {
 		}
 	}
 	plugins := sessionPlugins(h.State)
+	if len(h.State.ToolSnapshot) == 0 {
+		// No turn has listed the session's tools yet.
+		plugins = h.Engines
+	}
 	// From the most to the least detail: "model:" and "workspace:" with the
 	// whole path, then its last two segments, then its last one; the same
 	// without the labels; then cut plugin names.
