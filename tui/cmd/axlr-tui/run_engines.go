@@ -46,6 +46,8 @@ func engineSocketDir(getenv func(string) string, stateBase string) string {
 // starts those daemons now so the launch can say in one line what it got.
 // Anything that fails leaves the console starting its own engine.
 func shareEngines(ctx context.Context, manager *plugins.Manager, registrations []plugins.Registration, supervisor engines.Supervisor, stderr io.Writer) {
+	// Locks of daemons that are gone are cleared before any starts.
+	supervisor.Sweep()
 	manager.SetShare(func(ctx context.Context, r plugins.Registration) (string, error) {
 		if !sharedEngine(r) {
 			return "", fmt.Errorf("%s is not shared", r.Manifest.ID)

@@ -110,17 +110,61 @@ func TestConsolesShareOneEngineProcessPerSpec(t *testing.T) {
 	for _, console := range consoles {
 		_ = console.Close()
 	}
-	// Without consoles the daemons exit after their idle time (1 s here).
+	// Without consoles the daemons exit after their idle time (1 s here),
+	// and take their lock files with them (14 October 2026: 20 lock files
+	// for 2 live sockets).
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(first); os.IsNotExist(err) {
-			if _, err := os.Stat(other); os.IsNotExist(err) {
-				return
+		gone := true
+		for _, path := range []string{first, other, first + ".lock", other + ".lock"} {
+			if _, err := os.Stat(path); !os.IsNotExist(err) {
+				gone = false
 			}
+		}
+		if gone {
+			return
 		}
 		time.Sleep(100 * time.Millisecond)
 	}
-	t.Fatal("the daemons did not exit when idle")
+	entries, _ := os.ReadDir(filepath.Dir(first))
+	t.Fatalf("the daemons did not exit when idle, or left files: %v", entries)
+}
+
+// A console sweeps the lock files of daemons that are gone at start: a
+// lock nobody holds, whose socket does not answer, goes with that socket;
+// a held lock stays.
+func TestSweepRemovesOrphanedEngineLocks(t *testing.T) {
+	dir := shortDir(t)
+	if err := privateDir(dir); err != nil {
+		t.Fatal(err)
+	}
+	orphan := filepath.Join(dir, "orphan.sock")
+	held := filepath.Join(dir, "held.sock")
+	for _, path := range []string{orphan, orphan + ".lock", held + ".lock", filepath.Join(dir, "notes.txt")} {
+		if err := os.WriteFile(path, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lock, err := takeLock(held + ".lock")
+	if err != nil || lock == nil {
+		t.Fatalf("lock %v %v", lock, err)
+	}
+	defer lock.Close()
+	Supervisor{Dir: dir}.Sweep()
+	for _, gone := range []string{orphan, orphan + ".lock"} {
+		if _, err := os.Stat(gone); !os.IsNotExist(err) {
+			t.Fatalf("%s kept: %v", gone, err)
+		}
+	}
+	for _, kept := range []string{held + ".lock", filepath.Join(dir, "notes.txt")} {
+		if _, err := os.Stat(kept); err != nil {
+			t.Fatalf("%s removed: %v", kept, err)
+		}
+	}
+	// A second daemon for the held socket gets no lock while it is held.
+	if second, err := takeLock(held + ".lock"); second != nil || err != nil {
+		t.Fatalf("second lock %v %v", second, err)
+	}
 }
 
 func TestTheSocketDirectoryMustBePrivate(t *testing.T) {
