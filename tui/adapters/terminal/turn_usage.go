@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // maxTurnLog is how many finished turns /usage lists.
@@ -14,7 +17,11 @@ const maxTurnLog = 10
 // ledger keeps totals, not requests. On 12 October 2026 the cost of a turn
 // was only in the live footer, gone with the next prompt.
 type turnUsage struct {
+	// At is when the turn began and Prompt the first words of the prompt
+	// that began it: on 14 October 2026 /usage listed a turn begun at
+	// 15:46 as "15:49 · 8 requests", its end, and nothing said which.
 	At        time.Time
+	Prompt    string
 	Requests  int
 	Tokens    int
 	Cost      float64
@@ -26,7 +33,7 @@ type turnUsage struct {
 // messages, when it made a request.
 func (m *AppModel) finishTurnUsage(messages int, elapsed time.Duration) {
 	l := m.cost.ledger
-	usage := turnUsage{At: time.Now(), Requests: l.Requests - m.cost.turnAll, Tokens: l.PromptTokens + l.CompletionTokens - m.cost.turnTokens, Elapsed: elapsed}
+	usage := turnUsage{At: time.Now().Add(-elapsed), Prompt: turnPrompt(m.Header.State.Messages, messages), Requests: l.Requests - m.cost.turnAll, Tokens: l.PromptTokens + l.CompletionTokens - m.cost.turnTokens, Elapsed: elapsed}
 	if usage.Requests <= 0 {
 		return
 	}
@@ -41,6 +48,40 @@ func (m *AppModel) finishTurnUsage(messages int, elapsed time.Duration) {
 	if len(m.turnLog) > maxTurnLog {
 		m.turnLog = m.turnLog[len(m.turnLog)-maxTurnLog:]
 	}
+}
+
+// turnPromptRunes bounds the prompt's words on a /usage line.
+const turnPromptRunes = 32
+
+// turnPrompt is the first words of the person's last prompt among the
+// first messages: its first line, whitespace collapsed, cut at a word.
+func turnPrompt(messages []root.Message, end int) string {
+	for i := min(end, len(messages)) - 1; i >= 0; i-- {
+		content := messages[i].Content
+		if messages[i].Role != root.RoleUser || strings.HasPrefix(string(content), "[AXLR") || domain.BudgetNote(content) {
+			continue
+		}
+		typed, _ := splitConsoleNotes(content)
+		line := ""
+		for _, candidate := range strings.Split(typed, "\n") {
+			if line = strings.Join(strings.Fields(candidate), " "); line != "" {
+				break
+			}
+		}
+		runes := []rune(Sanitize(line))
+		if len(runes) <= turnPromptRunes {
+			return string(runes)
+		}
+		cut := turnPromptRunes - 1
+		for j := cut; j > turnPromptRunes/2; j-- {
+			if runes[j] == ' ' {
+				cut = j
+				break
+			}
+		}
+		return strings.TrimSpace(string(runes[:cut])) + "…"
+	}
+	return ""
 }
 
 // turnCostLine is the dim "· $0.0046 · 27k tok" under a finished turn, ""
@@ -93,7 +134,11 @@ func turnLogLines(turns []turnUsage, theme Theme) []string {
 		if t.CostKnown {
 			cost = FormatUSD(t.Cost)
 		}
-		lines = append(lines, theme.Tn("usage.turn", t.Requests, formatClock(t.At, transcriptNow()), t.Requests, shortTokens(t.Tokens), cost, formatElapsed(t.Elapsed)))
+		when := formatClock(t.At, transcriptNow())
+		if t.Prompt != "" {
+			when += " · " + t.Prompt
+		}
+		lines = append(lines, theme.Tn("usage.turn", t.Requests, when, t.Requests, shortTokens(t.Tokens), cost, formatElapsed(t.Elapsed)))
 	}
 	return lines
 }
