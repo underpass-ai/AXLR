@@ -153,6 +153,11 @@ func TestClassifyOutcomeReadsEveryResultShape(t *testing.T) {
 	for result, want := range map[string]string{
 		``:                         turnUnknown,
 		`tool call denied by user`: turnDenied,
+		`tool call cancelled`:      turnCancelled,
+		cancelledByPerson:          turnCancelled,
+		`tool execution failed; effect unknown: boom`:                                  turnError,
+		`{"error":{"code":"x","message":"y"}}`:                                         turnError,
+		`{"protocol_version":1,"tool":"write","status":"completed","error":null}`:      turnCompleted,
 		`not run: over the turn's tool-call budget of 32 calls: x`:                     turnOverBudget,
 		`invalid tool invocation rejected: local_exec: give why`:                       turnRejected,
 		`{"status":"completed","output":{"exit_code":1},"error":null}`:                 turnCompleted,

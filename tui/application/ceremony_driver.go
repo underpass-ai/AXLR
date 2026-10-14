@@ -102,7 +102,7 @@ func (d *CeremonyDriver) report(ctx context.Context, s domain.Session, run *doma
 	}
 	state := s.Export()
 	run.Reports++
-	_ = d.Engine.Report(ctx, HostReport{Instance: run.Instance, Step: run.Step, Fence: run.Fence, OperationID: run.OperationID, Status: status, Activity: activity,
+	_ = d.Engine.Report(ctx, HostReport{Instance: run.Instance, Step: run.Step, Fence: run.Fence, OperationID: run.OperationID, Attempt: run.ClaimAttempt, Status: status, Activity: activity,
 		Summary: fmt.Sprintf("step %s of %s %s, attempt %d, session %s", run.Step, run.Definition, run.Version, run.Iteration, state.ID), Execution: run.Instance, Worker: string(state.ID), Role: d.role(*run), Model: string(state.Model), Sequence: run.Reports, Host: d.Host})
 }
 
@@ -288,7 +288,8 @@ func (d *CeremonyDriver) Begin(ctx context.Context, s *domain.Session, prompt ro
 		return fmt.Errorf("claim %s: %w", run.Step, err)
 	}
 	run.Fence = fence
-	run.OperationID, _ = d.Engine.OperationID(ctx, instance, run.Step, fence)
+	operation, _ := d.Engine.Operation(ctx, instance, run.Step, fence)
+	run.OperationID, run.ClaimAttempt = operation.ID, operation.Attempt
 	d.report(ctx, *s, &run, "running", "step")
 	return s.SetCeremony(run)
 }
@@ -772,7 +773,8 @@ func (d *CeremonyDriver) claimFor(ctx context.Context, run *domain.CeremonyRun, 
 	}
 	run.Fence = fence
 	run.Reminded = false
-	run.OperationID, _ = d.Engine.OperationID(ctx, run.Instance, run.Step, fence)
+	operation, _ := d.Engine.Operation(ctx, run.Instance, run.Step, fence)
+	run.OperationID, run.ClaimAttempt = operation.ID, operation.Attempt
 	return nil
 }
 

@@ -180,3 +180,47 @@ func TestRememberSendsSummaryENAndNamesItOnRefusal(t *testing.T) {
 		t.Fatalf("summary_en sent empty: %+v", requests[1])
 	}
 }
+
+// A strict store's refusal of a summary_en that drops identifiers is
+// answered by the console: it copies the listed identifiers into
+// summary_en and writes once more, for axlr_remember and the settled
+// memory alike. On 14 October 2026 the settled memory was lost and an
+// axlr_remember call cost the model a retry.
+func TestAStrictRefusalOfDroppedIdentifiersIsRetriedOnce(t *testing.T) {
+	strict := map[string]any{"status": "rejected", "error": map[string]any{"code": "invalid_argument", "message": "strict kmp_write_memory refuses summary_en: drops identifiers the text carries: b==0, calc/calc.go, errors.is, len(xs)==0. Fix summary_en; never change summary. Copy the dropped identifiers into summary_en as written."}}
+	var requests []map[string]any
+	m := kmpAnswers(t, &requests, strict, map[string]any{"accepted": true, "status": "committed", "local_refs": map[string]any{"m1": "project:probe:entry:m1"}})
+	request := rememberRequest()
+	request.SummaryEN = "Divide returns an error for a zero divisor."
+	answer, err := m.Remember(context.Background(), request)
+	if err != nil || answer["accepted"] != true || len(requests) != 2 {
+		t.Fatalf("%+v %v after %d requests", answer, err, len(requests))
+	}
+	summary := requests[1]["memories"].([]any)[0].(map[string]any)["summary_en"]
+	if summary != "Divide returns an error for a zero divisor; identifiers: b==0, calc/calc.go, errors.is, len(xs)==0" || requests[1]["idempotency_key"] != requests[0]["idempotency_key"] {
+		t.Fatalf("retry %+v", requests[1])
+	}
+	// The settled memory takes the same path; a second refusal is returned.
+	requests = nil
+	m = kmpAnswers(t, &requests, strict, strict)
+	_, err = m.RecordSettled(context.Background(), application.SettledEntry{About: "project:probe", Kind: "decision", Text: "Usa example.com/ws/calc.", SummaryEN: "decision settled in turn 14", Key: "k"})
+	if err == nil || !strings.Contains(err.Error(), "KMP refused the settled memory") || len(requests) != 2 {
+		t.Fatalf("%v after %d requests", err, len(requests))
+	}
+	// Another refusal is not retried.
+	requests = nil
+	m = kmpAnswers(t, &requests, map[string]any{"status": "rejected", "error": map[string]any{"code": "invalid_argument", "message": "strict kmp_write_memory refuses summary_en: leans to es, not to English. Fix summary_en; never change summary."}})
+	if _, err := m.Remember(context.Background(), request); err == nil || len(requests) != 1 {
+		t.Fatalf("%v after %d requests", err, len(requests))
+	}
+	for message, want := range map[string]string{
+		"refuses summary_en: drops identifiers the text carries: example.com/ws/calc. Fix summary_en":    "example.com/ws/calc",
+		"refuses summary_en: drops identifiers the text carries: #469, v0.7.0; leans to es, not English": "#469|v0.7.0",
+		"refuses summary_en: drops identifiers the text carries: v0.7.0.":                                "v0.7.0",
+		"refuses summary_en: leans to es": "",
+	} {
+		if got := strings.Join(droppedIdentifiers(message), "|"); got != want {
+			t.Fatalf("%q: %q, want %q", message, got, want)
+		}
+	}
+}

@@ -18,6 +18,9 @@ import (
 // HostReport is one bounded status report on a claimed step.
 type HostReport struct {
 	Instance, Step, Fence, OperationID string
+	// Attempt is the claimed step record's attempt: MADE refuses a report
+	// whose attempt differs from it.
+	Attempt int
 	// Status is running, blocked or finished; Activity a short label
 	// (turn, heartbeat, step, stall).
 	Status, Activity string
@@ -49,7 +52,7 @@ func (c *SessionCeremony) report(ctx context.Context, s domain.Session, instance
 	}
 	state := s.Export()
 	instance.Reports++
-	report := HostReport{Instance: instance.Instance, Step: sessionTurnStep, Fence: instance.Fence, OperationID: instance.OperationID, Status: status, Activity: activity,
+	report := HostReport{Instance: instance.Instance, Step: sessionTurnStep, Fence: instance.Fence, OperationID: instance.OperationID, Attempt: instance.ClaimAttempt, Status: status, Activity: activity,
 		Summary: fmt.Sprintf("turn %d of session %s, mode %s", instance.Turns+1, state.ID, s.Mode()), Execution: string(state.ID), Worker: string(state.ID), Role: sessionRole, Model: string(state.Model), Sequence: instance.Reports, Host: c.Host}
 	if err := c.Engine.Report(ctx, report); err != nil {
 		if c.firstRefusal(err.Error()) {
@@ -89,19 +92,19 @@ func (c *SessionCeremony) Heartbeat(ctx context.Context, s *domain.Session) {
 	}
 }
 
-// claimed records a fresh claim on the instance: its operation id (read
-// from MADE, which the claim receipt does not carry), its lease and time,
-// then reports running.
+// claimed records a fresh claim on the instance: its operation id and
+// step attempt (read from MADE, which the claim receipt does not carry),
+// its lease and time, then reports running.
 func (c *SessionCeremony) claimed(ctx context.Context, s domain.Session, instance *domain.SessionInstance, fence string, lease time.Duration) {
 	// Reports count across the instance's claims: MADE orders reports and
 	// keys them, so a sequence that restarted at every claim would replay.
-	instance.Fence, instance.ClaimedAt, instance.LeaseMS, instance.OperationID, instance.Reported, instance.ClaimIncarnation = fence, c.now(), lease.Milliseconds(), "", time.Time{}, c.Host.incarnation()
-	operation, err := c.Engine.OperationID(ctx, instance.Instance, sessionTurnStep, fence)
+	instance.Fence, instance.ClaimedAt, instance.LeaseMS, instance.OperationID, instance.ClaimAttempt, instance.Reported, instance.ClaimIncarnation = fence, c.now(), lease.Milliseconds(), "", 0, time.Time{}, c.Host.incarnation()
+	operation, err := c.Engine.Operation(ctx, instance.Instance, sessionTurnStep, fence)
 	if err != nil {
 		c.log("session %s operation id: %v", instance.Instance, err)
 		return
 	}
-	instance.OperationID = operation
+	instance.OperationID, instance.ClaimAttempt = operation.ID, operation.Attempt
 	c.report(ctx, s, instance, "running", "turn")
 }
 

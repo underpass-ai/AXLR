@@ -1,6 +1,8 @@
 package terminal
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,7 +32,7 @@ func (m AppModel) exportSession(path string) (tea.Model, tea.Cmd) {
 	written, err := export.Execute(m.lifetime.ctx, m.Header.State, path)
 	if err != nil {
 		m.Status.Notice = ""
-		m.Status.Error = m.Theme.Tf("export.failed", err.Error())
+		m.Status.Error = m.exportFailure(err, path)
 		return m, nil
 	}
 	m.Composer.Input.Reset()
@@ -64,11 +66,28 @@ func (m AppModel) exportSessionBundle(id string) (tea.Model, tea.Cmd) {
 	written, err := export.Execute(m.lifetime.ctx, open, target)
 	if err != nil {
 		m.Status.Notice = ""
-		m.Status.Error = m.Theme.Tf("export.failed", err.Error())
+		m.Status.Error = m.exportFailure(err, "")
 		return m, nil
 	}
 	m.Composer.Input.Reset()
 	m.Status.Error = ""
 	m.Status.Notice = m.Theme.Tf("export.done", m.workspacePath(written))
 	return m, nil
+}
+
+// exportFailure says why an export failed in the person's language, naming
+// the path they typed or the folder in the way. On 14 October 2026 the
+// footer read "…/s.md already exists; export to another path" and
+// "mkdir …/notas/s.md: not a directory", in English, in a Spanish console.
+func (m AppModel) exportFailure(err error, typed string) string {
+	var pathErr *fs.PathError
+	switch {
+	case errors.Is(err, fs.ErrExist) && typed != "":
+		return m.Theme.Tf("export.exists", singleLine(typed))
+	case errors.As(err, &pathErr) && pathErr.Op == "mkdir":
+		if info, statErr := os.Stat(pathErr.Path); statErr == nil && !info.IsDir() {
+			return m.Theme.Tf("export.notFolder", m.workspacePath(pathErr.Path))
+		}
+	}
+	return m.Theme.Tf("export.failed", err.Error())
 }

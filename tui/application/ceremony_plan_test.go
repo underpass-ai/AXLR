@@ -98,6 +98,22 @@ func TestPlanRefusesTestFirstOverTestsOnly(t *testing.T) {
 	}
 }
 
+// The mirror case: a test-first task whose scope holds no test cannot
+// write the failing test (14 October 2026: add-max had only calc/calc.go,
+// and calc/calc_test.go belonged to add-testmax in the same wave).
+func TestPlanRefusesTestFirstWithoutATest(t *testing.T) {
+	d, _, _, _, s := planDriver(t)
+	codeOnly := strings.Replace(goodTasks, `"scope":["textstat.go","textstat_test.go"]`, `"scope":["textstat.go"]`, 1)
+	report := step(t, d, &s, planArgs(t, codeOnly))
+	text, _ := json.Marshal(report["defects"])
+	if !strings.Contains(string(text), "task wordcount: test_first needs a test to write first, but its scope holds no test file; put the test and the code it tests in one task's scope, or set test_first false") {
+		t.Fatalf("test_first without a test must be a defect: %s", text)
+	}
+	if strings.Contains(string(text), "task linecount: test_first") {
+		t.Fatalf("a task without test_first is fine: %s", text)
+	}
+}
+
 func TestPlanCitationsMustQuoteTheLine(t *testing.T) {
 	d, _, _, _, s := planDriver(t)
 	wrong := strings.Replace(goodTasks, `"line":8`, `"line":3`, 1)

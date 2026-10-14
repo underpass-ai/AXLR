@@ -114,8 +114,8 @@ func (e *incidentEngine) Handoff(context.Context, HostHandoff) error   { return 
 func (e *incidentEngine) Renew(context.Context, string, string, string, time.Duration) error {
 	return nil
 }
-func (e *incidentEngine) OperationID(context.Context, string, string, string) (string, error) {
-	return "op", nil
+func (e *incidentEngine) Operation(context.Context, string, string, string) (ClaimOperation, error) {
+	return ClaimOperation{ID: "op", Attempt: 1}, nil
 }
 func (e *incidentEngine) Inspect(context.Context, string) (CeremonyView, error) {
 	view := CeremonyView{State: e.state, Enabled: e.enabled(), Completed: map[string]map[string]any{}}

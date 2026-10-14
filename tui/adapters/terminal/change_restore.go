@@ -71,7 +71,10 @@ func (m AppModel) restoreChange() (AppModel, tea.Cmd) {
 	return m, cmd
 }
 
-// askUndo asks to confirm /undo, naming the files the last turn changed.
+// askUndo asks to confirm /undo, naming the files the last turn changed;
+// after a turn that changed none, the most recent turn that did. On 14
+// October 2026 /undo after a turn that only read said "The last turn
+// changed no file" and nothing more, though the turn before had.
 func (m AppModel) askUndo() (AppModel, tea.Cmd) {
 	m.Composer.Input.Reset()
 	if m.Busy {
@@ -86,8 +89,15 @@ func (m AppModel) askUndo() (AppModel, tea.Cmd) {
 			return m, nil
 		}
 	}
+	m.undoTurn = 0
+	changes := state.LastTurnChanges()
+	if len(changes) == 0 {
+		if turn := state.LatestChangingTurn(); turn > 0 {
+			m.undoTurn, changes = turn, state.TurnChanges(turn)
+		}
+	}
 	var files []string
-	for _, change := range state.LastTurnChanges() {
+	for _, change := range changes {
 		path := singleLine(string(change.Change.Path))
 		if !strings.Contains(" "+strings.Join(files, " ")+" ", " "+path+" ") {
 			files = append(files, path)
@@ -100,6 +110,9 @@ func (m AppModel) askUndo() (AppModel, tea.Cmd) {
 	m.undoAsking = true
 	m.Status.Error = ""
 	m.Status.Notice = m.Theme.Tn("undo.confirm", len(files), changedFiles(files))
+	if m.undoTurn > 0 {
+		m.Status.Notice = m.Theme.Tn("undo.confirmTurn", len(files), m.undoTurn, changedFiles(files))
+	}
 	return m, nil
 }
 
@@ -116,8 +129,14 @@ func (m AppModel) answerUndo(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 	}
 	restore := m.restoreUseCase()
 	m.Status.Notice = ""
+	turn := m.undoTurn
 	cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
-		_, err := restore.UndoLastTurn(ctx, s)
+		var err error
+		if turn > 0 {
+			_, err = restore.UndoTurn(ctx, s, turn)
+		} else {
+			_, err = restore.UndoLastTurn(ctx, s)
+		}
 		return err
 	})
 	m.restoreOperation = m.operationID
@@ -130,11 +149,27 @@ func (m AppModel) restoredNotice(state domain.SessionState) string {
 	if len(state.ConsoleLines) == 0 {
 		return ""
 	}
-	restore := state.ConsoleLines[len(state.ConsoleLines)-1].Restore
-	if restore == nil {
+	line := state.ConsoleLines[len(state.ConsoleLines)-1]
+	if line.Restore == nil {
 		return ""
 	}
-	return restoreLineText(*restore, m.Theme)
+	return restoreLineTextIn(state, line, m.Theme)
+}
+
+// restoreLineTextIn reads a restore as the transcript shows it, naming the
+// turn an undo put back when it was not the last one before it.
+func restoreLineTextIn(state domain.SessionState, line domain.ConsoleLine, theme Theme) string {
+	restore := *line.Restore
+	if restore.Undo && len(restore.Files) > 0 {
+		if turn := state.TurnOf(restore.Files[0].From); turn > 0 && turn != state.TurnsBefore(line.AfterMessage) {
+			paths := make([]string, 0, len(restore.Files))
+			for _, f := range restore.Files {
+				paths = append(paths, singleLine(string(f.Path)))
+			}
+			return theme.Tf("transcript.undoneTurn", turn, changedFiles(paths))
+		}
+	}
+	return restoreLineText(restore, theme)
 }
 
 // restoreLineText reads a restore as the transcript shows it.

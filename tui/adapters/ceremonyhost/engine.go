@@ -184,23 +184,49 @@ func (e Engine) Transition(ctx context.Context, instance, trigger string) (strin
 	return state, nil
 }
 
-// OperationID reads the operation id MADE assigned to a claim: the claim
-// receipt does not carry it, made_inspect_ceremony_resume does.
-func (e Engine) OperationID(ctx context.Context, instance, step, fence string) (string, error) {
+// Operation reads what MADE checks a status report against besides the
+// fence and the owner: the claim's operation id, which
+// made_inspect_ceremony_resume carries and the claim receipt does not, and
+// the attempt of the claimed step record, which only the instance's step
+// list carries. MADE 0.10.0 reads a report without an attempt as attempt
+// 0 and refuses it (14 October 2026).
+func (e Engine) Operation(ctx context.Context, instance, step, fence string) (application.ClaimOperation, error) {
 	resume, err := e.made(ctx, "made_inspect_ceremony_resume", map[string]any{"ceremony_id": instance})
 	if err != nil {
-		return "", err
+		return application.ClaimOperation{}, err
 	}
+	operation := application.ClaimOperation{}
 	claims, _ := resume["claims"].([]any)
 	for _, raw := range claims {
 		claim, _ := raw.(map[string]any)
 		if claim["claim_fence"] == fence && claim["step_id"] == step {
 			if id, _ := claim["operation_id"].(string); id != "" {
-				return id, nil
+				operation.ID = id
+				break
 			}
 		}
 	}
-	return "", fmt.Errorf("no operation id for claim %s of %s", bounded(fence, 12), instance)
+	if operation.ID == "" {
+		return application.ClaimOperation{}, fmt.Errorf("no operation id for claim %s of %s", bounded(fence, 12), instance)
+	}
+	current, err := e.made(ctx, "made_get_ceremony_instance", map[string]any{"ceremony_id": instance})
+	if err != nil {
+		return application.ClaimOperation{}, fmt.Errorf("attempt of claim %s of %s: %w", bounded(fence, 12), instance, err)
+	}
+	steps, _ := current["steps"].([]any)
+	for _, raw := range steps {
+		record, _ := raw.(map[string]any)
+		if record["step_id"] != step {
+			continue
+		}
+		if attempt, _ := record["attempt"].(float64); attempt >= 1 {
+			operation.Attempt = int(attempt)
+		}
+	}
+	if operation.Attempt == 0 {
+		return application.ClaimOperation{}, fmt.Errorf("no attempt for step %s of %s", step, instance)
+	}
+	return operation, nil
 }
 
 // Report sends one host status report. The host agent id is the claim's
@@ -211,7 +237,7 @@ func (e Engine) Report(ctx context.Context, report application.HostReport) error
 		"ceremony_id": report.Instance, "step_id": report.Step, "claim_fence": report.Fence, "operation_id": report.OperationID,
 		"agent_execution_id": report.Execution, "logical_worker_id": report.Worker, "claim_owner_id": e.owner(),
 		"host_agent_id": e.owner(), "host_agent_incarnation": report.Host.Incarnation, "role_id": report.Role,
-		"execution_status": report.Status, "liveness": "fresh", "source": "host_report", "activity": report.Activity,
+		"attempt": report.Attempt, "execution_status": report.Status, "liveness": "fresh", "source": "host_report", "activity": report.Activity,
 		"task_summary": bounded(report.Summary, 500), "observed_at": time.Now().UTC().Format(time.RFC3339),
 		"report_sequence": report.Sequence, "idempotency_key": fmt.Sprintf("axlr:report:%s:%s:%s:%d", report.Instance, report.Step, bounded(report.Fence, 12), report.Sequence),
 	}

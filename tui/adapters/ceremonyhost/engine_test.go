@@ -57,6 +57,8 @@ func TestEngineReportsAsTheClaimOwner(t *testing.T) {
 			answer = map[string]any{"claims": []any{map[string]any{"claim_fence": "f1", "step_id": "turn", "phase": "live", "owner": "made-local-host-1-axlr-work", "operation_id": "op-1"}}}
 		case "made_claim_ceremony_step":
 			answer = map[string]any{"claim_fence": "f1"}
+		case "made_get_ceremony_instance":
+			answer = map[string]any{"current_state": "WORK", "steps": []any{map[string]any{"step_id": "plan", "attempt": 1}, map[string]any{"step_id": "turn", "attempt": 3}}}
 		}
 		encoded, _ := json.Marshal(map[string]any{"status": "completed", "output": map[string]any{"structured_content": answer}})
 		return domain.ToolOutcome{Content: root.Text(encoded)}, nil
@@ -65,18 +67,20 @@ func TestEngineReportsAsTheClaimOwner(t *testing.T) {
 	if fence, err := engine.Claim(ctx, "i", "turn", "k", 0); err != nil || fence != "f1" || requests[0]["args"].(map[string]any)["lease_owner_id"] != "made-local-host-1-axlr-work" {
 		t.Fatalf("%q %v %+v", fence, err, requests[0])
 	}
-	if op, err := engine.OperationID(ctx, "i", "turn", "f1"); err != nil || op != "op-1" {
-		t.Fatalf("%q %v", op, err)
+	// MADE checks a report's attempt against the claimed step record's,
+	// which only the instance's step list carries (14 October 2026).
+	if op, err := engine.Operation(ctx, "i", "turn", "f1"); err != nil || op.ID != "op-1" || op.Attempt != 3 {
+		t.Fatalf("%+v %v", op, err)
 	}
-	if _, err := engine.OperationID(ctx, "i", "turn", "other"); err == nil {
+	if _, err := engine.Operation(ctx, "i", "turn", "other"); err == nil {
 		t.Fatal("an unknown fence has no operation id")
 	}
 	host := application.HostIdentity{Owner: "made-local-host-1-axlr-work", AgentID: "install1", Incarnation: "run1"}
-	if err := engine.Report(ctx, application.HostReport{Instance: "i", Step: "turn", Fence: "f1", OperationID: "op-1", Status: "running", Activity: "turn", Summary: "turn 1", Execution: "s1", Worker: "s1", Role: "AXLR", Model: "m", Sequence: 1, Host: host}); err != nil {
+	if err := engine.Report(ctx, application.HostReport{Instance: "i", Step: "turn", Fence: "f1", OperationID: "op-1", Attempt: 3, Status: "running", Activity: "turn", Summary: "turn 1", Execution: "s1", Worker: "s1", Role: "AXLR", Model: "m", Sequence: 1, Host: host}); err != nil {
 		t.Fatal(err)
 	}
 	status := requests[len(requests)-1]["args"].(map[string]any)["status"].(map[string]any)
-	if status["host_agent_id"] != "made-local-host-1-axlr-work" || status["claim_owner_id"] != "made-local-host-1-axlr-work" || status["host_agent_incarnation"] != "install1:run1" || status["operation_id"] != "op-1" || status["claim_fence"] != "f1" || status["execution_status"] != "running" || status["report_sequence"] != float64(1) || status["idempotency_key"] != "axlr:report:i:turn:f1:1" || status["requested_model"] != "m" || status["role_id"] != "AXLR" || status["source"] != "host_report" || status["liveness"] != "fresh" {
+	if status["host_agent_id"] != "made-local-host-1-axlr-work" || status["claim_owner_id"] != "made-local-host-1-axlr-work" || status["host_agent_incarnation"] != "install1:run1" || status["operation_id"] != "op-1" || status["attempt"] != float64(3) || status["claim_fence"] != "f1" || status["execution_status"] != "running" || status["report_sequence"] != float64(1) || status["idempotency_key"] != "axlr:report:i:turn:f1:1" || status["requested_model"] != "m" || status["role_id"] != "AXLR" || status["source"] != "host_report" || status["liveness"] != "fresh" {
 		t.Fatalf("%+v", status)
 	}
 	if err := engine.Renew(ctx, "i", "turn", "f1", 0); err != nil {

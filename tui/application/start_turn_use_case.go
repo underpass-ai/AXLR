@@ -78,6 +78,12 @@ func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, 
 	if stopped := next.TakeStoppedCeremony(); stopped != "" && !next.Mode().StartsCeremony() {
 		prompt = root.Text(string(prompt) + "\n\n" + StoppedCeremonyNote(stopped))
 	}
+	// Files the person restored since the last answer are told once, on
+	// this prompt, so the model does not take them for someone else's
+	// change; the history itself stays as it was.
+	if note := restoreNote(next.Export()); note != "" {
+		prompt = root.Text(string(prompt) + "\n\n" + note)
+	}
 	began := false
 	if _, live := next.Ceremony(); next.Mode().StartsCeremony() && !live {
 		// The ceremony starts before the turn so its first step instruction

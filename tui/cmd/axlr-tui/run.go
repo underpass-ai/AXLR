@@ -501,6 +501,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	store.OnDiscard = func(id domain.SessionID) { _ = sessionLabels.Forget(context.Background(), id) }
 	var session *domain.Session
 	var newID domain.SessionID
+	// heldElsewhere is the session --continue or --session named while
+	// another console has it open; this launch starts a new one instead.
+	var heldElsewhere domain.SessionID
 	hostname, _ := os.Hostname()
 	if resuming {
 		id, e := domain.NewSessionID(*sessionFlag)
@@ -514,19 +517,29 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(e)
 		}
 		loaded, loadErr := loggedStore.Load(ctx, id)
-		if errors.Is(loadErr, domain.ErrSessionHeld) {
+		switch {
+		case errors.Is(loadErr, domain.ErrSessionHeld) && *importFlag == "":
 			// On 14 October 2026 a second --continue printed only
-			// "resource temporarily unavailable".
+			// "resource temporarily unavailable", and then exited with
+			// "open in another console": the person had to launch again.
+			// A new session starts in the same workspace instead, and the
+			// footer says so; Ctrl+O lists the other one.
+			heldElsewhere, resuming = id, false
+			if *modelFlag == "" {
+				model = root.ModelID(settings.Model)
+			}
+		case errors.Is(loadErr, domain.ErrSessionHeld):
 			return fail(fmt.Errorf("session %s is open in another console: close it there, or launch without --continue/--session for a new session", id))
-		}
-		if loadErr != nil {
+		case loadErr != nil:
 			return fail(loadErr)
+		default:
+			session = &loaded
+			if session.Export().Workspace != workspace || (*modelFlag != "" && session.Export().Model != model) {
+				return fail(errors.New("saved session workspace/model differ from --root/--model"))
+			}
 		}
-		session = &loaded
-		if session.Export().Workspace != workspace || (*modelFlag != "" && session.Export().Model != model) {
-			return fail(errors.New("saved session workspace/model differ from --root/--model"))
-		}
-	} else {
+	}
+	if !resuming {
 		if newID, err = application.NewRandomSessionID(); err != nil {
 			return fail(err)
 		}
@@ -776,6 +789,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	if len(startupWarnings) > 0 {
 		deps.StartupNotice = startupWarnings[0] + " · axlr-tui logs --level WARN"
+	}
+	if heldElsewhere != "" {
+		notice := terminal.Translatef(locale, "notice.sessionHeldNew", string(heldElsewhere)[:8])
+		if deps.StartupNotice != "" {
+			notice += " · " + deps.StartupNotice
+		}
+		deps.StartupNotice = notice
 	}
 	if hasKMP && kmp.Save != nil {
 		deps.MemoryBundle = memoryBundle(kmp.Save)
@@ -1061,7 +1081,7 @@ func (s successorSessions) Continue(ctx context.Context, predecessor domain.Sess
 			if title != "" {
 				title = root.Text(successorTitle(string(title)))
 			}
-			_, _ = s.labels.Initialize(ctx, session.ID(), domain.SessionLabel{Title: title, About: previous.About})
+			_, _ = s.labels.Initialize(ctx, session.ID(), domain.SessionLabel{Title: title, TitleDerived: previous.TitleDerived, About: previous.About})
 		}
 	}
 	if err := s.store.Save(ctx, session); err != nil {

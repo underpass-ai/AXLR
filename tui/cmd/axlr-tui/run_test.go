@@ -504,3 +504,43 @@ func TestRunContinueOpensTheMostRecentSession(t *testing.T) {
 		}
 	}
 }
+
+// On 14 October 2026 --continue on a session open in another console exited
+// with "open in another console": a new session starts in the same
+// workspace instead, and the footer says so.
+func TestRunContinueStartsANewSessionWhenTheLatestIsOpenElsewhere(t *testing.T) {
+	env := cliEnv(t)
+	workspace := t.TempDir()
+	ctx := context.Background()
+	store, err := storage.New(filepath.Join(env["XDG_STATE_HOME"], "axlr", "sessions"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	held := domain.SessionID("0123456789abcdef0123456789abcdef")
+	s, _ := domain.NewSession(held, domain.Workspace(canonicalWorkspace(t, workspace)), "test/model")
+	if err := s.BeginTurn(root.Text("hello"), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Save(ctx, s); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(ctx, held); err != nil { // this console holds it
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"--root", workspace, "--model", "test/model", "-c"}, {"--root", workspace, "--model", "test/model", "--session", string(held)}} {
+		var out bytes.Buffer
+		var state domain.SessionState
+		var notice string
+		if code := run(ctx, args, func(k string) string { return env[k] }, func(m tea.Model) error {
+			app := m.(terminal.AppModel)
+			state, notice = app.Header.State, app.Status.Notice
+			return nil
+		}, &out); code != 0 {
+			t.Fatalf("%v: code %d %s", args, code, &out)
+		}
+		if state.ID == "" || state.ID == held || state.Workspace != domain.Workspace(canonicalWorkspace(t, workspace)) || !strings.Contains(notice, "Session 01234567 is open in another console") {
+			t.Fatalf("%v: opened %q in %q, notice %q", args, state.ID, state.Workspace, notice)
+		}
+	}
+}

@@ -43,6 +43,7 @@ type sessionCeremony struct {
 	StepCall     string           `json:"step_call,omitempty"`
 	Model        string           `json:"model,omitempty"`
 	OperationID  string           `json:"operation_id,omitempty"`
+	ClaimAttempt int              `json:"claim_attempt,omitempty"`
 	Reports      int              `json:"reports,omitempty"`
 	Generic      *sessionGeneric  `json:"generic,omitempty"`
 	Plan         *sessionPlan     `json:"plan,omitempty"`
@@ -75,7 +76,7 @@ func (s *SessionStore) readCeremony(id domain.SessionID) *domain.CeremonyRun {
 	if decoder.Decode(&record) != nil || record.Version != sessionCeremonyVersion {
 		return nil
 	}
-	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, LimitStep: record.LimitStep, LimitResumes: record.LimitResumes, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model, OperationID: record.OperationID, Reports: record.Reports}
+	run := domain.CeremonyRun{Definition: record.Definition, Version: record.Release, Instance: record.Instance, Step: record.Step, Iteration: record.Iteration, Fence: record.Fence, Check: domain.CheckCommand{Program: record.Program, Args: record.Args}, About: record.About, Memory: record.Memory, BudgetBase: record.BudgetBase, Reminded: record.Reminded, LimitStep: record.LimitStep, LimitResumes: record.LimitResumes, Compact: record.Compact, StepCall: record.StepCall, Model: record.Model, OperationID: record.OperationID, ClaimAttempt: record.ClaimAttempt, Reports: record.Reports}
 	if record.Generic != nil {
 		run.Generic = &domain.GenericRun{Prompts: record.Generic.Prompts, Terminal: record.Generic.Terminal}
 	}
@@ -110,7 +111,7 @@ func (s *SessionStore) writeCeremony(id domain.SessionID, run *domain.CeremonyRu
 		}
 		return nil
 	}
-	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, LimitStep: run.LimitStep, LimitResumes: run.LimitResumes, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model, OperationID: run.OperationID, Reports: run.Reports}
+	record := sessionCeremony{Version: sessionCeremonyVersion, Definition: run.Definition, Release: run.Version, Instance: run.Instance, Step: run.Step, Iteration: run.Iteration, Fence: run.Fence, Program: run.Check.Program, Args: run.Check.Args, About: run.About, Memory: run.Memory, BudgetBase: run.BudgetBase, Reminded: run.Reminded, LimitStep: run.LimitStep, LimitResumes: run.LimitResumes, Compact: run.Compact, StepCall: run.StepCall, Model: run.Model, OperationID: run.OperationID, ClaimAttempt: run.ClaimAttempt, Reports: run.Reports}
 	if run.Generic != nil {
 		record.Generic = &sessionGeneric{Prompts: run.Generic.Prompts, Terminal: run.Generic.Terminal}
 	}

@@ -16,8 +16,10 @@ import (
 const maxWorkspaceFiles = 20000
 
 // skippedDirectories are never listed for @: version control, dependencies
-// and build output, which drown the files a prompt names.
-var skippedDirectories = map[string]bool{".git": true, ".hg": true, ".svn": true, "node_modules": true, "vendor": true, "dist": true, "target": true, ".venv": true, "venv": true, "__pycache__": true, ".cache": true, ".idea": true, ".axlr": true}
+// and build output, which drown the files a prompt names, and the console's
+// own stores (.axlr, and .kernel, the checkout's KMP store, since 14
+// October 2026).
+var skippedDirectories = map[string]bool{".git": true, ".hg": true, ".svn": true, "node_modules": true, "vendor": true, "dist": true, "target": true, ".venv": true, "venv": true, "__pycache__": true, ".cache": true, ".idea": true, ".axlr": true, ".kernel": true}
 
 // errWalkLimit stops the walk at maxWorkspaceFiles entries.
 var errWalkLimit = errors.New("workspace walk limit")

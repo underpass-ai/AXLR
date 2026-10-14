@@ -38,8 +38,8 @@ func (readyEngine) Handoff(context.Context, application.HostHandoff) error {
 func (readyEngine) Renew(context.Context, string, string, string, time.Duration) error {
 	return nil
 }
-func (readyEngine) OperationID(context.Context, string, string, string) (string, error) {
-	return "", nil
+func (readyEngine) Operation(context.Context, string, string, string) (application.ClaimOperation, error) {
+	return application.ClaimOperation{}, nil
 }
 
 type preparerStub struct {

@@ -104,6 +104,17 @@ func TestResolveToolExecutionOutcomes(t *testing.T) {
 			if err == nil || !a.Outcome.Uncertain || s.Status() != domain.StatusInterrupted {
 				t.Fatalf("uncertain outcome %+v %v", s.Export(), err)
 			}
+			// A call the person cancelled says so and asks not to be run
+			// again; on 14 October 2026 "effect unknown: context canceled"
+			// read as a failure and glm-5.3-flash retried it on the next
+			// prompt. A timeout is still a failure of unknown effect.
+			content := string(a.Outcome.Content)
+			if kind == "cancel" && (content != cancelledByPerson || !strings.Contains(content, "Do not run it again unless the person asks")) {
+				t.Fatalf("cancelled call reads %q", content)
+			}
+			if kind == "timeout" && !strings.HasPrefix(content, "tool execution failed; effect unknown: ") {
+				t.Fatalf("timed-out call reads %q", content)
+			}
 			restored, e := domain.RestoreSession(store.states[len(store.states)-1])
 			if e != nil {
 				t.Fatal(e)

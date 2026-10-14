@@ -91,14 +91,85 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 
 // callBudget is where the current tool-call budget starts in the turn's
 // count and how many calls it allows: the turn's, or a ceremony step's,
-// which starts when the step was accepted.
+// which starts when the step was accepted. A Jev follow-up allows only
+// what the person's request left (see JevNotePrefix).
 func (s Session) callBudget(turnLimit int) (base, limit int) {
 	base, limit = s.state.FinishedBudgetBase, turnLimit
 	if s.state.Ceremony != nil {
 		base = max(base, s.state.Ceremony.BudgetBase)
 		limit = s.state.Ceremony.StepCallLimit(turnLimit)
+		return base, limit
+	}
+	if at := lastTurnStart(s.state.Messages); at >= 0 && JevNote(s.state.Messages[at].Content) {
+		limit = max(0, turnLimit-requestCalls(s.state.Messages, at))
 	}
 	return base, limit
+}
+
+// JevNotePrefix opens the console's follow-up turn when Jev doubts a final
+// answer. The follow-up is not the person's word, so it does not start a
+// new tool-call allowance: it gets what the person's request left
+// (turn_tool_calls less the calls already made). The turn's count still
+// restarts at the note, as at every user message, and the allowance is
+// read from the transcript, so a saved session replays to the same
+// count. On 14 October 2026, with turn_tool_calls 8, a request used 8
+// calls and its Jev follow-up ran 8 more.
+const JevNotePrefix = "[AXLR · Jev]"
+
+// JevNote reports whether a message is a Jev follow-up.
+func JevNote(content axlr.Text) bool {
+	return strings.HasPrefix(string(content), JevNotePrefix)
+}
+
+// RequestCallsUsed is how many tool calls the person's last request has
+// made so far, console turns included, the calls refused over budget left
+// out.
+func (s Session) RequestCallsUsed() int {
+	return requestCalls(s.state.Messages, len(s.state.Messages))
+}
+
+// lastTurnStart is the index of the user message that started the current
+// turn: the last one that is not a budget note, which joins a running
+// turn. It is -1 without one.
+func lastTurnStart(messages []axlr.Message) int {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == axlr.RoleUser && !BudgetNote(messages[i].Content) {
+			return i
+		}
+	}
+	return -1
+}
+
+// consoleNotePrefix opens every message the console writes as a user
+// message; the person's own messages never start with it.
+const consoleNotePrefix = "[AXLR"
+
+// requestCalls counts the tool calls made before end since the person's
+// last message before it, console turns in between included, the calls
+// refused over budget left out, as TurnCallCount does.
+func requestCalls(messages []axlr.Message, end int) int {
+	start := -1
+	for i := end - 1; i >= 0; i-- {
+		if messages[i].Role == axlr.RoleUser && !strings.HasPrefix(string(messages[i].Content), consoleNotePrefix) {
+			start = i
+			break
+		}
+	}
+	if start < 0 {
+		return 0
+	}
+	calls := 0
+	for _, message := range messages[start+1 : end] {
+		switch message.Role {
+		case axlr.RoleAssistant:
+			calls += len(message.ToolCalls)
+		case axlr.RoleTool:
+			if strings.HasPrefix(string(message.Content), OverBudgetOutcomePrefix) {
+				calls--
+			}
+		}
+	}
+	return max(0, calls)
 }
 
 // CallsLeft is how many tool calls the current budget still allows, and

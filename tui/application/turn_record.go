@@ -50,6 +50,7 @@ const (
 	turnCompleted  = "completed"
 	turnError      = "error"
 	turnDenied     = "denied"
+	turnCancelled  = "cancelled"
 	turnRejected   = "rejected"
 	turnOverBudget = "over_budget"
 	turnUnknown    = "unknown"
@@ -329,7 +330,12 @@ func actionTarget(call root.ToolCall) string {
 }
 
 // classifyOutcome reads a tool result: the console's refusals are plain
-// text, the runtime's results a JSON envelope.
+// text, the runtime's results a JSON envelope whose "error" is null when
+// the call succeeded. It is the one reader of a result's outcome: the turn
+// record, the shortened closed-turn writes and Jev's final check all use
+// it. On 14 October 2026 the final check took every result holding
+// `"error"` for a failure, `"error":null` included, and Jev doubted three
+// of four correct answers.
 func classifyOutcome(result string) (outcome, reason string) {
 	switch {
 	case result == "":
@@ -337,6 +343,11 @@ func classifyOutcome(result string) (outcome, reason string) {
 	case strings.HasPrefix(result, "tool call denied by user"):
 		_, reason, _ = strings.Cut(result, ": ")
 		return turnDenied, strings.TrimSpace(reason)
+	case strings.HasPrefix(result, "tool call cancelled"):
+		// A pending call the person cancelled, or one cancelled while it ran.
+		return turnCancelled, ""
+	case strings.HasPrefix(result, "tool execution failed; effect unknown") || strings.HasPrefix(result, "tool execution started; effect unknown"):
+		return turnError, "effect unknown"
 	case strings.HasPrefix(result, "not run: over the turn's tool-call budget"):
 		return turnOverBudget, ""
 	case strings.HasPrefix(result, "invalid tool invocation rejected") || strings.HasPrefix(result, "unknown tool"):
@@ -362,6 +373,9 @@ func classifyOutcome(result string) (outcome, reason string) {
 		return turnCompleted, ""
 	}
 	if envelope.Status == "" {
+		if envelope.Error != nil {
+			return turnError, envelope.Error.Code
+		}
 		var host struct {
 			Error string `json:"error"`
 		}

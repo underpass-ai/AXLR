@@ -23,13 +23,23 @@ type CeremonyEnginePort interface {
 	// step the model will not hand back, or the person's stop.
 	Cancel(ctx context.Context, instance, reason string) error
 	// Report tells MADE where the host stands on a claimed step (decision
-	// H5); Renew extends a claim's lease; OperationID reads a claim's
-	// operation id, which the claim receipt does not carry.
+	// H5); Renew extends a claim's lease; Operation reads a claim's
+	// operation id and step attempt, which a report must repeat.
 	Report(ctx context.Context, report HostReport) error
 	Renew(ctx context.Context, instance, step, fence string, lease time.Duration) error
-	OperationID(ctx context.Context, instance, step, fence string) (string, error)
+	Operation(ctx context.Context, instance, step, fence string) (ClaimOperation, error)
 	// Handoff journals that a claim's host incarnation is gone (decision
 	// H6): a console that finds a claim of an earlier incarnation of
 	// itself declares it lost, with the evidence, before completing it.
 	Handoff(ctx context.Context, handoff HostHandoff) error
+}
+
+// ClaimOperation is what MADE checks a host report against besides the
+// fence and the owner: the claim's operation id and the attempt of the
+// claimed step record. On 14 October 2026 every report of v0.8.1 was
+// refused as "claim was changed by someone else first" because none
+// carried the attempt and MADE read the missing field as zero.
+type ClaimOperation struct {
+	ID      string
+	Attempt int
 }

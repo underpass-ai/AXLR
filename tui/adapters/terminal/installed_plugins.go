@@ -34,7 +34,9 @@ func NewInstalledPlugins() InstalledPlugins {
 	search.Placeholder = Translate(English, "catalog.search")
 	marketplace := textinput.New()
 	marketplace.Placeholder = Translate(English, "catalog.marketplacePlaceholder")
-	return InstalledPlugins{Search: search, MarketplaceInput: marketplace, Details: viewport.New()}
+	details := viewport.New()
+	details.SoftWrap = true // as /mcp's: a long description or path wraps
+	return InstalledPlugins{Search: search, MarketplaceInput: marketplace, Details: details}
 }
 
 func (p *InstalledPlugins) Resize(w, h int) {
@@ -228,6 +230,9 @@ func (p *InstalledPlugins) Update(msg tea.Msg) ControlIntent {
 			}
 			return ""
 		}
+	}
+	if key, ok := msg.(tea.KeyPressMsg); ok && jumpViewport(&p.Details, key.String()) {
+		return ""
 	}
 	p.Details, _ = p.Details.Update(msg)
 	return ""

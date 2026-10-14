@@ -59,10 +59,12 @@ type CeremonyRun struct {
 	// StepCall is the axlr_step_done call that opened the current step; the
 	// compact projection cuts the transcript after its results.
 	StepCall string
-	// OperationID is the live claim's operation id and Reports the count
+	// OperationID and ClaimAttempt are the live claim's operation id and
+	// step attempt, which every host report repeats, and Reports the count
 	// of host reports on this instance (decision H5).
-	OperationID string
-	Reports     int
+	OperationID  string
+	ClaimAttempt int
+	Reports      int
 	// Generic is the state of a definition driven through /ceremony's
 	// generic loop; nil for the console's own definitions.
 	Generic *GenericRun

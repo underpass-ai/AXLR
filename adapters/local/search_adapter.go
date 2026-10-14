@@ -32,10 +32,21 @@ const (
 // errWalkStop ends a walk early without an error.
 var errWalkStop = errors.New("walk stopped")
 
+// unwalked reports a directory a walk from a parent never enters: .git,
+// and the console's own stores, .axlr (session exports, settings) and
+// .kernel (the KMP store and its logs). On 14 October 2026 a search for
+// "func" filled its page with matches in a 544 KB session export under
+// .axlr and a recursive listing ran out before calc/. A scope inside one
+// of them is still walked: the caller asked for it.
+func unwalked(name string) bool {
+	return name == ".git" || name == ".axlr" || name == ".kernel"
+}
+
 // Search walks c.Scope through the workspace root in name order, depth
 // first, and reports the lines matching c.Pattern. Every entry is Lstat'ed
-// through the root: a symlink is never followed, .git is never entered and
-// only regular files are opened, so nothing outside the workspace is read.
+// through the root: a symlink is never followed, .git, .axlr and .kernel are
+// never entered below the scope and only regular files are opened, so
+// nothing outside the workspace is read.
 func (a *FileAdapter) Search(ctx context.Context, c domain.SearchCommand) (domain.SearchResult, error) {
 	result := domain.SearchResult{Matches: []domain.SearchMatch{}, Offset: c.Offset}
 	seen := 0
@@ -109,7 +120,7 @@ func (a *FileAdapter) Search(ctx context.Context, c domain.SearchCommand) (domai
 	switch {
 	case info.IsDir():
 		err = a.walk(string(c.Scope), 1, 0, func(rel string, info fs.FileInfo, _ int) (bool, error) {
-			if info.Name() == ".git" {
+			if unwalked(info.Name()) {
 				return false, nil
 			}
 			if info.IsDir() {
@@ -136,8 +147,8 @@ func (a *FileAdapter) Search(ctx context.Context, c domain.SearchCommand) (domai
 }
 
 // List reports the entries under c.Scope in name order, depth first, down
-// to c.Depth levels. A symlink is listed as one and never followed; .git is
-// listed but not entered. A scope that is not a directory lists itself.
+// to c.Depth levels. A symlink is listed as one and never followed; .git,
+// .axlr and .kernel are listed but not entered. A scope that is not a directory lists itself.
 func (a *FileAdapter) List(ctx context.Context, c domain.ListCommand) (domain.ListResult, error) {
 	result := domain.ListResult{Entries: []domain.ListEntry{}, Offset: c.Offset}
 	info, err := a.root.Lstat(string(c.Scope))
@@ -170,7 +181,7 @@ func (a *FileAdapter) List(ctx context.Context, c domain.ListCommand) (domain.Li
 				result.Entries = append(result.Entries, listEntry(rel, info))
 			}
 		}
-		return info.IsDir() && info.Name() != ".git", nil
+		return info.IsDir() && !unwalked(info.Name()), nil
 	}, func() {})
 	if err != nil && !errors.Is(err, errWalkStop) {
 		return domain.ListResult{}, err

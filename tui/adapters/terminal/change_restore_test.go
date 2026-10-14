@@ -123,7 +123,7 @@ func TestUInChangesRestoresTheSelectedStep(t *testing.T) {
 	m = update(m, typed('u'))
 	next, cmd = m.Update(typed('y'))
 	m = drain(t, next.(AppModel), cmd)
-	if files["b.go"] != "edited by hand\n" || !strings.Contains(m.Status.Error, "changed after step w3") {
+	if files["b.go"] != "edited by hand\n" || m.Status.Error != "Not restored: b.go changed after the session wrote it, and nothing was put back" {
 		t.Fatalf("b.go %q, error %q", files["b.go"], m.Status.Error)
 	}
 }
@@ -152,5 +152,33 @@ func TestUndoPutsBackTheLastTurn(t *testing.T) {
 	m = update(m, ControlIntent("send"))
 	if m.undoAsking || m.Status.Notice != "The last turn is already undone" {
 		t.Fatalf("a second /undo: %q", m.Status.Notice)
+	}
+}
+
+// On 14 October 2026 /undo after a turn that only read said "The last turn
+// changed no file": it now offers the most recent turn that changed files,
+// with the same y, and an undone turn is not offered again.
+func TestUndoOffersTheLatestTurnThatChangedFiles(t *testing.T) {
+	m, files := restoreModel(t)
+	defer m.zones.Close()
+	if err := m.deps.Session.BeginTurn("just read", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := m.deps.Session.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "read"}}); err != nil {
+		t.Fatal(err)
+	}
+	m.Header.State = m.deps.Session.Export()
+	m.Composer.Input.SetValue("/undo")
+	m = update(m, ControlIntent("send"))
+	if !m.undoAsking || !strings.Contains(m.Status.Notice, "The last turn changed no file: undo turn 1's changes to b.go, a.go? y restores") {
+		t.Fatalf("notice %q", m.Status.Notice)
+	}
+	next, cmd := m.Update(typed('y'))
+	m = drain(t, next.(AppModel), cmd)
+	if files["a.go"] != "one\n" || files["b.go"] != "x\n" || !strings.Contains(m.Transcript.Text(), "undid turn 1: restored b.go, a.go") || !strings.Contains(m.Status.Notice, "undid turn 1") {
+		t.Fatalf("files %v, error %q, notice %q", files, m.Status.Error, m.Status.Notice)
+	}
+	if turn := m.Header.State.LatestChangingTurn(); turn != 0 {
+		t.Fatalf("an undone turn is offered again: %d", turn)
 	}
 }

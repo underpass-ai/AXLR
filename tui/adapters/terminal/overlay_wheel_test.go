@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	root "github.com/underpass-ai/AXLR/domain"
 )
@@ -53,5 +54,34 @@ func TestMouseWheelScrollsTheOverlayNotTheHiddenConversation(t *testing.T) {
 	m = update(m, ControlIntent("search"))
 	if m = update(m, wheel); m.Transcript.Viewport.YOffset() == 0 {
 		t.Fatal("the wheel no longer scrolls the conversation during search")
+	}
+}
+
+// On 14 October 2026 the info panel (Ctrl+P → I) scrolled with PgUp and
+// PgDn but ignored Home and End; /usage, /session and the /mcp detail did
+// too.
+func TestHomeAndEndJumpInScrollingPanels(t *testing.T) {
+	long := strings.Repeat("row\n", 80)
+	for _, overlay := range []ControlIntent{"info", "session", "usage", "memory"} {
+		for _, keys := range [][2]tea.KeyPressMsg{{{Code: tea.KeyEnd}, {Code: tea.KeyHome}}, {{Code: tea.KeyEnd, Mod: tea.ModCtrl}, {Code: tea.KeyHome, Mod: tea.ModCtrl}}} {
+			m := sized()
+			m.overlay = overlay
+			m.Info.SetContent(long)
+			m.Info.Viewport.GotoTop()
+			if m = update(m, keys[0]); !m.Info.Viewport.AtBottom() {
+				t.Fatalf("%s: %s did not reach the end", overlay, keys[0].String())
+			}
+			if m = update(m, keys[1]); m.Info.Viewport.YOffset() != 0 {
+				t.Fatalf("%s: %s did not reach the top", overlay, keys[1].String())
+			}
+		}
+	}
+	p := PluginPanel{Details: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5))}
+	p.Details.SetContent(long)
+	if p.Update(tea.KeyPressMsg{Code: tea.KeyEnd}, "mcp"); !p.Details.AtBottom() {
+		t.Fatal("/mcp: End did not reach the end of the detail")
+	}
+	if p.Update(tea.KeyPressMsg{Code: tea.KeyHome}, "mcp"); p.Details.YOffset() != 0 {
+		t.Fatal("/mcp: Home did not reach the top of the detail")
 	}
 }

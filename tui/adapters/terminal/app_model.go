@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -147,6 +148,12 @@ type AppModel struct {
 	// went back. undoAsking waits for the key that answers /undo.
 	restoreOperation uint64
 	undoAsking       bool
+	// undoTurn is the earlier turn /undo asks to undo, 0 for the last.
+	undoTurn int
+	// noticeAt is when the footer's notice was raised; lastingNotice is a
+	// notice no time ends (see footer_notice.go).
+	noticeAt      time.Time
+	lastingNotice string
 	// turnCosts are the finished turns' usage by the number of messages
 	// each ended after, drawn under them; turnLog the last ones, for
 	// /usage. Both are this console's, from the ledger's totals.
@@ -212,6 +219,10 @@ func New(deps Dependencies) AppModel {
 	m := AppModel{lifetime: &lifecycle{ctx: ctx, cancel: cancel}, deps: deps, UIPreferences: deps.UIPreferences, Theme: Theme{ID: deps.UIPreferences.Theme, Icons: deps.UIPreferences.Icons, Locale: deps.Locale, Monochrome: deps.Monochrome}, Composer: NewComposer(deps.Monochrome, deps.Locale), Transcript: NewTranscript(), Plugins: NewPluginPanel(), InstalledPlugins: NewInstalledPlugins(), activitySpinner: spinner.New(spinner.WithSpinner(spinner.Spinner{Frames: []string{"◐", "◓", "◑", "◒"}, FPS: 125 * time.Millisecond})), zones: z, prefix: z.NewPrefix(), steer: &steerQueue{}, pasted: map[string]bool{}}
 	m.Header.About, m.Header.Memories, m.Header.MemoriesKnown = deps.About, deps.Memories, deps.MemoriesKnown
 	m.Plugins.Facts = deps.EngineFacts
+	for engine := range deps.EngineFacts {
+		m.Header.Engines = append(m.Header.Engines, singleLine(engine))
+	}
+	sort.Strings(m.Header.Engines)
 	m.withCommandAllows()
 	m.Composer.ApplyTheme(m.Theme)
 	m.Changes = NewChangeViewer()
@@ -267,6 +278,7 @@ func (m AppModel) Init() tea.Cmd {
 	if os.Getenv("TERM") != "dumb" {
 		repairs = tea.Batch(repairs, startTitle())
 	}
+	repairs = tea.Batch(repairs, nextNoticeTick())
 	if m.Theme.Monochrome {
 		return repairs
 	}
@@ -279,8 +291,13 @@ func (m AppModel) Init() tea.Cmd {
 // Update handles a message, then rings and sets the terminal's title as
 // what it changed asks.
 func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(noticeTick); ok {
+		// Every two seconds while idle: no trace span, nothing to signal.
+		return m.noticeTicked()
+	}
+	before := m.footerBefore()
 	next, cmd := m.handle(msg)
-	return next.(AppModel).signal(cmd)
+	return next.(AppModel).settleFooter(before, msg).signal(cmd)
 }
 
 func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -787,6 +804,8 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.restoreOperation = 0
 			if v.Err == nil {
 				m.Status.Notice = m.restoredNotice(v.Session.Export())
+			} else if changed := (application.FileChangedError{}); errors.As(v.Err, &changed) {
+				m.Status.Error = m.Theme.Tf("changes.restoreChanged", singleLine(string(changed.Path)))
 			}
 		}
 		if v.Fresh && v.Err == nil {
@@ -876,8 +895,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m.quit()
 			}
-			if !known && unknownSlashWord(command) {
-				m.Status.Error = m.Theme.Tf("error.unknownCommand", command)
+			if word, unknown := unknownSlashWord(command, string(m.Header.State.Workspace)); unknown {
+				// The draft stays in the composer to be corrected.
+				m.Status.Error = m.Theme.Tf("error.unknownCommand", word)
 				return m, nil
 			}
 			if !known {
@@ -1323,6 +1343,10 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 		m.Composer.Input.Reset()
 		m.clearStaleError()
 		m.refreshTranscript()
+		// A person who sends goes to what they sent: on 14 October 2026 a
+		// prompt sent while scrolled up left it, its tool rows and its
+		// approval card below the view behind "↓ 34 new lines · End".
+		m.jumpBottom()
 		// The queued message waits for the current model step: the turn
 		// takes it after its next tool step, or it starts the next turn.
 		return m, nil
@@ -1368,6 +1392,7 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	}
 	m.Header.State.Messages = append(m.Header.State.Messages, root.Message{Role: root.RoleUser, Content: prompt})
 	m.refreshTranscript()
+	m.jumpBottom()
 	cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 		return m.deps.Start.Execute(ctx, s, prompt, emit)
 	})

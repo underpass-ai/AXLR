@@ -37,14 +37,25 @@ func TestProjectionShortensWriteArgumentsOfClosedTurnsOnly(t *testing.T) {
 	if err := json.Unmarshal(calls[0].Arguments.Bytes(), &shortened); err != nil {
 		t.Fatal(err)
 	}
-	if shortened["path"] != "a.go" || shortened["mode"] != "create" || shortened["content"] != nil || shortened["content_omitted_bytes"] != float64(len(content)) || !strings.Contains(shortened["recover"].(string), "local_read") {
+	// The shortened form is a record under one key that is no tool
+	// parameter, so it does not read as a call to copy (14 October 2026:
+	// glm-5.3-flash sent the earlier form back as local_write arguments).
+	omitted, _ := shortened[omittedKey].(map[string]any)
+	if len(shortened) != 3 || shortened["path"] != "a.go" || shortened["mode"] != "create" || omitted["content_bytes"] != float64(len(content)) || !strings.Contains(omitted["note"].(string), "local_read") || !strings.Contains(omitted["note"].(string), "a new local_write needs its full content") {
 		t.Fatalf("closed write: %s", calls[0].Arguments.Bytes())
 	}
+	shortened = nil
 	if err := json.Unmarshal(calls[1].Arguments.Bytes(), &shortened); err != nil {
 		t.Fatal(err)
 	}
-	if shortened["path"] != "b.go" || shortened["old_text_omitted_bytes"] != float64(len(content)) || shortened["new_text_omitted_bytes"] != float64(1) {
+	omitted, _ = shortened[omittedKey].(map[string]any)
+	if len(shortened) != 2 || shortened["path"] != "b.go" || omitted["old_text_bytes"] != float64(len(content)) || omitted["new_text_bytes"] != float64(1) || !strings.Contains(omitted["note"].(string), "full old_text and new_text") {
 		t.Fatalf("closed edit: %s", calls[1].Arguments.Bytes())
+	}
+	for _, arguments := range []string{string(calls[0].Arguments.Bytes()), string(calls[1].Arguments.Bytes())} {
+		if strings.Contains(arguments, `"recover"`) || strings.Contains(arguments, "_omitted_bytes") || strings.Contains(arguments, "expected_sha256") {
+			t.Fatalf("the record keeps a call's shape: %s", arguments)
+		}
 	}
 	// A small write and other tools stay exact, as does the current turn.
 	if string(calls[2].Arguments.Bytes()) != string(small.Arguments.Bytes()) || string(calls[3].Arguments.Bytes()) != string(read.Arguments.Bytes()) {
@@ -63,7 +74,10 @@ func TestProjectionShortensWriteArgumentsOfClosedTurnsOnly(t *testing.T) {
 // only copy of that text.
 func TestProjectionKeepsTheArgumentsOfAWriteThatDidNotHappen(t *testing.T) {
 	content := strings.Repeat("línea de código\n", 200)
-	results := []root.Text{"tool call denied by user", `{"protocol_version":1,"tool":"write","status":"failed","error":{"code":"io_error","message":"disk full"}}`}
+	results := []root.Text{"tool call denied by user", `{"protocol_version":1,"tool":"write","status":"failed","error":{"code":"io_error","message":"disk full"}}`,
+		`{"protocol_version":1,"tool":"write","status":"rejected","error":{"code":"invalid_arguments","message":"replace requires expected_sha256: pass the content_sha256 of a local_read of a.go"}}`,
+		"invalid tool invocation rejected: local_write: replace requires expected_sha256: pass the content_sha256 of a local_read of a.go",
+		cancelledByPerson, "tool execution failed; effect unknown: boom"}
 	for _, result := range results {
 		write := recordCall(t, "w1", "local_write", `{"path":"a.go","content":`+quoteJSON(content)+`,"mode":"create"}`)
 		original := []root.Message{
@@ -77,7 +91,7 @@ func TestProjectionKeepsTheArgumentsOfAWriteThatDidNotHappen(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got := string(projection.Messages[1].ToolCalls[0].Arguments.Bytes()); got != string(write.Arguments.Bytes()) {
+		if got := string(projection.Messages[1].ToolCalls[0].Arguments.Bytes()); got != string(write.Arguments.Bytes()) || strings.Contains(got, omittedKey) || strings.Contains(got, `"recover"`) {
 			t.Fatalf("%.30q: a write that did not happen was shortened to %s", result, got)
 		}
 	}

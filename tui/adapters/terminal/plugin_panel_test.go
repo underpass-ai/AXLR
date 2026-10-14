@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -234,5 +235,24 @@ func TestEngineFactsAreTranslated(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Fatalf("details lack %q:\n%s", want, text)
 		}
+	}
+}
+
+// On 14 October 2026 /mcp cut the store path ("…4c2") and the work
+// identity ("(un agente por almacén, un cont") at the detail's edge.
+func TestMCPDetailWrapsLongValues(t *testing.T) {
+	store := "/tmp/claude-1000/-home-gx10a-Documents-ai-AXLR/88338e7f-86bd-4af8-a524-88f27f6c4a23/ws/.kernel"
+	p := NewPluginPanel()
+	p.Theme = Theme{Monochrome: true}
+	p.Facts = map[string][]EngineFact{"kmp": {{Key: "mcp.store", Value: store}, {Key: "mcp.identity", Value: "axlr:98fb", NoteKey: "mcp.identityNote"}}}
+	p.SetItems([]domain.PluginState{{Profile: domain.PluginProfile{ID: "kmp", Name: "kmp"}}})
+	p.Resize(100, 30)
+	var joined strings.Builder
+	for _, line := range strings.Split(ansi.Strip(p.Details.View()), "\n") {
+		joined.WriteString(strings.TrimRight(line, " "))
+	}
+	note := strings.Fields(Translate(English, "mcp.identityNote"))
+	if !strings.Contains(joined.String(), store) || !strings.Contains(joined.String(), note[len(note)-1]) {
+		t.Fatalf("a long value was cut:\n%s", ansi.Strip(p.Details.View()))
 	}
 }

@@ -49,7 +49,7 @@ func (s *SessionLabelStore) Load(ctx context.Context) (map[domain.SessionID]doma
 	}
 	labels := make(map[domain.SessionID]domain.SessionLabel, len(record.Labels))
 	for id, entry := range record.Labels {
-		labels[domain.SessionID(id)] = domain.SessionLabel{Title: root.Text(entry.Title), Archived: entry.Archived, About: entry.About}
+		labels[domain.SessionID(id)] = domain.SessionLabel{Title: root.Text(entry.Title), TitleDerived: entry.TitleDerived, Archived: entry.Archived, About: entry.About}
 	}
 	return labels, nil
 }
@@ -113,8 +113,13 @@ func (s *SessionLabelStore) update(ctx context.Context, id domain.SessionID, lab
 	}
 	if initialize {
 		entry := record.Labels[string(id)]
-		if entry.Title != "" {
-			label.Title = root.Text(entry.Title)
+		// A title stays unless the console derived it and the person or
+		// the model now gives one.
+		if entry.Title != "" && !(entry.TitleDerived && label.Title != "" && !label.TitleDerived) {
+			label.Title, label.TitleDerived = root.Text(entry.Title), entry.TitleDerived
+		}
+		if label.Title == "" {
+			label.TitleDerived = false
 		}
 		if entry.About != "" {
 			label.About = entry.About
@@ -128,7 +133,7 @@ func (s *SessionLabelStore) update(ctx context.Context, id domain.SessionID, lab
 	if label == (domain.SessionLabel{}) {
 		delete(record.Labels, string(id))
 	} else {
-		record.Labels[string(id)] = sessionLabelEntry{Title: string(label.Title), Archived: label.Archived, About: label.About}
+		record.Labels[string(id)] = sessionLabelEntry{Title: string(label.Title), TitleDerived: label.TitleDerived && label.Title != "", Archived: label.Archived, About: label.About}
 	}
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
@@ -161,8 +166,10 @@ func (s *SessionLabelStore) read() (sessionLabelsRecord, error) {
 	if err != nil {
 		return record, err
 	}
+	// A field this version does not know is ignored, not refused: on 14
+	// October 2026 title_derived was added, and a console that refused
+	// unknown fields read the whole file as invalid while a newer one ran.
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&record); err != nil || record.Version != sessionLabelsVersion {
 		return record, errors.New("invalid session labels file")
 	}

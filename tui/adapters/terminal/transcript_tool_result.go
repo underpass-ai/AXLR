@@ -343,3 +343,26 @@ func scalarText(value any) string {
 func indentLines(text, indent string) string {
 	return indent + strings.ReplaceAll(text, "\n", "\n"+indent)
 }
+
+// toggleLastToolResult opens what the session's last tool call returned
+// under its row, or folds it, and shows the row: on 14 October 2026 a
+// result opened only with the mouse. Ctrl+P → L.
+func (m AppModel) toggleLastToolResult() AppModel {
+	messages := m.Header.State.Messages
+	for i := len(messages) - 1; i >= 0; i-- {
+		calls := messages[i].ToolCalls
+		if len(calls) == 0 {
+			continue
+		}
+		key := toolNoteKey(calls[len(calls)-1].ID)
+		m.Transcript.ToggleNote(key)
+		m.refreshTranscript()
+		if line, ok := m.Transcript.NoteLine(key); ok {
+			m.Transcript.Viewport.SetYOffset(max(0, line-1))
+			m.markBottom()
+		}
+		return m
+	}
+	m.Status.Notice = m.Theme.T("notice.noToolResult")
+	return m
+}

@@ -71,7 +71,7 @@ func TestSAllowsTheExactCommandForTheSession(t *testing.T) {
 func TestExecAllowKeyIsExact(t *testing.T) {
 	key := func(raw string) string { k, _ := execAllowKey([]byte(raw)); return k }
 	base := key(`{"program":"go","args":["test","./..."]}`)
-	for _, same := range []string{`{"args":["test","./..."],"program":"go","cwd":"./","timeout_ms":9,"max_output_bytes":10,"stdin":""}`, `{"program":"go","args":["test","./..."],"cwd":"."}`} {
+	for _, same := range []string{`{"args":["test","./..."],"program":"go","cwd":"./","timeout_ms":9,"max_output_bytes":10,"stdin":""}`, `{"program":"go","args":["test","./..."],"cwd":"."}`, `{"program":"go","args":["test","./..."],"why":"Run the test suite"}`, `{"program":"go","args":["test","./..."],"why":"Run the exact go test ./... command again"}`} {
 		if key(same) != base {
 			t.Fatalf("%s differs", same)
 		}

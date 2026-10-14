@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -92,6 +93,10 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 	if summary, ok := localListingSummary(call, theme); ok {
 		args = summary
 	} else if summary, ok := localExecSummary(call); ok {
+		args = summary
+	} else if summary, ok := localFileSummary(call); ok {
+		args = summary
+	} else if summary, ok := stepDoneSummary(call); ok {
 		args = summary
 	}
 	if args != "" {
@@ -183,6 +188,10 @@ func toolArgumentSummary(call root.ToolCall) string {
 // summaryValue appends a value, or puts it first when it is the call's path:
 // a model may send the path after the other arguments.
 func summaryValue(values []string, key any, value string) []string {
+	if slices.Contains(values, value) {
+		// The same value twice ("calc/calc.go calc/calc.go") says it once.
+		return values
+	}
 	if key == "path" {
 		return append([]string{value}, values...)
 	}
@@ -219,6 +228,55 @@ func localListingSummary(call root.ToolCall, theme Theme) (string, bool) {
 		summary += " (" + args.Glob + ")"
 	}
 	return ansi.Truncate(singleLine(summary), toolRowArgumentWidth, "…"), true
+}
+
+var modeField = regexp.MustCompile(`"mode":\s*"(create|replace)"`)
+
+// localFileSummary reads a write as its path and mode and an edit as its
+// path. On 14 October 2026 a replace read "local_write calc/calc.go
+// 36dc0cc81d1ed…": the scalar summary listed expected_sha256, which says
+// nothing to the person, and pushed the mode out of the row.
+func localFileSummary(call root.ToolCall) (string, bool) {
+	if call.Name != "local_write" && call.Name != "local_edit" {
+		return "", false
+	}
+	raw := call.Arguments.Bytes()
+	match := pathField.FindSubmatch(raw)
+	if match == nil {
+		return "", false
+	}
+	summary := string(match[1])
+	if call.Name == "local_write" {
+		if mode := modeField.FindSubmatch(raw); mode != nil {
+			summary += " · " + string(mode[1])
+		}
+	}
+	return ansi.Truncate(singleLine(summary), toolRowArgumentWidth, "…"), true
+}
+
+// stepDoneFields are the axlr_step_done fields that say what a step handed
+// back, the first one sent naming the row: on 14 October 2026 a step that
+// sent its scope and its draft path read "calc/calc.go calc/calc.go".
+var stepDoneFields = []string{"summary", "root_cause", "observed", "proposed_fix", "scope", "draft_path", "expected", "criteria", "report"}
+
+func stepDoneSummary(call root.ToolCall) (string, bool) {
+	if call.Name != application.HostStepDoneName || len(call.Arguments.Bytes()) > 64<<10 {
+		return "", false
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(call.Arguments.Bytes(), &fields) != nil {
+		return "", false
+	}
+	for _, name := range stepDoneFields {
+		var value string
+		if json.Unmarshal(fields[name], &value) == nil && strings.TrimSpace(value) != "" {
+			return ansi.Truncate(singleLine(value), toolRowArgumentWidth, "…"), true
+		}
+	}
+	if command, ok := execCommand(fields["check_command"]); ok {
+		return ansi.Truncate(command, toolRowArgumentWidth, "…"), true
+	}
+	return "", false
 }
 
 func durationMS(head string) (int64, bool) {
@@ -260,6 +318,10 @@ func formatDuration(ms int64) string {
 func deniedLabel(record *domain.PendingTool) string {
 	if record.Outcome != nil {
 		switch content := string(record.Outcome.Content); {
+		case strings.HasPrefix(content, "invalid tool invocation rejected: ") && notInStep(content):
+			// On 14 October 2026 a write refused because a read-only step
+			// does not offer it read "invalid arguments, the model retries".
+			return "transcript.toolNotInStep"
 		case strings.HasPrefix(content, "invalid tool invocation rejected: "):
 			return "transcript.toolInvalid"
 		case strings.HasPrefix(content, "unknown tool "):
@@ -269,6 +331,12 @@ func deniedLabel(record *domain.PendingTool) string {
 		}
 	}
 	return "transcript.toolDenied"
+}
+
+// notInStep reports a call refused because the ceremony step does not
+// offer its tool, whatever its arguments.
+func notInStep(content string) bool {
+	return strings.Contains(content, " is not available in this step") || strings.Contains(content, " is not available during this ceremony step")
 }
 
 // overCallBudget reports a call the console did not run because the turn's

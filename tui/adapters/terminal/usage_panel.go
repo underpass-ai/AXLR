@@ -48,6 +48,8 @@ func (m AppModel) observeUsage(ledger domain.UsageLedger, warn bool) AppModel {
 	m.cost.ledger = ledger
 	if warn {
 		m.Status.Notice = m.Theme.Tf("notice.budgetWarning", FormatUSD(ledger.Cost), formatBudget(ledger.Limit(m.deps.MaxSessionUSD)))
+		// Said once: it stays until a key, not for a notice's while.
+		m.lastingNotice = m.Status.Notice
 	}
 	return m.refreshUsagePanel()
 }
@@ -155,7 +157,9 @@ func (m AppModel) usageKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		m.Status.Notice = m.Theme.Tf("usage.raised", formatBudget(ledger.Limit(limit)))
 		return m.refreshUsagePanel(), nil
 	}
-	m.Info.Viewport, _ = m.Info.Viewport.Update(k)
+	if !jumpViewport(&m.Info.Viewport, k.String()) {
+		m.Info.Viewport, _ = m.Info.Viewport.Update(k)
+	}
 	return m, nil
 }
 
