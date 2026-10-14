@@ -28,6 +28,8 @@ type SessionStore struct {
 	closed         bool
 	preserveActive bool
 	replace        func(string, string) error
+	// toolSets caches the tool sets this store wrote or read, by reference.
+	toolSets map[string][]dto.AvailableTool
 	// OnDiscard is told each session Close discarded because it never
 	// received a message, so what the console kept about it elsewhere (its
 	// label) goes too.
@@ -61,7 +63,7 @@ func New(stateDir string) (*SessionStore, error) {
 	if e = os.Chmod(stateDir, 0700); e != nil {
 		return nil, e
 	}
-	return &SessionStore{dir: stateDir, locks: make(map[domain.SessionID]*sessionLock), replace: os.Rename}, nil
+	return &SessionStore{dir: stateDir, locks: make(map[domain.SessionID]*sessionLock), replace: os.Rename, toolSets: map[string][]dto.AvailableTool{}}, nil
 }
 
 // NewService preserves active states on ordinary reads. The service performs
@@ -125,6 +127,10 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	if e = s.claim(session.Export().ID); e != nil {
 		return e
 	}
+	if record.ToolSnapshotRef, e = s.storeToolSet(record.ToolSnapshot); e != nil {
+		return e
+	}
+	record.ToolSnapshot, record.Version = nil, storedSnapshotVersion
 	// json.Marshal would escape <, > and & inside tool call arguments, so a
 	// loaded session would no longer send the bytes the live one sent.
 	var encoded bytes.Buffer
@@ -220,6 +226,19 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	}
 	if record.ID != string(id) {
 		return domain.Session{}, errors.New("snapshot ID does not match filename")
+	}
+	if record.Version == storedSnapshotVersion {
+		if record.ToolSnapshot != nil {
+			return domain.Session{}, errors.New("a version 3 snapshot names its tools, it does not carry them")
+		}
+		if record.ToolSnapshotRef != "" {
+			if record.ToolSnapshot, e = s.loadToolSet(record.ToolSnapshotRef); e != nil {
+				return domain.Session{}, e
+			}
+			record.ToolSnapshotRef = ""
+		}
+	} else if record.ToolSnapshotRef != "" {
+		return domain.Session{}, errors.New("only a version 3 snapshot names a tool set")
 	}
 	return restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id), s.readCeremony(id), s.readInstance(id), s.readConsole(id))
 }

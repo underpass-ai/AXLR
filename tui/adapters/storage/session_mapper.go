@@ -74,8 +74,11 @@ func restore(d dto.SessionSnapshot) (domain.Session, error) {
 }
 
 func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Time, mode domain.WorkMode, ceremony *domain.CeremonyRun, instance *domain.SessionInstance, notes consoleNotes) (domain.Session, error) {
-	if d.Version != 1 && d.Version != snapshotVersion {
+	if d.Version != 1 && d.Version != snapshotVersion && d.Version != storedSnapshotVersion {
 		return domain.Session{}, errors.New("unsupported session snapshot version")
+	}
+	if d.ToolSnapshotRef != "" {
+		return domain.Session{}, errors.New("the snapshot names a stored tool set instead of carrying its tools")
 	}
 	s := domain.SessionState{ID: domain.SessionID(d.ID), Owner: d.Owner, Revision: d.Revision, OperationID: d.OperationID, Workspace: domain.Workspace(d.Workspace), Model: root.ModelID(d.Model), Status: domain.SessionStatus(d.Status), Draft: root.Text(d.Draft), TurnCallCount: d.TurnCallCount}
 	for _, m := range d.Messages {

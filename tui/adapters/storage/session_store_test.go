@@ -88,7 +88,7 @@ func TestSessionStoreRestoresChangedModelFromVersionOneSnapshot(t *testing.T) {
 	must(t, err)
 	var record map[string]any
 	must(t, json.Unmarshal(raw, &record))
-	if record["version"] != float64(2) {
+	if record["version"] != float64(storedSnapshotVersion) {
 		t.Fatalf("snapshot version changed: %v", record["version"])
 	}
 	got, err := store.Load(context.Background(), s.Export().ID)

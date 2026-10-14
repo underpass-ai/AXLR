@@ -51,5 +51,10 @@ func (s *SessionStore) Delete(ctx context.Context, id domain.SessionID) error {
 		_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))
 	}
 	delete(s.locks, id)
-	return errors.Join(err, lock.close())
+	err = errors.Join(err, lock.close())
+	if err == nil {
+		// A tool set only the deleted session named goes too.
+		err = s.sweepToolSets()
+	}
+	return err
 }
