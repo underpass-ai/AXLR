@@ -229,7 +229,12 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 		lease = presentLease // the person may answer days later
 	}
 	if fence != "" {
+		// The recovered claim is ours but not the one the run last
+		// recorded: its operation id and attempt are read again, or every
+		// host report of the step would name the earlier claim's.
 		run.Fence, run.Reminded = fence, false
+		operation, _ := d.Engine.Operation(ctx, run.Instance, run.Step, fence)
+		run.OperationID, run.ClaimAttempt = operation.ID, operation.Attempt
 		report["reused_claim"] = run.Step
 	} else if err := d.claimFor(ctx, &run, lease); err != nil {
 		return StepResult{}, err

@@ -222,3 +222,123 @@ func TestTheNextPromptTellsTheModelWhatThePersonRestored(t *testing.T) {
 		t.Fatalf("the note was repeated: %q", prompts[1])
 	}
 }
+
+// /undo reaches the most recent turn that changed files, which need not be
+// the last one; the note said "before your last turn" whatever turn it
+// undid. It now names the turn and the person's prompt that began it.
+func TestTheRestoreNoteNamesTheTurnAnUndoReached(t *testing.T) {
+	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "calc/calc.go", Before: "one", After: "two"}}}, []changeStep{{"w2", domain.FileChange{Path: "b.go", Before: "b0", After: "b1"}}})
+	files := &workspaceFiles{files: map[string]string{"calc/calc.go": "two", "b.go": "b1"}}
+	store := &memoryStore{}
+	restore := RestoreFileUseCase{Tools: files, Store: store}
+	if _, err := restore.UndoTurn(context.Background(), &s, 1); err != nil {
+		t.Fatal(err)
+	}
+	note := restoreNote(s.Export())
+	if !strings.Contains(note, `calc/calc.go to what it held before your turn 1 of 2, not your last, the one the person began with "turn 1" (with /undo)`) || strings.Contains(note, "your last turn") {
+		t.Fatalf("note %q", note)
+	}
+}
+
+// Confirmed live on 14 October 2026: a turn wrote calc.go and
+// calc_test.go, the person restored calc_test.go from Ctrl+D, and /undo
+// offered the turn, found calc_test.go "changed after the session wrote
+// it" and undid nothing, calc.go included. A change restored from the
+// panel counts as undone: the undo puts back what remains.
+func TestUndoSkipsAChangeRestoredFromThePanel(t *testing.T) {
+	s := changedSession(t, []changeStep{
+		{"w1", domain.FileChange{Path: "calc/calc.go", Before: "calc0", After: "calc1"}},
+		{"w2", domain.FileChange{Path: "calc/calc_test.go", Before: "test0", After: "test1"}},
+	})
+	// A later turn ran only reads: the session's last turn changed no file.
+	if err := s.BeginTurn("¿pasan los tests?", repairTools(t)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteAssistant(assistant("sí")); err != nil {
+		t.Fatal(err)
+	}
+	files := &workspaceFiles{files: map[string]string{"calc/calc.go": "calc1", "calc/calc_test.go": "test1"}}
+	u := RestoreFileUseCase{Tools: files, Store: &memoryStore{}}
+	if _, err := u.Restore(context.Background(), &s, "w2"); err != nil {
+		t.Fatal(err)
+	}
+	// /undo offers turn 1, without the restored test file.
+	state := s.Export()
+	if turn, changes := state.LatestChangingTurn(), state.TurnChanges(1); turn != 1 || len(changes) != 1 || changes[0].Call != "w1" {
+		t.Fatalf("turn %d changes %+v", turn, changes)
+	}
+	restored, err := u.UndoTurn(context.Background(), &s, 1)
+	if err != nil || len(restored) != 1 || restored[0] != (domain.RestoredFile{Path: "calc/calc.go", From: "w1", To: "w1"}) {
+		t.Fatalf("undo %+v %v", restored, err)
+	}
+	if files.files["calc/calc.go"] != "calc0" || files.files["calc/calc_test.go"] != "test0" {
+		t.Fatalf("files %v", files.files)
+	}
+	// Everything turn 1 changed is back: it is not offered again.
+	if turn := s.Export().LatestChangingTurn(); turn == 1 {
+		t.Fatal("turn 1 offered again")
+	}
+	// A turn whose every change the panel restored has nothing to undo.
+	only := changedSession(t, []changeStep{{"o1", domain.FileChange{Path: "a.go", Before: "a0", After: "a1"}}})
+	files = &workspaceFiles{files: map[string]string{"a.go": "a1"}}
+	u.Tools = files
+	if _, err := u.Restore(context.Background(), &only, "o1"); err != nil {
+		t.Fatal(err)
+	}
+	if turn := only.Export().LatestChangingTurn(); turn != 0 || len(only.Export().LastTurnChanges()) != 0 {
+		t.Fatalf("restored turn still offered: %d", turn)
+	}
+}
+
+// A restore made while the turn is interrupted reached the model only with
+// a new prompt: Ctrl+R resumed without one and the model went on over
+// files that no longer held what it wrote. The resumed turn's next request
+// carries the note once, as a console note that joins the turn, and the
+// saved session replays.
+func TestAResumedTurnIsToldWhatThePersonRestored(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn("cambia calc", repairTools(t)); err != nil {
+		t.Fatal(err)
+	}
+	call := root.ToolCall{ID: "w1", Name: "local_write", Arguments: mustObject(t, `{}`)}
+	if err := s.CompleteAssistant(assistant("", call)); err != nil {
+		t.Fatal(err)
+	}
+	change := domain.FileChange{Path: "calc/calc.go", Before: "one", After: "two"}
+	if err := s.RecordToolOutcome("w1", domain.DecisionApprove, domain.ToolOutcome{Content: "{}", Change: &change}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.PauseTurn(); err != nil {
+		t.Fatal(err)
+	}
+	store := &memoryStore{}
+	files := &workspaceFiles{files: map[string]string{"calc/calc.go": "two"}}
+	if _, err := (RestoreFileUseCase{Tools: files, Store: store}).Restore(context.Background(), &s, "w1"); err != nil {
+		t.Fatal(err)
+	}
+	var requests [][]root.Message
+	model := streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		requests = append(requests, r.Messages)
+		return assistant("listo"), nil
+	})
+	u := SessionControlUseCase{Store: store, Agent: AgentTurnUseCase{Continue: ContinueTurnUseCase{Models: model, Store: store}}}
+	if err := u.Resume(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	if len(requests) != 1 {
+		t.Fatalf("%d requests", len(requests))
+	}
+	last := requests[0][len(requests[0])-1]
+	if last.Role != root.RoleUser || !strings.HasPrefix(string(last.Content), RestoreNotePrefix+" Since your last answer the person restored calc/calc.go to what it held before your call w1") {
+		t.Fatalf("last message %+v", last)
+	}
+	if note := restoreNote(s.Export()); note != "" {
+		t.Fatalf("the note is still pending: %q", note)
+	}
+	if _, err := domain.RestoreSession(s.Export()); err != nil {
+		t.Fatalf("the saved session does not replay: %v", err)
+	}
+	if s.Export().TurnCallCount != 1 {
+		t.Fatalf("the note began a turn: count %d", s.Export().TurnCallCount)
+	}
+}

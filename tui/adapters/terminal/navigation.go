@@ -1001,7 +1001,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		store := m.deps.Store
 		workspace := m.Header.State.Workspace
-		leave := m.deps.Leave
+		leave, sessions := m.deps.Leave, m.deps.Sessions
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, _ func(application.Event) error) error {
 			if store == nil {
 				return errors.New(m.Theme.T("error.sessionStoreUnavailable"))
@@ -1015,12 +1015,15 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				return err
 			}
 			if loaded.Export().Workspace != workspace {
+				// Loading took its lock; a session not opened gives it back.
+				releaseLeft(sessions, &loaded, "")
 				return errors.New(m.Theme.Tf("error.workspaceMismatch", shortenHome(string(loaded.Export().Workspace)), shortenHome(string(workspace))))
 			}
 			if leave != nil && s != nil {
 				// The session left closes its MADE instance for this console.
 				_ = leave(ctx, s)
 			}
+			releaseLeft(sessions, s, id)
 			*s = loaded
 			return nil
 		})

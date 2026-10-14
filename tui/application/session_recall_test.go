@@ -80,7 +80,7 @@ func TestRecallNoteWakesTheProjectAndThePersonAtTheFirstPrompt(t *testing.T) {
 // A session this console did not recall yet but which already has
 // messages was resumed: its own history is woken too, once.
 func TestRecallNoteWakesTheSessionsOwnAboutWhenResumed(t *testing.T) {
-	recall := &recallStub{texts: map[string]string{}}
+	recall := &recallStub{texts: map[string]string{"user:tirso": "- prefers commits in English"}}
 	c := recallCeremony(t, recall)
 	s := turnSession(t)
 	if err := s.BeginTurn("primero", turnTools()); err != nil {
@@ -172,7 +172,7 @@ func TestTopicChanged(t *testing.T) {
 func TestStartTurnAppendsTheRecallNote(t *testing.T) {
 	s := turnSession(t)
 	store := &memoryStore{}
-	recall := &recallStub{texts: map[string]string{}}
+	recall := &recallStub{texts: map[string]string{"user:tirso": "- prefers commits in English"}}
 	c := recallCeremony(t, recall)
 	c.Store = store
 	model := streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
@@ -193,5 +193,38 @@ func TestStartTurnAppendsTheRecallNote(t *testing.T) {
 	record := BuildTurnRecord(s, 0, 1, "project:x", nil)
 	if record.Prompt != "hola" || strings.Contains(record.Prompt, RecallNotePrefix) {
 		t.Fatalf("record prompt %q", record.Prompt)
+	}
+}
+
+// On 14 October 2026 every prompt of a new project carried "project:ws3:
+// new project, nothing recorded yet. user:gx10a: nothing recorded yet.":
+// with nothing recorded under any about there is no note, and the wake is
+// still remembered, so the next prompt on the topic wakes nothing and
+// another topic wakes again.
+func TestRecallNoteIsOmittedWhenNothingIsRecorded(t *testing.T) {
+	recall := &recallStub{texts: map[string]string{}}
+	c := recallCeremony(t, recall)
+	s := turnSession(t)
+	if note := c.Recall(context.Background(), &s, "añade tests al parser"); note != "" || len(recall.requests) != 2 {
+		t.Fatalf("note %q requests %d", note, len(recall.requests))
+	}
+	if instance, _ := s.Instance(); instance.Recalled != "añade tests al parser" {
+		t.Fatalf("instance %+v", instance)
+	}
+	if err := s.BeginTurn("añade tests al parser", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	if note := c.Recall(context.Background(), &s, "ahora los tests del parser de fechas"); note != "" || len(recall.requests) != 2 {
+		t.Fatalf("same topic woke again: %q %d", note, len(recall.requests))
+	}
+	if note := c.Recall(context.Background(), &s, "cambia el instalador de windows para firmar binarios"); note != "" || len(recall.requests) != 4 {
+		t.Fatalf("topic change: %q %d", note, len(recall.requests))
+	}
+	// A failing wake is not nothing: it is disclosed.
+	failing := &recallStub{texts: map[string]string{}, errs: map[string]error{"user:tirso": errors.New("engine down")}}
+	c = recallCeremony(t, failing)
+	other := turnSession(t)
+	if note := c.Recall(context.Background(), &other, "hola que tal todo"); !strings.Contains(note, "memory recall unavailable") {
+		t.Fatalf("note %q", note)
 	}
 }

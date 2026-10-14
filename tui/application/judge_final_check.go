@@ -58,6 +58,9 @@ func checkFinalAnswer(ctx context.Context, s *domain.Session, u ContinueTurnUseC
 			return false, nil
 		}
 	}
+	if personDecided(messages[start:]) {
+		return false, nil
+	}
 	left := u.turnLimit() - s.RequestCallsUsed()
 	if left <= 0 {
 		return false, nil
@@ -116,8 +119,30 @@ func finalCheckNote(yes float64, left int) root.Text {
 	return root.Text(fmt.Sprintf("%s An independent check that saw only the person's request, your last answer and the tool activity estimates a %.0f%% probability that your answer completes the request. If something the person asked is still missing, do it now (this request has %s left) and then tell the person what changed. Never repeat a call the person denied or cancelled: that was their decision. If nothing is missing, tell the person so in one sentence. Write to the person, not to this check, and do not mention it.", jevFinalPrefix, yes*100, calls))
 }
 
-// finalCheckState is what Jev sees: the request, the final answer and one
-// line per tool call of the request, each bounded, with how it ended.
+// personDecided reports a request in which the person denied or cancelled
+// a tool call: the person already decided what the request does, so its
+// final answer is not checked. On 14 October 2026, after a denial, Jev
+// doubted the answer and the follow-up spent 60k tokens on bookkeeping
+// (a title, two axlr_remember calls, local_list .kernel) for a 3-line
+// file.
+func personDecided(turn []root.Message) bool {
+	for _, message := range turn {
+		if message.Role != root.RoleTool {
+			continue
+		}
+		if outcome, _ := classifyOutcome(string(message.Content)); outcome == turnDenied || outcome == turnCancelled {
+			return true
+		}
+	}
+	return false
+}
+
+// finalCheckState is what Jev sees: the request as the person wrote it,
+// the final answer and one line per tool call of the request, each
+// bounded, with how it ended. The console's notes appended to the prompt
+// (the recall note, a ceremony step) are left out: on 14 October 2026 Jev
+// judged "Di hola en una palabra." with the [AXLR · recall] memory of
+// other work glued on, text the person never wrote.
 func finalCheckState(turn []root.Message) (string, error) {
 	var tools []string
 	results := map[root.ToolCallID]string{}
@@ -135,7 +160,7 @@ func finalCheckState(turn []root.Message) (string, error) {
 		}
 	}
 	state, err := json.Marshal(map[string]any{
-		"request":       cut(string(turn[0].Content), finalRequestBytes),
+		"request":       cut(personTyped(string(turn[0].Content)), finalRequestBytes),
 		"answer":        cut(string(turn[len(turn)-1].Content), finalAnswerBytes),
 		"tool_activity": tools,
 	})

@@ -211,3 +211,39 @@ func TestWhitespaceBeforeToolCallsDrawsNothing(t *testing.T) {
 		t.Fatalf("rows between the prompt and its tool row:\n%q", lines)
 	}
 }
+
+// On 14 October 2026 a local_read of an 809-byte file showed 1.2 KB, the
+// size of the result's JSON: a read row shows the bytes it returned.
+func TestLocalReadRowShowsTheBytesRead(t *testing.T) {
+	args, _ := root.NewJSONObject([]byte(`{"path":"calc/calc.go"}`))
+	call := root.ToolCall{ID: "c1", Name: "local_read", Arguments: args}
+	result := `{"status":"completed","duration_ms":3,"output":{"content":"` + strings.Repeat("x", 809) + `","start_offset_bytes":0,"returned_bytes":809,"next_offset_bytes":809,"truncated":false,"content_sha256":"` + strings.Repeat("a", 64) + `"}}`
+	s := domain.SessionState{
+		Messages: []root.Message{{Role: root.RoleUser, Content: "read it"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{call}}, {Role: root.RoleTool, ToolCallID: "c1", Content: root.Text(result)}},
+		Activity: []domain.PendingTool{{Call: call, Decision: domain.DecisionAutoApprove}},
+	}
+	row := renderedToolRow(t, s)
+	if !strings.Contains(row, "809 B") || strings.Contains(row, "KB") {
+		t.Fatalf("row %q", row)
+	}
+	if got := resultBytes(root.ToolCall{Name: "local_exec"}, root.Text(result)); got != len(result) {
+		t.Fatalf("exec result size %d, want %d", got, len(result))
+	}
+}
+
+// On 14 October 2026 a Jev follow-up's reply read " Hola", with the
+// model's leading space: a reply is shown without its leading whitespace.
+func TestAReplyIsShownWithoutLeadingWhitespace(t *testing.T) {
+	tr := NewTranscript()
+	tr.SetWidth(80)
+	tr.SetSession(domain.SessionState{Messages: []root.Message{{Role: root.RoleUser, Content: "Di hola"}, {Role: root.RoleAssistant, Content: " \n Hola"}}}, "", Theme{ID: domain.ThemeInk})
+	var reply *transcriptRow
+	for i := range tr.rows {
+		if tr.rows[i].Kind == transcriptRowAssistant {
+			reply = &tr.rows[i]
+		}
+	}
+	if reply == nil || reply.Text != "Hola" {
+		t.Fatalf("reply row %+v", reply)
+	}
+}

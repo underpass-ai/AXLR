@@ -211,7 +211,9 @@ func (e Engine) Operation(ctx context.Context, instance, step, fence string) (ap
 	}
 	current, err := e.made(ctx, "made_get_ceremony_instance", map[string]any{"ceremony_id": instance})
 	if err != nil {
-		return application.ClaimOperation{}, fmt.Errorf("attempt of claim %s of %s: %w", bounded(fence, 12), instance, err)
+		// The operation id is already read: it is returned with the error,
+		// so a report can still name the claim's operation.
+		return operation, fmt.Errorf("attempt of claim %s of %s: %w", bounded(fence, 12), instance, err)
 	}
 	steps, _ := current["steps"].([]any)
 	for _, raw := range steps {
@@ -219,12 +221,14 @@ func (e Engine) Operation(ctx context.Context, instance, step, fence string) (ap
 		if record["step_id"] != step {
 			continue
 		}
-		if attempt, _ := record["attempt"].(float64); attempt >= 1 {
+		// A repeated step may be listed once per attempt; the claim is on
+		// the highest, whatever order the records come in.
+		if attempt, _ := record["attempt"].(float64); attempt >= 1 && int(attempt) > operation.Attempt {
 			operation.Attempt = int(attempt)
 		}
 	}
 	if operation.Attempt == 0 {
-		return application.ClaimOperation{}, fmt.Errorf("no attempt for step %s of %s", step, instance)
+		return operation, fmt.Errorf("no attempt for step %s of %s", step, instance)
 	}
 	return operation, nil
 }

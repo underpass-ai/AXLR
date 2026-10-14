@@ -113,3 +113,24 @@ func TestTheCatalogRequiresAWhyOnlyWhenAsked(t *testing.T) {
 		t.Fatal("axlr_tools must not mention a why")
 	}
 }
+
+// On 14 October 2026 glm-5.3-flash sent {"program":"echo","args":["echo",
+// "hola"]} and the card read "$ echo echo hola": the description and the
+// args property say args never repeats the program.
+func TestLocalExecSaysArgsExcludeTheProgram(t *testing.T) {
+	exec := localDefinition(t, "local_exec")
+	if !strings.Contains(string(exec.Description), "never the program again") {
+		t.Fatalf("description %q", exec.Description)
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(exec.Parameters.Bytes(), &schema); err != nil {
+		t.Fatal(err)
+	}
+	if args := schema.Properties["args"].Description; !strings.Contains(args, "without the program itself") || !strings.Contains(args, `["hola"]`) {
+		t.Fatalf("args description %q", args)
+	}
+}

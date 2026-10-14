@@ -47,7 +47,9 @@ const (
 // report sends one status report for the session's turn and keeps the
 // sequence; a failure is logged once per report.
 func (c *SessionCeremony) report(ctx context.Context, s domain.Session, instance *domain.SessionInstance, status, activity string) {
-	if c == nil || c.Engine == nil || instance.Fence == "" || instance.OperationID == "" {
+	// MADE refuses a report without the step's attempt; an operation id
+	// kept without one (its read failed) waits for the next claim.
+	if c == nil || c.Engine == nil || instance.Fence == "" || instance.OperationID == "" || instance.ClaimAttempt == 0 {
 		return
 	}
 	state := s.Export()
@@ -101,6 +103,8 @@ func (c *SessionCeremony) claimed(ctx context.Context, s domain.Session, instanc
 	instance.Fence, instance.ClaimedAt, instance.LeaseMS, instance.OperationID, instance.ClaimAttempt, instance.Reported, instance.ClaimIncarnation = fence, c.now(), lease.Milliseconds(), "", 0, time.Time{}, c.Host.incarnation()
 	operation, err := c.Engine.Operation(ctx, instance.Instance, sessionTurnStep, fence)
 	if err != nil {
+		// An id read before the attempt failed is still the claim's.
+		instance.OperationID = operation.ID
 		c.log("session %s operation id: %v", instance.Instance, err)
 		return
 	}

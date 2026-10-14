@@ -24,7 +24,8 @@ type CeremonyEnginePort interface {
 	Cancel(ctx context.Context, instance, reason string) error
 	// Report tells MADE where the host stands on a claimed step (decision
 	// H5); Renew extends a claim's lease; Operation reads a claim's
-	// operation id and step attempt, which a report must repeat.
+	// operation id and step attempt, which a report must repeat (when the
+	// attempt cannot be read, the id read already comes with the error).
 	Report(ctx context.Context, report HostReport) error
 	Renew(ctx context.Context, instance, step, fence string, lease time.Duration) error
 	Operation(ctx context.Context, instance, step, fence string) (ClaimOperation, error)

@@ -29,7 +29,7 @@ const HostRememberName root.ToolName = "axlr_remember"
 var rememberSchema = `{"type":"object","properties":{` +
 	`"kind":{"type":"string","enum":["` + strings.Join(rememberKinds, `","`) + `"]},` +
 	`"text":{"type":"string","minLength":1,"maxLength":4000},` +
-	`"summary_en":{"type":"string","minLength":1,"maxLength":4000,"description":"An English summary of text when text is not in English; a strict store refuses such a memory without it."},` +
+	`"summary_en":{"type":"string","minLength":1,"maxLength":4000,"description":"Required with every text: text rendered in plain English, keeping identifiers, paths, commands and code verbatim (text itself when it is already English). A strict store refuses a memory in another language without it."},` +
 	`"evidence":{"type":"string","minLength":1,"maxLength":8200,"description":"One to eight evidence items, one per line (a file:line and what it shows, a command and its result); each line at most 1000 characters."},` +
 	`"links":{"type":"array","maxItems":8,"items":{"type":"object","properties":{"ref":{"type":"string","minLength":1},"rel":{"type":"string","minLength":1},"why":{"type":"string","minLength":1,"maxLength":1000},"evidence":{"type":"string","maxLength":1000}},"required":["ref","rel","why"],"additionalProperties":false}},` +
 	`"about":{"type":"string","minLength":1,"maxLength":256},` +
@@ -43,12 +43,16 @@ var rememberKinds = []string{"decision", "constraint", "observation", "feedback"
 
 // RememberTool is axlr_remember, offered while the model records memory
 // itself: KMP has kmp_write_memory and no ceremony or mode refuses it.
+// summary_en is asked for with every text: on 14 October 2026 every
+// axlr_remember of a Spanish session came without it, a strict store
+// refused each one and the model retried. The schema cannot require it,
+// since a continuation is sent alone.
 func RememberTool() domain.AvailableTool {
 	identity, _ := domain.NewHostToolIdentity(domain.HostOperationRemember)
 	schema, _ := root.NewJSONObject([]byte(rememberSchema))
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostRememberName,
-		Description: "Record one durable memory in one call: kind, text (with summary_en, an English summary, when text is not in English), its evidence and optional links to refs you saw (rel such as supports, depends_on, supersedes, contradicts, corrects, restates or derived_from, and why). evidence is one string with an item per line. Example: {\"kind\":\"constraint\",\"text\":\"…\",\"evidence\":\"runtime/config.go:37 const HardTimeout = 5 * time.Minute\\ngo test ./runtime/ ok\"}. The console writes it under the session's about (the one session metadata and axlr_session show: the selected about, by default the workspace's project about) unless you name one, labels it with the session and workspace, and derives the idempotency key, so a retry never duplicates it; it needs no registration or schema read. A write with links returns needs_review with the stored context they touch and writes nothing: check it, then call again with only the continuation to commit, or correct the links. Approved like kmp_write_memory.",
+		Description: "Record one durable memory in one call: kind, text, summary_en (always: text in plain English with identifiers kept verbatim, so a strict store never refuses it), its evidence and optional links to refs you saw (rel such as supports, depends_on, supersedes, contradicts, corrects, restates or derived_from, and why). evidence is one string with an item per line. Example: {\"kind\":\"constraint\",\"text\":\"…\",\"evidence\":\"runtime/config.go:37 const HardTimeout = 5 * time.Minute\\ngo test ./runtime/ ok\"}. The console writes it under the session's about (the one session metadata and axlr_session show: the selected about, by default the workspace's project about) unless you name one, labels it with the session and workspace, and derives the idempotency key, so a retry never duplicates it; it needs no registration or schema read. A write with links returns needs_review with the stored context they touch and writes nothing: check it, then call again with only the continuation to commit, or correct the links. Approved like kmp_write_memory.",
 		Parameters:  schema,
 	}}
 }

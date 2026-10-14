@@ -87,6 +87,70 @@ func answers(path string) bool {
 	return true
 }
 
+// lockSuffix names a daemon's lock file next to its socket.
+const lockSuffix = ".lock"
+
+// takeLock opens path and takes its exclusive lock without waiting, or
+// returns nil when another holder has it. A lock file is removed by the
+// daemon that held it and by Sweep, so a lock taken on a file that is no
+// longer at path (removed between the open and the lock) is let go and
+// taken again on the file now there: two daemons never each hold a lock
+// for one socket.
+func takeLock(path string) (*os.File, error) {
+	for range 4 {
+		lock, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o600)
+		if err != nil {
+			return nil, err
+		}
+		if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+			_ = lock.Close()
+			return nil, nil
+		}
+		held, err := lock.Stat()
+		if err != nil {
+			_ = lock.Close()
+			return nil, err
+		}
+		if current, err := os.Lstat(path); err == nil && os.SameFile(held, current) {
+			return lock, nil
+		}
+		_ = lock.Close()
+	}
+	return nil, errors.New("the engine lock file keeps changing")
+}
+
+// Sweep removes the lock files of daemons that are gone: a .sock.lock
+// whose socket does not answer and whose lock nobody holds, with that
+// stale socket. Daemons remove their own lock when they exit; Sweep, run
+// once when a console starts, clears what earlier versions and killed
+// daemons left behind. A lock held, or a socket that answers, is kept.
+func (s Supervisor) Sweep() {
+	entries, err := os.ReadDir(s.Dir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		socket, ok := strings.CutSuffix(name, lockSuffix)
+		if !ok || !strings.HasSuffix(socket, ".sock") || !entry.Type().IsRegular() {
+			continue
+		}
+		socket = filepath.Join(s.Dir, socket)
+		if answers(socket) {
+			continue
+		}
+		lock, err := os.OpenFile(socket+lockSuffix, os.O_RDWR|syscall.O_NOFOLLOW, 0)
+		if err != nil {
+			continue
+		}
+		if syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) == nil {
+			_ = os.Remove(socket)
+			_ = os.Remove(socket + lockSuffix)
+		}
+		_ = lock.Close()
+	}
+}
+
 // privateDir creates dir 0700 or checks that an existing one is a real
 // directory of this user that nobody else can enter.
 func privateDir(dir string) error {
@@ -126,14 +190,17 @@ func Serve(ctx context.Context, socket string, specIn io.Reader, version string,
 	if err := privateDir(filepath.Dir(socket)); err != nil {
 		return err
 	}
-	lock, err := os.OpenFile(socket+".lock", os.O_CREATE|os.O_RDWR|syscall.O_NOFOLLOW, 0o600)
-	if err != nil {
-		return err
+	lock, err := takeLock(socket + lockSuffix)
+	if err != nil || lock == nil {
+		return err // nil: another daemon serves this spec
 	}
-	defer lock.Close()
-	if err := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
-		return nil // another daemon serves this spec
-	}
+	// The lock file goes with the daemon, removed while still held: on 14
+	// October 2026 the engines directory kept a .sock.lock for every engine
+	// that ever ran, 20 files for 2 live sockets.
+	defer func() {
+		_ = os.Remove(socket + lockSuffix)
+		_ = lock.Close()
+	}()
 	_ = os.Remove(socket)
 	listener, err := net.Listen("unix", socket)
 	if err != nil {

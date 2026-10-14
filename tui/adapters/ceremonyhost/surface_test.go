@@ -63,3 +63,15 @@ func TestGuidanceParagraphsStayShortAndFollowTheSession(t *testing.T) {
 		t.Fatal("made or other paragraph")
 	}
 }
+
+// "No surgió nada durable que merezca registro en memoria; no grabo nada"
+// closed a reply on 14 October 2026: the record sentence asked the model
+// to say what it recorded or that nothing durable came out. Recording is
+// silent now, in both forms.
+func TestRecordGuidanceIsSilent(t *testing.T) {
+	for _, text := range []string{kmpRecordGuidance, kmpRecordBridgedGuidance} {
+		if strings.Contains(text, "say what you recorded") || !strings.Contains(text, "silently: never tell the person what you recorded or that nothing was") {
+			t.Fatalf("record guidance %q", text)
+		}
+	}
+}

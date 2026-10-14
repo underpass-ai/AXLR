@@ -17,6 +17,18 @@ func BudgetNote(content axlr.Text) bool {
 	return strings.HasPrefix(string(content), BudgetNotePrefix)
 }
 
+// RestoreNotePrefix opens the console note that tells the model which files
+// the person restored since its last answer (application.restoreNote).
+const RestoreNotePrefix = "[AXLR · restore]"
+
+// JoinsRunningTurn reports a console note that joins a running turn
+// instead of beginning one: a budget note, or a restore note delivered when
+// an interrupted turn is resumed. Neither is the person's word, so the call
+// budget goes on.
+func JoinsRunningTurn(content axlr.Text) bool {
+	return BudgetNote(content) || strings.HasPrefix(string(content), RestoreNotePrefix)
+}
+
 // OverBudgetOutcomePrefix opens the result of a call the console did not run
 // because the turn's tool-call budget (or a ceremony step's) was spent: the
 // person denied nothing, so the transcript labels these "over budget".
@@ -133,7 +145,7 @@ func (s Session) RequestCallsUsed() int {
 // turn. It is -1 without one.
 func lastTurnStart(messages []axlr.Message) int {
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role == axlr.RoleUser && !BudgetNote(messages[i].Content) {
+		if messages[i].Role == axlr.RoleUser && !JoinsRunningTurn(messages[i].Content) {
 			return i
 		}
 	}
@@ -181,14 +193,14 @@ func (s Session) CallsLeft(turnLimit int) (left, limit int) {
 
 // Note adds a console message to the running turn after its tool results.
 // Unlike Steer it is not the person's word: the call budget goes on. Only
-// budget notes are accepted, so a replayed transcript can tell them from a
-// turn's start.
+// budget and restore notes are accepted, so a replayed transcript can tell
+// them from a turn's start.
 func (s *Session) Note(content axlr.Text) error {
 	if s.Status() != StatusStreaming || len(s.Pending()) != 0 {
 		return errors.New("a note requires a streaming turn without pending calls")
 	}
-	if !BudgetNote(content) {
-		return errors.New("only budget notes join a running turn")
+	if !JoinsRunningTurn(content) {
+		return errors.New("only budget and restore notes join a running turn")
 	}
 	message := axlr.Message{Role: axlr.RoleUser, Content: content}
 	if err := message.Validate(); err != nil {

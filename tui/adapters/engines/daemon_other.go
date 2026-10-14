@@ -23,4 +23,7 @@ type Supervisor struct {
 
 func (Supervisor) Socket(context.Context, Spec) (string, error) { return "", errUnsupported }
 
+// Sweep has nothing to remove here.
+func (Supervisor) Sweep() {}
+
 func Serve(context.Context, string, io.Reader, string, time.Duration) error { return errUnsupported }

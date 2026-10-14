@@ -13,9 +13,11 @@ import (
 )
 
 type fakeEngine struct {
-	ready           error
-	state           string
-	calls           []string
+	ready error
+	state string
+	calls []string
+	// operations are the claims whose operation was read, "step fence".
+	operations      []string
 	completed       []map[string]any
 	failCompletes   int
 	failTransitions int
@@ -121,6 +123,7 @@ func (f *fakeEngine) Handoff(_ context.Context, handoff HostHandoff) error {
 	return nil
 }
 func (f *fakeEngine) Operation(_ context.Context, _, step, fence string) (ClaimOperation, error) {
+	f.operations = append(f.operations, step+" "+fence)
 	if f.noOperation {
 		return ClaimOperation{}, errors.New("no operation id")
 	}

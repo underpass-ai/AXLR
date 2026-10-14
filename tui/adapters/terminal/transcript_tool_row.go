@@ -76,8 +76,8 @@ func toolRow(s domain.SessionState, call root.ToolCall, record *domain.PendingTo
 			glyph, tone = theme.Icon("failed"), toneError
 			facts.State = toolFailed
 		}
-		facts.Bytes = len(result.Content)
-		details = append(details, formatBytes(len(result.Content)))
+		facts.Bytes = resultBytes(call, result.Content)
+		details = append(details, formatBytes(facts.Bytes))
 		if duration, ok := durationMS(head); ok {
 			facts.DurationMS, facts.HasTime = duration, true
 			details = append(details, formatDuration(duration))
@@ -300,6 +300,24 @@ func durationMS(head string) (int64, bool) {
 	}
 	value, err := strconv.ParseInt(digits[:end], 10, 64)
 	return value, err == nil
+}
+
+// resultBytes is the size a row shows for a call's result: the bytes a
+// local_read returned from the file, otherwise the result's own size. On
+// 14 October 2026 a read of an 809-byte file showed 1.2 KB, the size of
+// its JSON envelope.
+func resultBytes(call root.ToolCall, content root.Text) int {
+	if call.Name == "local_read" {
+		var read struct {
+			Output struct {
+				ReturnedBytes *int `json:"returned_bytes"`
+			} `json:"output"`
+		}
+		if json.Unmarshal([]byte(content), &read) == nil && read.Output.ReturnedBytes != nil {
+			return *read.Output.ReturnedBytes
+		}
+	}
+	return len(content)
 }
 
 func formatBytes(n int) string {
