@@ -38,6 +38,12 @@ func (u ImportSessionUseCase) Execute(ctx context.Context, data []byte) (domain.
 	state := session.Export()
 	if _, err := u.Store.Load(ctx, state.ID); err == nil {
 		return domain.Session{}, meta, fmt.Errorf("session %s is saved in this console already: resume it with --session %s", state.ID, state.ID)
+	} else if errors.Is(err, domain.ErrSessionHeld) {
+		// On 14 October 2026 this read "may be saved in this console
+		// already: session already has a writer: resource temporarily
+		// unavailable": the lock's errno, for a session merely open in
+		// another console.
+		return domain.Session{}, meta, fmt.Errorf("session %s is saved here already and open in another console: continue it there, or close it there and resume it with --session %s", state.ID, state.ID)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		// A saved copy that cannot be read, or one another console holds,
 		// is not overwritten.
