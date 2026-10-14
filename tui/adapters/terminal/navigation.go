@@ -11,6 +11,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"strings"
+	"time"
 )
 
 func (m AppModel) pending() (domain.PendingTool, bool) {
@@ -21,6 +22,16 @@ func (m AppModel) pending() (domain.PendingTool, bool) {
 	}
 	return domain.PendingTool{}, false
 }
+// approvalTypingWindow is how long after the person's last keystroke in
+// the composer a letter is still taken as typing, not as a card's answer.
+const approvalTypingWindow = 800 * time.Millisecond
+
+// typingIntoCard says whether k is a letter that continues what the person
+// was typing when the approval card opened.
+func (m AppModel) typingIntoCard(k tea.KeyPressMsg) bool {
+	return k.Text != "" && !m.denying && !m.typedAt.IsZero() && time.Since(m.typedAt) < approvalTypingWindow
+}
+
 func (m AppModel) approvalFocus() bool {
 	_, ok := m.pending()
 	// A decision operation owns the pending call until it publishes a new
@@ -232,6 +243,14 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		if m.approvalFocus() && m.denying {
 			return m.denyReasonKey(k)
+		}
+		if m.approvalFocus() && m.typingIntoCard(k) {
+			// On 14 October 2026 the "a" of a prompt being typed when a
+			// card opened approved an rm: letters that keep coming are the
+			// person's message, not an answer.
+			m.typedAt = time.Now()
+			m.Status.Notice = m.Theme.T("approval.typingGuard")
+			return m, nil, true
 		}
 		if m.approvalFocus() {
 			intent = ControlIntent(m.Approval.Intent(k))

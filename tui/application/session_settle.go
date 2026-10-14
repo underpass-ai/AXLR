@@ -85,6 +85,10 @@ func (c *SessionCeremony) settle(ctx context.Context, s domain.Session, instance
 		return
 	}
 	if gate.Yes == nil || *gate.Yes < settleGateThreshold {
+		// The log says why nothing was recorded, as it does for a record.
+		if gate.Yes != nil {
+			c.log("settle turn %d: nothing durable (p=%.2f)", record.Turn, *gate.Yes)
+		}
 		return
 	}
 	candidates := settleSentences(record.Answer)

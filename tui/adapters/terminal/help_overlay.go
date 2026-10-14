@@ -22,6 +22,7 @@ func (h HelpOverlay) rows(theme Theme, inner int) []string {
 		theme.Accent(theme.T("help.write")),
 		theme.T("help.sendFull"),
 		theme.T("help.commandsSession"),
+		theme.T("help.commandsMemory"),
 		theme.T("help.commandsModelTheme"),
 		theme.T("help.changes"),
 		theme.T("help.commandsMCPPlugins"),
@@ -43,9 +44,15 @@ func (h HelpOverlay) rows(theme Theme, inner int) []string {
 		theme.T("help.themeOptions"),
 	}
 	if h.Notice != "" {
-		rows = append(append(strings.Split(ansi.Wrap(h.Notice, max(1, inner), ""), "\n"), ""), rows...)
+		rows = append([]string{h.Notice, ""}, rows...)
 	}
-	return rows
+	// Every row wraps: on 14 October 2026 the longer ones ended in "…" even
+	// at 160 columns.
+	var wrapped []string
+	for _, row := range rows {
+		wrapped = append(wrapped, strings.Split(ansi.Wrap(row, max(1, inner), ""), "\n")...)
+	}
+	return wrapped
 }
 
 // window is the first row shown and how many rows fit with the marker row

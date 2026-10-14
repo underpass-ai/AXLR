@@ -22,6 +22,10 @@ import (
 func (m AppModel) memoryCommand(args string) (tea.Model, tea.Cmd) {
 	fields := strings.Fields(args)
 	if len(fields) == 0 {
+		// The bare command only names its verbs: the composer keeps it,
+		// ready for one, instead of "/memory" plus whatever is typed next.
+		m.Composer.Input.SetValue("/memory ")
+		m.Composer.Input.CursorEnd()
 		m.Status.Notice = m.Theme.Tf("notice.slashUsage", slashUsage("/memory"))
 		return m, nil
 	}
@@ -205,4 +209,22 @@ func writeRelation(b *strings.Builder, relation application.MemoryRelation) {
 		fmt.Fprintf(b, "\n    %s", singleLine(relation.Why))
 	}
 	b.WriteString("\n")
+}
+
+// countMemories reads the header's memory count again; nil without a
+// counter or an about.
+func (m AppModel) countMemories() tea.Cmd {
+	counter, about := m.deps.MemoryCount, m.Header.About
+	if counter == nil || about == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		count, known, err := counter.Count(ctx, about)
+		if err != nil {
+			return nil
+		}
+		return memoryCounted{about: about, count: count, known: known}
+	}
 }

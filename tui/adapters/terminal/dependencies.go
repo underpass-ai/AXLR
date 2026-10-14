@@ -47,6 +47,9 @@ type Dependencies struct {
 	MemoryBundle  application.MemoryBundlePort
 	MemoryCompare application.MemoryComparePort
 	MemoryForget  application.MemoryForgetPort
+	// MemoryCount reads the header's memory count again after each turn;
+	// nil keeps the launch's count.
+	MemoryCount application.MemoryCountPort
 	// DeleteSession removes a saved session from Ctrl+O; nil offers no
 	// delete.
 	DeleteSession application.SessionDeletePort

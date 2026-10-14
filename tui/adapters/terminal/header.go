@@ -192,6 +192,18 @@ func sessionPlugins(s domain.SessionState) []string {
 	return ids
 }
 
+// workspacePath names a file the console wrote by its path inside the
+// session's workspace (".axlr/exports/x.md"), else as shortenHome does: the
+// footer has room for one line.
+func (m AppModel) workspacePath(path string) string {
+	if workspace := string(m.Header.State.Workspace); workspace != "" {
+		if rel, err := filepath.Rel(workspace, path); err == nil && rel != "." && !strings.HasPrefix(rel, "..") && !filepath.IsAbs(rel) {
+			return rel
+		}
+	}
+	return shortenHome(path)
+}
+
 func shortenHome(path string) string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {

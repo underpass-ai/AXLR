@@ -53,6 +53,10 @@ type SessionCeremony struct {
 	Log func(string)
 
 	mu       sync.Mutex
+	// refusals are the report errors logged already: MADE 0.10.0 refuses
+	// every report the same way, two lines per turn otherwise.
+	refusalsMu sync.Mutex
+	refusals   map[string]bool
 	recalled map[domain.SessionID]bool
 }
 

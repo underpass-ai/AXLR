@@ -36,6 +36,9 @@ type AppModel struct {
 	UIPreferences    domain.UIPreferences
 	ThemePicker      ThemePicker
 	Busy             bool
+	// typedAt is when a key last changed the composer's text; an approval
+	// card ignores letters typed right after it (see typingIntoCard).
+	typedAt          time.Time
 	Approval         ApprovalDialog
 	SearchBox        SearchBox
 	Palette          ActionPalette
@@ -481,6 +484,12 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// The successor session takes the prompt the capped one could not.
 		m.Composer.Input.SetValue(v.prompt)
 		return m.submitDraft()
+	case memoryCounted:
+		if v.about == m.Header.About {
+			// Unknown means nothing is recorded under the about yet.
+			m.Header.Memories, m.Header.MemoriesKnown = v.count, true
+		}
+		return m, nil
 	case operationComplete:
 		if v.ID != m.operationID || !m.Busy {
 			return m, nil
@@ -561,7 +570,13 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Notice = m.Theme.Tf("notice.ceremonyPublished", v.Published)
 		}
 		if v.MemorySaved != nil && v.Err == nil {
-			m.Status.Notice = m.Theme.Tf("notice.memorySaved", v.MemorySaved.Events, v.MemorySaved.About, shortenHome(v.MemorySaved.Path))
+			if v.MemorySaved.About == m.Header.About {
+				m.Header.Memories, m.Header.MemoriesKnown = v.MemorySaved.Events, true
+			}
+			m.Status.Notice = m.Theme.Tf("notice.memorySaved", v.MemorySaved.Events, v.MemorySaved.About, m.workspacePath(v.MemorySaved.Path))
+			if v.MemorySaved.Events == 1 {
+				m.Status.Notice = m.Theme.Tf("notice.memorySavedOne", v.MemorySaved.About, m.workspacePath(v.MemorySaved.Path))
+			}
 		}
 		if v.MemoryForgotten != nil && v.Err == nil {
 			m.Status.Notice = m.Theme.Tf("notice.memoryForgotten", v.MemoryForgotten.Ref, v.MemoryForgotten.Superseding)
@@ -744,15 +759,20 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.autoOpenIncidentCard()
 			m = m.autoOpenRepairPanel()
 		}
+		var recount tea.Cmd
+		if wasTurn {
+			// The turn may have recorded memories: the header counts again.
+			recount = m.countMemories()
+		}
 		if failed != nil {
 			if record := m.recordTurnFailure(*failed); record != nil {
 				// A queued prompt starts when the line is recorded.
-				return m, record
+				return m, tea.Batch(record, recount)
 			}
 		}
 		if record := m.recordPlanOutcomes(); record != nil {
 			// A queued prompt starts when the outcome is recorded.
-			return m, record
+			return m, tea.Batch(record, recount)
 		}
 		if queued, ok := m.steer.Take(); ok {
 			prompt := queued
@@ -783,9 +803,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return start.Execute(ctx, s, prompt, emit)
 			})
-			return m, cmd
+			return m, tea.Batch(cmd, recount)
 		}
-		return m, nil
+		return m, recount
 	case ControlIntent:
 		switch v {
 		case "send":
@@ -979,7 +999,13 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.slashTop = slashWindow(m.slashTop, m.slashSelected, len(suggestions), m.slashLimit())
 				return m, nil
 			case "tab":
-				m.Composer.Input.SetValue(suggestions[min(m.slashSelected, len(suggestions)-1)].name)
+				name := suggestions[min(m.slashSelected, len(suggestions)-1)].name
+				if slashUsage(name) != name {
+					// A command that takes text is completed ready for it.
+					name += " "
+				}
+				m.Composer.Input.SetValue(name)
+				m.Composer.Input.CursorEnd()
 				m.slashSelected = 0
 				return m, nil
 			}
@@ -1085,6 +1111,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	before := m.Composer.Input.Value()
 	m.Composer, cmd = m.Composer.Update(msg)
 	if m.Composer.Input.Value() != before {
+		if _, typed := msg.(tea.KeyPressMsg); typed {
+			m.typedAt = time.Now()
+		}
 		m.slashSelected = 0
 		m.mention.selected, m.mention.top = 0, 0
 	}

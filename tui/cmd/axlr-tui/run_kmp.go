@@ -54,6 +54,9 @@ type kmpStore struct {
 	// without a binary.
 	Save    func(ctx context.Context, about string) (application.BundleSaved, error)
 	Counted bool
+	// Count reads Memories again, for the header after a turn; nil
+	// without a binary.
+	Count func(ctx context.Context, about string) (int, bool, error)
 }
 
 // prepareKMPStore chooses the store of the stdio kmp registration for this
@@ -92,6 +95,9 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 	selection, env := store.Selection, r.Env
 	store.SyncGuide = func(ctx context.Context) error {
 		return kmpstore.GuideSync{CLI: cli, PluginRoot: pluginRoot}.Sync(ctx, selection, env)
+	}
+	store.Count = func(ctx context.Context, about string) (int, bool, error) {
+		return kmpstore.Counter{CLI: cli}.Count(ctx, selection, about, env)
 	}
 	store.Save = func(ctx context.Context, about string) (application.BundleSaved, error) {
 		path, events, err := kmpstore.Exporter{CLI: cli}.Export(ctx, selection, about, env)

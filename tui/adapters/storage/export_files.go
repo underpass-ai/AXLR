@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 )
@@ -24,8 +25,18 @@ func (ExportFiles) Create(ctx context.Context, path string, data []byte) error {
 	if !filepath.IsAbs(path) {
 		return errors.New("export path must be absolute")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
+	}
+	if strings.HasSuffix(dir, string(filepath.Separator)+filepath.FromSlash(application.ExportDirectory)) {
+		// The default directory ignores itself, as the .kernel store does:
+		// on 14 October 2026 git status offered the exported transcripts
+		// to the next commit.
+		ignore := filepath.Join(dir, ".gitignore")
+		if _, err := os.Lstat(ignore); errors.Is(err, os.ErrNotExist) {
+			_ = os.WriteFile(ignore, []byte("*\n"), 0600)
+		}
 	}
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if errors.Is(err, os.ErrExist) {

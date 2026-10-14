@@ -167,6 +167,9 @@ func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
 		t.Fatalf("in the middle the menu does not count both sides (%q):\n%s", want, view)
 	}
 	want := slashCommands[m.slashSelected].name
+	if slashUsage(want) != want {
+		want += " " // a command that takes text is completed ready for it
+	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyTab})
 	if got := m.Composer.Input.Value(); got != want {
 		t.Fatalf("Tab completed to %q; want %s", got, want)

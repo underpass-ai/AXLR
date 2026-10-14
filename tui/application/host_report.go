@@ -52,7 +52,9 @@ func (c *SessionCeremony) report(ctx context.Context, s domain.Session, instance
 	report := HostReport{Instance: instance.Instance, Step: sessionTurnStep, Fence: instance.Fence, OperationID: instance.OperationID, Status: status, Activity: activity,
 		Summary: fmt.Sprintf("turn %d of session %s, mode %s", instance.Turns+1, state.ID, s.Mode()), Execution: string(state.ID), Worker: string(state.ID), Role: sessionRole, Model: string(state.Model), Sequence: instance.Reports, Host: c.Host}
 	if err := c.Engine.Report(ctx, report); err != nil {
-		c.log("session %s report %s: %v", instance.Instance, status, err)
+		if c.firstRefusal(err.Error()) {
+			c.log("session %s report %s: %v (an identical refusal is not logged again)", instance.Instance, status, err)
+		}
 		return
 	}
 	instance.Reported = c.now()
@@ -128,4 +130,18 @@ func (c *SessionCeremony) handoff(ctx context.Context, instance domain.SessionIn
 		return
 	}
 	c.log("session %s: handoff from run %s recorded", instance.Instance, instance.ClaimIncarnation)
+}
+
+// firstRefusal says whether this report error is new to this console.
+func (c *SessionCeremony) firstRefusal(text string) bool {
+	c.refusalsMu.Lock()
+	defer c.refusalsMu.Unlock()
+	if c.refusals[text] {
+		return false
+	}
+	if c.refusals == nil {
+		c.refusals = map[string]bool{}
+	}
+	c.refusals[text] = true
+	return true
 }

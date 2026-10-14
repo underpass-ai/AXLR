@@ -508,6 +508,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(e)
 		}
 		loaded, loadErr := loggedStore.Load(ctx, id)
+		if errors.Is(loadErr, domain.ErrSessionHeld) {
+			// On 14 October 2026 a second --continue printed only
+			// "resource temporarily unavailable".
+			return fail(fmt.Errorf("session %s is open in another console: close it there, or launch without --continue/--session for a new session", id))
+		}
 		if loadErr != nil {
 			return fail(loadErr)
 		}
@@ -758,6 +763,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	if hasKMP && kmp.Save != nil {
 		deps.MemoryBundle = memoryBundle(kmp.Save)
+	}
+	if hasKMP && kmp.Count != nil && kmp.Counted {
+		deps.MemoryCount = memoryCounter(kmp.Count)
 	}
 	if kmpMemory != nil {
 		deps.MemoryCompare, deps.MemoryForget = *kmpMemory, *kmpMemory
@@ -1073,7 +1081,7 @@ func engineFacts(kmp kmpStore, hasKMP bool, host application.HostIdentity, hasMA
 	if hasMADE {
 		facts["made"] = []terminal.EngineFact{
 			{Key: "mcp.identity", Value: host.Owner},
-			{Key: "mcp.grant", Value: madesetup.WorkGrantID},
+			{Key: "mcp.grant", Value: madesetup.WorkGrantFor(host.Owner)},
 		}
 	}
 	return facts
