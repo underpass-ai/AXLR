@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // CLI runs kmp-mcp's command-line verbs, which read or write a store
@@ -54,7 +55,11 @@ func tail(output string) string {
 	}
 	text := strings.Join(lines, " · ")
 	if len(text) > 800 {
-		text = text[len(text)-800:]
+		start := len(text) - 800
+		for start < len(text) && !utf8.RuneStart(text[start]) {
+			start++
+		}
+		text = text[start:]
 	}
 	if text == "" {
 		return "no output"

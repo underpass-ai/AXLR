@@ -236,6 +236,9 @@ func New(deps Dependencies) AppModel {
 	if deps.ApprovalSettings != nil {
 		m.Status.Autonomous = deps.ApprovalSettings.Autonomous()
 	}
+	if deps.StartupNotice != "" {
+		m.Status.Notice = deps.StartupNotice
+	}
 	if deps.InitialDraft != "" {
 		m.Composer.Input.SetValue(deps.InitialDraft)
 	}
@@ -1020,7 +1023,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "tab":
 				name := suggestions[min(m.slashSelected, len(suggestions)-1)].name
-				if slashUsage(name) != name {
+				if word, _, _ := strings.Cut(name, " "); slashUsage(word) != word {
 					// A command that takes text is completed ready for it.
 					name += " "
 				}

@@ -17,18 +17,25 @@ func (m AppModel) openSessionPanel() AppModel {
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)
-	m.Info.SetContent(sessionPanelContent(m.Header.State, m.Theme))
+	m.Info.SetContent(sessionPanelContent(m.Header.State, m.Theme, m.sessionAbout()))
 	m.Info.Viewport.GotoTop()
 	m.overlay = "session"
 	return m
 }
 
-// sessionPanelContent renders the session's instance and last turn record.
-func sessionPanelContent(state domain.SessionState, theme Theme) string {
+// sessionPanelContent renders the session's instance and last turn record;
+// project is the about its settled memories go to.
+func sessionPanelContent(state domain.SessionState, theme Theme, project string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s %s\n", theme.T("session.id"), state.ID)
 	fmt.Fprintf(&b, "%s ws:%s\n", theme.T("session.about"), state.ID)
+	if project != "" {
+		fmt.Fprintf(&b, "%s %s\n", theme.T("session.project"), project)
+	}
 	instance := state.Instance
+	if instance != nil && instance.Predecessor != "" {
+		fmt.Fprintf(&b, "%s %s\n", theme.T("session.predecessor"), instance.Predecessor)
+	}
 	if instance != nil && instance.MemoryContext != "" {
 		fmt.Fprintf(&b, "%s %s\n", theme.T("session.context"), instance.MemoryContext)
 	}

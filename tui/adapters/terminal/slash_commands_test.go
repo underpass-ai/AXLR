@@ -132,15 +132,16 @@ func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()
 	m = typeDraft(m, "/")
+	all := slashSuggestions("/") // the verbs of /memory and /session wait for their command
 	limit := m.slashLimit()
 	if limit != slashSuggestionMax {
 		t.Fatalf("a 30-row console shows %d suggestions; want %d", limit, slashSuggestionMax)
 	}
 	view := ansi.Strip(m.View().Content)
-	if !strings.Contains(view, m.Theme.Tf("slash.more", len(slashCommands)-limit)) || strings.Contains(view, "/exit") {
+	if !strings.Contains(view, m.Theme.Tf("slash.more", len(all)-limit)) || strings.Contains(view, "/exit") {
 		t.Fatalf("the menu does not say more commands exist:\n%s", view)
 	}
-	for range len(slashCommands) - 1 {
+	for range len(all) - 1 {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
 	}
 	view = ansi.Strip(m.View().Content)
@@ -148,25 +149,25 @@ func TestTheSlashMenuScrollsThroughEveryCommand(t *testing.T) {
 		t.Fatalf("the menu did not scroll to the last command:\n%s", view)
 	}
 	// On 10 October 2026 the count read "↑↓ 18 more" wherever the list was.
-	if above := len(slashCommands) - limit; !strings.Contains(view, m.Theme.Tf("slash.above", above)) || strings.Contains(view, "below") {
+	if above := len(all) - limit; !strings.Contains(view, m.Theme.Tf("slash.above", above)) || strings.Contains(view, "below") {
 		t.Fatalf("at the end the menu does not count what is above:\n%s", view)
 	}
 	for range 3 {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	}
 	view = ansi.Strip(m.View().Content)
-	if !strings.Contains(view, "> "+slashCommands[len(slashCommands)-4].name+" ") || !strings.Contains(view, "/exit") {
+	if !strings.Contains(view, "> "+all[len(all)-4].name+" ") || !strings.Contains(view, "/exit") {
 		t.Fatalf("moving up inside the window scrolled it:\n%s", view)
 	}
 	for range limit {
 		m = update(m, tea.KeyPressMsg{Code: tea.KeyUp})
 	}
 	view = ansi.Strip(m.View().Content)
-	top := slashWindow(m.slashTop, m.slashSelected, len(slashCommands), limit)
-	if want := m.Theme.Tf("slash.aboveBelow", top, len(slashCommands)-top-limit); !strings.Contains(view, want) {
+	top := slashWindow(m.slashTop, m.slashSelected, len(all), limit)
+	if want := m.Theme.Tf("slash.aboveBelow", top, len(all)-top-limit); !strings.Contains(view, want) {
 		t.Fatalf("in the middle the menu does not count both sides (%q):\n%s", want, view)
 	}
-	want := slashCommands[m.slashSelected].name
+	want := all[m.slashSelected].name
 	if slashUsage(want) != want {
 		want += " " // a command that takes text is completed ready for it
 	}
@@ -346,5 +347,28 @@ func TestTheSlashMenuMatchesAliasesAndShowsThem(t *testing.T) {
 	}
 	if rows != short.slashLimit() {
 		t.Fatalf("a short console shows %d rows of suggestions", rows)
+	}
+}
+
+// "/memory " offers its verbs; "/m" does not list them among the commands.
+func TestTheMenuOffersACommandsVerbsOnceItIsTyped(t *testing.T) {
+	names := func(draft string) string {
+		var out []string
+		for _, c := range slashSuggestions(draft) {
+			out = append(out, c.name)
+		}
+		return strings.Join(out, ",")
+	}
+	if got := names("/memory "); got != "/memory save,/memory compare,/memory forget" {
+		t.Fatalf("/memory offers %q", got)
+	}
+	if got := names("/memory f"); got != "/memory forget" {
+		t.Fatalf("/memory f offers %q", got)
+	}
+	if got := names("/sesion "); got != "/session export" {
+		t.Fatalf("/sesion offers %q", got)
+	}
+	if got := names("/m"); strings.Contains(got, "save") {
+		t.Fatalf("/m offers verbs: %q", got)
 	}
 }

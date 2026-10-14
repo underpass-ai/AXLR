@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -604,6 +605,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		kmpMemory = &memory
 		sessionCeremony.Identity = &application.MemoryIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewMemoryAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: memory, Recall: memory, UserAbout: userAbout(getenv)}
 	}
+	var startupWarnings []string
 	if ceremonies != nil {
 		sessionCeremony.Engine = ceremonies.Engine
 		if journal, ok := ceremonies.Memory.(application.JournalPort); ok {
@@ -618,8 +620,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			prepareSessionDefinition(ctx, ceremonies.Engine, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}),
 			sweepAbandonedSessions(ctx, sessionCeremony, store, workspace, consoleSessionID(session, newID)),
 		} {
-			if line != "" && appLog != nil {
-				appLog.Logf(diagnostics.AppInfo, "%s", line)
+			if line == "" {
+				continue
+			}
+			level := diagnostics.AppInfo
+			if startupTrouble.MatchString(line) {
+				// The person sees trouble in the console, not only in the
+				// log (review of 14 October 2026).
+				level = diagnostics.AppWarn
+				startupWarnings = append(startupWarnings, line)
+			}
+			if appLog != nil {
+				appLog.Logf(level, "%s", line)
 			}
 		}
 	}
@@ -765,6 +777,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		SessionBundles:          storage.SessionBundles{},
 		Sessions:                store,
 		Hostname:                hostname,
+	}
+	if len(startupWarnings) > 0 {
+		deps.StartupNotice = startupWarnings[0] + " · axlr-tui logs --level WARN"
 	}
 	if hasKMP && kmp.Save != nil {
 		deps.MemoryBundle = memoryBundle(kmp.Save)
@@ -1048,7 +1063,7 @@ func (s successorSessions) Continue(ctx context.Context, predecessor domain.Sess
 			previous := labels[state.ID]
 			title := previous.Title
 			if title != "" {
-				title = root.Text(bounded(string(title), 100) + " (2)")
+				title = root.Text(successorTitle(string(title)))
 			}
 			_, _ = s.labels.Initialize(ctx, session.ID(), domain.SessionLabel{Title: title, About: previous.About})
 		}
@@ -1057,6 +1072,17 @@ func (s successorSessions) Continue(ctx context.Context, predecessor domain.Sess
 		return domain.Session{}, err
 	}
 	return session, nil
+}
+
+// successorTitle numbers a continued session's title: "X" becomes "X (2)"
+// and "X (2)" becomes "X (3)", not "X (2) (2)".
+func successorTitle(title string) string {
+	if open := strings.LastIndex(title, " ("); open >= 0 && strings.HasSuffix(title, ")") {
+		if n, err := strconv.Atoi(title[open+2 : len(title)-1]); err == nil && n >= 2 {
+			return fmt.Sprintf("%s (%d)", bounded(title[:open], 100), n+1)
+		}
+	}
+	return bounded(title, 100) + " (2)"
 }
 
 func bounded(text string, limit int) string {

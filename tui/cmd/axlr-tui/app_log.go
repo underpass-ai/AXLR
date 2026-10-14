@@ -34,6 +34,10 @@ func openAppLog(getenv func(string) string, secrets ...string) (*diagnostics.App
 // warningWords mark a console note on stderr that reports trouble.
 var warningWords = regexp.MustCompile(`(?i)\b(ignoring|unavailable|refused|incomplete|needs|unsandboxed|invalid|failed|error)\b`)
 
+// startupTrouble marks a start line that reports a problem the person
+// should see: a missing definition, a refused or conflicting grant.
+var startupTrouble = regexp.MustCompile(`(?i)\b(missing|conflict|refused|denied|failed|error|unavailable)\b`)
+
 // consoleNotes copies each line the console writes on stderr to the app
 // log: the notes before the terminal opens are hidden once it does.
 type consoleNotes struct {

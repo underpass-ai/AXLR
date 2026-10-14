@@ -44,9 +44,17 @@ var slashCommands = []slashCommand{
 	{"/export", "slash.export"},
 	{"/usage", "slash.usage"},
 	{"/session", "slash.session"},
+	{"/session export", "slash.sessionExport"},
 	{"/memory", "slash.memory"},
+	{"/memory save", "slash.memorySave"},
+	{"/memory compare", "slash.memoryCompare"},
+	{"/memory forget", "slash.memoryForget"},
 	{"/exit", "slash.exit"},
 }
+
+// slashVerbs are the commands whose menu rows after a space ("/memory
+// save") appear only once the command and a space are typed.
+var slashVerbs = map[string]bool{"/memory": true, "/session": true}
 
 // slashAliases run the same command under another name.
 var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo"}
@@ -96,9 +104,17 @@ func slashSuggestions(draft string) []slashCommand {
 		return nil
 	}
 	lower := strings.ToLower(draft)
+	if word, rest, spaced := strings.Cut(lower, " "); spaced && slashAliases[word] != "" {
+		// "/memoria " offers the verbs of /memory.
+		lower = slashAliases[word] + " " + rest
+	}
 	var out []slashCommand
 	seen := map[string]bool{}
 	add := func(c slashCommand) {
+		if word, _, sub := strings.Cut(c.name, " "); sub && slashVerbs[word] && !strings.HasPrefix(lower, word+" ") {
+			// A command's verbs are offered once the command is typed.
+			return
+		}
 		if !seen[c.name] && c.name != lower {
 			seen[c.name] = true
 			out = append(out, c)

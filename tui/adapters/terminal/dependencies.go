@@ -58,6 +58,9 @@ type Dependencies struct {
 	// InitialDraft fills the composer at launch, such as the repair brief;
 	// the person still presses Enter.
 	InitialDraft string
+	// StartupNotice is trouble found while the console started, shown in
+	// the footer until the next notice.
+	StartupNotice string
 	// Repairs shows the self-repairs the agent requested; nil without MADE.
 	Repairs RepairPanelPort
 	// Plans shows the plans and their tasks; nil without MADE.
