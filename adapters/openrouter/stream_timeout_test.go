@@ -238,3 +238,14 @@ func TestCompleteTimesOutAfterMaximumDuration(t *testing.T) {
 		t.Fatalf("cancelled completion = %T %v", err, err)
 	}
 }
+
+func TestStreamTimeoutErrorTellsItsKindAndProvider(t *testing.T) {
+	cut := NewStreamTimeoutError("", true)
+	if !cut.MaximumDuration() || cut.Provider() != "OpenRouter" || cut.Error() != "OpenRouter stream maximum duration exceeded" {
+		t.Fatalf("%v %q %q", cut.MaximumDuration(), cut.Provider(), cut.Error())
+	}
+	idle := NewStreamTimeoutError("llama", false)
+	if idle.MaximumDuration() || idle.Provider() != "llama" || idle.Error() != "llama stream inactivity timeout" {
+		t.Fatalf("%v %q %q", idle.MaximumDuration(), idle.Provider(), idle.Error())
+	}
+}

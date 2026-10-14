@@ -628,6 +628,9 @@ var enMessages = map[string]string{
 	"footer.actions":                       "actions",
 	"footer.help":                          "help",
 	"footer.continue":                      "continue",
+	"footer.retry":                         "retry",
+	"error.streamMaxDuration":              "%s cut the reply: it ran past the stream's maximum duration",
+	"error.streamInactivity":               "%s sent nothing for too long and the stream was closed",
 	"footer.tokens":                        "%s tok",
 	"footer.cache":                         "%d%% cache",
 	"footer.costTurn":                      "%s turn", // usage
@@ -1474,6 +1477,9 @@ var esMessages = map[string]string{
 	"footer.actions":                       "acciones",
 	"footer.help":                          "ayuda",
 	"footer.continue":                      "continuar",
+	"footer.retry":                         "reintentar",
+	"error.streamMaxDuration":              "%s cortó la respuesta: superó la duración máxima del stream",
+	"error.streamInactivity":               "%s dejó de enviar datos demasiado tiempo y se cerró el stream",
 	"footer.tokens":                        "%s tok",
 	"footer.cache":                         "%d %% caché",
 	"footer.costTurn":                      "%s turno", // usage

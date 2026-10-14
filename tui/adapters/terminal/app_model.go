@@ -792,6 +792,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Status.Error = strings.Replace(m.Status.Error, domain.ErrToolCallLimit.Error(), m.Theme.T("error.toolCallLimit"), 1)
 			}
 			m.Status.Error = m.budgetErrorText(v.Err, m.Status.Error)
+			m.Status.Error = m.streamTimeoutText(v.Err, m.Status.Error)
 			m.Status.Error = m.withProviderHint(v.Err, m.Status.Error)
 			if failure, ok := turnFailure(v.Err); ok && wasTurn && returned == "" {
 				// The transcript keeps the failure once the footer moves on.

@@ -17,18 +17,15 @@ type footerHint struct{ zone, key, label string }
 const maxErrorRows = 3
 
 // footerView is the main view's last row: clickable key hints on the left
-// and the session state on the right. An error takes the whole row, and up
-// to maxErrorRows rows when it is longer, so its text is not truncated
-// behind the hints. While an operation runs the error sits above the hint
-// row instead, so the activity and its cancel hint stay in view.
+// and the session state on the right. An error sits above the hint row, on
+// up to maxErrorRows rows of its own, so its text is not truncated behind
+// the hints and the hints, the state and the activity stay in view. On 14
+// October 2026 a provider failure ("! OpenRouter stream maximum duration
+// exceeded") took the whole row, and with it the state and the Ctrl+R hint
+// that would have retried.
 func (m AppModel) footerView() string {
 	if m.Status.Error != "" {
-		if m.Busy || m.visibleNotice() != "" {
-			// A notice shows under an error that stays: "press Ctrl+C again
-			// to quit" must never hide behind one.
-			return strings.Join(append(m.errorRows(maxErrorRows-1), m.hintRow()), "\n")
-		}
-		return strings.Join(m.errorRows(maxErrorRows), "\n")
+		return strings.Join(append(m.errorRows(maxErrorRows), m.hintRow()), "\n")
 	}
 	return m.hintRow()
 }
@@ -43,7 +40,12 @@ func (m AppModel) hintRow() string {
 	}
 	if !m.Busy && (m.Header.State.Status == domain.StatusInterrupted || m.Header.State.Status == domain.StatusStreaming) {
 		// Ctrl+R is refused while an operation runs.
-		hints = append(hints, footerHint{"continue", "ctrl+r", m.Theme.T("footer.continue")})
+		label := m.Theme.T("footer.continue")
+		if m.Status.Error != "" {
+			// After a failure Ctrl+R sends the request again.
+			label = m.Theme.T("footer.retry")
+		}
+		hints = append(hints, footerHint{"continue", "ctrl+r", label})
 	}
 	if count := len(m.Changes.files); count > 0 {
 		// Files, as /changes lists them: on 10 October 2026 the hint read

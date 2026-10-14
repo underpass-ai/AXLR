@@ -46,6 +46,22 @@ func (m AppModel) withProviderHint(err error, text string) string {
 	return text
 }
 
+// streamTimeoutText says a stream the provider adapter cut in the
+// person's language: on 14 October 2026 a Spanish console read "!
+// OpenRouter stream maximum duration exceeded" after glm-5.3-flash had
+// reasoned for five minutes.
+func (m AppModel) streamTimeoutText(err error, text string) string {
+	var timeout *openrouter.StreamTimeoutError
+	if !errors.As(err, &timeout) {
+		return text
+	}
+	label := "error.streamInactivity"
+	if timeout.MaximumDuration() {
+		label = "error.streamMaxDuration"
+	}
+	return strings.Replace(text, timeout.Error(), m.Theme.Tf(label, timeout.Provider()), 1)
+}
+
 // turnFailure is the console line a failed turn leaves, or false for an
 // ending that is not a failure: the person's cancel, the tool-call limit
 // and the budget pause say how to go on in the footer.
