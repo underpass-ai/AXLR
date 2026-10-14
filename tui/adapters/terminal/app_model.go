@@ -85,7 +85,10 @@ type AppModel struct {
 	draft             string
 	submittedPrompt   string
 	submittedAt       int
-	unsentPrompts     []string
+	// sending is the turn sent or continued that has not reported its state
+	// yet; see turn_sending.go.
+	sending       uint64
+	unsentPrompts []string
 	// steer holds what the person wrote while the operation ran; the running
 	// turn takes it after a tool step, or it starts the next turn.
 	steer *steerQueue
@@ -428,6 +431,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case application.Event:
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticEventConsumed, Chunks: 1, Bytes: len(v.Text)})
+		m.sentEvent(v)
 		if v.Kind == application.EventSession && v.Snapshot != nil {
 			m.providerWaiting = false
 			m.toolExecuting = false
@@ -869,6 +873,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return start.Execute(ctx, s, prompt, emit)
 			})
+			m.markSending()
 			return m, tea.Batch(cmd, recount)
 		}
 		return m, recount
@@ -1396,6 +1401,7 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 		return m.deps.Start.Execute(ctx, s, prompt, emit)
 	})
+	m.markSending()
 	return m, cmd
 }
 

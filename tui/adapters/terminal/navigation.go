@@ -883,6 +883,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			return u.Resume(ctx, s, emit)
 		})
+		m.markSending()
 		return m, cmd, true
 	case "sessions":
 		if m.Busy {

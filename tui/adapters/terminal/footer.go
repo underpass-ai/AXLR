@@ -202,6 +202,9 @@ func (m AppModel) activityLabel(status StatusBar) string {
 			}
 		}
 		return indicator + " " + label + " · " + fmt.Sprintf("%ds", int(time.Since(m.providerWaitStarted).Seconds()))
+	case m.sendingNow():
+		// Sent, and nothing back yet: not the last turn's "complete".
+		return m.Theme.Icon("waiting") + " " + m.Theme.T("status.sending")
 	case m.Busy && !m.turnRunning():
 		// An update, MADE preparation or a list runs: say so instead of
 		// "idle". No clock ticks for it, so the indicator is the still one.
