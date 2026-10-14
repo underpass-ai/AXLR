@@ -364,7 +364,9 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
 				case "info", "approvals", "updates", "made-setup", "session", "ceremonies", "memory":
-					m.Info.Viewport, _ = m.Info.Viewport.Update(k)
+					if !jumpViewport(&m.Info.Viewport, k.String()) {
+						m.Info.Viewport, _ = m.Info.Viewport.Update(k)
+					}
 				case "sessions":
 					m.Picker.Page = m.Picker.PageSize(m.Layout.Height-1, m.Layout.Width)
 					// Enter while renaming or confirming a delete is the
@@ -1208,4 +1210,4 @@ func (m AppModel) paletteAction(intent ControlIntent) (tea.Model, tea.Cmd, bool)
 }
 
 // helpScrollKeys move the help list when it is taller than the overlay.
-var helpScrollKeys = map[string]int{"up": -1, "k": -1, "down": 1, "j": 1, "pgup": -10, "pgdown": 10, "home": -1 << 20, "end": 1 << 20}
+var helpScrollKeys = map[string]int{"up": -1, "k": -1, "down": 1, "j": 1, "pgup": -10, "pgdown": 10, "home": -1 << 20, "end": 1 << 20, "ctrl+home": -1 << 20, "ctrl+end": 1 << 20}

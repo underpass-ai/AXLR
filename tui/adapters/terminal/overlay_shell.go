@@ -3,6 +3,7 @@ package terminal
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/viewport"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -48,4 +49,21 @@ func (t Theme) Overlay(title, hint, body, footer string, width, height int) stri
 	}
 	lines = append(lines, t.overlayLine("", width, false), t.overlayLine(t.Muted(footer), width, true))
 	return strings.Join(lines, "\n")
+}
+
+// jumpViewport moves a scrolling panel to its top on Home or Ctrl+Home and
+// to its end on End or Ctrl+End, and reports whether the key was one of
+// them. On 14 October 2026 the info panel (Ctrl+P → I) scrolled with PgUp
+// and PgDn and ignored Home and End, as /usage, /session and the /mcp
+// detail did.
+func jumpViewport(v *viewport.Model, key string) bool {
+	switch key {
+	case "home", "ctrl+home":
+		v.GotoTop()
+	case "end", "ctrl+end":
+		v.GotoBottom()
+	default:
+		return false
+	}
+	return true
 }

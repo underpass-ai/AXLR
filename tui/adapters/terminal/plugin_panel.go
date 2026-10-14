@@ -257,6 +257,9 @@ func (p *PluginPanel) Update(msg tea.Msg, mode ControlIntent) ControlIntent {
 			return ""
 		}
 	}
+	if key, ok := msg.(tea.KeyPressMsg); ok && jumpViewport(&p.Details, key.String()) {
+		return ""
+	}
 	p.Details, _ = p.Details.Update(msg)
 	return ""
 }

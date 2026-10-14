@@ -157,7 +157,9 @@ func (m AppModel) usageKey(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		m.Status.Notice = m.Theme.Tf("usage.raised", formatBudget(ledger.Limit(limit)))
 		return m.refreshUsagePanel(), nil
 	}
-	m.Info.Viewport, _ = m.Info.Viewport.Update(k)
+	if !jumpViewport(&m.Info.Viewport, k.String()) {
+		m.Info.Viewport, _ = m.Info.Viewport.Update(k)
+	}
 	return m, nil
 }
 
