@@ -1436,6 +1436,8 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 	case command == "/copy" && (strings.EqualFold(text, "code") || strings.Trim(text, "0123456789") == ""):
 		m.Composer.Input.Reset()
 		return m, m.copyCode(strings.ToLower(text))
+	case command == "/plan":
+		return m.planWithGoal(text)
 	case slashPromptModes[command]:
 		changed, cmd := m.switchMode(slashModes[command])
 		if changed.Status.Error != "" {
