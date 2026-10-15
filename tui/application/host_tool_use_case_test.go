@@ -48,13 +48,14 @@ func hostExecute(t *testing.T, s domain.Session, op, args string) domain.ToolOut
 
 func TestHostDiscoveryListsStableSummariesAndExactSchema(t *testing.T) {
 	s := hostSession(t, "reply", hostPlugin(t, "zeta", "made", "made_get_ceremony_instance"), hostPlugin(t, "alpha", "kmp", "kmp_wake"))
-	out := hostExecute(t, s, domain.HostOperationTools, `{"limit":1}`)
+	// The plugin tools come first; the session's own tools follow them.
+	out := hostExecute(t, s, domain.HostOperationTools, `{"limit":2}`)
 	var result struct {
 		Tools        []struct{ Name string }
 		TotalMatches int  `json:"total_matches"`
 		HasMore      bool `json:"has_more"`
 	}
-	if err := json.Unmarshal([]byte(out.Content), &result); err != nil || out.IsError || len(result.Tools) != 1 || result.Tools[0].Name != "alpha" || result.TotalMatches != 2 || !result.HasMore {
+	if err := json.Unmarshal([]byte(out.Content), &result); err != nil || out.IsError || len(result.Tools) != 2 || result.Tools[0].Name != "alpha" || result.Tools[1].Name != "zeta" || result.TotalMatches != 2+len(SessionTools(s, s.ToolSnapshot())) || !result.HasMore {
 		t.Fatalf("%s %v", out.Content, err)
 	}
 	out = hostExecute(t, s, domain.HostOperationTools, `{"query":"KMP WAKE"}`)
@@ -73,7 +74,7 @@ func TestHostDiscoveryListsStableSummariesAndExactSchema(t *testing.T) {
 
 func TestHostDiscoveryRejectsInvalidRangesAndSchemaWithoutTruncation(t *testing.T) {
 	s := hostSession(t, "reply", hostPlugin(t, "memory", "kmp", "kmp_wake"))
-	for _, args := range []string{`{"name":"read"}`, `{"name":"unknown"}`, `{"name":null}`, `{"name":"memory","query":"wake"}`, `{"query":3}`, `{"query":null}`, `{"limit":0}`, `{"limit":21}`, `{"limit":1.5}`, `{"limit":null}`, `{"query":"x","query":"y"}`, `{"extra":true}`, `{"offset":-1}`, `{"offset":null}`, `{"offset":1.5}`, `{"offset":2}`, `{"name":"memory","offset":0}`} {
+	for _, args := range []string{`{"name":"unknown"}`, `{"name":null}`, `{"name":"memory","query":"wake"}`, `{"query":3}`, `{"query":null}`, `{"limit":0}`, `{"limit":21}`, `{"limit":1.5}`, `{"limit":null}`, `{"query":"x","query":"y"}`, `{"extra":true}`, `{"offset":-1}`, `{"offset":null}`, `{"offset":1.5}`, `{"offset":99}`, `{"name":"memory","offset":0}`} {
 		if out := hostExecute(t, s, domain.HostOperationTools, args); !out.IsError {
 			t.Fatalf("accepted %s: %s", args, out.Content)
 		}
@@ -261,8 +262,13 @@ func TestHostDiscoveryPagesEveryRegisteredTool(t *testing.T) {
 		}
 		offset = page.Next
 	}
-	if len(names) != 25 {
+	if len(names) != 25+len(SessionTools(s, s.ToolSnapshot())) {
 		t.Fatalf("catalog incomplete: %d", len(names))
+	}
+	for _, plugin := range plugins {
+		if !names[string(plugin.Definition.Name)] {
+			t.Fatalf("%s not paged", plugin.Definition.Name)
+		}
 	}
 }
 

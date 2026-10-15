@@ -50,6 +50,14 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 		if err != nil {
 			return nil, err
 		}
+		if known && directTool(tool) {
+			view, err := toolSchemaView(tool.Definition.Parameters.Bytes(), path)
+			if err != nil {
+				return nil, err
+			}
+			view["name"], view[tool.Identity.Kind], view["call_directly"], view["description"] = tool.Definition.Name, true, true, tool.Definition.Description
+			return view, nil
+		}
 		if !known || tool.Identity.Kind != domain.ToolKindPlugin {
 			if made, found := findForged(forged, name); found {
 				return forgedView(made, path)
@@ -107,10 +115,31 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 			about:   tool.Description,
 		})
 	}
+	// The session's own local and host tools come last: they are already in
+	// the function list and are called by name, not through a bridge (until
+	// 16 Oct 2026 they were left out, and a search for "axlr_logs" found
+	// nothing).
+	direct := make([]domain.AvailableTool, 0, len(snapshot))
+	for _, tool := range snapshot {
+		if directTool(tool) {
+			direct = append(direct, tool)
+		}
+	}
+	sort.Slice(direct, func(i, j int) bool { return direct[i].Definition.Name < direct[j].Definition.Name })
+	for _, tool := range direct {
+		candidates = append(candidates, discoveryCandidate{
+			text:    string(tool.Definition.Name) + " " + tool.Identity.Kind + " " + string(tool.Definition.Description),
+			summary: map[string]any{"name": tool.Definition.Name, tool.Identity.Kind: true, "call_directly": true},
+			about:   string(tool.Definition.Description),
+			direct:  true,
+		})
+	}
 	// Every term must match. When none does, a tool matching some terms is
 	// still better than nothing: those come back, most terms first, with
 	// partial set (seen on 9 Oct 2026: "ventas total facturado producto csv"
-	// found no tool described as summing units by price per product).
+	// found no tool described as summing units by price per product). The
+	// session's own tools are known to the model already, so they come back
+	// only on a full match.
 	selected := make([]discoveryCandidate, 0, len(candidates))
 	for _, candidate := range candidates {
 		if termsMatched(candidate.text, terms) == len(terms) {
@@ -125,7 +154,7 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 		}
 		var some []ranked
 		for _, candidate := range candidates {
-			if score := termsMatched(candidate.text, terms); score > 0 {
+			if score := termsMatched(candidate.text, terms); score > 0 && !candidate.direct {
 				some = append(some, ranked{candidate, score})
 			}
 		}
@@ -182,10 +211,42 @@ func hostInteger(args map[string]json.RawMessage, key string, fallback int) (int
 	return *value, nil
 }
 
-// discoveryCandidate is one plugin or forged tool under an axlr_tools search.
+// discoverySnapshot is the session's tool snapshot as the model is offered
+// it: the plugin tools, and only the local and host tools its mode and
+// ceremony step leave in the function list, with the definitions sent there
+// (a compact step rewrites axlr_step_done's schema).
+func discoverySnapshot(s domain.Session) []domain.AvailableTool {
+	snapshot := s.ToolSnapshot()
+	offered := make(map[root.ToolName]root.ToolDefinition)
+	for _, definition := range SessionTools(s, snapshot) {
+		offered[definition.Name] = definition
+	}
+	out := make([]domain.AvailableTool, 0, len(snapshot))
+	for _, tool := range snapshot {
+		if directTool(tool) {
+			definition, kept := offered[tool.Definition.Name]
+			if !kept {
+				continue
+			}
+			tool.Definition = definition
+		}
+		out = append(out, tool)
+	}
+	return out
+}
+
+// directTool reports a local or host tool, which the model calls by its own
+// name.
+func directTool(tool domain.AvailableTool) bool {
+	return tool.Identity.Kind == domain.ToolKindLocal || tool.Identity.Kind == domain.ToolKindHost
+}
+
+// discoveryCandidate is one plugin, forged, local or host tool under an
+// axlr_tools search.
 type discoveryCandidate struct {
 	text, about string
 	summary     map[string]any
+	direct      bool
 }
 
 // forgedView is axlr_tools' answer for one forged tool's exact name: its
