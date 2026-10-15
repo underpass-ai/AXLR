@@ -112,6 +112,18 @@ func TestAKeyFinishesTheTypingWithoutSendingOrCancelling(t *testing.T) {
 	}
 }
 
+// A click during a typing finishes it before it does anything else.
+func TestAClickFinishesTheTyping(t *testing.T) {
+	m := naturalOn(t)
+	next, cmd := m.Update(tea.PasteMsg{Content: "five names, please"})
+	m = next.(AppModel)
+	m, _ = tick(t, m, cmd)
+	m = update(m, tea.MouseClickMsg{Button: tea.MouseLeft, X: 1, Y: 1})
+	if m.typing() || m.Composer.Input.Value() != "five names, please" {
+		t.Fatalf("after a click the composer holds %q, typing %v", m.Composer.Input.Value(), m.typing())
+	}
+}
+
 // A second paste during a typing finishes the first and types itself after it.
 func TestASecondPasteFollowsTheFirst(t *testing.T) {
 	m := naturalOn(t)

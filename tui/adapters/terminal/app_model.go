@@ -320,6 +320,11 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Enter does not send, Esc cancels nothing.
 		return m.finishTyping(), nil
 	}
+	if _, ok := msg.(tea.MouseClickMsg); ok && m.typing() {
+		// A click finishes it too and then does what it does: a click on
+		// send sends the whole paste.
+		m = m.finishTyping()
+	}
 	if k, ok := msg.(tea.KeyPressMsg); ok && m.undoAsking {
 		return m.answerUndo(k)
 	}
