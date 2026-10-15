@@ -150,6 +150,9 @@ func (m AppModel) footerStatus(detail int) string {
 	if status.Autonomous {
 		parts = append(parts, m.Theme.T("status.autonomous"))
 	}
+	if m.natural.on {
+		parts = append(parts, m.Theme.T("status.naturalWriting"))
+	}
 	if m.tokens > 0 && detail < statusNoTokens {
 		parts = append(parts, m.footerTokens())
 		if m.cached > 0 {
