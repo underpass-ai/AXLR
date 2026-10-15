@@ -3,6 +3,7 @@ package openrouter
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -128,12 +129,36 @@ func toolArguments(raw string, finish string) (domain.JSONValue, error) {
 	var value any
 	if err := json.Unmarshal([]byte(raw), &value); err != nil {
 		malformed.Error = err.Error()
+		// The offset and the text around it say what to correct: on 16
+		// October 2026 claude-haiku-5.5, told only "invalid character 'a'
+		// looking for beginning of value", sent the same broken call nine
+		// times; the break was a bare "evidence": text past the prefix.
+		var syntax *json.SyntaxError
+		if errors.As(err, &syntax) && int(syntax.Offset) < len(raw) {
+			malformed.Error += fmt.Sprintf(" at byte %d, near `%s`; every string value needs double quotes", syntax.Offset, malformedContext(raw, int(syntax.Offset)))
+		}
 	}
 	encoded, err := json.Marshal(map[string]malformedArgumentsDTO{malformedArgumentsKey: malformed})
 	if err != nil {
 		return domain.JSONValue{}, err
 	}
 	return domain.NewJSONObject(encoded)
+}
+
+// malformedContextBytes bounds the text kept on each side of the byte where
+// unreadable arguments break.
+const malformedContextBytes = 40
+
+// malformedContext is the text of raw around offset, on rune boundaries.
+func malformedContext(raw string, offset int) string {
+	start, end := max(0, offset-malformedContextBytes), min(len(raw), offset+malformedContextBytes)
+	for start > 0 && !utf8.RuneStart(raw[start]) {
+		start--
+	}
+	for end < len(raw) && !utf8.RuneStart(raw[end]) {
+		end++
+	}
+	return raw[start:end]
 }
 
 // utf8Prefix keeps at most maximum bytes of text on a rune boundary.

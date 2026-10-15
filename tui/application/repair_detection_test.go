@@ -197,6 +197,39 @@ func TestDecodeRepairRequestBoundsEveryField(t *testing.T) {
 	}
 }
 
+// Evidence is one string with an item per line, as in axlr_remember: an
+// array of prose is what claude-haiku-5.5 could not write as JSON. The
+// array is still accepted.
+func TestRepairAndImprovementEvidenceIsOneLinePerItem(t *testing.T) {
+	text := `{"description":"axlr_forge_tool refuses every registration","expected":"the tool is registered","observed":"arguments must match its schema","evidence":"first forge refused\n\n  retry refused the same way  ","tool_calls":["c1","c2"]}`
+	for name, decode := range map[string]func(root.JSONValue) (repairRequest, error){"repair": decodeRepairRequest, "improvement": decodeImprovementRequest} {
+		request, err := decode(mustObject(t, text))
+		if err != nil || len(request.Evidence) != 2 || request.Evidence[1] != "retry refused the same way" {
+			t.Fatalf("%s: %+v, %v", name, request.Evidence, err)
+		}
+	}
+	escaped := strings.Replace(text, `\n\n`, `\\n`, 1)
+	if request, err := decodeRepairRequest(mustObject(t, escaped)); err != nil || len(request.Evidence) != 2 {
+		t.Fatalf("escaped line break: %+v, %v", request.Evidence, err)
+	}
+	for _, args := range []string{strings.Replace(text, `"evidence":"first forge refused\n\n  retry refused the same way  "`, `"evidence":" \n "`, 1), strings.Replace(text, `"evidence":"first forge refused\n\n  retry refused the same way  "`, `"evidence":"`+strings.Repeat(`x\n`, 9)+`"`, 1)} {
+		if _, err := decodeRepairRequest(mustObject(t, args)); err == nil {
+			t.Fatalf("accepted %s", args)
+		}
+	}
+	for _, name := range []root.ToolName{HostRequestRepairName, HostRequestImprovementName} {
+		found := false
+		for _, tool := range HostTools() {
+			if tool.Definition.Name == name {
+				found = strings.Contains(string(tool.Definition.Parameters.Bytes()), `"evidence":{"type":"string"`)
+			}
+		}
+		if !found {
+			t.Fatalf("%s does not take evidence as a string", name)
+		}
+	}
+}
+
 func TestRepairBriefCarriesTheCitedOutcomesAndRepairSlugNamesIt(t *testing.T) {
 	s := parentSession(t, activity{"c1", "local_edit", `{"path":"a.go"}`, outcomeInternal, false})
 	request := repairRequest{Description: "local_edit fails with internal_error on every replace", Expected: "edited", Observed: "nil", Evidence: []string{"seen twice"}, ToolCalls: []string{"c1"}}

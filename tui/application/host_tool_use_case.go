@@ -63,6 +63,11 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		// The runtime's envelope is the result, as for local_exec.
 		return u.hostRun(ctx, session, arguments)
 	}
+	// The other host tools take no why, but a model told to give its writes
+	// and commands one gives it here too: on 16 October 2026
+	// claude-haiku-5.5 sent axlr_forge_tool a why on every registration and
+	// the strict decoding refused them all. It is dropped, not refused.
+	arguments = StripWhy(arguments)
 	var result any
 	var err error
 	switch identity.LocalOperation {

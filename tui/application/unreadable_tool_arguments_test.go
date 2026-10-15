@@ -19,9 +19,9 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { retu
 
 func TestResolveToolCallRefusesUnreadableArguments(t *testing.T) {
 	for _, tc := range []struct{ arguments, want string }{
-		{`{"axlr_malformed_arguments":{"error":"unexpected end of JSON input","raw_prefix":"{\"path\":\"a.go"}}`, `the call's arguments were not a valid JSON object (unexpected end of JSON input); send the complete call again`},
+		{`{"axlr_malformed_arguments":{"error":"unexpected end of JSON input","raw_prefix":"{\"path\":\"a.go"}}`, `the call's arguments were not a valid JSON object (unexpected end of JSON input); axlr_malformed_arguments is the console's stand-in for the unreadable arguments, not a field you sent: send the complete call again with the tool's own fields`},
 		{`{"axlr_malformed_arguments":{"error":"unexpected end of JSON input","raw_prefix":"{\"path\":","cut_by_output_limit":true}}`, `the model's output limit cut the call's arguments (unexpected end of JSON input); send the complete call again, shorter`},
-		{` { "axlr_malformed_arguments" : { } } `, `the call's arguments were not a valid JSON object (unknown error); send the complete call again`},
+		{` { "axlr_malformed_arguments" : { } } `, `the call's arguments were not a valid JSON object (unknown error); axlr_malformed_arguments is the console's stand-in for the unreadable arguments, not a field you sent: send the complete call again with the tool's own fields`},
 	} {
 		call := root.ToolCall{ID: "a", Name: "read", Arguments: hostJSON(t, tc.arguments)}
 		if _, _, _, err := ResolveToolCall(turnTools(), call); err == nil || err.Error() != tc.want {
