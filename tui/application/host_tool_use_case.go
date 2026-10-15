@@ -77,7 +77,7 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 			forged, err = u.Forge.List(ctx, string(session.Export().Workspace))
 		}
 		if err == nil {
-			result, err = hostDiscover(session.ToolSnapshot(), forged, arguments)
+			result, err = hostDiscover(discoverySnapshot(session), forged, arguments)
 		}
 	case domain.HostOperationForgeTool:
 		result, err = u.hostForge(ctx, session, arguments)
