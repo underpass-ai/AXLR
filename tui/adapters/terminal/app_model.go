@@ -1200,7 +1200,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case naturalTick:
 		return m.typeNext(v.gen)
 	case tea.PasteMsg:
-		if m.natural.on && !m.inlineApproval() {
+		if m.UIPreferences.NaturalWriting && !m.inlineApproval() {
 			next, cmd, typed := m.typePaste(v.Content)
 			if typed {
 				return next, cmd

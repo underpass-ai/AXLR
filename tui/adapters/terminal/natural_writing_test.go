@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"errors"
 	"math/rand/v2"
 	"strings"
 	"testing"
@@ -8,6 +9,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // naturalOn is a console with /natural-writing on, typing without waiting
@@ -21,8 +24,8 @@ func naturalOn(t *testing.T) AppModel {
 	t.Cleanup(m.zones.Close)
 	m.Composer.Input.SetValue("/natural-writing")
 	m = update(m, ControlIntent("send"))
-	if !m.natural.on || m.Composer.Input.Value() != "" {
-		t.Fatalf("/natural-writing did not turn the mode on: on=%v draft=%q", m.natural.on, m.Composer.Input.Value())
+	if !m.UIPreferences.NaturalWriting || m.Composer.Input.Value() != "" {
+		t.Fatalf("/natural-writing did not turn the mode on: on=%v draft=%q", m.UIPreferences.NaturalWriting, m.Composer.Input.Value())
 	}
 	m.natural.random = rand.New(rand.NewPCG(1, 2))
 	return m
@@ -138,7 +141,7 @@ func TestLongPastesAndTheModeOffPasteAtOnce(t *testing.T) {
 	m.pastes = nil
 	m.Composer.Input.SetValue("/escritura-natural")
 	m = update(m, ControlIntent("send"))
-	if m.natural.on {
+	if m.UIPreferences.NaturalWriting {
 		t.Fatal("/escritura-natural did not turn the mode off")
 	}
 	if view := ansi.Strip(m.View().Content); strings.Contains(view, "natural writing on") || strings.Contains(view, "· natural writing") {
@@ -193,5 +196,40 @@ func TestNaturalPaceVariesAndPausesAfterPunctuation(t *testing.T) {
 	}
 	if !varied {
 		t.Fatal("the pace has no jitter")
+	}
+}
+
+// The mode is a UI preference: /natural-writing saves it, a console opened
+// with it saved starts with it on, and a failed save changes nothing.
+func TestNaturalWritingIsSavedAsAUIPreference(t *testing.T) {
+	store := &uiPreferenceStub{}
+	m := sized()
+	defer m.zones.Close()
+	m.deps.UIPreferenceStore = store
+	m.Composer.Input.SetValue("/natural_writing")
+	m = update(m, ControlIntent("send"))
+	if !store.saved.NaturalWriting || store.saved.Theme != m.UIPreferences.Theme || !m.UIPreferences.NaturalWriting {
+		t.Fatalf("saved %+v", store.saved)
+	}
+	// /theme saves the preferences whole and keeps the mode.
+	m = update(m, ControlIntent("theme"))
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	m = update(m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if store.saved.Theme != domain.ThemeInk || !store.saved.NaturalWriting {
+		t.Fatalf("/theme saved %+v", store.saved)
+	}
+
+	opened := New(Dependencies{UIPreferences: domain.UIPreferences{Theme: domain.ThemeAuto, Icons: domain.IconsSafe, NaturalWriting: true}, Monochrome: true})
+	defer opened.zones.Close()
+	opened = update(opened, tea.WindowSizeMsg{Width: 100, Height: 30})
+	if _, cmd := opened.Update(tea.PasteMsg{Content: "typed"}); cmd == nil {
+		t.Fatal("a console opened with the preference saved pastes at once")
+	}
+
+	store.err = errors.New("disk full")
+	m.Composer.Input.SetValue("/natural-writing")
+	m = update(m, ControlIntent("send"))
+	if !m.UIPreferences.NaturalWriting || !strings.Contains(m.Status.Error, "disk full") {
+		t.Fatalf("a failed save turned the mode off: on=%v error=%q", m.UIPreferences.NaturalWriting, m.Status.Error)
 	}
 }

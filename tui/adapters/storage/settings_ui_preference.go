@@ -24,5 +24,6 @@ func (p settingsUIPreference) Save(ctx context.Context, ui domain.UIPreferences)
 		s.Theme = string(ui.Theme)
 		s.Icons = string(ui.Icons)
 		s.ReduceMotion = ui.ReduceMotion
+		s.NaturalWriting = ui.NaturalWriting
 	})
 }

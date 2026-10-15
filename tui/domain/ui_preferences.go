@@ -4,6 +4,9 @@ type UIPreferences struct {
 	Theme        ThemeID
 	Icons        IconProfile
 	ReduceMotion bool
+	// NaturalWriting types pastes into the composer at a human pace, for
+	// recording demos (/natural-writing).
+	NaturalWriting bool
 }
 
 func DefaultUIPreferences() UIPreferences {

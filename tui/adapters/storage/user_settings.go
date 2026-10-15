@@ -17,12 +17,14 @@ const maxFavoriteModels = 50
 // UserSettings is the editable, user-facing configuration in settings.json.
 // An empty model means that the console opens without a selected model.
 type UserSettings struct {
-	Model        string               `json:"model"`
-	Language     string               `json:"language"`
-	Theme        string               `json:"theme"`
-	Icons        string               `json:"icons"`
-	ReduceMotion bool                 `json:"reduce_motion"`
-	Approvals    *ApprovalPreferences `json:"approvals,omitempty"`
+	Model        string `json:"model"`
+	Language     string `json:"language"`
+	Theme        string `json:"theme"`
+	Icons        string `json:"icons"`
+	ReduceMotion bool   `json:"reduce_motion"`
+	// NaturalWriting types pastes in at a human pace (/natural-writing).
+	NaturalWriting bool                 `json:"natural_writing,omitempty"`
+	Approvals      *ApprovalPreferences `json:"approvals,omitempty"`
 	// FavoriteModels are listed first in /model.
 	FavoriteModels []string `json:"favorite_models,omitempty"`
 	// ReviewerModel judges incident postmortems in a fresh context; empty
@@ -178,7 +180,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "prompt_tokens", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools", "notify"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "natural_writing", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "prompt_tokens", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools", "notify"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -317,7 +319,7 @@ func (s UserSettings) Validate() error {
 }
 
 func (s UserSettings) UIPreferences() domain.UIPreferences {
-	return domain.UIPreferences{Theme: domain.ThemeID(s.Theme), Icons: domain.IconProfile(s.Icons), ReduceMotion: s.ReduceMotion}
+	return domain.UIPreferences{Theme: domain.ThemeID(s.Theme), Icons: domain.IconProfile(s.Icons), ReduceMotion: s.ReduceMotion, NaturalWriting: s.NaturalWriting}
 }
 
 // repositoryName accepts owner/name with the characters GitHub allows.

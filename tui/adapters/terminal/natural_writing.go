@@ -11,10 +11,9 @@ import (
 // naturalWriting is /natural-writing, for recording demos: while it is on,
 // a paste into the composer is typed in a character at a time at a human
 // pace instead of appearing at once. Any key finishes the typing and puts
-// the rest in; nothing is ever sent without the person's Enter. It lasts
-// until the console closes.
+// the rest in; nothing is ever sent without the person's Enter. Whether
+// it is on is a UI preference, saved in settings.json.
 type naturalWriting struct {
-	on bool
 	// pending is what is left to type; gen tells the ticks of the typing
 	// under way from those of a typing finished or replaced.
 	pending []rune
@@ -31,7 +30,7 @@ type naturalPace struct {
 	base, jitter, space, punctuation, line time.Duration
 }
 
-// naturalRhythm is the console's pace, about 14 characters a second; tests
+// naturalRhythm is the console's pace, about 15 characters a second; tests
 // replace it to type without waiting.
 var naturalRhythm = naturalPace{base: 35 * time.Millisecond, jitter: 45 * time.Millisecond, space: 50 * time.Millisecond, punctuation: 180 * time.Millisecond, line: 350 * time.Millisecond}
 
@@ -56,15 +55,23 @@ func (p naturalPace) after(r rune, random *rand.Rand) time.Duration {
 	return wait
 }
 
-// toggleNaturalWriting turns the mode on or off; off, a typing under way
-// is finished first.
+// toggleNaturalWriting turns the mode on or off and saves it; a typing
+// under way is finished first.
 func (m AppModel) toggleNaturalWriting() (AppModel, tea.Cmd) {
 	m = m.finishTyping()
+	next := m.UIPreferences
+	next.NaturalWriting = !next.NaturalWriting
+	if store := m.deps.UIPreferenceStore; store != nil {
+		if err := store.Save(m.lifetime.ctx, next); err != nil {
+			m.Status.Error = m.Theme.T("error.saveNaturalWriting") + err.Error()
+			return m, nil
+		}
+	}
+	m.UIPreferences = next
 	m.Composer.Input.Reset()
-	m.natural.on = !m.natural.on
 	m.Status.Error = ""
 	m.Status.Notice = m.Theme.T("notice.naturalWritingOff")
-	if m.natural.on {
+	if next.NaturalWriting {
 		m.Status.Notice = m.Theme.T("notice.naturalWritingOn")
 	}
 	return m, nil
