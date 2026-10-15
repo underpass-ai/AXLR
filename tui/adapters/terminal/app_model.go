@@ -130,6 +130,8 @@ type AppModel struct {
 	// folds.
 	pastes []pastedText
 	pasted map[string]bool
+	// natural is /natural-writing (natural_writing.go).
+	natural naturalWriting
 	// mention is the @ menu of workspace files.
 	mention mentionState
 	// failures are errors of operations that ended while a message was
@@ -313,6 +315,16 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	_, span := application.StartDiagnosticSpan(m.deps.Context, m.deps.Diagnostics, application.DiagnosticActionUpdate, application.DiagnosticEvent{OperationID: m.operationID})
 	defer span.End(application.DiagnosticErrorNone)
+	if _, ok := msg.(tea.KeyPressMsg); ok && m.typing() {
+		// A key during a typed paste finishes it and does nothing else:
+		// Enter does not send, Esc cancels nothing.
+		return m.finishTyping(), nil
+	}
+	if _, ok := msg.(tea.MouseClickMsg); ok && m.typing() {
+		// A click finishes it too and then does what it does: a click on
+		// send sends the whole paste.
+		m = m.finishTyping()
+	}
 	if k, ok := msg.(tea.KeyPressMsg); ok && m.undoAsking {
 		return m.answerUndo(k)
 	}
@@ -957,6 +969,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/clean-screen" {
 				return m.cleanScreen(), nil
 			}
+			if command == "/natural-writing" {
+				return m.toggleNaturalWriting()
+			}
 			if command == "/axlr-info" {
 				return m.openAxlrInfo(false)
 			}
@@ -1187,7 +1202,16 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.beginSelection(v)
 		}
 		return m, nil
+	case naturalTick:
+		return m.typeNext(v.gen)
 	case tea.PasteMsg:
+		if m.UIPreferences.NaturalWriting && !m.inlineApproval() {
+			next, cmd, typed := m.typePaste(v.Content)
+			if typed {
+				return next, cmd
+			}
+			m = next
+		}
 		// A long paste is a token in the composer; the prompt sent carries
 		// it whole.
 		m.paste(v.Content)

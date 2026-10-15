@@ -40,6 +40,16 @@ func TestUserSettingsCanBeEditedAndSelectorsPreserveOtherSettings(t *testing.T) 
 	if err != nil || loaded.Model != "provider/picked" || loaded.Language != "es" || loaded.Theme != "ink" || loaded.Icons != "safe" || loaded.ReduceMotion {
 		t.Fatalf("saved = %+v, %v", loaded, err)
 	}
+	// /natural-writing saves its preference beside the theme's.
+	if err := store.UIPreference().Save(ctx, domain.UIPreferences{Theme: domain.ThemeInk, Icons: domain.IconsSafe, NaturalWriting: true}); err != nil {
+		t.Fatal(err)
+	}
+	if ui, err := store.UIPreference().Load(ctx); err != nil || !ui.NaturalWriting || ui.Theme != domain.ThemeInk {
+		t.Fatalf("natural writing = %+v, %v", ui, err)
+	}
+	if data, err := os.ReadFile(path); err != nil || !strings.Contains(string(data), `"natural_writing": true`) {
+		t.Fatalf("settings.json lacks natural_writing: %s, %v", data, err)
+	}
 	info, err := os.Stat(path)
 	if err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("settings mode = %v, %v", info, err)

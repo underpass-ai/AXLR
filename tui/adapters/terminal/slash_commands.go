@@ -47,6 +47,7 @@ var slashCommands = []slashCommand{
 	{"/export", "slash.export"},
 	{"/usage", "slash.usage"},
 	{"/axlr-info", "slash.axlrInfo"},
+	{"/natural-writing", "slash.naturalWriting"},
 	{"/session", "slash.session"},
 	{"/session export", "slash.sessionExport"},
 	{"/memory", "slash.memory"},
@@ -61,7 +62,7 @@ var slashCommands = []slashCommand{
 var slashVerbs = map[string]bool{"/memory": true, "/session": true}
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo", "/clean_screen": "/clean-screen", "/cls": "/clean-screen", "/limpiar": "/clean-screen"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo", "/clean_screen": "/clean-screen", "/cls": "/clean-screen", "/limpiar": "/clean-screen", "/natural_writing": "/natural-writing", "/escritura-natural": "/natural-writing"}
 
 // slashSuggestionMax is how many suggestions the menu shows at once on a
 // screen tall enough; the selection scrolls the rest into view. On 12

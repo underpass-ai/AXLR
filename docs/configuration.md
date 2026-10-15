@@ -94,6 +94,7 @@ A `null` value for a whole section means the section is absent. Every key is opt
 | `/model`: Ctrl+Enter (or Ctrl+D) on a model, or the first model chosen while no default is saved | `model` |
 | `/model`: Ctrl+S on a model | `favorite_models` |
 | `/theme`: Enter | `theme`, `icons`, `reduce_motion` |
+| `/natural-writing` | `natural_writing` |
 | `/autonomy on`, `/autonomy off`, `F` on an approval card | `approvals.autonomous` |
 | `L` on an approval card | `approvals.allowed` |
 | The setup assistant (`axlr-tui setup`, or the first launch in a terminal) | `language`, `model`, `local_models` |
@@ -119,6 +120,7 @@ Wherever a key takes a model id (`model`, `reviewer_model`, `favorite_models`, `
 | `theme` | string | `"auto"` | [theme](#theme) |
 | `icons` | string | `"safe"` | [icons](#icons) |
 | `reduce_motion` | boolean | `false` | [reduce_motion](#reduce_motion) |
+| `natural_writing` | boolean | `false` | [natural_writing](#natural_writing) |
 | `notify` | `"bell"` \| `"osc"` \| `"off"` | `"bell"` | [notify](#notify) |
 | `approvals` | object | absent (manual approval); a clean install writes `autonomous: true` with `always_ask` | [approvals](#approvals) |
 | `context_tokens` | integer | `0` (no cap) | [context_tokens](#context_tokens) |
@@ -187,6 +189,10 @@ One of `"auto"` (default), `"ink"`, `"aurora"`, `"paper"`, `"phosphor"`, `"edito
 #### reduce_motion
 
 Boolean, default `false`. Turns off animation. Written by `/theme` (`A`). A string such as `"yes"` is a type error (`invalid settings.json JSON`).
+
+#### natural_writing
+
+Boolean, default `false`, written only when `true`. Types a paste into the composer at a human pace, for recording demos; see `/natural-writing` in the [console guide](console.md). Written by `/natural-writing`. A string such as `"yes"` is a type error (`invalid settings.json JSON`).
 
 #### notify
 
