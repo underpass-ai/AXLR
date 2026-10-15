@@ -90,6 +90,37 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 	}
 }
 
+// The runtime's envelope names the model's call in request_id, which the
+// model cites in a repair request: Claude models never see their own call
+// IDs (16 October 2026). A call without one keeps the console's constant.
+func TestToolRunnerNamesTheCallInTheEnvelope(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "file"), []byte("hello"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	e, err := runtime.New(runtime.Config{Root: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer e.Close()
+	runner := ToolRunner{Executor: e}
+	id, _ := domain.NewLocalToolIdentity("read")
+	for _, tc := range []struct {
+		ctx  context.Context
+		want string
+	}{
+		{application.WithToolCall(context.Background(), "toolu_01AbC"), `"request_id":"toolu_01AbC"`},
+		{context.Background(), `"request_id":"tui-tool"`},
+		{application.WithToolCall(context.Background(), "bad\nid"), `"request_id":"tui-tool"`},
+	} {
+		ctx, want := tc.ctx, tc.want
+		out, err := runner.Execute(ctx, id, jsonValue(t, `{"path":"file"}`))
+		if err != nil || !strings.Contains(string(out.Content), want) {
+			t.Fatalf("want %s in %s %v", want, out.Content, err)
+		}
+	}
+}
+
 func TestExecEchoHelper(t *testing.T) {
 	for _, arg := range os.Args {
 		if arg == "axlr-echo-helper" {

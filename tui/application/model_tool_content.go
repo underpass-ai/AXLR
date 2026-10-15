@@ -59,6 +59,9 @@ func projectToolContentIn(raw string, index, limit int, place excerptPlace, tool
 	if place == excerptCompacted {
 		bounded["retrieval"] = "This turn no longer fits the model context, so its earlier results were shortened. Answer with what you have, or ask the user before gathering more."
 	}
+	if key, id, named := namedCall(original); named {
+		bounded[key] = id
+	}
 	if controls := protocolControls(original); controls != nil {
 		bounded["protocol_controls"] = controls
 	}
@@ -125,6 +128,11 @@ func wholeToolContent(raw string) (original, semantic any, whole string) {
 						}
 					}
 					result["protocol_version"] = envelope["protocol_version"]
+					if key, id, named := namedCall(envelope); named {
+						if _, exists := result[key]; !exists {
+							result[key] = id
+						}
+					}
 				}
 			}
 		}
