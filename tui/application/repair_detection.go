@@ -287,7 +287,7 @@ func citedFailures(s domain.Session, request repairRequest) ([]citedFailure, str
 	for _, id := range request.ToolCalls {
 		record, ok := byID[root.ToolCallID(id)]
 		if !ok {
-			return nil, fmt.Sprintf("call %s is not in this session; cite IDs of tool calls you made here", id)
+			return nil, uncitedRefusal(state, id, ownCall(state))
 		}
 		cited, refusal := classifyCall(state.ToolSnapshot, record)
 		if refusal != "" {

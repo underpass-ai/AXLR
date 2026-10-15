@@ -55,7 +55,7 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 	}
 	// The why is the console's: the runtime decodes a local tool's
 	// arguments strictly and would refuse it.
-	request := dto.Request{ProtocolVersion: runtime.ProtocolVersion, RequestID: "tui-tool", Tool: id.LocalOperation, Arguments: application.StripWhy(args).Bytes()}
+	request := dto.Request{ProtocolVersion: runtime.ProtocolVersion, RequestID: requestID(ctx), Tool: id.LocalOperation, Arguments: application.StripWhy(args).Bytes()}
 	if id.Kind == domain.ToolKindPlugin {
 		request.Tool = "plugins.call"
 		encoded, err := json.Marshal(dto.PluginCallArgs{PluginID: id.Plugin.PluginID.String(), ToolName: id.Plugin.ToolName.String(), Arguments: args.Bytes()})
@@ -121,4 +121,15 @@ func (r ToolRunner) namedGuideRoot(id domain.ToolIdentity, content string) strin
 	path := string(escaped[1 : len(escaped)-1])
 	content = strings.ReplaceAll(content, `\u003cplugin-root\u003e`, path)
 	return strings.ReplaceAll(content, "<plugin-root>", path)
+}
+
+// requestID names the model's call in the runtime's envelope, where the
+// model reads the ID it cites in a repair request.
+func requestID(ctx context.Context) string {
+	if call, ok := application.ToolCallOf(ctx); ok {
+		if _, err := root.NewRequestID(string(call)); err == nil {
+			return string(call)
+		}
+	}
+	return application.UnnamedRequestID
 }
