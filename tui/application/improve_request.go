@@ -72,7 +72,7 @@ func citedFriction(s domain.Session, request repairRequest) ([]citedFailure, str
 		record, ok := byID[root.ToolCallID(id)]
 		switch {
 		case !ok:
-			return nil, fmt.Sprintf("call %s is not in this session; cite IDs of tool calls you made here", id)
+			return nil, uncitedRefusal(state, id, ownCall(state))
 		case record.Outcome == nil:
 			return nil, fmt.Sprintf("call %s has no outcome yet", id)
 		case record.Decision == domain.DecisionDeny:
