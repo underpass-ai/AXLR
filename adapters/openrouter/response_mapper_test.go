@@ -104,6 +104,7 @@ func TestMapResponseKeepsUnreadableToolArgumentsForAToolError(t *testing.T) {
 		{"missing brace", `{"path":"a.go"`, "tool_calls", `{"axlr_malformed_arguments":{"error":"unexpected end of JSON input","raw_prefix":"{\"path\":\"a.go\""}}`},
 		{"not an object", `[]`, "tool_calls", `{"axlr_malformed_arguments":{"error":"arguments must be a JSON object","raw_prefix":"[]"}}`},
 		{"cut by the output limit", `{"path":"a.go","content":"pack`, "length", `{"axlr_malformed_arguments":{"error":"unexpected end of JSON input","raw_prefix":"{\"path\":\"a.go\",\"content\":\"pack","cut_by_output_limit":true}}`},
+		{"bare value", `{"observed":"refused","evidence": First forge refused., "evidence": Retry refused.}`, "tool_calls", `{"axlr_malformed_arguments":{"error":"invalid character 'F' looking for beginning of value at byte 35, near ` + "`" + `{\"observed\":\"refused\",\"evidence\": First forge refused., \"evidence\": Retry r` + "`" + `; every string value needs double quotes","raw_prefix":"{\"observed\":\"refused\",\"evidence\": First forge refused., \"evidence\": Retry refused.}"}}`},
 		{"long", `{"content":"` + long, "length", `{"axlr_malformed_arguments":{"error":"unexpected end of JSON input","raw_prefix":"{\"content\":\"` + strings.Repeat("x", 499) + `","cut_by_output_limit":true}}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

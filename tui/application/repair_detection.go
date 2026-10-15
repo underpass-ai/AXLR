@@ -36,11 +36,37 @@ const (
 
 // repairRequest is what the model sends through axlr_request_repair.
 type repairRequest struct {
-	Description string   `json:"description"`
-	Expected    string   `json:"expected"`
-	Observed    string   `json:"observed"`
-	Evidence    []string `json:"evidence"`
-	ToolCalls   []string `json:"tool_calls"`
+	Description string        `json:"description"`
+	Expected    string        `json:"expected"`
+	Observed    string        `json:"observed"`
+	Evidence    evidenceLines `json:"evidence"`
+	ToolCalls   []string      `json:"tool_calls"`
+}
+
+// evidenceLines is a request's evidence: a string with an item per line, or,
+// as the schema had it before, an array of strings. On 16 October 2026
+// claude-haiku-5.5 wrote the array as repeated "evidence" keys with bare
+// text in ten requests out of ten, the arguments were not JSON and no
+// repair could be asked for; axlr_remember met the same on 10 October.
+type evidenceLines []string
+
+func (e *evidenceLines) UnmarshalJSON(raw []byte) error {
+	var text string
+	if err := json.Unmarshal(raw, &text); err != nil {
+		return json.Unmarshal(raw, (*[]string)(e))
+	}
+	if !strings.Contains(text, "\n") {
+		// The model may escape the line break once more, as with axlr_remember.
+		text = strings.ReplaceAll(text, `\n`, "\n")
+	}
+	items := []string{}
+	for _, line := range strings.Split(text, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			items = append(items, line)
+		}
+	}
+	*e = items
+	return nil
 }
 
 const (
