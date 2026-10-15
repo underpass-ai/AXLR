@@ -100,7 +100,10 @@ func malformedArguments(arguments root.JSONValue) error {
 	if malformed.CutByOutputLimit {
 		return fmt.Errorf("the model's output limit cut the call's arguments (%s); send the complete call again, shorter", malformed.Error)
 	}
-	return fmt.Errorf("the call's arguments were not a valid JSON object (%s); send the complete call again", malformed.Error)
+	// The history keeps this stand-in as the call's arguments: on 16 October
+	// 2026 claude-haiku-5.5 read it there as a field it had sent and spent
+	// ten calls apologising for it.
+	return fmt.Errorf("the call's arguments were not a valid JSON object (%s); %s is the console's stand-in for the unreadable arguments, not a field you sent: send the complete call again with the tool's own fields", malformed.Error, malformedArgumentsKey)
 }
 
 func hostFindTool(snapshot []domain.AvailableTool, name root.ToolName) (domain.AvailableTool, bool, error) {
