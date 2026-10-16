@@ -53,6 +53,13 @@ const (
 	HostOperationRemoveTool = "remove_tool"
 	// HostOperationLogs reads the console's own log; read-only.
 	HostOperationLogs = "logs"
+	// HostOperationCatalog searches and describes the pre-forged tools of
+	// the configured catalogs from their cached signed indexes; read-only.
+	HostOperationCatalog = "catalog"
+	// HostOperationInstallTool installs a catalog tool as a forged tool of
+	// the workspace; it is judged and approved as the local write it
+	// performs.
+	HostOperationInstallTool = "install_tool"
 )
 
 func NewLocalToolIdentity(operation string) (ToolIdentity, error) {
@@ -74,7 +81,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember, HostOperationRecall, HostOperationForgeTool, HostOperationRunTool, HostOperationRemoveTool, HostOperationLogs:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember, HostOperationRecall, HostOperationForgeTool, HostOperationRunTool, HostOperationRemoveTool, HostOperationLogs, HostOperationCatalog, HostOperationInstallTool:
 			return nil
 		}
 	case ToolKindLocal:

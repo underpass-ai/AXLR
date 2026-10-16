@@ -288,6 +288,9 @@ func forgedView(tool ForgedTool, path string) (any, error) {
 	if tool.Broken != "" {
 		view["broken"], view["hint"] = tool.Broken, brokenForgedHint
 	}
+	if tool.Origin != nil {
+		view["origin"] = map[string]string{"catalog": tool.Origin.Catalog, "version": tool.Origin.Version}
+	}
 	return view, nil
 }
 

@@ -28,31 +28,34 @@ func forgedName(arguments []byte) string {
 // forge call's shape; the card then shows them as JSON.
 func forgeCard(arguments []byte) (string, bool) {
 	var call struct {
-		Name        string          `json:"name"`
-		Description string          `json:"description"`
-		InputSchema json.RawMessage `json:"input_schema"`
-		Program     string          `json:"program"`
-		Args        []string        `json:"args"`
-		Files       []struct {
-			Path    string `json:"path"`
-			Content string `json:"content"`
-		} `json:"files"`
+		Name        string                   `json:"name"`
+		Description string                   `json:"description"`
+		InputSchema json.RawMessage          `json:"input_schema"`
+		Program     string                   `json:"program"`
+		Args        []string                 `json:"args"`
+		Files       []application.ForgedFile `json:"files"`
 	}
 	if json.Unmarshal(arguments, &call) != nil || call.Name == "" || len(call.Files) == 0 {
 		return "", false
 	}
+	return forgeCardOf(call.Program, call.Args, call.Description, call.InputSchema, call.Files), true
+}
+
+// forgeCardOf lays a tool out: the command, the description, the schema
+// and each file as code. The install card adds its origin above it.
+func forgeCardOf(program string, args []string, description string, inputSchema json.RawMessage, files []application.ForgedFile) string {
 	var b strings.Builder
-	b.WriteString("$ " + formatCommand(call.Program, call.Args) + "\n\n")
-	b.WriteString(call.Description + "\n\n")
+	b.WriteString("$ " + formatCommand(program, args) + "\n\n")
+	b.WriteString(description + "\n\n")
 	var schema bytes.Buffer
-	if json.Indent(&schema, call.InputSchema, "", "  ") == nil {
+	if json.Indent(&schema, inputSchema, "", "  ") == nil {
 		b.WriteString("input_schema:\n" + schema.String() + "\n")
 	}
-	for _, file := range call.Files {
+	for _, file := range files {
 		b.WriteString("\n── " + file.Path + " ──\n")
 		b.WriteString(strings.TrimRight(file.Content, "\n") + "\n")
 	}
-	return b.String(), true
+	return b.String()
 }
 
 // savesAlwaysAllow reports whether "always allow" can save a rule for the

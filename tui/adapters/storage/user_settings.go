@@ -79,6 +79,9 @@ type UserSettings struct {
 	// ForgedTools offers axlr_forge_tool and axlr_run_tool; absent means on.
 	// A pointer keeps an explicit false when another setting is saved.
 	ForgedTools *bool `json:"forged_tools,omitempty"`
+	// Catalogs are the catalogs of pre-forged tools beside the built-in
+	// official one (catalog_settings.go).
+	Catalogs []CatalogSetting `json:"catalogs,omitempty"`
 	// Notify is how the console calls for attention when a long turn ends
 	// or a card waits: "bell" (the default), "osc" (a desktop notification
 	// and the bell) or "off".
@@ -180,7 +183,7 @@ func (s *UserSettings) UnmarshalJSON(data []byte) error {
 		return errors.New("settings.json must contain a JSON object")
 	}
 	for key := range fields {
-		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "natural_writing", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "prompt_tokens", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools", "notify"} {
+		for _, knownKey := range []string{"model", "language", "theme", "icons", "reduce_motion", "natural_writing", "approvals", "favorite_models", "reviewer_model", "repair", "context_tokens", "local_models", "models", "jev", "ceremonies", "plan", "trace_retention_days", "trace_payloads", "turn_tool_calls", "prompt_tokens", "exec_sandbox", "engines", "max_session_usd", "jobs", "forged_tools", "catalogs", "notify"} {
 			if strings.EqualFold(key, knownKey) {
 				delete(fields, key)
 				break
@@ -263,6 +266,9 @@ func (s UserSettings) Validate() error {
 		return fmt.Errorf("settings trace_retention_days must be between 0 and %d", maxTraceRetentionDays)
 	}
 	if err := s.validateSessionBudget(); err != nil {
+		return err
+	}
+	if err := s.validateCatalogs(); err != nil {
 		return err
 	}
 	if len(s.LocalModels) > maxLocalModels {

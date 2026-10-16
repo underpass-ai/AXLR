@@ -33,6 +33,9 @@ type HostToolUseCase struct {
 	Validation ToolArgumentValidationPort
 	// Logs serves axlr_logs; nil means the console keeps no app log.
 	Logs AppLogPort
+	// Catalog serves axlr_catalog and axlr_install_tool with Forge; nil
+	// offers neither.
+	Catalog CatalogPort
 }
 
 // historyPageLimit is the largest encoded axlr_history page that the
@@ -87,6 +90,10 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		result, err = u.hostForge(ctx, session, arguments)
 	case domain.HostOperationRemoveTool:
 		result, err = u.hostRemove(ctx, session, arguments)
+	case domain.HostOperationCatalog:
+		result, err = u.hostCatalog(ctx, session, arguments)
+	case domain.HostOperationInstallTool:
+		result, err = u.hostInstall(ctx, session, arguments)
 	case domain.HostOperationHistory:
 		result, err = hostHistory(session.Messages(), arguments, u.historyPageLimit(session))
 	case domain.HostOperationSkill:

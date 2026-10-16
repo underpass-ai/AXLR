@@ -30,6 +30,7 @@ func (h HelpOverlay) rows(theme Theme, inner int) []string {
 		theme.T("help.commandsModes"),
 		theme.T("help.commandsCeremonies"),
 		theme.T("help.commandsJobs"),
+		theme.T("help.commandsTools"),
 		"",
 		theme.Accent(theme.T("help.navigate")),
 		theme.T("help.shortcuts"),

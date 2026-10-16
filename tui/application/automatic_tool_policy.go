@@ -12,9 +12,9 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 		// It writes KMP memory: approved as kmp_write_memory would be.
 		return policy != nil && policy.AutoApproves(domain.MemoryWriteIdentity)
 	}
-	if id.Kind == domain.ToolKindHost && (id.LocalOperation == domain.HostOperationForgeTool || id.LocalOperation == domain.HostOperationRemoveTool) {
+	if id.Kind == domain.ToolKindHost && (id.LocalOperation == domain.HostOperationForgeTool || id.LocalOperation == domain.HostOperationRemoveTool || id.LocalOperation == domain.HostOperationInstallTool) {
 		// It writes or deletes the tool's files: approved as local_write
-		// would be.
+		// would be. An install writes the files the card showed.
 		return policy != nil && policy.AutoApproves(localIdentity("write"))
 	}
 	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationRunTool {
@@ -27,8 +27,9 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 		// the merge) stay with the person, so the request itself needs no
 		// card. A judgement
 		// asks Jev a question the person enabled in settings and changes
-		// nothing. The console's log is read-only.
-		return id.LocalOperation == domain.HostOperationLogs || id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationRequestImprovement || id.LocalOperation == domain.HostOperationJudge || id.LocalOperation == domain.HostOperationRecall
+		// nothing. The console's log and the catalogs' indexes are
+		// read-only.
+		return id.LocalOperation == domain.HostOperationLogs || id.LocalOperation == domain.HostOperationCatalog || id.LocalOperation == domain.HostOperationTools || id.LocalOperation == domain.HostOperationHistory || id.LocalOperation == domain.HostOperationSkill || id.LocalOperation == domain.HostOperationSession || id.LocalOperation == domain.HostOperationRequestRepair || id.LocalOperation == domain.HostOperationRepairStatus || id.LocalOperation == domain.HostOperationRequestImprovement || id.LocalOperation == domain.HostOperationJudge || id.LocalOperation == domain.HostOperationRecall
 	}
 	if readsWorkspace(id) {
 		// On 10 October 2026, with autonomy off, every local_search and

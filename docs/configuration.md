@@ -131,6 +131,7 @@ Wherever a key takes a model id (`model`, `reviewer_model`, `favorite_models`, `
 | `models` | object | `{}` | [models](#models-per-model-openrouter-options) |
 | `exec_sandbox` | object | absent (`mode: off`) | [exec_sandbox](#exec_sandbox) |
 | `forged_tools` | boolean | `true` | [forged_tools](#forged_tools) |
+| `catalogs` | array of objects | `[]` (the built-in `axlr` catalog) | [catalogs](#catalogs) |
 | `engines` | object | absent (`shared: false`, `required: false`); a clean install writes both true | [engines](#engines) |
 | `ceremonies` | object | absent (`profile: auto`) | [ceremonies](#ceremonies) |
 | `plan` | object | absent (session model, manual approval) | [plan](#plan) |
@@ -387,7 +388,29 @@ Refused while reading: `settings exec_sandbox.mode must be off, auto or required
 
 #### forged_tools
 
-Boolean, default `true` (absent means on; an explicit `false` is kept when other keys are saved). `false` offers the model none of `axlr_forge_tool`, `axlr_run_tool` and `axlr_remove_tool`. See [forged tools](console.md#forged-tools).
+Boolean, default `true` (absent means on; an explicit `false` is kept when other keys are saved). `false` offers the model none of `axlr_forge_tool`, `axlr_run_tool` and `axlr_remove_tool`, nor `axlr_catalog` and `axlr_install_tool`, and `/tools` is refused. See [forged tools](console.md#forged-tools).
+
+#### catalogs
+
+Array of objects; absent means the built-in official catalog alone. Each entry is a catalog of pre-forged tools the console reads for `/tools`, `axlr_catalog` and `axlr_install_tool` (decision D1 of the [tool registry design](plans/2026-10-16-tool-registry-design.md)): a static, signed `index.json` plus the files of each tool. Source: [catalog_settings.go](../tui/adapters/storage/catalog_settings.go), [client.go](../tui/adapters/catalog/client.go).
+
+| Key | Type | Default | Meaning |
+|:--|:--|:--|:--|
+| `name` | string | required | 1-32 lowercase letters, digits, `_` or `-`, starting with a letter; unique. `/tools install <name> --from <catalog>` and `axlr_install_tool`'s `catalog` name it, and the cache lives under `<state>/axlr/catalog/<name>/` |
+| `url` | string | required (optional for `axlr`) | The absolute URL of the catalog's `index.json`, `https` anywhere or `http` on this machine's loopback (a local mirror). Manifests and files are fetched relative to it |
+| `public_key` | string | required (optional for `axlr`) | The catalog's minisign public key, the base64 line of its `.pub` file (`RWQ…`). The index is read only when `index.json.minisig` beside it verifies with this key: an unsigned index is never read, from any catalog |
+| `enabled` | boolean | `true` | `false` keeps the entry but reads nothing from it |
+
+The official catalog, named `axlr` at `https://catalog.axlr.dev/index.json`, is built in and cannot be removed: an entry named `axlr` overrides its `url` (a mirror) or `public_key`, or disables it with `enabled: false`. Its public key is published with the catalog's first release; until the console ships it, the entry is listed with the warning `no public key configured` and reads nothing, unless settings give the key. Refused while reading: `settings catalogs name "…" must be …`, `settings catalogs <name> needs a url`, `settings catalogs <name> needs a public_key: an unsigned index is never read`, `settings catalogs <name>: url must use https (http only on the loopback)`, `settings catalogs lists <name> twice`, and at most 16 entries.
+
+```json
+"catalogs": [
+  {"name": "axlr", "public_key": "RWRheGxyZG9jc4IpcKOE7GUurQdesELtiL2GWej6/lWjlsg3t+4iHGjd"},
+  {"name": "acme", "url": "https://tools.intranet.acme/index.json", "public_key": "RWRhY21lZG9jc7JU8iG+4Xf85Q3Rspj1ARuikOVIzFzTP10NHeP42at5"}
+]
+```
+
+A catalog's index is cached once verified and read from the cache for a day; `/tools update` fetches it again. A fetch or a signature that fails leaves the cache as it was and is reported as a warning in `/tools` and `axlr_catalog`. See [installing catalog tools](console.md#installing-catalog-tools).
 
 ### Engines, ceremonies and jobs
 
@@ -762,6 +785,9 @@ Every key with a value. The file passes validation as written; to launch with it
     "writable": ["/home/you/.cache/go-build", "/home/you/go/pkg/mod"]
   },
   "forged_tools": true,
+  "catalogs": [
+    {"name": "acme", "url": "https://tools.intranet.acme/index.json", "public_key": "RWRhY21lZG9jc7JU8iG+4Xf85Q3Rspj1ARuikOVIzFzTP10NHeP42at5"}
+  ],
   "engines": {"shared": true},
   "ceremonies": {"profile": "auto"},
   "plan": {"model": "session", "auto_approve": false},
