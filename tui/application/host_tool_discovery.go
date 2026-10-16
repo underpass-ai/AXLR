@@ -1,6 +1,7 @@
 package application
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -109,9 +110,13 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 	sorted := append([]ForgedTool(nil), forged...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
 	for _, tool := range sorted {
+		summary := map[string]any{"name": tool.Name, "forged": true, "call_with": HostRunToolName}
+		if tool.Broken != "" {
+			summary["broken"], summary["hint"] = tool.Broken, brokenForgedHint
+		}
 		candidates = append(candidates, discoveryCandidate{
 			text:    tool.Name + " forged " + tool.Description,
-			summary: map[string]any{"name": tool.Name, "forged": true, "call_with": HostRunToolName},
+			summary: summary,
 			about:   tool.Description,
 		})
 	}
@@ -280,5 +285,25 @@ func forgedView(tool ForgedTool, path string) (any, error) {
 	sort.Strings(files)
 	view["name"], view["forged"], view["call_with"], view["description"] = tool.Name, true, HostRunToolName, tool.Description
 	view["command"], view["files"] = append([]string{tool.Program}, tool.Args...), files
+	if tool.Broken != "" {
+		view["broken"], view["hint"] = tool.Broken, brokenForgedHint
+	}
 	return view, nil
+}
+
+// brokenForgedHint tells the model how to get a broken forged tool back.
+const brokenForgedHint = "forge it again under the same name with axlr_forge_tool, or remove it with axlr_remove_tool; axlr_run_tool refuses it until then"
+
+// markBrokenForged records on each forged tool whose files no longer verify
+// why it is broken, so axlr_tools says so before the model calls it.
+func markBrokenForged(ctx context.Context, port ForgedToolsPort, workspace string, forged []ForgedTool) []ForgedTool {
+	marked := make([]ForgedTool, 0, len(forged))
+	for _, tool := range forged {
+		tool.Broken = ""
+		if err := port.Verify(ctx, workspace, tool); err != nil {
+			tool.Broken = err.Error()
+		}
+		marked = append(marked, tool)
+	}
+	return marked
 }

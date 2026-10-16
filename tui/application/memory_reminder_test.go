@@ -80,6 +80,11 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		{"a refused command", withResult(memoryRequest(t, commands[0]), "x1", "give why: one sentence saying what this call is for"), false},
 		{"a command without a result", []root.Message{{Role: root.RoleUser, Content: "run the tests"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{commands[0]}}, {Role: root.RoleAssistant, Content: "done"}}, false},
 		{"a forged tool run", memoryRequest(t, toolCall(t, "f1", HostRunToolName, `{"name":"t"}`)), true},
+		// A refused axlr_run_tool never ran its program: its result is an
+		// error envelope (hostFailure), with no status (docs/console.md).
+		{"a forged tool changed since it was forged", withResult(memoryRequest(t, toolCall(t, "f1", HostRunToolName, `{"name":"t"}`)), "f1", `{"error":"forged tool \"t\" changed since it was forged (count.sh); forge it again"}`), false},
+		{"an unknown forged tool", withResult(memoryRequest(t, toolCall(t, "f1", HostRunToolName, `{"name":"missing"}`)), "f1", `{"error":"unknown forged tool \"missing\""}`), false},
+		{"a forged tool run with invalid arguments", withResult(memoryRequest(t, toolCall(t, "f1", HostRunToolName, `{}`)), "f1", `{"error":"axlr_run_tool arguments must be name, arguments and why"}`), false},
 		{"eight reads", memoryRequest(t, reads...), false},
 		{"searches and listings", memoryRequest(t, searches...), false},
 		{"searches and a recall", memoryRequest(t, searches[0], searches[1], toolCall(t, "q1", HostRecallName, `{}`)), false},

@@ -198,10 +198,10 @@ func repairPanelContent(records []domain.RepairRecord, theme Theme) string {
 			lines = append(lines, theme.Tf("repairs.merged", shortDigest(record.MergeSHA)))
 		}
 		if record.Pending != "" {
-			lines = append(lines, theme.Tf("repairs.pending", record.Pending))
+			lines = append(lines, theme.Tf("repairs.pending", singleLine(record.Pending)))
 		}
 		if record.Error != "" {
-			lines = append(lines, theme.Tf("repairs.error", record.Error))
+			lines = append(lines, theme.Tf("repairs.error", singleLine(record.Error)))
 		}
 		if record.Memory != "" {
 			lines = append(lines, theme.Tf("repairs.memory", record.Memory))

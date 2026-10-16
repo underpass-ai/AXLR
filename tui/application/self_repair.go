@@ -466,15 +466,23 @@ func (r *SelfRepair) drive(ctx context.Context, run *repairRun, child domain.Ses
 	}
 	nudges, retries := 0, 0
 	for {
-		r.update(ctx, run, func(record *domain.RepairRecord) { syncRecord(record, child) })
 		if ctx.Err() != nil {
+			// The record, not the session, says where the run stood: a
+			// cancelled console step (propose, watch, decide) returns the
+			// session as its turn began, and on 16 October 2026 a repair
+			// stopped while watching was recorded at its earlier repair step.
 			r.update(ctx, run, func(record *domain.RepairRecord) {
+				state := describeRunState(child)
+				if ceremony, live := child.Ceremony(); live && record.Step != "" {
+					state = fmt.Sprintf("step %s of %s (%s)", record.Step, ceremony.Definition, child.Status())
+				}
 				record.Status, record.Pending = domain.RepairInterrupted, ""
-				record.Error = "interrupted while " + describeRunState(child)
+				record.Error = "interrupted while " + state
 				record.Notice = repairNotice(*record, r.Build)
 			})
 			return
 		}
+		r.update(ctx, run, func(record *domain.RepairRecord) { syncRecord(record, child) })
 		if err != nil {
 			retries++
 			if retries > maxRepairRetries {

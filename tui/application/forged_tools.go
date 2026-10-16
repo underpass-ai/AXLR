@@ -101,25 +101,35 @@ func (u ContinueTurnUseCase) offersForge(s domain.Session) bool {
 	return !live && !s.Mode().StartsCeremony() && s.Mode() != domain.ModeTask
 }
 
+// forgeArgs are axlr_forge_tool's arguments.
+type forgeArgs struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	InputSchema json.RawMessage `json:"input_schema"`
+	Program     string          `json:"program"`
+	Args        []string        `json:"args"`
+	Files       []ForgedFile    `json:"files"`
+}
+
+// parseForge decodes and validates axlr_forge_tool's arguments without
+// touching the workspace, so the same checks run before the card.
+func parseForge(arguments root.JSONValue) (forgeArgs, []ForgedFile, error) {
+	var args forgeArgs
+	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&args); err != nil {
+		return args, nil, errors.New("axlr_forge_tool arguments must match its schema: name, description, input_schema, program, args, files")
+	}
+	files, err := validateForge(args.Name, args.Description, args.InputSchema, args.Program, args.Args, args.Files)
+	return args, files, err
+}
+
 // hostForge validates axlr_forge_tool's arguments and registers the tool.
 func (u HostToolUseCase) hostForge(ctx context.Context, session domain.Session, arguments root.JSONValue) (any, error) {
 	if u.Forge == nil {
 		return nil, errors.New("forged tools are not enabled in this console")
 	}
-	var args struct {
-		Name        string          `json:"name"`
-		Description string          `json:"description"`
-		InputSchema json.RawMessage `json:"input_schema"`
-		Program     string          `json:"program"`
-		Args        []string        `json:"args"`
-		Files       []ForgedFile    `json:"files"`
-	}
-	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&args); err != nil {
-		return nil, errors.New("axlr_forge_tool arguments must match its schema: name, description, input_schema, program, args, files")
-	}
-	files, err := validateForge(args.Name, args.Description, args.InputSchema, args.Program, args.Args, args.Files)
+	args, files, err := parseForge(arguments)
 	if err != nil {
 		return nil, err
 	}
@@ -240,44 +250,9 @@ func (u HostToolUseCase) hostRun(ctx context.Context, session domain.Session, ar
 	if u.Tools == nil {
 		return hostFailure(errors.New("forged tools need the local runtime")), nil
 	}
-	var args struct {
-		Name      string          `json:"name"`
-		Arguments json.RawMessage `json:"arguments"`
-		// Why is the console's, shown on the card and kept with the turn.
-		Why string `json:"why"`
-	}
-	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&args); err != nil || args.Name == "" {
-		return hostFailure(errors.New("axlr_run_tool arguments must be name, arguments and why")), nil
-	}
-	input, err := root.NewJSONObject(args.Arguments)
-	if err != nil {
-		return hostFailure(errors.New("arguments must be a JSON object")), nil
-	}
-	if len(input.Bytes()) > maxForgedArgumentsBytes {
-		return hostFailure(fmt.Errorf("arguments exceed %d bytes", maxForgedArgumentsBytes)), nil
-	}
-	workspace := string(session.Export().Workspace)
-	tools, err := u.Forge.List(ctx, workspace)
+	tool, input, err := u.prepareRun(ctx, session, arguments)
 	if err != nil {
 		return hostFailure(err), nil
-	}
-	tool, found := findForged(tools, args.Name)
-	if !found {
-		return hostFailure(fmt.Errorf("unknown forged tool %q; search axlr_tools or forge it with axlr_forge_tool", args.Name)), nil
-	}
-	if err := u.Forge.Verify(ctx, workspace, tool); err != nil {
-		return hostFailure(err), nil
-	}
-	if u.Validation != nil {
-		schema, err := root.NewJSONObject(tool.InputSchema)
-		if err != nil {
-			return hostFailure(fmt.Errorf("forged tool %q has no valid input_schema; forge it again", tool.Name)), nil
-		}
-		if err := u.Validation.Validate(root.ToolDefinition{Name: root.ToolName(forgedAlias(tool.Name)), Description: root.Text(tool.Description), Parameters: schema}, input); err != nil {
-			return hostFailure(fmt.Errorf("arguments do not match %s's input_schema: %v", tool.Name, err)), nil
-		}
 	}
 	command, err := json.Marshal(map[string]any{"program": tool.Program, "args": tool.Args, "stdin": string(input.Bytes())})
 	if err != nil {
@@ -288,6 +263,99 @@ func (u HostToolUseCase) hostRun(ctx context.Context, session domain.Session, ar
 		return hostFailure(err), nil
 	}
 	return u.Tools.Execute(ctx, localIdentity("exec"), value)
+}
+
+// prepareRun finds the forged tool axlr_run_tool names, checks that its
+// files are the ones forged and that the arguments match its schema; it
+// runs nothing, so the same checks run before the card.
+func (u HostToolUseCase) prepareRun(ctx context.Context, session domain.Session, arguments root.JSONValue) (ForgedTool, root.JSONValue, error) {
+	var args struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+		// Why is the console's, shown on the card and kept with the turn.
+		Why string `json:"why"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&args); err != nil || args.Name == "" {
+		return ForgedTool{}, root.JSONValue{}, errors.New("axlr_run_tool arguments must be name, arguments and why")
+	}
+	input, err := root.NewJSONObject(args.Arguments)
+	if err != nil {
+		return ForgedTool{}, root.JSONValue{}, errors.New("arguments must be a JSON object")
+	}
+	if len(input.Bytes()) > maxForgedArgumentsBytes {
+		return ForgedTool{}, root.JSONValue{}, fmt.Errorf("arguments exceed %d bytes", maxForgedArgumentsBytes)
+	}
+	workspace := string(session.Export().Workspace)
+	tools, err := u.Forge.List(ctx, workspace)
+	if err != nil {
+		return ForgedTool{}, root.JSONValue{}, err
+	}
+	tool, found := findForged(tools, args.Name)
+	if !found {
+		return ForgedTool{}, root.JSONValue{}, fmt.Errorf("unknown forged tool %q; search axlr_tools or forge it with axlr_forge_tool", args.Name)
+	}
+	if err := u.Forge.Verify(ctx, workspace, tool); err != nil {
+		return ForgedTool{}, root.JSONValue{}, err
+	}
+	if u.Validation != nil {
+		schema, err := root.NewJSONObject(tool.InputSchema)
+		if err != nil {
+			return ForgedTool{}, root.JSONValue{}, fmt.Errorf("forged tool %q has no valid input_schema; forge it again", tool.Name)
+		}
+		if err := u.Validation.Validate(root.ToolDefinition{Name: root.ToolName(forgedAlias(tool.Name)), Description: root.Text(tool.Description), Parameters: schema}, input); err != nil {
+			return ForgedTool{}, root.JSONValue{}, fmt.Errorf("arguments do not match %s's input_schema: %v", tool.Name, err)
+		}
+	}
+	return tool, input, nil
+}
+
+// forgedArgumentError runs, before the card, the checks of axlr_forge_tool,
+// axlr_run_tool and axlr_remove_tool that change nothing: the forge's
+// name, paths and args, the run's tool, files and arguments, the removal's
+// registration. On 16 October 2026 four invalid forges and a run of a tool
+// edited outside the console each raised a card, the person approved it
+// and the console then refused the call.
+func forgedArgumentError(ctx context.Context, forge ForgedToolsPort, validation ToolArgumentValidationPort, s domain.Session, tool domain.AvailableTool, arguments root.JSONValue) error {
+	if forge == nil {
+		return nil
+	}
+	var err error
+	switch tool.Definition.Name {
+	case HostForgeToolName:
+		_, _, err = parseForge(arguments)
+	case HostRunToolName:
+		_, _, err = HostToolUseCase{Forge: forge, Validation: validation}.prepareRun(ctx, s, arguments)
+	case HostRemoveToolName:
+		err = removableError(ctx, forge, s, arguments)
+	default:
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%s: %w", tool.Definition.Name, err)
+	}
+	return nil
+}
+
+// removableError checks that axlr_remove_tool names a registered tool.
+func removableError(ctx context.Context, forge ForgedToolsPort, s domain.Session, arguments root.JSONValue) error {
+	var args struct {
+		Name string `json:"name"`
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&args); err != nil || args.Name == "" {
+		return errors.New("axlr_remove_tool arguments must be name")
+	}
+	tools, err := forge.List(ctx, string(s.Export().Workspace))
+	if err != nil {
+		return nil // the removal reports it
+	}
+	if _, found := findForged(tools, args.Name); !found {
+		return fmt.Errorf("unknown forged tool %q; axlr_tools lists the forged tools", args.Name)
+	}
+	return nil
 }
 
 func localIdentity(operation string) domain.ToolIdentity {

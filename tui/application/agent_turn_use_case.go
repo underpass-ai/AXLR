@@ -99,7 +99,7 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 }
 
 func (u ContinueTurnUseCase) admission() headAdmission {
-	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, TurnLimit: u.turnLimit()}
+	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Forge, TurnLimit: u.turnLimit()}
 }
 
 func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, emit func(Event) error) error {
@@ -133,7 +133,9 @@ func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, 
 					// the model reads what to send rather than a schema rule.
 					if resolveErr = whyError(tool, args); resolveErr == nil {
 						if resolveErr = localArgumentError(admit.Validation, tool, args); resolveErr == nil {
-							return nil
+							if resolveErr = forgedArgumentError(ctx, admit.Forge, admit.Validation, *s, tool, args); resolveErr == nil {
+								return nil
+							}
 						}
 					}
 				}

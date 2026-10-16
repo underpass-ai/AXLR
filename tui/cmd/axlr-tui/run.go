@@ -666,9 +666,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if repairsDirectory == "" {
 			repairsDirectory = filepath.Join(dataBase, "axlr", "repairs")
 		}
+		// A clone started from a running console writes its progress to
+		// the app log only: on 16 October 2026 "axlr-tui: cloning …" was
+		// drawn over the /jobs panel.
+		var cloneProgress io.Writer = io.Discard
+		if appLog != nil {
+			cloneProgress = appLog.Writer(diagnostics.AppInfo, "")
+		}
 		repairs = &application.SelfRepair{
 			Registry:  registry,
-			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: stderr},
+			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: cloneProgress},
 			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog},
 			Store:     loggedStore,
 			Engine:    ceremonies.Engine,
