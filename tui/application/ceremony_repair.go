@@ -255,6 +255,10 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 				return StepResult{}, err
 			}
 			output, trigger = map[string]any{"proposed": false, "error": bounded(err.Error(), 2000)}, "propose_failed"
+			// The report carries the error to the record, the panel and
+			// the origin's note: on 16 October 2026 they showed the last
+			// check's passing output as the reason a propose failed.
+			report["error"] = "propose failed: " + bounded(err.Error(), 2000)
 			break
 		}
 		r.PullRequest, r.URL, r.HeadSHA = pr.Number, pr.URL, pr.HeadSHA
@@ -295,6 +299,7 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 				return StepResult{}, err
 			}
 			output, trigger = map[string]any{"merged": false, "pull_request": r.PullRequest, "error": bounded(err.Error(), 2000)}, "merge_failed"
+			report["error"] = "merge failed: " + bounded(err.Error(), 2000)
 			break
 		}
 		r.MergeSHA = sha

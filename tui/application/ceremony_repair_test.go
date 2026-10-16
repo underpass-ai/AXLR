@@ -359,6 +359,11 @@ func TestRepairProposeFailureBlocksHonestly(t *testing.T) {
 	if r["ceremony"] != "BLOCKED" {
 		t.Fatalf("propose failure: %v", r)
 	}
+	// The record and the panel name the propose error, not the passing
+	// check that came before it (16 October 2026).
+	if reason := blockedReason(r); !strings.Contains(reason, "propose failed: gh: not logged in") {
+		t.Fatalf("blocked reason %q from %v", reason, r)
+	}
 	if !strings.Contains(strings.Join(engine.calls, " | "), "transition propose_failed") {
 		t.Fatal(engine.calls)
 	}

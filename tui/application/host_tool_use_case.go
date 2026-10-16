@@ -74,7 +74,11 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 	case domain.HostOperationTools:
 		var forged []ForgedTool
 		if u.Forge != nil {
-			forged, err = u.Forge.List(ctx, string(session.Export().Workspace))
+			workspace := string(session.Export().Workspace)
+			forged, err = u.Forge.List(ctx, workspace)
+			if err == nil {
+				forged = markBrokenForged(ctx, u.Forge, workspace, forged)
+			}
 		}
 		if err == nil {
 			result, err = hostDiscover(discoverySnapshot(session), forged, arguments)

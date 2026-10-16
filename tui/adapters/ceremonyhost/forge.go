@@ -25,10 +25,17 @@ type Forge struct{ Checks application.CheckRunnerPort }
 
 var _ application.ForgePort = Forge{}
 
-// stageArgs stage every change in the clone except its repair marker. The
-// preparer also lists the marker in .git/info/exclude; the pathspec keeps it
-// out of the commit even where that did not hold.
-var stageArgs = []string{"add", "-A", "--", ".", ":(exclude)" + application.RepairMarker}
+// stageArgs stage every change in the clone and unstageArgs take its repair
+// marker back out. The preparer lists the marker in .git/info/exclude, so
+// the add leaves it alone; the removal keeps it out of the commit even where
+// that did not hold. Until 16 October 2026 one add excluded the marker by
+// pathspec, and git refuses (exit 1, "paths are ignored") a pathspec that
+// names an ignored file: every repair and improvement of AXLR ended BLOCKED
+// at propose.
+var (
+	stageArgs   = []string{"add", "-A", "--", "."}
+	unstageArgs = []string{"rm", "-q", "--cached", "--ignore-unmatch", "--", application.RepairMarker}
+)
 
 // run returns the whole stdout of a successful command, for parsing: it asks
 // the runtime for its whole output limit and refuses an output cut there.
@@ -61,6 +68,9 @@ func (f Forge) Propose(ctx context.Context, p application.RepairProposal) (appli
 		}
 	}
 	if _, err := f.run(ctx, "git", stageArgs...); err != nil {
+		return application.PullRequest{}, err
+	}
+	if _, err := f.run(ctx, "git", unstageArgs...); err != nil {
 		return application.PullRequest{}, err
 	}
 	staged, _ := f.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"diff", "--cached", "--quiet"}})

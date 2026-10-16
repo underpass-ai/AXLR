@@ -176,10 +176,19 @@ func commandRan(result string) bool {
 		}
 	}
 	var envelope struct {
-		Status string `json:"status"`
+		Status string          `json:"status"`
+		Error  json.RawMessage `json:"error"`
 	}
-	if json.Unmarshal([]byte(result), &envelope) == nil && envelope.Status != "" && envelope.Status != "completed" && envelope.Status != "ok" {
-		return false
+	if json.Unmarshal([]byte(result), &envelope) == nil {
+		if envelope.Status != "" && envelope.Status != "completed" && envelope.Status != "ok" {
+			return false
+		}
+		// A host refusal (hostFailure) is {"error": ...} with no status: a
+		// refused axlr_run_tool, an unknown tool or invalid arguments never
+		// ran its program.
+		if envelope.Status == "" && len(envelope.Error) > 0 && string(envelope.Error) != "null" {
+			return false
+		}
 	}
 	return true
 }

@@ -10,6 +10,9 @@ type headAdmission struct {
 	// Validation checks local arguments against their schema; nil leaves
 	// that to the runtime.
 	Validation ToolArgumentValidationPort
+	// Forge checks forged-tool calls before their card; nil leaves that to
+	// the host tool.
+	Forge ForgedToolsPort
 	// TurnLimit is the turn's tool-call budget; zero means
 	// domain.MaxTurnToolCalls.
 	TurnLimit int

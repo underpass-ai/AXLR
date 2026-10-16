@@ -42,7 +42,7 @@ func forgeCard(arguments []byte) (string, bool) {
 		return "", false
 	}
 	var b strings.Builder
-	b.WriteString("$ " + strings.Join(append([]string{call.Program}, call.Args...), " ") + "\n\n")
+	b.WriteString("$ " + formatCommand(call.Program, call.Args) + "\n\n")
 	b.WriteString(call.Description + "\n\n")
 	var schema bytes.Buffer
 	if json.Indent(&schema, call.InputSchema, "", "  ") == nil {
