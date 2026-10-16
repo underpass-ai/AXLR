@@ -109,9 +109,13 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 	sorted := append([]ForgedTool(nil), forged...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Name < sorted[j].Name })
 	for _, tool := range sorted {
+		summary := map[string]any{"name": tool.Name, "forged": true, "call_with": HostRunToolName}
+		if tool.Broken != "" {
+			summary["broken"], summary["hint"] = tool.Broken, forgedBrokenHint
+		}
 		candidates = append(candidates, discoveryCandidate{
 			text:    tool.Name + " forged " + tool.Description,
-			summary: map[string]any{"name": tool.Name, "forged": true, "call_with": HostRunToolName},
+			summary: summary,
 			about:   tool.Description,
 		})
 	}
@@ -266,5 +270,12 @@ func forgedView(tool ForgedTool, path string) (any, error) {
 	sort.Strings(files)
 	view["name"], view["forged"], view["call_with"], view["description"] = tool.Name, true, HostRunToolName, tool.Description
 	view["command"], view["files"] = append([]string{tool.Program}, tool.Args...), files
+	if tool.Broken != "" {
+		view["broken"], view["hint"] = tool.Broken, forgedBrokenHint
+	}
 	return view, nil
 }
+
+// forgedBrokenHint tells the model what to do with a forged tool that
+// Verify refuses.
+const forgedBrokenHint = "the tool cannot run as it is: forge it again with axlr_forge_tool, or remove it with axlr_remove_tool"

@@ -14,4 +14,7 @@ type ForgedTool struct {
 	Files       map[string]string `json:"files"`
 	ForgedAt    string            `json:"forged_at,omitempty"`
 	Session     string            `json:"session,omitempty"`
+	// Broken is why Verify refuses the tool now (its files changed or are
+	// missing), set for axlr_tools only; it is never stored.
+	Broken string `json:"-"`
 }

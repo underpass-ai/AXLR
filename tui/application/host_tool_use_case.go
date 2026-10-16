@@ -77,7 +77,7 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 			forged, err = u.Forge.List(ctx, string(session.Export().Workspace))
 		}
 		if err == nil {
-			result, err = hostDiscover(discoverySnapshot(session), forged, arguments)
+			result, err = hostDiscover(discoverySnapshot(session), u.markBroken(ctx, string(session.Export().Workspace), forged), arguments)
 		}
 	case domain.HostOperationForgeTool:
 		result, err = u.hostForge(ctx, session, arguments)
@@ -130,6 +130,22 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		return hostFailure(fmt.Errorf("host result exceeds %d bytes; use a narrower query or smaller page", MaxHostResultBytes)), nil
 	}
 	return domain.ToolOutcome{Content: root.Text(encoded)}, nil
+}
+
+// markBroken returns a copy of forged in which each tool that Verify refuses
+// carries its reason, so axlr_tools can say it is broken before the model
+// tries to run it.
+func (u HostToolUseCase) markBroken(ctx context.Context, workspace string, forged []ForgedTool) []ForgedTool {
+	if u.Forge == nil || len(forged) == 0 {
+		return forged
+	}
+	marked := append([]ForgedTool(nil), forged...)
+	for i := range marked {
+		if err := u.Forge.Verify(ctx, workspace, marked[i]); err != nil {
+			marked[i].Broken = err.Error()
+		}
+	}
+	return marked
 }
 
 func hostFailure(err error) domain.ToolOutcome {

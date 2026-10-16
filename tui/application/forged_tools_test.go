@@ -350,6 +350,34 @@ func TestForgeAcceptsAFileNamedByItsWorkspacePath(t *testing.T) {
 	}
 }
 
+// A forged tool whose files changed or went missing is marked broken with the
+// reason and a hint in axlr_tools, by search and by exact name, before the
+// model tries to run it; a healthy one is not.
+func TestAxlrToolsMarksBrokenForgedTools(t *testing.T) {
+	forged := &forgedMemory{}
+	s := turnSession(t)
+	host := HostToolUseCase{Forge: forged}
+	if outcome, _ := host.Execute(context.Background(), s, hostIdentity(t, domain.HostOperationForgeTool), object(t, forgeArguments)); outcome.IsError {
+		t.Fatal(outcome.Content)
+	}
+	tools := hostIdentity(t, domain.HostOperationTools)
+	reason := `forged tool word_count changed since it was forged (main.py)`
+	forged.verifyErr = errors.New(reason)
+	search, _ := host.Execute(context.Background(), s, tools, object(t, `{"query":"words"}`))
+	if !strings.Contains(string(search.Content), `"broken":"`+reason+`"`) || !strings.Contains(string(search.Content), "axlr_remove_tool") {
+		t.Fatalf("broken search: %s", search.Content)
+	}
+	exact, _ := host.Execute(context.Background(), s, tools, object(t, `{"name":"word_count"}`))
+	if exact.IsError || !strings.Contains(string(exact.Content), `"broken":"`+reason+`"`) || !strings.Contains(string(exact.Content), "forge it again") {
+		t.Fatalf("broken exact: %s", exact.Content)
+	}
+	forged.verifyErr = nil
+	healthy, _ := host.Execute(context.Background(), s, tools, object(t, `{"query":"words"}`))
+	if strings.Contains(string(healthy.Content), "broken") || !strings.Contains(string(healthy.Content), `"name":"word_count"`) {
+		t.Fatalf("healthy search: %s", healthy.Content)
+	}
+}
+
 func TestAxlrToolsFallsBackToPartialMatches(t *testing.T) {
 	forged := &forgedMemory{}
 	s := turnSession(t)
