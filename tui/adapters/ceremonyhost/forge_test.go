@@ -215,8 +215,9 @@ func TestRecordLinkedSendsLinksAndReturnsTheStoredRef(t *testing.T) {
 }
 
 // RerunFailed reruns the failed jobs of each workflow run behind a failed
-// check once, skips checks no workflow run produced, and waits until the
-// forge shows the runs going again.
+// check once, skips checks no workflow run produced, waits for a run still
+// in progress to complete first, and waits until the forge shows the runs
+// going again.
 func TestForgeRerunFailedRerunsEachFailedWorkflowRunOnce(t *testing.T) {
 	rerunPoll = time.Millisecond
 	defer func() { rerunPoll = 5 * time.Second }()
@@ -225,15 +226,23 @@ func TestForgeRerunFailedRerunsEachFailedWorkflowRunOnce(t *testing.T) {
 		{"name":"native (windows)","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/actions/runs/38949927108/job/117138511841"},
 		{"name":"go","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://github.com/o/r/actions/runs/1/job/2"},
 		{"name":"CodeQL","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/runs/117138609239"}]}`
-	views := 0
+	views, reran := 0, false
 	checks := &scriptedChecks{answers: map[string]application.CheckResult{
 		"gh pr view 132": {Ran: true, Stdout: view},
 	}}
 	checks.dynamic = func(line string) (application.CheckResult, bool) {
+		if strings.HasPrefix(line, "gh run rerun") {
+			reran = true
+		}
 		if strings.HasPrefix(line, "gh run view 38949927108") {
 			views++
-			if views == 1 {
+			switch {
+			case !reran && views == 1:
+				return application.CheckResult{Ran: true, Stdout: "in_progress\n"}, true // not rerunnable yet
+			case !reran:
 				return application.CheckResult{Ran: true, Stdout: "completed\n"}, true
+			case views == 3:
+				return application.CheckResult{Ran: true, Stdout: "completed\n"}, true // the rerun has not shown yet
 			}
 			return application.CheckResult{Ran: true, Stdout: "queued\n"}, true
 		}
@@ -244,7 +253,7 @@ func TestForgeRerunFailedRerunsEachFailedWorkflowRunOnce(t *testing.T) {
 		t.Fatalf("reran %d: %v", n, err)
 	}
 	joined := strings.Join(checks.ran, "\n")
-	if strings.Count(joined, "gh run rerun 38949927108 --failed --repo o/r") != 1 || strings.Contains(joined, "rerun 117138609239") || views != 2 {
+	if strings.Count(joined, "gh run rerun 38949927108 --failed --repo o/r") != 1 || strings.Contains(joined, "rerun 117138609239") || views != 4 {
 		t.Fatalf("commands (views %d):\n%s", views, joined)
 	}
 }

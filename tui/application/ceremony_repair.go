@@ -232,6 +232,8 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 		lease = d.watchDeadline() + 15*time.Minute
 	case run.Step == "decide" && !d.automaticMerge(run):
 		lease = presentLease // the person may answer days later
+	case run.Step == "propose" && r.PullRequest > 0:
+		lease = 15 * time.Minute // a later round may wait for failed checks to rerun
 	}
 	if fence != "" {
 		// The recovered claim is ours but not the one the run last

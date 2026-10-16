@@ -220,29 +220,43 @@ func (f Forge) RerunFailed(ctx context.Context, repository string, number int) (
 		seen[match[1]] = true
 		runs = append(runs, match[1])
 	}
+	// The forge reruns only a completed run; a check can read completed a
+	// moment before its run does.
+	deadline := time.Now().Add(rerunSettle)
 	for _, id := range runs {
+		if err := f.waitRun(ctx, repository, id, deadline, func(status string) bool { return status == "completed" }); err != nil {
+			return 0, err
+		}
 		if _, err := f.run(ctx, "gh", "run", "rerun", id, "--failed", "--repo", repository); err != nil {
 			return 0, err
 		}
 	}
-	deadline := time.Now().Add(rerunSettle)
+	deadline = time.Now().Add(rerunSettle)
 	for _, id := range runs {
-		for {
-			status, err := f.run(ctx, "gh", "run", "view", id, "--repo", repository, "--json", "status", "--jq", ".status")
-			if err == nil && strings.TrimSpace(status) != "completed" {
-				break
-			}
-			if time.Now().After(deadline) {
-				return 0, fmt.Errorf("workflow run %s did not start again within %s", id, rerunSettle)
-			}
-			select {
-			case <-ctx.Done():
-				return 0, ctx.Err()
-			case <-time.After(rerunPoll):
-			}
+		if err := f.waitRun(ctx, repository, id, deadline, func(status string) bool { return status != "completed" }); err != nil {
+			return 0, err
 		}
 	}
 	return len(runs), nil
+}
+
+// waitRun polls a workflow run's status until done accepts it or the
+// deadline passes.
+func (f Forge) waitRun(ctx context.Context, repository, id string, deadline time.Time, done func(status string) bool) error {
+	for {
+		status, err := f.run(ctx, "gh", "run", "view", id, "--repo", repository, "--json", "status", "--jq", ".status")
+		if err == nil && done(strings.TrimSpace(status)) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("workflow run %s did not reach the state a rerun needs within %s", id, rerunSettle)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(rerunPoll):
+		}
+	}
 }
 
 func (f Forge) UpdateBranch(ctx context.Context, repository string, number int) error {
