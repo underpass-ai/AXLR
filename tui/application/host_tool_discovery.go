@@ -173,11 +173,7 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 	summaries := make([]map[string]any, 0, limit)
 	for i, candidate := range selected {
 		if i >= offset && len(summaries) < limit {
-			description := []rune(strings.Join(strings.Fields(candidate.about), " "))
-			if len(description) > 160 {
-				description = append(description[:160], '…')
-			}
-			candidate.summary["description"] = string(description)
+			candidate.summary["description"] = hostCutDescription(strings.Join(strings.Fields(candidate.about), " "))
 			summaries = append(summaries, candidate.summary)
 		}
 	}
@@ -190,6 +186,24 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 		result["partial"] = true
 	}
 	return result, nil
+}
+
+// hostCutDescription keeps at most 160 runes of a description. A longer one is
+// cut before the last space inside those runes, so no word is split, and marked
+// with "…". A single word longer than the cap is cut at the cap.
+func hostCutDescription(text string) string {
+	runes := []rune(text)
+	if len(runes) <= 160 {
+		return text
+	}
+	kept := runes[:160]
+	for i := len(kept) - 1; i > 0; i-- {
+		if kept[i] == ' ' {
+			kept = kept[:i]
+			break
+		}
+	}
+	return string(kept) + "…"
 }
 
 // termsMatched counts the lowercase terms text contains.

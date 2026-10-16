@@ -2,11 +2,46 @@ package application
 
 import (
 	"encoding/json"
+	"fmt"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"strings"
 	"testing"
 )
+
+// A search result cuts a long description before a word, not inside one. Each
+// word here is nine runes with its space, so the 160-rune cap falls inside the
+// eighteenth word; the cut keeps the first seventeen words and marks the rest.
+func TestAxlrToolsSearchCutsDescriptionsAtAWord(t *testing.T) {
+	var words, kept []string
+	for i := 1; i <= 20; i++ {
+		word := fmt.Sprintf("word%04d", i)
+		words = append(words, word)
+		if i <= 17 {
+			kept = append(kept, word)
+		}
+	}
+	identity, err := domain.NewLocalToolIdentity("write")
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema, _ := root.NewJSONObject([]byte(`{"type":"object"}`))
+	tool := domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{Name: "local_write", Description: root.Text(strings.Join(words, " ")), Parameters: schema}}
+	result, err := hostDiscover([]domain.AvailableTool{tool}, nil, hostJSON(t, `{"query":"write"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, _ := json.Marshal(result)
+	var got struct {
+		Tools []map[string]any `json:"tools"`
+	}
+	if err := json.Unmarshal(encoded, &got); err != nil || len(got.Tools) != 1 {
+		t.Fatalf("%s %v", encoded, err)
+	}
+	if want := strings.Join(kept, " ") + "…"; got.Tools[0]["description"] != want {
+		t.Fatalf("description %q, want %q", got.Tools[0]["description"], want)
+	}
+}
 
 // A host tool the session offers is found by its own name (seen on 15 and
 // 16 Oct 2026: Haiku searched axlr_tools for "axlr_logs", got no match and
