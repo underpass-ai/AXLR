@@ -271,7 +271,9 @@ func (w *blockingWorkbench) Begin(ctx context.Context, s *domain.Session, prompt
 	if err := s.BeginTurn(prompt, turnTools()); err != nil {
 		return err
 	}
-	if err := s.SetCeremony(repairRunFor("watch", &domain.RepairRun{Repository: "o/r", PullRequest: 7, URL: "https://example.test/pr/7"})); err != nil {
+	// The session keeps the step its turn began at while the console step
+	// runs; only the progress says watch, as in the live console.
+	if err := s.SetCeremony(repairRunFor("repair", &domain.RepairRun{Repository: "o/r", PullRequest: 7, URL: "https://example.test/pr/7"})); err != nil {
 		return err
 	}
 	w.observe(CeremonyProgress{Instance: "axlr-child-1", Step: "watch", Repair: &domain.RepairRun{PullRequest: 7, URL: "https://example.test/pr/7"}})
@@ -667,7 +669,7 @@ func TestInterruptedRepairIsRecoveredWithoutRepeatingEffects(t *testing.T) {
 	}
 	rig.repair.Close()
 	record = waitStatus(t, rig.registry, id, domain.RepairInterrupted)
-	if !strings.Contains(record.Notice, "interrupted") || !strings.Contains(record.Error, "watch") {
+	if !strings.Contains(record.Notice, "interrupted") || !strings.Contains(record.Error, "step watch") || record.Step != "watch" {
 		t.Fatalf("interrupted record: %+v", record)
 	}
 	// A new console launch finds the record and the person recovers it.

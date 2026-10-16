@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -17,11 +18,18 @@ import (
 type scriptedChecks struct {
 	answers map[string]application.CheckResult
 	ran     []string
+	// dynamic answers before the script when it returns true.
+	dynamic func(line string) (application.CheckResult, bool)
 }
 
 func (s *scriptedChecks) Run(_ context.Context, c domain.CheckCommand) (application.CheckResult, error) {
 	line := c.Program + " " + strings.Join(c.Args, " ")
 	s.ran = append(s.ran, line)
+	if s.dynamic != nil {
+		if answer, ok := s.dynamic(line); ok {
+			return answer, nil
+		}
+	}
 	for prefix, answer := range s.answers {
 		if strings.HasPrefix(line, prefix) {
 			return answer, nil
@@ -203,5 +211,40 @@ func TestRecordLinkedSendsLinksAndReturnsTheStoredRef(t *testing.T) {
 	link := links[0].(map[string]any)
 	if link["ref"] != "project:x:entry:decision:a" || link["rel"] != "restates" || link["why"] != "same" || link["evidence"] != "probe" || link["confidence"] != "medium" {
 		t.Fatalf("link %v", link)
+	}
+}
+
+// RerunFailed reruns the failed jobs of each workflow run behind a failed
+// check once, skips checks no workflow run produced, and waits until the
+// forge shows the runs going again.
+func TestForgeRerunFailedRerunsEachFailedWorkflowRunOnce(t *testing.T) {
+	rerunPoll = time.Millisecond
+	defer func() { rerunPoll = 5 * time.Second }()
+	view := `{"statusCheckRollup":[
+		{"name":"native (macos-15)","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/actions/runs/38949927108/job/117138511840"},
+		{"name":"native (windows)","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/actions/runs/38949927108/job/117138511841"},
+		{"name":"go","status":"COMPLETED","conclusion":"SUCCESS","detailsUrl":"https://github.com/o/r/actions/runs/1/job/2"},
+		{"name":"CodeQL","status":"COMPLETED","conclusion":"FAILURE","detailsUrl":"https://github.com/o/r/runs/117138609239"}]}`
+	views := 0
+	checks := &scriptedChecks{answers: map[string]application.CheckResult{
+		"gh pr view 132": {Ran: true, Stdout: view},
+	}}
+	checks.dynamic = func(line string) (application.CheckResult, bool) {
+		if strings.HasPrefix(line, "gh run view 38949927108") {
+			views++
+			if views == 1 {
+				return application.CheckResult{Ran: true, Stdout: "completed\n"}, true
+			}
+			return application.CheckResult{Ran: true, Stdout: "queued\n"}, true
+		}
+		return application.CheckResult{}, false
+	}
+	n, err := (Forge{Checks: checks}).RerunFailed(context.Background(), "o/r", 132)
+	if err != nil || n != 1 {
+		t.Fatalf("reran %d: %v", n, err)
+	}
+	joined := strings.Join(checks.ran, "\n")
+	if strings.Count(joined, "gh run rerun 38949927108 --failed --repo o/r") != 1 || strings.Contains(joined, "rerun 117138609239") || views != 2 {
+		t.Fatalf("commands (views %d):\n%s", views, joined)
 	}
 }

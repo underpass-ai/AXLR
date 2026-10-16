@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -75,7 +77,7 @@ func (f Forge) Propose(ctx context.Context, p application.RepairProposal) (appli
 	}
 	staged, _ := f.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"diff", "--cached", "--quiet"}})
 	if staged.Ran && staged.ExitCode == 0 {
-		return application.PullRequest{}, errors.New("the repair changed no file in the clone")
+		return application.PullRequest{}, application.ErrNothingToPropose
 	}
 	message := p.Title + "\n\n" + p.Body
 	if p.Trailer != "" {
@@ -173,6 +175,74 @@ func (f Forge) Status(ctx context.Context, repository string, number int) (appli
 		}
 	}
 	return status, nil
+}
+
+// workflowRun finds the workflow run in a check's details URL, such as
+// https://github.com/o/r/actions/runs/123/job/456.
+var workflowRun = regexp.MustCompile(`/actions/runs/([0-9]+)(?:/|$)`)
+
+// rerunSettle bounds the wait for a rerun to show on the forge, and
+// rerunPoll is how often it looks.
+var (
+	rerunSettle = 90 * time.Second
+	rerunPoll   = 5 * time.Second
+)
+
+// RerunFailed reruns the failed jobs of every workflow run behind a failed
+// check of the pull request, then waits until the forge shows each run
+// queued or in progress again, so the next watch does not read the old
+// failure as a new red round.
+func (f Forge) RerunFailed(ctx context.Context, repository string, number int) (int, error) {
+	out, err := f.run(ctx, "gh", "pr", "view", strconv.Itoa(number), "--repo", repository, "--json", "statusCheckRollup")
+	if err != nil {
+		return 0, err
+	}
+	var view pullRequestView
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &view); err != nil {
+		return 0, fmt.Errorf("unreadable pull request view: %w", err)
+	}
+	var runs []string
+	seen := map[string]bool{}
+	for _, check := range view.StatusCheckRollup {
+		conclusion := strings.ToUpper(check.Conclusion)
+		if conclusion == "" {
+			conclusion = strings.ToUpper(check.State)
+		}
+		switch conclusion {
+		case "FAILURE", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE", "ERROR":
+		default:
+			continue
+		}
+		match := workflowRun.FindStringSubmatch(check.DetailsURL)
+		if match == nil || seen[match[1]] {
+			continue
+		}
+		seen[match[1]] = true
+		runs = append(runs, match[1])
+	}
+	for _, id := range runs {
+		if _, err := f.run(ctx, "gh", "run", "rerun", id, "--failed", "--repo", repository); err != nil {
+			return 0, err
+		}
+	}
+	deadline := time.Now().Add(rerunSettle)
+	for _, id := range runs {
+		for {
+			status, err := f.run(ctx, "gh", "run", "view", id, "--repo", repository, "--json", "status", "--jq", ".status")
+			if err == nil && strings.TrimSpace(status) != "completed" {
+				break
+			}
+			if time.Now().After(deadline) {
+				return 0, fmt.Errorf("workflow run %s did not start again within %s", id, rerunSettle)
+			}
+			select {
+			case <-ctx.Done():
+				return 0, ctx.Err()
+			case <-time.After(rerunPoll):
+			}
+		}
+	}
+	return len(runs), nil
 }
 
 func (f Forge) UpdateBranch(ctx context.Context, repository string, number int) error {

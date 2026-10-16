@@ -29,12 +29,19 @@ type fakeForge struct {
 	updates              int
 	merged               bool
 	proposeErr, mergeErr error
+	// laterProposeErr answers proposals to an open pull request.
+	laterProposeErr error
+	reruns          []int
+	rerunCount      int
 }
 
 func (f *fakeForge) Propose(_ context.Context, p RepairProposal) (PullRequest, error) {
 	f.proposals = append(f.proposals, p)
 	if f.proposeErr != nil {
 		return PullRequest{}, f.proposeErr
+	}
+	if p.Number != 0 && f.laterProposeErr != nil {
+		return PullRequest{}, f.laterProposeErr
 	}
 	number := p.Number
 	if number == 0 {
@@ -51,6 +58,10 @@ func (f *fakeForge) Status(context.Context, string, int) (PullRequestStatus, err
 	return status, nil
 }
 func (f *fakeForge) UpdateBranch(context.Context, string, int) error { f.updates++; return nil }
+func (f *fakeForge) RerunFailed(_ context.Context, _ string, number int) (int, error) {
+	f.reruns = append(f.reruns, number)
+	return f.rerunCount, nil
+}
 func (f *fakeForge) Merge(context.Context, string, int) (string, error) {
 	if f.mergeErr != nil {
 		return "", f.mergeErr
@@ -218,6 +229,48 @@ func TestRepairRedRoundGoesBackToRepairWithTheFailingChecks(t *testing.T) {
 	joined := strings.Join(engine.calls, " | ")
 	if !strings.Contains(joined, "claim repair c1") || !strings.Contains(joined, "claim propose c1") {
 		t.Fatalf("second-round claim keys: %s", joined)
+	}
+}
+
+// A red round the model leaves unchanged reruns the failed checks on the same
+// head instead of ending BLOCKED: on 16 October 2026 a flaky macOS check sent
+// a finished repair back and propose found nothing to commit.
+func TestRepairRedRoundWithNothingToChangeRerunsTheFailedChecks(t *testing.T) {
+	forge := &fakeForge{laterProposeErr: ErrNothingToPropose, rerunCount: 1, statuses: []PullRequestStatus{
+		{State: "OPEN", MergeState: "BLOCKED", Passed: 17, Failed: []string{"native (macos-15): failure https://github.com/o/r/actions/runs/9/job/1"}},
+		{State: "OPEN", MergeState: "CLEAN", Passed: 18},
+	}}
+	d, engine, _, _, s := repairDriver(t, forge, 1, 0, 0)
+	d.RepairPolicy.AutoMerge = true
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, reproduceArgs)
+	step(t, d, &s, `{"root_cause":"c","evidence":"e","proposed_fix":"f"}`)
+	r := step(t, d, &s, `{"summary":"s","summary_en":"s en"}`)
+	run, _ := s.Ceremony()
+	if r["next_step"] != "repair" || !strings.Contains(Instruction(run), "change nothing and hand the step back") {
+		t.Fatalf("red round: %v\n%s", r, Instruction(run))
+	}
+	r = step(t, d, &s, `{"summary":"unchanged: the macOS check is a flake","summary_en":"e"}`)
+	if r["ceremony"] != "COMPLETED" || len(forge.reruns) != 1 || forge.reruns[0] != 7 {
+		t.Fatalf("rerun round: %v reruns=%v", r, forge.reruns)
+	}
+	if joined := strings.Join(engine.calls, " | "); strings.Contains(joined, "propose_failed") {
+		t.Fatal(joined)
+	}
+	// With nothing to rerun the round still ends BLOCKED, with the reason.
+	forge = &fakeForge{laterProposeErr: ErrNothingToPropose, statuses: []PullRequestStatus{{State: "OPEN", MergeState: "BLOCKED", Passed: 1, Failed: []string{"codeql: failure"}}}}
+	d, _, _, _, s = repairDriver(t, forge, 1, 0, 0)
+	if err := d.Begin(context.Background(), &s, "hola sale 1"); err != nil {
+		t.Fatal(err)
+	}
+	step(t, d, &s, reproduceArgs)
+	step(t, d, &s, `{"root_cause":"c","evidence":"e","proposed_fix":"f"}`)
+	step(t, d, &s, `{"summary":"s","summary_en":"s en"}`)
+	r = step(t, d, &s, `{"summary":"s","summary_en":"s en"}`)
+	if r["ceremony"] != "BLOCKED" || !strings.Contains(blockedReason(r), "no failed check can be rerun") {
+		t.Fatalf("nothing to rerun: %v", r)
 	}
 }
 

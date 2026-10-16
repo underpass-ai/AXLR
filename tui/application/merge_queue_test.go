@@ -45,6 +45,8 @@ func (f *queueForge) Status(_ context.Context, _ string, number int) (PullReques
 	}
 	return status, nil
 }
+func (f *queueForge) RerunFailed(context.Context, string, int) (int, error) { return 0, nil }
+
 func (f *queueForge) UpdateBranch(_ context.Context, _ string, number int) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

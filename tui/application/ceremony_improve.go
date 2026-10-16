@@ -28,6 +28,7 @@ func improveInstruction(run domain.CeremonyRun) string {
 		text.WriteString(" Do not commit, push or open pull requests yourself: the console does that once the check passes, and the person decides the merge.")
 		if r.Rounds > 0 && r.Feedback != "" {
 			fmt.Fprintf(&text, " Check round %d of %d came back red on pull request #%d; failing checks: %s", r.Rounds, domain.MaxRepairRounds, r.PullRequest, r.Feedback)
+			text.WriteString(redRoundUnrelated)
 		}
 	}
 	return text.String()
