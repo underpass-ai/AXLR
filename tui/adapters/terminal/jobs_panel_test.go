@@ -311,3 +311,21 @@ func TestJobsPanelNeedsTheCoordinator(t *testing.T) {
 		t.Fatalf("a without jobs: %q", empty.JobsPanel.message)
 	}
 }
+
+// A record's text reaches the screen on one line without tabs: on 16
+// October 2026 a reason quoting go test's "ok\tgithub.com/…" left a tab on
+// screen and the terminal stopped repainting the rows below it.
+func TestJobsPanelDrawsRecordTextWithoutTabsOrNewlines(t *testing.T) {
+	records := jobRecords()
+	records[0].Error = "the ceremony ended BLOCKED; last check output: ok  \tgithub.com/underpass-ai/AXLR/tui/application\t0.008s\n"
+	records[0].Check = "go test exited 1:\nFAIL\tx"
+	jobs := &fakeJobs{fakeRepairs: &fakeRepairs{records: records}}
+	m := jobsModel(t, jobs, English)
+	view := m.View().Content
+	if strings.Contains(view, "\t") {
+		t.Fatalf("a tab reached the screen:\n%q", view)
+	}
+	if !strings.Contains(view, "last check output: ok github.com/underpass-ai/AXLR/tui/application 0.008s") {
+		t.Fatalf("the reason is not one line:\n%s", view)
+	}
+}

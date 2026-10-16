@@ -434,10 +434,10 @@ func (m AppModel) jobsBlock(record domain.RepairRecord, selected bool) []string 
 	}
 	lines := []string{heading, "    " + progress}
 	if record.Pending != "" && record.Status.Awaiting() {
-		lines = append(lines, "    "+theme.Tf("repairs.pending", record.Pending))
+		lines = append(lines, "    "+theme.Tf("repairs.pending", singleLine(record.Pending)))
 	}
 	if record.Check != "" {
-		lines = append(lines, "    "+theme.Tf("jobs.check", record.Check))
+		lines = append(lines, "    "+theme.Tf("jobs.check", singleLine(record.Check)))
 	}
 	if !record.Queued.IsZero() {
 		switch {
@@ -447,8 +447,11 @@ func (m AppModel) jobsBlock(record domain.RepairRecord, selected bool) []string 
 			lines = append(lines, "    "+theme.Tf("jobs.queued", m.jobsQueuePlace(record), record.Queued.Local().Format("15:04"), orDash(record.QueueNote)))
 		}
 	}
+	// Record text is one line: on 16 October 2026 a reason quoting go
+	// test's "ok\tgithub.com/…" put a tab on screen, and the terminal
+	// stopped repainting the rows below it, the panel's messages included.
 	if record.Error != "" {
-		lines = append(lines, "    "+theme.Tf("repairs.error", record.Error))
+		lines = append(lines, "    "+theme.Tf("repairs.error", singleLine(record.Error)))
 	}
 	if !selected || !m.JobsPanel.details {
 		return lines
@@ -510,7 +513,7 @@ func (m AppModel) jobsPanelView() string {
 	}
 	if panel.message != "" {
 		tail = append(tail, "")
-		tail = append(tail, strings.Split(ansi.Wrap(panel.message, max(10, inner-2), " "), "\n")...)
+		tail = append(tail, strings.Split(ansi.Wrap(singleLine(panel.message), max(10, inner-2), " "), "\n")...)
 	}
 	listHeight := max(1, bodyHeight-len(tail))
 	var lines []string
