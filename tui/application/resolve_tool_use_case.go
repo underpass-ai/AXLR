@@ -182,6 +182,8 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		if err := emit(Event{Kind: EventToolExecutionStarted, Tool: domain.PendingTool{Call: pending[0].Call, Decision: decision}, Memory: tool.Identity.Kind == domain.ToolKindPlugin && tool.Surface.Role == domain.PluginRoleMemory}); err != nil {
 			return err
 		}
+		// The runtime names the call in its result for the model to cite.
+		ctx := WithToolCall(ctx, id)
 		var outcome domain.ToolOutcome
 		var runErr error
 		var step *StepResult
@@ -227,6 +229,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		if outcome.Uncertain && runErr == nil {
 			runErr = errors.New("tool effect is uncertain; turn paused")
 		}
+		outcome = citeCall(outcome, id)
 		next = *s
 		if err := next.FinishToolExecution(id, outcome); err != nil {
 			return errors.Join(runErr, err)
