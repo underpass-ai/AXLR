@@ -14,4 +14,7 @@ type ForgedTool struct {
 	Files       map[string]string `json:"files"`
 	ForgedAt    string            `json:"forged_at,omitempty"`
 	Session     string            `json:"session,omitempty"`
+	// Broken is why axlr_tools found the tool's files changed or missing; it
+	// is set only in the listing, never stored.
+	Broken string `json:"-"`
 }

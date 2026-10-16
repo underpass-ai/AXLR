@@ -398,3 +398,70 @@ func TestRemovingAForgedTool(t *testing.T) {
 		t.Fatal("the descriptions do not point the model at axlr_remove_tool")
 	}
 }
+
+// The forged-tool checks that change nothing run before the card. On 16
+// October 2026 four invalid forges (a path outside the tool's directory, a
+// -c command, bash /etc/passwd, a name with a space), a run of a tool edited
+// outside the console and a removal of an unregistered directory each raised
+// a card, the person approved it, and the console then refused the call.
+func TestForgedCallsTheConsoleWouldRefuseAreRefusedBeforeTheCard(t *testing.T) {
+	registered := ForgedTool{Name: "csv_stats", Description: "stats", InputSchema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`), Program: "python3", Args: []string{".axlr/tools/csv_stats/main.py"}}
+	for name, test := range map[string]struct {
+		tool      domain.AvailableTool
+		arguments string
+		verifyErr error
+		invalid   bool
+		want      string
+	}{
+		"path outside the tool": {tool: ForgeTool(), arguments: `{"name":"evil","description":"qa","input_schema":{"type":"object"},"program":"python3","args":[".axlr/tools/evil/main.py"],"files":[{"path":"../../escape.py","content":"x"},{"path":"main.py","content":"x"}]}`, want: `axlr_forge_tool: file path "../../escape.py" must be inside the tool's directory`},
+		"args name no file":     {tool: ForgeTool(), arguments: `{"name":"evil","description":"qa","input_schema":{"type":"object"},"program":"bash","args":["/etc/passwd"],"files":[{"path":"run.sh","content":"x"}]}`, want: "args must name one of the tool's files"},
+		"bad name":              {tool: ForgeTool(), arguments: `{"name":"Bad Name!","description":"qa","input_schema":{"type":"object"},"program":"python3","args":["main.py"],"files":[{"path":"main.py","content":"x"}]}`, want: "name must be 2-48 lowercase"},
+		"valid forge":           {tool: ForgeTool(), arguments: forgeArguments},
+		"changed tool":          {tool: RunTool(), arguments: `{"name":"csv_stats","arguments":{"path":"a.csv"},"why":"stats of the sample"}`, verifyErr: errors.New(`forged tool "csv_stats" changed since it was forged (main.py)`), want: "axlr_run_tool: forged tool \"csv_stats\" changed since it was forged"},
+		"unknown tool":          {tool: RunTool(), arguments: `{"name":"missing","arguments":{},"why":"run the missing tool"}`, want: `unknown forged tool "missing"`},
+		"arguments off schema":  {tool: RunTool(), arguments: `{"name":"csv_stats","arguments":{"path":5},"why":"stats of the sample"}`, invalid: true, want: "arguments do not match csv_stats's input_schema"},
+		"valid run":             {tool: RunTool(), arguments: `{"name":"csv_stats","arguments":{"path":"a.csv"},"why":"stats of the sample"}`},
+		"unregistered removal":  {tool: RemoveTool(), arguments: `{"name":"stray"}`, want: `axlr_remove_tool: unknown forged tool "stray"`},
+		"registered removal":    {tool: RemoveTool(), arguments: `{"name":"csv_stats"}`},
+	} {
+		t.Run(name, func(t *testing.T) {
+			forged := &forgedMemory{tools: []ForgedTool{registered}, verifyErr: test.verifyErr}
+			s := turnSession(t)
+			if err := s.BeginTurn("work", append(turnTools(), test.tool)); err != nil {
+				t.Fatal(err)
+			}
+			validation := argumentValidationFunc(func(_ root.ToolDefinition, args root.JSONValue) error {
+				if test.invalid && strings.Contains(string(args.Bytes()), `"path":5`) {
+					return errors.New("path: expected string")
+				}
+				return nil
+			})
+			requests := 0
+			models := streamFunc(func(context.Context, root.CompletionRequest, func(root.Text) error) (root.CompletionResult, error) {
+				requests++
+				if requests == 1 {
+					return assistant("", root.ToolCall{ID: "call", Name: test.tool.Definition.Name, Arguments: object(t, test.arguments)}), nil
+				}
+				return assistant("done"), nil
+			})
+			u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: &memoryStore{}, Models: models, Forge: forged}, Tools: executionFunc(func(context.Context, domain.ToolIdentity, root.JSONValue) (domain.ToolOutcome, error) {
+				t.Fatal("nothing runs before the card")
+				return domain.ToolOutcome{}, nil
+			})}
+			u.Continue.Validation = validation
+			if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+				t.Fatal(err)
+			}
+			if test.want == "" {
+				if pending := s.Pending(); s.Status() != domain.StatusApproval || len(pending) != 1 {
+					t.Fatalf("a valid call waits for its card: %s %+v", s.Status(), pending)
+				}
+				return
+			}
+			refused := s.Export().Activity[0]
+			if refused.Decision != domain.DecisionDeny || refused.Outcome == nil || !strings.Contains(string(refused.Outcome.Content), test.want) {
+				t.Fatalf("not refused before the card with %q: %+v", test.want, refused)
+			}
+		})
+	}
+}

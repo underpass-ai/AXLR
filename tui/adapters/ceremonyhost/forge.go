@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -25,10 +27,17 @@ type Forge struct{ Checks application.CheckRunnerPort }
 
 var _ application.ForgePort = Forge{}
 
-// stageArgs stage every change in the clone except its repair marker. The
-// preparer also lists the marker in .git/info/exclude; the pathspec keeps it
-// out of the commit even where that did not hold.
-var stageArgs = []string{"add", "-A", "--", ".", ":(exclude)" + application.RepairMarker}
+// stageArgs stage every change in the clone and unstageArgs take its repair
+// marker back out. The preparer lists the marker in .git/info/exclude, so
+// the add leaves it alone; the removal keeps it out of the commit even where
+// that did not hold. Until 16 October 2026 one add excluded the marker by
+// pathspec, and git refuses (exit 1, "paths are ignored") a pathspec that
+// names an ignored file: every repair and improvement of AXLR ended BLOCKED
+// at propose.
+var (
+	stageArgs   = []string{"add", "-A", "--", "."}
+	unstageArgs = []string{"rm", "-q", "--cached", "--ignore-unmatch", "--", application.RepairMarker}
+)
 
 // run returns the whole stdout of a successful command, for parsing: it asks
 // the runtime for its whole output limit and refuses an output cut there.
@@ -63,9 +72,12 @@ func (f Forge) Propose(ctx context.Context, p application.RepairProposal) (appli
 	if _, err := f.run(ctx, "git", stageArgs...); err != nil {
 		return application.PullRequest{}, err
 	}
+	if _, err := f.run(ctx, "git", unstageArgs...); err != nil {
+		return application.PullRequest{}, err
+	}
 	staged, _ := f.Checks.Run(ctx, domain.CheckCommand{Program: "git", Args: []string{"diff", "--cached", "--quiet"}})
 	if staged.Ran && staged.ExitCode == 0 {
-		return application.PullRequest{}, errors.New("the repair changed no file in the clone")
+		return application.PullRequest{}, application.ErrNothingToPropose
 	}
 	message := p.Title + "\n\n" + p.Body
 	if p.Trailer != "" {
@@ -163,6 +175,88 @@ func (f Forge) Status(ctx context.Context, repository string, number int) (appli
 		}
 	}
 	return status, nil
+}
+
+// workflowRun finds the workflow run in a check's details URL, such as
+// https://github.com/o/r/actions/runs/123/job/456.
+var workflowRun = regexp.MustCompile(`/actions/runs/([0-9]+)(?:/|$)`)
+
+// rerunSettle bounds the wait for a rerun to show on the forge, and
+// rerunPoll is how often it looks.
+var (
+	rerunSettle = 90 * time.Second
+	rerunPoll   = 5 * time.Second
+)
+
+// RerunFailed reruns the failed jobs of every workflow run behind a failed
+// check of the pull request, then waits until the forge shows each run
+// queued or in progress again, so the next watch does not read the old
+// failure as a new red round.
+func (f Forge) RerunFailed(ctx context.Context, repository string, number int) (int, error) {
+	out, err := f.run(ctx, "gh", "pr", "view", strconv.Itoa(number), "--repo", repository, "--json", "statusCheckRollup")
+	if err != nil {
+		return 0, err
+	}
+	var view pullRequestView
+	if err := json.Unmarshal([]byte(strings.TrimSpace(out)), &view); err != nil {
+		return 0, fmt.Errorf("unreadable pull request view: %w", err)
+	}
+	var runs []string
+	seen := map[string]bool{}
+	for _, check := range view.StatusCheckRollup {
+		conclusion := strings.ToUpper(check.Conclusion)
+		if conclusion == "" {
+			conclusion = strings.ToUpper(check.State)
+		}
+		switch conclusion {
+		case "FAILURE", "TIMED_OUT", "CANCELLED", "STARTUP_FAILURE", "ERROR":
+		default:
+			continue
+		}
+		match := workflowRun.FindStringSubmatch(check.DetailsURL)
+		if match == nil || seen[match[1]] {
+			continue
+		}
+		seen[match[1]] = true
+		runs = append(runs, match[1])
+	}
+	// The forge reruns only a completed run; a check can read completed a
+	// moment before its run does.
+	deadline := time.Now().Add(rerunSettle)
+	for _, id := range runs {
+		if err := f.waitRun(ctx, repository, id, deadline, func(status string) bool { return status == "completed" }); err != nil {
+			return 0, err
+		}
+		if _, err := f.run(ctx, "gh", "run", "rerun", id, "--failed", "--repo", repository); err != nil {
+			return 0, err
+		}
+	}
+	deadline = time.Now().Add(rerunSettle)
+	for _, id := range runs {
+		if err := f.waitRun(ctx, repository, id, deadline, func(status string) bool { return status != "completed" }); err != nil {
+			return 0, err
+		}
+	}
+	return len(runs), nil
+}
+
+// waitRun polls a workflow run's status until done accepts it or the
+// deadline passes.
+func (f Forge) waitRun(ctx context.Context, repository, id string, deadline time.Time, done func(status string) bool) error {
+	for {
+		status, err := f.run(ctx, "gh", "run", "view", id, "--repo", repository, "--json", "status", "--jq", ".status")
+		if err == nil && done(strings.TrimSpace(status)) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("workflow run %s did not reach the state a rerun needs within %s", id, rerunSettle)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(rerunPoll):
+		}
+	}
 }
 
 func (f Forge) UpdateBranch(ctx context.Context, repository string, number int) error {

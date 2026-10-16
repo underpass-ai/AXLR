@@ -56,6 +56,7 @@ func repairInstruction(run domain.CeremonyRun) string {
 		text.WriteString(" Also return summary_en: two or three plain English sentences for project memory. Do not commit, push or open pull requests yourself: the console does that once the check passes.")
 		if r.Rounds > 0 && r.Feedback != "" {
 			fmt.Fprintf(&text, " Check round %d of %d came back red on pull request #%d; failing checks: %s", r.Rounds, domain.MaxRepairRounds, r.PullRequest, r.Feedback)
+			text.WriteString(redRoundUnrelated)
 		}
 	}
 	if len(r.WakeRefs) > 0 && (run.Step == "diagnose" || run.Step == "repair") {
@@ -63,6 +64,10 @@ func repairInstruction(run domain.CeremonyRun) string {
 	}
 	return text.String()
 }
+
+// redRoundUnrelated tells the model what to do with a red check its change
+// did not cause, so a flake is rerun rather than "fixed".
+const redRoundUnrelated = " If a failing check is unrelated to this change (a flaky test, a runner or network failure), change nothing and hand the step back: the console then reruns the failed checks."
 
 // memoryRelations are the relation types KMP accepts; a link with another
 // name is refused here so one invented word does not sink the whole write.
@@ -227,6 +232,8 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 		lease = d.watchDeadline() + 15*time.Minute
 	case run.Step == "decide" && !d.automaticMerge(run):
 		lease = presentLease // the person may answer days later
+	case run.Step == "propose" && r.PullRequest > 0:
+		lease = 15 * time.Minute // a later round may wait for failed checks to rerun
 	}
 	if fence != "" {
 		// The recovered claim is ours but not the one the run last
@@ -250,11 +257,30 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 		}
 		pr, err := d.Forge.Propose(ctx, RepairProposal{Repository: r.Repository, Base: r.Base, Branch: r.Branch, Number: r.PullRequest,
 			Title: proposalTitle(*r), Body: repairBody(run), Trailer: fmt.Sprintf("%s: AXLR %s %s %s", trailer, run.Definition, run.Version, run.Instance)})
+		if errors.Is(err, ErrNothingToPropose) && r.PullRequest > 0 {
+			// A red round the model left unchanged: on 16 October 2026 a
+			// flaky macOS check sent a finished repair back, the model had
+			// nothing to fix and propose ended it BLOCKED. The failed checks
+			// run again on the same head, still bounded by the red rounds.
+			var reruns int
+			if reruns, err = d.Forge.RerunFailed(ctx, r.Repository, r.PullRequest); err == nil && reruns == 0 {
+				err = errors.New("the repair changed no file and no failed check can be rerun")
+			}
+			if err == nil {
+				output, trigger = map[string]any{"proposed": true, "rerun": reruns, "pull_request": r.PullRequest, "url": r.URL, "head_sha": r.HeadSHA, "round": r.Rounds + 1}, "proposed"
+				report["pull_request"], report["url"], report["rerun"] = r.PullRequest, r.URL, reruns
+				break
+			}
+		}
 		if err != nil {
 			if ctx.Err() != nil {
 				return StepResult{}, err
 			}
 			output, trigger = map[string]any{"proposed": false, "error": bounded(err.Error(), 2000)}, "propose_failed"
+			// The report carries the error to the record, the panel and
+			// the origin's note: on 16 October 2026 they showed the last
+			// check's passing output as the reason a propose failed.
+			report["error"] = "propose failed: " + bounded(err.Error(), 2000)
 			break
 		}
 		r.PullRequest, r.URL, r.HeadSHA = pr.Number, pr.URL, pr.HeadSHA
@@ -295,6 +321,7 @@ func (d *CeremonyDriver) repairStepWith(ctx context.Context, s domain.Session, r
 				return StepResult{}, err
 			}
 			output, trigger = map[string]any{"merged": false, "pull_request": r.PullRequest, "error": bounded(err.Error(), 2000)}, "merge_failed"
+			report["error"] = "merge failed: " + bounded(err.Error(), 2000)
 			break
 		}
 		r.MergeSHA = sha
