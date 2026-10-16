@@ -177,8 +177,15 @@ func commandRan(result string) bool {
 	}
 	var envelope struct {
 		Status string `json:"status"`
+		Error  string `json:"error"`
 	}
 	if json.Unmarshal([]byte(result), &envelope) == nil && envelope.Status != "" && envelope.Status != "completed" && envelope.Status != "ok" {
+		return false
+	}
+	// A refusal before the start is hostFailure's {"error": ...} with no
+	// status (a forged tool changed since it was forged, an unknown name,
+	// invalid arguments): it ran nothing.
+	if json.Unmarshal([]byte(result), &envelope) == nil && envelope.Error != "" && envelope.Status == "" {
 		return false
 	}
 	return true

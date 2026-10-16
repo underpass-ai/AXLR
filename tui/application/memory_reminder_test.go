@@ -80,6 +80,12 @@ func TestMemoryReminderNeedsDurableWorkAndNoWrite(t *testing.T) {
 		{"a refused command", withResult(memoryRequest(t, commands[0]), "x1", "give why: one sentence saying what this call is for"), false},
 		{"a command without a result", []root.Message{{Role: root.RoleUser, Content: "run the tests"}, {Role: root.RoleAssistant, ToolCalls: []root.ToolCall{commands[0]}}, {Role: root.RoleAssistant, Content: "done"}}, false},
 		{"a forged tool run", memoryRequest(t, toolCall(t, "f1", HostRunToolName, `{"name":"t"}`)), true},
+		// A refused axlr_run_tool never started: hostFailure answers with
+		// {"error": ...} and no status (16 Oct 2026, 0.9.0: a forged tool
+		// edited outside the console was refused and still reminded).
+		{"a forged tool changed since it was forged", withResult(memoryRequest(t, toolCall(t, "f2", HostRunToolName, `{"name":"t"}`)), "f2", `{"error":"forged tool \"t\" changed since it was forged; forge it again"}`), false},
+		{"a forged tool that is unknown", withResult(memoryRequest(t, toolCall(t, "f3", HostRunToolName, `{"name":"nope"}`)), "f3", `{"error":"unknown forged tool \"nope\""}`), false},
+		{"a forged tool with invalid arguments", withResult(memoryRequest(t, toolCall(t, "f4", HostRunToolName, `{"name":"t","arguments":{}}`)), "f4", `{"error":"arguments do not match the tool's schema: validating root"}`), false},
 		{"eight reads", memoryRequest(t, reads...), false},
 		{"searches and listings", memoryRequest(t, searches...), false},
 		{"searches and a recall", memoryRequest(t, searches[0], searches[1], toolCall(t, "q1", HostRecallName, `{}`)), false},
