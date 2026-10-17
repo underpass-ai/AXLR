@@ -32,7 +32,7 @@ The index is signed with an Ed25519 key in minisign format. The service that pro
 
 ```json
 "catalogs": [
-  {"name": "axlr", "url": "https://catalog.axlr.dev/index.json", "public_key": "RWQ…"},
+  {"name": "axlr", "url": "https://registry.underpassai.com/index.json", "public_key": "RWQ…"},
   {"name": "acme", "url": "https://tools.intranet.acme/index.json", "public_key": "RWQ…"}
 ]
 ```

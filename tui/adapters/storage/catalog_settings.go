@@ -30,10 +30,10 @@ type CatalogSetting struct {
 // catalog. It is published with the catalog's first release; until then
 // it is empty and the official entry is listed but never read, unless
 // settings give the key.
-const OfficialCatalogPublicKey = ""
+const OfficialCatalogPublicKey = "RWTTouaIeiFysJfKLAVMcrVC06dzhJZW2XGkdgMf25skIX5v8Ozz4Djj"
 
 // OfficialCatalog is the built-in entry.
-var OfficialCatalog = CatalogSetting{Name: "axlr", URL: "https://catalog.axlr.dev/index.json", PublicKey: OfficialCatalogPublicKey}
+var OfficialCatalog = CatalogSetting{Name: "axlr", URL: "https://registry.underpassai.com/index.json", APIURL: "https://api.registry.underpassai.com", PublicKey: OfficialCatalogPublicKey}
 
 const maxCatalogs = 16
 
