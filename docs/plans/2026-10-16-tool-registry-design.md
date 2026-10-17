@@ -28,7 +28,7 @@ Both are **registered, not scanned**, exactly as forged tools are today: a downl
 
 The catalog is a Git repository (`underpass-ai/axlr-catalog`) published as a static site. The console reads one file, `index.json`, plus the files of what it installs. There is no API, no account and no telemetry: a static index can be mirrored, pinned to a commit, served from an intranet and audited by reading it. Homebrew taps, Go module proxies and the MCP registry's `server.json` all converged on "manifest plus content hash", and `engines.lock.json` already follows it.
 
-The index is signed with an Ed25519 key in minisign format. AXLR ships the public key of the official catalog; a settings entry adds other catalogs with their own keys:
+The index is signed with an Ed25519 key in minisign format. The service that produces it (publisher keys and scoped tokens, upload, policy scan, sandboxed tests, human review, yanks and the signed index) is the sibling project `axlr-registry`, in its own repository; its `docs/domain.md` is the write-side design, and this document stays the read side. The two share only the index format. AXLR ships the public key of the official catalog; a settings entry adds other catalogs with their own keys:
 
 ```json
 "catalogs": [
@@ -172,4 +172,5 @@ These are console changes the catalog depends on, in order of value:
 2. **Signed index verification and the catalog cache**: minisign verification in Go (an Ed25519 signature over the index bytes), the cache directory, `catalogs` in settings.
 3. **Generic-loop guards for catalog ceremonies**: an `x-axlr` step annotation the console honours in the generic loop: `approval: true` shows the approval card and records `decision` itself; `check: true` runs the model's `check_command` and records `passed`; `fan_out: n` works a step `n` times with fresh context and hands the outputs to the next step. Until then catalog ceremonies are written within D5's limits.
 4. **Secrets for tools**: a `secrets: ["NAME"]` manifest field resolved from `credentials.json` and passed as environment to that run only, shown by name on the run card. Tier 2 of the catalog (anything that calls an API) waits for it.
-5. **Per-tool always-allow**: already listed as not done in the forged-tools design; catalog tools, being reviewed, are the natural first beneficiaries.
+5. **Registry revocations on the console**: honour `revocations` and `revoked_keys` in an index (mark the installed version `broken` with the reason, refuse to run it, offer the newer one), show the publisher and reviewer on the install card, and verify the publisher signature over the bundle digest beside the index signature. Until then the registry's guarantees stop at the index.
+6. **Per-tool always-allow**: already listed as not done in the forged-tools design; catalog tools, being reviewed, are the natural first beneficiaries.
