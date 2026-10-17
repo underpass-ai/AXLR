@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -255,8 +256,11 @@ func TestKeyStoreCreatesOnceAndLoads(t *testing.T) {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(store.Path())
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("key file mode %v, %v", info.Mode(), err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 { // NTFS has no owner-only mode
+		t.Fatalf("key file mode %v", info.Mode())
 	}
 	data, _ := os.ReadFile(store.Path())
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
