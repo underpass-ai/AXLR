@@ -27,7 +27,7 @@ type RegistryPort interface {
 
 // EnrollRequest is the enrolment body: the publisher id, the key being
 // enrolled (its public key, added by the adapter), the namespaces asked
-// for and, when given, a contact.
+// for and a contact the operator can reach.
 type EnrollRequest struct {
 	ID         string
 	Namespaces []string

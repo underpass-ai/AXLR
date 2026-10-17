@@ -121,8 +121,8 @@ func (m AppModel) enrollPublisher(fields []string) (AppModel, tea.Cmd) {
 	return m, toolsCompletion(cmd, &outcome)
 }
 
-// parseEnrollArguments reads "<publisher id> <namespace>… [--to <catalog>]
-// [--contact <address>]".
+// parseEnrollArguments reads "<publisher id> <namespace>… --contact
+// <address> [--to <catalog>]"; the registry requires the contact.
 func parseEnrollArguments(fields []string) (application.EnrollRequest, string, error) {
 	var request application.EnrollRequest
 	catalog := ""
@@ -146,7 +146,7 @@ func parseEnrollArguments(fields []string) (application.EnrollRequest, string, e
 			request.Namespaces = append(request.Namespaces, fields[i])
 		}
 	}
-	if request.ID == "" || len(request.Namespaces) == 0 {
+	if request.ID == "" || len(request.Namespaces) == 0 || request.Contact == "" {
 		return request, "", fmt.Errorf("usage: %s", slashUsage("/tools"))
 	}
 	return request, catalog, nil
@@ -181,7 +181,7 @@ func (m AppModel) preparePublish(request application.PublishRequest) (AppModel, 
 	m = m.openToolsOverlay(m.Theme.Tf("tools.publishPreparing", request.Name))
 	use := m.deps.ToolCatalog
 	workspace := string(m.Header.State.Workspace)
-	var outcome toolsOutcome
+	outcome := toolsOutcome{publishing: true}
 	cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 		draft, err := use.Prepare(ctx, workspace, request)
 		if err != nil {
@@ -255,7 +255,7 @@ func (m AppModel) buildPublishBundle() (AppModel, tea.Cmd) {
 	use := m.deps.ToolCatalog
 	workspace := string(m.Header.State.Workspace)
 	copied := *draft
-	var outcome toolsOutcome
+	outcome := toolsOutcome{publishing: true}
 	cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 		if err := use.SaveMetadata(ctx, workspace, copied); err != nil {
 			return err
@@ -280,7 +280,7 @@ func (m AppModel) uploadPublishBundle() (AppModel, tea.Cmd) {
 	use := m.deps.ToolCatalog
 	copied, signed := *draft, *bundle
 	theme := m.Theme
-	var outcome toolsOutcome
+	outcome := toolsOutcome{publishing: true}
 	cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()

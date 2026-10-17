@@ -32,6 +32,9 @@ type toolsOutcome struct {
 	// keyCreated reports /tools keygen; notice is a status line to show.
 	keyCreated bool
 	notice     string
+	// publishing marks a /tools publish stage, whose failure drops the
+	// run; another verb's failure leaves a run that is polling alone.
+	publishing bool
 	// draft, bundle, report and retryAfter are /tools publish's stages
 	// (tools_publish.go).
 	draft      *application.PublishDraft
@@ -323,7 +326,9 @@ func (m AppModel) completeTools(outcome toolsOutcome, err error) (AppModel, tea.
 	}
 	if err != nil {
 		m.toolsQueue = nil
-		m.publishDraft, m.publishBundle, m.publishAsking = nil, nil, ""
+		if outcome.publishing {
+			m.publishDraft, m.publishBundle, m.publishAsking = nil, nil, ""
+		}
 		if m.overlay != "tools" {
 			m.Status.Error = err.Error()
 		}

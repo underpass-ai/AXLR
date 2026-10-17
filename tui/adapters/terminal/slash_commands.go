@@ -254,7 +254,7 @@ var slashPromptModes = map[string]bool{"/normal": true, "/review": true, "/write
 
 // slashUsages are how the commands that take text are written; any other
 // command takes none.
-var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]", "/ceremony": "/ceremony [<definition> [version] [brief]] · /ceremony publish <file.yaml>", "/memory": "/memory save · /memory compare <about>… · /memory forget <ref> [why]", "/session": "/session [export [id]]", "/plan": "/plan [goal]", "/tools": "/tools · /tools search <terms> · /tools install <name>[@version] [--from <catalog>] · /tools update [name] · /tools remove <name> · /tools identity · /tools keygen · /tools enroll <publisher> <namespace>… [--to <catalog>] [--contact <address>] · /tools publish <name>[@version] [--to <catalog>]"}
+var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]", "/ceremony": "/ceremony [<definition> [version] [brief]] · /ceremony publish <file.yaml>", "/memory": "/memory save · /memory compare <about>… · /memory forget <ref> [why]", "/session": "/session [export [id]]", "/plan": "/plan [goal]", "/tools": "/tools · /tools search <terms> · /tools install <name>[@version] [--from <catalog>] · /tools update [name] · /tools remove <name> · /tools identity · /tools keygen · /tools enroll <publisher> <namespace>… --contact <address> [--to <catalog>] · /tools publish <name>[@version] [--to <catalog>]"}
 
 func slashUsage(command string) string {
 	if usage, ok := slashUsages[command]; ok {

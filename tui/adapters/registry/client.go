@@ -61,11 +61,7 @@ func RequestMessage(method, path, query string, body []byte, timestamp int64, no
 
 // Enroll implements application.RegistryPort.
 func (c *Client) Enroll(ctx context.Context, api string, key *application.ClientKey, request application.EnrollRequest) (application.EnrollResult, error) {
-	body := map[string]any{"id": request.ID, "public_key": key.PublicBase64(), "namespaces": request.Namespaces}
-	if request.Contact != "" {
-		body["contact"] = request.Contact
-	}
-	encoded, err := json.Marshal(body)
+	encoded, err := json.Marshal(map[string]any{"id": request.ID, "public_key": key.PublicBase64(), "namespaces": request.Namespaces, "contact": request.Contact})
 	if err != nil {
 		return application.EnrollResult{}, err
 	}

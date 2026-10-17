@@ -146,14 +146,16 @@ func TestToolsEnrollReportsPendingOrTheError(t *testing.T) {
 		t.Fatalf("notice %q", m.Status.Notice)
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEscape})
-	m = runTools(t, m, "/tools enroll taken taken_*")
+	m = runTools(t, m, "/tools enroll taken taken_* --contact ops@taken.example")
 	if !strings.Contains(m.Info.Text(), "409") || !strings.Contains(m.Info.Text(), "publisher taken is active") {
 		t.Fatalf("409 panel:\n%s", m.Info.Text())
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEscape})
-	m = runTools(t, m, "/tools enroll acme")
-	if !strings.Contains(m.Status.Notice, "usage") {
-		t.Fatalf("no namespace: %q", m.Status.Notice)
+	for _, short := range []string{"/tools enroll acme --contact ops@acme.example", "/tools enroll acme acme_*"} {
+		m = runTools(t, m, short)
+		if !strings.Contains(m.Status.Notice, "usage") || !strings.Contains(m.Status.Notice, "--contact <address>") {
+			t.Fatalf("%s: %q", short, m.Status.Notice)
+		}
 	}
 }
 
@@ -270,7 +272,7 @@ func TestToolsPublishAsksUploadsAndPolls(t *testing.T) {
 func TestToolsPublishVerbsNeedTheRegistry(t *testing.T) {
 	m := toolsModel(t, &forgeFake{}, newCatalogFake("business_days"))
 	defer m.zones.Close()
-	for _, command := range []string{"/tools publish word_count", "/tools identity", "/tools keygen", "/tools enroll acme acme_*"} {
+	for _, command := range []string{"/tools publish word_count", "/tools identity", "/tools keygen", "/tools enroll acme acme_* --contact ops@acme.example"} {
 		m = runTools(t, m, command)
 		if !strings.Contains(m.Status.Error, "No registry client") {
 			t.Fatalf("%s: %q", command, m.Status.Error)

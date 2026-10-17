@@ -211,7 +211,7 @@ func TestClientReportsErrorsAndRateLimits(t *testing.T) {
 	server.answers["POST /v1/versions"] = answer{status: 429, body: `{"error":"too many uploads"}`, retryAfter: "17"}
 	client := &Client{Now: func() time.Time { return now }}
 	ctx := context.Background()
-	_, err := client.Enroll(ctx, server.URL, key, application.EnrollRequest{ID: "acme", Namespaces: []string{"acme_*"}})
+	_, err := client.Enroll(ctx, server.URL, key, application.EnrollRequest{ID: "acme", Namespaces: []string{"acme_*"}, Contact: "ops@acme.example"})
 	var registryErr *application.RegistryError
 	if !errors.As(err, &registryErr) || registryErr.Status != 409 || !strings.Contains(err.Error(), "the registry answered 409: {\"error\":\"publisher acme is active\"}") {
 		t.Fatalf("409: %v", err)

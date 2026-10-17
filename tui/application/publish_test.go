@@ -290,16 +290,18 @@ func TestIdentityKeygenAndEnroll(t *testing.T) {
 		t.Fatalf("enroll: %+v %s %v", result, catalog, err)
 	}
 	for name, request := range map[string]EnrollRequest{
-		"bad id":        {ID: "Acme", Namespaces: []string{"acme_*"}},
-		"no namespace":  {ID: "acme"},
-		"bad namespace": {ID: "acme", Namespaces: []string{"../x"}},
+		"bad id":        {ID: "Acme", Namespaces: []string{"acme_*"}, Contact: "ops@acme.example"},
+		"no namespace":  {ID: "acme", Contact: "ops@acme.example"},
+		"bad namespace": {ID: "acme", Namespaces: []string{"../x"}, Contact: "ops@acme.example"},
+		"no contact":    {ID: "acme", Namespaces: []string{"acme_*"}},
+		"spaced":        {ID: "acme", Namespaces: []string{"acme_*"}, Contact: "ops @acme"},
 	} {
 		if _, _, err := use.Enroll(ctx, "", request); err == nil {
 			t.Fatalf("%s was sent", name)
 		}
 	}
 	registry.enrollErr = &RegistryError{Status: 409, Body: `{"error":"publisher acme is active"}`}
-	if _, _, err := use.Enroll(ctx, "axlr", EnrollRequest{ID: "acme", Namespaces: []string{"acme_*"}}); err == nil || !strings.Contains(err.Error(), "409") || !strings.Contains(err.Error(), "acme is active") {
+	if _, _, err := use.Enroll(ctx, "axlr", EnrollRequest{ID: "acme", Namespaces: []string{"acme_*"}, Contact: "ops@acme.example"}); err == nil || !strings.Contains(err.Error(), "409") || !strings.Contains(err.Error(), "acme is active") {
 		t.Fatalf("409: %v", err)
 	}
 }

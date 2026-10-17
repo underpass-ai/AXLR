@@ -373,6 +373,11 @@ func (u CatalogUseCase) Enroll(ctx context.Context, catalog string, request Enro
 			return EnrollResult{}, "", fmt.Errorf("namespace %q must be lowercase letters, digits and underscores, with * at the end at most", namespace)
 		}
 	}
+	// The registry requires a contact: an address or a scheme:handle of 3
+	// to 254 visible characters.
+	if n := len(request.Contact); n < 3 || n > 254 || strings.ContainsAny(request.Contact, " \t\r\n") {
+		return EnrollResult{}, "", errors.New("give --contact: an email address or a scheme:handle the operator can reach, 3 to 254 characters without spaces")
+	}
 	catalogs, err := u.Catalog.Cached(ctx)
 	if err != nil {
 		return EnrollResult{}, "", err
