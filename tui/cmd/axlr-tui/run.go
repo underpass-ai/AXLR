@@ -33,6 +33,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
+	toolregistry "github.com/underpass-ai/AXLR/tui/adapters/registry"
 	"github.com/underpass-ai/AXLR/tui/adapters/repairclone"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
@@ -736,7 +737,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		// and /tools read their signed indexes, cached under the state.
 		toolCatalog = &toolcatalog.Client{Dir: filepath.Join(stateBase, "axlr", "catalog"), Entries: settings.EffectiveCatalogs()}
 		continuation.Catalog = toolCatalog
-		toolCatalogUseCase = application.CatalogUseCase{Catalog: toolCatalog, Forge: forged}
+		// The registry's client identity: one key under the state, signed
+		// requests for /tools enroll and /tools publish.
+		toolCatalogUseCase = application.CatalogUseCase{Catalog: toolCatalog, Forge: forged, Keys: &toolregistry.KeyStore{Dir: filepath.Join(stateBase, "axlr", "registry")}, Registry: &toolregistry.Client{}, Files: forged}
 	}
 	if _, kmp := activeEngineCommands["kmp"]; kmp {
 		// axlr_remember writes the model's memories in one call;

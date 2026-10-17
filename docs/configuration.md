@@ -399,18 +399,19 @@ Array of objects; absent means the built-in official catalog alone. Each entry i
 | `name` | string | required | 1-32 lowercase letters, digits, `_` or `-`, starting with a letter; unique. `/tools install <name> --from <catalog>` and `axlr_install_tool`'s `catalog` name it, and the cache lives under `<state>/axlr/catalog/<name>/` |
 | `url` | string | required (optional for `axlr`) | The absolute URL of the catalog's `index.json`, `https` anywhere or `http` on this machine's loopback (a local mirror). Manifests and files are fetched relative to it |
 | `public_key` | string | required (optional for `axlr`) | The catalog's minisign public key, the base64 line of its `.pub` file (`RWQ…`). The index is read only when `index.json.minisig` beside it verifies with this key: an unsigned index is never read, from any catalog |
+| `api_url` | string | absent | The origin of the catalog's registry, the publish API that `/tools enroll` and `/tools publish` send signed requests to (`https://api.staging.underpassai.com` for the staging registry), `https` anywhere or `http` on the loopback, without a path's query. Absent, the catalog takes no uploads and the two commands say so. Reads never use it |
 | `enabled` | boolean | `true` | `false` keeps the entry but reads nothing from it |
 
-The official catalog, named `axlr` at `https://catalog.axlr.dev/index.json`, is built in and cannot be removed: an entry named `axlr` overrides its `url` (a mirror) or `public_key`, or disables it with `enabled: false`. Its public key is published with the catalog's first release; until the console ships it, the entry is listed with the warning `no public key configured` and reads nothing, unless settings give the key. Refused while reading: `settings catalogs name "…" must be …`, `settings catalogs <name> needs a url`, `settings catalogs <name> needs a public_key: an unsigned index is never read`, `settings catalogs <name>: url must use https (http only on the loopback)`, `settings catalogs lists <name> twice`, and at most 16 entries.
+The official catalog, named `axlr` at `https://catalog.axlr.dev/index.json`, is built in and cannot be removed: an entry named `axlr` overrides its `url` (a mirror), `public_key` or `api_url`, or disables it with `enabled: false`. Its public key is published with the catalog's first release; until the console ships it, the entry is listed with the warning `no public key configured` and reads nothing, unless settings give the key. Refused while reading: `settings catalogs name "…" must be …`, `settings catalogs <name> needs a url`, `settings catalogs <name> needs a public_key: an unsigned index is never read`, `settings catalogs <name>: url must use https (http only on the loopback)`, `settings catalogs <name>: api_url must use https (http only on the loopback)`, `settings catalogs lists <name> twice`, and at most 16 entries.
 
 ```json
 "catalogs": [
   {"name": "axlr", "public_key": "RWRheGxyZG9jc4IpcKOE7GUurQdesELtiL2GWej6/lWjlsg3t+4iHGjd"},
-  {"name": "acme", "url": "https://tools.intranet.acme/index.json", "public_key": "RWRhY21lZG9jc7JU8iG+4Xf85Q3Rspj1ARuikOVIzFzTP10NHeP42at5"}
+  {"name": "acme", "url": "https://tools.intranet.acme/index.json", "public_key": "RWRhY21lZG9jc7JU8iG+4Xf85Q3Rspj1ARuikOVIzFzTP10NHeP42at5", "api_url": "https://api.tools.intranet.acme"}
 ]
 ```
 
-A catalog's index is cached once verified and read from the cache for a day; `/tools update` fetches it again. A fetch or a signature that fails leaves the cache as it was and is reported as a warning in `/tools` and `axlr_catalog`. See [installing catalog tools](console.md#installing-catalog-tools).
+A catalog's index is cached once verified and read from the cache for a day; `/tools update` fetches it again. A fetch or a signature that fails leaves the cache as it was and is reported as a warning in `/tools` and `axlr_catalog`. See [installing catalog tools](console.md#installing-catalog-tools) and [publishing a tool to a catalog](console.md#publishing-a-tool-to-a-catalog); the client key the publish commands sign with lives at `<state>/axlr/registry/client.key`.
 
 ### Engines, ceremonies and jobs
 

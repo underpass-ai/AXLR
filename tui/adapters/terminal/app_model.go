@@ -167,6 +167,16 @@ type AppModel struct {
 	toolsStaged *application.StagedTool
 	toolsAsking bool
 	toolsQueue  []string
+	// publishDraft is the tool /tools publish is reading, publishAsking
+	// the catalog field the composer answers, publishBundle the signed
+	// upload waiting for y, publishLog the run's panel lines; publishGen
+	// numbers the runs so a stale poll is dropped (tools_publish.go).
+	publishDraft    *application.PublishDraft
+	publishAsking   string
+	publishBundle   *application.PublishBundle
+	publishLog      []string
+	publishGen      uint64
+	publishDeadline time.Time
 	// installStaged is the model's pending axlr_install_tool call staged
 	// for its card (installStagedCall names the call), or why it was not.
 	installStaged     *application.StagedTool
@@ -348,6 +358,11 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if k, ok := msg.(tea.KeyPressMsg); ok && m.toolsAsking {
 		return m.answerTools(k)
 	}
+	if k, ok := msg.(tea.KeyPressMsg); ok && m.publishAsking != "" {
+		if next, cmd, handled := m.publishFieldKey(k); handled {
+			return next, cmd
+		}
+	}
 	if next, cmd, handled := m.navigation(msg); handled {
 		return next, cmd
 	}
@@ -364,6 +379,17 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(record, m.subscribePlans())
 	case planOutcomesMsg:
 		return m, m.recordPlanOutcomes()
+	case publishPollMsg:
+		return m.applyPublishPoll(v)
+	case publishRetryMsg:
+		if v.gen != m.publishGen || m.publishBundle == nil {
+			return m, nil
+		}
+		if m.Busy {
+			// Another operation holds the console: the retry waits for it.
+			return m, tea.Tick(publishPollInterval, func(time.Time) tea.Msg { return v })
+		}
+		return m.uploadPublishBundle()
 	case installStagedMsg:
 		if v.call != m.installStagedCall {
 			return m, nil

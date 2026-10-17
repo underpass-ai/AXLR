@@ -25,6 +25,8 @@ type catalogMemory struct {
 	reads, cached int
 	// tamper changes a staged file's content after the digest was taken.
 	tamper bool
+	// api is the catalog's registry URL, for the publish tests.
+	api string
 }
 
 const catalogSchema = `{"type":"object","properties":{"seats":{"type":"integer"},"votes":{"type":"object"}},"required":["seats","votes"]}`
@@ -55,13 +57,13 @@ func (m *catalogMemory) Catalogs(_ context.Context, refresh bool) ([]CatalogStat
 		m.refreshs++
 	}
 	index := m.index
-	return []CatalogState{{Name: m.name, URL: "https://catalog.example/index.json", Index: &index, Warning: m.warning}}, nil
+	return []CatalogState{{Name: m.name, URL: "https://catalog.example/index.json", APIURL: m.api, Index: &index, Warning: m.warning}}, nil
 }
 
 func (m *catalogMemory) Cached(context.Context) ([]CatalogState, error) {
 	m.cached++
 	index := m.index
-	return []CatalogState{{Name: m.name, URL: "https://catalog.example/index.json", Index: &index, Warning: m.warning}}, nil
+	return []CatalogState{{Name: m.name, URL: "https://catalog.example/index.json", APIURL: m.api, Index: &index, Warning: m.warning}}, nil
 }
 
 func (m *catalogMemory) Stage(_ context.Context, catalog, name, version string) (StagedTool, error) {

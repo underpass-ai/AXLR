@@ -53,6 +53,8 @@ type catalogFake struct {
 	index application.CatalogIndex
 	files map[string]application.ForgedFile
 	fail  error
+	// api is the catalog's registry URL, for the publish tests.
+	api string
 }
 
 func newCatalogFake(names ...string) *catalogFake {
@@ -68,7 +70,7 @@ func newCatalogFake(names ...string) *catalogFake {
 
 func (f *catalogFake) Catalogs(context.Context, bool) ([]application.CatalogState, error) {
 	index := f.index
-	return []application.CatalogState{{Name: "axlr", URL: "https://catalog.example/index.json", Index: &index}}, nil
+	return []application.CatalogState{{Name: "axlr", URL: "https://catalog.example/index.json", APIURL: f.api, Index: &index}}, nil
 }
 func (f *catalogFake) Cached(ctx context.Context) ([]application.CatalogState, error) {
 	return f.Catalogs(ctx, false)

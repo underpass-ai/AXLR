@@ -29,6 +29,15 @@ type toolsOutcome struct {
 	removed   string
 	// queue is what /tools update still has to install after this one.
 	queue []string
+	// keyCreated reports /tools keygen; notice is a status line to show.
+	keyCreated bool
+	notice     string
+	// draft, bundle, report and retryAfter are /tools publish's stages
+	// (tools_publish.go).
+	draft      *application.PublishDraft
+	bundle     *application.PublishBundle
+	report     *application.VersionReport
+	retryAfter time.Duration
 }
 
 // installStagedMsg is the model's pending axlr_install_tool call staged
@@ -89,6 +98,28 @@ func (m AppModel) toolsCommand(args string) (tea.Model, tea.Cmd) {
 		}
 		m.Composer.Input.Reset()
 		return m.removeTool(fields[1])
+	case "keygen", "identity":
+		if len(fields) != 1 {
+			m.Status.Notice = m.Theme.Tf("notice.slashUsage", slashUsage("/tools"))
+			return m, nil
+		}
+		m.Composer.Input.Reset()
+		return m.showIdentity(fields[0] == "keygen")
+	case "enroll":
+		m.Composer.Input.Reset()
+		return m.enrollPublisher(fields[1:])
+	case "publish":
+		if len(fields) < 2 {
+			m.Status.Notice = m.Theme.Tf("notice.slashUsage", slashUsage("/tools"))
+			return m, nil
+		}
+		request, err := parsePublishArguments(fields[1:])
+		if err != nil {
+			m.Status.Error = err.Error()
+			return m, nil
+		}
+		m.Composer.Input.Reset()
+		return m.preparePublish(request)
 	}
 	m.Status.Notice = m.Theme.Tf("notice.slashUsage", slashUsage("/tools"))
 	return m, nil
@@ -292,10 +323,22 @@ func (m AppModel) completeTools(outcome toolsOutcome, err error) (AppModel, tea.
 	}
 	if err != nil {
 		m.toolsQueue = nil
+		m.publishDraft, m.publishBundle, m.publishAsking = nil, nil, ""
 		if m.overlay != "tools" {
 			m.Status.Error = err.Error()
 		}
 		return m, nil
+	}
+	if outcome.keyCreated {
+		m.Status.Notice = m.Theme.T("notice.keyCreated")
+		return m, nil
+	}
+	if outcome.notice != "" {
+		m.Status.Notice = outcome.notice
+		return m, nil
+	}
+	if outcome.draft != nil || outcome.bundle != nil || outcome.report != nil || outcome.retryAfter > 0 {
+		return m.completePublish(outcome)
 	}
 	if outcome.removed != "" {
 		m.Status.Notice = m.Theme.Tf("notice.toolRemoved", outcome.removed)
@@ -345,9 +388,14 @@ func (m AppModel) answerTools(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		return m, nil
 	}
 	m.toolsAsking = false
+	publishing := m.publishBundle != nil
 	if k.String() != "y" {
 		m.toolsStaged, m.toolsQueue = nil, nil
 		m.Status.Notice = m.Theme.T("tools.kept")
+		if publishing {
+			m.publishBundle, m.publishDraft = nil, nil
+			m.Status.Notice = m.Theme.T("tools.publishKept")
+		}
 		if m.overlay == "tools" {
 			m.overlay = ""
 		}
@@ -358,15 +406,19 @@ func (m AppModel) answerTools(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		return m, nil
 	}
 	m.Status.Notice = ""
+	if publishing {
+		return m.uploadPublishBundle()
+	}
 	return m.installStagedTool()
 }
 
 // closeTools forgets the staged tool and its question when the panel
 // closes by a click, so the next character typed is not its answer.
 func (m *AppModel) closeTools() {
-	if m.overlay == "tools" && m.toolsAsking {
+	if m.overlay == "tools" && (m.toolsAsking || m.publishAsking != "") {
 		m.toolsAsking, m.toolsStaged, m.toolsQueue = false, nil, nil
 		m.Status.Notice = m.Theme.T("tools.kept")
+		m.closePublish()
 	}
 }
 

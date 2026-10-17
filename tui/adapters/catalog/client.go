@@ -26,10 +26,11 @@ import (
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
-// Catalog is one configured catalog: its name, the URL of its index.json
-// and its minisign public key. A catalog without a key is never fetched.
+// Catalog is one configured catalog: its name, the URL of its index.json,
+// its minisign public key and, when it takes uploads, the URL of its
+// registry's publish API. A catalog without a key is never fetched.
 type Catalog struct {
-	Name, URL, PublicKey string
+	Name, URL, PublicKey, APIURL string
 }
 
 // Bounds of what the client reads: an index, a manifest, one file.
@@ -112,7 +113,7 @@ func (c *Client) read(ctx context.Context, refresh, fetchStale bool) ([]applicat
 		if err := ctx.Err(); err != nil {
 			return states, err
 		}
-		state := application.CatalogState{Name: entry.Name, URL: entry.URL}
+		state := application.CatalogState{Name: entry.Name, URL: entry.URL, APIURL: entry.APIURL}
 		key, err := c.key(entry)
 		if err != nil {
 			state.Warning = err.Error()

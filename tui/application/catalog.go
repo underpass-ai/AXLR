@@ -43,8 +43,11 @@ type CatalogPort interface {
 
 // CatalogState is one configured catalog as the console sees it.
 type CatalogState struct {
-	Name      string
-	URL       string
+	Name string
+	URL  string
+	// APIURL is the catalog's registry, where /tools enroll and /tools
+	// publish go; "" for a catalog that takes no uploads.
+	APIURL    string
 	Index     *CatalogIndex
 	FetchedAt time.Time
 	// Warning is why the last fetch or verification failed, or why the
@@ -134,6 +137,11 @@ type ToolUpdate struct {
 type CatalogUseCase struct {
 	Catalog CatalogPort
 	Forge   ForgedToolsPort
+	// Keys, Registry and Files serve /tools keygen, identity, enroll and
+	// publish (client_key.go, publish.go); nil leaves publishing off.
+	Keys     ClientKeyPort
+	Registry RegistryPort
+	Files    ToolFilesPort
 }
 
 var (

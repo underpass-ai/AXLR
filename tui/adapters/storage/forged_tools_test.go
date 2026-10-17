@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -187,5 +188,46 @@ func TestForgedToolsSetting(t *testing.T) {
 	encoded, err := json.Marshal(parsed)
 	if err != nil || !strings.Contains(string(encoded), `"forged_tools":false`) {
 		t.Fatalf("encoded %s: %v", encoded, err)
+	}
+}
+
+// ReadToolFile and WriteToolFile reach a tool's directory without
+// registering anything; catalog.json survives a forge again, the tool's
+// files do not; a missing file is ErrNoToolFile and a path is refused.
+func TestForgedToolStoreReadsAndWritesToolFiles(t *testing.T) {
+	workspace := t.TempDir()
+	store := &ForgedToolStore{Dir: t.TempDir()}
+	ctx := context.Background()
+	if _, _, err := store.Forge(ctx, workspace, forgedTool("echo_it"), []application.ForgedFile{{Path: "run.sh", Content: "cat"}}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := store.ReadToolFile(ctx, workspace, "echo_it", "run.sh")
+	if err != nil || string(data) != "cat" {
+		t.Fatalf("read: %q %v", data, err)
+	}
+	if _, err := store.ReadToolFile(ctx, workspace, "echo_it", "tests.json"); !errors.Is(err, application.ErrNoToolFile) {
+		t.Fatalf("missing: %v", err)
+	}
+	if err := store.WriteToolFile(ctx, workspace, "echo_it", "catalog.json", []byte(`{"version":"1.0.0"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.WriteToolFile(ctx, workspace, "nothing", "catalog.json", []byte(`{}`)); err == nil {
+		t.Fatal("wrote into a tool that has no directory")
+	}
+	for _, bad := range [][2]string{{"echo_it", "../x"}, {"echo_it", "lib/x"}, {"../echo_it", "x"}, {"echo_it", ""}} {
+		if _, err := store.ReadToolFile(ctx, workspace, bad[0], bad[1]); err == nil || errors.Is(err, application.ErrNoToolFile) {
+			t.Fatalf("%v accepted: %v", bad, err)
+		}
+	}
+	stored, _, err := store.Forge(ctx, workspace, forgedTool("echo_it"), []application.ForgedFile{{Path: "run.sh", Content: "cat -n"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, err := store.ReadToolFile(ctx, workspace, "echo_it", "catalog.json")
+	if err != nil || string(kept) != `{"version":"1.0.0"}` {
+		t.Fatalf("catalog.json after a forge: %q %v", kept, err)
+	}
+	if _, listed := stored.Files["catalog.json"]; listed || store.Verify(ctx, workspace, stored) != nil {
+		t.Fatalf("catalog.json became a tool file: %v", stored.Files)
 	}
 }

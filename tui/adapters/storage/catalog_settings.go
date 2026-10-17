@@ -20,7 +20,10 @@ type CatalogSetting struct {
 	Name      string `json:"name"`
 	URL       string `json:"url,omitempty"`
 	PublicKey string `json:"public_key,omitempty"`
-	Enabled   *bool  `json:"enabled,omitempty"`
+	// APIURL is the catalog's registry, where /tools enroll and /tools
+	// publish send signed requests; absent for a catalog that takes none.
+	APIURL  string `json:"api_url,omitempty"`
+	Enabled *bool  `json:"enabled,omitempty"`
 }
 
 // OfficialCatalogPublicKey is the minisign public key of the official
@@ -60,7 +63,32 @@ func (c CatalogSetting) validate() error {
 			return fmt.Errorf("settings catalogs %s: %v", c.Name, err)
 		}
 	}
+	if c.APIURL != "" {
+		if err := registryURL(c.APIURL); err != nil {
+			return fmt.Errorf("settings catalogs %s: %v", c.Name, err)
+		}
+	}
 	return nil
+}
+
+// registryURL accepts an https origin of a registry's publish API, or
+// http on this machine's loopback.
+func registryURL(raw string) error {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host == "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return errors.New("api_url must be an absolute URL without a query")
+	}
+	host := parsed.Hostname()
+	loopback := host == "localhost" || strings.HasSuffix(host, ".localhost")
+	if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+		loopback = true
+	}
+	switch {
+	case parsed.Scheme == "https", parsed.Scheme == "http" && loopback:
+		return nil
+	default:
+		return errors.New("api_url must use https (http only on the loopback)")
+	}
 }
 
 // catalogURL accepts an https URL of an index.json, or http on this
@@ -115,17 +143,20 @@ func (s UserSettings) EffectiveCatalogs() []catalog.Catalog {
 			if entry.PublicKey != "" {
 				official.PublicKey = entry.PublicKey
 			}
+			if entry.APIURL != "" {
+				official.APIURL = entry.APIURL
+			}
 			official.Enabled = entry.Enabled
 			continue
 		}
 		others = append(others, entry)
 	}
 	if official.IsEnabled() {
-		out = append(out, catalog.Catalog{Name: official.Name, URL: official.URL, PublicKey: official.PublicKey})
+		out = append(out, catalog.Catalog{Name: official.Name, URL: official.URL, PublicKey: official.PublicKey, APIURL: official.APIURL})
 	}
 	for _, entry := range others {
 		if entry.IsEnabled() {
-			out = append(out, catalog.Catalog{Name: entry.Name, URL: entry.URL, PublicKey: entry.PublicKey})
+			out = append(out, catalog.Catalog{Name: entry.Name, URL: entry.URL, PublicKey: entry.PublicKey, APIURL: entry.APIURL})
 		}
 	}
 	return out

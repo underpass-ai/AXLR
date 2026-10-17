@@ -39,6 +39,27 @@ func TestCatalogSettings(t *testing.T) {
 	if len(effective) != 2 || effective[0].Name != "axlr" || effective[0].URL != OfficialCatalog.URL || effective[0].PublicKey != key || effective[1].Name != "acme" {
 		t.Fatalf("effective = %+v", effective)
 	}
+	// api_url names the catalog's registry; the official entry takes one
+	// too; off the loopback it must be https, and it carries no query.
+	var withAPI UserSettings
+	if err := json.Unmarshal([]byte(`{"catalogs":[{"name":"acme","url":"https://x/index.json","public_key":"`+key+`","api_url":"https://api.x"},{"name":"axlr","api_url":"http://127.0.0.1:9000"}]}`), &withAPI); err != nil {
+		t.Fatal(err)
+	}
+	if err := withAPI.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if got := withAPI.EffectiveCatalogs(); got[0].APIURL != "http://127.0.0.1:9000" || got[1].APIURL != "https://api.x" {
+		t.Fatalf("api urls %+v", got)
+	}
+	for name, api := range map[string]string{"plain http": "http://api.x", "query": "https://api.x/?a=1", "relative": "api.x"} {
+		var bad UserSettings
+		if err := json.Unmarshal([]byte(`{"catalogs":[{"name":"acme","url":"https://x/index.json","public_key":"`+key+`","api_url":"`+api+`"}]}`), &bad); err != nil {
+			t.Fatal(err)
+		}
+		if err := bad.Validate(); err == nil || !strings.Contains(err.Error(), "api_url") {
+			t.Fatalf("%s accepted: %v", name, err)
+		}
+	}
 	off := false
 	s.Catalogs = []CatalogSetting{{Name: "axlr", Enabled: &off}}
 	if err := s.Validate(); err != nil || len(s.EffectiveCatalogs()) != 0 {
