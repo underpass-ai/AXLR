@@ -26,9 +26,11 @@ type operationComplete struct {
 	MemorySaved     *application.BundleSaved
 	MemoryCompared  *application.CompareResult
 	MemoryForgotten *application.ForgetReceipt
-	Session         domain.Session
-	Err             error
-	Sessions        *[]domain.SessionSummary
+	// Tools is a /tools operation's outcome.
+	Tools    *toolsOutcome
+	Session  domain.Session
+	Err      error
+	Sessions *[]domain.SessionSummary
 	// Held marks the listed sessions another console has open.
 	Held                    map[domain.SessionID]bool
 	Plugins                 *[]domain.PluginState

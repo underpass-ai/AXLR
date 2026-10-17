@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "catalog": "axlr",
+  "generated_at": "2026-10-16T19:09:07Z",
+  "tools": [
+    {
+      "name": "business_days",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "dates",
+        "deadlines",
+        "calendar",
+        "working-days",
+        "sla"
+      ],
+      "summary": "Count the working days between two dates, add or subtract working days to a date, or list them, skipping weekends and a given holiday list.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/business_days/manifest.json",
+      "manifest_sha256": "02e55008ead6a80e471dbe632dc726b0b7239a444198c66f45d2ab36a07f03ae",
+      "files": {
+        "business_days.py": "9945f79f9b2d1b76bd8566ed2be5e90f87dbf33ed7353b5abc03d3c13c2d8920"
+      }
+    },
+    {
+      "name": "seat_allocation",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "elections",
+        "dhondt",
+        "sainte-lague",
+        "hare",
+        "proportional"
+      ],
+      "summary": "Allocate seats among parties from their votes by D'Hondt, Sainte-Laguë, modified Sainte-Laguë or Hare largest remainder, with an optional electoral threshold.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/seat_allocation/manifest.json",
+      "manifest_sha256": "d598c6d7cf643681e1b9d9654c5db2ac7f079beb6b977928ce5d9e225d77c7b1",
+      "files": {
+        "seat_allocation.py": "56d3e582c6fb977f64b25eefdeffa1da4d243339390c011afd249ebce7d9ea57"
+      }
+    }
+  ],
+  "ceremonies": [
+    {
+      "name": "draft_critique_revise",
+      "version": "1.0",
+      "domain": "writing",
+      "summary": "Write a draft from a brief, critique it against the brief's named criteria, revise; at most three critique rounds and two revision attempts per round.",
+      "definition": "ceremonies/writing/draft_critique_revise-1.0.yaml",
+      "sha256": "57377f272741c60455a04ff34605934cc8206bd0ad31761e456f0be6e9b42c28",
+      "guards": [
+        "output_field",
+        "step_repeat_exhausted",
+        "step_status"
+      ],
+      "approvals": "none"
+    }
+  ]
+}

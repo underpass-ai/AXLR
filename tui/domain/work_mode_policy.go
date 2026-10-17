@@ -51,6 +51,11 @@ func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict,
 		// mode allows.
 		return VerdictDeny, string(m) + " mode does not forge tools"
 	}
+	if id.Kind == ToolKindHost && id.LocalOperation == HostOperationInstallTool {
+		// Installing a catalog tool writes its files into the workspace,
+		// as forging does.
+		return VerdictDeny, string(m) + " mode does not install tools"
+	}
 	if id.Kind == ToolKindHost && id.LocalOperation == HostOperationRemoveTool {
 		// Removing deletes the tool's files, a write no restricted mode
 		// allows.

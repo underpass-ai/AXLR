@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -48,7 +49,10 @@ type ForgedToolStore struct {
 	Now func() time.Time
 }
 
-var _ application.ForgedToolsPort = (*ForgedToolStore)(nil)
+var (
+	_ application.ForgedToolsPort = (*ForgedToolStore)(nil)
+	_ application.ToolFilesPort   = (*ForgedToolStore)(nil)
+)
 
 // NewForgedToolStore keeps the registries in dir, created owner-only.
 func NewForgedToolStore(dir string) (*ForgedToolStore, error) {
@@ -103,9 +107,19 @@ func (s *ForgedToolStore) Forge(ctx context.Context, workspace string, tool appl
 	}
 	dir := path.Join(application.ForgedToolsDir, tool.Name)
 	// A new version starts from an empty directory, so no file of the old
-	// one is left beside it.
+	// one is left beside it; only the catalog block /tools publish asked
+	// for survives, since it describes the tool, not its code.
+	catalogBlock, _ := root.ReadFile(path.Join(dir, application.PublishCatalogFile))
 	if err := root.RemoveAll(dir); err != nil {
 		return application.ForgedTool{}, false, err
+	}
+	if len(catalogBlock) > 0 {
+		if err := root.MkdirAll(dir, 0o755); err != nil {
+			return application.ForgedTool{}, false, err
+		}
+		if err := root.WriteFile(path.Join(dir, application.PublishCatalogFile), catalogBlock, 0o644); err != nil {
+			return application.ForgedTool{}, false, err
+		}
 	}
 	tool.Files = make(map[string]string, len(files))
 	for _, file := range files {
@@ -253,4 +267,61 @@ func (s *ForgedToolStore) read(workspace string) (forgedToolsRecord, error) {
 		return forgedToolsRecord{}, fmt.Errorf("%s is not a version %d registry of this workspace's forged tools", s.registry(workspace), forgedToolsVersion)
 	}
 	return record, nil
+}
+
+// ReadToolFile implements application.ToolFilesPort: a file of a tool's
+// directory, registered or not (tests.json, catalog.json), through the
+// workspace root so no path leaves it.
+func (s *ForgedToolStore) ReadToolFile(ctx context.Context, workspace, tool, file string) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if err := checkToolFileName(tool, file); err != nil {
+		return nil, err
+	}
+	root, err := openWorkspace(workspace)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	data, err := root.ReadFile(path.Join(application.ForgedToolsDir, tool, file))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, application.ErrNoToolFile
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxForgedRegistryBytes {
+		return nil, fmt.Errorf("%s of %s exceeds %d bytes", file, tool, maxForgedRegistryBytes)
+	}
+	return data, nil
+}
+
+// WriteToolFile implements application.ToolFilesPort: it writes beside a
+// tool's files without registering anything, so the file is never one of
+// the tool's.
+func (s *ForgedToolStore) WriteToolFile(ctx context.Context, workspace, tool, file string, data []byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := checkToolFileName(tool, file); err != nil {
+		return err
+	}
+	root, err := openWorkspace(workspace)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	dir := path.Join(application.ForgedToolsDir, tool)
+	if _, err := root.Stat(dir); err != nil {
+		return fmt.Errorf("tool %s has no directory in this workspace", tool)
+	}
+	return root.WriteFile(path.Join(dir, file), data, 0o644)
+}
+
+func checkToolFileName(tool, file string) error {
+	if tool == "" || file == "" || path.Clean(tool) != tool || path.Clean(file) != file || strings.ContainsAny(tool+file, `/\`) || file == "." || file == ".." {
+		return fmt.Errorf("%q is not a bare file name of tool %q", file, tool)
+	}
+	return nil
 }

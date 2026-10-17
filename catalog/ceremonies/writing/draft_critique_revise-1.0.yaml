@@ -1,0 +1,118 @@
+version: '1.0'
+name: draft_critique_revise
+description: "Write a draft from a brief, critique it against the brief's named criteria, revise; at most three critique rounds and two revision attempts per round. Deliver when the critique accepts it, escalate to the person when the rounds run out."
+inputs:
+  required:
+  - brief
+  - workspace
+  optional:
+  - memory_about
+outputs:
+  deliverable:
+    type: object
+states:
+- id: DRAFT
+  initial: true
+- id: CRITIQUE
+- id: REVISE
+- id: DELIVER
+- id: ESCALATE
+- id: COMPLETED
+  terminal: true
+- id: BLOCKED
+  terminal: true
+transitions:
+- from: DRAFT
+  to: CRITIQUE
+  trigger: drafted
+  guards: [draft_completed]
+- from: CRITIQUE
+  to: DELIVER
+  trigger: accepted
+  guards: [critique_completed, critique_accepts]
+- from: CRITIQUE
+  to: REVISE
+  trigger: revision_needed
+  guards: [critique_completed, critique_rejects, critique_open]
+- from: CRITIQUE
+  to: ESCALATE
+  trigger: critique_exhausted
+  guards: [critique_completed, critique_rejects, critique_exhausted]
+- from: REVISE
+  to: CRITIQUE
+  trigger: revised
+  guards: [revise_completed, revise_settled]
+- from: REVISE
+  to: ESCALATE
+  trigger: rounds_exhausted
+  guards: [revise_completed, revise_exhausted]
+- from: DELIVER
+  to: COMPLETED
+  trigger: delivered
+  guards: [deliver_completed]
+- from: ESCALATE
+  to: BLOCKED
+  trigger: escalated
+  guards: [escalate_completed]
+steps:
+- id: draft
+  state: DRAFT
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: "Read the brief. Write the draft it asks for into the workspace (one file; name it from the brief) and list the brief's acceptance criteria, numbered. Hand back path, criteria (the numbered list) and a one-paragraph summary."
+    see_prior: true
+- id: critique
+  state: CRITIQUE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: "You are the critic, not the author. Read the draft at path and judge it against each numbered criterion only; do not rewrite it. Hand back accepted=true when every criterion is met, otherwise accepted=false with findings (one per failed criterion: the criterion number, what is wrong, where, and what would satisfy it). Count the critiques in this transcript, including this one, as round: hand back exhausted=true when this is the third rejection, exhausted=false otherwise."
+    see_prior: true
+- id: revise
+  state: REVISE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: "Revise the draft at path to resolve every finding and nothing else; keep what the critic accepted. Hand back path, resolved (which findings you addressed and how) and settled: true when every finding is resolved, false naming the finding you could not resolve without changing the brief. This step runs at most twice per round before the work is escalated."
+    see_prior: true
+  repeat:
+    max_iterations: 2
+    until:
+      output_field: settled
+      equals: true
+- id: deliver
+  state: DELIVER
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: "Present the accepted draft to the person: its path, the criteria it meets and the rounds it took. Hand back path and summary."
+    see_prior: true
+- id: escalate
+  state: ESCALATE
+  handler: host_callback
+  config:
+    num_agents: 1
+    prompt: "The rounds ran out with findings still open. Tell the person which criteria are still unmet and what decision is theirs (relax a criterion, change the brief, or take the draft as is). Hand back open_findings and the question for the person."
+    see_prior: true
+guards:
+  draft_completed: {type: automated, check: 'step_status:draft:COMPLETED'}
+  critique_completed: {type: automated, check: 'step_status:critique:COMPLETED'}
+  critique_accepts: {type: automated, check: 'output_field:critique:accepted=true'}
+  critique_rejects: {type: automated, check: 'output_field:critique:accepted=false'}
+  critique_open: {type: automated, check: 'output_field:critique:exhausted=false'}
+  critique_exhausted: {type: automated, check: 'output_field:critique:exhausted=true'}
+  revise_completed: {type: automated, check: 'step_status:revise:COMPLETED'}
+  revise_settled: {type: automated, check: 'output_field:revise:settled=true'}
+  revise_exhausted: {type: automated, check: 'step_repeat_exhausted:revise'}
+  deliver_completed: {type: automated, check: 'step_status:deliver:COMPLETED'}
+  escalate_completed: {type: automated, check: 'step_status:escalate:COMPLETED'}
+roles:
+- id: AXLR
+  allowed_actions: [draft, drafted, critique, accepted, revision_needed, critique_exhausted, revise, revised, rounds_exhausted, deliver, delivered, escalate, escalated]
+timeouts:
+  step_default: 3600
+retry_policies:
+  default: {max_attempts: 1, backoff_seconds: 1}
+max_transitions: 16
+max_bounces: 3

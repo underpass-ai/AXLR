@@ -2,3 +2,6 @@
 # (the Windows default) would change the bytes the binary embeds.
 tui/adapters/axlrplugin/builtin/** text eol=lf
 tui/adapters/ceremonyhost/definitions/** text eol=lf
+# The catalog entries and index carry per-file SHA-256 digests; a CRLF checkout
+# would change the bytes the install verifies.
+catalog/** text eol=lf

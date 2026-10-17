@@ -31,6 +31,10 @@ func (m AppModel) approveAll() (tea.Model, tea.Cmd) {
 	if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() || m.pendingCalls() < 2 {
 		return m, nil
 	}
+	if !m.installCardReady() {
+		m.Status.Notice = m.Theme.T("approval.installNotReady")
+		return m, nil
+	}
 	batch := map[root.ToolCallID]bool{}
 	for _, p := range m.Header.State.Activity {
 		if p.Outcome == nil {

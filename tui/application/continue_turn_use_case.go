@@ -60,6 +60,10 @@ type ContinueTurnUseCase struct {
 	// settings turn them off, offers neither axlr_forge_tool nor
 	// axlr_run_tool.
 	Forge ForgedToolsPort
+	// Catalog reads the catalogs of pre-forged tools (catalog.go); with
+	// Forge it offers axlr_catalog and axlr_install_tool, nil offers
+	// neither.
+	Catalog CatalogPort
 	// Logs reads the console's app log for axlr_logs; nil offers no
 	// axlr_logs.
 	Logs AppLogPort
@@ -153,6 +157,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if u.offersForge(*session) {
 		hostTools = append(hostTools, ForgeTool(), RunTool(), RemoveTool())
+		if u.Catalog != nil {
+			hostTools = append(hostTools, CatalogTool(), InstallTool())
+		}
 	}
 	if u.Logs != nil {
 		hostTools = append(hostTools, LogsTool())
@@ -230,9 +237,16 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if !u.offersForge(*session) {
 		tools = withoutTool(withoutTool(withoutTool(tools, HostForgeToolName), HostRunToolName), HostRemoveToolName)
-	} else if session.Mode().HidesWriteTools() {
-		// Review mode runs forged tools but writes or removes none.
-		tools = withoutTool(withoutTool(tools, HostForgeToolName), HostRemoveToolName)
+		tools = withoutTool(withoutTool(tools, HostCatalogName), HostInstallToolName)
+	} else {
+		if u.Catalog == nil {
+			tools = withoutTool(withoutTool(tools, HostCatalogName), HostInstallToolName)
+		}
+		if session.Mode().HidesWriteTools() {
+			// Review mode runs forged tools and reads the catalogs but
+			// writes, installs or removes none.
+			tools = withoutTool(withoutTool(withoutTool(tools, HostForgeToolName), HostRemoveToolName), HostInstallToolName)
+		}
 	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
 	counted := 0

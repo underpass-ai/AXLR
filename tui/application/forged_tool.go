@@ -17,4 +17,17 @@ type ForgedTool struct {
 	// Broken is why axlr_tools found the tool's files changed or missing; it
 	// is set only in the listing, never stored.
 	Broken string `json:"-"`
+	// Origin names the catalog a tool was installed from; nil for a tool
+	// the model forged. An older console refuses a registry that carries
+	// it, since it reads the registry strictly.
+	Origin *ToolOrigin `json:"origin,omitempty"`
+}
+
+// ToolOrigin is where an installed tool came from: the catalog, the
+// version installed and the generated_at of the signed index that
+// carried its digests.
+type ToolOrigin struct {
+	Catalog          string `json:"catalog"`
+	Version          string `json:"version"`
+	IndexGeneratedAt string `json:"index_generated_at,omitempty"`
 }

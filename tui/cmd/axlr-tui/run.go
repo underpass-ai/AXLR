@@ -25,6 +25,7 @@ import (
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
+	toolcatalog "github.com/underpass-ai/AXLR/tui/adapters/catalog"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	"github.com/underpass-ai/AXLR/tui/adapters/enginesetup"
@@ -32,6 +33,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
+	toolregistry "github.com/underpass-ai/AXLR/tui/adapters/registry"
 	"github.com/underpass-ai/AXLR/tui/adapters/repairclone"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
@@ -722,6 +724,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		continuation.Successor = successorSessions{create: application.CreateSessionUseCase{Store: loggedStore, Labels: sessionLabels, About: kmp.bundleAbout()}, labels: sessionLabels, store: loggedStore}
 	}
 	continuation.Logs = logReader(appLog)
+	var toolCatalog *toolcatalog.Client
+	var toolCatalogUseCase application.CatalogUseCase
 	if settings.ForgedToolsEnabled() {
 		// The model forges workspace tools and runs them in the same session.
 		forged, err := storage.NewForgedToolStore(filepath.Join(stateBase, "axlr", "forged-tools"))
@@ -729,6 +733,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 		continuation.Forge = forged
+		// The catalogs of pre-forged tools: axlr_catalog, axlr_install_tool
+		// and /tools read their signed indexes, cached under the state.
+		toolCatalog = &toolcatalog.Client{Dir: filepath.Join(stateBase, "axlr", "catalog"), Entries: settings.EffectiveCatalogs()}
+		continuation.Catalog = toolCatalog
+		// The registry's client identity: one key under the state, signed
+		// requests for /tools enroll and /tools publish.
+		toolCatalogUseCase = application.CatalogUseCase{Catalog: toolCatalog, Forge: forged, Keys: &toolregistry.KeyStore{Dir: filepath.Join(stateBase, "axlr", "registry")}, Registry: &toolregistry.Client{}, Files: forged}
 	}
 	if _, kmp := activeEngineCommands["kmp"]; kmp {
 		// axlr_remember writes the model's memories in one call;
@@ -752,6 +763,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Diagnostics:             trace,
 		Plugins:                 pluginManager,
 		InstalledPlugins:        axlrCatalog,
+		ToolCatalog:             toolCatalogUseCase,
 		EngineUpdates:           &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands, Install: &enginesetup.Installer{Configuration: &configStore, Getenv: getenv, KMPApproval: "auto", MADEApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}).Prepare}},
 		OrchestratorPreparation: &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore},
 		Models:                  application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: locals.available, Remote: remoteCatalog}, Diagnostics: trace},

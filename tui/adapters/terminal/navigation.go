@@ -90,6 +90,8 @@ func (m *AppModel) syncApproval() {
 				target = m.Theme.Tf("approval.runTarget", forgedName(p.Call.Arguments.Bytes()))
 			case domain.HostOperationRemoveTool:
 				target = m.Theme.Tf("approval.removeToolTarget", forgedName(p.Call.Arguments.Bytes()))
+			case domain.HostOperationInstallTool:
+				target = m.Theme.Tf("approval.installTarget", forgedName(p.Call.Arguments.Bytes()))
 			}
 		}
 	}
@@ -107,6 +109,7 @@ func (m *AppModel) syncApproval() {
 		m.denying = false
 		// An exec card is the command as it will run, not its JSON: the
 		// arguments array reads as a command line, not a list.
+		m.applyInstallCard()
 		if command := m.execCardCommand(p); command != "" {
 			if warning := m.hiddenInputWarning(p); warning != "" {
 				command = warning + "\n\n" + command
@@ -380,7 +383,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 				case "plugins":
 					intent = m.InstalledPlugins.Update(k)
 					hasIntent = intent != ""
-				case "info", "approvals", "updates", "made-setup", "session", "ceremonies", "memory":
+				case "info", "approvals", "updates", "made-setup", "session", "ceremonies", "memory", "tools":
 					if !jumpViewport(&m.Info.Viewport, k.String()) {
 						m.Info.Viewport, _ = m.Info.Viewport.Update(k)
 					}
@@ -486,7 +489,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		// m.Info scroll it, and the others keep the conversation behind
 		// them still. Search shows the conversation, so it falls through.
 		switch m.overlay {
-		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage", "session", "ceremonies", "memory":
+		case "info", "approvals", "updates", "made-setup", "plans", "repairs", "incident", "usage", "session", "ceremonies", "memory", "tools":
 			m.Info.Viewport, _ = m.Info.Viewport.Update(wheel)
 		case "help":
 			delta := 3
@@ -796,6 +799,11 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		if m.Busy || m.Layout.TooSmall || !m.approvalFocus() || !m.knownPending() {
 			return m, nil, true
 		}
+		if intent != "deny" && intent != "deny-send" && !m.installCardReady() {
+			// The install card shows the files before they are approved.
+			m.Status.Notice = m.Theme.T("approval.installNotReady")
+			return m, nil, true
+		}
 		if intent == "deny" {
 			// D asks first for the reason the model is told.
 			return m.askDenyReason(), nil, true
@@ -1068,6 +1076,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.SearchBox.Input.SetWidth(max(1, m.Layout.Width-18))
 		return m, nil, true
 	case "close":
+		m.closeTools()
 		m.overlay = ""
 		return m, nil, true
 	case "next", "previous":
@@ -1148,8 +1157,11 @@ func (m AppModel) overlayView(base string) string {
 		body = m.Palette.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
 	case "help":
 		body = m.Help.View(m.Theme, m.zones, m.prefix, m.Layout.Width, m.Layout.Height-1)
-	case "info", "approvals", "updates", "made-setup", "session", "ceremonies", "memory":
+	case "info", "approvals", "updates", "made-setup", "session", "ceremonies", "memory", "tools":
 		title, subtitle := m.Theme.T("info.title"), m.Theme.T("info.subtitle")
+		if m.overlay == "tools" {
+			title, subtitle = m.Theme.T("tools.title"), m.Theme.T("tools.subtitle")
+		}
 		if m.overlay == "session" {
 			title, subtitle = m.Theme.T("session.title"), m.Theme.T("session.subtitle")
 		}

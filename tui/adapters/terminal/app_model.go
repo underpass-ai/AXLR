@@ -162,6 +162,28 @@ type AppModel struct {
 	undoAsking       bool
 	// undoTurn is the earlier turn /undo asks to undo, 0 for the last.
 	undoTurn int
+	// toolsStaged is the catalog tool /tools staged, waiting for the y
+	// toolsAsking asks for; toolsQueue is what /tools update installs next.
+	toolsStaged *application.StagedTool
+	toolsAsking bool
+	toolsQueue  []string
+	// publishDraft is the tool /tools publish is reading, publishAsking
+	// the catalog field the composer answers, publishBundle the signed
+	// upload waiting for y, publishLog the run's panel lines; publishGen
+	// numbers the runs so a stale poll is dropped (tools_publish.go).
+	publishDraft    *application.PublishDraft
+	publishAsking   string
+	publishBundle   *application.PublishBundle
+	publishLog      []string
+	publishGen      uint64
+	publishDeadline time.Time
+	// installStaged is the model's pending axlr_install_tool call staged
+	// for its card (installStagedCall names the call), or why it was not.
+	installStaged     *application.StagedTool
+	installStagedCall root.ToolCallID
+	installStageErr   error
+	// initialStage stages a pending install found at launch; Init runs it.
+	initialStage tea.Cmd
 	// noticeAt is when the footer's notice was raised; lastingNotice is a
 	// notice no time ends (see footer_notice.go).
 	noticeAt      time.Time
@@ -269,11 +291,16 @@ func New(deps Dependencies) AppModel {
 	}
 	m.refreshTranscript()
 	m.syncApproval()
+	// A session reopened on a pending install stages it for its card.
+	m.initialStage = m.stageInstallCard()
 	m = m.loadRepairs().loadPlans().loadUsage()
 	return m.queueUnreportedPlans()
 }
 func (m AppModel) Init() tea.Cmd {
 	repairs := m.subscribeRepairs()
+	if m.initialStage != nil {
+		repairs = tea.Batch(repairs, m.initialStage)
+	}
 	if plans := m.subscribePlans(); plans != nil {
 		repairs = tea.Batch(repairs, plans)
 	}
@@ -328,6 +355,14 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if k, ok := msg.(tea.KeyPressMsg); ok && m.undoAsking {
 		return m.answerUndo(k)
 	}
+	if k, ok := msg.(tea.KeyPressMsg); ok && m.toolsAsking {
+		return m.answerTools(k)
+	}
+	if k, ok := msg.(tea.KeyPressMsg); ok && m.publishAsking != "" {
+		if next, cmd, handled := m.publishFieldKey(k); handled {
+			return next, cmd
+		}
+	}
 	if next, cmd, handled := m.navigation(msg); handled {
 		return next, cmd
 	}
@@ -344,6 +379,29 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(record, m.subscribePlans())
 	case planOutcomesMsg:
 		return m, m.recordPlanOutcomes()
+	case publishPollMsg:
+		return m.applyPublishPoll(v)
+	case publishRetryMsg:
+		if v.gen != m.publishGen || m.publishBundle == nil {
+			return m, nil
+		}
+		if m.Busy {
+			// Another operation holds the console: the retry waits for it.
+			return m, tea.Tick(publishPollInterval, func(time.Time) tea.Msg { return v })
+		}
+		return m.uploadPublishBundle()
+	case installStagedMsg:
+		if v.call != m.installStagedCall {
+			return m, nil
+		}
+		if v.err != nil {
+			m.installStageErr = v.err
+		} else {
+			staged := v.staged
+			m.installStaged = &staged
+		}
+		m.applyInstallCard()
+		return m, nil
 	case repairEventMsg:
 		// A repair session changed: reread the registry, redraw the panel,
 		// open it when a decision waits and nothing else is on screen, and
@@ -663,6 +721,11 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.MemoryForgotten != nil && v.Err == nil {
 			m.Status.Notice = m.Theme.Tf("notice.memoryForgotten", v.MemoryForgotten.Ref, v.MemoryForgotten.Superseding)
 		}
+		if v.Tools != nil {
+			var next tea.Cmd
+			m, next = m.completeTools(*v.Tools, v.Err)
+			followUp = tea.Batch(followUp, next)
+		}
 		if v.Ceremonies != nil && v.CeremonyArm == nil && m.overlay == "ceremonies" {
 			m.Info.SetContent(ceremoniesContent(*v.Ceremonies, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
@@ -857,6 +920,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Transcript.Viewport.GotoBottom()
 		}
 		m.syncApproval()
+		if stage := m.stageInstallCard(); stage != nil {
+			followUp = tea.Batch(followUp, stage)
+		}
 		if m.steer.Peek() == "" && !m.inlineApproval() {
 			m = m.autoOpenIncidentCard()
 			m = m.autoOpenRepairPanel()
@@ -999,6 +1065,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if command == "/memory" {
 				return m.memoryCommand("")
+			}
+			if command == "/tools" {
+				return m.toolsCommand("")
 			}
 			if command == "/changes" || command == "/diff" {
 				m.Composer.Input.Reset()
@@ -1476,6 +1545,8 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 		return m.ceremonyCommand(text)
 	case command == "/memory":
 		return m.memoryCommand(text)
+	case command == "/tools":
+		return m.toolsCommand(text)
 	case command == "/session":
 		fields := strings.Fields(text)
 		if strings.EqualFold(fields[0], "export") {
