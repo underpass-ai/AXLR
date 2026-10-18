@@ -1,0 +1,22 @@
+[
+  {"name": "FSF licence list: Apache-2.0 is incompatible with GPL-2.0-only", "input": {"target": "GPL-2.0-only", "components": ["Apache-2.0"]},
+   "expect": {"exit": 0, "stdout_json": {"overall": "incompatible", "components": [{"license": "Apache-2.0", "verdict": "incompatible"}]}}},
+  {"name": "FSF licence list: Apache-2.0 is compatible with GPL-3.0", "input": {"target": "GPL-3.0-only", "components": ["Apache-2.0"]},
+   "expect": {"exit": 0, "stdout_json": {"overall": "compatible", "components": [{"license": "Apache-2.0", "verdict": "compatible"}]}}},
+  {"name": "MIT into permissive targets is fine", "input": {"target": "BSD-3-Clause", "components": ["MIT", "ISC", "Zlib", "BSL-1.0"]},
+   "expect": {"exit": 0, "stdout_json": {"overall": "compatible"}}},
+  {"name": "FSF matrix: LGPL-3.0 cannot go into GPL-2.0-only, GPL-2.0-or-later can go into GPL-3.0", "input": {"target": "GPL-2.0-only", "components": ["LGPL-3.0-only", "GPL-2.0-or-later", "GPL-3.0-only"]},
+   "expect": {"exit": 0, "stdout_json": {"components": [{"verdict": "incompatible"}, {"verdict": "compatible"}, {"verdict": "incompatible"}]}}},
+  {"name": "MPL FAQ: MPL-2.0 into GPL via Secondary License, unless Exhibit B", "input": {"target": "GPL-3.0-or-later", "components": ["MPL-2.0", {"license": "MPL-2.0", "incompatible_with_secondary": true}, "CDDL-1.0"]},
+   "expect": {"exit": 0, "stdout_json": {"components": [{"verdict": "compatible"}, {"verdict": "incompatible"}, {"verdict": "incompatible"}]}}},
+  {"name": "LGPL: linking into a proprietary work is conditional, copying the code is not allowed; GPL even dynamically is not", "input": {"target": "proprietary", "components": [{"license": "LGPL-2.1-only", "linking": "dynamic"}, {"license": "LGPL-2.1-only", "linking": "source"}, {"license": "GPL-3.0-only", "linking": "dynamic"}]},
+   "expect": {"exit": 0, "stdout_json": {"overall": "incompatible", "components": [{"verdict": "conditional"}, {"verdict": "incompatible"}, {"verdict": "incompatible"}]}}},
+  {"name": "Apache policy: MPL-2.0 is category B in an Apache-2.0 work", "input": {"target": "Apache-2.0", "components": ["MPL-2.0"]},
+   "expect": {"exit": 0, "stdout_json": {"components": [{"verdict": "conditional", "apache_category": "B"}]}}},
+  {"name": "GPL-2.0-only code limits a GPL-2.0-or-later project to version 2", "input": {"target": "GPL-2.0-or-later", "components": ["GPL-2.0-only"]},
+   "expect": {"exit": 0, "stdout_contains": "conveyed only under GPL-2.0 only"}},
+  {"name": "deprecated SPDX id is read as -only", "input": {"target": "AGPL-3.0", "components": ["GPL-3.0"]},
+   "expect": {"exit": 0, "stdout_json": {"target": "AGPL-3.0-only", "overall": "compatible"}}},
+  {"name": "unknown licence", "input": {"target": "WTFPL-9", "components": ["MIT"]}, "expect": {"exit": 2, "stdout_contains": "unknown licence"}},
+  {"name": "bad linking", "input": {"target": "MIT", "components": ["MIT"], "linking": "plugin"}, "expect": {"exit": 2, "stdout_contains": "linking must be"}}
+]

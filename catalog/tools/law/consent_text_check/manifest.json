@@ -1,0 +1,33 @@
+{
+  "name": "consent_text_check",
+  "description": "Check a privacy notice or consent text in English or Spanish against the information items of GDPR Article 13 (data collected from the person: 13(1)(a)-(f) and 13(2)(a)-(f)) or Article 14 (data obtained elsewhere): controller identity and contact, DPO, purposes and legal basis, legitimate interests, recipients, transfers, retention, each data subject right, withdrawing consent, complaint to the supervisory authority, statutory or contractual requirement, automated decisions, source. Reports each item found, partial or missing with the matching snippet, and a completeness score. Keyword heuristic; not legal advice.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "description": "The notice, inline"},
+      "source": {"type": "string", "enum": ["data_subject", "third_party"], "default": "data_subject", "description": "data_subject: Article 13; third_party: Article 14"},
+      "language": {"type": "string", "enum": ["en", "es"], "default": "en", "description": "Item labels and disclaimer"},
+      "applies": {"type": "object", "additionalProperties": false, "description": "false marks a conditional item as not applicable", "properties": {
+        "dpo": {"type": "boolean"}, "legitimate_interests": {"type": "boolean"}, "transfers": {"type": "boolean"},
+        "consent": {"type": "boolean"}, "automated_decisions": {"type": "boolean"}, "recipients": {"type": "boolean"}}}
+    }
+  },
+  "program": "python3",
+  "args": ["consent_text_check.py"],
+  "files": ["consent_text_check.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "law",
+    "tags": ["gdpr", "rgpd", "privacy-notice", "consent", "transparency", "data-protection", "compliance"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"text": "Acme Ltd is the controller. Contact us at privacy@acme.example. We use your data in order to deliver your orders; the legal basis is the performance of a contract. We keep your data for 6 years. You have the right of access, rectification and erasure."},
+      "output": {"partial": ["13(2)(b)"], "score": {"points": "7/2", "applicable_items": 12, "completeness_percent": "29.2"}}
+    },
+    "source": "original; information items of Regulation (EU) 2016/679 (GDPR) Articles 13 and 14"
+  }
+}

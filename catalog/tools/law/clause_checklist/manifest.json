@@ -1,0 +1,30 @@
+{
+  "name": "clause_checklist",
+  "description": "Clause checklist for a contract type (NDA, services, lease, employment, sale of goods, software licence, GDPR Article 28 data processing agreement): each clause's purpose and the questions to ask, with the legal reference for the DPA's mandatory contents. Given a contract text in English or Spanish, it reports each clause as found, with the matching snippet, or missing, by keyword and heading heuristics. Heuristic and not legal advice.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "contract_type": {"type": "string", "enum": ["nda", "services", "lease", "employment", "sale_of_goods", "software_license", "dpa"]},
+      "text": {"type": "string", "description": "The contract text, inline"},
+      "language": {"type": "string", "enum": ["en", "es"], "default": "en", "description": "Clause titles and disclaimer"},
+      "list_types": {"type": "boolean"}
+    }
+  },
+  "program": "python3",
+  "args": ["clause_checklist.py"],
+  "files": ["clause_checklist.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "law",
+    "tags": ["contracts", "checklist", "contract-review", "gdpr", "dpa", "nda"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"contract_type": "nda", "text": "This Agreement is made between Acme Ltd and Beta SL. Confidential Information means any information disclosed by one party. This Agreement is governed by the laws of England and Wales."},
+      "output": {"summary": {"found": 4, "missing": 11, "total": 15}}
+    },
+    "source": "original; DPA contents from Regulation (EU) 2016/679 (GDPR) Art. 28(2)-(4), 32-36 and Chapter V; CISG Art. 6 for the sale-of-goods note"
+  }
+}
