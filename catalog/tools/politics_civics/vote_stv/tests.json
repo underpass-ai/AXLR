@@ -1,0 +1,383 @@
+[
+ {
+  "name": "Wikipedia Single transferable vote food example (23 guests, 3 seats): Pears, Cake, Hamburger",
+  "input": {
+   "seats": 3,
+   "ballots": [
+    {
+     "ranking": [
+      "Oranges",
+      "Pears"
+     ],
+     "count": 3
+    },
+    {
+     "ranking": [
+      "Pears",
+      "Strawberry",
+      "Cake"
+     ],
+     "count": 8
+    },
+    {
+     "ranking": [
+      "Strawberry",
+      "Oranges",
+      "Pears"
+     ],
+     "count": 1
+    },
+    {
+     "ranking": [
+      "Cake",
+      "Chocolate",
+      "Hamburger"
+     ],
+     "count": 3
+    },
+    {
+     "ranking": [
+      "Chocolate",
+      "Cake"
+     ],
+     "count": 1
+    },
+    {
+     "ranking": [
+      "Hamburger",
+      "Chicken"
+     ],
+     "count": 4
+    },
+    {
+     "ranking": [
+      "Chicken",
+      "Chocolate",
+      "Hamburger"
+     ],
+     "count": 3
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "quota": "6",
+    "elected": [
+     "Pears",
+     "Cake",
+     "Hamburger"
+    ],
+    "excluded": [
+     "Chocolate",
+     "Strawberry",
+     "Chicken"
+    ],
+    "rounds": [
+     {
+      "round": 1,
+      "elected": [
+       "Pears"
+      ],
+      "tally": {
+       "Pears": "8",
+       "Hamburger": "4",
+       "Oranges": "3",
+       "Cake": "3",
+       "Chicken": "3",
+       "Strawberry": "1",
+       "Chocolate": "1"
+      }
+     },
+     {
+      "round": 2,
+      "action": "transfer surplus of Pears",
+      "transfer_value": "1/4",
+      "tally": {
+       "Strawberry": "3"
+      }
+     },
+     {
+      "round": 3,
+      "action": "exclude Chocolate",
+      "tally": {
+       "Cake": "4"
+      }
+     },
+     {
+      "round": 4,
+      "action": "exclude Strawberry",
+      "tie": {
+       "between": [
+        "Oranges",
+        "Strawberry",
+        "Chicken"
+       ],
+       "excluded": "Strawberry",
+       "resolved_by": "first preferences"
+      },
+      "tally": {
+       "Cake": "6",
+       "Oranges": "4"
+      },
+      "elected": [
+       "Cake"
+      ]
+     },
+     {
+      "round": 5,
+      "action": "exclude Chicken",
+      "tally": {
+       "Hamburger": "7"
+      },
+      "elected": [
+       "Hamburger"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "fractional Gregory transfer at 5/12, checked by hand",
+  "input": {
+   "seats": 2,
+   "ballots": [
+    {
+     "ranking": [
+      "A",
+      "B"
+     ],
+     "count": 8
+    },
+    {
+     "ranking": [
+      "A",
+      "C"
+     ],
+     "count": 4
+    },
+    {
+     "ranking": [
+      "B"
+     ],
+     "count": 1
+    },
+    {
+     "ranking": [
+      "C"
+     ],
+     "count": 2
+    },
+    {
+     "ranking": [
+      "D",
+      "C"
+     ],
+     "count": 3
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "quota": "7",
+    "elected": [
+     "A",
+     "C"
+    ],
+    "excluded": [
+     "D",
+     "B"
+    ],
+    "rounds": [
+     {
+      "round": 1,
+      "elected": [
+       "A"
+      ]
+     },
+     {
+      "round": 2,
+      "surplus": "5",
+      "transfer_value": "5/12",
+      "tally": {
+       "A": "7",
+       "B": "4.333333",
+       "C": "3.666667",
+       "D": "3"
+      }
+     },
+     {
+      "round": 3,
+      "tally": {
+       "A": "7",
+       "C": "6.666667",
+       "B": "4.333333"
+      },
+      "exhausted": "0"
+     },
+     {
+      "round": 4,
+      "action": "exclude B",
+      "exhausted": "4.333333",
+      "elected_without_quota": [
+       "C"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "unbreakable first-round tie follows tie_order",
+  "input": {
+   "seats": 1,
+   "ballots": [
+    {
+     "ranking": [
+      "A"
+     ],
+     "count": 2
+    },
+    {
+     "ranking": [
+      "B",
+      "A"
+     ],
+     "count": 1
+    },
+    {
+     "ranking": [
+      "C",
+      "A"
+     ],
+     "count": 1
+    },
+    {
+     "ranking": [
+      "D"
+     ],
+     "count": 1
+    }
+   ],
+   "tie_order": [
+    "C",
+    "B",
+    "D",
+    "A"
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "quota": "3",
+    "elected": [
+     "A"
+    ],
+    "excluded": [
+     "C"
+    ],
+    "rounds": [
+     {
+      "round": 1
+     },
+     {
+      "round": 2,
+      "tie": {
+       "between": [
+        "B",
+        "C",
+        "D"
+       ],
+       "excluded": "C",
+       "resolved_by": "tie_order (unresolved by the counts)"
+      },
+      "tally": {
+       "A": "3"
+      },
+      "elected": [
+       "A"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "one seat behaves as instant runoff with a majority quota",
+  "input": {
+   "seats": 1,
+   "ballots": [
+    {
+     "ranking": [
+      "A"
+     ],
+     "count": 4
+    },
+    {
+     "ranking": [
+      "B",
+      "C"
+     ],
+     "count": 3
+    },
+    {
+     "ranking": [
+      "C",
+      "B"
+     ],
+     "count": 2
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "quota": "5",
+    "elected": [
+     "B"
+    ],
+    "excluded": [
+     "C"
+    ],
+    "round_count": 2
+   }
+  }
+ },
+ {
+  "name": "seats not fewer than candidates",
+  "input": {
+   "seats": 2,
+   "ballots": [
+    [
+     "A",
+     "B"
+    ]
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "fewer than the candidates"
+  }
+ },
+ {
+  "name": "tied ranking rejected",
+  "input": {
+   "seats": 1,
+   "ballots": [
+    [
+     "A",
+     [
+      "B",
+      "C"
+     ]
+    ]
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "strict rankings"
+  }
+ }
+]

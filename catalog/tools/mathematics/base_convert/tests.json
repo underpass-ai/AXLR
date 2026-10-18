@@ -1,0 +1,20 @@
+[
+  {"name": "255 is 0xFF, 0o377 and 0b11111111", "input": {"operation": "convert", "value": "255"}, "expect": {"exit": 0, "stdout_json": {"results": {"2": "11111111", "8": "377", "10": "255", "16": "FF"}}}},
+  {"name": "hex prefix read without from_base", "input": {"operation": "convert", "value": "0xFF", "to_base": 10}, "expect": {"exit": 0, "stdout_json": {"from_base": 16, "result": "255"}}},
+  {"name": "Python tutorial (floating point issues): 0.1 is 0.0001100110011... in binary", "input": {"operation": "convert", "value": "0.1", "to_base": 2},
+   "expect": {"exit": 0, "stdout_json": {"result": "0.0(0011)", "repeating": true, "value": "1/10"}}},
+  {"name": "1/7 = 0.(142857)", "input": {"operation": "convert", "value": "1/7", "to_base": 10}, "expect": {"exit": 0, "stdout_json": {"result": "0.(142857)"}}},
+  {"name": "hexadecimal fraction with sign", "input": {"operation": "convert", "value": "-FF.8", "from_base": 16, "to_base": 10}, "expect": {"exit": 0, "stdout_json": {"result": "-255.5", "terminates": true}}},
+  {"name": "1/3 in binary repeats 01", "input": {"operation": "convert", "value": "1/3", "to_base": 2, "fraction_digits": 4}, "expect": {"exit": 0, "stdout_json": {"result": "0.(01)"}}},
+  {"name": "digit limit truncates before the period is found", "input": {"operation": "convert", "value": "1/3", "to_base": 2, "fraction_digits": 1}, "expect": {"exit": 0, "stdout_json": {"result": "0.0...", "truncated": true}}},
+  {"name": "Roman MCMXCIV = 1994", "input": {"operation": "from_roman", "value": "MCMXCIV"}, "expect": {"exit": 0, "stdout_json": {"value": 1994}}},
+  {"name": "1994 = MCMXCIV and 3999 = MMMCMXCIX", "input": {"operation": "to_roman", "value": 3999}, "expect": {"exit": 0, "stdout_json": {"roman": "MMMCMXCIX"}}},
+  {"name": "non-standard IIII refused", "input": {"operation": "from_roman", "value": "IIII"}, "expect": {"exit": 2, "stdout_contains": "not a standard Roman numeral"}},
+  {"name": "subtractive IC (99) refused", "input": {"operation": "from_roman", "value": "IC"}, "expect": {"exit": 2, "stdout_contains": "not a standard Roman numeral"}},
+  {"name": "-1 in 8-bit two's complement is 11111111", "input": {"operation": "to_twos_complement", "value": -1, "bits": 8}, "expect": {"exit": 0, "stdout_json": {"binary": "11111111", "hex": "FF", "range": [-128, 127]}}},
+  {"name": "10000000 is -128", "input": {"operation": "from_twos_complement", "value": "1000 0000"}, "expect": {"exit": 0, "stdout_json": {"value": -128, "bits": 8}}},
+  {"name": "128 does not fit in 8 signed bits", "input": {"operation": "to_twos_complement", "value": 128, "bits": 8}, "expect": {"exit": 2, "stdout_contains": "from -128 to 127"}},
+  {"name": "BCD of 1994 and back", "input": {"operation": "to_bcd", "value": 1994}, "expect": {"exit": 0, "stdout_json": {"bcd": "0001 1001 1001 0100"}}},
+  {"name": "invalid BCD nibble", "input": {"operation": "from_bcd", "value": "0001 1010"}, "expect": {"exit": 2, "stdout_contains": "not a decimal digit"}},
+  {"name": "digit outside the base", "input": {"operation": "convert", "value": "12", "from_base": 2}, "expect": {"exit": 2, "stdout_contains": "not a digit in base 2"}}
+]

@@ -1,0 +1,36 @@
+{
+  "name": "cashflow_forecast",
+  "description": "Monthly cash-flow projection from recurring items (monthly, quarterly, yearly or once, between a start and an end month, growing by a percentage a year) and an opening balance: each month's inflows, outflows, net flow and closing balance, the first month below zero and the minimum balance. Decimal arithmetic, each occurrence in cents.",
+  "input_schema": {
+    "type": "object",
+    "required": ["start", "months", "items"],
+    "additionalProperties": false,
+    "properties": {
+      "start": {"type": "string", "pattern": "^\\d{4}-\\d{2}$", "description": "First month YYYY-MM"},
+      "months": {"type": "integer", "minimum": 1, "maximum": 600},
+      "opening_balance": {"type": ["number", "string"], "default": 0},
+      "items": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["amount"], "additionalProperties": false, "properties": {
+        "name": {"type": "string"},
+        "amount": {"type": ["number", "string"], "description": "Positive inflow, negative outflow"},
+        "frequency": {"type": "string", "enum": ["monthly", "quarterly", "yearly", "once"], "default": "monthly"},
+        "start": {"type": "string", "pattern": "^\\d{4}-\\d{2}$", "description": "Default: the forecast start"},
+        "end": {"type": "string", "pattern": "^\\d{4}-\\d{2}$", "description": "Inclusive; optional"},
+        "growth_pct": {"type": ["number", "string"], "default": 0, "description": "Percent a year, compounding once per full year since start"},
+        "day": {"type": "integer", "minimum": 1, "maximum": 31, "description": "Accepted and ignored"}}}},
+      "detail": {"type": "boolean", "default": false, "description": "Add each month's amount per item"}
+    }
+  },
+  "program": "python3",
+  "args": ["cashflow_forecast.py"],
+  "files": ["cashflow_forecast.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["cash-flow", "forecast", "budget", "treasury", "liquidity", "projection"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"start": "2026-01", "months": 6, "opening_balance": 0, "items": [{"name": "salary", "amount": 2000}, {"name": "rent", "amount": -1500}, {"name": "insurance", "amount": -900, "frequency": "quarterly", "start": "2026-02"}, {"name": "bonus", "amount": 500, "frequency": "once", "start": "2026-06"}, {"name": "tax", "amount": -1200, "frequency": "yearly", "start": "2026-04"}]}, "output": {"closing_balance": "500.00", "minimum_balance": {"amount": "-500.00", "month": "2026-05"}, "first_month_below_zero": "2026-04"}},
+    "source": "original"
+  }
+}

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog": "axlr",
-  "generated_at": "2026-10-18T08:55:59Z",
+  "generated_at": "2026-10-18T09:35:59Z",
   "tools": [
     {
       "name": "business_days",
@@ -26,6 +26,58 @@
       "manifest_sha256": "02e55008ead6a80e471dbe632dc726b0b7239a444198c66f45d2ab36a07f03ae",
       "files": {
         "business_days.py": "9945f79f9b2d1b76bd8566ed2be5e90f87dbf33ed7353b5abc03d3c13c2d8920"
+      }
+    },
+    {
+      "name": "date_parse",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "dates",
+        "parsing",
+        "iso8601",
+        "durations",
+        "natural-language",
+        "spanish"
+      ],
+      "summary": "Parse dates, times and durations into ISO 8601: ISO forms (dates, basic and extended date-times with offsets, week and ordinal dates, durations like P1DT2H), numeric dates with a stated day-first or month-first order, month names, and English and Spanish relative forms (tomorrow, next Monday, in 3 days, 3 weeks ago, mañana, el próximo lunes, hace 3 días) computed from a given reference date.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/date_parse/manifest.json",
+      "manifest_sha256": "e79733e0b28eb02f98af75914e8b012f57538a6c5713ab7bd7f62df17b1738e8",
+      "files": {
+        "date_parse.py": "56665645c562b679b5851a3bdb7d7e48596bb4d54ae0872685b35ffe08e21719"
+      }
+    },
+    {
+      "name": "doc_template_fill",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "templates",
+        "docx",
+        "word",
+        "placeholders",
+        "documents",
+        "mail-merge"
+      ],
+      "summary": "Fill {{placeholders}} (with optional {{field|default}}) in plain text or in a Word .docx given as hex, with no package: the .docx is opened as a zip and the text runs of the body, headers, footers, notes and comments are rewritten, joining the runs of each paragraph so a placeholder Word split across runs is still found.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/doc_template_fill/manifest.json",
+      "manifest_sha256": "d8740bae43cd31b4cef4af96629dd7f05c2bd7d5d66343cc76eca50a58f9610c",
+      "files": {
+        "doc_template_fill.py": "9632fc0f76c1da619764012a95437b53a0b62a746c1f105073d924f5502d1bf6"
       }
     },
     {
@@ -83,6 +135,59 @@
       }
     },
     {
+      "name": "expense_split",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "expenses",
+        "splitting",
+        "settlement",
+        "group-travel",
+        "decimal",
+        "debts"
+      ],
+      "summary": "Split shared expenses (equally, by weights or by exact shares among some participants) and settle up with the fewest transfers: balances paid minus owed in exact decimal minor units, leftover cents by largest remainder with a deterministic tie-break, payments already made, and a settlement found by splitting the balances into the most zero-sum groups and pairing largest creditor with largest debtor.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/expense_split/manifest.json",
+      "manifest_sha256": "38aa6752a59d5a8e24a46f3ace43e001fcaaf2abfb8072d06bb5e82cbfe16384",
+      "files": {
+        "expense_split.py": "8f2df4e6331529df169033f5801c6c765e454d553bc012a94bc1f09d748449b4"
+      }
+    },
+    {
+      "name": "holiday_table",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "holidays",
+        "calendar",
+        "bank-holidays",
+        "federal-holidays",
+        "working-days",
+        "dates"
+      ],
+      "summary": "Public holidays of a country and year (2024 to 2032) from a bundled dated table computed from each holiday's legal rule: Spain, Portugal, France, Germany (nationwide), Italy, England and Wales (bank holidays with substitute days) and the US (federal, with observed days).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/holiday_table/manifest.json",
+      "manifest_sha256": "00ce4045398b67de0fd11b3ec8347080836e2dcb2299592f39c02bf467bdc8df",
+      "files": {
+        "holiday_table.py": "18f4f06e8058e20875600c47d5d8b28be1cf630bf1e63157b6944495de327b7c",
+        "holidays.json": "99b449e9c4335a1ab6c43866ac8d24887a9ca06c3942df9df289895ee30b6629"
+      }
+    },
+    {
       "name": "iban_validate",
       "version": "1.0.2",
       "category": "administration",
@@ -106,6 +211,32 @@
       "manifest_sha256": "8fe6ad9b75f03a815fff119b75e26796d52e637a01ed776b9d1b23ddc863acc2",
       "files": {
         "iban_validate.py": "f84303b34acf45b7eb314e79d89a4a5a45946bdb6e7c05aebb4abbb87271ca7f"
+      }
+    },
+    {
+      "name": "ics_generate",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "icalendar",
+        "ics",
+        "rfc5545",
+        "calendar",
+        "events",
+        "recurrence"
+      ],
+      "summary": "Write an RFC 5545 iCalendar file for one event or a recurring one: RRULE from structured fields (FREQ, INTERVAL, COUNT or UNTIL, BYDAY, BYMONTHDAY, BYMONTH, WKST), EXDATE, alarms, organizer and attendees, floating, UTC or IANA TZID times with a VTIMEZONE derived from zoneinfo, text escaping, 75-octet line folding and CRLF.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/ics_generate/manifest.json",
+      "manifest_sha256": "579959d2696e57a223ff7f2e43f2335db335c31d28ac57fd38c2f4873cb130ab",
+      "files": {
+        "ics_generate.py": "b56c0ce4bd6795cf5d0cb5e66ee0775214f3ae4ee7221f391244db9894987ba9"
       }
     },
     {
@@ -133,6 +264,84 @@
       "manifest_sha256": "2b8e3816f87e21b096ff0c914b16366be6d1cfc3ee0df7ea4ca325e4d208c138",
       "files": {
         "invoice_calc.py": "edb5c88490622489eba30a86ce90cd7094bde80cef84bfcaa79ff33d7fe6860c"
+      }
+    },
+    {
+      "name": "letter_formal",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "letters",
+        "correspondence",
+        "salutations",
+        "multilingual",
+        "templates",
+        "writing"
+      ],
+      "summary": "Formal letter skeleton in Spanish, English (UK or US), French, German, Portuguese or Italian, in a formal, very formal or administrative register: sender and recipient blocks, the date written as each language writes it, subject line, and the salutation and matching closing for a named recipient or nobody in particular (Dear Sir or Madam / Yours faithfully, Dear Ms Smith / Yours sincerely, Sehr geehrte Damen und Herren / Mit freundlichen Grüßen, Madame, Monsieur / Veuillez agréer...).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/letter_formal/manifest.json",
+      "manifest_sha256": "5d7a0c040a85609f39641e5234567da2a6a08d508ea68307ff4c342bd3d74f65",
+      "files": {
+        "letter_formal.py": "061bc4b418e884af32dbc49c1383bed7bd13609c4bbc9e826c063d22b3e4d914"
+      }
+    },
+    {
+      "name": "mail_merge",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "mail-merge",
+        "csv",
+        "templates",
+        "letters",
+        "documents",
+        "batch"
+      ],
+      "summary": "Mail merge: CSV text with a header row plus a text template with {{field}} and {{field|default}} placeholders gives one rendered document per row, with the missing fields of each row (no such column, or empty cell), an optional file name per document from a file-name template, and duplicate-name warnings.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/mail_merge/manifest.json",
+      "manifest_sha256": "81f32e2224ec5ef36a3aaf5253c8259fa59c9408a9073f4313ca037da090d9be",
+      "files": {
+        "mail_merge.py": "f0524c10aae56190c62f094aadca53a73fe790d544af5e2828a492d4af264027"
+      }
+    },
+    {
+      "name": "meeting_planner",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "meetings",
+        "time-zones",
+        "scheduling",
+        "zoneinfo",
+        "working-hours",
+        "calendar"
+      ],
+      "summary": "Find the common working hours of people in different IANA time zones for a date or a date range: the UTC windows when everyone is at work, each participant's local times for them (date, time, weekday, UTC offset, daylight saving included), and meeting slots of a given duration ranked by how far they sit from anyone's start or end of day.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/meeting_planner/manifest.json",
+      "manifest_sha256": "ab4efc9eacdaf5fef93f472a579297b4bef0d06f4cc42e8a01adcc37d3a27e0f",
+      "files": {
+        "meeting_planner.py": "c508faa089327ed2af826c8fdb142865f45a11ebe83b22b36fc659ef863f0ceb"
       }
     },
     {
@@ -633,6 +842,112 @@
       }
     },
     {
+      "name": "break_even",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "break-even",
+        "cvp",
+        "contribution-margin",
+        "margin-of-safety",
+        "operating-leverage",
+        "sales-mix",
+        "sensitivity"
+      ],
+      "summary": "Cost-volume-profit analysis: break-even units and revenue, contribution margin and ratio, margin of safety, operating income and degree of operating leverage at a sales level, units for a target profit before or after tax, a sales-mix break-even for several products (mix by units or by revenue), and a sensitivity table over price, variable-cost and fixed-cost changes.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/break_even/manifest.json",
+      "manifest_sha256": "4592b3469dd43c150952dd11736580ff58acb95e42fac7a52930b09603c9d222",
+      "files": {
+        "break_even.py": "a22ea751a81efd424ff67995917c084c2d560a8081850e261a7d73706ed0f40b"
+      }
+    },
+    {
+      "name": "cashflow_forecast",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "cash-flow",
+        "forecast",
+        "budget",
+        "treasury",
+        "liquidity",
+        "projection"
+      ],
+      "summary": "Monthly cash-flow projection from recurring items (monthly, quarterly, yearly or once, between a start and an end month, growing by a percentage a year) and an opening balance: each month's inflows, outflows, net flow and closing balance, the first month below zero and the minimum balance.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/cashflow_forecast/manifest.json",
+      "manifest_sha256": "b13b9f1c3112ed34ae134b737c4615d5e817a6fdab12c8bcbbbd429196244594",
+      "files": {
+        "cashflow_forecast.py": "f95860795f6fb5ae530630471285f309faf4915d2cd5e2707bd6755af3727198"
+      }
+    },
+    {
+      "name": "compound_interest",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "compound-interest",
+        "future-value",
+        "present-value",
+        "annuity",
+        "effective-rate",
+        "rule-of-72",
+        "fisher"
+      ],
+      "summary": "Compound-interest arithmetic: future and present value of a sum and of a level annuity (ordinary or due), the effective annual rate of a nominal rate compounded m times a year or continuously, the nominal rate of an effective one, doubling time exactly and by the rules of 72, 70 and 69.3, and the real rate by Fisher's equation.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/compound_interest/manifest.json",
+      "manifest_sha256": "e670831a16f8dc4a1c523b95b44a8e4c3868a21419d27ce468676ba70c7d5bff",
+      "files": {
+        "compound_interest.py": "e6da51a2c144896daa79d6109310f70af3cf70bb5e1f7b953d493d9294864ae6"
+      }
+    },
+    {
+      "name": "depreciation",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "depreciation",
+        "straight-line",
+        "declining-balance",
+        "sum-of-years-digits",
+        "book-value",
+        "accounting"
+      ],
+      "summary": "Depreciation schedule of an asset with each year's charge, accumulated depreciation and book value: straight-line, declining balance at any factor or rate with an optional switch to straight-line, double-declining, Excel's fixed-rate declining balance (DB), sum-of-the-years'-digits and units-of-production, with salvage value and a partial first year in months.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/depreciation/manifest.json",
+      "manifest_sha256": "6ff0aeb6c86216a841ffb59d7ed552d50156827aa18f6e918430faaffd91dacc",
+      "files": {
+        "depreciation.py": "9a11ef2a1ce0fe4257c6e54dbd8f5ae9a93f27aa980c29df3c24a8309cb71737"
+      }
+    },
+    {
       "name": "fx_convert",
       "version": "1.0.0",
       "category": "finance",
@@ -656,6 +971,60 @@
       "manifest_sha256": "1f387e93fe98bfb01839c26952c4c4f155a495966470f96608de85a7181ae294",
       "files": {
         "fx_convert.py": "ef02a9e81a9eb5a59427308d87c201761f899e6b5b990c71cb212cd5d0432e49"
+      }
+    },
+    {
+      "name": "inflation_adjust",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "inflation",
+        "cpi",
+        "hicp",
+        "ipc",
+        "real-value",
+        "price-index",
+        "economics"
+      ],
+      "summary": "Adjust an amount for inflation between two years or two months with a consumer price index: bundled dated series (US CPI-U from BLS, euro-area HICP from Eurostat, Spain's IPC from INE), each answer naming its source, series id, base and fetch date, or any index given in the input.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/inflation_adjust/manifest.json",
+      "manifest_sha256": "3ae169f703d627ec02734a4fabd146d7ee8d4dfe2dac4b54d292da3989091fb8",
+      "files": {
+        "inflation_adjust.py": "dc807553fad24879b8c4c81ed8cd5c6733814b8ea7dbd8846a9d430a1f074d10",
+        "cpi.json": "11d47b8f4a0a75bcfef42c21b196fd6569d0245dc7592b00a9aad9d2085fe7ea"
+      }
+    },
+    {
+      "name": "loan_amortization",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "loan",
+        "mortgage",
+        "amortization",
+        "annuity",
+        "instalment",
+        "early-repayment"
+      ],
+      "summary": "Loan instalment and full amortization schedule for the French (constant payment), German (constant principal) and American (interest only, bullet) systems, from a nominal annual rate and payments per year.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/loan_amortization/manifest.json",
+      "manifest_sha256": "5b08030535de18808d2524b5f85bf89797508c5559adcc22af49bc3ab6a82f8e",
+      "files": {
+        "loan_amortization.py": "d6ca956c6d14209a447548864ff3363c1914557fa4e3ca6d35088dd88d958856"
       }
     },
     {
@@ -683,6 +1052,33 @@
       "manifest_sha256": "6b077937e11f3293133c1e356a7d09f3fd6380c613e724d6538ddbdac5cffc9e",
       "files": {
         "npv_irr.py": "ea92e482795eec0ed03a2409d2dbb34634d6e66c53cde4080fb0269a7b1a0ab0"
+      }
+    },
+    {
+      "name": "portfolio_stats",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "portfolio",
+        "returns",
+        "volatility",
+        "sharpe-ratio",
+        "drawdown",
+        "correlation",
+        "beta"
+      ],
+      "summary": "Return and risk statistics from a price or return table given inline as CSV (a date column and one column per asset): per asset and for a weighted portfolio rebalanced each period, total and annualised return, mean and annualised volatility on simple or log returns, Sharpe ratio over a risk-free rate, maximum drawdown with peak, trough and recovery dates, the correlation matrix and beta to a benchmark column.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/portfolio_stats/manifest.json",
+      "manifest_sha256": "7324bbb3ebe05bd740f62c398d7f677533a4238b3ba540f1af98537c7a16dcd6",
+      "files": {
+        "portfolio_stats.py": "299c35d76400c05d8a4f400d3037c764a3702cf51d4202fbabbd10075166aafc"
       }
     },
     {
@@ -1383,6 +1779,59 @@
       }
     },
     {
+      "name": "clause_checklist",
+      "version": "1.0.0",
+      "category": "law",
+      "tags": [
+        "contracts",
+        "checklist",
+        "contract-review",
+        "gdpr",
+        "dpa",
+        "nda"
+      ],
+      "summary": "Clause checklist for a contract type (NDA, services, lease, employment, sale of goods, software licence, GDPR Article 28 data processing agreement): each clause's purpose and the questions to ask, with the legal reference for the DPA's mandatory contents.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/law/clause_checklist/manifest.json",
+      "manifest_sha256": "31ca5e562b4216bd522441027fd56a1fa642f3aa9657785122d79cfb1c2b4106",
+      "files": {
+        "clause_checklist.py": "a1b4fc040eb619d314b3b25a305adddc5c6d653ca418a7d799f11d681b3bad2d"
+      }
+    },
+    {
+      "name": "consent_text_check",
+      "version": "1.0.0",
+      "category": "law",
+      "tags": [
+        "gdpr",
+        "rgpd",
+        "privacy-notice",
+        "consent",
+        "transparency",
+        "data-protection",
+        "compliance"
+      ],
+      "summary": "Check a privacy notice or consent text in English or Spanish against the information items of GDPR Article 13 (data collected from the person: 13(1)(a)-(f) and 13(2)(a)-(f)) or Article 14 (data obtained elsewhere): controller identity and contact, DPO, purposes and legal basis, legitimate interests, recipients, transfers, retention, each data subject right, withdrawing consent, complaint to the supervisory authority, statutory or contractual requirement, automated decisions, source.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/law/consent_text_check/manifest.json",
+      "manifest_sha256": "f6be7b34dd4b7e49080935c1b07806869d661e59f4156231ffc99dfd0cbdc24c",
+      "files": {
+        "consent_text_check.py": "4f9ad6808b8e37299a1c904a58496f7ce1d913a74d5ec7cf17502cf482de115f"
+      }
+    },
+    {
       "name": "deadline_calc",
       "version": "1.0.0",
       "category": "law",
@@ -1406,6 +1855,165 @@
       "manifest_sha256": "2ed2ea13f40766e7c889b055a1f52ff8cb26214adeef327023cedc4502e9385a",
       "files": {
         "deadline_calc.py": "3ada1ec43dd9398de386566b3f0aa3833eebc179a98d6b100d58da94af5578fa"
+      }
+    },
+    {
+      "name": "dpia_screening",
+      "version": "1.0.0",
+      "category": "law",
+      "tags": [
+        "gdpr",
+        "rgpd",
+        "dpia",
+        "eipd",
+        "privacy",
+        "risk-assessment",
+        "compliance"
+      ],
+      "summary": "Screen whether a processing operation needs a GDPR data protection impact assessment: the nine criteria of the WP29/EDPB guidelines (WP248 rev.01) given as booleans or hinted from a description in English or Spanish, the rule that two or more criteria usually mean a DPIA is required, the mandatory cases of Article 35(3), the Recital 91 exception, and a pointer to the supervisory authority's Article 35(4) list (e.g.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/law/dpia_screening/manifest.json",
+      "manifest_sha256": "0d1476ffa8bafd5ac36c43ade9c945124b7ca131ee9609e7ef3a73cfda8d7bba",
+      "files": {
+        "dpia_screening.py": "072dbc14aba9f41dfad68e694a696b06ea474e0935edbcb2f49ae1a73bb562a7"
+      }
+    },
+    {
+      "name": "gdpr_ropa_template",
+      "version": "1.0.0",
+      "category": "law",
+      "tags": [
+        "gdpr",
+        "rgpd",
+        "ropa",
+        "data-protection",
+        "privacy",
+        "compliance",
+        "template"
+      ],
+      "summary": "Build a GDPR Article 30 record of processing activities for a controller (Art.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/law/gdpr_ropa_template/manifest.json",
+      "manifest_sha256": "d912a9b3671eb4810fb0c9be1b994703bb9274b359947d16ccfc9c18568f3b77",
+      "files": {
+        "gdpr_ropa_template.py": "51ca9f52d486d204c1e83e88eb8bb235c79c2bc605d97ba7a14a01ad98d7bc95"
+      }
+    },
+    {
+      "name": "legal_citation_format",
+      "version": "1.0.0",
+      "category": "law",
+      "tags": [
+        "citations",
+        "boe",
+        "eur-lex",
+        "celex",
+        "ecli",
+        "bluebook",
+        "legislation"
+      ],
+      "summary": "Format and parse legal citations: Spanish legislation as published in the BOE (\"Ley 39/2015, de 1 de octubre, .",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/law/legal_citation_format/manifest.json",
+      "manifest_sha256": "8b77de5513030c11b4553e9a08ae87ef5fa35906ce8cee45bfe8bddddfd51615",
+      "files": {
+        "legal_citation_format.py": "40abb208dcb1d489f774e5cd2d494f8652d6d68436c375d2210bdce56c0756b6"
+      }
+    },
+    {
+      "name": "license_compat",
+      "version": "1.0.0",
+      "category": "law",
+      "tags": [
+        "licensing",
+        "open-source",
+        "spdx",
+        "gpl",
+        "compliance",
+        "copyleft"
+      ],
+      "summary": "Check whether code under open-source licences (SPDX ids: MIT, BSD, ISC, Zlib, BSL-1.0, Unlicense, CC0, Apache-2.0, MPL-2.0, EPL-2.0, CDDL-1.0, LGPL, GPL and AGPL in -only and -or-later forms) can be combined into a work under a target licence or a proprietary work.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/law/license_compat/manifest.json",
+      "manifest_sha256": "b4cca217848773710343b8bd4011c1e6a987de51f3c292d3b396242a4b0dbcab",
+      "files": {
+        "license_compat.py": "448f159ea9ed6c90e1d896baec1f172499701c10e028b3a9d975f570a670790a"
+      }
+    },
+    {
+      "name": "retention_schedule",
+      "version": "1.0.0",
+      "category": "law",
+      "tags": [
+        "records-management",
+        "retention",
+        "legal-hold",
+        "compliance",
+        "gdpr",
+        "conservacion"
+      ],
+      "summary": "Apply a records retention schedule given in the input (record type, period, trigger event, legal basis, action) to a list of dated records: the date each rule's retention ends, the governing rule when several apply, the destruction or review date, which records are past retention, and legal holds that suspend destruction.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/law/retention_schedule/manifest.json",
+      "manifest_sha256": "53e841986bce944939a6df6e1392b1a890912b89f29477ce9758ec8ff489d4a2",
+      "files": {
+        "retention_schedule.py": "b33916f6e938886d82b5ff87e170f1d18a345323de81d3ad3ddf61dd24b6e3cf"
+      }
+    },
+    {
+      "name": "base_convert",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "number-bases",
+        "binary",
+        "hexadecimal",
+        "roman-numerals",
+        "twos-complement",
+        "bcd"
+      ],
+      "summary": "Convert numbers between bases 2 to 36, fractions included, with the repeating block found exactly (0.1 is 0.0(0011) in binary); Roman numerals both ways with strict validation (1 to 3999); two's complement of a given bit width both ways; and 8421 binary-coded decimal both ways.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/base_convert/manifest.json",
+      "manifest_sha256": "168b14d4b9bca74cb9d8c62576e50d4a7e2b22de3d1d00bb28fbc7d61e1f3dee",
+      "files": {
+        "base_convert.py": "c923a1d2d7b328b3baefc7cbae9adba84116f8ba9f69b7e521249334447bb0ca"
       }
     },
     {
@@ -1435,6 +2043,191 @@
       }
     },
     {
+      "name": "hypothesis_test",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "statistics",
+        "hypothesis-test",
+        "t-test",
+        "chi-square",
+        "fisher-exact",
+        "p-value",
+        "z-test"
+      ],
+      "summary": "Classical hypothesis tests with p-values and confidence intervals: Welch, pooled Student, paired and one-sample t; chi-square goodness of fit and independence (Yates on 2x2); Fisher's exact test on a 2x2 table with an exact fractional p-value; one- and two-proportion z tests.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/hypothesis_test/manifest.json",
+      "manifest_sha256": "2baf0853df307e915ac2e7001e83ba5aff8097ce6c4f03da76045b6e012e79ad",
+      "files": {
+        "hypothesis_test.py": "160c36bf769c0cfaecd562465dfaddd0c2960cfd657e92376eb3fcf7e8e90c11"
+      }
+    },
+    {
+      "name": "matrix_ops",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "linear-algebra",
+        "matrix",
+        "determinant",
+        "inverse",
+        "linear-systems",
+        "fractions"
+      ],
+      "summary": "Exact matrix arithmetic over fractions: determinant, inverse, rank, reduced row echelon form, transpose, product, and A x = b solved and classified as one solution, none, or infinitely many with the general solution in the free variables.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/matrix_ops/manifest.json",
+      "manifest_sha256": "69f7aa2f0e2118407a0037f39a29d047b980c6db8b5355dc65ddc68b7e8a3643",
+      "files": {
+        "matrix_ops.py": "b75bd1233036c6acbf34eaa1598515e9629bf7cd46f6f3e0141c47adcaa4815f"
+      }
+    },
+    {
+      "name": "number_theory",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "number-theory",
+        "primes",
+        "factorisation",
+        "modular-arithmetic",
+        "gcd",
+        "crt",
+        "miller-rabin"
+      ],
+      "summary": "Integer number theory: prime factorisation (trial division and Pollard's rho), primality by Miller-Rabin (deterministic below 3.3e24, stated as probable above), gcd, lcm and extended Euclid, modular inverse and power, Euler's totient, divisors, the Chinese remainder theorem for any moduli, and next and previous primes.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/number_theory/manifest.json",
+      "manifest_sha256": "3f323f28607efc0051fab9f98fbd87f27faff5d99ea560eb361815f749b676a7",
+      "files": {
+        "number_theory.py": "c6dbcb332aef49843d01602c90a402cbb3cd3011ddd8afcefa9301b83ab9c420"
+      }
+    },
+    {
+      "name": "prob_dist",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "probability",
+        "distributions",
+        "binomial",
+        "poisson",
+        "normal",
+        "combinatorics",
+        "fractions"
+      ],
+      "summary": "Probability distributions and exact counting: pmf or pdf, cdf, survival, interval probability, quantile, mean and variance of the binomial, Poisson, normal, hypergeometric, geometric, negative binomial, exponential and uniform distributions, and n choose k, permutations, multisets and multinomial coefficients.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/prob_dist/manifest.json",
+      "manifest_sha256": "9c06e751c20b5d0018c8610081872da0eb9951ff3f66ba07cd80b485336f8883",
+      "files": {
+        "prob_dist.py": "b14b7ebb4805c84cc08af987679ff2dfb21dfaaa265dab1b2ca400926bf63600"
+      }
+    },
+    {
+      "name": "rounding_report",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "rounding",
+        "significant-figures",
+        "uncertainty",
+        "error-propagation",
+        "measurement",
+        "decimal"
+      ],
+      "summary": "Round numbers correctly and report measurements: significant figures or decimal places in seven modes (half up, half even, half down, up, down, ceiling, floor) with scientific and engineering notation, all done in Decimal; and first-order propagation of independent uncertainties through sums, products, quotients and powers, with the result rounded to the uncertainty's significant figures (9.81 +- 0.0234 becomes 9.81 +- 0.02).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/rounding_report/manifest.json",
+      "manifest_sha256": "2daa36ad221d20b1daeddcc06535f355a1c67e244304ad1088e5879d95e39d80",
+      "files": {
+        "rounding_report.py": "bf87106cb61ea92510a8ad9f62d46e61a1ace83ba9230147deaeccb7ce9d4a24"
+      }
+    },
+    {
+      "name": "sampling_plan",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "sampling",
+        "sample-size",
+        "survey",
+        "margin-of-error",
+        "stratification",
+        "neyman"
+      ],
+      "summary": "Survey sample sizes: how many respondents to estimate a proportion or a mean to a given margin of error and confidence, with the finite-population correction, a design effect and the expected response rate; and the split of a total sample across strata by proportional, Neyman or equal allocation, rounded to add up.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/sampling_plan/manifest.json",
+      "manifest_sha256": "562f8478f008db0a499a986bd11bb87abc544f6ffa60abf2afee5626feed8f0f",
+      "files": {
+        "sampling_plan.py": "d7fe24f182d1fb5a5fefad43545abf3cb2f89d4348f7d96373d564fcadcd1f62"
+      }
+    },
+    {
+      "name": "sequence_tools",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "sequences",
+        "finite-differences",
+        "recurrence",
+        "fibonacci",
+        "pattern",
+        "oeis"
+      ],
+      "summary": "Recognise a number sequence from its terms: arithmetic, geometric, polynomial by finite differences, or a linear recurrence with constant coefficients solved exactly over fractions.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/sequence_tools/manifest.json",
+      "manifest_sha256": "03e5ced705334da0e3e22316f3c0ed7e068729d230c7b7ecca24a0b03dde0aa7",
+      "files": {
+        "sequence_tools.py": "6c507f347f7f52e9c23dd9d73b0d3f05fa217903585695c79e3285935ced9da4"
+      }
+    },
+    {
       "name": "stats_describe",
       "version": "1.0.0",
       "category": "mathematics",
@@ -1459,6 +2252,34 @@
       "manifest_sha256": "dcdfaa08aaed2f6ceec9b201e9ffcb53f7517423cb01324986da96da0aab9d54",
       "files": {
         "stats_describe.py": "8782ad6c454b306f59398397f51e502b6a6d22dbd321c0b63c8023fc68612d7f"
+      }
+    },
+    {
+      "name": "unit_convert",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "units",
+        "conversion",
+        "si",
+        "dimensional-analysis",
+        "imperial",
+        "temperature",
+        "exact"
+      ],
+      "summary": "Convert quantities between units with a dimensional check and an exact conversion factor: SI units with all prefixes, units accepted with the SI, and US customary and imperial units from a bundled dated table built from the SI Brochure (9th ed.) and NIST SP 811.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/unit_convert/manifest.json",
+      "manifest_sha256": "b958bc10b9707d47087d576f54d9d1a0631bd5170fd68cc935d87acbaf413e01",
+      "files": {
+        "unit_convert.py": "e0a04af242074d2574b7eb1314a68bacf1ec2545e01b3abc26f96ba9c2827689",
+        "units.json": "24336a28d3b3aa1f70de9e230426f3b3bbcc960c5eac6d0a77dac9f8b9ec0c66"
       }
     },
     {
@@ -1941,6 +2762,138 @@
       }
     },
     {
+      "name": "apportionment",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "apportionment",
+        "huntington-hill",
+        "webster",
+        "jefferson",
+        "hamilton",
+        "census",
+        "redistricting"
+      ],
+      "summary": "Apportion seats among districts by population with Huntington-Hill, Webster (Sainte-Laguë), Jefferson (D'Hondt), Adams or Hamilton (largest remainder), with a minimum number of seats per district.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/apportionment/manifest.json",
+      "manifest_sha256": "fd7ff7ecc7ba4c0d0d845d90c33ab7fda53932ffd121fed320e1bec4347e024f",
+      "files": {
+        "apportionment.py": "8b29cbd2274211c0f1f150ac4e0ad67c31af42b98dc1bdfd4fc4db6fb12f3798"
+      }
+    },
+    {
+      "name": "budget_breakdown",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "budget",
+        "public-finance",
+        "per-capita",
+        "csv",
+        "transparency",
+        "year-over-year"
+      ],
+      "summary": "Break down a public budget given as CSV text: totals and per-capita amounts per year, each programme's share, year-over-year changes per programme (new and dropped ones marked) and the largest items.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/budget_breakdown/manifest.json",
+      "manifest_sha256": "ac04dcacf80a933e2769f616ba66b259f37bb0fe6f05e7193ca9d72bd916ddb1",
+      "files": {
+        "budget_breakdown.py": "2740a1f4d2a21dae0006d06ab6573f0618d70cda60ac785a019d3cf0004e608a"
+      }
+    },
+    {
+      "name": "gerrymander_metrics",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "redistricting",
+        "gerrymandering",
+        "efficiency-gap",
+        "compactness",
+        "polsby-popper",
+        "reock",
+        "elections"
+      ],
+      "summary": "Measure a districting plan: wasted votes and the efficiency gap from two-party district votes, the mean-median difference and seats against votes, and Polsby-Popper and Reock compactness from district polygons in planar coordinates.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/gerrymander_metrics/manifest.json",
+      "manifest_sha256": "5f3cd2b6d6ac6e0516f8a2d83b2ebc15cd316ad134d86738a70242b3f115d2dc",
+      "files": {
+        "gerrymander_metrics.py": "6fcc24dd340d5fb657875b4d9bc00f59ee16f58437b82270bf9ad936691199df"
+      }
+    },
+    {
+      "name": "legislative_calendar",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "legislation",
+        "parliament",
+        "deadlines",
+        "calendar",
+        "sitting-days",
+        "procedure"
+      ],
+      "summary": "Compute a bill's procedural deadlines from its key dates, a session calendar and counting rules all given in the input: N sitting days after or before an event, calendar days with or without recess time, rolled to a sitting day if the rule says so, chained from other deadlines.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/legislative_calendar/manifest.json",
+      "manifest_sha256": "b1bf0fde33009bda4edbda5585ba7bb6a25e7ebc7d9375d122d4030e7c96e56c",
+      "files": {
+        "legislative_calendar.py": "af4c16ccb7d0cd0915ef9408ae57b14db338fdfb92c3a09b67ec72a426bd4bd4"
+      }
+    },
+    {
+      "name": "poll_margin_error",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "polling",
+        "margin-of-error",
+        "sample-size",
+        "survey",
+        "confidence-interval",
+        "statistics"
+      ],
+      "summary": "Margin of error of a poll proportion at any confidence level, with finite-population correction and design effect; the sample size needed for a target margin; and whether the lead between two candidates in the same poll exceeds sampling error, using the multinomial variance of the difference.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/poll_margin_error/manifest.json",
+      "manifest_sha256": "e4c1881b40efaeb09536be4769462e8592cb48e2026ef7ced551bb964251d768",
+      "files": {
+        "poll_margin_error.py": "86cb484ad047fdae57edc144a055ecf674ab835905da43a35d1d0c0e8f949d83"
+      }
+    },
+    {
       "name": "seat_allocation",
       "version": "1.0.0",
       "category": "politics_civics",
@@ -1963,6 +2916,32 @@
       "manifest_sha256": "d598c6d7cf643681e1b9d9654c5db2ac7f079beb6b977928ce5d9e225d77c7b1",
       "files": {
         "seat_allocation.py": "56d3e582c6fb977f64b25eefdeffa1da4d243339390c011afd249ebce7d9ea57"
+      }
+    },
+    {
+      "name": "seat_allocation_droop",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "elections",
+        "droop",
+        "imperiali",
+        "hagenbach-bischoff",
+        "largest-remainder",
+        "proportional"
+      ],
+      "summary": "Allocate seats among parties by largest remainder with a Droop, Hagenbach-Bischoff, Imperiali or Hare quota, with an optional electoral threshold.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/seat_allocation_droop/manifest.json",
+      "manifest_sha256": "404bd7e0569a143ee9b70a29555cd5d7488878923a81faff4fce414df605b14c",
+      "files": {
+        "seat_allocation_droop.py": "882f622b602ab74f2f4d7b4461486fa60da736e4460a8eb58b3f10174941cb9b"
       }
     },
     {
@@ -1992,6 +2971,32 @@
       }
     },
     {
+      "name": "vote_borda",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "elections",
+        "borda",
+        "dowdall",
+        "ranked-choice",
+        "positional-voting",
+        "nauru"
+      ],
+      "summary": "Score ranked ballots by the Borda count (n-1 to 0, or n to 1) or the Dowdall system (1, 1/2, 1/3, ...), in exact fractions.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/vote_borda/manifest.json",
+      "manifest_sha256": "a6235ac63fd687cf080920328b350c0f3fe3f935f405d72d65a2289e9565f494",
+      "files": {
+        "vote_borda.py": "3c6cd802dce2172487b1e230c7b375eba2959118babd93c6c734379c10765321"
+      }
+    },
+    {
       "name": "vote_condorcet",
       "version": "1.0.0",
       "category": "politics_civics",
@@ -2015,6 +3020,59 @@
       "manifest_sha256": "04aab81dbf11284a6e757dcf0e0e254fb9d2bd40e9aed93f6f5795ee1b5d2472",
       "files": {
         "vote_condorcet.py": "529507dafa79958259d59119ecfdb001481c5bb2b7c33b32da60fe4ba6596836"
+      }
+    },
+    {
+      "name": "vote_irv",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "elections",
+        "instant-runoff",
+        "ranked-choice",
+        "irv",
+        "alternative-vote",
+        "preferential"
+      ],
+      "summary": "Count an instant-runoff (single-winner ranked-choice) election round by round: each round's tally, exhausted ballots and the majority base, who is eliminated and why, with a stated tie rule (fewest first preferences, then earlier rounds, then a lot order you supply).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/vote_irv/manifest.json",
+      "manifest_sha256": "baccf36859360a83ec55ba07a886c61b1a3ae33e41c49916fb1a2ea4585f5b73",
+      "files": {
+        "vote_irv.py": "6b75567f3bd4b2b92eb1db34cc4e6364071b43ee2c228ba816fca230fd8a9576"
+      }
+    },
+    {
+      "name": "vote_stv",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "elections",
+        "stv",
+        "single-transferable-vote",
+        "droop",
+        "gregory",
+        "proportional",
+        "ranked-choice"
+      ],
+      "summary": "Count a single transferable vote election with the Droop quota and Gregory fractional surplus transfers in exact fractions: every round's tallies, transfer values, exhausted votes, elections and exclusions, with a stated tie rule (fewest first preferences, then earlier rounds, then a lot order you supply).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/vote_stv/manifest.json",
+      "manifest_sha256": "c992d395b9e5705605514ded5407ddcc33fdc4c295b64fdd29d63569d59343f5",
+      "files": {
+        "vote_stv.py": "1c2c8aa5d061d36024e191b6b6b6f589f91baf4e6626f09270064ad27b34e27b"
       }
     },
     {

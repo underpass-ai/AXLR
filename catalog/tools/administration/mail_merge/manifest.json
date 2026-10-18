@@ -1,0 +1,31 @@
+{
+  "name": "mail_merge",
+  "description": "Mail merge: CSV text with a header row plus a text template with {{field}} and {{field|default}} placeholders gives one rendered document per row, with the missing fields of each row (no such column, or empty cell), an optional file name per document from a file-name template, and duplicate-name warnings.",
+  "input_schema": {
+    "type": "object",
+    "required": ["csv", "template"],
+    "additionalProperties": false,
+    "properties": {
+      "csv": {"type": "string", "description": "CSV text, first row the header"},
+      "template": {"type": "string", "description": "Text with {{field}} or {{field|default}}"},
+      "filename_template": {"type": "string", "description": "e.g. letter_{{id}}.txt; unsafe characters become _"},
+      "delimiter": {"type": "string", "minLength": 1, "maxLength": 1, "default": ","},
+      "missing": {"type": "string", "enum": ["keep", "empty", "error"], "default": "keep", "description": "What to put where a field is missing"},
+      "rows": {"type": "array", "items": {"type": "integer", "minimum": 1}, "description": "1-based data rows to render; default all"}
+    }
+  },
+  "program": "python3",
+  "args": ["mail_merge.py"],
+  "files": ["mail_merge.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["mail-merge", "csv", "templates", "letters", "documents", "batch"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"csv": "name,city\nAna,Madrid\nLi,\n", "template": "Dear {{name}}, see you in {{city|our office}}."},
+                "output": {"rendered": 2, "documents": [{"row": 1, "text": "Dear Ana, see you in Madrid.", "missing": []}, {"row": 2, "text": "Dear Li, see you in our office.", "missing": [], "defaults_used": ["city"]}]}},
+    "source": "original; CSV read with Python's csv module (RFC 4180 quoting)"
+  }
+}

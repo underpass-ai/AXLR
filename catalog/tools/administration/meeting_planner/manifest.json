@@ -1,0 +1,38 @@
+{
+  "name": "meeting_planner",
+  "description": "Find the common working hours of people in different IANA time zones for a date or a date range: the UTC windows when everyone is at work, each participant's local times for them (date, time, weekday, UTC offset, daylight saving included), and meeting slots of a given duration ranked by how far they sit from anyone's start or end of day.",
+  "input_schema": {
+    "type": "object",
+    "required": ["participants"],
+    "additionalProperties": false,
+    "properties": {
+      "participants": {"type": "array", "minItems": 1, "maxItems": 50, "items": {"type": "object", "required": ["tz"], "additionalProperties": false, "properties": {
+        "name": {"type": "string"},
+        "tz": {"type": "string", "description": "IANA zone, e.g. America/New_York"},
+        "start": {"type": "string", "pattern": "^\\d{1,2}:\\d{2}$", "default": "09:00"},
+        "end": {"type": "string", "pattern": "^\\d{1,2}:\\d{2}$", "default": "17:00", "description": "At or before start means past midnight"},
+        "workdays": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 7}, "default": [1, 2, 3, 4, 5]}}}},
+      "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+      "start_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+      "end_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+      "reference_tz": {"type": "string", "description": "Whose calendar days the dates are; default the first participant's zone"},
+      "duration_minutes": {"type": "integer", "minimum": 1, "maximum": 1440, "default": 30},
+      "step_minutes": {"type": "integer", "minimum": 1, "maximum": 240, "default": 15},
+      "max_slots": {"type": "integer", "minimum": 0, "maximum": 500, "default": 10}
+    }
+  },
+  "program": "python3",
+  "args": ["meeting_planner.py"],
+  "files": ["meeting_planner.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["meetings", "time-zones", "scheduling", "zoneinfo", "working-hours", "calendar"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"participants": [{"name": "Madrid", "tz": "Europe/Madrid", "start": "09:00", "end": "18:00"}, {"name": "New York", "tz": "America/New_York", "start": "09:00", "end": "17:00"}], "date": "2026-07-01", "duration_minutes": 60, "max_slots": 1},
+                "output": {"windows": [{"start_utc": "2026-07-01T13:00Z", "end_utc": "2026-07-01T16:00Z", "minutes": 180}], "slots": [{"start_utc": "2026-07-01T14:00Z", "end_utc": "2026-07-01T15:00Z", "score": 60}]}},
+    "source": "original; time zone rules from the IANA tz database through Python's zoneinfo (PEP 615)"
+  }
+}

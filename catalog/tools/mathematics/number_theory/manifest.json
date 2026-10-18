@@ -1,0 +1,34 @@
+{
+  "name": "number_theory",
+  "description": "Integer number theory: prime factorisation (trial division and Pollard's rho), primality by Miller-Rabin (deterministic below 3.3e24, stated as probable above), gcd, lcm and extended Euclid, modular inverse and power, Euler's totient, divisors, the Chinese remainder theorem for any moduli, and next and previous primes. Integers up to 200 digits; answers as exact decimal strings.",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["factor", "is_prime", "gcd", "lcm", "egcd", "mod_inverse", "mod_pow", "totient", "divisors", "crt", "next_prime", "prev_prime"]},
+      "n": {"type": ["integer", "string"], "description": "factor, is_prime, totient, divisors, next_prime, prev_prime; big values as digit strings"},
+      "values": {"type": "array", "minItems": 2, "items": {"type": ["integer", "string"]}, "description": "gcd, lcm"},
+      "a": {"type": ["integer", "string"], "description": "egcd, mod_inverse"},
+      "b": {"type": ["integer", "string"], "description": "egcd"},
+      "base": {"type": ["integer", "string"], "description": "mod_pow"},
+      "exponent": {"type": ["integer", "string"], "description": "mod_pow; negative uses the modular inverse"},
+      "m": {"type": ["integer", "string"], "description": "Modulus, >= 1 (mod_inverse, mod_pow)"},
+      "residues": {"type": "array", "items": {"type": ["integer", "string"]}, "description": "crt"},
+      "moduli": {"type": "array", "items": {"type": ["integer", "string"]}, "description": "crt; need not be coprime"}
+    }
+  },
+  "program": "python3",
+  "args": ["number_theory.py"],
+  "files": ["number_theory.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["number-theory", "primes", "factorisation", "modular-arithmetic", "gcd", "crt", "miller-rabin"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "factor", "n": "147573952589676412927"}, "output": {"product": "193707721 * 761838257287", "complete": true}},
+    "source": "Miller-Rabin with the first 13 prime bases, deterministic below 3317044064679887385961981 (J. Sorenson and J. Webster, Math. Comp. 86, 2017); Pollard's rho in R. P. Brent's form (BIT 20, 1980); Knuth, TAOCP vol. 2, 4.5.2 and 4.5.4"
+  }
+}

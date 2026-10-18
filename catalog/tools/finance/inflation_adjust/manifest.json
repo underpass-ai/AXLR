@@ -1,0 +1,29 @@
+{
+  "name": "inflation_adjust",
+  "description": "Adjust an amount for inflation between two years or two months with a consumer price index: bundled dated series (US CPI-U from BLS, euro-area HICP from Eurostat, Spain's IPC from INE), each answer naming its source, series id, base and fetch date, or any index given in the input. Returns the adjusted amount, the factor, cumulative and annualised inflation. Decimal arithmetic.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {"type": ["number", "string"]},
+      "from": {"type": ["integer", "string"], "description": "A year (2020) or a month (\"2020-06\")"},
+      "to": {"type": ["integer", "string"], "description": "Same kind as from"},
+      "series": {"type": "string", "enum": ["us_cpi_u", "ea_hicp", "es_ipc"]},
+      "index": {"type": "object", "additionalProperties": {"type": ["number", "string"]}, "description": "Your own index values keyed by year or YYYY-MM, instead of series"},
+      "list_series": {"type": "boolean", "description": "Only list the bundled series, their coverage and sources"}
+    }
+  },
+  "program": "python3",
+  "args": ["inflation_adjust.py"],
+  "files": ["inflation_adjust.py", "cpi.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["inflation", "cpi", "hicp", "ipc", "real-value", "price-index", "economics"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"amount": 100, "from": 2020, "to": 2022, "series": "us_cpi_u"}, "output": {"from_index": "258.811", "to_index": "292.655", "adjusted_amount": "113.08", "cumulative_inflation_pct": "13.08"}},
+    "source": "original; series fetched by tools/catalog/data/inflation_adjust.py from the BLS public API v1 (CUUR0000SA0), Eurostat (prc_hicp_aind, prc_hicp_midx) and INE (IPC290751)"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "prob_dist",
+  "description": "Probability distributions and exact counting: pmf or pdf, cdf, survival, interval probability, quantile, mean and variance of the binomial, Poisson, normal, hypergeometric, geometric, negative binomial, exponential and uniform distributions, and n choose k, permutations, multisets and multinomial coefficients. Discrete distributions with rational parameters are exact fractions (binomial(10, 1/2) P(X = 5) is 63/256).",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "distribution": {"type": "string", "enum": ["binomial", "poisson", "normal", "hypergeometric", "geometric", "negative_binomial", "exponential", "uniform"]},
+      "n": {"type": "integer", "minimum": 0, "maximum": 10000, "description": "binomial trials (at most 2000); choose and permutations"},
+      "p": {"type": ["number", "string"], "description": "success probability, a number or a decimal or fraction string; binomial, geometric, negative_binomial"},
+      "lambda": {"type": ["number", "string"], "description": "Poisson mean, at most 100000"},
+      "mean": {"type": ["number", "string"], "description": "normal"},
+      "sd": {"type": ["number", "string"], "description": "normal, > 0"},
+      "population": {"type": "integer", "minimum": 1, "maximum": 2000, "description": "hypergeometric N"},
+      "successes": {"type": "integer", "minimum": 0, "description": "hypergeometric K, success states in the population"},
+      "draws": {"type": "integer", "minimum": 0, "description": "hypergeometric n, draws without replacement"},
+      "r": {"type": "integer", "minimum": 1, "maximum": 2000, "description": "negative_binomial: successes; X counts the failures before the r-th"},
+      "rate": {"type": ["number", "string"], "description": "exponential rate, > 0"},
+      "low": {"type": ["number", "string"], "description": "uniform"},
+      "high": {"type": ["number", "string"], "description": "uniform"},
+      "x": {"type": ["number", "string"], "description": "Point: pmf or pdf, cdf P(X <= x) and survival P(X > x)"},
+      "between": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": ["number", "string"]}, "description": "[a, b]: P(a <= X <= b)"},
+      "q": {"type": ["number", "string"], "description": "Probability for the quantile; discrete: smallest k with P(X <= k) >= q"},
+      "operation": {"type": "string", "enum": ["choose", "permutations", "multinomial"]},
+      "k": {"type": "integer", "minimum": 0, "maximum": 10000},
+      "repetition": {"type": "boolean", "default": false, "description": "choose: multisets C(n + k - 1, k); permutations: n^k"},
+      "counts": {"type": "array", "items": {"type": "integer", "minimum": 0}, "description": "multinomial coefficient (sum)! / product of factorials"}
+    }
+  },
+  "program": "python3",
+  "args": ["prob_dist.py"],
+  "files": ["prob_dist.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["probability", "distributions", "binomial", "poisson", "normal", "combinatorics", "fractions"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"distribution": "binomial", "n": 10, "p": "0.5", "x": 5}, "output": {"pmf": 0.24609375, "exact": {"pmf": "63/256", "cdf": "319/512"}}},
+    "source": "Standard definitions as in scipy.stats (geometric counts trials, negative binomial counts failures); Poisson cdf through the regularized incomplete gamma function (Numerical Recipes, ch. 6.2); normal cdf through math.erfc and quantile through statistics.NormalDist (Wichura's AS241)"
+  }
+}

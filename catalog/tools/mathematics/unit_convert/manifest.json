@@ -1,0 +1,29 @@
+{
+  "name": "unit_convert",
+  "description": "Convert quantities between units with a dimensional check and an exact conversion factor: SI units with all prefixes, units accepted with the SI, and US customary and imperial units from a bundled dated table built from the SI Brochure (9th ed.) and NIST SP 811. Parses compound units (km/h, kg*m/s^2, J/(kg*K), kWh, m²) and converts temperatures in degC, degF, degR and K with their offsets.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "value": {"type": ["number", "string"], "default": 1, "description": "Number or decimal string"},
+      "from": {"type": "string", "maxLength": 200, "description": "Unit expression: names, SI prefixes, * / ^ ( ), juxtaposition, superscripts"},
+      "to": {"type": "string", "maxLength": 200, "description": "Omitted: SI base units"},
+      "temperature": {"type": "string", "enum": ["absolute", "difference"], "default": "absolute", "description": "Bare temperature units: with offsets (absolute) or as intervals"},
+      "precision": {"type": "integer", "minimum": 1, "maximum": 50, "default": 15, "description": "Significant digits when the decimal does not terminate"},
+      "list_units": {"type": "boolean", "description": "List the table's units, prefixes and sources"}
+    }
+  },
+  "program": "python3",
+  "args": ["unit_convert.py"],
+  "files": ["unit_convert.py", "units.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["units", "conversion", "si", "dimensional-analysis", "imperial", "temperature", "exact"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"value": 100, "from": "km/h", "to": "m/s"}, "output": {"result_exact": "250/9", "result": "27.7777777777778", "dimension": "m s^-1"}},
+    "source": "BIPM SI Brochure, 9th ed. (2019, v2.01 2022) Tables 2, 4, 7 and 8; NIST SP 811 (2008) Appendix B; NIST Handbook 44 Appendix C; transcribed by tools/catalog/data/unit_convert.py (dimensional approach as in pint)"
+  }
+}

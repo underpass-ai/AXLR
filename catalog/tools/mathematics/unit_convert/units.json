@@ -1,0 +1,1789 @@
+{
+ "generated": "2026-10-18",
+ "generator": "tools/catalog/data/unit_convert.py",
+ "source": "BIPM SI Brochure, 9th ed. (2019, v2.01 2022); NIST SP 811 (2008) App. B; NIST Handbook 44 App. C; IAU 2012 B2",
+ "dimensions": [
+  "m",
+  "kg",
+  "s",
+  "A",
+  "K",
+  "mol",
+  "cd"
+ ],
+ "prefixes": {
+  "Q": "1000000000000000000000000000000",
+  "R": "1000000000000000000000000000",
+  "Y": "1000000000000000000000000",
+  "Z": "1000000000000000000000",
+  "E": "1000000000000000000",
+  "P": "1000000000000000",
+  "T": "1000000000000",
+  "G": "1000000000",
+  "M": "1000000",
+  "k": "1000",
+  "h": "100",
+  "da": "10",
+  "d": "1/10",
+  "c": "1/100",
+  "m": "1/1000",
+  "µ": "1/1000000",
+  "μ": "1/1000000",
+  "u": "1/1000000",
+  "n": "1/1000000000",
+  "p": "1/1000000000000",
+  "f": "1/1000000000000000",
+  "a": "1/1000000000000000000",
+  "z": "1/1000000000000000000000",
+  "y": "1/1000000000000000000000000",
+  "r": "1/1000000000000000000000000000",
+  "q": "1/1000000000000000000000000000000"
+ },
+ "temperatures": {
+  "K": {
+   "scale": "1",
+   "offset": "0"
+  },
+  "degC": {
+   "scale": "1",
+   "offset": "273.15"
+  },
+  "degF": {
+   "scale": "5/9",
+   "offset": "459.67"
+  },
+  "degR": {
+   "scale": "5/9",
+   "offset": "0"
+  }
+ },
+ "units": {
+  "m": {
+   "factor": "1",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "metre",
+    "meter"
+   ],
+   "definition": "SI base unit of length",
+   "source": "SI Brochure 9th ed. (2019), Table 2",
+   "exact": true
+  },
+  "g": {
+   "factor": "1/1000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "gram"
+   ],
+   "definition": "1/1000 kg (the kilogram is the SI base unit; prefixes attach to the gram)",
+   "source": "SI Brochure 9th ed. (2019), Table 2",
+   "exact": true
+  },
+  "s": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "second"
+   ],
+   "definition": "SI base unit of time",
+   "source": "SI Brochure 9th ed. (2019), Table 2",
+   "exact": true
+  },
+  "A": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    0,
+    1,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "ampere"
+   ],
+   "definition": "SI base unit of electric current",
+   "source": "SI Brochure 9th ed. (2019), Table 2",
+   "exact": true
+  },
+  "K": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "kelvin"
+   ],
+   "definition": "SI base unit of thermodynamic temperature",
+   "source": "SI Brochure 9th ed. (2019), Table 2",
+   "exact": true
+  },
+  "mol": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    1,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "mole"
+   ],
+   "definition": "SI base unit of amount of substance",
+   "source": "SI Brochure 9th ed. (2019), Table 2",
+   "exact": true
+  },
+  "cd": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "prefixable": true,
+   "aliases": [
+    "candela"
+   ],
+   "definition": "SI base unit of luminous intensity",
+   "source": "SI Brochure 9th ed. (2019), Table 2",
+   "exact": true
+  },
+  "rad": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "radian"
+   ],
+   "definition": "m/m",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "sr": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "steradian"
+   ],
+   "definition": "m2/m2",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "Hz": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    -1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "hertz"
+   ],
+   "definition": "s-1",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "N": {
+   "factor": "1",
+   "dimension": [
+    1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "newton"
+   ],
+   "definition": "kg m s-2",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "Pa": {
+   "factor": "1",
+   "dimension": [
+    -1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "pascal"
+   ],
+   "definition": "N/m2",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "J": {
+   "factor": "1",
+   "dimension": [
+    2,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "joule"
+   ],
+   "definition": "N m",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "W": {
+   "factor": "1",
+   "dimension": [
+    2,
+    1,
+    -3,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "watt"
+   ],
+   "definition": "J/s",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "C": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "coulomb"
+   ],
+   "definition": "A s",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "V": {
+   "factor": "1",
+   "dimension": [
+    2,
+    1,
+    -3,
+    -1,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "volt"
+   ],
+   "definition": "W/A",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "F": {
+   "factor": "1",
+   "dimension": [
+    -2,
+    -1,
+    4,
+    2,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "farad"
+   ],
+   "definition": "C/V",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "ohm": {
+   "factor": "1",
+   "dimension": [
+    2,
+    1,
+    -3,
+    -2,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "Ω",
+    "Ω"
+   ],
+   "definition": "V/A",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "S": {
+   "factor": "1",
+   "dimension": [
+    -2,
+    -1,
+    3,
+    2,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "siemens"
+   ],
+   "definition": "A/V",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "Wb": {
+   "factor": "1",
+   "dimension": [
+    2,
+    1,
+    -2,
+    -1,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "weber"
+   ],
+   "definition": "V s",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "T": {
+   "factor": "1",
+   "dimension": [
+    0,
+    1,
+    -2,
+    -1,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "tesla"
+   ],
+   "definition": "Wb/m2",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "H": {
+   "factor": "1",
+   "dimension": [
+    2,
+    1,
+    -2,
+    -2,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "henry"
+   ],
+   "definition": "Wb/A",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "lm": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "prefixable": true,
+   "aliases": [
+    "lumen"
+   ],
+   "definition": "cd sr",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "lx": {
+   "factor": "1",
+   "dimension": [
+    -2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    1
+   ],
+   "prefixable": true,
+   "aliases": [
+    "lux"
+   ],
+   "definition": "lm/m2",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "Bq": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    -1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "becquerel"
+   ],
+   "definition": "s-1",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "Gy": {
+   "factor": "1",
+   "dimension": [
+    2,
+    0,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "gray"
+   ],
+   "definition": "J/kg",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "Sv": {
+   "factor": "1",
+   "dimension": [
+    2,
+    0,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "sievert"
+   ],
+   "definition": "J/kg",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "kat": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    -1,
+    0,
+    0,
+    1,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "katal"
+   ],
+   "definition": "mol/s",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "degC": {
+   "factor": "1",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "°C",
+    "celsius"
+   ],
+   "definition": "degree Celsius: t/°C = T/K - 273.15; as a difference 1 °C = 1 K",
+   "source": "SI Brochure 9th ed. (2019), Table 4",
+   "exact": true
+  },
+  "min": {
+   "factor": "60",
+   "dimension": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "minute"
+   ],
+   "definition": "60 s",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": true
+  },
+  "h": {
+   "factor": "3600",
+   "dimension": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "hour"
+   ],
+   "definition": "60 min = 3600 s",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": true
+  },
+  "d": {
+   "factor": "86400",
+   "dimension": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "day"
+   ],
+   "definition": "24 h = 86400 s",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": true
+  },
+  "wk": {
+   "factor": "604800",
+   "dimension": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "week"
+   ],
+   "definition": "7 d",
+   "source": "7 days of 86400 s",
+   "exact": true
+  },
+  "yr": {
+   "factor": "31557600",
+   "dimension": [
+    0,
+    0,
+    1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "year",
+    "a"
+   ],
+   "definition": "Julian year, 365.25 d",
+   "source": "IAU; NIST SP 811 (2008), App. B.9 (year, 365.25 d)",
+   "exact": true
+  },
+  "au": {
+   "factor": "149597870700",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "astronomical_unit"
+   ],
+   "definition": "149 597 870 700 m",
+   "source": "SI Brochure 9th ed. (2019), Table 8 (IAU 2012 Resolution B2)",
+   "exact": true
+  },
+  "ly": {
+   "factor": "9460730472580800",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "light_year"
+   ],
+   "definition": "c x Julian year = 9 460 730 472 580 800 m",
+   "source": "IAU; c from SI Brochure 9th ed. (2019)",
+   "exact": true
+  },
+  "ha": {
+   "factor": "10000",
+   "dimension": [
+    2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "hectare"
+   ],
+   "definition": "1 hm2 = 10^4 m2",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": true
+  },
+  "L": {
+   "factor": "1/1000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "l",
+    "litre",
+    "liter"
+   ],
+   "definition": "1 dm3 = 10^-3 m3",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": true
+  },
+  "t": {
+   "factor": "1000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "tonne"
+   ],
+   "definition": "10^3 kg",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": true
+  },
+  "eV": {
+   "factor": "801088317/5000000000000000000000000000",
+   "dimension": [
+    2,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "electronvolt"
+   ],
+   "definition": "e x 1 V, e = 1.602176634e-19 C exactly",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": true
+  },
+  "angstrom": {
+   "factor": "1/10000000000",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "Å",
+    "Å"
+   ],
+   "definition": "10^-10 m",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "bar": {
+   "factor": "100000",
+   "dimension": [
+    -1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [],
+   "definition": "10^5 Pa",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "in": {
+   "factor": "127/5000",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "inch"
+   ],
+   "definition": "0.0254 m exactly",
+   "source": "NIST SP 811 (2008), App. B.8; 1959 agreement",
+   "exact": true
+  },
+  "ft": {
+   "factor": "381/1250",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "foot",
+    "feet"
+   ],
+   "definition": "12 in = 0.3048 m exactly",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "yd": {
+   "factor": "1143/1250",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "yard"
+   ],
+   "definition": "3 ft = 0.9144 m exactly",
+   "source": "NIST SP 811 (2008), App. B.8; 1959 agreement",
+   "exact": true
+  },
+  "mi": {
+   "factor": "201168/125",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "mile"
+   ],
+   "definition": "5280 ft = 1609.344 m exactly (international mile)",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "nmi": {
+   "factor": "1852",
+   "dimension": [
+    1,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "nautical_mile"
+   ],
+   "definition": "1852 m exactly",
+   "source": "NIST SP 811 (2008), App. B.8; SI Brochure 9th ed. (2019), Table 8 note",
+   "exact": true
+  },
+  "acre": {
+   "factor": "316160658/78125",
+   "dimension": [
+    2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [],
+   "definition": "43 560 ft2 = 4046.8564224 m2 (international foot)",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "lb": {
+   "factor": "45359237/100000000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "pound"
+   ],
+   "definition": "avoirdupois pound, 0.45359237 kg exactly",
+   "source": "NIST SP 811 (2008), App. B.8; 1959 agreement",
+   "exact": true
+  },
+  "oz": {
+   "factor": "45359237/1600000000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "ounce"
+   ],
+   "definition": "lb/16 = 28.349523125 g",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "st": {
+   "factor": "317514659/50000000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "stone"
+   ],
+   "definition": "14 lb",
+   "source": "NIST Handbook 44 (2024), App. C",
+   "exact": true
+  },
+  "ton": {
+   "factor": "45359237/50000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "short_ton"
+   ],
+   "definition": "short ton, 2000 lb",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "long_ton": {
+   "factor": "317514659/312500",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [],
+   "definition": "long ton, 2240 lb",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "gr": {
+   "factor": "6479891/100000000000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "grain"
+   ],
+   "definition": "lb/7000 = 64.79891 mg",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "ozt": {
+   "factor": "19439673/625000000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "troy_ounce"
+   ],
+   "definition": "480 gr = 31.1034768 g",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "ct": {
+   "factor": "1/5000",
+   "dimension": [
+    0,
+    1,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "carat"
+   ],
+   "definition": "metric carat, 200 mg",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "gal": {
+   "factor": "473176473/125000000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "gallon",
+    "us_gal"
+   ],
+   "definition": "US gallon, 231 in3 = 3.785411784 L",
+   "source": "NIST SP 811 (2008), App. B.8; NIST Handbook 44 (2024), App. C",
+   "exact": true
+  },
+  "qt": {
+   "factor": "473176473/500000000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "quart"
+   ],
+   "definition": "US liquid quart, gal/4",
+   "source": "NIST Handbook 44 (2024), App. C",
+   "exact": true
+  },
+  "pt": {
+   "factor": "473176473/1000000000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "pint"
+   ],
+   "definition": "US liquid pint, gal/8",
+   "source": "NIST Handbook 44 (2024), App. C",
+   "exact": true
+  },
+  "cup": {
+   "factor": "473176473/2000000000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [],
+   "definition": "US cup, gal/16 = 8 fl oz",
+   "source": "NIST Handbook 44 (2024), App. C",
+   "exact": true
+  },
+  "floz": {
+   "factor": "473176473/16000000000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "fl_oz",
+    "fluid_ounce"
+   ],
+   "definition": "US fluid ounce, gal/128",
+   "source": "NIST SP 811 (2008), App. B.8; NIST Handbook 44 (2024), App. C",
+   "exact": true
+  },
+  "tbsp": {
+   "factor": "473176473/32000000000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "tablespoon"
+   ],
+   "definition": "US tablespoon, fl oz/2",
+   "source": "NIST Handbook 44 (2024), App. C",
+   "exact": true
+  },
+  "tsp": {
+   "factor": "157725491/32000000000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "teaspoon"
+   ],
+   "definition": "US teaspoon, fl oz/6",
+   "source": "NIST Handbook 44 (2024), App. C",
+   "exact": true
+  },
+  "bbl": {
+   "factor": "9936705933/62500000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "barrel"
+   ],
+   "definition": "oil barrel, 42 US gal",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "imp_gal": {
+   "factor": "454609/100000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "imperial_gallon"
+   ],
+   "definition": "imperial gallon, 4.54609 L exactly",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "imp_pt": {
+   "factor": "454609/800000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "imperial_pint"
+   ],
+   "definition": "imperial pint, imp gal/8",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "imp_floz": {
+   "factor": "454609/16000000000",
+   "dimension": [
+    3,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "imperial_fluid_ounce"
+   ],
+   "definition": "imperial fluid ounce, imp gal/160",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "gn": {
+   "factor": "196133/20000",
+   "dimension": [
+    1,
+    0,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "g0",
+    "standard_gravity"
+   ],
+   "definition": "standard acceleration of gravity, 9.80665 m/s2",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "lbf": {
+   "factor": "8896443230521/2000000000000",
+   "dimension": [
+    1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "pound_force"
+   ],
+   "definition": "lb x g_n = 4.4482216152605 N",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "kgf": {
+   "factor": "196133/20000",
+   "dimension": [
+    1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "kilogram_force"
+   ],
+   "definition": "kg x g_n = 9.80665 N",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "psi": {
+   "factor": "8896443230521/1290320000",
+   "dimension": [
+    -1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [],
+   "definition": "lbf/in2",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "atm": {
+   "factor": "101325",
+   "dimension": [
+    -1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "atmosphere"
+   ],
+   "definition": "standard atmosphere, 101 325 Pa",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "torr": {
+   "factor": "20265/152",
+   "dimension": [
+    -1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "Torr"
+   ],
+   "definition": "atm/760",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "mmHg": {
+   "factor": "26664477483/200000000",
+   "dimension": [
+    -1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [],
+   "definition": "conventional millimetre of mercury, 133.322387415 Pa",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "inHg": {
+   "factor": "3386388640341/1000000000",
+   "dimension": [
+    -1,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [],
+   "definition": "conventional inch of mercury, 25.4 mmHg",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "cal": {
+   "factor": "523/125",
+   "dimension": [
+    2,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "calorie"
+   ],
+   "definition": "thermochemical calorie, 4.184 J exactly",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "cal_IT": {
+   "factor": "10467/2500",
+   "dimension": [
+    2,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [],
+   "definition": "International Table calorie, 4.1868 J exactly",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "Btu": {
+   "factor": "52752792631/50000000",
+   "dimension": [
+    2,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "BTU",
+    "btu"
+   ],
+   "definition": "International Table Btu, 1055.05585262 J",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "Wh": {
+   "factor": "3600",
+   "dimension": [
+    2,
+    1,
+    -2,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "watt_hour"
+   ],
+   "definition": "W x h = 3600 J",
+   "source": "SI Brochure 9th ed. (2019), Table 8 (hour)",
+   "exact": true
+  },
+  "Ah": {
+   "factor": "3600",
+   "dimension": [
+    0,
+    0,
+    1,
+    1,
+    0,
+    0,
+    0
+   ],
+   "prefixable": true,
+   "aliases": [
+    "amp_hour"
+   ],
+   "definition": "A x h = 3600 C",
+   "source": "SI Brochure 9th ed. (2019), Table 8 (hour)",
+   "exact": true
+  },
+  "hp": {
+   "factor": "37284993579113511/50000000000000",
+   "dimension": [
+    2,
+    1,
+    -3,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "horsepower"
+   ],
+   "definition": "mechanical horsepower, 550 ft lbf/s = 745.69987158227022 W",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "hp_metric": {
+   "factor": "588399/800",
+   "dimension": [
+    2,
+    1,
+    -3,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "PS"
+   ],
+   "definition": "metric horsepower, 75 kgf m/s = 735.49875 W",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "mph": {
+   "factor": "1397/3125",
+   "dimension": [
+    1,
+    0,
+    -1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [],
+   "definition": "mi/h",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "kn": {
+   "factor": "463/900",
+   "dimension": [
+    1,
+    0,
+    -1,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "knot"
+   ],
+   "definition": "nmi/h",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "percent": {
+   "factor": "1/100",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "%"
+   ],
+   "definition": "1/100",
+   "source": "ISO 80000-1",
+   "exact": true
+  },
+  "ppm": {
+   "factor": "1/1000000",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [],
+   "definition": "10^-6",
+   "source": "ISO 80000-1",
+   "exact": true
+  },
+  "degF": {
+   "factor": "5/9",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "°F",
+    "fahrenheit"
+   ],
+   "definition": "degree Fahrenheit: T/K = (t/°F + 459.67) x 5/9; as a difference 5/9 K",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "degR": {
+   "factor": "5/9",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    1,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "°R",
+    "rankine"
+   ],
+   "definition": "degree Rankine, 5/9 K",
+   "source": "NIST SP 811 (2008), App. B.8",
+   "exact": true
+  },
+  "deg": {
+   "factor": null,
+   "factor_decimal": "0.01745329251994329576923690768488612713442871888542",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "°",
+    "degree"
+   ],
+   "definition": "pi/180 rad",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": false
+  },
+  "arcmin": {
+   "factor": null,
+   "factor_decimal": "0.00029088820866572159615394846141476878557381198142",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "′"
+   ],
+   "definition": "(1/60) degree",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": false
+  },
+  "arcsec": {
+   "factor": null,
+   "factor_decimal": "0.00000484813681109535993589914102357947975956353302",
+   "dimension": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "prefixable": false,
+   "aliases": [
+    "″"
+   ],
+   "definition": "(1/60) arcmin",
+   "source": "SI Brochure 9th ed. (2019), Table 8",
+   "exact": false
+  }
+ }
+}

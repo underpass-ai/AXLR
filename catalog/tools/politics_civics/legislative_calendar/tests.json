@@ -1,0 +1,302 @@
+[
+ {
+  "name": "hand-built October-November 2026 calendar (Tue-Thu sittings, recess 12-16 Oct, 28 Oct cancelled): six rules checked by hand on the real 2026 calendar",
+  "input": {
+   "calendar": {
+    "start": "2026-10-01",
+    "end": "2026-11-30",
+    "sitting_weekdays": [
+     2,
+     3,
+     4
+    ],
+    "recesses": [
+     {
+      "start": "2026-10-12",
+      "end": "2026-10-16",
+      "name": "October recess"
+     }
+    ],
+    "non_sitting_days": [
+     "2026-10-28"
+    ]
+   },
+   "events": {
+    "publication": "2026-10-01",
+    "debate": "2026-11-05"
+   },
+   "rules": [
+    {
+     "name": "amendments",
+     "from": "publication",
+     "count": 6
+    },
+    {
+     "name": "committee_report",
+     "from": "amendments",
+     "count": 4
+    },
+    {
+     "name": "objection",
+     "from": "publication",
+     "count": 15,
+     "unit": "calendar_days",
+     "roll": "next_sitting_day"
+    },
+    {
+     "name": "government_view",
+     "from": "publication",
+     "count": 15,
+     "unit": "calendar_days_excluding_recess"
+    },
+    {
+     "name": "notice",
+     "from": "debate",
+     "count": 2,
+     "direction": "before"
+    },
+    {
+     "name": "too_far",
+     "from": "publication",
+     "count": 30
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "calendar": {
+     "sitting_days": 21
+    },
+    "deadlines": [
+     {
+      "name": "amendments",
+      "deadline": "2026-10-22",
+      "weekday": "Thursday"
+     },
+     {
+      "name": "committee_report",
+      "from_date": "2026-10-22",
+      "deadline": "2026-11-04",
+      "weekday": "Wednesday"
+     },
+     {
+      "name": "objection",
+      "unrolled": "2026-10-16",
+      "deadline": "2026-10-20"
+     },
+     {
+      "name": "government_view",
+      "recess_days_skipped": 5,
+      "deadline": "2026-10-21"
+     },
+     {
+      "name": "notice",
+      "deadline": "2026-11-03"
+     },
+     {
+      "name": "too_far",
+      "deadline": null,
+      "note": "the count runs past the end of the calendar given"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "include_start counts a sitting publication day as day one (October 2026)",
+  "input": {
+   "calendar": {
+    "start": "2026-10-01",
+    "end": "2026-11-30",
+    "sitting_weekdays": [
+     2,
+     3,
+     4
+    ],
+    "recesses": [
+     {
+      "start": "2026-10-12",
+      "end": "2026-10-16",
+      "name": "October recess"
+     }
+    ],
+    "non_sitting_days": [
+     "2026-10-28"
+    ]
+   },
+   "events": {
+    "publication": "2026-10-01"
+   },
+   "rules": [
+    {
+     "name": "amendments",
+     "from": "publication",
+     "count": 6,
+     "include_start": true
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "deadlines": [
+     {
+      "deadline": "2026-10-21"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "explicit sitting-day list, calendar day deadline left in a recess is flagged",
+  "input": {
+   "calendar": {
+    "sitting_days": [
+     "2026-10-06",
+     "2026-10-07",
+     "2026-10-20",
+     "2026-10-21"
+    ],
+    "recesses": [
+     {
+      "start": "2026-10-12",
+      "end": "2026-10-16",
+      "name": "October recess"
+     }
+    ]
+   },
+   "events": {
+    "filed": "2026-10-06"
+   },
+   "rules": [
+    {
+     "name": "second_reading",
+     "from": "filed",
+     "count": 2
+    },
+    {
+     "name": "comments",
+     "from": "filed",
+     "count": 8,
+     "unit": "calendar_days"
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "deadlines": [
+     {
+      "deadline": "2026-10-20"
+     },
+     {
+      "deadline": "2026-10-14",
+      "is_sitting_day": false,
+      "in_recess": "October recess"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "rules that depend on each other",
+  "input": {
+   "calendar": {
+    "start": "2026-10-01",
+    "end": "2026-11-30",
+    "sitting_weekdays": [
+     2,
+     3,
+     4
+    ],
+    "recesses": [
+     {
+      "start": "2026-10-12",
+      "end": "2026-10-16",
+      "name": "October recess"
+     }
+    ],
+    "non_sitting_days": [
+     "2026-10-28"
+    ]
+   },
+   "events": {},
+   "rules": [
+    {
+     "name": "a",
+     "from": "b",
+     "count": 1
+    },
+    {
+     "name": "b",
+     "from": "a",
+     "count": 1
+    }
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "cycle"
+  }
+ },
+ {
+  "name": "unknown starting point",
+  "input": {
+   "calendar": {
+    "start": "2026-10-01",
+    "end": "2026-11-30",
+    "sitting_weekdays": [
+     2,
+     3,
+     4
+    ],
+    "recesses": [
+     {
+      "start": "2026-10-12",
+      "end": "2026-10-16",
+      "name": "October recess"
+     }
+    ],
+    "non_sitting_days": [
+     "2026-10-28"
+    ]
+   },
+   "events": {},
+   "rules": [
+    {
+     "name": "a",
+     "from": "publication",
+     "count": 1
+    }
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "neither an event nor a rule"
+  }
+ },
+ {
+  "name": "calendar without sittings",
+  "input": {
+   "calendar": {
+    "start": "2026-10-01",
+    "end": "2026-10-31"
+   },
+   "events": {
+    "x": "2026-10-01"
+   },
+   "rules": [
+    {
+     "name": "a",
+     "from": "x",
+     "count": 1
+    }
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "calendar needs"
+  }
+ }
+]

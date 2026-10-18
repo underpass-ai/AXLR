@@ -1,0 +1,12 @@
+[
+  {"name": "Wikipedia Margin of error: n = 1000 at 95 % gives about 3.1 points (z 1.95996)", "input": {"n": 1000}, "expect": {"exit": 0, "stdout_contains": "\"z\": 1.959964, \"n\": 1000, \"p\": 0.5, \"standard_error\": 0.015811, \"margin_of_error\": 0.03099, \"margin_of_error_points\": 3.1"}},
+  {"name": "99 % and 90 % quantiles match statistics.NormalDist: 2.575829 and 1.644854", "input": {"confidence": 99, "n": 500, "p": 0.3, "population": 2000}, "expect": {"exit": 0, "stdout_json": {"z": 2.575829, "finite_population_correction": 0.866242, "margin_of_error_points": 4.57}}},
+  {"name": "90 % with n = 100", "input": {"confidence": "90%", "n": 100}, "expect": {"exit": 0, "stdout_json": {"z": 1.644854, "margin_of_error": 0.082243}}},
+  {"name": "far tail of the quantile (Acklam's upper branch) matches statistics.NormalDist 4.753424", "input": {"confidence": 0.999998, "n": 1000}, "expect": {"exit": 0, "stdout_contains": "\"z\": 4.753424"}},
+  {"name": "sample size for plus or minus 3 points at 95 %: 1068, and 965 out of 10000", "input": {"margin": "3%", "population": 10000}, "expect": {"exit": 0, "stdout_json": {"required_sample_size": {"infinite_population": 1068, "n": 965}}}},
+  {"name": "48 vs 44 with n = 1000: lead margin 5.94 points, not significant", "input": {"n": 1000, "p1": 0.48, "p2": 0.44}, "expect": {"exit": 0, "stdout_json": {"lead": {"lead_points": 4.0, "standard_error": 0.030305, "margin_of_error_points": 5.94, "significant": false, "p_value": 0.186865}}}},
+  {"name": "50 vs 40 with n = 1000 is significant", "input": {"n": 1000, "p1": "50%", "p2": "40%"}, "expect": {"exit": 0, "stdout_json": {"lead": {"lead": 0.1, "significant": true, "margin_of_error_points": 5.85}}}},
+  {"name": "lead without n", "input": {"p1": 0.5, "p2": 0.4}, "expect": {"exit": 2, "stdout_contains": "needs n"}},
+  {"name": "shares over 100 %", "input": {"n": 100, "p1": 0.7, "p2": 0.5}, "expect": {"exit": 2, "stdout_contains": "add up to at most 1"}},
+  {"name": "nothing to compute", "input": {"confidence": 0.95}, "expect": {"exit": 2, "stdout_contains": "give n"}}
+]

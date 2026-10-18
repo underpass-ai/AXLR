@@ -1,0 +1,37 @@
+{
+  "name": "sampling_plan",
+  "description": "Survey sample sizes: how many respondents to estimate a proportion or a mean to a given margin of error and confidence, with the finite-population correction, a design effect and the expected response rate; and the split of a total sample across strata by proportional, Neyman or equal allocation, rounded to add up. Plus or minus 5 points at 95 % is 385.",
+  "input_schema": {
+    "type": "object",
+    "required": ["target"],
+    "additionalProperties": false,
+    "properties": {
+      "target": {"type": "string", "enum": ["proportion", "mean", "stratified"]},
+      "margin": {"type": ["number", "string"], "description": "Margin of error: a proportion (0.05) for proportion, data units for mean"},
+      "confidence": {"type": ["number", "string"], "default": 0.95},
+      "z": {"type": ["number", "string"], "description": "Fixed z instead of the normal quantile of confidence, e.g. 1.96"},
+      "p": {"type": ["number", "string"], "default": 0.5, "description": "Expected proportion"},
+      "sd": {"type": ["number", "string"], "description": "Expected standard deviation (mean)"},
+      "distribution": {"type": "string", "enum": ["z", "t"], "default": "z", "description": "mean: iterate on Student's t"},
+      "population": {"type": "integer", "minimum": 1, "description": "Population size for the finite-population correction"},
+      "design_effect": {"type": ["number", "string"], "default": 1},
+      "response_rate": {"type": ["number", "string"], "default": 1, "description": "Expected share who respond, 0 to 1"},
+      "n": {"type": "integer", "minimum": 1, "description": "Total sample to allocate (stratified)"},
+      "strata": {"type": "array", "minItems": 2, "items": {"type": "object", "required": ["size"], "additionalProperties": false, "properties": {"name": {"type": "string"}, "size": {"type": "integer", "minimum": 1}, "sd": {"type": ["number", "string"]}}}},
+      "method": {"type": "string", "enum": ["proportional", "neyman", "equal"], "default": "proportional"}
+    }
+  },
+  "program": "python3",
+  "args": ["sampling_plan.py"],
+  "files": ["sampling_plan.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["sampling", "sample-size", "survey", "margin-of-error", "stratification", "neyman"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"target": "proportion", "margin": 0.05, "population": 10000}, "output": {"n": 370, "n0": 384.145882069}},
+    "source": "W. G. Cochran, Sampling Techniques, 3rd ed. (1977), ch. 4 (sample size, finite-population correction) and ch. 5 (Neyman allocation); checked against the table of R. V. Krejcie and D. W. Morgan, Educational and Psychological Measurement 30 (1970)"
+  }
+}

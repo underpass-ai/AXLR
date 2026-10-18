@@ -1,0 +1,281 @@
+[
+ {
+  "name": "Wikipedia Tennessee capital example: Chattanooga then Nashville out, Knoxville wins 58 to 42",
+  "input": {
+   "ballots": [
+    {
+     "ranking": [
+      "Memphis",
+      "Nashville",
+      "Chattanooga",
+      "Knoxville"
+     ],
+     "count": 42
+    },
+    {
+     "ranking": [
+      "Nashville",
+      "Chattanooga",
+      "Knoxville",
+      "Memphis"
+     ],
+     "count": 26
+    },
+    {
+     "ranking": [
+      "Chattanooga",
+      "Knoxville",
+      "Nashville",
+      "Memphis"
+     ],
+     "count": 15
+    },
+    {
+     "ranking": [
+      "Knoxville",
+      "Chattanooga",
+      "Nashville",
+      "Memphis"
+     ],
+     "count": 17
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "winner": "Knoxville",
+    "elimination_order": [
+     "Chattanooga",
+     "Nashville"
+    ],
+    "rounds": [
+     {
+      "round": 1,
+      "tally": {
+       "Memphis": 42,
+       "Nashville": 26,
+       "Knoxville": 17,
+       "Chattanooga": 15
+      },
+      "eliminated": "Chattanooga"
+     },
+     {
+      "round": 2,
+      "tally": {
+       "Memphis": 42,
+       "Knoxville": 32,
+       "Nashville": 26
+      },
+      "eliminated": "Nashville"
+     },
+     {
+      "round": 3,
+      "tally": {
+       "Knoxville": 58,
+       "Memphis": 42
+      }
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "tie for fewest broken by first preferences, exhausted ballots leave the majority base",
+  "input": {
+   "ballots": [
+    {
+     "ranking": [
+      "A"
+     ],
+     "count": 5
+    },
+    {
+     "ranking": [
+      "B"
+     ],
+     "count": 3
+    },
+    {
+     "ranking": [
+      "C"
+     ],
+     "count": 4
+    },
+    {
+     "ranking": [
+      "D",
+      "B"
+     ],
+     "count": 1
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "winner": "A",
+    "elimination_order": [
+     "D",
+     "B"
+    ],
+    "rounds": [
+     {
+      "round": 1,
+      "exhausted": 0
+     },
+     {
+      "round": 2,
+      "tally": {
+       "A": 5,
+       "B": 4,
+       "C": 4
+      },
+      "tie": {
+       "between": [
+        "B",
+        "C"
+       ],
+       "eliminated": "B",
+       "resolved_by": "first preferences"
+      }
+     },
+     {
+      "round": 3,
+      "tally": {
+       "A": 5,
+       "C": 4
+      },
+      "continuing_votes": 9,
+      "exhausted": 4
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "unbreakable tie follows tie_order",
+  "input": {
+   "ballots": [
+    {
+     "ranking": [
+      "A"
+     ],
+     "count": 4
+    },
+    {
+     "ranking": [
+      "B",
+      "A"
+     ],
+     "count": 2
+    },
+    {
+     "ranking": [
+      "C",
+      "B"
+     ],
+     "count": 2
+    },
+    {
+     "ranking": [
+      "D",
+      "A"
+     ],
+     "count": 3
+    }
+   ],
+   "tie_order": [
+    "B",
+    "C",
+    "D",
+    "A"
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "winner": "A",
+    "elimination_order": [
+     "B"
+    ],
+    "rounds": [
+     {
+      "round": 1,
+      "tie": {
+       "between": [
+        "B",
+        "C"
+       ],
+       "eliminated": "B",
+       "resolved_by": "tie_order (unresolved by the counts)"
+      }
+     },
+     {
+      "round": 2,
+      "tally": {
+       "A": 6,
+       "D": 3,
+       "C": 2
+      },
+      "continuing_votes": 11
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "two-way final tie is reported, not broken",
+  "input": {
+   "ballots": [
+    [
+     "A",
+     "B"
+    ],
+    [
+     "B",
+     "A"
+    ]
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "winner": null,
+    "tied_winners": [
+     "A",
+     "B"
+    ],
+    "round_count": 1
+   }
+  }
+ },
+ {
+  "name": "tied ranking rejected",
+  "input": {
+   "ballots": [
+    [
+     "A",
+     [
+      "B",
+      "C"
+     ]
+    ]
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "strict rankings"
+  }
+ },
+ {
+  "name": "no ballots",
+  "input": {
+   "ballots": []
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "ballots must be"
+  }
+ }
+]

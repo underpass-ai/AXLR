@@ -1,0 +1,32 @@
+{
+  "name": "seat_allocation_droop",
+  "description": "Allocate seats among parties by largest remainder with a Droop, Hagenbach-Bischoff, Imperiali or Hare quota, with an optional electoral threshold. Exact arithmetic; reports each party's quotient and remainder, ties at the cut, and seats taken back when a quota hands out more seats than exist.",
+  "input_schema": {
+    "type": "object",
+    "required": ["seats", "votes"],
+    "additionalProperties": false,
+    "properties": {
+      "seats": {"type": "integer", "minimum": 1, "description": "Seats to allocate"},
+      "votes": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Votes per party"},
+      "quota": {"type": "string", "enum": ["droop", "hagenbach_bischoff", "imperiali", "hare"], "default": "droop", "description": "droop = floor(V/(S+1))+1, hagenbach_bischoff = V/(S+1), imperiali = V/(S+2), hare = V/S"},
+      "threshold": {"type": "number", "minimum": 0, "maximum": 99, "default": 0, "description": "Minimum share of valid votes, in percent, to receive seats"},
+      "on_overallocation": {"type": "string", "enum": ["smallest_remainders", "error"], "default": "smallest_remainders", "description": "When whole quotas exceed the seats: take seats back from the smallest remainders, or fail"}
+    }
+  },
+  "program": "python3",
+  "args": ["seat_allocation_droop.py"],
+  "files": ["seat_allocation_droop.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": ["elections", "droop", "imperiali", "hagenbach-bischoff", "largest-remainder", "proportional"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"seats": 10, "votes": {"Yellows": 47000, "Whites": 16000, "Reds": 15800, "Greens": 12000, "Blues": 6100, "Pinks": 3100}},
+      "output": {"quota": "9091", "remainder_seats": ["Whites", "Reds"], "allocation": {"Yellows": 5, "Whites": 2, "Reds": 2, "Greens": 1, "Blues": 0, "Pinks": 0}}
+    },
+    "source": "original; quotas as defined in Gallagher & Mitchell, The Politics of Electoral Systems (2005), appendix A, checked against Wikipedia's Largest remainder method example"
+  }
+}

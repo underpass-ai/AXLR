@@ -1,0 +1,46 @@
+{
+  "name": "gdpr_ropa_template",
+  "description": "Build a GDPR Article 30 record of processing activities for a controller (Art. 30(1)(a)-(g)) or a processor (Art. 30(2)(a)-(d)): the article's items, the record filled with what the input gives per processing activity, the mandatory fields still missing and the 'where applicable' or 'where possible' ones, as JSON and as a Markdown table, in English or Spanish. Not legal advice.",
+  "input_schema": {
+    "type": "object",
+    "required": ["role"],
+    "additionalProperties": false,
+    "properties": {
+      "role": {"type": "string", "enum": ["controller", "processor"]},
+      "language": {"type": "string", "enum": ["en", "es"], "default": "en"},
+      "organisation": {"type": "object", "additionalProperties": false, "properties": {
+        "name": {"type": "string"}, "contact": {"type": "string"}, "representative": {"type": "string"}, "dpo": {"type": "string"},
+        "joint_controller": {"type": "string"}}},
+      "activities": {"type": "array", "items": {"type": "object", "additionalProperties": false, "properties": {
+        "name": {"type": "string"},
+        "purposes": {"type": ["string", "array"], "items": {"type": "string"}},
+        "data_subjects": {"type": ["string", "array"], "items": {"type": "string"}},
+        "data_categories": {"type": ["string", "array"], "items": {"type": "string"}},
+        "recipients": {"type": ["string", "array"], "items": {"type": "string"}},
+        "transfers": {"type": ["string", "array"], "items": {"type": "string"}},
+        "erasure_time_limits": {"type": ["string", "array"], "items": {"type": "string"}},
+        "security_measures": {"type": ["string", "array"], "items": {"type": "string"}},
+        "legal_basis": {"type": ["string", "array"], "items": {"type": "string"}, "description": "Controller; recommended, not required by Art. 30"},
+        "joint_controller": {"type": "string"},
+        "controller": {"type": "string", "description": "Processor: the controller acted for, name and contact"},
+        "processing_categories": {"type": ["string", "array"], "items": {"type": "string"}, "description": "Processor"},
+        "notes": {"type": "string"}}}}
+    }
+  },
+  "program": "python3",
+  "args": ["gdpr_ropa_template.py"],
+  "files": ["gdpr_ropa_template.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "law",
+    "tags": ["gdpr", "rgpd", "ropa", "data-protection", "privacy", "compliance", "template"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"role": "controller", "organisation": {"name": "Acme SL", "contact": "privacy@acme.example"}, "activities": [{"name": "CCTV"}]},
+      "output": {"article": "30(1)", "complete": false, "missing_mandatory": [{"activity": "CCTV", "item": "30(1)(b)", "field": "purposes", "requirement": "mandatory"}, {"activity": "CCTV", "item": "30(1)(c)", "field": "data_subjects", "requirement": "mandatory"}, {"activity": "CCTV", "item": "30(1)(c)", "field": "data_categories", "requirement": "mandatory"}, {"activity": "CCTV", "item": "30(1)(d)", "field": "recipients", "requirement": "mandatory"}]}
+    },
+    "source": "original; Regulation (EU) 2016/679 (GDPR) Art. 30 in its English and Spanish Official Journal texts; LOPDGDD art. 31.2 for the Spanish public-sector note"
+  }
+}
