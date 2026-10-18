@@ -1,0 +1,106 @@
+{
+  "name": "poll_margin_error",
+  "description": "Margin of error of a poll proportion at any confidence level, with finite-population correction and design effect; the sample size needed for a target margin; and whether the lead between two candidates in the same poll exceeds sampling error, using the multinomial variance of the difference.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "confidence": {
+        "type": [
+          "number",
+          "string"
+        ],
+        "default": 0.95,
+        "description": "0.95, 95 or \"95%\""
+      },
+      "n": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Sample size"
+      },
+      "p": {
+        "type": [
+          "number",
+          "string"
+        ],
+        "default": 0.5,
+        "description": "Proportion, 0.52 or \"52%\"; 0.5 gives the widest margin"
+      },
+      "population": {
+        "type": "integer",
+        "minimum": 1,
+        "description": "Population size for the finite-population correction"
+      },
+      "design_effect": {
+        "type": [
+          "number",
+          "string"
+        ],
+        "default": 1,
+        "description": "Variance inflation from weighting or clustering"
+      },
+      "margin": {
+        "type": [
+          "number",
+          "string"
+        ],
+        "description": "Target margin of error, 0.03 or \"3%\", for the required sample size"
+      },
+      "p1": {
+        "type": [
+          "number",
+          "string"
+        ],
+        "description": "First candidate's share in the poll"
+      },
+      "p2": {
+        "type": [
+          "number",
+          "string"
+        ],
+        "description": "Second candidate's share in the same poll"
+      }
+    }
+  },
+  "program": "python3",
+  "args": [
+    "poll_margin_error.py"
+  ],
+  "files": [
+    "poll_margin_error.py"
+  ],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": [
+      "polling",
+      "margin-of-error",
+      "sample-size",
+      "survey",
+      "confidence-interval",
+      "statistics"
+    ],
+    "license": "MIT",
+    "requires": {
+      "program_min_version": "3.10",
+      "packages": []
+    },
+    "network": false,
+    "example": {
+      "input": {
+        "n": 1000,
+        "p1": 0.48,
+        "p2": 0.44
+      },
+      "output": {
+        "z": 1.959964,
+        "lead": {
+          "lead_points": 4.0,
+          "margin_of_error_points": 5.94,
+          "significant": false
+        }
+      }
+    },
+    "source": "original; normal quantile by P. J. Acklam's algorithm with a Halley refinement; finite-population correction and design effect as in Kish, Survey Sampling (1965); lead variance from the multinomial covariance of two shares; checked against Wikipedia's Margin of error article and Python's statistics.NormalDist"
+  }
+}

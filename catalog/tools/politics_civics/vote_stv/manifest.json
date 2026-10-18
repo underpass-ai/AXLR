@@ -1,0 +1,37 @@
+{
+  "name": "vote_stv",
+  "description": "Count a single transferable vote election with the Droop quota and Gregory fractional surplus transfers in exact fractions: every round's tallies, transfer values, exhausted votes, elections and exclusions, with a stated tie rule (fewest first preferences, then earlier rounds, then a lot order you supply).",
+  "input_schema": {
+    "type": "object",
+    "required": ["seats", "ballots"],
+    "additionalProperties": false,
+    "properties": {
+      "seats": {"type": "integer", "minimum": 1, "description": "Seats to fill; fewer than the candidates"},
+      "ballots": {"type": "array", "minItems": 1, "description": "Each a strict ranking (list of names, may stop early) or {ranking, count}", "items": {
+        "anyOf": [
+          {"type": "array", "items": {"type": "string"}},
+          {"type": "object", "required": ["ranking"], "additionalProperties": false, "properties": {
+            "ranking": {"type": "array", "items": {"type": "string"}},
+            "count": {"type": "integer", "minimum": 0, "default": 1}}}
+        ]}},
+      "candidates": {"type": "array", "items": {"type": "string"}, "description": "Every candidate, including any no ballot ranks; default the names on the ballots"},
+      "tie_order": {"type": "array", "items": {"type": "string"}, "description": "Order in which candidates lose a tie the counts cannot break (e.g. a drawing of lots); default the reverse candidate order"}
+    }
+  },
+  "program": "python3",
+  "args": ["vote_stv.py"],
+  "files": ["vote_stv.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": ["elections", "stv", "single-transferable-vote", "droop", "gregory", "proportional", "ranked-choice"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"seats": 2, "ballots": [{"ranking": ["A", "B"], "count": 8}, {"ranking": ["A", "C"], "count": 4}, {"ranking": ["B"], "count": 1}, {"ranking": ["C"], "count": 2}, {"ranking": ["D", "C"], "count": 3}]},
+      "output": {"quota": "7", "elected": ["A", "C"], "excluded": ["D", "B"], "round_count": 4}
+    },
+    "source": "original; weighted inclusive Gregory method as in the Scottish Local Government Elections Order 2007 (transfer value = surplus x value / votes), without its five-decimal truncation; checked against Wikipedia's Single transferable vote example"
+  }
+}

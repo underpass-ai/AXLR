@@ -1,0 +1,138 @@
+{
+  "name": "vote_irv",
+  "description": "Count an instant-runoff (single-winner ranked-choice) election round by round: each round's tally, exhausted ballots and the majority base, who is eliminated and why, with a stated tie rule (fewest first preferences, then earlier rounds, then a lot order you supply). Final ties are reported, not broken.",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "ballots"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "ballots": {
+        "type": "array",
+        "minItems": 1,
+        "description": "Each a strict ranking (list of names, may stop early) or {ranking, count}",
+        "items": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "object",
+              "required": [
+                "ranking"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "ranking": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 1
+                }
+              }
+            }
+          ]
+        }
+      },
+      "candidates": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Every candidate, including any no ballot ranks; default the names on the ballots"
+      },
+      "tie_order": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Order in which candidates lose a tie the counts cannot break (e.g. a drawing of lots); default the reverse candidate order"
+      }
+    }
+  },
+  "program": "python3",
+  "args": [
+    "vote_irv.py"
+  ],
+  "files": [
+    "vote_irv.py"
+  ],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": [
+      "elections",
+      "instant-runoff",
+      "ranked-choice",
+      "irv",
+      "alternative-vote",
+      "preferential"
+    ],
+    "license": "MIT",
+    "requires": {
+      "program_min_version": "3.10",
+      "packages": []
+    },
+    "network": false,
+    "example": {
+      "input": {
+        "ballots": [
+          {
+            "ranking": [
+              "Memphis",
+              "Nashville",
+              "Chattanooga",
+              "Knoxville"
+            ],
+            "count": 42
+          },
+          {
+            "ranking": [
+              "Nashville",
+              "Chattanooga",
+              "Knoxville",
+              "Memphis"
+            ],
+            "count": 26
+          },
+          {
+            "ranking": [
+              "Chattanooga",
+              "Knoxville",
+              "Nashville",
+              "Memphis"
+            ],
+            "count": 15
+          },
+          {
+            "ranking": [
+              "Knoxville",
+              "Chattanooga",
+              "Nashville",
+              "Memphis"
+            ],
+            "count": 17
+          }
+        ]
+      },
+      "output": {
+        "winner": "Knoxville",
+        "round_count": 3,
+        "elimination_order": [
+          "Chattanooga",
+          "Nashville"
+        ]
+      }
+    },
+    "source": "original; instant-runoff counting as described in Wikipedia's Instant-runoff voting article, checked against the Tennessee capital example of Wikipedia's voting-method articles (Borda count, Ranked pairs, Combined approval voting)"
+  }
+}

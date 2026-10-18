@@ -1,0 +1,203 @@
+[
+ {
+  "name": "hand-checked two-year budget: totals, per capita, shares and the 2024 to 2025 changes",
+  "input": {
+   "csv": "programme,amount,year,population\nEducation,1200000.00,2024,50000\nHealth,900000.00,2024,50000\nRoads,400000.00,2024,50000\nCulture,100000.00,2024,50000\nEducation,1260000.00,2025,52000\nHealth,990000.00,2025,52000\nRoads,350000.00,2025,52000\nHousing,200000.00,2025,52000\n",
+   "top": 3
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "years": [
+     "2024",
+     "2025"
+    ],
+    "by_year": [
+     {
+      "year": "2024",
+      "total": "2600000.00",
+      "population": "50000",
+      "per_capita": "52.00",
+      "programmes": [
+       {
+        "programme": "Education",
+        "share_percent": "46.15",
+        "per_capita": "24.00"
+       },
+       {
+        "programme": "Health",
+        "share_percent": "34.62"
+       },
+       {
+        "programme": "Roads",
+        "share_percent": "15.38"
+       },
+       {
+        "programme": "Culture",
+        "share_percent": "3.85"
+       }
+      ]
+     },
+     {
+      "year": "2025",
+      "total": "2800000.00",
+      "per_capita": "53.85",
+      "top": [
+       {
+        "programme": "Education",
+        "share_percent": "45.00"
+       },
+       {
+        "programme": "Health",
+        "share_percent": "35.36"
+       },
+       {
+        "programme": "Roads",
+        "share_percent": "12.50"
+       }
+      ]
+     }
+    ],
+    "year_over_year": [
+     {
+      "total_change": "200000.00",
+      "total_change_percent": "7.69",
+      "per_capita_change": "1.85",
+      "per_capita_change_percent": "3.55",
+      "programmes": [
+       {
+        "programme": "Housing",
+        "change_percent": null,
+        "status": "new"
+       },
+       {
+        "programme": "Health",
+        "change_percent": "10.00"
+       },
+       {
+        "programme": "Education",
+        "change_percent": "5.00"
+       },
+       {
+        "programme": "Roads",
+        "change": "-50000.00",
+        "change_percent": "-12.50"
+       },
+       {
+        "programme": "Culture",
+        "change_percent": "-100.00",
+        "status": "dropped"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "Spanish headers, semicolons and decimal commas; repeated programme rows are summed",
+  "input": {
+   "csv": "Programa;Importe\nSanidad;1.234,50\nEducación;2.000\nSanidad;765,50\n",
+   "columns": {
+    "programme": "Programa",
+    "amount": "Importe"
+   },
+   "decimal_comma": true,
+   "population": 1000
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "years": [
+     "all"
+    ],
+    "by_year": [
+     {
+      "total": "4000.00",
+      "per_capita": "4.00",
+      "programmes": [
+       {
+        "programme": "Educación",
+        "amount": "2000.00"
+       },
+       {
+        "programme": "Sanidad",
+        "amount": "2000.00",
+        "share_percent": "50.00"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "population per year from the input overrides the column",
+  "input": {
+   "csv": "programme,amount,year\nA,\"1,000\",2024\nA,1500,2025\n",
+   "population": {
+    "2024": 10,
+    "2025": 12
+   }
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "by_year": [
+     {
+      "per_capita": "100.00"
+     },
+     {
+      "per_capita": "125.00"
+     }
+    ],
+    "year_over_year": [
+     {
+      "total_change_percent": "50.00",
+      "per_capita_change_percent": "25.00"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "stray field from a decimal comma without decimal_comma",
+  "input": {
+   "csv": "programme,amount\nA,1,5\n"
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "more fields than the header"
+  }
+ },
+ {
+  "name": "amount that is not a number",
+  "input": {
+   "csv": "programme,amount\nA,ten\n"
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "is not an amount"
+  }
+ },
+ {
+  "name": "missing amount column",
+  "input": {
+   "csv": "programme,cost\nA,1\n"
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "amount column"
+  }
+ },
+ {
+  "name": "conflicting population in one year",
+  "input": {
+   "csv": "programme,amount,year,population\nA,1,2024,10\nB,1,2024,11\n"
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "differs from"
+  }
+ }
+]
