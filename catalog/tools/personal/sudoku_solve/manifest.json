@@ -1,0 +1,27 @@
+{
+  "name": "sudoku_solve",
+  "description": "Solve sudoku puzzles of size 4x4, 6x6, 9x9 and 16x16 by constraint propagation and backtracking search, report whether the givens are invalid, unsolvable or have more than one solution (showing two and where they differ), and give a difficulty hint from the human techniques needed (singles, locked candidates, naked pairs, or search).",
+  "input_schema": {
+    "type": "object",
+    "required": ["grid"],
+    "additionalProperties": false,
+    "properties": {
+      "grid": {"type": ["string", "array"], "description": "N*N symbols row by row, \".\" or \"0\" for empty; or a list of rows (strings or lists of numbers, 0 or null for empty). 16x16 uses 1-9 then A-G"},
+      "size": {"type": "integer", "enum": [4, 6, 9, 16], "description": "Default: from the number of cells"},
+      "max_nodes": {"type": "integer", "minimum": 1, "maximum": 2000000, "default": 200000, "description": "Search limit"}
+    }
+  },
+  "program": "python3",
+  "args": ["sudoku_solve.py"],
+  "files": ["sudoku_solve.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["sudoku", "puzzle", "solver", "constraint-propagation", "backtracking", "games"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"grid": "53..7....6..195....98....6.8...6...34..8.3..17...2...6.6....28....419..5....8..79"}, "output": {"status": "solved", "unique": true, "solution": ["534678912", "672195348", "198342567", "859761423", "426853791", "713924856", "961537284", "287419635", "345286179"]}},
+    "source": "original; constraint propagation with naked and hidden singles and minimum-remaining-values search as described by Peter Norvig, 'Solving Every Sudoku Puzzle' (2006); technique names from the standard solving literature"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "chess_fen_validate",
+  "description": "Validate a chess position given in Forsyth-Edwards Notation (FEN): the six fields, piece and pawn counts, one king each, no pawns on the back ranks, castling rights consistent with the king and rook squares, a plausible en-passant square, the move counters, and that the side not to move is not in check; returns every problem found, a board diagram, who is in check and the material count.",
+  "input_schema": {
+    "type": "object",
+    "required": ["fen"],
+    "additionalProperties": false,
+    "properties": {
+      "fen": {"type": "string", "maxLength": 200},
+      "strict_en_passant": {"type": "boolean", "default": false, "description": "Require that an en-passant capture is actually possible (newer convention)"},
+      "unicode": {"type": "boolean", "default": false, "description": "Diagram with chess symbols"}
+    }
+  },
+  "program": "python3",
+  "args": ["chess_fen_validate.py"],
+  "files": ["chess_fen_validate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["chess", "fen", "validation", "board-games", "notation", "games"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"fen": "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1"}, "output": {"valid": true, "side_to_move": "black", "en_passant": {"square": "e3", "captured_pawn": "e4", "capture_possible_from": []}, "errors": []}},
+    "source": "FEN as specified in the Portable Game Notation Specification and Implementation Guide (Steven J. Edwards, 1994), section 16.1; legality rules of the FIDE Laws of Chess"
+  }
+}

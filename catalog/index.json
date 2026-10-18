@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog": "axlr",
-  "generated_at": "2026-10-18T08:55:19Z",
+  "generated_at": "2026-10-18T09:35:59Z",
   "tools": [
     {
       "name": "business_days",
@@ -948,6 +948,32 @@
       }
     },
     {
+      "name": "fx_convert",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "currency",
+        "exchange-rates",
+        "ecb",
+        "fx",
+        "euro",
+        "conversion"
+      ],
+      "summary": "Convert an amount between currencies with the European Central Bank's euro foreign exchange reference rates: the latest daily rates or a date in the last 90 days, cross rates through the euro, Decimal arithmetic, the rate date and the ECB's information-only notice in every answer.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": true,
+      "license": "MIT",
+      "manifest": "tools/finance/fx_convert/manifest.json",
+      "manifest_sha256": "1f387e93fe98bfb01839c26952c4c4f155a495966470f96608de85a7181ae294",
+      "files": {
+        "fx_convert.py": "ef02a9e81a9eb5a59427308d87c201761f899e6b5b990c71cb212cd5d0432e49"
+      }
+    },
+    {
       "name": "inflation_adjust",
       "version": "1.0.0",
       "category": "finance",
@@ -1643,6 +1669,36 @@
       }
     },
     {
+      "name": "pinyin_convert",
+      "version": "1.0.0",
+      "category": "language",
+      "tags": [
+        "chinese",
+        "mandarin",
+        "pinyin",
+        "romanization",
+        "hanzi",
+        "unihan",
+        "tones"
+      ],
+      "summary": "Convert Chinese characters to Hanyu Pinyin with tone marks (zhōng), tone numbers (zhong1) or no tones, from bundled Unihan readings: the 8105 characters of the Table of General Standard Chinese Characters plus every other code point with a kMandarin reading (44 355 in all).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/pinyin_convert/manifest.json",
+      "manifest_sha256": "3466147f2263bd4b62f173b0bdc2b2458ada7198f68246562cb11a130b00e91b",
+      "files": {
+        "pinyin_convert.py": "54c641a5251d9bab51b54a0e682205c9bb1c3dc18ca014975c387f19ae41ee5e",
+        "readings_core.txt": "bb1e20325d689193083553e8b307ce6b56e401a45d3fbf7fdd539ef8e4230f2c",
+        "readings_ext_1.txt": "712b4be649263721b807bec70de1fdbc509455417c95c62eb3e484224e7ebee1",
+        "readings_ext_2.txt": "56abadaad51db84af70951684434da23a876ca76c625c5c12f6f11b1ce3f799e"
+      }
+    },
+    {
       "name": "tokenize_text",
       "version": "1.0.0",
       "category": "language",
@@ -2308,6 +2364,32 @@
       }
     },
     {
+      "name": "qr_generate",
+      "version": "1.0.0",
+      "category": "media",
+      "tags": [
+        "qr-code",
+        "barcode",
+        "svg",
+        "iso-18004",
+        "reed-solomon",
+        "encoder"
+      ],
+      "summary": "Encode text as a QR Code (ISO/IEC 18004, versions 1-40) and return it as SVG, as a text rendering and as the module matrix in rows of 0/1.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/media/qr_generate/manifest.json",
+      "manifest_sha256": "b30ded24e0869e3d6e1b1f9c84a5c8bc0362024b69a73f4a19a5a585cbe15b2d",
+      "files": {
+        "qr_generate.py": "63910754eb4139bb6e58a286fa3ad1af69ea2efeb94ea7f2e2066381962a997c"
+      }
+    },
+    {
       "name": "srt_tools",
       "version": "1.0.0",
       "category": "media",
@@ -2358,6 +2440,325 @@
       "manifest_sha256": "c5f5547b763e98b1bf92b6c605f4cd04d8fc1251fa181eb418abb3118f205266",
       "files": {
         "wav_info.py": "717900bbfcb3e096ec59dce349e307eacf7347b551e616fd3d08e0d156a933ec"
+      }
+    },
+    {
+      "name": "beam_load",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "engineering",
+        "statics",
+        "beam",
+        "bending-moment",
+        "shear",
+        "deflection"
+      ],
+      "summary": "Simply supported (with optional overhangs) and cantilever beams under point loads, uniform and linearly varying distributed loads: reactions, shear and bending moment at given points, their extremes, and with E and I the slope and deflection and the maximum deflection, by exact integration of the elastic curve; single standard cases are cross-checked against the beam-table formulas.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/beam_load/manifest.json",
+      "manifest_sha256": "b2d87705f49777851206e3befea2f9db5cdb41814b5cf0c43a39365cf4889d55",
+      "files": {
+        "beam_load.py": "f9ccf5bd3f42fbf51ced4a48688fc140078e61dbf1792da10a77f88a3c71365b"
+      }
+    },
+    {
+      "name": "chess_fen_validate",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "chess",
+        "fen",
+        "validation",
+        "board-games",
+        "notation",
+        "games"
+      ],
+      "summary": "Validate a chess position given in Forsyth-Edwards Notation (FEN): the six fields, piece and pawn counts, one king each, no pawns on the back ranks, castling rights consistent with the king and rook squares, a plausible en-passant square, the move counters, and that the side not to move is not in check; returns every problem found, a board diagram, who is in check and the material count.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/chess_fen_validate/manifest.json",
+      "manifest_sha256": "d4bd9048a64106a75d1430d4ebcb76d4882c91f3252cfd76e7a95b93800b3bf3",
+      "files": {
+        "chess_fen_validate.py": "e61337ab73908e132c85b8eccb1f7985024c55735eee3b9c85ed2388ff9aa236"
+      }
+    },
+    {
+      "name": "cooking_unit_convert",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "cooking",
+        "kitchen",
+        "units",
+        "conversion",
+        "baking",
+        "oven-temperature",
+        "gas-mark"
+      ],
+      "summary": "Kitchen unit conversion: cups, tablespoons, teaspoons, fluid ounces, pints and millilitres under a stated cup definition (US customary 236.588 mL, US legal 240 mL, metric 250 mL, UK 284 mL); grams, ounces and pounds; volume to weight by a given density in g/mL (or the bundled ingredient table: water now, USDA FoodData Central rows when the generator's fetch succeeds); oven temperatures in °C, °F and gas marks (UK table and exact scale).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/cooking_unit_convert/manifest.json",
+      "manifest_sha256": "f0372d2a3310bd88a9a14cc5fa82346dfbe116cbd76ac8a3d780a8a3a7f43e30",
+      "files": {
+        "cooking_unit_convert.py": "e14125bd10150aa6ba792f70c3c48438b3ee965f0b11d17f2645531c83465de4",
+        "cooking.json": "c0cbf5e1e22df51561608023b0d5b45e2cb7236e87e507f3bf8a960cb37fb632"
+      }
+    },
+    {
+      "name": "dice_roll_seeded",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "dice",
+        "probability",
+        "tabletop",
+        "games",
+        "random",
+        "distribution",
+        "exact"
+      ],
+      "summary": "Dice notation (NdM+K, several terms, keep/drop highest or lowest, exploding dice, d%, Fudge dice): a reproducible roll with random.Random(seed) showing every die, and the exact probability distribution of the total by convolution in fractions, with mean, variance, mode and the chance of reaching a target.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/dice_roll_seeded/manifest.json",
+      "manifest_sha256": "aec8d296b9f874cd6782ec9b158cac1e2d0f701b1857da0a62329d00baad5cc6",
+      "files": {
+        "dice_roll_seeded.py": "aa4634cef681919c415cbfc31b839d9070b025cc688572e6d04ce50040e7f2df"
+      }
+    },
+    {
+      "name": "eisenhower_matrix",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "productivity",
+        "prioritization",
+        "tasks",
+        "planning",
+        "eisenhower",
+        "markdown"
+      ],
+      "summary": "Sort tasks into the Eisenhower matrix (do, schedule, delegate, eliminate) from urgent/important flags, 1-5 scores with thresholds, or due dates counted from a given today, and return an action plan ordered by quadrant, due date and effort, with the reason for each placement, as JSON and a Markdown table.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/eisenhower_matrix/manifest.json",
+      "manifest_sha256": "25a8daf203f774b4593c1891877ef77edca3b253a2d7028940154af089b8746b",
+      "files": {
+        "eisenhower_matrix.py": "4f9d013dc2784c671859ca04421fecd59199d9a55f9bbefb7d543494706c8ff8"
+      }
+    },
+    {
+      "name": "habit_streaks",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "habits",
+        "streaks",
+        "tracking",
+        "calendar",
+        "productivity",
+        "self-improvement"
+      ],
+      "summary": "Habit tracking from a log of dates: current and longest streaks, completion rates over chosen windows, missed days and this week's progress, for daily, weekday, chosen-weekday or N-times-per-week (ISO week) habits, all counted relative to an as_of date given in the input so results are reproducible.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/habit_streaks/manifest.json",
+      "manifest_sha256": "d75671f9942fab2390f59c638545133b74a4ce4ab217c8fae0e99d1e8b042e30",
+      "files": {
+        "habit_streaks.py": "88d21dd6fdd3e8e66d9ad0f886d932512d19099348f305924d43ec2e2176c6ce"
+      }
+    },
+    {
+      "name": "ohms_law",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "electronics",
+        "ohms-law",
+        "resistors",
+        "voltage-divider",
+        "led",
+        "circuits",
+        "exact"
+      ],
+      "summary": "Ohm's law and simple resistor circuits in exact fractions: solve voltage, current, resistance and power from any two; reduce series/parallel networks written as nested expressions (\"100 + (220 || 330) + 1k\"); unloaded and loaded voltage dividers; LED series resistors.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/ohms_law/manifest.json",
+      "manifest_sha256": "0a728fea070010b2195ea4638cec6f31e78d0a7e2714bb6d1b58e995e55a7441",
+      "files": {
+        "ohms_law.py": "2869636cbb9e311e4610f9c32ab965a8909f26be1f3f385688364bc29836b083"
+      }
+    },
+    {
+      "name": "recipe_scale",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "cooking",
+        "recipe",
+        "scaling",
+        "fractions",
+        "kitchen",
+        "servings"
+      ],
+      "summary": "Scale a recipe's ingredient list by servings, by a factor or to a target amount of one ingredient, in exact fractions: reads quantities like 1 1/2, ½, 2-3 and units (cups, tbsp, tsp, fl oz, g, kg, oz, lb, ml, l, pinches, cans), gives the exact scaled amount and a measurable one (cups to 1/4 or 1/3, tbsp to 1/2, tsp to 1/8, grams whole), moves small cup amounts to spoons and flags fractional eggs.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/recipe_scale/manifest.json",
+      "manifest_sha256": "21c421aaf68262077d84727d04bff92ca5c690b76e3f72b09d5d553f714bf877",
+      "files": {
+        "recipe_scale.py": "cc115b7c7b6a59f2179ed98fb1ab33aa7e6b6c8e0c116a052b5f4b8ae57db456"
+      }
+    },
+    {
+      "name": "resistor_color",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "electronics",
+        "resistor",
+        "color-code",
+        "e-series",
+        "iec-60062",
+        "iec-60063"
+      ],
+      "summary": "Resistor colour code per IEC 60062: decode 3, 4, 5 or 6 bands into resistance, tolerance, limits and temperature coefficient, or encode a value (4700, \"4k7\", \"R47\", \"10 kΩ\") into its 4-, 5- and 6-band codes; find the nearest standard value in the E3 to E192 series of IEC 60063 and which series a value belongs to.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/resistor_color/manifest.json",
+      "manifest_sha256": "75014e3d3e2421e70fa2ca6d1de9dea78b9b17d47c57e943598779df3b820ba7",
+      "files": {
+        "resistor_color.py": "1e0ac77d8d9c9233800d6dc39d07128aa3f253b9675abdbcea54fb2b6dbaacc3",
+        "codes.json": "3e1a22a9572b48f10268bd8db241f6333579261aac44658ff862599fdcb647a3"
+      }
+    },
+    {
+      "name": "sudoku_solve",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "sudoku",
+        "puzzle",
+        "solver",
+        "constraint-propagation",
+        "backtracking",
+        "games"
+      ],
+      "summary": "Solve sudoku puzzles of size 4x4, 6x6, 9x9 and 16x16 by constraint propagation and backtracking search, report whether the givens are invalid, unsolvable or have more than one solution (showing two and where they differ), and give a difficulty hint from the human techniques needed (singles, locked candidates, naked pairs, or search).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/sudoku_solve/manifest.json",
+      "manifest_sha256": "311a0881dcf9bb3859954e6fde474d9d4a707730643676ee0535c98b82355651",
+      "files": {
+        "sudoku_solve.py": "c060b7e4571f372d4ee29aa56c9ca852907244d7629df7d7ef5337747aeca968"
+      }
+    },
+    {
+      "name": "unit_price_compare",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "shopping",
+        "unit-price",
+        "groceries",
+        "deals",
+        "units",
+        "comparison"
+      ],
+      "summary": "Compare the price per unit of several offers with different sizes and units (g, kg, oz, lb; ml, l, US and imperial fl oz, pints, gallons; items and dozens), multipacks and deals such as \"3 for 2\", \"2 for 5.00\", \"buy 2 get 1 free\" or percent off: ranks them, names the cheapest per unit and what each other offer costs extra.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/unit_price_compare/manifest.json",
+      "manifest_sha256": "07eee16fd113c9e97f4a4e41cd58e1ebadb69c163480ed90b7f048f114c4f466",
+      "files": {
+        "unit_price_compare.py": "9dbb52e7f8b9c4a37171b38dd359846b23e51a4968712cc91192357a4e3ec762",
+        "units.json": "be2dc6642b54362a049f7bc8694c75bba186f538f56de7cea05cdeaaac5776d2"
+      }
+    },
+    {
+      "name": "wordle_helper",
+      "version": "1.0.0",
+      "category": "personal",
+      "tags": [
+        "wordle",
+        "word-games",
+        "puzzle",
+        "entropy",
+        "information-theory",
+        "games"
+      ],
+      "summary": "Wordle helper: score a guess against an answer with the game's rule for repeated letters, filter a word list by the green/yellow/grey feedback of earlier guesses, and rank the next guesses by expected information (entropy of the feedback pattern) or letter frequency.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/personal/wordle_helper/manifest.json",
+      "manifest_sha256": "d1149b0ef51bb8fad146e17afcb7dc37fda055861db93e9073d48cb194501954",
+      "files": {
+        "wordle_helper.py": "0322ba3f2aaf059f39fd27f71a57c299082fef4599a53cbffad83c0b2a417c0f",
+        "words5.txt": "444d271327493fb37ba8a1771f6eaecae31f498f3a5010e61607ba629b7c397a"
       }
     },
     {
@@ -2965,6 +3366,33 @@
       }
     },
     {
+      "name": "arxiv_lookup",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "arxiv",
+        "preprints",
+        "papers",
+        "metadata",
+        "search",
+        "atom",
+        "bibliography"
+      ],
+      "summary": "Search arXiv or fetch papers by id through the arXiv API and return each entry's id and version, title, authors and affiliations, abstract, submission and update dates, categories, comment, journal reference, DOI and abs/PDF links.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": true,
+      "license": "MIT",
+      "manifest": "tools/research/arxiv_lookup/manifest.json",
+      "manifest_sha256": "0096881e89cc3aefb5d8093eb5b33aa93240a9a5abb535e736e528e422e34f2c",
+      "files": {
+        "arxiv_lookup.py": "9c9910fad71db62d77cd2aadaad85c688b2c2c28d72d48d933e68892f6d41b9e"
+      }
+    },
+    {
       "name": "bibtex_tools",
       "version": "1.0.0",
       "category": "research",
@@ -3124,6 +3552,33 @@
       "manifest_sha256": "45d9b16dff80f2a94ad0b86b2da630a7d27bcadb60e194ac9d9be73259be5fd6",
       "files": {
         "doi_isbn_validate.py": "e7e73c3e9a727bcc4d0eab5c05910a2b30064e12bc2227587c9eed64d33ea400"
+      }
+    },
+    {
+      "name": "doi_lookup",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "doi",
+        "crossref",
+        "citation",
+        "metadata",
+        "apa",
+        "csl",
+        "bibliography"
+      ],
+      "summary": "Look up a DOI's metadata in the Crossref REST API and return it as CSL-JSON-like fields (title, authors, container, issued date, volume, issue, pages, DOI, URL, type, publisher) with an APA 7 reference in plain text and HTML.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": true,
+      "license": "MIT",
+      "manifest": "tools/research/doi_lookup/manifest.json",
+      "manifest_sha256": "7b348fcbf13415f087ee00d2b386d11f00b81072a6f64fbf191c213e1e5dfa5f",
+      "files": {
+        "doi_lookup.py": "2cf0fa6ea177ebb44ea72ada88e9063233dd408123ea228b4477bb650e1190af"
       }
     },
     {

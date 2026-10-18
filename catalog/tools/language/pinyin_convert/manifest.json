@@ -1,0 +1,31 @@
+{
+  "name": "pinyin_convert",
+  "description": "Convert Chinese characters to Hanyu Pinyin with tone marks (zhōng), tone numbers (zhong1) or no tones, from bundled Unihan readings: the 8105 characters of the Table of General Standard Chinese Characters plus every other code point with a kMandarin reading (44 355 in all). Each character gets Unihan's primary reading and lists its alternatives; optional tone sandhi for 一, 不 and third tones, apostrophes when syllables are joined, capitals. No word segmentation.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "minLength": 1, "maxLength": 100000, "description": "Chinese text; characters without a reading are copied unchanged"},
+      "style": {"type": "string", "enum": ["marks", "numbers", "none"], "default": "marks"},
+      "separator": {"type": "string", "maxLength": 10, "default": " ", "description": "Between syllables of a run of Hanzi; with \"\" an apostrophe goes before a syllable starting with a, e or o"},
+      "capitalize": {"type": "boolean", "default": false, "description": "Upper-case the first letter of each run of Hanzi"},
+      "sandhi": {"type": "boolean", "default": false, "description": "Apply the tone sandhi of 一, 不 and runs of third tones"},
+      "umlaut": {"type": "string", "enum": ["ü", "v", "u:"], "default": "ü", "description": "How ü is written in the numbers and none styles"},
+      "neutral_five": {"type": "boolean", "default": false, "description": "Write the neutral tone as 5 in the numbers style"}
+    }
+  },
+  "program": "python3",
+  "args": ["pinyin_convert.py"],
+  "files": ["pinyin_convert.py", "readings_core.txt", "readings_ext_1.txt", "readings_ext_2.txt"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "language",
+    "tags": ["chinese", "mandarin", "pinyin", "romanization", "hanzi", "unihan", "tones"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "你好"}, "output": {"pinyin": "nǐ hǎo", "syllables": [{"char": "你", "pinyin": "nǐ"}, {"char": "好", "pinyin": "hǎo", "alternatives": ["hào"]}]}},
+    "source": "Unicode Han Database (UAX #38, Unicode 18.0.0): kMandarin, kTGH, kTGHZ2013, kXHC1983, kHanyuPinyin, Unicode License v3, bundled by tools/catalog/data/pinyin_convert.py; tone-mark placement and apostrophe per GB/T 16159-2012; stdlib replacement for python-pinyin (pypinyin, MIT) without its phrase dictionary"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "arxiv_lookup",
+  "description": "Search arXiv or fetch papers by id through the arXiv API and return each entry's id and version, title, authors and affiliations, abstract, submission and update dates, categories, comment, journal reference, DOI and abs/PDF links. Ids in new (1706.03762v7) or old (hep-th/9711200) form, or a query in arXiv syntax (ti:, au:, abs:, cat:, AND/OR/ANDNOT), up to 50 results. One HTTPS request per call, 15 s timeout, no key; pass the Atom body as response to parse it offline.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "id_list": {"type": ["array", "string"], "items": {"type": "string"}, "maxItems": 50, "description": "arXiv ids, with or without version or arXiv: prefix"},
+      "search_query": {"type": "string", "minLength": 1, "maxLength": 1000, "description": "arXiv query syntax, e.g. au:vaswani AND ti:attention"},
+      "max_results": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Default 10, or the number of ids when only id_list is given"},
+      "start": {"type": "integer", "minimum": 0, "maximum": 30000, "default": 0},
+      "sort_by": {"type": "string", "enum": ["relevance", "lastUpdatedDate", "submittedDate"]},
+      "sort_order": {"type": "string", "enum": ["ascending", "descending"]},
+      "response": {"type": "string", "maxLength": 5000000, "description": "The exact Atom text the API returned (offline or cached use); no request is made"}
+    }
+  },
+  "program": "python3",
+  "args": ["arxiv_lookup.py"],
+  "files": ["arxiv_lookup.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["arxiv", "preprints", "papers", "metadata", "search", "atom", "bibliography"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": true,
+    "example": {"input": {"id_list": ["1706.03762"]}, "output": {"total_results": 1, "entries": [{"id": "1706.03762", "version": 7, "title": "Attention Is All You Need", "published": "2017-06-12T17:57:34Z", "primary_category": "cs.CL"}]}},
+    "source": "arXiv API User's Manual (https://info.arxiv.org/help/api/user-manual.html): query interface at https://export.arxiv.org/api/query, Atom 1.0 response with the arxiv and opensearch extensions, terms of use asking for one request every three seconds"
+  }
+}

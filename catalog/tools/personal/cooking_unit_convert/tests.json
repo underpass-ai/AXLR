@@ -1,0 +1,16 @@
+[
+  {"name": "NIST Handbook 44: 1 US tablespoon = 1/2 US fl oz = 14.78676478125 mL (14.7868)", "input": {"value": 1, "from": "tbsp", "to": "ml"}, "expect": {"exit": 0, "stdout_json": {"result": "14.7868", "exact": "473176473/32000000"}}},
+  {"name": "UK cookery table: gas mark 4 = 180 °C (350 °F; exactly 176.667 °C)", "input": {"value": 4, "from": "gas_mark", "to": "C"}, "expect": {"exit": 0, "stdout_json": {"result": "180", "fahrenheit": "350", "exact_celsius_from_fahrenheit": "176.667"}}},
+  {"name": "21 CFR 101.9(b)(5)(viii): the US legal cup is 240 mL and its tablespoon 15 mL", "input": {"value": 1, "from": "cup", "to": "tbsp", "system": "us_legal"}, "expect": {"exit": 0, "stdout_json": {"result": "16", "definitions": {"cup (us_legal)": "240 mL", "tbsp (us_legal)": "15 mL"}}}},
+  {"name": "UK cup = half an imperial pint = 284.130625 mL", "input": {"value": 1, "from": "uk_cup", "to": "ml"}, "expect": {"exit": 0, "stdout_json": {"result": "284.131", "exact": "454609/1600"}}},
+  {"name": "two metric cups (500 mL) are 2.11338 US customary cups", "input": {"value": 2, "from": "metric_cup", "to": "us_cup"}, "expect": {"exit": 0, "stdout_json": {"exact": "1000000000/473176473", "result": "2.11338"}}},
+  {"name": "1 1/2 cups = 24 tablespoons", "input": {"value": "1 1/2", "from": "cups", "to": "tbsp"}, "expect": {"exit": 0, "stdout_json": {"result": "24", "exact": "24"}}},
+  {"name": "NIST: 8 oz avoirdupois = 226.796185 g", "input": {"value": 8, "from": "oz", "to": "g", "digits": 9}, "expect": {"exit": 0, "stdout_json": {"result": "226.796185", "exact": "45359237/200000"}}},
+  {"name": "100 °C = 212 °F", "input": {"value": 100, "from": "°C", "to": "°F"}, "expect": {"exit": 0, "stdout_json": {"result": "212", "exact": "212"}}},
+  {"name": "180 °C is gas mark 4 in the UK table (exact scale 4.24)", "input": {"value": 180, "from": "C", "to": "gas_mark"}, "expect": {"exit": 0, "stdout_json": {"result": "4", "exact_gas_mark": "4.24"}}},
+  {"name": "250 °F is gas mark 1/2", "input": {"value": 250, "from": "F", "to": "gas_mark"}, "expect": {"exit": 0, "stdout_json": {"result": "1/2", "exact_gas_mark": "0.5"}}},
+  {"name": "volume to weight with a given density: 100 mL of oil at 0.92 g/mL is 92 g", "input": {"value": 100, "from": "ml", "to": "g", "density": "0.92"}, "expect": {"exit": 0, "stdout_json": {"result": "92", "density_source": "given in the input"}}},
+  {"name": "bundled water: 1 US cup of water weighs 236.588 g at 1 g/mL", "input": {"value": 1, "from": "cup", "to": "g", "ingredient": "water"}, "expect": {"exit": 0, "stdout_json": {"result": "236.588", "ingredient": "water"}}},
+  {"name": "volume to weight needs a density", "input": {"value": 1, "from": "cup", "to": "g"}, "expect": {"exit": 2, "stdout_contains": "needs ingredient or density"}},
+  {"name": "temperature to volume", "input": {"value": 1, "from": "C", "to": "ml"}, "expect": {"exit": 2, "stdout_contains": "temperatures convert only"}}
+]

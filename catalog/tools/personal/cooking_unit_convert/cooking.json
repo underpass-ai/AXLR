@@ -1,0 +1,149 @@
+{
+ "generated": "2026-10-18",
+ "generator": "tools/catalog/data/cooking_unit_convert.py",
+ "volume_systems": {
+  "us_customary": {
+   "cup": "236.5882365",
+   "tbsp": "14.78676478125",
+   "tsp": "4.92892159375",
+   "fl_oz": "29.5735295625",
+   "pint": "473.176473",
+   "source": "NIST Handbook 44 (2024), Appendix C (US gallon = 231 in^3)"
+  },
+  "us_legal": {
+   "cup": "240",
+   "tbsp": "15",
+   "tsp": "5",
+   "fl_oz": "30",
+   "pint": "480",
+   "source": "21 CFR 101.9(b)(5)(viii) (US nutrition labelling)"
+  },
+  "metric": {
+   "cup": "250",
+   "tbsp": "15",
+   "tsp": "5",
+   "fl_oz": "29.5735295625",
+   "pint": "500",
+   "source": "metric cup of Australia, Canada, New Zealand and South Africa; fl oz is the US one, pint 500 mL"
+  },
+  "uk": {
+   "cup": "284.130625",
+   "tbsp": "15",
+   "tsp": "5",
+   "fl_oz": "28.4130625",
+   "pint": "568.26125",
+   "source": "half imperial pint; imperial gallon 4.54609 L (NIST SP 811 App. B.8, Weights and Measures Act 1985); metric spoons"
+  }
+ },
+ "gas_marks": [
+  {
+   "gas_mark": "1/4",
+   "fahrenheit": 225,
+   "celsius": 110,
+   "description": "very slow / very cool"
+  },
+  {
+   "gas_mark": "1/2",
+   "fahrenheit": 250,
+   "celsius": 120,
+   "description": "very slow / very cool"
+  },
+  {
+   "gas_mark": "1",
+   "fahrenheit": 275,
+   "celsius": 140,
+   "description": "slow / cool"
+  },
+  {
+   "gas_mark": "2",
+   "fahrenheit": 300,
+   "celsius": 150,
+   "description": "slow / cool"
+  },
+  {
+   "gas_mark": "3",
+   "fahrenheit": 325,
+   "celsius": 170,
+   "description": "moderately slow / warm"
+  },
+  {
+   "gas_mark": "4",
+   "fahrenheit": 350,
+   "celsius": 180,
+   "description": "moderate"
+  },
+  {
+   "gas_mark": "5",
+   "fahrenheit": 375,
+   "celsius": 190,
+   "description": "moderately hot"
+  },
+  {
+   "gas_mark": "6",
+   "fahrenheit": 400,
+   "celsius": 200,
+   "description": "moderately hot"
+  },
+  {
+   "gas_mark": "7",
+   "fahrenheit": 425,
+   "celsius": 220,
+   "description": "hot"
+  },
+  {
+   "gas_mark": "8",
+   "fahrenheit": 450,
+   "celsius": 230,
+   "description": "very hot"
+  },
+  {
+   "gas_mark": "9",
+   "fahrenheit": 475,
+   "celsius": 240,
+   "description": "very hot"
+  },
+  {
+   "gas_mark": "10",
+   "fahrenheit": 500,
+   "celsius": 260,
+   "description": "extremely hot"
+  }
+ ],
+ "gas_mark_source": "conventional UK table (BBC Good Food; The Guardian, 2007) as reproduced in Wikipedia, 'Gas mark', retrieved 2026-10-18",
+ "ingredients_source": "USDA FoodData Central, SR Legacy (2018), household-measure portions; public domain (CC0 1.0); fetched with the FDC API",
+ "licence": "NIST and CFR: US Government works, public domain; USDA FoodData Central: CC0 1.0; gas marks: factual values",
+ "ingredients": {
+  "water": {
+   "aliases": [
+    "tap water"
+   ],
+   "fdc_id": null,
+   "description": "water (by definition, about 1 g/mL)",
+   "grams_per_us_cup": "236.5882365",
+   "density_g_per_ml": "1.000000",
+   "density_basis": "1 mL = 1 g (water near 4 degC)"
+  }
+ },
+ "not_fetched": {
+  "all-purpose flour": "FDC 168894: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "bread flour": "FDC 168896: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "whole wheat flour": "FDC 168944: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "granulated sugar": "FDC 169655: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "brown sugar": "FDC 168833: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "powdered sugar": "FDC 169656: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "butter": "FDC 173410: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "whole milk": "FDC 171265: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "heavy cream": "FDC 170859: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "honey": "FDC 169640: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "maple syrup": "FDC 169661: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "olive oil": "FDC 171413: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "vegetable oil": "FDC 172336: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "table salt": "FDC 173468: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "baking soda": "FDC 175040: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "baking powder": "FDC 172805: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "cocoa powder": "FDC 169593: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "rolled oats": "FDC 173904: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "white rice": "FDC 169756: API request failed (HTTPError: HTTP Error 429: Too Many Requests)",
+  "cornstarch": "FDC 169698: API request failed (HTTPError: HTTP Error 429: Too Many Requests)"
+ }
+}

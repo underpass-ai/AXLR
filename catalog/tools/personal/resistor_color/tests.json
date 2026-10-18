@@ -1,0 +1,16 @@
+[
+  {"name": "IEC 60062: brown-black-red-gold is 1 kΩ ±5 %", "input": {"bands": ["brown", "black", "red", "gold"]}, "expect": {"exit": 0, "stdout_json": {"ohms": "1000", "value": "1 kΩ", "tolerance_pct": "5", "min_ohms": "950", "max_ohms": "1050"}}},
+  {"name": "Wikipedia 'Electronic color code' example: red-violet-green-gold is 2,700,000 Ω ±5 %", "input": {"bands": ["red", "violet", "green", "gold"]}, "expect": {"exit": 0, "stdout_json": {"ohms": "2700000", "value": "2.7 MΩ", "tolerance_pct": "5", "e_series": ["E12", "E24"]}}},
+  {"name": "Wikipedia example: 56 kΩ 2 % as green-blue-orange-red and as green-blue-black-red-red", "input": {"bands": ["green", "blue", "black", "red", "red"]}, "expect": {"exit": 0, "stdout_json": {"ohms": "56000", "tolerance_pct": "2"}}},
+  {"name": "Wikipedia photo caption: 2.26 kΩ 1 % (E96) is red-red-blue-brown-brown", "input": {"operation": "encode", "value": "2.26k"}, "expect": {"exit": 0, "stdout_json": {"bands_4": null, "bands_5": ["red", "red", "blue", "brown", "brown"], "e_series": ["E48", "E96", "E192"]}}},
+  {"name": "six bands: red-red-black-red-red-brown is 22 kΩ ±2 %, 100 ppm/K", "input": {"bands": ["red", "red", "black", "red", "red", "brown"]}, "expect": {"exit": 0, "stdout_json": {"ohms": "22000", "tolerance_pct": "2", "tcr_ppm_per_k": 100}}},
+  {"name": "three bands mean ±20 %", "input": {"bands": ["brown", "black", "black"]}, "expect": {"exit": 0, "stdout_json": {"ohms": "10", "tolerance_pct": "20", "min_ohms": "8", "max_ohms": "12"}}},
+  {"name": "RKM 4k7 encodes as yellow-violet-red-gold and yellow-violet-black-brown-brown", "input": {"value": "4k7"}, "expect": {"exit": 0, "stdout_json": {"ohms": "4700", "bands_4": ["yellow", "violet", "red", "gold"], "bands_5": ["yellow", "violet", "black", "brown", "brown"]}}},
+  {"name": "R47 uses the silver multiplier", "input": {"value": "R47", "tolerance": 10}, "expect": {"exit": 0, "stdout_json": {"ohms": "0.47", "bands_4": ["yellow", "violet", "silver", "silver"]}}},
+  {"name": "IEC 60063 E12 decade: 1.0 1.2 1.5 1.8 2.2 2.7 3.3 3.9 4.7 5.6 6.8 8.2; 5 kΩ is nearest 4.7 kΩ", "input": {"operation": "nearest", "value": 5000, "series": "E12"}, "expect": {"exit": 0, "stdout_json": {"nearest": "4700", "below": "4700", "above": "5600", "error_pct": "-6.000"}}},
+  {"name": "IEC 60063 E192: 9.20 is the official value at n = 185 (the formula gives 9.19)", "input": {"operation": "nearest", "value": "9.19k", "series": "E192"}, "expect": {"exit": 0, "stdout_json": {"nearest": "9200", "below": "9090", "above": "9200"}}},
+  {"name": "IEC 60063 E24 keeps 2.7 (the formula gives 2.6)", "input": {"operation": "nearest", "value": 27, "series": "E24"}, "expect": {"exit": 0, "stdout_json": {"nearest": "27", "exact_match": true}}},
+  {"name": "nearest crosses the decade: 0.95 Ω in E6 is 1 Ω", "input": {"operation": "nearest", "value": "0.95", "series": "E6"}, "expect": {"exit": 0, "stdout_json": {"nearest": "1", "below": "0.68"}}},
+  {"name": "gold cannot be a digit", "input": {"bands": ["gold", "black", "red", "gold"]}, "expect": {"exit": 2, "stdout_contains": "not a digit colour"}},
+  {"name": "tolerance without a colour", "input": {"value": 1000, "tolerance": 3}, "expect": {"exit": 2, "stdout_contains": "has no colour"}}
+]

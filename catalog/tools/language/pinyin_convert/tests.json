@@ -1,0 +1,18 @@
+[
+  {"name": "GB/T 16159-2012 orthography: the country name 中国 is written Zhōngguó (one word, capitalised)", "input": {"text": "中国", "separator": "", "capitalize": true}, "expect": {"exit": 0, "stdout_json": {"pinyin": "Zhōngguó"}}},
+  {"name": "你好 is nǐ hǎo (dictionary tones, no sandhi)", "input": {"text": "你好"}, "expect": {"exit": 0, "stdout_json": {"pinyin": "nǐ hǎo", "syllables": [{"char": "你", "pinyin": "nǐ"}, {"char": "好", "pinyin": "hǎo", "alternatives": ["hào"]}]}}},
+  {"name": "third-tone sandhi: 你好 is said ní hǎo", "input": {"text": "你好", "sandhi": true}, "expect": {"exit": 0, "stdout_json": {"pinyin": "ní hǎo", "syllables": [{"char": "你", "pinyin": "ní", "dictionary": "nǐ"}, {"char": "好", "pinyin": "hǎo", "alternatives": ["hào"]}]}}},
+  {"name": "pypinyin README example: 中心 is zhōng xīn, with heteronyms 中 zhōng/zhòng", "input": {"text": "中心"}, "expect": {"exit": 0, "stdout_json": {"pinyin": "zhōng xīn", "syllables": [{"char": "中", "pinyin": "zhōng", "alternatives": ["zhòng"]}, {"char": "心", "pinyin": "xīn"}]}}},
+  {"name": "pypinyin README example: 中心 in Style.TONE3 is zhong1 xin1", "input": {"text": "中心", "style": "numbers"}, "expect": {"exit": 0, "stdout_json": {"pinyin": "zhong1 xin1"}}},
+  {"name": "pypinyin README example: 中心 in Style.NORMAL is zhong xin", "input": {"text": "中心", "style": "none"}, "expect": {"exit": 0, "stdout_json": {"pinyin": "zhong xin"}}},
+  {"name": "tone-mark placement (a/e first, then o of ou, then the second of iu/ui) gives Unihan's spellings: hǎo lüè ōu liú duì shuǐ liù lǜ nǚ ǹg", "input": {"text": "好略欧刘对水六绿女嗯"}, "expect": {"exit": 0, "stdout_json": {"pinyin": "hǎo lüè ōu liú duì shuǐ liù lǜ nǚ ǹg"}}},
+  {"name": "GB/T 16159 apostrophe before a, o, e: 西安 Xī'ān, 天安门 Tiān'ānmén", "input": {"text": "西安，天安门", "separator": "", "capitalize": true}, "expect": {"exit": 0, "stdout_json": {"pinyin": "Xī'ān，Tiān'ānmén"}}},
+  {"name": "一 and 不 sandhi: yí gè, yì tiān, dì yī, shí yī, bú shì, bù hǎo", "input": {"text": "一个，一天，第一，十一，不是，不好", "sandhi": true}, "expect": {"exit": 0, "stdout_json": {"pinyin": "yí gè，yì tiān，dì yī，shí yī，bú shì，bù hǎo"}}},
+  {"name": "a run of third tones: 我很好 wó hén hǎo with sandhi", "input": {"text": "我很好", "sandhi": true}, "expect": {"exit": 0, "stdout_json": {"pinyin": "wó hén hǎo"}}},
+  {"name": "neutral tone and ü in numbers style: 绿的 lv4 de5", "input": {"text": "绿的", "style": "numbers", "umlaut": "v", "neutral_five": true}, "expect": {"exit": 0, "stdout_json": {"pinyin": "lv4 de5"}}},
+  {"name": "Latin text kept and spaced, characters outside the tables reported", "input": {"text": "我爱Python和䶿"}, "expect": {"exit": 0, "stdout_json": {"pinyin": "wǒ ài Python hé䶿", "no_reading": ["䶿"]}}},
+  {"name": "CJK Extension A and B characters from the extended tables: 㐀 qiū, 𠀀 hē (Unihan kMandarin)", "input": {"text": "㐀𠀀"}, "expect": {"exit": 0, "stdout_json": {"pinyin": "qiū hē"}}},
+  {"name": "unknown style", "input": {"text": "中", "style": "zhuyin"}, "expect": {"exit": 2, "stdout_contains": "style must be"}},
+  {"name": "empty text", "input": {"text": ""}, "expect": {"exit": 2, "stdout_contains": "text must be"}},
+  {"name": "sandhi not a boolean", "input": {"text": "你好", "sandhi": "yes"}, "expect": {"exit": 2, "stdout_contains": "sandhi must be"}}
+]

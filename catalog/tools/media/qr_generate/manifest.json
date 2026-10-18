@@ -1,0 +1,37 @@
+{
+  "name": "qr_generate",
+  "description": "Encode text as a QR Code (ISO/IEC 18004, versions 1-40) and return it as SVG, as a text rendering and as the module matrix in rows of 0/1. Numeric, alphanumeric and UTF-8 byte modes (optional ECI), error correction L/M/Q/H, the smallest version that fits or a forced one, Reed-Solomon codewords over GF(256), block interleaving and the mask with the lowest penalty score; details show the codewords, format and version bits and every mask's penalties. Pure standard library.",
+  "input_schema": {
+    "type": "object",
+    "required": ["data"],
+    "additionalProperties": false,
+    "properties": {
+      "data": {"type": "string", "minLength": 1, "maxLength": 7089},
+      "error": {"type": "string", "enum": ["L", "M", "Q", "H"], "default": "M", "description": "Error correction level: about 7, 15, 25 or 30 % recoverable"},
+      "mode": {"type": "string", "enum": ["auto", "numeric", "alphanumeric", "byte"], "default": "auto", "description": "auto: numeric for digits only, alphanumeric for 0-9 A-Z space $%*+-./:, else byte (UTF-8)"},
+      "version": {"type": "integer", "minimum": 1, "maximum": 40, "description": "Force a version; default the smallest that fits"},
+      "mask": {"type": "integer", "minimum": 0, "maximum": 7, "description": "Force a mask pattern; default the lowest penalty"},
+      "boost_error": {"type": "boolean", "default": false, "description": "Raise the error level while the data still fits the same version"},
+      "eci": {"type": "boolean", "default": false, "description": "Byte mode: declare UTF-8 with ECI 000026"},
+      "outputs": {"type": "array", "items": {"type": "string", "enum": ["svg", "text", "matrix"]}, "minItems": 1, "default": ["svg", "text", "matrix"]},
+      "scale": {"type": "integer", "minimum": 1, "maximum": 100, "default": 4, "description": "SVG pixels per module"},
+      "border": {"type": "integer", "minimum": 0, "maximum": 40, "default": 4, "description": "Quiet zone in modules (SVG and text)"},
+      "dark": {"type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "default": "#000000"},
+      "light": {"type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$", "default": "#ffffff"},
+      "details": {"type": "boolean", "default": false, "description": "Also return codewords, blocks, generator polynomial, format and version bits, mask penalties"}
+    }
+  },
+  "program": "python3",
+  "args": ["qr_generate.py"],
+  "files": ["qr_generate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "media",
+    "tags": ["qr-code", "barcode", "svg", "iso-18004", "reed-solomon", "encoder"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"data": "HELLO WORLD", "error": "M", "outputs": ["matrix"]}, "output": {"version": 1, "error": "M", "mode": "alphanumeric", "mask": 0, "size": 21}},
+    "source": "ISO/IEC 18004:2015 (QR Code bar code symbology specification), checked against the Thonky QR Code Tutorial (thonky.com/qr-code-tutorial) and segno 1.6.6 (github.com/heuer/segno, BSD), written independently; stdlib replacement for segno"
+  }
+}

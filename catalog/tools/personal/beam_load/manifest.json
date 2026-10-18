@@ -1,0 +1,41 @@
+{
+  "name": "beam_load",
+  "description": "Simply supported (with optional overhangs) and cantilever beams under point loads, uniform and linearly varying distributed loads: reactions, shear and bending moment at given points, their extremes, and with E and I the slope and deflection and the maximum deflection, by exact integration of the elastic curve; single standard cases are cross-checked against the beam-table formulas. SI or imperial units. Not a structural design check.",
+  "input_schema": {
+    "type": "object",
+    "required": ["support", "length", "loads"],
+    "additionalProperties": false,
+    "properties": {
+      "support": {"type": "string", "enum": ["simply_supported", "cantilever"], "description": "cantilever: fixed at x = 0, free at x = L"},
+      "length": {"type": ["number", "string"]},
+      "supports": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": ["number", "string"]}, "description": "simply_supported: support positions [a, b], default [0, L]"},
+      "loads": {"type": "array", "minItems": 1, "maxItems": 100, "items": {"type": "object", "additionalProperties": false, "required": ["type"], "properties": {
+        "type": {"type": "string", "enum": ["point", "udl", "linear"]},
+        "magnitude": {"type": ["number", "string"], "description": "point: force; udl: force per length (downward positive)"},
+        "position": {"type": ["number", "string"], "description": "point: x from the left end"},
+        "start": {"type": ["number", "string"], "default": 0},
+        "end": {"type": ["number", "string"], "description": "default: the length"},
+        "start_magnitude": {"type": ["number", "string"], "description": "linear: intensity at start"},
+        "end_magnitude": {"type": ["number", "string"], "description": "linear: intensity at end"}
+      }}},
+      "E": {"type": ["number", "string"], "description": "Modulus of elasticity (Pa or psi)"},
+      "I": {"type": ["number", "string"], "description": "Second moment of area (m^4 or in^4)"},
+      "units": {"type": "string", "enum": ["SI", "imperial", "consistent"], "default": "SI", "description": "SI: N, m, N/m, Pa, m^4; imperial: lbf, in, lbf/in, psi, in^4"},
+      "points": {"type": "array", "maxItems": 1000, "items": {"type": ["number", "string"]}, "description": "Positions to report (default 11 equally spaced)"},
+      "digits": {"type": "integer", "minimum": 3, "maximum": 40, "default": 10}
+    }
+  },
+  "program": "python3",
+  "args": ["beam_load.py"],
+  "files": ["beam_load.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["engineering", "statics", "beam", "bending-moment", "shear", "deflection"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"support": "simply_supported", "length": 6, "loads": [{"type": "udl", "magnitude": 10000}], "E": "200e9", "I": "8e-5", "points": [3]}, "output": {"max_moment": {"value": "45000", "position": "3"}, "max_deflection": {"value": "0.010546875", "position": "3", "direction": "down"}}},
+    "source": "Euler-Bernoulli beam theory (EI y'' = M) integrated exactly; cross-checked against the beam diagrams and formulas of the AISC Steel Construction Manual, Table 3-23, and Roark's Formulas for Stress and Strain, Table 8.1"
+  }
+}
