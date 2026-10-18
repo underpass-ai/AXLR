@@ -1,0 +1,27 @@
+{
+  "name": "iban_validate",
+  "description": "Validate IBANs (ISO 13616): allowed characters, the country's length, the mod-97 check digits, and the BBAN split into bank, branch and account for common countries; Spanish account check digits are verified too. Also builds an IBAN from a country and BBAN.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "iban": {"type": "string", "description": "One IBAN; spaces, dashes and an IBAN prefix are ignored"},
+      "ibans": {"type": "array", "items": {"type": "string"}, "description": "Several IBANs"},
+      "country": {"type": "string", "pattern": "^[A-Za-z]{2}$", "description": "With bban: build the IBAN"},
+      "bban": {"type": "string"}
+    }
+  },
+  "program": "python3",
+  "args": ["iban_validate.py"],
+  "files": ["iban_validate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["iban", "bank", "sepa", "checksum", "validation", "ccc"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"iban": "GB82 WEST 1234 5698 7654 32"}, "output": {"valid": true, "country": "GB", "fields": {"bank": "WEST", "branch": "123456", "account": "98765432"}}},
+    "source": "ISO 13616 and the SWIFT IBAN Registry; Spanish CCC check digits; ideas from python-stdnum (github.com/arthurdejong/python-stdnum)"
+  }
+}

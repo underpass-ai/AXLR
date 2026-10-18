@@ -1,0 +1,10 @@
+[
+  {"name": "python-stdnum's example of every member state is valid", "input": {"vats": ["ATU13585627", "BE0403019261", "BG175074752", "CY10259033P", "CZ25123891", "DE136695976", "DK13585628", "EE100931558", "EL094259216", "ESQ2826000H", "FI20774740", "FR40303265045", "HR33392005961", "HU12892312", "IE6433435F", "IT00743110157", "LT119511515", "LU15027442", "LV40003521600", "MT11679112", "NL004495445B01", "PL8567346215", "PT501964843", "RO18547290", "SE123456789701", "SI50223054", "SK2022749619", "XI980780684"]},
+   "expect": {"exit": 0, "stdout_json": {"valid": 28, "invalid": 0}}},
+  {"name": "one changed check digit fails in every state", "input": {"vats": ["ATU13585628", "BE0403019262", "BG175074753", "CY10259033Q", "CZ25123892", "DE136695977", "DK13585629", "EE100931559", "EL094259217", "ESQ2826000I", "FI20774741", "FR40303265046", "HR33392005962", "HU12892313", "IE6433435G", "IT00743110158", "LT119511516", "LU15027443", "LV40003521601", "MT11679113", "NL004495446B01", "PL8567346216", "PT501964844", "RO18547291", "SE123456789801", "SI50223055", "SK2022749610", "XI980780685"]},
+   "expect": {"exit": 0, "stdout_json": {"valid": 0, "invalid": 28}}},
+  {"name": "spacing, GR prefix and a 9-digit Belgian number", "input": {"vats": ["DE 136 695 976", "GR094259216", "BE403019261"]}, "expect": {"exit": 0, "stdout_json": {"results": [{"vat": "DE136695976", "valid": true}, {"country": "EL", "valid": true}, {"valid": true}]}}},
+  {"name": "a number without a prefix and a country", "input": {"vat": "B-58818501", "country": "es"}, "expect": {"exit": 0, "stdout_json": {"vat": "ESB58818501", "country_name": "Spain"}}},
+  {"name": "GB is no longer an EU VAT prefix", "input": {"vat": "GB980780684"}, "expect": {"exit": 0, "stdout_json": {"valid": false, "reason": "GB numbers are not EU VAT numbers since 2021; XI is for Northern Ireland"}}},
+  {"name": "nothing given", "input": {"country": "DE"}, "expect": {"exit": 2, "stdout_contains": "give vat"}}
+]

@@ -1,0 +1,38 @@
+{
+  "name": "invoice_calc",
+  "description": "Invoice totals in exact decimal arithmetic: line amounts with per-line and global discounts, tax base and VAT per rate, optional equivalence surcharge, withholding (such as Spanish IRPF) on the base, and the total due, rounded half up per line and per rate.",
+  "input_schema": {
+    "type": "object",
+    "required": ["lines"],
+    "additionalProperties": false,
+    "properties": {
+      "lines": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["quantity", "unit_price", "vat_percent"], "additionalProperties": false, "properties": {
+        "description": {"type": "string"},
+        "quantity": {"type": ["number", "string"]},
+        "unit_price": {"type": ["number", "string"], "description": "Before tax; a decimal string keeps exact cents"},
+        "discount_percent": {"type": ["number", "string"], "default": 0},
+        "vat_percent": {"type": ["number", "string"], "description": "e.g. 21, 10, 4, 0"},
+        "surcharge_percent": {"type": ["number", "string"], "default": 0, "description": "Recargo de equivalencia, e.g. 5.2 with 21 % VAT"}}}},
+      "global_discount_percent": {"type": ["number", "string"], "default": 0},
+      "withholding_percent": {"type": ["number", "string"], "default": 0, "description": "Withheld on the tax base, e.g. 15 for IRPF"},
+      "currency": {"type": "string", "default": "EUR"},
+      "decimals": {"type": "integer", "minimum": 0, "maximum": 6, "default": 2}
+    }
+  },
+  "program": "python3",
+  "args": ["invoice_calc.py"],
+  "files": ["invoice_calc.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["invoice", "vat", "iva", "irpf", "withholding", "decimal", "billing"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"lines": [{"description": "Consulting", "quantity": 10, "unit_price": "100.00", "vat_percent": 21}], "withholding_percent": 15},
+      "output": {"base": "1000.00", "vat": "210.00", "withholding": "150.00", "total": "1060.00"}
+    },
+    "source": "original; Spanish invoicing rules (Real Decreto 1619/2012, rounding per line and rate) and IRPF withholding on the base"
+  }
+}
