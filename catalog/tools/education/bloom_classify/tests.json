@@ -1,0 +1,29 @@
+[
+  {"name": "Anderson & Krathwohl 2001 Table 5.1: recognizing, interpreting, implementing, differentiating, critiquing and generating are processes of the six levels in order", "input": {"objectives": ["Recognize the dates of important events", "Interpret a line graph", "Implement a sorting algorithm", "Differentiate relevant from irrelevant numbers in a word problem", "Critique a hypothesis on the basis of its evidence", "Generate hypotheses to account for an observed phenomenon"], "language": "en"},
+   "expect": {"exit": 0, "stdout_json": {"results": [
+     {"level": "remember", "level_number": 1, "process": "recognizing"},
+     {"level": "understand", "level_number": 2, "process": "interpreting"},
+     {"level": "apply", "level_number": 3, "process": "implementing"},
+     {"level": "analyze", "level_number": 4, "process": "differentiating"},
+     {"level": "evaluate", "level_number": 5, "process": "critiquing"},
+     {"level": "create", "level_number": 6, "process": "generating"}]}}},
+  {"name": "Anderson & Krathwohl 2001 Table 5.1 alternative names: retrieving (recalling), extrapolating (inferring), carrying out (executing), outlining (organizing), detecting (checking), designing (planning)", "input": {"objectives": ["Retrieve the multiplication facts", "Extrapolate the trend to 2030", "Carry out a titration", "Outlining the argument of an essay", "Detects inconsistencies in a report", "Designed a habitat for an animal"]},
+   "expect": {"exit": 0, "stdout_json": {"results": [
+     {"process": "recalling", "level": "remember"}, {"process": "inferring", "level": "understand"}, {"process": "executing", "level": "apply", "matched": "carry out"},
+     {"process": "organizing", "level": "analyze", "ambiguous": true}, {"process": "checking", "level": "evaluate"}, {"process": "planning", "level": "create", "matched": "designed"}]}}},
+  {"name": "understand and know are flagged as non-measurable and left unclassified", "input": {"objectives": ["Students will understand photosynthesis", "Know the capitals of Europe"]},
+   "expect": {"exit": 0, "stdout_json": {"results": [{"level": null, "non_measurable": true, "non_measurable_verbs": ["understand"]}, {"level": null, "non_measurable": true}], "summary": {"unclassified": 2, "non_measurable": 2}}}},
+  {"name": "compare is ambiguous (Understand in the taxonomy, often listed under Analyze)", "input": {"objectives": ["Students will be able to compare the French and American revolutions"]},
+   "expect": {"exit": 0, "stdout_json": {"results": [{"verb": "compare", "level": "understand", "ambiguous": true, "also_listed_at": ["Analyze"]}]}}},
+  {"name": "British spelling, a second verb and the highest level", "input": {"objectives": ["Students will analyse primary sources and design a museum exhibit"]},
+   "expect": {"exit": 0, "stdout_json": {"results": [{"verb": "analyse", "level": "analyze", "other_verbs": [{"verb": "design", "level": "create"}], "highest_level": "create"}]}}},
+  {"name": "Spanish: infinitive, future and the non-measurable comprender", "input": {"objectives": ["Diseñar un experimento para medir la gravedad", "El alumno identificará las partes de la célula", "Comprender la Revolución Industrial"]},
+   "expect": {"exit": 0, "stdout_json": {"results": [
+     {"language": "es", "verb": "diseñar", "level": "create", "level_name": "Crear"},
+     {"language": "es", "verb": "identificar", "matched": "identificara", "level": "remember", "level_name": "Recordar"},
+     {"language": "es", "level": null, "non_measurable": true}]}}},
+  {"name": "a vague verb before a measurable one is flagged but classified by the measurable verb", "input": {"objectives": ["Que el alumnado conozca y explique las causas de la guerra"]},
+   "expect": {"exit": 0, "stdout_json": {"results": [{"verb": "explicar", "level": "understand", "non_measurable": true}]}}},
+  {"name": "no objectives", "input": {"objectives": []}, "expect": {"exit": 2, "stdout_contains": "objectives must be"}},
+  {"name": "bad language", "input": {"objectives": ["List the planets"], "language": "fr"}, "expect": {"exit": 2, "stdout_contains": "language must be"}}
+]

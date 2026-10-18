@@ -1,0 +1,16 @@
+[
+  {"name": "natural sort (hand-checked): file1, file2, file10, file20 rather than code-point order file1, file10, file2, file20", "input": {"lines": ["file10", "file2", "file20", "file1"], "sort": "natural"}, "expect": {"exit": 0, "stdout_json": {"lines": ["file1", "file2", "file10", "file20"]}}},
+  {"name": "the same lines in code-point (lexical) order", "input": {"lines": ["file10", "file2", "file20", "file1"], "sort": "lexical"}, "expect": {"exit": 0, "stdout_json": {"lines": ["file1", "file10", "file2", "file20"]}}},
+  {"name": "exact dedupe keeps the first occurrence, in input order, and counts (hand-checked: b x3, a x2, c x1)", "input": {"text": "b\na\nb\nc\na\nb\n"}, "expect": {"exit": 0, "stdout_json": {"lines": ["b", "a", "c"], "text": "b\na\nc\n", "counts": [{"line": "b", "count": 3}, {"line": "a", "count": 2}, {"line": "c", "count": 1}], "duplicates": [{"line": "b", "count": 3}, {"line": "a", "count": 2}], "removed_duplicates": 3, "input_lines": 6}}},
+  {"name": "case-insensitive with Unicode case folding: Straße = STRASSE = strasse", "input": {"lines": ["Straße", "STRASSE", "strasse", "Weg"], "ignore_case": true}, "expect": {"exit": 0, "stdout_json": {"lines": ["Straße", "Weg"], "counts": [{"line": "Straße", "count": 3}, {"line": "Weg", "count": 1}]}}},
+  {"name": "trimmed: surrounding spaces ignored and removed", "input": {"lines": ["  apple", "apple  ", "\tapple", "pear"], "trim": true}, "expect": {"exit": 0, "stdout_json": {"lines": ["apple", "pear"]}}},
+  {"name": "Unicode normalisation: precomposed é (U+00E9) and e + combining acute (U+0065 U+0301) are the same under NFC", "input": {"lines": ["café", "café"], "normalize": "NFC"}, "expect": {"exit": 0, "stdout_json": {"lines": ["café"], "counts": [{"line": "café", "count": 2}]}}},
+  {"name": "without normalisation they are different lines", "input": {"lines": ["café", "café"]}, "expect": {"exit": 0, "stdout_json": {"output_lines": 2}}},
+  {"name": "accent- and case-insensitive natural sort without a locale: ana, Ángel, Ñu (as nu), Óscar, zorro", "input": {"lines": ["zorro", "Óscar", "ana", "Ángel", "Ñu"], "sort": "natural", "ignore_accents": true, "ignore_case": true, "dedupe": false}, "expect": {"exit": 0, "stdout_json": {"lines": ["ana", "Ángel", "Ñu", "Óscar", "zorro"]}}},
+  {"name": "reverse natural sort, empty lines dropped", "input": {"text": "v1.2\n\nv1.10\nv1.9\n", "sort": "natural", "reverse": true, "drop_empty": true}, "expect": {"exit": 0, "stdout_json": {"lines": ["v1.10", "v1.9", "v1.2"], "empty_dropped": 1}}},
+  {"name": "only the duplicated lines", "input": {"lines": ["a", "b", "a", "c", "c", "c"], "only": "duplicates"}, "expect": {"exit": 0, "stdout_json": {"lines": ["a", "c"]}}},
+  {"name": "only the lines seen once", "input": {"lines": ["a", "b", "a"], "only": "unique"}, "expect": {"exit": 0, "stdout_json": {"lines": ["b"]}}},
+  {"name": "CRLF line endings are kept", "input": {"text": "b\r\na\r\nb\r\n", "sort": "lexical"}, "expect": {"exit": 0, "stdout_json": {"text": "a\r\nb\r\n"}}},
+  {"name": "bad sort", "input": {"lines": ["a"], "sort": "random"}, "expect": {"exit": 2, "stdout_contains": "sort must be"}},
+  {"name": "no input", "input": {}, "expect": {"exit": 2, "stdout_contains": "exactly one of text"}}
+]

@@ -1,0 +1,38 @@
+{
+  "name": "rubric_grade",
+  "description": "Score one student or a class against a weighted analytic rubric (criteria with weights; levels with points and descriptors), in exact fractions: per-criterion points and share, raw total, weighted percentage, an optional 0-to-N scale, a grade from bands given in the input, feedback lines built from the level descriptors, and a class summary. Scores may be level labels or points between levels.",
+  "input_schema": {
+    "type": "object",
+    "required": ["rubric"],
+    "additionalProperties": false,
+    "properties": {
+      "rubric": {"type": "object", "additionalProperties": false, "required": ["criteria"], "properties": {
+        "title": {"type": "string"},
+        "criteria": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["name", "levels"], "properties": {
+          "name": {"type": "string"},
+          "weight": {"type": ["number", "string"], "default": 1},
+          "levels": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["points"], "properties": {
+            "label": {"type": "string"}, "points": {"type": ["number", "string"]}, "descriptor": {"type": "string"}}}}}}}}},
+      "students": {"type": "array", "minItems": 1, "maxItems": 2000, "items": {"type": "object", "additionalProperties": false, "required": ["scores"], "properties": {
+        "student": {"type": "string"}, "scores": {"type": "object", "additionalProperties": {"type": ["string", "number"]}}, "comment": {"type": "string"}}}},
+      "scores": {"type": "object", "additionalProperties": {"type": ["string", "number"]}, "description": "One student's scores: criterion -> level label or points"},
+      "bands": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["min_percent", "grade"], "properties": {"min_percent": {"type": ["number", "string"]}, "grade": {"type": "string"}}}},
+      "scale": {"type": ["number", "string"], "description": "Also report on 0..scale, e.g. 10"},
+      "decimals": {"type": "integer", "minimum": 0, "maximum": 10, "default": 2}
+    }
+  },
+  "program": "python3",
+  "args": ["rubric_grade.py"],
+  "files": ["rubric_grade.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "education",
+    "tags": ["rubric", "grading", "assessment", "feedback", "teaching", "exact"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"rubric": {"criteria": [{"name": "Content", "weight": 2, "levels": [{"label": "Good", "points": 3, "descriptor": "Minor gaps"}, {"label": "Excellent", "points": 4}]}, {"name": "Language", "levels": [{"label": "Adequate", "points": 2, "descriptor": "Some slips"}, {"label": "Strong", "points": 3}]}]}, "scores": {"Content": "Good", "Language": "Adequate"}},
+                "output": {"results": [{"weighted_score": "13/6", "percentage": "72.22", "feedback": ["Content: Good (3/4) - Minor gaps", "Language: Adequate (2/3) - Some slips"]}]}},
+    "source": "original (weighted analytic rubric scoring)"
+  }
+}

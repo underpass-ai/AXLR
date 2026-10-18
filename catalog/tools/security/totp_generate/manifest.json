@@ -1,0 +1,35 @@
+{
+  "name": "totp_generate",
+  "description": "Generate and verify one-time passwords: TOTP (RFC 6238) for a time given in the input and HOTP (RFC 4226) for a counter, from a secret in base32 (as in authenticator apps), hex or ascii, with SHA-1, SHA-256 or SHA-512, 6 to 8 digits, any period and epoch. Verification accepts a window of steps and reports the matching offset. The clock is never read and the secret is never echoed.",
+  "input_schema": {
+    "type": "object",
+    "required": ["secret"],
+    "additionalProperties": false,
+    "properties": {
+      "secret": {"type": "string", "maxLength": 4096, "description": "Shared key"},
+      "secret_encoding": {"type": "string", "enum": ["base32", "hex", "ascii"], "default": "base32"},
+      "mode": {"type": "string", "enum": ["totp", "hotp"], "default": "totp"},
+      "time": {"type": ["integer", "string"], "description": "TOTP: Unix seconds or YYYY-MM-DDTHH:MM:SSZ (required for totp)"},
+      "counter": {"type": "integer", "minimum": 0, "description": "HOTP moving factor (required for hotp)"},
+      "algorithm": {"type": "string", "enum": ["SHA1", "SHA256", "SHA512"], "default": "SHA1"},
+      "digits": {"type": "integer", "minimum": 6, "maximum": 8, "default": 6},
+      "period": {"type": "integer", "minimum": 1, "maximum": 86400, "default": 30, "description": "TOTP time step X in seconds"},
+      "t0": {"type": "integer", "default": 0, "description": "TOTP epoch T0 in Unix seconds"},
+      "code": {"type": ["string", "integer"], "description": "A code to verify"},
+      "window": {"type": "integer", "minimum": 0, "maximum": 100, "default": 1, "description": "Steps or counters accepted on each side when verifying"}
+    }
+  },
+  "program": "python3",
+  "args": ["totp_generate.py"],
+  "files": ["totp_generate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "security",
+    "tags": ["totp", "hotp", "otp", "2fa", "mfa", "rfc6238", "rfc4226"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"secret": "12345678901234567890", "secret_encoding": "ascii", "time": 59, "digits": 8}, "output": {"code": "94287082", "counter": 1, "seconds_remaining": 1}},
+    "source": "RFC 4226 (HOTP, dynamic truncation, section 5.3) and RFC 6238 (TOTP); base32 per RFC 4648 section 6"
+  }
+}

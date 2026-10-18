@@ -1,0 +1,32 @@
+{
+  "name": "diff_text",
+  "description": "Compare two texts given inline: a unified diff with a chosen number of context lines, side-by-side rows (and a rendered table), a word-level diff with [-removed-]{+added+} markers, line counts and similarity ratios as exact fractions. Built on Python's difflib, matching its unified_diff output and marking a missing final newline as GNU diff does.",
+  "input_schema": {
+    "type": "object",
+    "required": ["a", "b"],
+    "additionalProperties": false,
+    "properties": {
+      "a": {"type": "string", "maxLength": 200000, "description": "Old text"},
+      "b": {"type": "string", "maxLength": 200000, "description": "New text"},
+      "from_name": {"type": "string", "default": "a", "description": "Label of a in the --- header"},
+      "to_name": {"type": "string", "default": "b", "description": "Label of b in the +++ header"},
+      "context": {"type": "integer", "minimum": 0, "maximum": 1000, "default": 3},
+      "side_by_side": {"type": "boolean", "default": false},
+      "width": {"type": "integer", "minimum": 8, "maximum": 200, "default": 40, "description": "Column width of the rendered side-by-side table"},
+      "words": {"type": "boolean", "default": false, "description": "Add a word-level diff"}
+    }
+  },
+  "program": "python3",
+  "args": ["diff_text.py"],
+  "files": ["diff_text.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "programming",
+    "tags": ["diff", "difflib", "text", "compare", "patch", "similarity"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"a": "The quick brown fox jumps.", "b": "The quick red fox leaped.", "words": true}, "output": {"words": {"inline": "The quick [-brown-]{+red+} fox [-jumps-]{+leaped+}.", "changes": [{"op": "replace", "old": "brown", "new": "red"}, {"op": "replace", "old": "jumps", "new": "leaped"}]}}},
+    "source": "Python standard library difflib (unified_diff, SequenceMatcher); the word-diff markers follow git diff --word-diff=plain"
+  }
+}

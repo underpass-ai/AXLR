@@ -1,0 +1,39 @@
+{
+  "name": "haversine",
+  "description": "Distance and bearing between points on the Earth: the haversine great-circle distance on a sphere (R = 6371.0088 km by default) and Vincenty's inverse formula on the WGS-84 or GRS80 ellipsoid (the more exact, to about half a millimetre), with initial and final bearings, the midpoint, and the destination reached from a start point, a bearing and a distance (spherical and Vincenty direct). One pair or a batch of pairs; km, m, statute miles or nautical miles; coordinates as decimal degrees or DMS strings. Near-antipodal pairs where Vincenty does not converge are reported, not looped on.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["inverse", "destination"], "default": "inverse"},
+      "from": {"description": "Point: [lat, lon] or {lat, lon}; numbers, decimal strings or DMS strings such as \"50 03 59N\"",
+               "oneOf": [{"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": ["number", "string"]}},
+                         {"type": "object", "additionalProperties": false, "required": ["lat", "lon"], "properties": {"lat": {"type": ["number", "string"]}, "lon": {"type": ["number", "string"]}}}]},
+      "to": {"description": "Point, as from (inverse)",
+             "oneOf": [{"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": ["number", "string"]}},
+                       {"type": "object", "additionalProperties": false, "required": ["lat", "lon"], "properties": {"lat": {"type": ["number", "string"]}, "lon": {"type": ["number", "string"]}}}]},
+      "pairs": {"type": "array", "minItems": 1, "maxItems": 10000, "description": "Inverse batch: [lat1, lon1, lat2, lon2] or {from, to}",
+                "items": {"oneOf": [{"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": ["number", "string"]}},
+                                    {"type": "object", "required": ["from", "to"], "additionalProperties": false, "properties": {"from": {}, "to": {}}}]}},
+      "bearing": {"type": ["number", "string"], "description": "Destination: initial bearing in degrees, or DMS"},
+      "distance": {"type": ["number", "string"], "minimum": 0, "description": "Destination: distance in unit"},
+      "unit": {"type": "string", "enum": ["km", "m", "mi", "nmi"], "default": "km"},
+      "radius_km": {"type": ["number", "string"], "default": 6371.0088, "description": "Sphere radius for the haversine results"},
+      "ellipsoid": {"type": "string", "enum": ["WGS84", "GRS80"], "default": "WGS84"}
+    }
+  },
+  "program": "python3",
+  "args": ["haversine.py"],
+  "files": ["haversine.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "geography",
+    "tags": ["distance", "great-circle", "haversine", "vincenty", "bearing", "wgs84", "geodesy"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"from": ["37 57 03.72030S", "144 25 29.52440E"], "to": ["37 39 10.15610S", "143 55 35.38390E"], "unit": "m"},
+                "output": {"vincenty": {"converged": true, "distance_m": 54972.2711387, "initial_bearing": {"dms": "306°52′05.37″"}, "reverse_azimuth": {"dms": "127°10′25.07″"}}, "more_exact": "vincenty"}},
+    "source": "original; haversine, bearing, midpoint and destination formulas as on Movable Type Scripts (Veness, 'Calculate distance, bearing and more between latitude/longitude points'); T. Vincenty, 'Direct and inverse solutions of geodesics on the ellipsoid', Survey Review 23 (176), 1975; test case from Geoscience Australia"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "format_convert",
+  "description": "Convert between JSON, TOML, INI and a YAML subset. TOML is read with tomllib and written as tables, arrays of tables, inline arrays and quoted keys; INI goes through configparser (case kept, no interpolation); YAML block mappings and sequences, scalars with YAML 1.2 core types, quoted strings, block scalars, single-line flow collections and comments are read and written here, and anchors, aliases, tags and multi-document streams are refused clearly. Each result is read back to check the round trip and lists what is lost.",
+  "input_schema": {
+    "type": "object",
+    "required": ["to"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "description": "The input text (with from)"},
+      "data": {"description": "Or a JSON value (from json)"},
+      "from": {"type": "string", "enum": ["json", "toml", "ini", "yaml"]},
+      "to": {"type": "string", "enum": ["json", "toml", "ini", "yaml"]},
+      "indent": {"type": "integer", "minimum": 0, "maximum": 8, "default": 2, "description": "JSON indentation"}
+    }
+  },
+  "program": "python3",
+  "args": ["format_convert.py"],
+  "files": ["format_convert.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "data",
+    "tags": ["toml", "yaml", "ini", "json", "config", "convert"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "name = \"Orange\"\nphysical.color = \"orange\"\nphysical.shape = \"round\"\nsite.\"google.com\" = true\n", "from": "toml", "to": "yaml"},
+                "output": {"text": "name: Orange\nphysical:\n  color: orange\n  shape: round\nsite:\n  google.com: true\n", "round_trip_ok": true}},
+    "source": "TOML v1.0.0 (toml.io) through tomllib (PEP 680); Python configparser; YAML 1.2.2 core schema, block and flow styles (subset); JSON RFC 8259"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "name": "cert_inspect",
+  "description": "Inspect a PEM X.509 certificate with openssl: subject, issuer, serial, notBefore and notAfter, SHA-256 fingerprint, subject alternative names, key type, size and curve, signature algorithm, and the days left until expiry relative to a date given in the input (the clock is never read). Flags expired, not-yet-valid, short RSA keys, SHA-1 or MD5 signatures and missing SANs. Bash with coreutils and openssl; no chain or revocation check.",
+  "input_schema": {
+    "type": "object",
+    "required": ["pem", "now"],
+    "additionalProperties": false,
+    "properties": {
+      "pem": {"type": "string", "maxLength": 200000, "description": "The certificate in PEM form (-----BEGIN CERTIFICATE-----); the first block is read"},
+      "now": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}Z)?$", "description": "Reference date, UTC: YYYY-MM-DD (midnight) or YYYY-MM-DDTHH:MM:SSZ"}
+    }
+  },
+  "program": "bash",
+  "args": ["cert_inspect.sh"],
+  "files": ["cert_inspect.sh"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "security",
+    "tags": ["x509", "certificate", "tls", "openssl", "expiry", "pem"],
+    "license": "MIT",
+    "requires": {"program_min_version": "4.4", "packages": []},
+    "network": false,
+    "example": {"input": {"pem": "-----BEGIN CERTIFICATE-----\nMIIDczCCAlugAwIBAgIDGis8MA0GCSqGSIb3DQEBCwUAMDgxCzAJBgNVBAYTAkVT\nMRIwEAYDVQQKDAlBWExSIFRlc3QxFTATBgNVBAMMDHRlc3QuZXhhbXBsZTAeFw0y\nNjEwMTgwNDI1NDJaFw0yNzEwMTgwNDI1NDJaMDgxCzAJBgNVBAYTAkVTMRIwEAYD\nVQQKDAlBWExSIFRlc3QxFTATBgNVBAMMDHRlc3QuZXhhbXBsZTCCASIwDQYJKoZI\nhvcNAQEBBQADggEPADCCAQoCggEBANvsV+BqHF87NSo7tOW+XSL2z4aGHpFo4c8v\niCKoepFwE3Xryl7mXJLsZiMoZ5aRNwbGn/+clg3C/kg+7/A2NLvq1G7CZYzvdnu5\n3EWjAIOpUVQQ6w73U4qMyWVEpZgIkbb3LzRT3XL1+V7KYZDW4OcN/9hzMZO2QfFu\nABbbCpphHjJJ2+Xygs/pIEP1TqKnNZEAk0GicoEEaw01lkZ4H4r6wX4inwBYlQgv\nqV/nRVR1G01gvz1KGBmImg2Io7pQiYdfLbkWH3s8eYTd02xkhLHw4bqTruT8nIRV\nb1zfe0mPzK7z1FdGDxqO6gXgPk3pYHwNioqK5/ajngPmEOrHlTMCAwEAAaOBhTCB\ngjAdBgNVHQ4EFgQUkdePRF9DNgbaMdvsJuy+YHsZRoQwHwYDVR0jBBgwFoAUkdeP\nRF9DNgbaMdvsJuy+YHsZRoQwDwYDVR0TAQH/BAUwAwEB/zAvBgNVHREEKDAmggx0\nZXN0LmV4YW1wbGWCEHd3dy50ZXN0LmV4YW1wbGWHBH8AAAEwDQYJKoZIhvcNAQEL\nBQADggEBAE5r6X0SglWl6QHUGnSU2aADFM/c4T6HwuDbbrjUraASxKscUMszqnlB\nwBvWXoXjwM+3okAGM8bv3O/BvzOHDAakDDtzRuYYPlHmGA+vrt5WF9Ai3cfgnERy\nBpyzhdnTNYPBc6NzynqV+il8Oo0PpVg2WteG5iK5iAtWqG9iloHvfl3R/5UjM+mR\n6i6MXub1LILLc1uR7f5NvEY7O7joZLEOfw74ENsAZhWPY9t72Jad/t82BXwMVLWT\nTVlWcT2I7AJwMPKdFHLIZzQhTZUUfQsUOQK+QGoIUMk28O9Q2ylAkv7B1yyXhG2K\nWiKJ8npA6wYHlH2fSzTuSUViKTeC+eM=\n-----END CERTIFICATE-----\n", "now": "2026-12-01"},
+                "output": {"subject": "CN=test.example,O=AXLR Test,C=ES", "serial": "1A2B3C", "not_after": "2027-10-18T04:25:42Z", "days_to_expiry": 321, "subject_alt_names": ["DNS:test.example", "DNS:www.test.example", "IP Address:127.0.0.1"], "key": {"type": "RSA", "bits": 2048, "curve": null}, "status": "valid"}},
+    "source": "RFC 5280 (X.509 certificate profile) fields as printed by OpenSSL's openssl x509 command"
+  }
+}

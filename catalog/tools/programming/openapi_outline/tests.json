@@ -1,0 +1,273 @@
+[
+ {
+  "name": "OpenAPI Initiative petstore.yaml (learn.openapis.org examples/v3.0, CC-BY-4.0): paths /pets and /pets/{petId}, operations listPets, createPets, showPetById, $ref to Pets, Pet and Error resolved",
+  "input": {
+   "text": "openapi: 3.0.0\ninfo:\n  version: 1.0.0\n  title: Swagger Petstore\n  license:\n    name: MIT\nservers:\n  - url: http://petstore.swagger.io/v1\npaths:\n  /pets:\n    get:\n      summary: List all pets\n      operationId: listPets\n      tags:\n        - pets\n      parameters:\n        - name: limit\n          in: query\n          description: How many items to return at one time (max 100)\n          required: false\n          schema:\n            type: integer\n            maximum: 100\n            format: int32\n      responses:\n        '200':\n          description: A paged array of pets\n          headers:\n            x-next:\n              description: A link to the next page of responses\n              schema:\n                type: string\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Pets'\n        default:\n          description: unexpected error\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Error'\n    post:\n      summary: Create a pet\n      operationId: createPets\n      tags:\n        - pets\n      requestBody:\n        content:\n          application/json:\n            schema:\n              $ref: '#/components/schemas/Pet'\n        required: true\n      responses:\n        '201':\n          description: Null response\n        default:\n          description: unexpected error\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Error'\n  /pets/{petId}:\n    get:\n      summary: Info for a specific pet\n      operationId: showPetById\n      tags:\n        - pets\n      parameters:\n        - name: petId\n          in: path\n          required: true\n          description: The id of the pet to retrieve\n          schema:\n            type: string\n      responses:\n        '200':\n          description: Expected response to a valid request\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Pet'\n        default:\n          description: unexpected error\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Error'\ncomponents:\n  schemas:\n    Pet:\n      type: object\n      required:\n        - id\n        - name\n      properties:\n        id:\n          type: integer\n          format: int64\n        name:\n          type: string\n        tag:\n          type: string\n    Pets:\n      type: array\n      maxItems: 100\n      items:\n        $ref: '#/components/schemas/Pet'\n    Error:\n      type: object\n      required:\n        - code\n        - message\n      properties:\n        code:\n          type: integer\n          format: int32\n        message:\n          type: string\n",
+   "format": "json"
+  },
+  "expect": {
+   "stdout_json": {
+    "outline": {
+     "spec": "OpenAPI 3.0.0",
+     "title": "Swagger Petstore",
+     "version": "1.0.0",
+     "servers": [
+      "http://petstore.swagger.io/v1"
+     ],
+     "paths": [
+      "/pets",
+      "/pets/{petId}"
+     ],
+     "operation_count": 3,
+     "operations": [
+      {
+       "method": "GET",
+       "path": "/pets",
+       "operationId": "listPets",
+       "parameters": [
+        {
+         "name": "limit",
+         "in": "query",
+         "required": false,
+         "type": "integer(int32)"
+        }
+       ],
+       "request_body": null,
+       "responses": {
+        "200": {
+         "content": {
+          "application/json": "Pets"
+         },
+         "headers": [
+          "x-next"
+         ]
+        },
+        "default": {
+         "content": {
+          "application/json": "Error"
+         }
+        }
+       }
+      },
+      {
+       "method": "POST",
+       "path": "/pets",
+       "operationId": "createPets",
+       "parameters": [],
+       "request_body": {
+        "required": true,
+        "content": {
+         "application/json": "Pet"
+        }
+       },
+       "responses": {
+        "201": {
+         "description": "Null response"
+        }
+       }
+      },
+      {
+       "method": "GET",
+       "path": "/pets/{petId}",
+       "operationId": "showPetById",
+       "parameters": [
+        {
+         "name": "petId",
+         "in": "path",
+         "required": true,
+         "type": "string"
+        }
+       ],
+       "responses": {
+        "200": {
+         "content": {
+          "application/json": "Pet"
+         }
+        }
+       }
+      }
+     ],
+     "schemas": {
+      "Pet": {
+       "required": [
+        "id",
+        "name"
+       ],
+       "properties": {
+        "id": "integer(int64)",
+        "name": "string",
+        "tag": "string"
+       }
+      },
+      "Pets": {
+       "type": "array<Pet>"
+      },
+      "Error": {
+       "required": [
+        "code",
+        "message"
+       ]
+      }
+     },
+     "warnings": [],
+     "syntax": "yaml"
+    }
+   }
+  }
+ },
+ {
+  "name": "OpenAPI Initiative petstore.json gives the same outline from JSON",
+  "input": {
+   "text": "{\n  \"openapi\": \"3.0.0\",\n  \"info\": {\n    \"version\": \"1.0.0\",\n    \"title\": \"Swagger Petstore\",\n    \"license\": {\n      \"name\": \"MIT\"\n    }\n  },\n  \"servers\": [\n    {\n      \"url\": \"http://petstore.swagger.io/v1\"\n    }\n  ],\n  \"paths\": {\n    \"/pets\": {\n      \"get\": {\n        \"summary\": \"List all pets\",\n        \"operationId\": \"listPets\",\n        \"tags\": [\"pets\"],\n        \"parameters\": [\n          {\n            \"name\": \"limit\",\n            \"in\": \"query\",\n            \"description\": \"How many items to return at one time (max 100)\",\n            \"required\": false,\n            \"schema\": {\n              \"type\": \"integer\",\n              \"maximum\": 100,\n              \"format\": \"int32\"\n            }\n          }\n        ],\n        \"responses\": {\n          \"200\": {\n            \"description\": \"A paged array of pets\",\n            \"headers\": {\n              \"x-next\": {\n                \"description\": \"A link to the next page of responses\",\n                \"schema\": {\n                  \"type\": \"string\"\n                }\n              }\n            },\n            \"content\": {\n              \"application/json\": {\n                \"schema\": {\n                  \"$ref\": \"#/components/schemas/Pets\"\n                }\n              }\n            }\n          },\n          \"default\": {\n            \"description\": \"unexpected error\",\n            \"content\": {\n              \"application/json\": {\n                \"schema\": {\n                  \"$ref\": \"#/components/schemas/Error\"\n                }\n              }\n            }\n          }\n        }\n      },\n      \"post\": {\n        \"summary\": \"Create a pet\",\n        \"operationId\": \"createPets\",\n        \"tags\": [\"pets\"],\n        \"requestBody\": {\n          \"content\": {\n            \"application/json\": {\n              \"schema\": {\n                \"$ref\": \"#/components/schemas/Pet\"\n              }\n            }\n          },\n          \"required\": true\n        },\n        \"responses\": {\n          \"201\": {\n            \"description\": \"Null response\"\n          },\n          \"default\": {\n            \"description\": \"unexpected error\",\n            \"content\": {\n              \"application/json\": {\n                \"schema\": {\n                  \"$ref\": \"#/components/schemas/Error\"\n                }\n              }\n            }\n          }\n        }\n      }\n    },\n    \"/pets/{petId}\": {\n      \"get\": {\n        \"summary\": \"Info for a specific pet\",\n        \"operationId\": \"showPetById\",\n        \"tags\": [\"pets\"],\n        \"parameters\": [\n          {\n            \"name\": \"petId\",\n            \"in\": \"path\",\n            \"required\": true,\n            \"description\": \"The id of the pet to retrieve\",\n            \"schema\": {\n              \"type\": \"string\"\n            }\n          }\n        ],\n        \"responses\": {\n          \"200\": {\n            \"description\": \"Expected response to a valid request\",\n            \"content\": {\n              \"application/json\": {\n                \"schema\": {\n                  \"$ref\": \"#/components/schemas/Pet\"\n                }\n              }\n            }\n          },\n          \"default\": {\n            \"description\": \"unexpected error\",\n            \"content\": {\n              \"application/json\": {\n                \"schema\": {\n                  \"$ref\": \"#/components/schemas/Error\"\n                }\n              }\n            }\n          }\n        }\n      }\n    }\n  },\n  \"components\": {\n    \"schemas\": {\n      \"Pet\": {\n        \"type\": \"object\",\n        \"required\": [\"id\", \"name\"],\n        \"properties\": {\n          \"id\": {\n            \"type\": \"integer\",\n            \"format\": \"int64\"\n          },\n          \"name\": {\n            \"type\": \"string\"\n          },\n          \"tag\": {\n            \"type\": \"string\"\n          }\n        }\n      },\n      \"Pets\": {\n        \"type\": \"array\",\n        \"maxItems\": 100,\n        \"items\": {\n          \"$ref\": \"#/components/schemas/Pet\"\n        }\n      },\n      \"Error\": {\n        \"type\": \"object\",\n        \"required\": [\"code\", \"message\"],\n        \"properties\": {\n          \"code\": {\n            \"type\": \"integer\",\n            \"format\": \"int32\"\n          },\n          \"message\": {\n            \"type\": \"string\"\n          }\n        }\n      }\n    }\n  }\n}\n",
+   "format": "json"
+  },
+  "expect": {
+   "stdout_json": {
+    "outline": {
+     "paths": [
+      "/pets",
+      "/pets/{petId}"
+     ],
+     "operation_count": 3,
+     "syntax": "json"
+    }
+   }
+  }
+ },
+ {
+  "name": "petstore.yaml as Markdown: the endpoint table",
+  "input": {
+   "text": "openapi: 3.0.0\ninfo:\n  version: 1.0.0\n  title: Swagger Petstore\n  license:\n    name: MIT\nservers:\n  - url: http://petstore.swagger.io/v1\npaths:\n  /pets:\n    get:\n      summary: List all pets\n      operationId: listPets\n      tags:\n        - pets\n      parameters:\n        - name: limit\n          in: query\n          description: How many items to return at one time (max 100)\n          required: false\n          schema:\n            type: integer\n            maximum: 100\n            format: int32\n      responses:\n        '200':\n          description: A paged array of pets\n          headers:\n            x-next:\n              description: A link to the next page of responses\n              schema:\n                type: string\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Pets'\n        default:\n          description: unexpected error\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Error'\n    post:\n      summary: Create a pet\n      operationId: createPets\n      tags:\n        - pets\n      requestBody:\n        content:\n          application/json:\n            schema:\n              $ref: '#/components/schemas/Pet'\n        required: true\n      responses:\n        '201':\n          description: Null response\n        default:\n          description: unexpected error\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Error'\n  /pets/{petId}:\n    get:\n      summary: Info for a specific pet\n      operationId: showPetById\n      tags:\n        - pets\n      parameters:\n        - name: petId\n          in: path\n          required: true\n          description: The id of the pet to retrieve\n          schema:\n            type: string\n      responses:\n        '200':\n          description: Expected response to a valid request\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Pet'\n        default:\n          description: unexpected error\n          content:\n            application/json:\n              schema:\n                $ref: '#/components/schemas/Error'\ncomponents:\n  schemas:\n    Pet:\n      type: object\n      required:\n        - id\n        - name\n      properties:\n        id:\n          type: integer\n          format: int64\n        name:\n          type: string\n        tag:\n          type: string\n    Pets:\n      type: array\n      maxItems: 100\n      items:\n        $ref: '#/components/schemas/Pet'\n    Error:\n      type: object\n      required:\n        - code\n        - message\n      properties:\n        code:\n          type: integer\n          format: int32\n        message:\n          type: string\n",
+   "format": "markdown"
+  },
+  "expect": {
+   "stdout_contains": "| GET | `/pets` | listPets | List all pets |\\n| POST | `/pets` | createPets | Create a pet |\\n| GET | `/pets/{petId}` | showPetById | Info for a specific pet |"
+  }
+ },
+ {
+  "name": "OpenAPI Initiative Swagger 2.0 petstore-expanded.yaml (learn.openapis.org examples/v2.0): the body parameter becomes the request body, definitions are the schemas",
+  "input": {
+   "text": "swagger: \"2.0\"\ninfo:\n  version: 1.0.0\n  title: Swagger Petstore\n  description: A sample API that uses a petstore as an example to demonstrate features in the swagger-2.0 specification\n  termsOfService: http://swagger.io/terms/\n  contact:\n    name: Swagger API Team\n    email: apiteam@swagger.io\n    url: http://swagger.io\n  license:\n    name: Apache 2.0\n    url: https://www.apache.org/licenses/LICENSE-2.0.html\nhost: petstore.swagger.io\nbasePath: /api\nschemes:\n  - http\nconsumes:\n  - application/json\nproduces:\n  - application/json\npaths:\n  /pets:\n    get:\n      description: |\n        Returns all pets from the system that the user has access to\n      operationId: findPets\n      parameters:\n        - name: tags\n          in: query\n          description: tags to filter by\n          required: false\n          type: array\n          collectionFormat: csv\n          items:\n            type: string\n        - name: limit\n          in: query\n          description: maximum number of results to return\n          required: false\n          type: integer\n          format: int32\n      responses:\n        \"200\":\n          description: pet response\n          schema:\n            type: array\n            items:\n              $ref: '#/definitions/Pet'\n        default:\n          description: unexpected error\n          schema:\n            $ref: '#/definitions/Error'\n    post:\n      description: Creates a new pet in the store.  Duplicates are allowed\n      operationId: addPet\n      parameters:\n        - name: pet\n          in: body\n          description: Pet to add to the store\n          required: true\n          schema:\n            $ref: '#/definitions/NewPet'\n      responses:\n        \"200\":\n          description: pet response\n          schema:\n            $ref: '#/definitions/Pet'\n        default:\n          description: unexpected error\n          schema:\n            $ref: '#/definitions/Error'\n  /pets/{id}:\n    get:\n      description: Returns a user based on a single ID, if the user does not have access to the pet\n      operationId: find pet by id\n      parameters:\n        - name: id\n          in: path\n          description: ID of pet to fetch\n          required: true\n          type: integer\n          format: int64\n      responses:\n        \"200\":\n          description: pet response\n          schema:\n            $ref: '#/definitions/Pet'\n        default:\n          description: unexpected error\n          schema:\n            $ref: '#/definitions/Error'\n    delete:\n      description: deletes a single pet based on the ID supplied\n      operationId: deletePet\n      parameters:\n        - name: id\n          in: path\n          description: ID of pet to delete\n          required: true\n          type: integer\n          format: int64\n      responses:\n        \"204\":\n          description: pet deleted\n        default:\n          description: unexpected error\n          schema:\n            $ref: '#/definitions/Error'\ndefinitions:\n  Pet:\n    allOf:\n      - $ref: '#/definitions/NewPet'\n      - required:\n        - id\n        type: \"object\"\n        properties:\n          id:\n            type: integer\n            format: int64\n\n  NewPet:\n    type: \"object\"\n    required:\n      - name  \n    properties:\n      name:\n        type: string\n      tag:\n        type: string    \n\n  Error:\n    type: \"object\"\n    required:\n      - code\n      - message\n    properties:\n      code:\n        type: integer\n        format: int32\n      message:\n        type: string\n",
+   "format": "json"
+  },
+  "expect": {
+   "stdout_json": {
+    "outline": {
+     "spec": "Swagger 2.0",
+     "servers": [
+      "http://petstore.swagger.io/api"
+     ],
+     "paths": [
+      "/pets",
+      "/pets/{id}"
+     ],
+     "operation_count": 4,
+     "operations": [
+      {
+       "method": "GET",
+       "operationId": "findPets"
+      },
+      {
+       "method": "POST",
+       "operationId": "addPet",
+       "parameters": [],
+       "request_body": {
+        "required": true,
+        "content": {
+         "application/json": "NewPet"
+        }
+       }
+      },
+      {
+       "method": "GET",
+       "operationId": "find pet by id"
+      },
+      {
+       "method": "DELETE",
+       "operationId": "deletePet"
+      }
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "YAML subset: block scalars, flow sequences, quoted keys, path-level parameters merged, unresolved external $ref warned",
+  "input": {
+   "text": "openapi: 3.1.0\ninfo:\n  title: Demo\n  version: '2'\n  description: |\n    First line.\n    Second line.\npaths:\n  /items/{id}:\n    parameters:\n      - {name: id, in: path, required: true, schema: {type: string, format: uuid}}\n    get:\n      operationId: getItem\n      tags: [items]\n      parameters:\n        - name: expand\n          in: query\n          schema:\n            type: array\n            items: {type: string, enum: [owner, tags]}\n      responses:\n        '200':\n          description: >\n            The item,\n            expanded.\n          content:\n            application/json:\n              schema:\n                $ref: 'common.yaml#/Item'\n",
+   "format": "json"
+  },
+  "expect": {
+   "stdout_json": {
+    "outline": {
+     "title": "Demo",
+     "version": "2",
+     "description": "First line.",
+     "operations": [
+      {
+       "operationId": "getItem",
+       "tags": [
+        "items"
+       ],
+       "parameters": [
+        {
+         "name": "id",
+         "in": "path",
+         "required": true,
+         "type": "string(uuid)"
+        },
+        {
+         "name": "expand",
+         "in": "query",
+         "required": false,
+         "type": "array<string enum[owner,tags]>"
+        }
+       ],
+       "responses": {
+        "200": {
+         "description": "The item, expanded.",
+         "content": {
+          "application/json": "common.yaml#/Item"
+         }
+        }
+       }
+      }
+     ],
+     "warnings": [
+      "unresolved or external $ref (not followed): common.yaml#/Item"
+     ]
+    }
+   }
+  }
+ },
+ {
+  "name": "YAML anchors are refused clearly",
+  "input": {
+   "text": "openapi: 3.0.0\ninfo: &i\n  title: x\n"
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "anchors (&name) are not supported"
+  }
+ },
+ {
+  "name": "YAML tags are refused clearly",
+  "input": {
+   "text": "openapi: !!str 3.0.0\n"
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "tags (!tag) are not supported"
+  }
+ },
+ {
+  "name": "not an OpenAPI document",
+  "input": {
+   "text": "name: hello\n"
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "no 'openapi' or 'swagger' field"
+  }
+ }
+]

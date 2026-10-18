@@ -1,0 +1,29 @@
+{
+  "name": "crossword_fill",
+  "description": "Fill a crossword grid (rows of '.', '#' and fixed letters) from a word list given in the input, by backtracking with the most-constrained slot first and forward checking, within a time limit. Returns the filled grid and numbered across/down entries, whether the fill is unique (with max_solutions above 1), or that no fill exists.",
+  "input_schema": {
+    "type": "object",
+    "required": ["grid", "words"],
+    "additionalProperties": false,
+    "properties": {
+      "grid": {"type": "array", "items": {"type": "string", "pattern": "^[.#A-Za-z]+$"}, "description": "'.' empty, '#' block, letters fixed"},
+      "words": {"type": "array", "items": {"type": "string"}},
+      "allow_repeats": {"type": "boolean", "default": false},
+      "max_solutions": {"type": "integer", "minimum": 1, "maximum": 100, "default": 1},
+      "time_limit": {"type": "number", "exclusiveMinimum": 0, "maximum": 25, "default": 5}
+    }
+  },
+  "program": "python3",
+  "args": ["crossword_fill.py"],
+  "files": ["crossword_fill.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["crossword", "puzzle", "constraint-satisfaction", "backtracking", "word-games"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"grid": ["..T", ".#.", "..."], "words": ["cat", "cab", "tow", "bow", "dog"], "max_solutions": 10}, "output": {"status": "filled", "grid": ["CAT", "A#O", "BOW"], "unique": true}},
+    "source": "original; backtracking with the minimum-remaining-values heuristic and forward checking (Russell and Norvig, Artificial Intelligence: A Modern Approach, ch. 6)"
+  }
+}

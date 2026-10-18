@@ -1,0 +1,25 @@
+{
+  "name": "image_info",
+  "description": "Read an image's format, width, height, bit depth, channels and colour type from its header without decoding pixels: PNG (IHDR, palette, transparency, dpi, APNG frames, chunk list, CRC check), JPEG (SOF markers, process, chroma subsampling, JFIF density, Exif APP1 presence, Adobe transform), GIF (screen, colour table, frames, loop, transparency), BMP (every DIB header version) and WebP (VP8, VP8L, VP8X). Bytes as hex or a relative file path.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "hex": {"type": "string", "description": "The file's bytes as hexadecimal; whitespace allowed"},
+      "path": {"type": "string", "description": "Relative path to the image inside the working directory"}
+    }
+  },
+  "program": "python3",
+  "args": ["image_info.py"],
+  "files": ["image_info.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "media",
+    "tags": ["images", "png", "jpeg", "gif", "webp", "bmp", "metadata", "file-formats"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"hex": "47494638396101000100800000ffffff00000021f90401000000002c00000000010001000002024401003b"}, "output": {"format": "GIF", "version": "89a", "width": 1, "height": 1, "frames": 1, "has_alpha": true}},
+    "source": "PNG specification (W3C, 2nd ed., ISO/IEC 15948); ITU-T T.81 / ISO/IEC 10918-1 JPEG markers and JFIF 1.02; CompuServe GIF89a specification; Microsoft BITMAPINFOHEADER/BITMAPV5HEADER documentation; Google WebP container and lossless bitstream specifications (RFC 9649)"
+  }
+}

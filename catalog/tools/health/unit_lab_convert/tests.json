@@ -1,0 +1,13 @@
+[
+  {"name": "known value: glucose 100 mg/dL is 5.55 mmol/L (molar mass 180.156 g/mol)", "input": {"analyte": "glucose", "value": 100, "from": "mg/dL"}, "expect": {"exit": 0, "stdout_json": {"to": "mmol/L", "result": "5.55", "molar_mass_g_mol": "180.156"}}},
+  {"name": "known value: creatinine 1 mg/dL is 88.4 umol/L (the factor of the NKF and KDIGO, molar mass 113.12)", "input": {"analyte": "creatinine", "value": 1, "from": "mg/dL", "decimals": 1}, "expect": {"exit": 0, "stdout_json": {"to": "umol/L", "result": "88.4", "molar_mass_g_mol": "113.120"}}},
+  {"name": "conventional SI factor for cholesterol 0.02586: 200 mg/dL is 5.17 mmol/L", "input": {"analyte": "cholesterol_total", "value": 200, "from": "mg/dL"}, "expect": {"exit": 0, "stdout_json": {"result": "5.17"}, "stdout_contains": "\"factor\": \"0.02586"}},
+  {"name": "conventional triglyceride factor 0.01129 (triolein): 150 mg/dL is 1.69 mmol/L", "input": {"analyte": "triglycerides", "value": 150, "from": "mg/dL"}, "expect": {"exit": 0, "stdout_json": {"result": "1.69"}, "stdout_contains": "\"factor\": \"0.01129"}},
+  {"name": "BUN 28.014 mg of N per mmol of urea: 14 mg/dL is 5.00 mmol/L", "input": {"analyte": "bun", "value": 14, "from": "mg/dL"}, "expect": {"exit": 0, "stdout_json": {"result": "5.00", "result_exact": "10000/2001"}}},
+  {"name": "uric acid 6 mg/dL is 357 umol/L (factor 59.48)", "input": {"analyte": "uric_acid", "value": 6, "from": "mg/dL", "decimals": 0}, "expect": {"exit": 0, "stdout_json": {"result": "357"}}},
+  {"name": "calcium 2.5 mmol/L back to mg/dL is 10.02", "input": {"analyte": "calcium", "value": "2.5", "from": "mmol/L"}, "expect": {"exit": 0, "stdout_json": {"to": "mg/dL", "result": "10.02"}}},
+  {"name": "mass to mass: glucose 1 g/L is 100 mg/dL", "input": {"analyte": "glucose", "value": 1, "from": "g/L", "to": "mg/dL"}, "expect": {"exit": 0, "stdout_json": {"result": "100.00"}}},
+  {"name": "micro sign accepted", "input": {"analyte": "creatinine", "value": 88.4, "from": "µmol/L", "decimals": 3}, "expect": {"exit": 0, "stdout_json": {"from": "umol/L", "result": "1.000"}}},
+  {"name": "unknown analyte", "input": {"analyte": "sodium", "value": 140, "from": "mmol/L"}, "expect": {"exit": 2, "stdout_contains": "analyte must be one of"}},
+  {"name": "bad unit", "input": {"analyte": "glucose", "value": 5, "from": "mEq/L"}, "expect": {"exit": 2, "stdout_contains": "disclaimer"}}
+]

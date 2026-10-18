@@ -1,0 +1,23 @@
+[
+  {"name": "Москва is Moskva in ISO 9 (table) and BGN/PCGN alike", "input": {"text": "Москва"}, "expect": {"stdout_json": {"result": "Moskva", "systems": {"cyrillic": "ISO 9:1995"}}}},
+  {"name": "Москва in BGN/PCGN 1947 table: Moskva", "input": {"text": "Москва", "cyrillic_system": "bgn_pcgn"}, "expect": {"stdout_json": {"result": "Moskva"}}},
+  {"name": "ISO 9:1995 table: х h, щ ŝ, ё ë, ь ʹ, ц c, я â, ю û, й j (Hruŝëv, Elʹcin, Ûrij, Majâ)", "input": {"text": "Хрущёв Ельцин Юрий Майя"}, "expect": {"stdout_json": {"result": "Hruŝëv Elʹcin Ûrij Majâ"}}},
+  {"name": "BGN/PCGN 1947 table: Khrushchëv, Yel'tsin (ye at word start), Yuriy, Mayya (ya)", "input": {"text": "Хрущёв Ельцин Юрий Майя", "cyrillic_system": "bgn_pcgn", "cyrillic_signs": "ascii"}, "expect": {"stdout_json": {"result": "Khrushchëv Yel'tsin Yuriy Mayya"}}},
+  {"name": "ISO 9 has no positional rule: е e, ё ë, э è, ъ ʺ everywhere", "input": {"text": "Аэрофлот объект Ёлка поездка мёд"}, "expect": {"stdout_json": {"result": "Aèroflot obʺekt Ëlka poezdka mëd"}}},
+  {"name": "BGN/PCGN positional rule in BGN mode", "input": {"text": "объект Ёлка поездка мёд", "cyrillic_system": "bgn_pcgn"}, "expect": {"stdout_json": {"result": "ob”yekt Yëlka poyezdka mëd"}}},
+  {"name": "scholarly transliteration of Russian: Xruščëv, šči, Jurij", "input": {"text": "Хрущёв щи Юрий", "cyrillic_system": "scholarly"}, "expect": {"stdout_json": {"result": "Xruščëv šči Jurij"}}},
+  {"name": "case: Щука Shchuka, ЩИ SHCHI, Щ alone Shch", "input": {"text": "Щука ЩИ Щ", "cyrillic_system": "bgn_pcgn"}, "expect": {"stdout_json": {"result": "Shchuka SHCHI Shch"}}},
+  {"name": "ISO 9:1995 table for Ukrainian, Serbian, Macedonian, Belarusian letters", "input": {"text": "Київ Ґанок Ђорђе Ћирилица Љубљана Ѓорѓи Ѕвезда Ўладзімір"}, "expect": {"stdout_json": {"result": "Kiïv G̀anok Đorđe Ćirilica L̂ubl̂ana Ǵorǵi Ẑvezda Ŭladzìmìr"}}},
+  {"name": "BGN mode leaves non-Russian letters and lists them", "input": {"text": "Київ", "cyrillic_system": "bgn_pcgn"}, "expect": {"stdout_json": {"result": "Kiїv", "unmapped": ["ї"]}}},
+  {"name": "ELOT 743 official names: Αθήνα Athina, Θεσσαλονίκη Thessaloniki, Πειραιάς Peiraias, Ηράκλειο Irakleio, Χαλκίδα Chalkida, Κέρκυρα Kerkyra", "input": {"text": "Αθήνα Θεσσαλονίκη Πειραιάς Ηράκλειο Χαλκίδα Κέρκυρα"}, "expect": {"stdout_json": {"result": "Athina Thessaloniki Peiraias Irakleio Chalkida Kerkyra"}}},
+  {"name": "ELOT 743 αυ/ευ rule: Ευρώπη Evropi (before ρ), αυτός aftos (before τ), Αύγουστος Avgoustos, Παύλος Pavlos", "input": {"text": "Ευρώπη αυτός Αύγουστος Παύλος"}, "expect": {"stdout_json": {"result": "Evropi aftos Avgoustos Pavlos"}}},
+  {"name": "ELOT 743 γγ ng, γξ nx, γχ nch, μπ b at start and mp inside", "input": {"text": "Άγγελος σφίγξ ελέγχω Μπαμπάς"}, "expect": {"stdout_json": {"result": "Angelos sfinx elencho Bampas"}}},
+  {"name": "Greek all capitals and diaeresis kept or dropped", "input": {"text": "ΕΥΡΩΠΗ Αϊτή", "greek_diaeresis": "drop"}, "expect": {"stdout_json": {"result": "EVROPI Aiti"}}},
+  {"name": "Greek diaeresis kept breaks the digraph: Ταΰγετος Taÿgetos", "input": {"text": "Ταΰγετος"}, "expect": {"stdout_json": {"result": "Taÿgetos"}}},
+  {"name": "ALA-LC Arabic table with vowel marks: مُحَمَّد muḥammad, كِتَاب kitāb, عَلِيّ ʻalī", "input": {"text": "مُحَمَّد كِتَاب عَلِيّ"}, "expect": {"stdout_json": {"result": "muḥammad kitāb ʻalī"}}},
+  {"name": "ALA-LC article al- without sun-letter assimilation: al-shams, al-qamar", "input": {"text": "الشَّمْس الْقَمَر"}, "expect": {"stdout_json": {"result": "al-shams al-qamar"}}},
+  {"name": "unvocalized Arabic: consonants and long ā only, short vowels not restored", "input": {"text": "القاهرة"}, "expect": {"stdout_json": {"result": "al-qāhrh"}, "stdout_contains": "not restored"}},
+  {"name": "mixed scripts and Arabic digits", "input": {"text": "Αθήνα–Москва ٢٠٢٦"}, "expect": {"stdout_json": {"result": "Athina–Moskva 2026", "scripts": ["greek", "cyrillic"]}}},
+  {"name": "bad system", "input": {"text": "Москва", "cyrillic_system": "gost"}, "expect": {"exit": 2, "stdout_contains": "cyrillic_system must be"}},
+  {"name": "text not a string", "input": {"text": 5}, "expect": {"exit": 2, "stdout_contains": "text must be"}}
+]

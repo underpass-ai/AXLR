@@ -1,0 +1,33 @@
+{
+  "name": "semver_tools",
+  "description": "Parse, compare, sort and bump Semantic Versioning 2.0.0 versions and match them against npm (node-semver) ranges. Precedence follows the SemVer spec (numeric before alphanumeric prerelease identifiers, build metadata ignored); ranges accept comparators, ^ caret, ~ tilde, x-ranges, partial versions, hyphen ranges and ||, with node-semver's desugaring (shown) and its prerelease rule, and report which versions satisfy plus the highest and lowest match.",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["parse", "compare", "sort", "bump", "match"]},
+      "version": {"type": "string", "maxLength": 256, "description": "parse, compare, bump, match"},
+      "other": {"type": "string", "maxLength": 256, "description": "Second version; compare"},
+      "versions": {"type": "array", "items": {"type": "string", "maxLength": 256}, "maxItems": 10000, "description": "sort, match"},
+      "release": {"type": "string", "enum": ["major", "minor", "patch", "premajor", "preminor", "prepatch", "prerelease", "release"], "description": "bump"},
+      "preid": {"type": "string", "maxLength": 64, "description": "Prerelease identifier for pre* bumps, e.g. beta"},
+      "range": {"type": "string", "maxLength": 4096, "description": "npm range, e.g. ^1.2.3 || >=2.0.0-rc.1 <2.1; match"},
+      "include_prerelease": {"type": "boolean", "default": false, "description": "Let prereleases match like normal versions; match"},
+      "descending": {"type": "boolean", "default": false, "description": "sort newest first"}
+    }
+  },
+  "program": "python3",
+  "args": ["semver_tools.py"],
+  "files": ["semver_tools.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "programming",
+    "tags": ["semver", "versioning", "npm", "ranges", "dependencies", "release"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "match", "range": "^1.2.3-beta.2", "versions": ["1.2.3-beta.4", "1.2.4-beta.2", "1.9.0"]}, "output": {"desugared": ">=1.2.3-beta.2 <2.0.0-0", "results": [{"version": "1.2.3-beta.4", "satisfies": true}, {"version": "1.2.4-beta.2", "satisfies": false}, {"version": "1.9.0", "satisfies": true}], "max_satisfying": "1.9.0"}},
+    "source": "Semantic Versioning 2.0.0 (semver.org), section 11 precedence; range grammar, desugaring, prerelease rule and inc() behaviour of npm's node-semver (README and classes/range.js, semver.js)"
+  }
+}

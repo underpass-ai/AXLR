@@ -1,0 +1,12 @@
+[
+  {"name": "difflib docs unified_diff example: bacon/eggs/ham/guido to python/eggy/hamster/guido, before.py and after.py", "input": {"a": "bacon\neggs\nham\nguido\n", "b": "python\neggy\nhamster\nguido\n", "from_name": "before.py", "to_name": "after.py"}, "expect": {"stdout_json": {"unified": "--- before.py\n+++ after.py\n@@ -1,4 +1,4 @@\n-bacon\n-eggs\n-ham\n+python\n+eggy\n+hamster\n guido\n", "hunks": 1, "lines": {"added": 3, "removed": 3}}}},
+  {"name": "difflib docs SequenceMatcher.ratio: 'tide' vs 'diet' is 0.25 (and the reverse order 0.5)", "input": {"a": "tide", "b": "diet"}, "expect": {"stdout_json": {"char_ratio": {"exact": "1/4", "value": 0.25}}}},
+  {"name": "difflib docs SequenceMatcher.ratio: 'diet' vs 'tide' is 0.5", "input": {"a": "diet", "b": "tide"}, "expect": {"stdout_json": {"char_ratio": {"exact": "1/2", "value": 0.5}}}},
+  {"name": "difflib docs SequenceMatcher example: 'private Thread currentThread;' vs '...volatile...' rounds to 0.866 (exactly 58/67)", "input": {"a": "private Thread currentThread;", "b": "private volatile Thread currentThread;"}, "expect": {"stdout_json": {"char_ratio": {"exact": "58/67"}}}},
+  {"name": "missing final newline is marked as GNU diff does", "input": {"a": "one\ntwo", "b": "one\nthree"}, "expect": {"stdout_json": {"unified": "--- a\n+++ b\n@@ -1,2 +1,2 @@\n one\n-two\n\\ No newline at end of file\n+three\n\\ No newline at end of file\n"}}},
+  {"name": "zero context lines", "input": {"a": "1\n2\n3\n4\n5\n", "b": "1\n2\nX\n4\n5\n", "context": 0}, "expect": {"stdout_json": {"unified": "--- a\n+++ b\n@@ -3 +3 @@\n-3\n+X\n"}}},
+  {"name": "word diff with inline markers", "input": {"a": "The quick brown fox jumps.", "b": "The quick red fox leaped.", "words": true}, "expect": {"stdout_json": {"words": {"inline": "The quick [-brown-]{+red+} fox [-jumps-]{+leaped+}.", "ratio": {"exact": "4/5"}}}}},
+  {"name": "side by side rows for an insertion", "input": {"a": "a\nc\n", "b": "a\nb\nc\n", "side_by_side": true}, "expect": {"stdout_json": {"side_by_side": {"rows": [{"left_line": 1, "op": " ", "right_line": 1}, {"left_line": null, "left": null, "op": ">", "right_line": 2, "right": "b"}, {"left_line": 2, "op": " ", "right_line": 3}]}}}},
+  {"name": "identical texts", "input": {"a": "same\n", "b": "same\n"}, "expect": {"stdout_json": {"identical": true, "unified": "", "hunks": 0, "line_ratio": {"exact": "1/1"}}}},
+  {"name": "missing b", "input": {"a": "x"}, "expect": {"exit": 2, "stdout_contains": "a and b must be strings"}}
+]

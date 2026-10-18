@@ -1,0 +1,27 @@
+{
+  "name": "password_entropy",
+  "description": "Estimate a password's strength without ever echoing it: the character-pool bound (length x log2 of the pool), a pattern-adjusted estimate that charges common passwords (a bundled list of the 2000 most common, from SecLists), l33t substitutions, keyboard runs, sequences, repeats, dates and context words at their guessing cost, crack-time estimates at stated guess rates (online and offline) and NIST SP 800-63B advice. Findings give only the pattern type, position and length.",
+  "input_schema": {
+    "type": "object",
+    "required": ["password"],
+    "additionalProperties": false,
+    "properties": {
+      "password": {"type": "string", "minLength": 1, "maxLength": 4096},
+      "context": {"type": "array", "items": {"type": "string", "maxLength": 256}, "maxItems": 50, "default": [], "description": "User or service words to penalise (name, e-mail, site)"},
+      "guesses_per_second": {"type": "object", "additionalProperties": {"type": "number", "exclusiveMinimum": 0}, "default": {}, "description": "Extra attack rates {label: guesses per second}"}
+    }
+  },
+  "program": "python3",
+  "args": ["password_entropy.py"],
+  "files": ["password_entropy.py", "common_passwords.txt"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "security",
+    "tags": ["password", "entropy", "strength", "nist", "800-63b", "crack-time"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"password": "kxqbvtmzrwpj"}, "output": {"length": 12, "pool_size": 26, "pool_entropy_bits": 56.41, "estimated_entropy_bits": 56.41, "rating": "fair", "patterns": []}},
+    "source": "Pool entropy H = L log2 N (NIST SP 800-63 v1.0.2 appendix A); pattern costs after zxcvbn (Wheeler, USENIX Security 2016); advice from NIST SP 800-63B; blocklist from SecLists 10k-most-common (MIT), written by tools/catalog/data/password_entropy.py"
+  }
+}

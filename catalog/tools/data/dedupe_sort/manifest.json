@@ -1,0 +1,35 @@
+{
+  "name": "dedupe_sort",
+  "description": "Deduplicate and sort lines of text: duplicates found exactly, ignoring case (Unicode case folding), after trimming, after Unicode normalisation (NFC or NFKC) or ignoring accents, keeping the first occurrence with a count of each line; sort by code point or naturally (file2 before file10, v1.9 before v1.10), case- and accent-insensitive without a locale, reversed; keep only duplicated or only unique lines, drop empty lines. Line endings are kept.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string"},
+      "lines": {"type": "array", "items": {"type": "string"}},
+      "path": {"type": "string", "description": "Or a relative path to a text file"},
+      "dedupe": {"type": "boolean", "default": true},
+      "ignore_case": {"type": "boolean", "default": false},
+      "trim": {"type": "boolean", "default": false},
+      "normalize": {"type": "string", "enum": ["none", "NFC", "NFKC"], "default": "none"},
+      "ignore_accents": {"type": "boolean", "default": false},
+      "sort": {"type": "string", "enum": ["none", "lexical", "natural"], "default": "none"},
+      "reverse": {"type": "boolean", "default": false},
+      "drop_empty": {"type": "boolean", "default": false},
+      "only": {"type": "string", "enum": ["all", "duplicates", "unique"], "default": "all"}
+    }
+  },
+  "program": "python3",
+  "args": ["dedupe_sort.py"],
+  "files": ["dedupe_sort.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "data",
+    "tags": ["dedupe", "sort", "natural-sort", "lines", "unicode", "text-cleaning"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"lines": ["file10", "file2", "file20", "file1", "file2"], "sort": "natural"}, "output": {"lines": ["file1", "file2", "file10", "file20"], "duplicates": [{"line": "file2", "count": 2}]}},
+    "source": "original; Unicode case folding and normalisation forms (Unicode Standard Annex 15) through unicodedata; natural order as in GNU sort -V and Python natsort"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "nutrition_totals",
+  "description": "Totals of energy and nutrients from a food table given in the input (amounts per 100 g) and the grams of each item, per item, in total and per serving, with the percentage of reference intakes: the adult reference intakes of Regulation (EU) No 1169/2011 Annex XIII (energy 8400 kJ / 2000 kcal, fat 70 g, saturates 20 g, carbohydrate 260 g, sugars 90 g, protein 50 g, salt 6 g, and the vitamin and mineral NRVs) by default, or values given in the input. Exact arithmetic; every output carries a disclaimer.",
+  "input_schema": {
+    "type": "object",
+    "required": ["foods", "items"],
+    "additionalProperties": false,
+    "properties": {
+      "foods": {"type": "object", "description": "Food name -> {nutrient key: amount per 100 g}; Annex XIII keys use its units (g, mg, ug, kJ, kcal)", "additionalProperties": {"type": "object", "additionalProperties": {"type": ["number", "string"]}}},
+      "items": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["food", "grams"], "properties": {"food": {"type": "string"}, "grams": {"type": ["number", "string"]}}}},
+      "servings": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 1},
+      "reference_intakes": {"type": "object", "additionalProperties": {"type": ["number", "string"]}, "description": "Replaces the Annex XIII defaults"},
+      "decimals": {"type": "integer", "minimum": 0, "maximum": 6, "default": 2}
+    }
+  },
+  "program": "python3",
+  "args": ["nutrition_totals.py"],
+  "files": ["nutrition_totals.py", "reference_intakes.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "health",
+    "tags": ["nutrition", "recipe", "reference-intakes", "food-labelling", "eu-1169-2011", "calories"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"foods": {"oats": {"energy_kcal": 375, "protein": 13}, "milk": {"energy_kcal": 64, "protein": 3.3}}, "items": [{"food": "oats", "grams": 80}, {"food": "milk", "grams": 250}], "servings": 2},
+                "output": {"totals": {"energy_kcal": "460.00", "protein": "18.65"}, "per_serving": {"energy_kcal": "230.00"}, "percent_reference_intake_per_serving": {"energy_kcal": "11.5", "protein": "18.7"}}},
+    "source": "Regulation (EU) No 1169/2011 on the provision of food information to consumers, Annex XIII (reference intakes), transcribed by tools/catalog/data/nutrition_totals.py from EUR-Lex CELEX 32011R1169"
+  }
+}

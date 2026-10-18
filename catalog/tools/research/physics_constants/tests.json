@@ -1,0 +1,13 @@
+[
+  {"name": "NIST CODATA 2022: speed of light in vacuum c = 299 792 458 m s^-1, exact", "input": {"query": "c"}, "expect": {"stdout_json": {"match": "symbol", "results": [{"name": "speed of light in vacuum", "value": "299792458", "unit": "m s^-1", "exact": true, "uncertainty": null}]}}},
+  {"name": "NIST CODATA 2022: Planck constant h = 6.626 070 15 e-34 J Hz^-1, exact", "input": {"symbol": "h"}, "expect": {"stdout_json": {"results": [{"name": "Planck constant", "value": "6.62607015e-34", "unit": "J Hz^-1", "exact": true}]}}},
+  {"name": "NIST CODATA 2022: electron mass 9.109 383 7139(28) e-31 kg", "input": {"query": "electron mass"}, "expect": {"stdout_json": {"match": "name", "count": 1, "results": [{"value": "9.1093837139e-31", "uncertainty": "2.8e-40", "unit": "kg", "exact": false, "concise": "9.1093837139(28)e-31", "relative_uncertainty": 3.07e-10}]}}},
+  {"name": "NIST CODATA 2022: Newtonian constant of gravitation 6.674 30(15) e-11 m^3 kg^-1 s^-2", "input": {"name": "newtonian constant of gravitation"}, "expect": {"stdout_json": {"results": [{"value": "6.67430e-11", "concise": "6.67430(15)e-11", "relative_uncertainty": 2.25e-05}]}}},
+  {"name": "keywords: boltzmann constant ranked first among the Boltzmann entries", "input": {"query": "boltzmann", "limit": 2}, "expect": {"stdout_json": {"match": "keywords", "count": 5, "truncated": true, "results": [{"name": "Boltzmann constant", "value": "1.380649e-23"}, {"name": "Boltzmann constant in Hz/K"}]}}},
+  {"name": "a truncated exact value is flagged (molar gas constant)", "input": {"symbol": "R"}, "expect": {"stdout_json": {"results": [{"value": "8.314462618", "exact": true, "note": "exact, but NIST prints it truncated (more digits follow)"}]}}},
+  {"name": "answers carry the table's source and date", "input": {"query": "fine-structure constant"}, "expect": {"stdout_json": {"source": {"fetched": "2026-10-18", "url": "https://physics.nist.gov/cuu/Constants/Table/allascii.txt"}, "results": [{"value": "7.2973525643e-3", "concise": "7.2973525643(11)e-3"}]}}},
+  {"name": "list counts all 355 constants", "input": {"list": true}, "expect": {"stdout_json": {"count": 355}}},
+  {"name": "no match is not an error", "input": {"query": "flux capacitor"}, "expect": {"stdout_json": {"count": 0, "results": []}}},
+  {"name": "two selectors at once", "input": {"query": "c", "symbol": "h"}, "expect": {"exit": 2, "stdout_contains": "exactly one of"}},
+  {"name": "query not a string", "input": {"query": 5}, "expect": {"exit": 2, "stdout_contains": "query must be"}}
+]

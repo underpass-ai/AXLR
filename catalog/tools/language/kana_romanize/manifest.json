@@ -1,0 +1,29 @@
+{
+  "name": "kana_romanize",
+  "description": "Romanize Japanese hiragana and katakana in modified Hepburn (long vowels with macrons or as spelled, sokuon doubling with tch, n' before vowels and y, optional traditional m before b/m/p) or Kunrei-shiki (ISO 3602: si, ti, tu, hu, sya, circumflexes), with yoon and the katakana extensions for loanwords (fa, ti, vu). Kanji are left unchanged and listed.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "minLength": 1, "maxLength": 100000, "description": "Japanese text in kana; kanji and other characters are copied unchanged"},
+      "system": {"type": "string", "enum": ["hepburn", "kunrei"], "default": "hepburn"},
+      "long_vowels": {"type": "string", "enum": ["mark", "as_is"], "default": "mark", "description": "mark: macron (Hepburn) or circumflex (Kunrei); as_is: vowels as spelled, ー repeats the vowel"},
+      "n_before_bmp": {"type": "string", "enum": ["n", "m"], "default": "n", "description": "Hepburn ん before b, m, p: n (modern) or m (traditional, shimbun)"},
+      "capitalize": {"type": "boolean", "default": false, "description": "Upper-case the first letter of each space-separated word"}
+    }
+  },
+  "program": "python3",
+  "args": ["kana_romanize.py"],
+  "files": ["kana_romanize.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "language",
+    "tags": ["japanese", "kana", "romanization", "hepburn", "kunrei", "transliteration", "linguistics"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "とうきょう", "capitalize": true}, "output": {"result": "Tōkyō", "system": "modified Hepburn"}},
+    "source": "Modified Hepburn as in the ALA-LC Japanese romanization table (Library of Congress) and Kenkyusha's dictionary; Kunrei-shiki per the 1954 Cabinet notification and ISO 3602:1989; kanji readings (not done) as in pykakasi"
+  }
+}

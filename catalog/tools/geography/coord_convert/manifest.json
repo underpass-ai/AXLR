@@ -1,0 +1,39 @@
+{
+  "name": "coord_convert",
+  "description": "Convert geographic coordinates on WGS-84 between notations: parse and format decimal degrees, degrees-minutes-seconds and degrees-decimal-minutes (N/S/E/W or signs, symbols ° ′ ″ ' \" d :), UTM both ways with zone and latitude band including the Norway (32V) and Svalbard (31X-37X) exceptions by Krueger's transverse Mercator series to sixth order as in Karney (2011) and GeographicLib, MGRS both ways (truncated, square centre on input, as GeoConvert), and geohash encode and decode with error bounds. Inputs are validated: ranges, minutes and seconds below 60, band against hemisphere, MGRS and geohash alphabets.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["all", "format", "to_utm", "from_utm", "to_mgrs", "from_mgrs", "geohash_encode", "geohash_decode"], "default": "all"},
+      "lat": {"type": ["number", "string"], "description": "Decimal degrees or a DMS/DDM string such as \"40°26′46″N\""},
+      "lon": {"type": ["number", "string"], "description": "Decimal degrees or a DMS/DDM string such as \"079 58 56W\""},
+      "position": {"type": "string", "maxLength": 200, "description": "Both coordinates in one string, instead of lat and lon: \"E44d24 N33d20\", \"33.3, 44.4\"; without letters the order is lat, lon"},
+      "zone": {"type": "integer", "minimum": 1, "maximum": 60, "description": "from_utm; to_utm to force a zone"},
+      "hemisphere": {"type": "string", "enum": ["N", "S", "n", "s"], "description": "from_utm (or give band)"},
+      "band": {"type": "string", "pattern": "^[C-HJ-NP-Xc-hj-np-x]$", "description": "from_utm latitude band, checked against the result"},
+      "easting": {"type": ["number", "string"], "description": "from_utm, metres"},
+      "northing": {"type": ["number", "string"], "description": "from_utm, metres"},
+      "mgrs": {"type": "string", "maxLength": 40, "description": "from_mgrs, e.g. \"38SMB4488\""},
+      "mgrs_digits": {"type": "integer", "minimum": 0, "maximum": 5, "default": 5, "description": "Digits per coordinate: 5 = 1 m, 2 = 1 km"},
+      "corner": {"type": "string", "enum": ["center", "southwest"], "default": "center", "description": "from_mgrs: point of the square returned"},
+      "geohash": {"type": "string", "maxLength": 22, "description": "geohash_decode"},
+      "geohash_length": {"type": "integer", "minimum": 1, "maximum": 12, "default": 9},
+      "seconds_decimals": {"type": "integer", "minimum": 0, "maximum": 6, "default": 2, "description": "DMS seconds decimals; DDM minutes get two more"}
+    }
+  },
+  "program": "python3",
+  "args": ["coord_convert.py"],
+  "files": ["coord_convert.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "geography",
+    "tags": ["coordinates", "dms", "utm", "mgrs", "geohash", "wgs84", "transverse-mercator"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "from_mgrs", "mgrs": "38SMB4488"},
+                "output": {"lat": 33.3342350846, "lon": 44.4036278478, "dms": "33°20′03.25″N 044°24′13.06″E", "utm": {"zone": 38, "hemisphere": "N", "band": "S", "easting": 444500.0, "northing": 3688500.0}}},
+    "source": "C. F. F. Karney, 'Transverse Mercator with an accuracy of a few nanometers', J. Geodesy 85 (2011) 475-485 (Krueger 1912 series to sixth order in n, Newton inversion of the conformal latitude); behaviour of GeographicLib's GeoConvert (UTM/MGRS conventions, documented examples); geohash by G. Niemeyer (2008), examples from Wikipedia's Geohash article"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "name": "bmi_bsa",
+  "description": "Body-mass index with the WHO adult categories (and a percentile note under 18) and body-surface area by the Mosteller, DuBois, Haycock and Gehan-George formulas, from metric or imperial weight and height. BMI is an exact fraction; every output carries a disclaimer: not medical advice, verify with a clinician.",
+  "input_schema": {
+    "type": "object",
+    "required": ["weight", "height"],
+    "additionalProperties": false,
+    "properties": {
+      "weight": {"type": ["number", "string"], "description": "kg (metric) or lb (imperial)"},
+      "height": {"type": ["number", "string"], "description": "cm (metric) or in (imperial)"},
+      "units": {"type": "string", "enum": ["metric", "imperial"], "default": "metric"},
+      "age": {"type": "number", "minimum": 0, "maximum": 130, "description": "Years; under 18 the adult categories are withheld"}
+    }
+  },
+  "program": "python3",
+  "args": ["bmi_bsa.py"],
+  "files": ["bmi_bsa.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "health",
+    "tags": ["bmi", "bsa", "body-surface-area", "anthropometry", "who", "mosteller", "dubois"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"weight": 80, "height": 180}, "output": {"bmi": "24.69", "who_category": "Normal range", "bsa_m2": {"mosteller": "2.0000", "dubois": "1.9964"}}},
+    "source": "WHO adult BMI classification (BMI 18.5, 25, 30, 35, 40 cut-offs); Mosteller, N Engl J Med 1987;317:1098; DuBois & DuBois, Arch Intern Med 1916;17:863; Haycock et al., J Pediatr 1978;93:62; Gehan & George, Cancer Chemother Rep 1970;54:225"
+  }
+}

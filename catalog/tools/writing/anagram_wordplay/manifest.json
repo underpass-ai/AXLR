@@ -1,0 +1,36 @@
+{
+  "name": "anagram_wordplay",
+  "description": "Word play: single- and multi-word anagrams from a word list, palindrome check ignoring punctuation, case and accents, lipogram check with offsets, the shortest word ladder between two words, and letter frequencies with a pangram check. Word lists come from the input, plus an optional bundled English list of 29,483 words (SCOWL/ESDB size 35, permissive licence).",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["anagrams", "palindrome", "lipogram", "word_ladder", "letter_frequency"]},
+      "text": {"type": "string", "description": "Word, phrase or text (anagrams, palindrome, lipogram, letter_frequency)"},
+      "words": {"type": "array", "items": {"type": "string"}, "description": "Your word list (anagrams, word_ladder)"},
+      "bundled": {"type": "boolean", "default": false, "description": "Add the bundled English list (lowercase words of 1 to 9 letters)"},
+      "multi_word": {"type": "boolean", "default": false, "description": "anagrams: also phrases of several words"},
+      "max_words": {"type": "integer", "minimum": 2, "maximum": 4, "default": 3},
+      "min_word_length": {"type": "integer", "minimum": 1, "maximum": 20, "default": 2},
+      "max_results": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 100},
+      "time_limit": {"type": "number", "exclusiveMinimum": 0, "maximum": 20, "default": 5, "description": "Seconds for the multi-word search"},
+      "letters": {"type": ["string", "array"], "items": {"type": "string"}, "description": "lipogram: the forbidden letters"},
+      "start": {"type": "string", "description": "word_ladder: first word"},
+      "end": {"type": "string", "description": "word_ladder: last word, same length"}
+    }
+  },
+  "program": "python3",
+  "args": ["anagram_wordplay.py"],
+  "files": ["anagram_wordplay.py", "words_en.txt"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["anagram", "palindrome", "lipogram", "word-ladder", "wordplay", "letters"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "anagrams", "text": "listen", "bundled": true}, "output": {"letters": "eilnst", "single_word": ["enlist", "inlets", "silent", "tinsel"], "single_word_count": 4}},
+    "source": "original; bundled list from SCOWL/ESDB by Kevin Atkinson (app.aspell.net, size 35, fetched 2026-10-18 by tools/catalog/data/anagram_wordplay.py), ESDB permissive licence"
+  }
+}

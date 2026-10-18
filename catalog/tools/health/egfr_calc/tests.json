@@ -1,0 +1,14 @@
+[
+  {"name": "NKF test values for the 2021 equation: age 18, male, creatinine 0.90 mg/dL is 127", "input": {"age": 18, "sex": "male", "creatinine": 0.90}, "expect": {"exit": 0, "stdout_json": {"egfr_cr": {"egfr": 127, "stage": "G1"}}}},
+  {"name": "NKF test values: age 18, male, 0.91 is 125", "input": {"age": 18, "sex": "male", "creatinine": 0.91}, "expect": {"exit": 0, "stdout_json": {"egfr_cr": {"egfr": 125}}}},
+  {"name": "NKF test values: age 18, female, 0.70 is 128", "input": {"age": 18, "sex": "female", "creatinine": 0.70}, "expect": {"exit": 0, "stdout_json": {"egfr_cr": {"egfr": 128}}}},
+  {"name": "NKF test values: age 18, female, 0.71 is 126", "input": {"age": 18, "sex": "female", "creatinine": 0.71}, "expect": {"exit": 0, "stdout_json": {"egfr_cr": {"egfr": 126}}}},
+  {"name": "NKF test values: age 90, male, 0.50 is 97", "input": {"age": 90, "sex": "male", "creatinine": 0.50}, "expect": {"exit": 0, "stdout_json": {"egfr_cr": {"egfr": 97}}}},
+  {"name": "NKF test values: age 90, male, 1.50 is 44 (G3b)", "input": {"age": 90, "sex": "male", "creatinine": 1.50}, "expect": {"exit": 0, "stdout_json": {"egfr_cr": {"egfr": 44, "stage": "G3b"}}}},
+  {"name": "NKF test values: age 90, female, 0.50 is 89 (G2)", "input": {"age": 90, "sex": "female", "creatinine": 0.50}, "expect": {"exit": 0, "stdout_json": {"egfr_cr": {"egfr": 89, "stage": "G2"}}}},
+  {"name": "NKF test values: age 90, female, 1.50 is 33", "input": {"age": 90, "sex": "female", "creatinine": 1.50}, "expect": {"exit": 0, "stdout_json": {"egfr_cr": {"egfr": 33}}}},
+  {"name": "hand-checked: 50-year-old female, 1.0 mg/dL = 142 x (1/0.7)^-1.2 x 0.9938^50 x 1.012 = 68.6, given in umol/L", "input": {"age": 50, "sex": "female", "creatinine": 88.4, "creatinine_unit": "umol/L"}, "expect": {"exit": 0, "stdout_json": {"creatinine_mg_dl": "1.000", "egfr_cr": {"egfr": 69, "egfr_unrounded": "68.63"}}}},
+  {"name": "hand-checked creatinine-cystatin 2021: 50 F, Scr 1.0, Scys 1.0 is 74", "input": {"age": 50, "sex": "female", "creatinine": 1.0, "cystatin_c": 1.0}, "expect": {"exit": 0, "stdout_json": {"egfr_cr_cys": {"egfr": 74, "stage": "G2"}}}},
+  {"name": "NKF test values: under 18, do not calculate", "input": {"age": 17, "sex": "male", "creatinine": 1.0}, "expect": {"exit": 2, "stdout_contains": "do not calculate"}},
+  {"name": "missing sex", "input": {"age": 40, "creatinine": 1.0}, "expect": {"exit": 2, "stdout_contains": "sex must be"}}
+]
