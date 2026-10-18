@@ -64,7 +64,7 @@ func TestCodexMarketplaceInstallsOnlyIntoAXLR(t *testing.T) {
 		t.Fatalf("Codex source mutated: %v", err)
 	}
 	guidance, err := catalog.Guidance(ctx)
-	if err != nil || !strings.Contains(guidance, "\n- sample: Example. Skills: example.") || strings.Contains(guidance, "Example skill") || !strings.Contains(guidance, "axlr_skill") || strings.Contains(guidance, packageRoot) {
+	if err != nil || !strings.Contains(guidance, "\n- sample: Example. Skills: example (Example skill).") || !strings.Contains(guidance, "axlr_skill") || strings.Contains(guidance, packageRoot) {
 		t.Fatalf("guidance: %q %v", guidance, err)
 	}
 }
@@ -77,7 +77,7 @@ func TestGuidanceListsSkillStartingWithMultibyteCharacter(t *testing.T) {
 	mustWrite(t, filepath.Join(packageRoot, ".codex-plugin", "plugin.json"), `{"name":"sample","version":"1.0.0","description":"Example","skills":"./skills/"}`)
 	mustWrite(t, filepath.Join(packageRoot, "skills", "bom", "SKILL.md"), "\ufeff---\nname: bom\n---\nUse this skill.\n")
 	guidance, err := (&Catalog{Root: axlr}).Guidance(context.Background())
-	if err != nil || !strings.Contains(guidance, "Skills: bom.") {
+	if err != nil || !strings.Contains(guidance, "Skills: bom.") || strings.Contains(guidance, "bom (") {
 		t.Fatalf("guidance: %q %v", guidance, err)
 	}
 }
