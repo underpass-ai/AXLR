@@ -1,0 +1,18 @@
+[
+  {"name": "Wikipedia, Gaussian elimination: 2x + y - z = 8, -3x - y + 2z = -11, -2x + y + 2z = -3 gives (2, 3, -1)", "input": {"operation": "solve", "matrix": [[2, 1, -1], [-3, -1, 2], [-2, 1, 2]], "b": [8, -11, -3]},
+   "expect": {"exit": 0, "stdout_json": {"solution_type": "unique", "solution": ["2", "3", "-1"]}}},
+  {"name": "determinant of that system by cofactor expansion by hand: -1", "input": {"operation": "determinant", "matrix": [[2, 1, -1], [-3, -1, 2], [-2, 1, 2]]}, "expect": {"exit": 0, "stdout_json": {"determinant": "-1"}}},
+  {"name": "Wikipedia, Gaussian elimination: inverse of [[2,-1,0],[-1,2,-1],[0,-1,2]] is 1/4 [[3,2,1],[2,4,2],[1,2,3]]", "input": {"operation": "inverse", "matrix": [[2, -1, 0], [-1, 2, -1], [0, -1, 2]]},
+   "expect": {"exit": 0, "stdout_json": {"determinant": "4", "inverse": [["3/4", "1/2", "1/4"], ["1/2", "1", "1/2"], ["1/4", "1/2", "3/4"]]}}},
+  {"name": "1..9 matrix is singular: rank 2, rref by hand", "input": {"operation": "rref", "matrix": [[1, 2, 3], [4, 5, 6], [7, 8, 9]]},
+   "expect": {"exit": 0, "stdout_json": {"rank": 2, "nullity": 1, "rref": [["1", "0", "-1"], ["0", "1", "2"], ["0", "0", "0"]], "pivot_columns": [1, 2]}}},
+  {"name": "infinitely many solutions with a parametric description", "input": {"operation": "solve", "matrix": [[1, 2, 3], [4, 5, 6], [7, 8, 9]], "b": [6, 15, 24]},
+   "expect": {"exit": 0, "stdout_json": {"solution_type": "infinite", "free_variables": ["x3"], "general_solution": ["x1 = x3", "x2 = 3 - 2*x3", "x3 free"], "null_space_basis": [["1", "-2", "1"]]}}},
+  {"name": "inconsistent system has no solution", "input": {"operation": "solve", "matrix": [[1, 2, 3], [4, 5, 6], [7, 8, 9]], "b": [1, 1, 0]}, "expect": {"exit": 0, "stdout_json": {"solution_type": "none", "rank": 2, "rank_augmented": 3}}},
+  {"name": "singular matrix has no inverse", "input": {"operation": "inverse", "matrix": [[1, 2], [2, 4]]}, "expect": {"exit": 0, "stdout_json": {"invertible": false, "inverse": null, "determinant": "0"}}},
+  {"name": "decimal entries are exact: det [[0.1, 0.2], [0.3, 0.4]] = -1/50", "input": {"operation": "determinant", "matrix": [[0.1, 0.2], [0.3, 0.4]]}, "expect": {"exit": 0, "stdout_json": {"determinant": "-1/50"}}},
+  {"name": "product", "input": {"operation": "multiply", "matrix": [[1, 2], [3, 4]], "other": [[5, 6], [7, 8]]}, "expect": {"exit": 0, "stdout_json": {"result": [["19", "22"], ["43", "50"]]}}},
+  {"name": "transpose", "input": {"operation": "transpose", "matrix": [[1, 2, 3]]}, "expect": {"exit": 0, "stdout_json": {"result": [["1"], ["2"], ["3"]], "result_shape": [3, 1]}}},
+  {"name": "determinant of a non-square matrix", "input": {"operation": "determinant", "matrix": [[1, 2, 3]]}, "expect": {"exit": 2, "stdout_contains": "square"}},
+  {"name": "ragged rows", "input": {"operation": "rank", "matrix": [[1, 2], [3]]}, "expect": {"exit": 2, "stdout_contains": "same"}}
+]

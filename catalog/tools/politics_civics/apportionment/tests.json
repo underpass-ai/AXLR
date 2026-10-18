@@ -1,0 +1,24 @@
+[
+  {"name": "Wikipedia Huntington-Hill method example: 100000/80000/30000, 8 seats, one each first, gives 4-3-1", "input": {"seats": 8, "populations": {"A": 100000, "B": 80000, "C": 30000}},
+   "expect": {"exit": 0, "stdout_json": {"min_seats": 1, "allocation": {"A": 4, "B": 3, "C": 1}, "awards": [
+     {"district": "A", "seat_number": 2, "priority": 70710.678}, {"district": "B", "seat_number": 2, "priority": 56568.542}, {"district": "A", "seat_number": 3, "priority": 40824.829},
+     {"district": "B", "seat_number": 3, "priority": 32659.863}, {"district": "A", "seat_number": 4, "priority": 28867.513}]}}},
+  {"name": "Wikipedia Largest remainder method Alabama paradox, Hamilton with 25 seats: D and E get 3", "input": {"seats": 25, "method": "hamilton", "populations": {"A": 1500, "B": 1500, "C": 900, "D": 500, "E": 500, "F": 200}},
+   "expect": {"exit": 0, "stdout_json": {"standard_divisor": "204", "allocation": {"A": 7, "B": 7, "C": 4, "D": 3, "E": 3, "F": 1}}}},
+  {"name": "Wikipedia Largest remainder method Alabama paradox, Hamilton with 26 seats: D and E drop to 2", "input": {"seats": 26, "method": "hamilton", "populations": {"A": 1500, "B": 1500, "C": 900, "D": 500, "E": 500, "F": 200}},
+   "expect": {"exit": 0, "stdout_json": {"allocation": {"A": 8, "B": 8, "C": 5, "D": 2, "E": 2, "F": 1}}}},
+  {"name": "Wikipedia Sainte-Lague method example, Webster with 8 seats: 3-3-1-1", "input": {"seats": 8, "method": "webster", "populations": {"A": 100000, "B": 80000, "C": 30000, "D": 20000}},
+   "expect": {"exit": 0, "stdout_json": {"allocation": {"A": 3, "B": 3, "C": 1, "D": 1}}}},
+  {"name": "Wikipedia Sainte-Lague method example, Jefferson (D'Hondt) gives A four seats and D none", "input": {"seats": 8, "method": "jefferson", "populations": {"A": 100000, "B": 80000, "C": 30000, "D": 20000}},
+   "expect": {"exit": 0, "stdout_json": {"allocation": {"A": 4, "B": 3, "C": 1, "D": 0}, "next_priority": "20000"}}},
+  {"name": "Adams with 7 seats, checked by hand", "input": {"seats": 7, "method": "adams", "populations": {"A": 100000, "B": 80000, "C": 30000, "D": 20000}},
+   "expect": {"exit": 0, "stdout_json": {"allocation": {"A": 3, "B": 2, "C": 1, "D": 1}, "awards": [{"district": "A", "priority": "100000"}, {"district": "B", "priority": "80000"}, {"district": "A", "priority": "50000"}]}}},
+  {"name": "Jefferson with a minimum of one seat", "input": {"seats": 8, "method": "jefferson", "min_seats": 1, "populations": {"A": 100000, "B": 80000, "C": 30000, "D": 20000}},
+   "expect": {"exit": 0, "stdout_json": {"allocation": {"A": 3, "B": 3, "C": 1, "D": 1}}}},
+  {"name": "Hamilton with a minimum of two seats reapportions the rest", "input": {"seats": 10, "method": "hamilton", "min_seats": 2, "populations": {"A": 100000, "B": 80000, "C": 30000, "D": 20000}},
+   "expect": {"exit": 0, "stdout_json": {"raised_to_minimum": ["C", "D"], "allocation": {"A": 3, "B": 3, "C": 2, "D": 2}}}},
+  {"name": "tie for the last seat is reported", "input": {"seats": 3, "method": "webster", "populations": {"A": 100, "B": 100, "C": 10}},
+   "expect": {"exit": 0, "stdout_json": {"allocation": {"A": 2, "B": 1, "C": 0}, "ties": [{"between": ["A", "B"], "awarded_to": "A"}]}}},
+  {"name": "minimums exceed the house", "input": {"seats": 3, "populations": {"A": 1, "B": 2, "C": 3, "D": 4}}, "expect": {"exit": 2, "stdout_contains": "need more than 3 seats"}},
+  {"name": "zero population", "input": {"seats": 3, "populations": {"A": 0}}, "expect": {"exit": 2, "stdout_contains": "positive integers"}}
+]

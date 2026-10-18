@@ -1,0 +1,39 @@
+{
+  "name": "break_even",
+  "description": "Cost-volume-profit analysis: break-even units and revenue, contribution margin and ratio, margin of safety, operating income and degree of operating leverage at a sales level, units for a target profit before or after tax, a sales-mix break-even for several products (mix by units or by revenue), and a sensitivity table over price, variable-cost and fixed-cost changes. Decimal arithmetic.",
+  "input_schema": {
+    "type": "object",
+    "required": ["fixed_costs"],
+    "additionalProperties": false,
+    "properties": {
+      "fixed_costs": {"type": ["number", "string"]},
+      "price": {"type": ["number", "string"], "description": "Unit price, one product"},
+      "variable_cost": {"type": ["number", "string"], "description": "Unit variable cost, one product"},
+      "products": {"type": "array", "minItems": 1, "items": {"type": "object", "required": ["price", "variable_cost", "mix"], "additionalProperties": false, "properties": {
+        "name": {"type": "string"}, "price": {"type": ["number", "string"]}, "variable_cost": {"type": ["number", "string"]},
+        "mix": {"type": ["number", "string"], "description": "Share of units or of revenue, any scale"}}}},
+      "mix_basis": {"type": "string", "enum": ["units", "revenue"], "default": "units"},
+      "sales_units": {"type": ["number", "string"], "description": "Expected units, one product"},
+      "sales_revenue": {"type": ["number", "string"]},
+      "target_profit": {"type": ["number", "string"]},
+      "tax_rate": {"type": ["number", "string"], "description": "Makes target_profit after tax: 0.25 or \"25%\""},
+      "sensitivity": {"type": "object", "additionalProperties": false, "properties": {
+        "price_changes_pct": {"type": "array", "items": {"type": ["number", "string"]}, "maxItems": 25},
+        "variable_cost_changes_pct": {"type": "array", "items": {"type": ["number", "string"]}, "maxItems": 25},
+        "fixed_cost_changes_pct": {"type": "array", "items": {"type": ["number", "string"]}, "maxItems": 25}}}
+    }
+  },
+  "program": "python3",
+  "args": ["break_even.py"],
+  "files": ["break_even.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["break-even", "cvp", "contribution-margin", "margin-of-safety", "operating-leverage", "sales-mix", "sensitivity"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"fixed_costs": 35000, "price": 250, "variable_cost": 150, "sales_units": 400}, "output": {"break_even_units": {"exact": "350.0000", "rounded_up": "350"}, "break_even_revenue": "87500.00", "at_sales": {"margin_of_safety_pct": "12.50", "degree_of_operating_leverage": "8.0000"}}},
+    "source": "original; the cost-volume-profit relationships of managerial-accounting texts (Garrison, Noreen and Brewer, Managerial Accounting, ch. on CVP), whose Acoustic Concepts example the tests reproduce"
+  }
+}

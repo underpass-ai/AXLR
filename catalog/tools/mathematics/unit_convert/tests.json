@@ -1,0 +1,20 @@
+[
+  {"name": "NIST SP 811 B.8: international mile = 1609.344 m exactly", "input": {"value": 1, "from": "mi", "to": "m"}, "expect": {"exit": 0, "stdout_json": {"result": "1609.344", "factor": "201168/125", "result_is_rounded": false}}},
+  {"name": "100 km/h = 250/9 m/s = 27.777...", "input": {"value": 100, "from": "km/h", "to": "m/s"}, "expect": {"exit": 0, "stdout_json": {"result_exact": "250/9", "result": "27.7777777777778", "result_is_rounded": true}}},
+  {"name": "body temperature 98.6 degF is exactly 37 degC", "input": {"value": "98.6", "from": "degF", "to": "degC"}, "expect": {"exit": 0, "stdout_json": {"result": "37", "result_exact": "37"}}},
+  {"name": "-40 degrees is the same in Celsius and Fahrenheit", "input": {"value": -40, "from": "°C", "to": "°F"}, "expect": {"exit": 0, "stdout_json": {"result": "-40"}}},
+  {"name": "SI Brochure: 0 degC is 273.15 K", "input": {"value": 0, "from": "degC", "to": "K"}, "expect": {"exit": 0, "stdout_json": {"result": "273.15"}}},
+  {"name": "a 10 degC difference is 10 K", "input": {"value": 10, "from": "degC", "to": "K", "temperature": "difference"}, "expect": {"exit": 0, "stdout_json": {"result": "10"}}},
+  {"name": "NIST SP 811 B.8: kW h = 3.6 E+06 J", "input": {"value": 1, "from": "kWh", "to": "J"}, "expect": {"exit": 0, "stdout_json": {"result": "3600000", "factor": "3600000"}}},
+  {"name": "NIST SP 811 B.8: Btu_IT/(lb degF) = 4.1868 E+03 J/(kg K)", "input": {"value": 1, "from": "Btu/(lb*degF)", "to": "J/(kg*K)"}, "expect": {"exit": 0, "stdout_json": {"result": "4186.8"}}},
+  {"name": "NIST SP 811 B.8: US gallon = 3.785411784 E-03 m3", "input": {"value": 1, "from": "gal", "to": "L"}, "expect": {"exit": 0, "stdout_json": {"result": "3.785411784"}}},
+  {"name": "NIST SP 811 B.8: horsepower (550 ft lbf/s) = 745.699 W", "input": {"value": 1, "from": "hp", "to": "W"}, "expect": {"exit": 0, "stdout_json": {"result": "745.69987158227022"}}},
+  {"name": "NIST SP 811 B.8: psi = 6.894757 E+03 Pa", "input": {"value": 1, "from": "psi", "to": "Pa"}, "expect": {"exit": 0, "stdout_contains": "\"result\": \"6894.757"}},
+  {"name": "compound units cancel: kg*m/s^2 is N", "input": {"value": 1, "from": "kg*m/s^2", "to": "N"}, "expect": {"exit": 0, "stdout_json": {"result": "1", "dimension": "m kg s^-2"}}},
+  {"name": "superscripts and attached exponents: 1 m² = 1562500/145161 ft2", "input": {"value": 1, "from": "m²", "to": "ft2"}, "expect": {"exit": 0, "stdout_json": {"result_exact": "1562500/145161"}}},
+  {"name": "electronvolt defined exactly", "input": {"value": 1, "from": "eV", "to": "J"}, "expect": {"exit": 0, "stdout_json": {"result": "1.602176634E-19"}}},
+  {"name": "180 degrees is pi radians, marked inexact", "input": {"value": 180, "from": "deg", "to": "rad"}, "expect": {"exit": 0, "stdout_contains": "\"result\": \"3.14159265358979"}},
+  {"name": "without to: SI base units", "input": {"value": 1, "from": "kWh"}, "expect": {"exit": 0, "stdout_json": {"to": "m^2 kg s^-2", "result": "3600000"}}},
+  {"name": "dimension mismatch", "input": {"value": 1, "from": "m", "to": "s"}, "expect": {"exit": 2, "stdout_contains": "incompatible units"}},
+  {"name": "unknown unit", "input": {"value": 1, "from": "furlong", "to": "m"}, "expect": {"exit": 2, "stdout_contains": "unknown unit"}}
+]

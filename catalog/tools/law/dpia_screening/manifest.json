@@ -1,0 +1,34 @@
+{
+  "name": "dpia_screening",
+  "description": "Screen whether a processing operation needs a GDPR data protection impact assessment: the nine criteria of the WP29/EDPB guidelines (WP248 rev.01) given as booleans or hinted from a description in English or Spanish, the rule that two or more criteria usually mean a DPIA is required, the mandatory cases of Article 35(3), the Recital 91 exception, and a pointer to the supervisory authority's Article 35(4) list (e.g. the AEPD's for Spain). Not legal advice.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "criteria": {"type": "object", "additionalProperties": false, "properties": {
+        "evaluation_scoring": {"type": "boolean"}, "automated_decision": {"type": "boolean"}, "systematic_monitoring": {"type": "boolean"},
+        "sensitive_data": {"type": "boolean"}, "large_scale": {"type": "boolean"}, "matching_combining": {"type": "boolean"},
+        "vulnerable_subjects": {"type": "boolean"}, "innovative_technology": {"type": "boolean"}, "prevents_right_or_service": {"type": "boolean"}}},
+      "art35_3": {"type": "object", "additionalProperties": false, "properties": {"a": {"type": "boolean"}, "b": {"type": "boolean"}, "c": {"type": "boolean"}}},
+      "description": {"type": "string", "description": "Free text; keyword hints count for criteria not set explicitly"},
+      "recital_91": {"type": "boolean", "default": false, "description": "Patients' or clients' data processed by an individual physician, health professional or lawyer"},
+      "country": {"type": "string", "pattern": "^[A-Za-z]{2}$", "description": "Competent supervisory authority's country"}
+    }
+  },
+  "program": "python3",
+  "args": ["dpia_screening.py"],
+  "files": ["dpia_screening.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "law",
+    "tags": ["gdpr", "rgpd", "dpia", "eipd", "privacy", "risk-assessment", "compliance"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"criteria": {"sensitive_data": true, "vulnerable_subjects": true, "large_scale": true}, "country": "ES"},
+      "output": {"verdict": "likely_required", "criteria_count": 3, "art35_3_possible": ["b"]}
+    },
+    "source": "Article 29 Working Party, Guidelines on Data Protection Impact Assessment (WP248 rev.01, 4 October 2017, endorsed by the EDPB), section III.B and its examples; Regulation (EU) 2016/679 Art. 35 and Recital 91"
+  }
+}

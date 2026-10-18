@@ -1,0 +1,22 @@
+[
+  {"name": "Python round() docs and IEEE 754 default: half-even rounds 2.5 to 2 (half up gives 3)", "input": {"operation": "round", "value": "2.5", "decimals": 0},
+   "expect": {"exit": 0, "stdout_json": {"result": "2", "by_mode": {"half_up": "3", "half_even": "2", "half_down": "2", "up": "3", "down": "2", "ceiling": "3", "floor": "2"}}}},
+  {"name": "Python decimal docs: Decimal('7.325').quantize(Decimal('.01'), rounding=ROUND_DOWN) is 7.32", "input": {"operation": "round", "value": "7.325", "decimals": 2, "mode": "down"}, "expect": {"exit": 0, "stdout_json": {"result": "7.32"}}},
+  {"name": "Python decimal docs: Decimal('7.325').quantize(Decimal('1.'), rounding=ROUND_UP) is 8", "input": {"operation": "round", "value": "7.325", "decimals": 0, "mode": "up"}, "expect": {"exit": 0, "stdout_json": {"result": "8"}}},
+  {"name": "ceiling and floor differ from up and down for negatives", "input": {"operation": "round", "value": "-2.5", "decimals": 0}, "expect": {"exit": 0, "stdout_json": {"by_mode": {"half_up": "-3", "half_even": "-2", "half_down": "-2", "up": "-3", "down": "-2", "ceiling": "-2", "floor": "-3"}}}},
+  {"name": "significant figures with carry: 9.96 to 2 is 10, 1.0e1", "input": {"operation": "round", "value": "9.96", "sig_figs": 2}, "expect": {"exit": 0, "stdout_json": {"result": "10", "scientific": "1.0e1"}}},
+  {"name": "small value to 3 significant figures, engineering notation", "input": {"operation": "round", "value": "0.00123456", "sig_figs": 3}, "expect": {"exit": 0, "stdout_json": {"result": "0.00123", "scientific": "1.23e-3", "engineering": "1.23e-3"}}},
+  {"name": "9.81 +- 0.0234 is reported as 9.81 +- 0.02", "input": {"operation": "report", "value": "9.81", "uncertainty": "0.0234"}, "expect": {"exit": 0, "stdout_json": {"reported_value": "9.81", "reported_uncertainty": "0.02"}}},
+  {"name": "GUM (JCGM 100:2008) 7.2.2 example: m_S = 100.02147 g with u_c = 0.35 mg, two significant figures", "input": {"operation": "report", "value": "100.02147", "uncertainty": "0.00035", "uncertainty_sig_figs": 2},
+   "expect": {"exit": 0, "stdout_json": {"reported_value": "100.02147", "reported_uncertainty": "0.00035"}}},
+  {"name": "sum in quadrature, hand-computed: (10.0 +- 0.3) + (5.0 +- 0.4) = 15.0 +- 0.5", "input": {"operation": "propagate", "kind": "sum", "terms": [{"value": "10.0", "uncertainty": "0.3"}, {"value": "5.0", "uncertainty": "0.4"}]},
+   "expect": {"exit": 0, "stdout_json": {"uncertainty": "0.5", "reported_value": "15.0", "reported_uncertainty": "0.5"}}},
+  {"name": "product, relative errors in quadrature: (2.0 +- 0.1)(3.0 +- 0.2) = 6.0 +- 0.5", "input": {"operation": "propagate", "kind": "product", "terms": [{"value": "2.0", "uncertainty": "0.1"}, {"value": "3.0", "uncertainty": "0.2"}]},
+   "expect": {"exit": 0, "stdout_json": {"reported_value": "6.0", "reported_uncertainty": "0.5"}}},
+  {"name": "quotient: (6.0 +- 0.3) / (2.0 +- 0.1) = 3.0 +- 0.2 (5 % and 5 % give 7.07 %)", "input": {"operation": "propagate", "kind": "quotient", "terms": [{"value": "6.0", "uncertainty": "0.3"}, {"value": "2.0", "uncertainty": "0.1"}]},
+   "expect": {"exit": 0, "stdout_contains": "\"relative_uncertainty\": \"0.070710678119\""}},
+  {"name": "power: (2.0 +- 0.1)^3 = 8 +- 1 (3 x 5 % = 15 %, 1.2)", "input": {"operation": "propagate", "kind": "power", "terms": [{"value": "2.0", "uncertainty": "0.1", "power": 3}]},
+   "expect": {"exit": 0, "stdout_json": {"uncertainty": "1.2", "reported": "8 ± 1"}}},
+  {"name": "sig_figs and decimals together", "input": {"operation": "round", "value": "1.5", "sig_figs": 1, "decimals": 0}, "expect": {"exit": 2, "stdout_contains": "one of them"}},
+  {"name": "zero in a product", "input": {"operation": "propagate", "kind": "product", "terms": [{"value": 0, "uncertainty": 1}]}, "expect": {"exit": 2, "stdout_contains": "zero"}}
+]

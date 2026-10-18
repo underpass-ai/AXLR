@@ -1,0 +1,49 @@
+{
+  "name": "legal_citation_format",
+  "description": "Format and parse legal citations: Spanish legislation as published in the BOE (\"Ley 39/2015, de 1 de octubre, ... «BOE» núm. 236, de 2 de octubre de 2015, pp. 89343-89410\") with BOE-A links and ELI URLs; EU acts from EUR-Lex (CELEX number to and from \"Regulation (EU) 2016/679\", the full title with its Official Journal reference, ELI and EUR-Lex URLs, in English or Spanish); European Case Law Identifiers checked against the ECLI rules; and US case citations in Bluebook form (\"Brown v. Board of Education, 347 U.S. 483 (1954)\"), built from parts or parsed.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "parse": {"type": "string", "description": "A citation or identifier to read; the system is detected"},
+      "system": {"type": "string", "enum": ["boe", "eurlex", "ecli", "us_case"]},
+      "language": {"type": "string", "enum": ["en", "es"], "default": "en", "description": "EUR-Lex wording"},
+      "parts": {"type": "object", "additionalProperties": false, "description": "Pieces to format; keys depend on the system", "properties": {
+        "type": {"type": "string", "description": "boe: Ley, Ley Orgánica, Real Decreto, Real Decreto-ley, Real Decreto Legislativo, Orden"},
+        "number": {"type": ["string", "integer"], "description": "boe: 39/2015; eurlex: 679"},
+        "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "date of the act"},
+        "title": {"type": "string", "description": "the title as it follows the date"},
+        "boe_number": {"type": ["string", "integer"]},
+        "boe_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+        "pages": {"type": "string", "description": "89343-89410"},
+        "boe_id": {"type": "string", "description": "BOE-A-2015-10565"},
+        "act_type": {"type": "string", "enum": ["regulation", "directive", "decision"]},
+        "year": {"type": ["string", "integer"]},
+        "domain": {"type": "string", "description": "EU, EC, EEC or Euratom"},
+        "author": {"type": "string", "description": "of the European Parliament and of the Council"},
+        "oj": {"type": "object", "additionalProperties": false, "properties": {
+          "series": {"type": "string", "enum": ["L", "C"]}, "number": {"type": "integer"}, "page": {"type": "integer"},
+          "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "act": {"type": "string", "description": "act-by-act OJ, e.g. 2023/2854"}}},
+        "country": {"type": "string"}, "court": {"type": "string"}, "ordinal": {"type": "string"},
+        "case_name": {"type": "string"}, "plaintiff": {"type": "string"}, "defendant": {"type": "string"},
+        "volume": {"type": ["string", "integer"]}, "reporter": {"type": "string"}, "page": {"type": ["string", "integer"]},
+        "pincite": {"type": ["string", "integer"]}}}
+    }
+  },
+  "program": "python3",
+  "args": ["legal_citation_format.py"],
+  "files": ["legal_citation_format.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "law",
+    "tags": ["citations", "boe", "eur-lex", "celex", "ecli", "bluebook", "legislation"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"parse": "32016R0679"},
+      "output": {"label": "Regulation (EU) 2016/679", "eurlex_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32016R0679", "eli": "http://data.europa.eu/eli/reg/2016/679/oj"}
+    },
+    "source": "original; BOE citation and ELI practice (boe.es), EUR-Lex CELEX number structure and the Interinstitutional Style Guide numbering of EU acts, Council conclusions on ECLI (OJ C 127, 29.4.2011, p. 1), The Bluebook rule 10 for case citations"
+  }
+}

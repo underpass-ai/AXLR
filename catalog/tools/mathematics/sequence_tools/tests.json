@@ -1,0 +1,18 @@
+[
+  {"name": "OEIS A000290 squares: n^2, next 49, 64, 81", "input": {"terms": [1, 4, 9, 16, 25, 36], "next": 3},
+   "expect": {"exit": 0, "stdout_json": {"model": "polynomial", "degree": 2, "closed_form": "a(n) = n^2", "checked_on": 3, "next": ["49", "64", "81"]}}},
+  {"name": "OEIS A000217 triangular numbers: n(n + 1)/2", "input": {"terms": [1, 3, 6, 10, 15, 21], "next": 2},
+   "expect": {"exit": 0, "stdout_json": {"closed_form": "a(n) = 1/2*n^2 + 1/2*n", "coefficients": ["0", "1/2", "1/2"], "next": ["28", "36"]}}},
+  {"name": "OEIS A000045 Fibonacci: a(n) = a(n-1) + a(n-2), next 34, 55, 89", "input": {"terms": [1, 1, 2, 3, 5, 8, 13, 21], "next": 3},
+   "expect": {"exit": 0, "stdout_json": {"model": "linear_recurrence", "order": 2, "recurrence": "a(n) = a(n-1) + a(n-2)", "closed_form": null, "checked_on": 4, "next": ["34", "55", "89"]}}},
+  {"name": "OEIS A000079 powers of two from n = 0: 2^n", "input": {"terms": [1, 2, 4, 8, 16, 32], "start_index": 0, "next": 2},
+   "expect": {"exit": 0, "stdout_json": {"model": "geometric", "ratio": "2", "closed_form": "a(n) = 2^n", "next": ["64", "128"]}}},
+  {"name": "OEIS A000032 Lucas numbers 2, 1, 3, 4, 7, 11, 18: next 29, 47, 76", "input": {"terms": [2, 1, 3, 4, 7, 11, 18], "next": 3},
+   "expect": {"exit": 0, "stdout_json": {"recurrence": "a(n) = a(n-1) + a(n-2)", "next": ["29", "47", "76"]}}},
+  {"name": "OEIS A000225 2^n - 1: recurrence with rational roots gets a closed form", "input": {"terms": [1, 3, 7, 15, 31], "next": 2},
+   "expect": {"exit": 0, "stdout_json": {"recurrence": "a(n) = 3*a(n-1) - 2*a(n-2)", "closed_form": "a(n) = 2^n - 1", "checked_on": 1, "next": ["63", "127"]}}},
+  {"name": "arithmetic with exactly one term to check it", "input": {"terms": [3, 7, 11], "next": 2}, "expect": {"exit": 0, "stdout_json": {"model": "arithmetic", "closed_form": "a(n) = 4*n - 1", "checked_on": 1, "next": ["15", "19"]}}},
+  {"name": "factorials fit none of the models: no claim", "input": {"terms": [1, 2, 6, 24, 120, 720]}, "expect": {"exit": 0, "stdout_json": {"model": null, "next": []}}},
+  {"name": "fractions stay exact", "input": {"terms": ["0.5", "0.25", "0.125"], "next": 2}, "expect": {"exit": 0, "stdout_json": {"ratio": "1/2", "next": ["1/16", "1/32"]}}},
+  {"name": "too few terms", "input": {"terms": [1, 2]}, "expect": {"exit": 2, "stdout_contains": "3 to 200"}}
+]

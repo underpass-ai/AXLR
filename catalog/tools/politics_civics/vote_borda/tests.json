@@ -1,0 +1,18 @@
+[
+  {"name": "Wikipedia Borda count Tennessee example: Nashville 194, Chattanooga 173, Memphis 126, Knoxville 107", "input": {"ballots": [{"ranking": ["Memphis", "Nashville", "Chattanooga", "Knoxville"], "count": 42}, {"ranking": ["Nashville", "Chattanooga", "Knoxville", "Memphis"], "count": 26}, {"ranking": ["Chattanooga", "Knoxville", "Nashville", "Memphis"], "count": 15}, {"ranking": ["Knoxville", "Chattanooga", "Nashville", "Memphis"], "count": 17}]},
+   "expect": {"exit": 0, "stdout_json": {"scores": {"Nashville": "194", "Chattanooga": "173", "Memphis": "126", "Knoxville": "107"}, "ranking": ["Nashville", "Chattanooga", "Memphis", "Knoxville"], "winners": ["Nashville"]}}},
+  {"name": "Wikipedia Borda count Tennessee example, Dowdall: Nashville 57.667 ahead of Memphis 56.5", "input": {"variant": "dowdall", "ballots": [{"ranking": ["Memphis", "Nashville", "Chattanooga", "Knoxville"], "count": 42}, {"ranking": ["Nashville", "Chattanooga", "Knoxville", "Memphis"], "count": 26}, {"ranking": ["Chattanooga", "Knoxville", "Nashville", "Memphis"], "count": 15}, {"ranking": ["Knoxville", "Chattanooga", "Nashville", "Memphis"], "count": 17}]},
+   "expect": {"exit": 0, "stdout_json": {"exact": {"Nashville": "173/3", "Memphis": "113/2", "Chattanooga": "101/2", "Knoxville": "131/3"}, "ranking": ["Nashville", "Memphis", "Chattanooga", "Knoxville"], "winners": ["Nashville"]}}},
+  {"name": "n..1 scale adds one point per voter per candidate", "input": {"variant": "borda_n", "ballots": [{"ranking": ["Memphis", "Nashville", "Chattanooga", "Knoxville"], "count": 42}, {"ranking": ["Nashville", "Chattanooga", "Knoxville", "Memphis"], "count": 26}, {"ranking": ["Chattanooga", "Knoxville", "Nashville", "Memphis"], "count": 15}, {"ranking": ["Knoxville", "Chattanooga", "Nashville", "Memphis"], "count": 17}]},
+   "expect": {"exit": 0, "stdout_json": {"scores": {"Nashville": "294", "Chattanooga": "273", "Memphis": "226", "Knoxville": "207"}}}},
+  {"name": "partial ballot, lowest: unranked score 0", "input": {"ballots": [["A", "B"]], "candidates": ["A", "B", "C", "D"]},
+   "expect": {"exit": 0, "stdout_json": {"exact": {"A": "3", "B": "2", "C": "0", "D": "0"}, "ranking": ["A", "B", ["C", "D"]]}}},
+  {"name": "partial ballot, average: unranked share 1 and 0", "input": {"ballots": [["A", "B"]], "candidates": ["A", "B", "C", "D"], "partial": "average"},
+   "expect": {"exit": 0, "stdout_json": {"exact": {"A": "3", "B": "2", "C": "1/2", "D": "1/2"}}}},
+  {"name": "partial ballot, modified Borda: ranked two score 2 and 1", "input": {"ballots": [["A", "B"]], "candidates": ["A", "B", "C", "D"], "partial": "modified"},
+   "expect": {"exit": 0, "stdout_json": {"exact": {"A": "2", "B": "1", "C": "0", "D": "0"}}}},
+  {"name": "Dowdall tie averaged: (1/2 + 1/3) / 2 = 5/12", "input": {"ballots": [["A", ["B", "C"]]], "variant": "dowdall", "partial": "average"},
+   "expect": {"exit": 0, "stdout_json": {"exact": {"A": "1", "B": "5/12", "C": "5/12"}}}},
+  {"name": "modified with Dowdall is a usage error", "input": {"ballots": [["A", "B"]], "variant": "dowdall", "partial": "modified"}, "expect": {"exit": 2, "stdout_contains": "Borda variants only"}},
+  {"name": "unknown variant", "input": {"ballots": [["A", "B"]], "variant": "nauru"}, "expect": {"exit": 2, "stdout_contains": "variant must be"}}
+]

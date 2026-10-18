@@ -1,0 +1,27 @@
+{
+  "name": "sequence_tools",
+  "description": "Recognise a number sequence from its terms: arithmetic, geometric, polynomial by finite differences, or a linear recurrence with constant coefficients solved exactly over fractions. Gives the next terms, the closed form where one exists, and how many terms fix the model versus how many merely confirm it, never claiming more than the data supports. Squares, triangular numbers, Fibonacci and 2^n.",
+  "input_schema": {
+    "type": "object",
+    "required": ["terms"],
+    "additionalProperties": false,
+    "properties": {
+      "terms": {"type": "array", "minItems": 3, "maxItems": 200, "items": {"type": ["number", "string"]}, "description": "Numbers, decimal or fraction strings"},
+      "next": {"type": "integer", "minimum": 0, "maximum": 100, "default": 5},
+      "start_index": {"type": "integer", "default": 1, "description": "The index n of the first term"}
+    }
+  },
+  "program": "python3",
+  "args": ["sequence_tools.py"],
+  "files": ["sequence_tools.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["sequences", "finite-differences", "recurrence", "fibonacci", "pattern", "oeis"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"terms": [1, 1, 2, 3, 5, 8, 13, 21], "next": 3}, "output": {"model": "linear_recurrence", "recurrence": "a(n) = a(n-1) + a(n-2)", "next": ["34", "55", "89"], "checked_on": 4}},
+    "source": "original; finite differences and Newton's forward-difference formula, linear recurrences solved exactly (Graham, Knuth and Patashnik, Concrete Mathematics, ch. 2 and 7); test sequences from the OEIS"
+  }
+}

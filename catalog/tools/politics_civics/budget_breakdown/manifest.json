@@ -1,0 +1,138 @@
+{
+  "name": "budget_breakdown",
+  "description": "Break down a public budget given as CSV text: totals and per-capita amounts per year, each programme's share, year-over-year changes per programme (new and dropped ones marked) and the largest items. Columns are chosen by header name; decimal commas and semicolons are supported; arithmetic in Decimal.",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "csv"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "csv": {
+        "type": "string",
+        "description": "The budget as CSV text with a header row"
+      },
+      "columns": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Header names for each role",
+        "properties": {
+          "programme": {
+            "type": "string",
+            "default": "programme"
+          },
+          "amount": {
+            "type": "string",
+            "default": "amount"
+          },
+          "year": {
+            "type": "string",
+            "default": "year",
+            "description": "Optional column"
+          },
+          "population": {
+            "type": "string",
+            "default": "population",
+            "description": "Optional column, one value per year"
+          }
+        }
+      },
+      "population": {
+        "anyOf": [
+          {
+            "type": [
+              "number",
+              "string"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": {
+              "type": [
+                "number",
+                "string"
+              ]
+            }
+          }
+        ],
+        "description": "Population for per-capita figures, or {year: population}; overrides the column"
+      },
+      "delimiter": {
+        "type": "string",
+        "enum": [
+          ",",
+          ";",
+          "\t",
+          "|"
+        ],
+        "description": "Default: guessed from the header"
+      },
+      "decimal_comma": {
+        "type": "boolean",
+        "default": false,
+        "description": "Amounts written 1.234,56"
+      },
+      "top": {
+        "type": "integer",
+        "minimum": 0,
+        "default": 5,
+        "description": "Largest programmes to list per year"
+      }
+    }
+  },
+  "program": "python3",
+  "args": [
+    "budget_breakdown.py"
+  ],
+  "files": [
+    "budget_breakdown.py"
+  ],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": [
+      "budget",
+      "public-finance",
+      "per-capita",
+      "csv",
+      "transparency",
+      "year-over-year"
+    ],
+    "license": "MIT",
+    "requires": {
+      "program_min_version": "3.10",
+      "packages": []
+    },
+    "network": false,
+    "example": {
+      "input": {
+        "csv": "programme,amount,year,population\nEducation,1200000,2024,50000\nHealth,900000,2024,50000\nEducation,1260000,2025,52000\nHealth,990000,2025,52000\n",
+        "top": 1
+      },
+      "output": {
+        "years": [
+          "2024",
+          "2025"
+        ],
+        "by_year": [
+          {
+            "year": "2024",
+            "total": "2100000.00",
+            "per_capita": "42.00"
+          },
+          {
+            "year": "2025",
+            "total": "2250000.00",
+            "per_capita": "43.27"
+          }
+        ],
+        "year_over_year": [
+          {
+            "total_change_percent": "7.14"
+          }
+        ]
+      }
+    },
+    "source": "original; standard budget-analysis ratios (programme share, per capita, year-over-year change) computed with Python's csv and decimal modules"
+  }
+}

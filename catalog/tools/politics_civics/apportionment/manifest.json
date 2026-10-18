@@ -1,0 +1,31 @@
+{
+  "name": "apportionment",
+  "description": "Apportion seats among districts by population with Huntington-Hill, Webster (Sainte-Laguë), Jefferson (D'Hondt), Adams or Hamilton (largest remainder), with a minimum number of seats per district. Exact arithmetic; shows each district's quota, the order and priority values of the seats awarded, and ties for the last seat.",
+  "input_schema": {
+    "type": "object",
+    "required": ["seats", "populations"],
+    "additionalProperties": false,
+    "properties": {
+      "seats": {"type": "integer", "minimum": 1, "description": "House size"},
+      "populations": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}, "description": "Population per district"},
+      "method": {"type": "string", "enum": ["huntington_hill", "webster", "jefferson", "adams", "hamilton"], "default": "huntington_hill"},
+      "min_seats": {"type": "integer", "minimum": 0, "default": 0, "description": "Seats every district gets first; huntington_hill and adams always give at least 1"}
+    }
+  },
+  "program": "python3",
+  "args": ["apportionment.py"],
+  "files": ["apportionment.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": ["apportionment", "huntington-hill", "webster", "jefferson", "hamilton", "census", "redistricting"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"seats": 8, "populations": {"A": 100000, "B": 80000, "C": 30000}},
+      "output": {"method": "huntington_hill", "min_seats": 1, "allocation": {"A": 4, "B": 3, "C": 1}}
+    },
+    "source": "original; methods as in Balinski & Young, Fair Representation (1982), and 2 U.S.C. 2a (Huntington-Hill with one seat per state), checked against Wikipedia's Huntington-Hill, Sainte-Laguë and Largest remainder examples"
+  }
+}

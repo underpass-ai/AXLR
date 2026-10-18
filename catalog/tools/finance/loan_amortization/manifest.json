@@ -1,0 +1,35 @@
+{
+  "name": "loan_amortization",
+  "description": "Loan instalment and full amortization schedule for the French (constant payment), German (constant principal) and American (interest only, bullet) systems, from a nominal annual rate and payments per year. Early repayments at any period, shortening the term or lowering the instalment, with the interest they save; totals of interest and payments. Decimal arithmetic, cents per period, the last payment absorbing the remainder.",
+  "input_schema": {
+    "type": "object",
+    "required": ["principal", "annual_rate"],
+    "additionalProperties": false,
+    "properties": {
+      "principal": {"type": ["number", "string"]},
+      "annual_rate": {"type": ["number", "string"], "description": "Nominal annual rate: 0.05 or \"5%\""},
+      "periods": {"type": "integer", "minimum": 1, "maximum": 12000, "description": "Number of payments; or give years"},
+      "years": {"type": ["number", "string"], "description": "Term in years; years x payments_per_year must be whole"},
+      "payments_per_year": {"type": "integer", "minimum": 1, "maximum": 365, "default": 12},
+      "system": {"type": "string", "enum": ["french", "german", "american"], "default": "french"},
+      "early_repayments": {"type": "array", "items": {"type": "object", "required": ["period", "amount"], "additionalProperties": false, "properties": {
+        "period": {"type": "integer", "minimum": 1, "description": "Paid right after this period's regular payment"},
+        "amount": {"type": ["number", "string"]},
+        "mode": {"type": "string", "enum": ["reduce_term", "reduce_payment"], "default": "reduce_term"}}}},
+      "schedule": {"type": "boolean", "default": true, "description": "false leaves the rows out"}
+    }
+  },
+  "program": "python3",
+  "args": ["loan_amortization.py"],
+  "files": ["loan_amortization.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["loan", "mortgage", "amortization", "annuity", "instalment", "early-repayment"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"principal": 100000, "annual_rate": "5%", "years": 30, "schedule": false}, "output": {"payment": "536.82", "periods_paid": 360, "totals": {"interest": "93256.52"}}},
+    "source": "original; the instalment is the annuity formula of Excel PMT and numpy-financial pmt, whose documentation examples the tests reproduce"
+  }
+}

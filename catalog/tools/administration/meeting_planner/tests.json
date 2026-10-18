@@ -1,0 +1,21 @@
+[
+  {"name": "hand-checked: Madrid 9-18 (UTC+2) and New York 9-17 (UTC-4) on 2026-07-01 overlap 13:00-16:00 UTC = 15:00-18:00 Madrid = 09:00-12:00 New York",
+   "input": {"participants": [{"name": "Madrid", "tz": "Europe/Madrid", "start": "09:00", "end": "18:00"}, {"name": "New York", "tz": "America/New_York", "start": "09:00", "end": "17:00"}], "date": "2026-07-01", "duration_minutes": 60, "step_minutes": 30},
+   "expect": {"stdout_json": {"windows": [{"start_utc": "2026-07-01T13:00Z", "end_utc": "2026-07-01T16:00Z", "minutes": 180,
+     "local": {"Madrid": {"start": {"time": "15:00"}, "end": {"time": "18:00"}}, "New York": {"start": {"time": "09:00"}, "end": {"time": "12:00"}}}}],
+     "slot_count": 5}}},
+  {"name": "ranking by the smallest margin to anyone's start or end (hand-checked: 14:00Z scores 60, 13:30Z and 14:30Z 30, 13:00Z and 15:00Z 0)",
+   "input": {"participants": [{"name": "Madrid", "tz": "Europe/Madrid", "start": "09:00", "end": "18:00"}, {"name": "New York", "tz": "America/New_York", "start": "09:00", "end": "17:00"}], "date": "2026-07-01", "duration_minutes": 60, "step_minutes": 30},
+   "expect": {"stdout_json": {"slots": [{"start_utc": "2026-07-01T14:00Z", "score": 60}, {"start_utc": "2026-07-01T13:30Z", "score": 30}, {"start_utc": "2026-07-01T14:30Z", "score": 30}, {"start_utc": "2026-07-01T13:00Z", "score": 0}, {"start_utc": "2026-07-01T15:00Z", "score": 0}]}}},
+  {"name": "US daylight saving starts 8 March 2026, Europe's on 29 March: the overlap grows from 3 to 4 hours; the weekend has none",
+   "input": {"participants": [{"name": "Madrid", "tz": "Europe/Madrid", "start": "09:00", "end": "18:00"}, {"name": "New York", "tz": "America/New_York", "start": "09:00", "end": "17:00"}], "start_date": "2026-03-06", "end_date": "2026-03-09", "max_slots": 0},
+   "expect": {"stdout_json": {"windows": [{"date": "2026-03-06", "start_utc": "2026-03-06T14:00Z", "end_utc": "2026-03-06T17:00Z"}, {"date": "2026-03-09", "start_utc": "2026-03-09T13:00Z", "end_utc": "2026-03-09T17:00Z"}], "total_common_minutes": 420, "slots": []}}},
+  {"name": "Tokyo and Los Angeles 8-18 meet on different local dates: Tokyo Wed 08:00-10:00 = LA Tue 16:00-18:00",
+   "input": {"participants": [{"name": "Tokyo", "tz": "Asia/Tokyo", "start": "08:00", "end": "18:00"}, {"name": "LA", "tz": "America/Los_Angeles", "start": "08:00", "end": "18:00"}], "date": "2026-07-01", "duration_minutes": 60, "max_slots": 1},
+   "expect": {"stdout_json": {"windows": [{"start_utc": "2026-06-30T23:00Z", "end_utc": "2026-07-01T01:00Z", "local": {"Tokyo": {"start": {"date": "2026-07-01", "time": "08:00"}}, "LA": {"start": {"date": "2026-06-30", "time": "16:00", "weekday": "Tuesday"}}}}],
+     "slots": [{"start_utc": "2026-06-30T23:30Z", "score": 30}]}}},
+  {"name": "Saturday: no common working time", "input": {"participants": [{"name": "A", "tz": "Europe/Madrid"}, {"name": "B", "tz": "Europe/London"}], "date": "2026-07-04"},
+   "expect": {"stdout_json": {"windows": [], "note": "no common working time in the range"}}},
+  {"name": "unknown zone", "input": {"participants": [{"name": "A", "tz": "Europe/Atlantis"}], "date": "2026-07-01"}, "expect": {"exit": 2, "stdout_contains": "not a known IANA time zone"}},
+  {"name": "bad time", "input": {"participants": [{"name": "A", "tz": "UTC", "start": "9am"}], "date": "2026-07-01"}, "expect": {"exit": 2, "stdout_contains": "must be HH:MM"}}
+]

@@ -1,0 +1,39 @@
+{
+  "name": "hypothesis_test",
+  "description": "Classical hypothesis tests with p-values and confidence intervals: Welch, pooled Student, paired and one-sample t; chi-square goodness of fit and independence (Yates on 2x2); Fisher's exact test on a 2x2 table with an exact fractional p-value; one- and two-proportion z tests. Two-sided, less or greater. Statistics summed exactly over fractions; matches R's t.test, chisq.test and fisher.test.",
+  "input_schema": {
+    "type": "object",
+    "required": ["test"],
+    "additionalProperties": false,
+    "properties": {
+      "test": {"type": "string", "enum": ["welch_t", "student_t", "paired_t", "one_sample_t", "chi_square_gof", "chi_square_independence", "fisher_exact", "one_proportion_z", "two_proportion_z"]},
+      "x": {"type": "array", "minItems": 2, "items": {"type": ["number", "string"]}},
+      "y": {"type": "array", "minItems": 2, "items": {"type": ["number", "string"]}},
+      "mu": {"type": ["number", "string"], "default": 0, "description": "Hypothesised mean (one_sample_t) or difference (other t tests)"},
+      "observed": {"type": "array", "items": {"type": "integer", "minimum": 0}, "description": "chi_square_gof counts"},
+      "expected": {"type": "array", "items": {"type": ["number", "string"]}, "description": "chi_square_gof expected counts (same total)"},
+      "proportions": {"type": "array", "items": {"type": ["number", "string"]}, "description": "chi_square_gof expected ratios, normalised (default equal)"},
+      "ddof": {"type": "integer", "minimum": 0, "default": 0, "description": "Degrees of freedom lost to estimated parameters"},
+      "table": {"type": "array", "items": {"type": "array", "items": {"type": "integer", "minimum": 0}}, "description": "Contingency table of counts"},
+      "yates": {"type": "boolean", "default": true, "description": "Continuity correction for a 2x2 chi-square"},
+      "successes": {"type": ["integer", "array"], "items": {"type": "integer", "minimum": 0}},
+      "trials": {"type": ["integer", "array"], "items": {"type": "integer", "minimum": 1}},
+      "p0": {"type": ["number", "string"], "default": 0.5},
+      "alternative": {"type": "string", "enum": ["two-sided", "less", "greater"], "default": "two-sided"},
+      "confidence": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "default": 0.95}
+    }
+  },
+  "program": "python3",
+  "args": ["hypothesis_test.py"],
+  "files": ["hypothesis_test.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["statistics", "hypothesis-test", "t-test", "chi-square", "fisher-exact", "p-value", "z-test"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"test": "fisher_exact", "table": [[3, 1], [1, 3]]}, "output": {"p_value": 0.485714285714, "exact": {"p_value": "17/35"}}},
+    "source": "Behaviour of R's t.test, chisq.test, fisher.test and prop.test (stats package); t and chi-square p-values through the regularized incomplete beta and gamma functions (Numerical Recipes, ch. 6.2 and 6.4)"
+  }
+}

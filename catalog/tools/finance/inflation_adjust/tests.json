@@ -1,0 +1,12 @@
+[
+  {"name": "BLS CPI-U annual averages: 2020 is 258.811 and 2022 is 292.655 as BLS publishes them", "input": {"amount": 100, "from": 2020, "to": 2022, "series": "us_cpi_u"}, "expect": {"exit": 0, "stdout_json": {"from_index": "258.811", "to_index": "292.655", "adjusted_amount": "113.08", "source": {"series_id": "CUUR0000SA0", "base": "1982-84=100"}}}},
+  {"name": "BLS: CPI-U annual average rose 8.0 % in 2022", "input": {"amount": 1, "from": 2021, "to": 2022, "series": "us_cpi_u"}, "expect": {"exit": 0, "stdout_contains": "\"cumulative_inflation_pct\": \"8.00\""}},
+  {"name": "Eurostat: euro-area annual average HICP inflation was 8.4 % in 2022", "input": {"amount": 100, "from": 2021, "to": 2022, "series": "ea_hicp"}, "expect": {"exit": 0, "stdout_json": {"from_index": "107.78", "to_index": "116.82", "cumulative_inflation_pct": "8.39", "adjusted_amount": "108.39"}}},
+  {"name": "INE: Spain's average CPI rose 8.4 % in 2022 and 3.5 % in 2023", "input": {"amount": "1000", "from": 2022, "to": 2023, "series": "es_ipc"}, "expect": {"exit": 0, "stdout_json": {"cumulative_inflation_pct": "3.53", "source": {"series_id": "IPC290751", "base": "2025=100"}}}},
+  {"name": "INE base 2025: the 2025 average of the monthly indexes is 100", "input": {"amount": 1, "from": 2025, "to": 2022, "series": "es_ipc"}, "expect": {"exit": 0, "stdout_json": {"from_index": "100.000", "to_index": "91.534"}}},
+  {"name": "months with an index given in the input", "input": {"amount": 200, "from": "2000-01", "to": "2010-01", "index": {"2000-01": "80", "2010-01": 100}}, "expect": {"exit": 0, "stdout_json": {"factor": "1.250000", "adjusted_amount": "250.00", "annualised_inflation_pct": "2.26", "years": "10.00", "series": "given in the input"}}},
+  {"name": "October 2025 CPI-U was never published", "input": {"amount": 1, "from": "2025-10", "to": "2026-01", "series": "us_cpi_u"}, "expect": {"exit": 2, "stdout_contains": "published no value"}},
+  {"name": "a year before the series starts", "input": {"amount": 1, "from": 1900, "to": 2000, "series": "us_cpi_u"}, "expect": {"exit": 2, "stdout_contains": "available: 1913 to"}},
+  {"name": "a year and a month mixed", "input": {"amount": 1, "from": 2020, "to": "2021-03", "series": "ea_hicp"}, "expect": {"exit": 2, "stdout_contains": "both be years or both be months"}},
+  {"name": "unknown series", "input": {"amount": 1, "from": 2020, "to": 2021, "series": "uk_cpi"}, "expect": {"exit": 2, "stdout_contains": "unknown series"}}
+]

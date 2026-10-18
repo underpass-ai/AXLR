@@ -1,0 +1,30 @@
+{
+  "name": "base_convert",
+  "description": "Convert numbers between bases 2 to 36, fractions included, with the repeating block found exactly (0.1 is 0.0(0011) in binary); Roman numerals both ways with strict validation (1 to 3999); two's complement of a given bit width both ways; and 8421 binary-coded decimal both ways. Arbitrary-size integers, no floating point.",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation", "value"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["convert", "to_roman", "from_roman", "to_twos_complement", "from_twos_complement", "to_bcd", "from_bcd"]},
+      "value": {"type": ["string", "integer"], "description": "Digits in from_base (convert: '-FF.8', '1/7', '0x1F'), an integer, a Roman numeral, or a bit string"},
+      "from_base": {"type": "integer", "minimum": 2, "maximum": 36, "default": 10, "description": "Omitted: 10, or read from a 0x / 0o / 0b prefix"},
+      "to_base": {"type": ["integer", "array"], "minimum": 2, "maximum": 36, "items": {"type": "integer", "minimum": 2, "maximum": 36}, "default": [2, 8, 10, 16]},
+      "fraction_digits": {"type": "integer", "minimum": 0, "maximum": 256, "default": 32, "description": "Limit on fractional digits before giving up on finding the period"},
+      "bits": {"type": "integer", "minimum": 1, "maximum": 4096, "description": "to_twos_complement width"}
+    }
+  },
+  "program": "python3",
+  "args": ["base_convert.py"],
+  "files": ["base_convert.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["number-bases", "binary", "hexadecimal", "roman-numerals", "twos-complement", "bcd"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "to_twos_complement", "value": -1, "bits": 8}, "output": {"binary": "11111111", "hex": "FF"}},
+    "source": "original; positional notation by exact long division (Knuth, TAOCP vol. 2, 4.4), standard subtractive Roman numerals, two's complement and 8421 BCD as in computer-architecture texts"
+  }
+}

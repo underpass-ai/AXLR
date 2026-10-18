@@ -1,0 +1,17 @@
+[
+  {"name": "Cochran: plus or minus 5 points at 95 % with p = 0.5 needs 385", "input": {"target": "proportion", "margin": 0.05, "z": 1.96}, "expect": {"exit": 0, "stdout_json": {"n0": 384.16, "n": 385}}},
+  {"name": "same with the exact normal quantile 1.959964: still 385", "input": {"target": "proportion", "margin": 0.05}, "expect": {"exit": 0, "stdout_json": {"n": 385}}},
+  {"name": "Krejcie and Morgan (1970) table: population 10000 needs 370", "input": {"target": "proportion", "margin": 0.05, "population": 10000}, "expect": {"exit": 0, "stdout_json": {"n": 370}}},
+  {"name": "Krejcie and Morgan (1970) table: population 1000 needs 278; 40 % response means contacting 695", "input": {"target": "proportion", "margin": 0.05, "population": 1000, "response_rate": 0.4}, "expect": {"exit": 0, "stdout_json": {"n": 278, "n_to_contact": 695}}},
+  {"name": "Krejcie and Morgan (1970) table: population 100 needs 80", "input": {"target": "proportion", "margin": 0.05, "population": 100}, "expect": {"exit": 0, "stdout_json": {"n": 80}}},
+  {"name": "mean within 2 units with sd 10: (1.96 x 5)^2 = 96.04, so 97", "input": {"target": "mean", "margin": 2, "sd": 10}, "expect": {"exit": 0, "stdout_json": {"n": 97}}},
+  {"name": "mean with Student t iterates to 99", "input": {"target": "mean", "margin": 2, "sd": 10, "distribution": "t"}, "expect": {"exit": 0, "stdout_json": {"n": 99, "df": 98}}},
+  {"name": "Neyman formula n N_h S_h / sum N_i S_i, hand-computed: 20, 30, 60 and variance 0.94", "input": {"target": "stratified", "n": 110, "method": "neyman", "strata": [{"name": "A", "size": 400, "sd": 5}, {"name": "B", "size": 300, "sd": 10}, {"name": "C", "size": 300, "sd": 20}]},
+   "expect": {"exit": 0, "stdout_json": {"strata": [{"name": "A", "n": 20}, {"name": "B", "n": 30}, {"name": "C", "n": 60}], "variance_of_mean": 0.94}}},
+  {"name": "proportional allocation 44, 33, 33", "input": {"target": "stratified", "n": 110, "strata": [{"name": "A", "size": 400}, {"name": "B", "size": 300}, {"name": "C", "size": 300}]},
+   "expect": {"exit": 0, "stdout_json": {"strata": [{"n": 44}, {"n": 33}, {"n": 33}]}}},
+  {"name": "equal allocation rounds by largest remainder to add up to n", "input": {"target": "stratified", "n": 10, "method": "equal", "strata": [{"size": 400}, {"size": 300}, {"size": 300}]},
+   "expect": {"exit": 0, "stdout_json": {"strata": [{"n": 4, "exact_share": "10/3"}, {"n": 3}, {"n": 3}]}}},
+  {"name": "zero margin", "input": {"target": "proportion", "margin": 0}, "expect": {"exit": 2, "stdout_contains": "margin must be greater than 0"}},
+  {"name": "neyman without sd", "input": {"target": "stratified", "n": 10, "method": "neyman", "strata": [{"size": 400}, {"size": 300}]}, "expect": {"exit": 2, "stdout_contains": "needs sd"}}
+]

@@ -1,0 +1,19 @@
+[
+  {"name": "Wikipedia Largest remainder method six-party example: Hare quota, 11 seats gives 5-2-2-1-1-0", "input": {"seats": 11, "quota": "hare", "votes": {"Yellows": 47000, "Whites": 16000, "Reds": 15800, "Greens": 12000, "Blues": 6100, "Pinks": 3100}},
+   "expect": {"exit": 0, "stdout_json": {"whole_seats_total": 8, "remainder_seats": ["Whites", "Reds", "Blues"], "allocation": {"Yellows": 5, "Whites": 2, "Reds": 2, "Greens": 1, "Blues": 1, "Pinks": 0}}}},
+  {"name": "same six parties, Droop quota 9091 for 10 seats (checked by hand): Blues lose the seat", "input": {"seats": 10, "votes": {"Yellows": 47000, "Whites": 16000, "Reds": 15800, "Greens": 12000, "Blues": 6100, "Pinks": 3100}},
+   "expect": {"exit": 0, "stdout_json": {"quota": "9091", "remainder_seats": ["Whites", "Reds"], "allocation": {"Yellows": 5, "Whites": 2, "Reds": 2, "Greens": 1, "Blues": 0, "Pinks": 0}}}},
+  {"name": "same six parties, Imperiali quota 100000/13 for 11 seats fills every seat with whole quotas", "input": {"seats": 11, "quota": "imperiali", "votes": {"Yellows": 47000, "Whites": 16000, "Reds": 15800, "Greens": 12000, "Blues": 6100, "Pinks": 3100}},
+   "expect": {"exit": 0, "stdout_json": {"quota": "7692.307692", "whole_seats_total": 11, "remainder_seats": [], "allocation": {"Yellows": 6, "Whites": 2, "Reds": 2, "Greens": 1, "Blues": 0, "Pinks": 0}}}},
+  {"name": "Hagenbach-Bischoff quota is exact 100000/11", "input": {"seats": 10, "quota": "hagenbach_bischoff", "votes": {"Yellows": 47000, "Whites": 16000, "Reds": 15800, "Greens": 12000, "Blues": 6100, "Pinks": 3100}},
+   "expect": {"exit": 0, "stdout_json": {"quota": "9090.909091", "allocation": {"Yellows": 5, "Blues": 0}}}},
+  {"name": "tie at the remainder cut is reported", "input": {"seats": 2, "votes": {"A": 50, "B": 25, "C": 25}},
+   "expect": {"exit": 0, "stdout_json": {"quota": "34", "allocation": {"A": 1, "B": 1, "C": 0}, "ties": [{"between": ["B", "C"], "awarded_to": ["B"]}]}}},
+  {"name": "Imperiali overallocation is taken back from the smallest remainder", "input": {"seats": 2, "quota": "imperiali", "votes": {"A": 60, "B": 40}},
+   "expect": {"exit": 0, "stdout_json": {"whole_seats_total": 3, "allocation": {"A": 1, "B": 1}, "overallocation": {"excess": 1, "taken_back_from": ["A"]}}}},
+  {"name": "threshold excludes a party before the quota", "input": {"seats": 5, "threshold": 5, "votes": {"A": 600, "B": 360, "C": 40}},
+   "expect": {"exit": 0, "stdout_json": {"votes_counted": 960, "quota": "161", "excluded_by_threshold": ["C"], "allocation": {"A": 3, "B": 2, "C": 0}}}},
+  {"name": "overallocation as an error when asked", "input": {"seats": 2, "quota": "imperiali", "votes": {"A": 60, "B": 40}, "on_overallocation": "error"}, "expect": {"exit": 2, "stdout_contains": "hands out 3 whole seats"}},
+  {"name": "unknown quota", "input": {"seats": 2, "quota": "dhondt", "votes": {"A": 1}}, "expect": {"exit": 2, "stdout_contains": "quota must be"}},
+  {"name": "negative votes", "input": {"seats": 2, "votes": {"A": -1}}, "expect": {"exit": 2, "stdout_contains": "votes must be"}}
+]

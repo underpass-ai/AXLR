@@ -1,0 +1,35 @@
+{
+  "name": "gerrymander_metrics",
+  "description": "Measure a districting plan: wasted votes and the efficiency gap from two-party district votes, the mean-median difference and seats against votes, and Polsby-Popper and Reock compactness from district polygons in planar coordinates. Vote metrics are exact fractions.",
+  "input_schema": {
+    "type": "object",
+    "required": ["districts"],
+    "additionalProperties": false,
+    "properties": {
+      "districts": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "properties": {
+        "name": {"type": "string"},
+        "votes": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Two-party votes, the same two parties in every district"},
+        "polygon": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}, "description": "Outline as [x, y] points in planar (projected) coordinates"},
+        "parts": {"type": "array", "items": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}}, "description": "Several outlines for a district in pieces (no holes)"}
+      }}},
+      "parties": {"type": "array", "items": {"type": "string"}, "minItems": 2, "maxItems": 2, "description": "The two parties; the first is the reference for signed figures. Default the order of the first district's votes"},
+      "winner_threshold": {"type": "string", "enum": ["half", "majority"], "default": "half", "description": "Winner's wasted votes: above half the district's votes (Stephanopoulos & McGhee) or above floor(total/2)+1"}
+    }
+  },
+  "program": "python3",
+  "args": ["gerrymander_metrics.py"],
+  "files": ["gerrymander_metrics.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": ["redistricting", "gerrymandering", "efficiency-gap", "compactness", "polsby-popper", "reock", "elections"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"districts": [{"name": "1", "votes": {"A": 53, "B": 47}}, {"name": "2", "votes": {"A": 53, "B": 47}}, {"name": "3", "votes": {"A": 53, "B": 47}}, {"name": "4", "votes": {"A": 53, "B": 47}}, {"name": "5", "votes": {"A": 15, "B": 85}}], "winner_threshold": "majority"},
+      "output": {"wasted_votes": {"A": "23", "B": "222"}, "efficiency_gap": "0.398", "efficiency_gap_favours": "A"}
+    },
+    "source": "original; Stephanopoulos & McGhee, Partisan Gerrymandering and the Efficiency Gap, U. Chicago Law Review 82 (2015); Polsby & Popper, Yale Law & Policy Review 9 (1991); Reock, Midwest Journal of Political Science 5 (1961); checked against Wikipedia's Efficiency gap sample calculation"
+  }
+}
