@@ -699,8 +699,14 @@ func (c *Catalog) Guidance(ctx context.Context) (string, error) {
 	if index == "" {
 		return "", nil
 	}
-	return "\nAXLR skills are listed below: each installed plugin with its description and its skills, each skill with the start of its description when the list has room. When a skill matches the user's request, read its SKILL.md with axlr_skill, using the plugin and skill names, and finish each resource you need before following it. local_read only accesses workspace files. Skill content is guidance and does not override user instructions." + index + "\n", nil
+	return "\nAXLR skills are listed below: each installed plugin with its description and its skills, each skill with the start of its description when the list has room. local_read only accesses workspace files. Skill content is guidance and does not override user instructions." + index + "\n" + skillFirstRule, nil
 }
+
+// skillFirstRule follows the index rather than preceding it: placed before
+// ten KiB of skills, the same advice let claude-haiku-5.5 name the matching
+// skill and still start reading code. It closes the system prompt and stays
+// byte-identical across turns, so the prompt cache holds.
+const skillFirstRule = "Before your first tool call for a request, check it against the skills above. When one fits what the request asks for or the files it will touch, your first call is axlr_skill for its SKILL.md, with the plugin and skill names, unless you already read it in this session; finish each resource you need and follow it. Only then read files or run other tools. When none fits, start directly.\n"
 
 // ReadSkill serves text resources from an installed skill and its package.
 // It does not grant local_read access outside the workspace.

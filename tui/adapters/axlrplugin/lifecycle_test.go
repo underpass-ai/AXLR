@@ -121,7 +121,7 @@ func TestUpdateReplacesInstalledPackageAndKeepsApproval(t *testing.T) {
 		t.Fatalf("after update: %#v %v", items, err)
 	}
 	guidance, err := l.catalog.Guidance(ctx)
-	if err != nil || !strings.Contains(guidance, "Skills: second (second skill).") || strings.Contains(guidance, "first") {
+	if err != nil || !strings.Contains(guidance, "Skills: second (second skill).") || strings.Contains(guidance, "first skill") {
 		t.Fatalf("guidance after update: %q %v", guidance, err)
 	}
 	definition, err := os.ReadFile(filepath.Join(l.installedDir(), "sample", ".axlr-mcp", "tools.json"))
