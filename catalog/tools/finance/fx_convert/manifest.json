@@ -1,0 +1,31 @@
+{
+  "name": "fx_convert",
+  "description": "Convert an amount between currencies with the European Central Bank's euro foreign exchange reference rates: the latest daily rates or a date in the last 90 days, cross rates through the euro, Decimal arithmetic, the rate date and the ECB's information-only notice in every answer. About 30 currencies. One HTTPS request per call, 15 s timeout, no key; pass the ECB XML as response to work offline.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "amount": {"type": ["number", "string"], "description": "Number or decimal string"},
+      "from": {"type": "string", "pattern": "^[A-Za-z]{3}$", "description": "ISO 4217 code, EUR or one the ECB quotes"},
+      "to": {"type": "string", "pattern": "^[A-Za-z]{3}$"},
+      "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "A day in the last 90 days (eurofxref-hist-90d.xml); omitted: the latest daily rates"},
+      "use_previous": {"type": "boolean", "default": false, "description": "If date has no rates (weekend, TARGET holiday), use the latest earlier day"},
+      "decimals": {"type": "integer", "minimum": 0, "maximum": 10, "default": 2, "description": "Decimals of the converted amount, rounded half up"},
+      "list_currencies": {"type": "boolean", "default": false, "description": "Only list the currencies and rates of the day"},
+      "response": {"type": "string", "maxLength": 5000000, "description": "The exact XML the ECB returned (offline or cached use); no request is made"}
+    }
+  },
+  "program": "python3",
+  "args": ["fx_convert.py"],
+  "files": ["fx_convert.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["currency", "exchange-rates", "ecb", "fx", "euro", "conversion"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": true,
+    "example": {"input": {"amount": 100, "from": "USD", "to": "JPY"}, "output": {"converted": "15802.01", "rate": "158.0200835", "rate_date": "2026-10-16", "per_eur": {"USD": "1.1253", "JPY": "177.82"}, "method": "cross rate via EUR"}},
+    "source": "European Central Bank, euro foreign exchange reference rates (https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html): eurofxref-daily.xml and eurofxref-hist-90d.xml"
+  }
+}

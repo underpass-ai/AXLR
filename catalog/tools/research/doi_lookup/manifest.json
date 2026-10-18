@@ -1,0 +1,27 @@
+{
+  "name": "doi_lookup",
+  "description": "Look up a DOI's metadata in the Crossref REST API and return it as CSL-JSON-like fields (title, authors, container, issued date, volume, issue, pages, DOI, URL, type, publisher) with an APA 7 reference in plain text and HTML. One HTTPS request per call, 15 s timeout, no key; an optional mailto joins Crossref's polite pool. Pass the body Crossref returned as response to parse it offline, without any request.",
+  "input_schema": {
+    "type": "object",
+    "required": ["doi"],
+    "additionalProperties": false,
+    "properties": {
+      "doi": {"type": "string", "minLength": 1, "maxLength": 500, "description": "10.NNNN/suffix; doi: and https://doi.org/ prefixes are accepted"},
+      "mailto": {"type": "string", "maxLength": 200, "description": "Contact e-mail for Crossref's polite pool, sent in the query string and User-Agent"},
+      "response": {"type": "string", "maxLength": 2000000, "description": "The exact body Crossref returned for this DOI (offline or cached use); no request is made"}
+    }
+  },
+  "program": "python3",
+  "args": ["doi_lookup.py"],
+  "files": ["doi_lookup.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["doi", "crossref", "citation", "metadata", "apa", "csl", "bibliography"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": true,
+    "example": {"input": {"doi": "10.1037/ppm0000185"}, "output": {"apa": "Grady, J. S., Her, M., Moreno, G., Perez, C., & Yelinek, J. (2019). Emotions in storybooks: A comparison of storybooks that represent ethnic and racial groups in the United States. Psychology of Popular Media Culture, 8(3), 207–217. https://doi.org/10.1037/ppm0000185", "csl": {"type": "article-journal", "volume": "8", "issue": "3", "page": "207–217"}}},
+    "source": "Crossref REST API (https://api.crossref.org/works/{doi}, api.crossref.org/swagger-ui); CSL-JSON field names from the Citation Style Language schema; reference format from the APA Publication Manual, 7th edition (journal article, section 10.1)"
+  }
+}
