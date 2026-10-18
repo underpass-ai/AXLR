@@ -1,0 +1,12 @@
+[
+  {"name": "Coleman and Liau's own passage scores grade 14.5", "input": {"text": "Existing computer programs that measure readability are based largely upon subroutines which estimate number of syllables, usually by counting vowels. The shortcoming in estimating syllables is that it necessitates keypunching the prose into the computer. There is no need to estimate syllables since word length in letters is a better predictor of readability than word length in syllables. Therefore, a new readability formula was computed that has for its predictors letters per 100 words and sentences per 100 words. Both predictors can be counted by an optical scanning device, and thus the formula makes it economically feasible for an organization such as the U.S. Office of Education to calibrate the readability of all textbooks for the public school system."},
+   "expect": {"exit": 0, "stdout_json": {"counts": {"sentences": 5, "words": 118, "letters": 633}, "scores": {"coleman_liau": 14.49}}}},
+  {"name": "one-syllable words: Flesch 206.835 - 1.015*6 - 84.6", "input": {"text": "The cat sat on the mat."},
+   "expect": {"exit": 0, "stdout_json": {"counts": {"sentences": 1, "words": 6, "syllables": 6}, "scores": {"flesch_reading_ease": 116.15, "flesch_kincaid_grade": -1.45, "flesch_band": "very easy"}}}},
+  {"name": "spanish syllables with hiatus and diphthongs", "input": {"text": "El gato come pan. La niña lee un libro en el país.", "language": "es"},
+   "expect": {"exit": 0, "stdout_json": {"counts": {"sentences": 2, "words": 12, "syllables": 18}, "scores": {"fernandez_huerta": 110.72, "szigriszt_pazos": 107.39, "inflesz_band": "muy fácil"}}}},
+  {"name": "spanish: murciélago, pingüino, guerra, aéreo", "input": {"text": "Murciélago pingüino guerra aéreo.", "language": "es"}, "expect": {"exit": 0, "stdout_json": {"counts": {"words": 4, "syllables": 13}}}},
+  {"name": "abbreviations do not end sentences", "input": {"text": "Dr. Smith went home. He slept! Did he? Yes."}, "expect": {"exit": 0, "stdout_json": {"counts": {"sentences": 4}}}},
+  {"name": "no words", "input": {"text": "1234 !!"}, "expect": {"exit": 2, "stdout_contains": "no words"}},
+  {"name": "unsupported language", "input": {"text": "Hallo Welt.", "language": "de"}, "expect": {"exit": 2, "stdout_contains": "language must be"}}
+]
