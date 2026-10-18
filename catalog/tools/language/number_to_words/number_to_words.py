@@ -586,8 +586,9 @@ def main():
     variant = request.get("variant", VARIANTS[language][0])
     if variant not in VARIANTS[language]:
         fail(f"variant for {language} must be one of {', '.join(VARIANTS[language])}")
-    grammatical = request.get("gender", "masculine")
-    if grammatical not in ("masculine", "feminine"):
+    asked = request.get("gender", "masculine")
+    grammatical = next((choice for choice in ("masculine", "feminine") if asked == choice), None)
+    if grammatical is None:
         fail("gender must be masculine or feminine")
     before_noun = request.get("before_noun", False)
     if not isinstance(before_noun, bool):

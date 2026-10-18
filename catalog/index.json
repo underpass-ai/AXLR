@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog": "axlr",
-  "generated_at": "2026-10-18T06:45:27Z",
+  "generated_at": "2026-10-18T06:48:48Z",
   "tools": [
     {
       "name": "business_days",
@@ -1008,7 +1008,7 @@
     },
     {
       "name": "number_to_words",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "category": "language",
       "tags": [
         "numbers",
@@ -1028,9 +1028,9 @@
       "network": false,
       "license": "MIT",
       "manifest": "tools/language/number_to_words/manifest.json",
-      "manifest_sha256": "84c047b8874a221e549a4270477117d26da90320ed70d3868afb91a0f34e3b02",
+      "manifest_sha256": "2d44bdb3b751d0aa50261aa75d1f5986f4408b8a9ea7bb86c31737e0bbef7917",
       "files": {
-        "number_to_words.py": "63c0ec69333dae6e0e79414fb8eef93de6e5e54c11343b94819ebb294c0dca94"
+        "number_to_words.py": "96a36e81aa7518ddb7506f1178b49709f7c8d126ca1e17e43cc5cbd836fb6fa4"
       }
     },
     {
@@ -2094,7 +2094,7 @@
     },
     {
       "name": "name_generator",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "category": "writing",
       "tags": [
         "names",
@@ -2113,9 +2113,9 @@
       "network": false,
       "license": "MIT",
       "manifest": "tools/writing/name_generator/manifest.json",
-      "manifest_sha256": "a1f2e845f8693a2b6465b1cdeb0fc2426b2a36b22addc31495275a0a378a5855",
+      "manifest_sha256": "0527c5a2003300bc0aea7e4941c1fd948e6872287324c547d3c19dc712fbd151",
       "files": {
-        "name_generator.py": "20739d848a8c64f1f90261a2eef9963808fef2a08a3fda024b3b1ad4cf9f7749"
+        "name_generator.py": "6ee7103753725ec6c61dbf449e17a757ecb3a238ced54a73b8dde703550a391a"
       }
     },
     {

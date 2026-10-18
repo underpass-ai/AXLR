@@ -31,7 +31,7 @@
   "args": ["number_to_words.py"],
   "files": ["number_to_words.py"],
   "catalog": {
-    "version": "1.0.1",
+    "version": "1.0.2",
     "category": "language",
     "tags": ["numbers", "words", "spelling", "ordinals", "currency", "cheques", "multilingual"],
     "license": "MIT",

@@ -189,8 +189,9 @@ def main():
     max_len = get_int(request, "max_length", 12, 1, 40)
     if min_len > max_len:
         fail("min_length is greater than max_length")
-    form = request.get("gender", "any")
-    if form not in ("any", "female", "male"):
+    asked = request.get("gender", "any")
+    form = next((choice for choice in ("any", "female", "male") if asked == choice), None)
+    if form is None:
         fail("gender must be any, female or male")
     surname = get_bool(request, "surname", True)
     unique = get_bool(request, "unique", True)

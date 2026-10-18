@@ -127,7 +127,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `style_lint` **1.0.0** | passive voice, filler words, adverbs, repeated words, sentence-length spread (heuristic, English and Spanish) | original |
 | `syllables_rhyme` **1.0.0** | syllable count, stress, rhyme scheme check (Spanish rules exact; English heuristic) | original |
 | `meter_check` **1.0.0** | scan verse against a meter (endecasílabo, alejandrino, iambic pentameter) | original |
-| `name_generator` **1.0.1** | seeded names for characters, places and products, by culture and style | original |
+| `name_generator` **1.0.2** | seeded names for characters, places and products, by culture and style | original |
 | `story_structure_check` **1.0.0** | outline beats against three-act, Save the Cat, hero's journey | original |
 | `md_convert` **1.0.0** | Markdown to HTML, plain text or a deck outline | original |
 | `latex_table` **1.0.0** | CSV to a LaTeX table with escaping and alignment | original |
@@ -220,7 +220,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `kana_romanize` **1.0.0** | Hepburn for kana (kanji needs `pykakasi`, tier 2) | pykakasi |
 | `pinyin_convert` | tier 2 with `pypinyin` | [python-pinyin](https://github.com/mozillazg/python-pinyin) |
 | `language_detect` **1.0.0** | character n-gram heuristic (tier 2 with `lingua`) | [lingua-py](https://github.com/pemistahl/lingua-py) |
-| `number_to_words` **1.0.1** | numbers, ordinals and currency to words (es, en, fr, de, pt) | original |
+| `number_to_words` **1.0.2** | numbers, ordinals and currency to words (es, en, fr, de, pt) | original |
 | `gender_agreement_es` **1.0.0** | agreement check for Spanish noun phrases (heuristic) | original |
 
 ### Geography and time
