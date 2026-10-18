@@ -1,0 +1,29 @@
+{
+  "name": "json_schema_check",
+  "description": "Validate a JSON instance against a JSON Schema (a draft 2020-12 subset) and list every error with its instance path, schema path, keyword and message. Covers type, enum, const, properties, required, additionalProperties, patternProperties, items and prefixItems, contains, numeric bounds (exclusive too) and multipleOf, string length and pattern, array size and uniqueItems, allOf/anyOf/oneOf/not, if/then/else, local $ref into $defs, and optional format checks (date, date-time, email, uri...). Keywords it does not support are reported, never silently ignored.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "schema": {"type": ["object", "boolean"], "description": "The JSON Schema"},
+      "schema_text": {"type": "string", "description": "The schema as JSON text, instead of schema"},
+      "instance": {"description": "The JSON value to validate (any type)"},
+      "instance_text": {"type": "string", "description": "The instance as JSON text, instead of instance"},
+      "formats": {"type": "string", "enum": ["annotate", "assert"], "default": "annotate", "description": "annotate: format failures are warnings (the 2020-12 default); assert: errors"},
+      "max_errors": {"type": "integer", "minimum": 1, "maximum": 10000, "default": 100}
+    }
+  },
+  "program": "python3",
+  "args": ["json_schema_check.py"],
+  "files": ["json_schema_check.py"],
+  "catalog": {
+    "version": "1.0.1",
+    "category": "programming",
+    "tags": ["json", "json-schema", "validation", "api", "data-quality", "schema"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"schema": {"type": "object", "properties": {"productId": {"type": "integer"}, "productName": {"type": "string"}, "price": {"type": "number", "exclusiveMinimum": 0}}, "required": ["productId", "productName", "price"]}, "instance": {"productId": 1, "product": "An ice sculpture", "price": "100"}}, "output": {"valid": false, "errors": [{"instance_path": "", "schema_path": "/required", "keyword": "required", "message": "'productName' is a required property", "property": "productName"}, {"instance_path": "/price", "schema_path": "/properties/price/type", "keyword": "type", "message": "string is not of type number"}]}},
+    "source": "JSON Schema draft 2020-12 Core and Validation specifications (json-schema.org); behaviour modelled on the Python jsonschema library, of which this is a stdlib subset"
+  }
+}

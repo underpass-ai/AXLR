@@ -1,0 +1,30 @@
+{
+  "name": "cron_explain",
+  "description": "Explain a cron expression in English and Spanish and list its next runs after a given date-time in an IANA time zone, DST-aware. Reads the five crontab fields (or six with a leading seconds field), names, lists, ranges, steps and the @daily-style macros, applies Vixie cron's rule that day-of-month and day-of-week are ORed when both are restricted, and accepts the Quartz/cronie L, W, # and ? extensions, flagged as non-standard. Each field's expanded values are returned too.",
+  "input_schema": {
+    "type": "object",
+    "required": ["expression"],
+    "additionalProperties": false,
+    "properties": {
+      "expression": {"type": "string", "maxLength": 1000, "description": "e.g. \"30 4 1,15 * 5\", \"@daily\", or a whole crontab line (the rest is reported as the command)"},
+      "seconds": {"type": "boolean", "default": false, "description": "The expression starts with a seconds field (Spring/Quartz style)"},
+      "from": {"type": "string", "description": "ISO 8601 date-time after which runs are listed; required when count > 0. Without an offset it is local to timezone"},
+      "timezone": {"type": "string", "default": "UTC", "description": "IANA zone, e.g. Europe/Madrid"},
+      "count": {"type": "integer", "minimum": 0, "maximum": 100, "default": 5, "description": "Number of next runs; 0 explains only"},
+      "dst": {"type": "string", "enum": ["skip", "shift"], "default": "skip", "description": "A local time removed by a spring-forward gap: skip it, or run at the first instant after the gap"}
+    }
+  },
+  "program": "python3",
+  "args": ["cron_explain.py"],
+  "files": ["cron_explain.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "programming",
+    "tags": ["cron", "crontab", "scheduling", "timezone", "dst", "devops", "spanish"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"expression": "30 4 1,15 * 5", "from": "2026-10-18T00:00", "timezone": "UTC", "count": 4}, "output": {"explanation_en": "At 04:30, on day-of-month 1 and 15 or on Friday.", "explanation_es": "A las 04:30, los días 1 y 15 del mes o los viernes.", "next_runs": ["2026-10-23T04:30:00+00:00", "2026-10-30T04:30:00+00:00", "2026-11-01T04:30:00+00:00", "2026-11-06T04:30:00+00:00"]}},
+    "source": "crontab(5) of Vixie cron / cronie (field ranges, names, steps, macros, the day-of-month/day-of-week OR rule and its first-character-is-* test); Quartz CronTrigger for L, W, # and ?; time zones from the IANA tz database through Python zoneinfo"
+  }
+}

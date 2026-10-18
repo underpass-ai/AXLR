@@ -1,0 +1,26 @@
+{
+  "name": "dockerfile_lint",
+  "description": "Lint a Dockerfile given inline with rules modelled on hadolint, citing its rule ids: untagged or :latest base images (DL3006, DL3007), last USER root (DL3002), sudo (DL3004), apt-get without -y, --no-install-recommends, pinned versions or removal of the apt lists (DL3014, DL3015, DL3008, DL3009), apt instead of apt-get (DL3027), ADD for local files (DL3020), relative WORKDIR (DL3000), shell-form CMD/ENTRYPOINT (DL3025), MAINTAINER (DL4000), multiple CMD or ENTRYPOINT (DL4003, DL4004); plus its own: no USER at all, secret-looking ENV/ARG names, downloads piped into a shell.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "maxLength": 500000, "description": "The Dockerfile content"},
+      "ignore": {"type": "array", "items": {"type": "string", "pattern": "^(DL|AXL)\\d{3,4}$"}, "default": [], "description": "Rule ids to skip; # hadolint ignore=ID comments are honoured too"}
+    }
+  },
+  "program": "python3",
+  "args": ["dockerfile_lint.py"],
+  "files": ["dockerfile_lint.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "programming",
+    "tags": ["docker", "dockerfile", "lint", "containers", "security", "devops", "hadolint"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "FROM busybox\nUSER root\nRUN ...\n"}, "output": {"findings": [{"line": 1, "rule": "DL3006", "severity": "warning", "message": "Always tag the version of an image explicitly."}, {"line": 2, "rule": "DL3002", "severity": "warning", "message": "Last USER should not be root."}], "passed": false}},
+    "source": "hadolint rule set (github.com/hadolint/hadolint README and wiki pages DL3000-DL4004: ids, severities, messages and examples); Docker build check SecretsUsedInArgOrEnv for the secrets rule"
+  }
+}

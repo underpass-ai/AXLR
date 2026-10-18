@@ -1,0 +1,29 @@
+{
+  "name": "log_summarise",
+  "description": "Summarise a log given inline by grouping its lines into templates: timestamps, UUIDs, IP addresses, hex ids, quoted strings and numbers are masked, then lines are clustered by Drain-like token similarity. For each template: the count, share, first and last timestamp (ISO 8601, syslog and Apache common log formats), levels and an example; overall level counts, time range and the top templates.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "maxLength": 5000000, "description": "The log lines"},
+      "top": {"type": "integer", "minimum": 1, "maximum": 500, "default": 20},
+      "similarity": {"type": ["number", "string"], "default": 0.5, "description": "Drain similarity threshold from 0 to 1"},
+      "year": {"type": "integer", "minimum": 1970, "maximum": 2100, "description": "Year for syslog timestamps, which carry none"},
+      "mask": {"type": "array", "items": {"type": "string", "enum": ["uuid", "ip", "hex", "timestamp", "string", "number"]}, "description": "Masks to apply; default all"}
+    }
+  },
+  "program": "python3",
+  "args": ["log_summarise.py"],
+  "files": ["log_summarise.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "programming",
+    "tags": ["logs", "log-analysis", "drain", "observability", "devops", "templates"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "2026-10-18T09:00:01Z INFO Started worker 1 in 120 ms\n2026-10-18T09:00:02Z INFO Started worker 2 in 98 ms\n2026-10-18T09:00:05Z WARN Disk usage at 91% on /dev/sda1\n"}, "output": {"template_count": 2, "levels": {"WARN": 1, "INFO": 2}, "templates": [{"template": "INFO Started worker <NUM> in <NUM> ms", "count": 2, "first_timestamp": "2026-10-18T09:00:01Z", "last_timestamp": "2026-10-18T09:00:02Z"}, {"template": "WARN Disk usage at <NUM>% on /dev/sda1", "count": 1}]}},
+    "source": "Drain (He, Zhu, Zheng and Lyu, 'Drain: An Online Log Parsing Approach with Fixed Depth Tree', IEEE ICWS 2017): length grouping and token similarity; timestamp formats from ISO 8601, RFC 3164 syslog and the Apache Common Log Format"
+  }
+}
