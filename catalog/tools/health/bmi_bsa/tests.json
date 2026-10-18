@@ -1,0 +1,11 @@
+[
+  {"name": "Mosteller 1987: 180 cm and 80 kg is sqrt(180*80/3600) = 2.00 m2 exactly; BMI 2000/81", "input": {"weight": 80, "height": 180}, "expect": {"exit": 0, "stdout_json": {"bmi": "24.69", "bmi_exact": "2000/81", "who_category": "Normal range", "bsa_m2": {"mosteller": "2.0000"}}}},
+  {"name": "DuBois & DuBois 1916 formula 0.007184 W^0.425 H^0.725 for 80 kg, 180 cm is 1.9964 (hand-computed with logarithms)", "input": {"weight": 80, "height": 180}, "expect": {"exit": 0, "stdout_contains": "\"dubois\": \"1.996"}},
+  {"name": "CDC adult BMI page example: 68 kg and 165 cm is 24.98", "input": {"weight": 68, "height": 165}, "expect": {"exit": 0, "stdout_json": {"bmi": "24.98"}}},
+  {"name": "CDC adult BMI page example: 150 lb and 65 in is 24.96", "input": {"weight": 150, "height": 65, "units": "imperial"}, "expect": {"exit": 0, "stdout_json": {"bmi": "24.96", "height_cm": "165.10"}}},
+  {"name": "WHO boundary: BMI exactly 30 is obese class I", "input": {"weight": 30, "height": 100}, "expect": {"exit": 0, "stdout_json": {"bmi": "30.00", "who_category": "Obese", "who_subcategory": "Obese class I"}}},
+  {"name": "WHO: BMI 17.5 is mild thinness", "input": {"weight": "17.5", "height": 100}, "expect": {"exit": 0, "stdout_json": {"who_category": "Underweight", "who_subcategory": "Mild thinness"}}},
+  {"name": "a child gets the percentile note and no adult category", "input": {"weight": 30, "height": 130, "age": 9}, "expect": {"exit": 0, "stdout_json": {"who_category": null}, "stdout_contains": "percentiles"}},
+  {"name": "zero weight is a usage error that still carries the disclaimer", "input": {"weight": 0, "height": 170}, "expect": {"exit": 2, "stdout_json": {"error": "weight must be positive"}, "stdout_contains": "Not medical advice"}},
+  {"name": "unknown units", "input": {"weight": 70, "height": 170, "units": "stone"}, "expect": {"exit": 2, "stdout_contains": "units must be"}}
+]

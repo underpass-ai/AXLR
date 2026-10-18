@@ -1,0 +1,219 @@
+{
+ "title": "Reference intakes, Regulation (EU) No 1169/2011, Annex XIII (adults)",
+ "source_url": "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32011R1169",
+ "licence": "(c) European Union; reuse authorised with acknowledgement of the source (Commission Decision 2011/833/EU)",
+ "transcribed": "2026-10-18",
+ "generator": "tools/catalog/data/nutrition_totals.py",
+ "intakes": {
+  "energy_kj": {
+   "label": "Energy",
+   "amount": "8400",
+   "unit": "kJ",
+   "part": "Annex XIII Part B"
+  },
+  "energy_kcal": {
+   "label": "Energy",
+   "amount": "2000",
+   "unit": "kcal",
+   "part": "Annex XIII Part B"
+  },
+  "fat": {
+   "label": "Total fat",
+   "amount": "70",
+   "unit": "g",
+   "part": "Annex XIII Part B"
+  },
+  "saturates": {
+   "label": "Saturates",
+   "amount": "20",
+   "unit": "g",
+   "part": "Annex XIII Part B"
+  },
+  "carbohydrate": {
+   "label": "Carbohydrate",
+   "amount": "260",
+   "unit": "g",
+   "part": "Annex XIII Part B"
+  },
+  "sugars": {
+   "label": "Sugars",
+   "amount": "90",
+   "unit": "g",
+   "part": "Annex XIII Part B"
+  },
+  "protein": {
+   "label": "Protein",
+   "amount": "50",
+   "unit": "g",
+   "part": "Annex XIII Part B"
+  },
+  "salt": {
+   "label": "Salt",
+   "amount": "6",
+   "unit": "g",
+   "part": "Annex XIII Part B"
+  },
+  "vitamin_a": {
+   "label": "Vitamin A",
+   "amount": "800",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "vitamin_d": {
+   "label": "Vitamin D",
+   "amount": "5",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "vitamin_e": {
+   "label": "Vitamin E",
+   "amount": "12",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "vitamin_k": {
+   "label": "Vitamin K",
+   "amount": "75",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "vitamin_c": {
+   "label": "Vitamin C",
+   "amount": "80",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "thiamin": {
+   "label": "Thiamin",
+   "amount": "1.1",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "riboflavin": {
+   "label": "Riboflavin",
+   "amount": "1.4",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "niacin": {
+   "label": "Niacin",
+   "amount": "16",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "vitamin_b6": {
+   "label": "Vitamin B6",
+   "amount": "1.4",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "folic_acid": {
+   "label": "Folic acid",
+   "amount": "200",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "vitamin_b12": {
+   "label": "Vitamin B12",
+   "amount": "2.5",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "biotin": {
+   "label": "Biotin",
+   "amount": "50",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "pantothenic_acid": {
+   "label": "Pantothenic acid",
+   "amount": "6",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "potassium": {
+   "label": "Potassium",
+   "amount": "2000",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "chloride": {
+   "label": "Chloride",
+   "amount": "800",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "calcium": {
+   "label": "Calcium",
+   "amount": "800",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "phosphorus": {
+   "label": "Phosphorus",
+   "amount": "700",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "magnesium": {
+   "label": "Magnesium",
+   "amount": "375",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "iron": {
+   "label": "Iron",
+   "amount": "14",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "zinc": {
+   "label": "Zinc",
+   "amount": "10",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "copper": {
+   "label": "Copper",
+   "amount": "1",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "manganese": {
+   "label": "Manganese",
+   "amount": "2",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "fluoride": {
+   "label": "Fluoride",
+   "amount": "3.5",
+   "unit": "mg",
+   "part": "Annex XIII Part A point 1"
+  },
+  "selenium": {
+   "label": "Selenium",
+   "amount": "55",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "chromium": {
+   "label": "Chromium",
+   "amount": "40",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "molybdenum": {
+   "label": "Molybdenum",
+   "amount": "50",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  },
+  "iodine": {
+   "label": "Iodine",
+   "amount": "150",
+   "unit": "ug",
+   "part": "Annex XIII Part A point 1"
+  }
+ }
+}

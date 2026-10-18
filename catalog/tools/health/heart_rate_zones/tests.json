@@ -1,0 +1,8 @@
+[
+  {"name": "Tanaka et al. 2001: 208 - 0.7 x age and 220 - age coincide at age 40 (180 bpm); Gellish 207 - 0.7 x 40 = 179", "input": {"age": 40}, "expect": {"exit": 0, "stdout_json": {"max_hr_estimates": {"tanaka": "180.0", "fox": "180.0", "gellish": "179.0"}}}},
+  {"name": "Karvonen hand-checked: age 40, rest 60, HRR 120, 70-80 % is 60 + 84 = 144 to 60 + 96 = 156", "input": {"age": 40, "resting_hr": 60, "method": "karvonen", "boundaries": [70, 80]}, "expect": {"exit": 0, "stdout_json": {"heart_rate_reserve": "120.0", "karvonen_zones": [{"zone": 1, "low_bpm": 144, "high_bpm": 156}]}}},
+  {"name": "percent of max hand-checked: 182.5 x 60 % = 109.5 rounds to 110, 75 % = 136.875", "input": {"age": 35, "formula": "gellish", "boundaries": [60, 75, 90]}, "expect": {"exit": 0, "stdout_json": {"max_hr": "182.5", "percent_max_zones": [{"low_bpm": 110, "high_bpm": 137, "high_exact": "136.9"}, {"low_bpm": 137, "high_bpm": 164}]}}},
+  {"name": "measured maximum overrides the estimate", "input": {"age": 30, "max_hr": 200, "resting_hr": 50, "method": "karvonen", "boundaries": [50, 100], "zone_names": ["all"]}, "expect": {"exit": 0, "stdout_json": {"max_hr": "200.0", "max_hr_source": "measured (given)", "karvonen_zones": [{"name": "all", "low_bpm": 125, "high_bpm": 200}]}}},
+  {"name": "Karvonen without resting heart rate", "input": {"age": 30, "method": "karvonen"}, "expect": {"exit": 2, "stdout_contains": "need resting_hr"}},
+  {"name": "descending boundaries", "input": {"age": 30, "boundaries": [80, 70]}, "expect": {"exit": 2, "stdout_contains": "strictly ascending"}}
+]

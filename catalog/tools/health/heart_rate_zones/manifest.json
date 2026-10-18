@@ -1,0 +1,30 @@
+{
+  "name": "heart_rate_zones",
+  "description": "Heart-rate training zones: maximum heart rate estimated by Tanaka (208 - 0.7 x age), Fox (220 - age) or Gellish (207 - 0.7 x age), or measured, and zones by heart-rate reserve (Karvonen, with resting heart rate) and by percentage of maximum, on default five-zone or custom boundaries. Exact arithmetic; every output carries a disclaimer: not medical advice, verify with a clinician.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "age": {"type": ["number", "string"], "minimum": 5, "maximum": 110, "description": "Years; needed unless max_hr is given"},
+      "resting_hr": {"type": ["number", "string"], "minimum": 20, "maximum": 150, "description": "bpm; enables Karvonen zones"},
+      "max_hr": {"type": ["number", "string"], "minimum": 60, "maximum": 250, "description": "Measured maximum, bpm"},
+      "formula": {"type": "string", "enum": ["tanaka", "fox", "gellish"], "default": "tanaka"},
+      "method": {"type": "string", "enum": ["karvonen", "percent_max", "both"], "description": "Default both with resting_hr, else percent_max"},
+      "boundaries": {"type": "array", "minItems": 2, "maxItems": 21, "items": {"type": "number", "minimum": 0, "maximum": 100}, "default": [50, 60, 70, 80, 90, 100]},
+      "zone_names": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "program": "python3",
+  "args": ["heart_rate_zones.py"],
+  "files": ["heart_rate_zones.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "health",
+    "tags": ["heart-rate", "karvonen", "training-zones", "exercise", "fitness", "cardio"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"age": 40, "resting_hr": 60}, "output": {"max_hr": "180.0", "heart_rate_reserve": "120.0", "max_hr_estimates": {"tanaka": "180.0", "fox": "180.0", "gellish": "179.0"}}},
+    "source": "Karvonen, Kentala & Mustala, Ann Med Exp Biol Fenn 1957;35:307 (heart-rate reserve); Tanaka, Monahan & Seals, J Am Coll Cardiol 2001;37:153; Fox, Naughton & Haskell 1971; Gellish et al., Med Sci Sports Exerc 2007;39:822"
+  }
+}
