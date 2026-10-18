@@ -1,0 +1,29 @@
+{
+  "name": "unicode_tools",
+  "description": "Inspect and normalise Unicode text with the standard library's unicodedata: NFC, NFD, NFKC and NFKD with their code points, accent stripping, each character's code point, name, general category and script, UTF-8, UTF-16 and UTF-32 bytes in hex and decoding hex back to text, and a homoglyph check that flags words mixing Latin, Cyrillic and Greek or made only of Latin lookalikes, using pairs from Unicode TR39 confusables.txt. Reports the Unicode version of unicodedata.",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["normalize", "strip_accents", "codepoints", "bytes", "decode", "confusables"]},
+      "text": {"type": "string", "description": "The text; every operation except decode", "maxLength": 20000},
+      "form": {"type": "string", "enum": ["NFC", "NFD", "NFKC", "NFKD"], "description": "normalize; omitted: all four"},
+      "hex": {"type": "string", "description": "decode: bytes in hex, e.g. \"C3 A9\""},
+      "encoding": {"type": "string", "enum": ["utf-8", "utf-16-be", "utf-16-le", "utf-32-be", "utf-32-le"], "default": "utf-8", "description": "decode"}
+    }
+  },
+  "program": "python3",
+  "args": ["unicode_tools.py"],
+  "files": ["unicode_tools.py"],
+  "catalog": {
+    "version": "1.0.1",
+    "category": "language",
+    "tags": ["unicode", "normalization", "utf-8", "code-points", "homoglyphs", "confusables", "text"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "normalize", "text": "é"}, "output": {"input_codepoints": ["U+00E9"], "forms": {"NFC": {"codepoints": ["U+00E9"], "input_is_normalized": true}, "NFD": {"codepoints": ["U+0065", "U+0301"], "input_is_normalized": false}}}},
+    "source": "Python stdlib unicodedata (UAX #15 normalisation, UnicodeData.txt names and categories); homoglyph pairs from Unicode TR39 confusables.txt 18.0.0 (Unicode License v3)"
+  }
+}

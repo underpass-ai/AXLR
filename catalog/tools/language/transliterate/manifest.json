@@ -1,0 +1,28 @@
+{
+  "name": "transliterate",
+  "description": "Transliterate Cyrillic, Greek and Arabic text into Latin letters from tables in the program: Cyrillic by ISO 9:1995 (Russian, Ukrainian, Belarusian, Serbian, Macedonian, Bulgarian), scholarly transliteration or BGN/PCGN 1947 for Russian (ye after vowels, kh, shch); Greek by ELOT 743 / ISO 843 transcription with its position rules (av/af, mp/b, ng, nch); Arabic by a simplified ALA-LC (consonants, long vowels, vowel marks when written). Case is kept (Щ Shch, ЩИ SHCHI).",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "minLength": 1, "maxLength": 100000, "description": "Text in any mix of Cyrillic, Greek and Arabic; other characters are copied"},
+      "cyrillic_system": {"type": "string", "enum": ["iso9", "scholarly", "bgn_pcgn"], "default": "iso9", "description": "iso9: all Slavic Cyrillic letters; scholarly and bgn_pcgn: Russian alphabet"},
+      "cyrillic_signs": {"type": "string", "enum": ["standard", "ascii", "omit"], "default": "standard", "description": "Soft and hard signs: the system's marks, ASCII ' and \", or dropped"},
+      "greek_diaeresis": {"type": "string", "enum": ["keep", "drop"], "default": "keep", "description": "Greek ϊ ϋ as ï ÿ (keep) or i y (drop)"}
+    }
+  },
+  "program": "python3",
+  "args": ["transliterate.py"],
+  "files": ["transliterate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "language",
+    "tags": ["transliteration", "romanization", "cyrillic", "greek", "arabic", "iso-9", "linguistics"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "Хрущёв", "cyrillic_system": "bgn_pcgn"}, "output": {"result": "Khrushchëv", "scripts": ["cyrillic"]}},
+    "source": "ISO 9:1995 table; BGN/PCGN 1947 romanization of Russian (US Board on Geographic Names / Permanent Committee on Geographical Names); scientific transliteration of Cyrillic; ELOT 743:2001 = ISO 843:1997 transcription (UN-approved for Greek); ALA-LC Arabic romanization table (Library of Congress)"
+  }
+}

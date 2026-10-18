@@ -1,0 +1,910 @@
+{
+ "generated": "2026-10-18",
+ "generator": "tools/catalog/data/es_verb_conjugate.py",
+ "source": "RAE and ASALE, Nueva gramática de la lengua española (2009), ch. 4 and appendix of conjugation models; Ortografía de la lengua española (2010); DLE conjugation tables (https://dle.rae.es/). Transcribed by hand.",
+ "persons": [
+  "yo",
+  "tú",
+  "él",
+  "nosotros",
+  "vosotros",
+  "ellos"
+ ],
+ "verbs": {
+  "abrir": {
+   "part": "abierto"
+  },
+  "acostar": {
+   "stem": "o>ue"
+  },
+  "actuar": {
+   "accent": true
+  },
+  "adquirir": {
+   "stem": "i>ie"
+  },
+  "advertir": {
+   "stem": "e>ie/i"
+  },
+  "agradecer": {
+   "model": "agradecer (-zc-)"
+  },
+  "aislar": {
+   "accent": true
+  },
+  "almorzar": {
+   "stem": "o>ue"
+  },
+  "andar": {
+   "pret": "anduv",
+   "model": "andar (pretérito fuerte)"
+  },
+  "aparecer": {
+   "model": "agradecer (-zc-)"
+  },
+  "aprobar": {
+   "stem": "o>ue"
+  },
+  "atender": {
+   "stem": "e>ie"
+  },
+  "atraer": {
+   "like": "traer"
+  },
+  "atravesar": {
+   "stem": "e>ie"
+  },
+  "caber": {
+   "yo": "quepo",
+   "pret": "cup",
+   "fut": "cabr",
+   "model": "caber (irregular)"
+  },
+  "caer": {
+   "yo": "caigo",
+   "model": "caer (irregular)"
+  },
+  "calentar": {
+   "stem": "e>ie"
+  },
+  "cerrar": {
+   "stem": "e>ie"
+  },
+  "cocer": {
+   "stem": "o>ue",
+   "c_z": true
+  },
+  "colgar": {
+   "stem": "o>ue"
+  },
+  "comenzar": {
+   "stem": "e>ie"
+  },
+  "competir": {
+   "stem": "e>i"
+  },
+  "componer": {
+   "like": "poner",
+   "imp_tu": "compón"
+  },
+  "concluir": {
+   "model": "construir (-uir: y)"
+  },
+  "conducir": {
+   "pret": "conduj",
+   "model": "conducir (-zc- and pretérito fuerte)"
+  },
+  "confiar": {
+   "accent": true
+  },
+  "conocer": {
+   "model": "agradecer (-zc-)"
+  },
+  "conseguir": {
+   "stem": "e>i"
+  },
+  "consentir": {
+   "stem": "e>ie/i"
+  },
+  "construir": {
+   "model": "construir (-uir: y)"
+  },
+  "contar": {
+   "stem": "o>ue"
+  },
+  "contener": {
+   "like": "tener",
+   "imp_tu": "contén"
+  },
+  "continuar": {
+   "accent": true
+  },
+  "contraer": {
+   "like": "traer"
+  },
+  "contribuir": {
+   "model": "construir (-uir: y)"
+  },
+  "convenir": {
+   "like": "venir",
+   "imp_tu": "convén"
+  },
+  "convertir": {
+   "stem": "e>ie/i"
+  },
+  "corregir": {
+   "stem": "e>i"
+  },
+  "costar": {
+   "stem": "o>ue"
+  },
+  "crecer": {
+   "model": "agradecer (-zc-)"
+  },
+  "creer": {
+   "model": "leer (y between vowels)"
+  },
+  "cubrir": {
+   "part": "cubierto"
+  },
+  "dar": {
+   "forms": {
+    "presente": [
+     "doy",
+     "das",
+     "da",
+     "damos",
+     "dais",
+     "dan"
+    ],
+    "preterito": [
+     "di",
+     "diste",
+     "dio",
+     "dimos",
+     "disteis",
+     "dieron"
+    ],
+    "subj_presente": [
+     "dé",
+     "des",
+     "dé",
+     "demos",
+     "deis",
+     "den"
+    ]
+   },
+   "vos_pres": "das",
+   "imp_vos": "da",
+   "model": "dar (irregular)"
+  },
+  "decir": {
+   "stem": "e>i",
+   "yo": "digo",
+   "pret": "dij",
+   "fut": "dir",
+   "imp_tu": "di",
+   "part": "dicho",
+   "model": "decir (irregular)"
+  },
+  "deducir": {
+   "like": "conducir"
+  },
+  "defender": {
+   "stem": "e>ie"
+  },
+  "describir": {
+   "part": "descrito"
+  },
+  "descubrir": {
+   "part": "descubierto"
+  },
+  "deshacer": {
+   "like": "hacer"
+  },
+  "despedir": {
+   "stem": "e>i"
+  },
+  "despertar": {
+   "stem": "e>ie"
+  },
+  "destruir": {
+   "model": "construir (-uir: y)"
+  },
+  "detener": {
+   "like": "tener",
+   "imp_tu": "detén"
+  },
+  "devolver": {
+   "stem": "o>ue",
+   "part": "devuelto"
+  },
+  "disponer": {
+   "like": "poner",
+   "imp_tu": "dispón"
+  },
+  "distraer": {
+   "like": "traer"
+  },
+  "distribuir": {
+   "model": "construir (-uir: y)"
+  },
+  "divertir": {
+   "stem": "e>ie/i"
+  },
+  "doler": {
+   "stem": "o>ue"
+  },
+  "dormir": {
+   "stem": "o>ue/u"
+  },
+  "elegir": {
+   "stem": "e>i"
+  },
+  "empezar": {
+   "stem": "e>ie"
+  },
+  "encender": {
+   "stem": "e>ie"
+  },
+  "encontrar": {
+   "stem": "o>ue"
+  },
+  "enfriar": {
+   "accent": true
+  },
+  "entender": {
+   "stem": "e>ie"
+  },
+  "enviar": {
+   "accent": true
+  },
+  "envolver": {
+   "stem": "o>ue",
+   "part": "envuelto"
+  },
+  "escribir": {
+   "part": "escrito"
+  },
+  "establecer": {
+   "model": "agradecer (-zc-)"
+  },
+  "estar": {
+   "forms": {
+    "presente": [
+     "estoy",
+     "estás",
+     "está",
+     "estamos",
+     "estáis",
+     "están"
+    ],
+    "subj_presente": [
+     "esté",
+     "estés",
+     "esté",
+     "estemos",
+     "estéis",
+     "estén"
+    ]
+   },
+   "pret": "estuv",
+   "imp_tu": "está",
+   "model": "estar (irregular)"
+  },
+  "evaluar": {
+   "accent": true
+  },
+  "exponer": {
+   "like": "poner",
+   "imp_tu": "expón"
+  },
+  "extender": {
+   "stem": "e>ie"
+  },
+  "extraer": {
+   "like": "traer"
+  },
+  "freír": {
+   "forms": {
+    "presente": [
+     "frío",
+     "fríes",
+     "fríe",
+     "freímos",
+     "freís",
+     "fríen"
+    ],
+    "subj_presente": [
+     "fría",
+     "frías",
+     "fría",
+     "friamos",
+     "friais",
+     "frían"
+    ],
+    "preterito": [
+     "freí",
+     "freíste",
+     "frio",
+     "freímos",
+     "freísteis",
+     "frieron"
+    ]
+   },
+   "ger": "friendo",
+   "part": "frito",
+   "part_alt": "freído",
+   "model": "reír (e>i, hiatus)"
+  },
+  "gobernar": {
+   "stem": "e>ie"
+  },
+  "graduar": {
+   "accent": true
+  },
+  "haber": {
+   "forms": {
+    "presente": [
+     "he",
+     "has",
+     "ha",
+     "hemos",
+     "habéis",
+     "han"
+    ],
+    "subj_presente": [
+     "haya",
+     "hayas",
+     "haya",
+     "hayamos",
+     "hayáis",
+     "hayan"
+    ]
+   },
+   "pret": "hub",
+   "fut": "habr",
+   "vos_pres": "has",
+   "imp_tu": null,
+   "imp_vos": null,
+   "imp_vosotros": null,
+   "note": "auxiliary verb; impersonal hay in the present (3rd person singular of the existential use); no imperative in use",
+   "model": "haber (irregular)"
+  },
+  "hacer": {
+   "yo": "hago",
+   "pret": "hic",
+   "fut": "har",
+   "imp_tu": "haz",
+   "part": "hecho",
+   "model": "hacer (irregular)"
+  },
+  "herir": {
+   "stem": "e>ie/i"
+  },
+  "hervir": {
+   "stem": "e>ie/i"
+  },
+  "huir": {
+   "forms": {
+    "presente": [
+     "huyo",
+     "huyes",
+     "huye",
+     "huimos",
+     "huis",
+     "huyen"
+    ],
+    "preterito": [
+     "hui",
+     "huiste",
+     "huyó",
+     "huimos",
+     "huisteis",
+     "huyeron"
+    ]
+   },
+   "vos_pres": "huis",
+   "imp_vos": "hui",
+   "model": "construir (-uir: y)",
+   "note": "hui, huis are written without accent (Ortografía 2010: monosyllables)"
+  },
+  "impedir": {
+   "stem": "e>i"
+  },
+  "imponer": {
+   "like": "poner",
+   "imp_tu": "impón"
+  },
+  "imprimir": {
+   "part": "impreso",
+   "part_alt": "imprimido"
+  },
+  "incluir": {
+   "model": "construir (-uir: y)"
+  },
+  "inscribir": {
+   "part": "inscrito"
+  },
+  "intervenir": {
+   "like": "venir",
+   "imp_tu": "intervén"
+  },
+  "introducir": {
+   "like": "conducir"
+  },
+  "ir": {
+   "forms": {
+    "presente": [
+     "voy",
+     "vas",
+     "va",
+     "vamos",
+     "vais",
+     "van"
+    ],
+    "imperfecto": [
+     "iba",
+     "ibas",
+     "iba",
+     "íbamos",
+     "ibais",
+     "iban"
+    ],
+    "preterito": [
+     "fui",
+     "fuiste",
+     "fue",
+     "fuimos",
+     "fuisteis",
+     "fueron"
+    ],
+    "subj_presente": [
+     "vaya",
+     "vayas",
+     "vaya",
+     "vayamos",
+     "vayáis",
+     "vayan"
+    ]
+   },
+   "vos_pres": "vas",
+   "imp_tu": "ve",
+   "imp_vos": null,
+   "imp_nosotros": "vamos",
+   "ger": "yendo",
+   "note": "the voseo imperative of ir is not used; andá (from andar) takes its place",
+   "model": "ir (irregular)"
+  },
+  "jugar": {
+   "stem": "u>ue"
+  },
+  "leer": {
+   "model": "leer (y between vowels)"
+  },
+  "llover": {
+   "stem": "o>ue",
+   "note": "impersonal (weather)"
+  },
+  "lucir": {
+   "model": "lucir (-zc-)"
+  },
+  "mantener": {
+   "like": "tener",
+   "imp_tu": "mantén"
+  },
+  "mecer": {
+   "c_z": true
+  },
+  "medir": {
+   "stem": "e>i"
+  },
+  "mentir": {
+   "stem": "e>ie/i"
+  },
+  "merecer": {
+   "model": "agradecer (-zc-)"
+  },
+  "morir": {
+   "stem": "o>ue/u",
+   "part": "muerto"
+  },
+  "mostrar": {
+   "stem": "o>ue"
+  },
+  "mover": {
+   "stem": "o>ue"
+  },
+  "nacer": {
+   "model": "agradecer (-zc-)"
+  },
+  "negar": {
+   "stem": "e>ie"
+  },
+  "nevar": {
+   "stem": "e>ie",
+   "note": "impersonal (weather)"
+  },
+  "obtener": {
+   "like": "tener",
+   "imp_tu": "obtén"
+  },
+  "ofrecer": {
+   "model": "agradecer (-zc-)"
+  },
+  "oler": {
+   "stem": "o>ue",
+   "note": "ue at the start of a word is written hue (huelo)"
+  },
+  "oponer": {
+   "like": "poner",
+   "imp_tu": "opón"
+  },
+  "oír": {
+   "forms": {
+    "presente": [
+     "oigo",
+     "oyes",
+     "oye",
+     "oímos",
+     "oís",
+     "oyen"
+    ]
+   },
+   "yo": "oigo",
+   "model": "oír (irregular)"
+  },
+  "parecer": {
+   "model": "agradecer (-zc-)"
+  },
+  "pedir": {
+   "stem": "e>i"
+  },
+  "pensar": {
+   "stem": "e>ie"
+  },
+  "perder": {
+   "stem": "e>ie"
+  },
+  "perseguir": {
+   "stem": "e>i"
+  },
+  "pertenecer": {
+   "model": "agradecer (-zc-)"
+  },
+  "poder": {
+   "stem": "o>ue",
+   "pret": "pud",
+   "fut": "podr",
+   "ger": "pudiendo",
+   "model": "poder (irregular)"
+  },
+  "poner": {
+   "yo": "pongo",
+   "pret": "pus",
+   "fut": "pondr",
+   "imp_tu": "pon",
+   "part": "puesto",
+   "model": "poner (irregular)"
+  },
+  "poseer": {
+   "model": "leer (y between vowels)"
+  },
+  "preferir": {
+   "stem": "e>ie/i"
+  },
+  "prevenir": {
+   "like": "venir",
+   "imp_tu": "prevén"
+  },
+  "probar": {
+   "stem": "o>ue"
+  },
+  "producir": {
+   "like": "conducir"
+  },
+  "prohibir": {
+   "accent": true
+  },
+  "proponer": {
+   "like": "poner",
+   "imp_tu": "propón"
+  },
+  "proveer": {
+   "model": "leer (y between vowels)",
+   "part": "provisto",
+   "part_alt": "proveído"
+  },
+  "querer": {
+   "stem": "e>ie",
+   "pret": "quis",
+   "fut": "querr",
+   "model": "querer (irregular)"
+  },
+  "recomendar": {
+   "stem": "e>ie"
+  },
+  "reconocer": {
+   "model": "agradecer (-zc-)"
+  },
+  "recordar": {
+   "stem": "o>ue"
+  },
+  "reducir": {
+   "like": "conducir"
+  },
+  "referir": {
+   "stem": "e>ie/i"
+  },
+  "repetir": {
+   "stem": "e>i"
+  },
+  "requerir": {
+   "stem": "e>ie/i"
+  },
+  "resolver": {
+   "stem": "o>ue",
+   "part": "resuelto"
+  },
+  "retener": {
+   "like": "tener",
+   "imp_tu": "retén"
+  },
+  "reunir": {
+   "accent": true
+  },
+  "reír": {
+   "forms": {
+    "presente": [
+     "río",
+     "ríes",
+     "ríe",
+     "reímos",
+     "reís",
+     "ríen"
+    ],
+    "subj_presente": [
+     "ría",
+     "rías",
+     "ría",
+     "riamos",
+     "riais",
+     "rían"
+    ],
+    "preterito": [
+     "reí",
+     "reíste",
+     "rio",
+     "reímos",
+     "reísteis",
+     "rieron"
+    ]
+   },
+   "ger": "riendo",
+   "model": "reír (e>i, hiatus)",
+   "note": "rio and riais are written without accent (Ortografía 2010: monosyllables)"
+  },
+  "reñir": {
+   "stem": "e>i"
+  },
+  "rogar": {
+   "stem": "o>ue"
+  },
+  "romper": {
+   "part": "roto"
+  },
+  "saber": {
+   "yo": "sé",
+   "subj_stem": "sep",
+   "pret": "sup",
+   "fut": "sabr",
+   "model": "saber (irregular)"
+  },
+  "salir": {
+   "yo": "salgo",
+   "fut": "saldr",
+   "imp_tu": "sal",
+   "model": "salir (irregular)"
+  },
+  "satisfacer": {
+   "yo": "satisfago",
+   "pret": "satisfic",
+   "fut": "satisfar",
+   "imp_tu": "satisfaz",
+   "part": "satisfecho",
+   "note": "tú imperative also satisface",
+   "model": "hacer (irregular)"
+  },
+  "seguir": {
+   "stem": "e>i"
+  },
+  "sentar": {
+   "stem": "e>ie"
+  },
+  "sentir": {
+   "stem": "e>ie/i"
+  },
+  "ser": {
+   "forms": {
+    "presente": [
+     "soy",
+     "eres",
+     "es",
+     "somos",
+     "sois",
+     "son"
+    ],
+    "imperfecto": [
+     "era",
+     "eras",
+     "era",
+     "éramos",
+     "erais",
+     "eran"
+    ],
+    "preterito": [
+     "fui",
+     "fuiste",
+     "fue",
+     "fuimos",
+     "fuisteis",
+     "fueron"
+    ],
+    "subj_presente": [
+     "sea",
+     "seas",
+     "sea",
+     "seamos",
+     "seáis",
+     "sean"
+    ]
+   },
+   "vos_pres": "sos",
+   "imp_tu": "sé",
+   "imp_vos": "sé",
+   "model": "ser (irregular)"
+  },
+  "servir": {
+   "stem": "e>i"
+  },
+  "situar": {
+   "accent": true
+  },
+  "sobresalir": {
+   "like": "salir"
+  },
+  "soler": {
+   "stem": "o>ue",
+   "note": "defective: no future, conditional or imperative in use"
+  },
+  "sonar": {
+   "stem": "o>ue"
+  },
+  "sonreír": {
+   "forms": {
+    "presente": [
+     "sonrío",
+     "sonríes",
+     "sonríe",
+     "sonreímos",
+     "sonreís",
+     "sonríen"
+    ],
+    "subj_presente": [
+     "sonría",
+     "sonrías",
+     "sonría",
+     "sonriamos",
+     "sonriáis",
+     "sonrían"
+    ],
+    "preterito": [
+     "sonreí",
+     "sonreíste",
+     "sonrió",
+     "sonreímos",
+     "sonreísteis",
+     "sonrieron"
+    ]
+   },
+   "ger": "sonriendo",
+   "model": "reír (e>i, hiatus)"
+  },
+  "sostener": {
+   "like": "tener",
+   "imp_tu": "sostén"
+  },
+  "soñar": {
+   "stem": "o>ue"
+  },
+  "sugerir": {
+   "stem": "e>ie/i"
+  },
+  "suponer": {
+   "like": "poner",
+   "imp_tu": "supón"
+  },
+  "tener": {
+   "stem": "e>ie",
+   "yo": "tengo",
+   "pret": "tuv",
+   "fut": "tendr",
+   "imp_tu": "ten",
+   "model": "tener (irregular)"
+  },
+  "teñir": {
+   "stem": "e>i"
+  },
+  "torcer": {
+   "stem": "o>ue"
+  },
+  "traducir": {
+   "like": "conducir"
+  },
+  "traer": {
+   "yo": "traigo",
+   "pret": "traj",
+   "model": "traer (irregular)"
+  },
+  "valer": {
+   "yo": "valgo",
+   "fut": "valdr",
+   "model": "valer (irregular)"
+  },
+  "variar": {
+   "accent": true
+  },
+  "venir": {
+   "stem": "e>ie",
+   "yo": "vengo",
+   "pret": "vin",
+   "fut": "vendr",
+   "imp_tu": "ven",
+   "ger": "viniendo",
+   "model": "venir (irregular)"
+  },
+  "ver": {
+   "forms": {
+    "presente": [
+     "veo",
+     "ves",
+     "ve",
+     "vemos",
+     "veis",
+     "ven"
+    ],
+    "imperfecto": [
+     "veía",
+     "veías",
+     "veía",
+     "veíamos",
+     "veíais",
+     "veían"
+    ],
+    "preterito": [
+     "vi",
+     "viste",
+     "vio",
+     "vimos",
+     "visteis",
+     "vieron"
+    ]
+   },
+   "yo": "veo",
+   "vos_pres": "ves",
+   "imp_vos": "ve",
+   "part": "visto",
+   "model": "ver (irregular)"
+  },
+  "vestir": {
+   "stem": "e>i"
+  },
+  "volar": {
+   "stem": "o>ue"
+  },
+  "volver": {
+   "stem": "o>ue",
+   "part": "vuelto"
+  }
+ }
+}

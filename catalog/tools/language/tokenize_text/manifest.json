@@ -1,0 +1,30 @@
+{
+  "name": "tokenize_text",
+  "description": "Split text into words and sentences, Unicode-aware, with counts, frequencies and code-point offsets. Words keep internal apostrophes and hyphens (l'homme, well-known, COVID-19); URLs, e-mail addresses and numbers (3.50, 1.000,5, +34, 12 %) stay single tokens; each Han, hiragana or katakana character is a token; sentence ends at . ! ? … and 。！？ skip the abbreviations of English, Spanish, French or German (Mr., Sr., Mme, z. B.), initials, dotted acronyms and German ordinals. A rule-based tokeniser, not a statistical one.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "maxLength": 2000000},
+      "language": {"type": "string", "enum": ["en", "es", "fr", "de"], "default": "en", "description": "Chooses the abbreviation list for sentence ends"},
+      "tokens": {"type": "boolean", "default": true, "description": "Include the token list with types and offsets"},
+      "sentences": {"type": "boolean", "default": true, "description": "Include the sentence list with offsets"},
+      "top": {"type": "integer", "minimum": 0, "default": 10, "description": "Most frequent words to list (0: none)"},
+      "lowercase": {"type": "boolean", "default": true, "description": "Case-fold words for frequencies and the unique count"}
+    }
+  },
+  "program": "python3",
+  "args": ["tokenize_text.py"],
+  "files": ["tokenize_text.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "language",
+    "tags": ["tokenization", "sentences", "words", "unicode", "nlp", "text-statistics"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "Dr. Smith paid $3.50 at https://example.com/a?b=1. He left... then came back!", "tokens": false, "top": 0}, "output": {"counts": {"tokens": 16, "words": 9, "numbers": 1, "urls": 1, "sentences": 2}, "sentences": [{"text": "Dr. Smith paid $3.50 at https://example.com/a?b=1.", "start": 0, "end": 50}, {"text": "He left... then came back!", "start": 51, "end": 77}]}},
+    "source": "original; word rules after Unicode UAX #29 (letters, marks and digits with internal apostrophes and hyphens), sentence rules after the Punkt-style abbreviation heuristics"
+  }
+}
