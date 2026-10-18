@@ -1,0 +1,32 @@
+{
+  "name": "json_diff",
+  "description": "Structural diff of two JSON values: every added, removed and changed value with its JSON Pointer path (RFC 6901), arrays compared by index, by a key field or by longest common subsequence, and the RFC 6902 JSON Patch that turns the first into the second, verified by applying it. Also applies a JSON Patch (add, remove, replace, move, copy, test) atomically. JSON equality as RFC 6902 defines it: 1 equals 1.0, true is not 1.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["diff", "apply"], "default": "diff"},
+      "a": {"description": "diff: the first JSON value"},
+      "b": {"description": "diff: the second JSON value"},
+      "a_text": {"type": "string", "description": "Or the first value as JSON text"},
+      "b_text": {"type": "string", "description": "Or the second value as JSON text"},
+      "arrays": {"type": "string", "enum": ["index", "key", "lcs"], "default": "index"},
+      "key": {"type": "string", "description": "Field identifying array elements (arrays key)"},
+      "doc": {"description": "apply: the document"},
+      "patch": {"type": "array", "items": {"type": "object"}, "description": "apply: RFC 6902 operations"}
+    }
+  },
+  "program": "python3",
+  "args": ["json_diff.py"],
+  "files": ["json_diff.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "data",
+    "tags": ["json", "diff", "json-patch", "json-pointer", "rfc6902", "compare"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"a": {"foo": ["bar", "baz"]}, "b": {"foo": ["bar", "qux", "baz"]}, "arrays": "lcs"}, "output": {"differences": [{"op": "added", "path": "/foo/1", "new": "qux"}], "patch": [{"op": "add", "path": "/foo/1", "value": "qux"}], "patch_verified": true}},
+    "source": "RFC 6902 (JSON Patch) and RFC 6901 (JSON Pointer); LCS array diff after Hunt-McIlroy"
+  }
+}

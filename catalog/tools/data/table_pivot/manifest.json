@@ -1,0 +1,34 @@
+{
+  "name": "table_pivot",
+  "description": "Group-by and pivot tables over CSV text: group rows by key columns and aggregate value columns with sum, count, mean, min, max and count distinct in exact Decimal arithmetic; optionally spread one column's values across the output columns (rows x columns) with a fill value for empty cells; row totals, a total row and the grand total computed from the underlying rows (a mean of all values, not of the cell means). Numeric keys sort as numbers. JSON rows and CSV.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "csv": {"type": "string"},
+      "path": {"type": "string", "description": "Or a relative path to a CSV file"},
+      "delimiter": {"type": "string"},
+      "group_by": {"type": "array", "items": {"type": "string"}, "default": []},
+      "columns": {"type": "string", "description": "Pivot column: its values become output columns"},
+      "values": {"type": "array", "items": {"type": "object", "additionalProperties": false, "properties": {"column": {"type": "string"}, "agg": {"type": "string", "enum": ["sum", "count", "mean", "min", "max", "count_distinct"]}, "name": {"type": "string"}}}, "default": [{"agg": "count"}]},
+      "fill": {"description": "Value for empty pivot cells (default null)"},
+      "totals": {"type": "boolean", "default": false},
+      "decimals": {"type": "integer", "minimum": 0, "maximum": 28, "description": "Round results half-up to this many places"},
+      "sort": {"type": "string", "enum": ["key", "none"], "default": "key"}
+    }
+  },
+  "program": "python3",
+  "args": ["table_pivot.py"],
+  "files": ["table_pivot.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "data",
+    "tags": ["pivot", "group-by", "aggregate", "csv", "decimal", "totals"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"csv": "region,quarter,amount\nNorth,Q1,10\nNorth,Q1,5.5\nNorth,Q2,7\nSouth,Q1,3\nSouth,Q2,4.25\n", "group_by": ["region"], "columns": "quarter", "values": [{"column": "amount", "agg": "sum"}], "totals": true},
+                "output": {"columns": ["region", "Q1", "Q2", "Total"], "csv": "region,Q1,Q2,Total\nNorth,15.5,7,22.5\nSouth,3,4.25,7.25\nTotal,18.5,11.25,29.75\n"}},
+    "source": "original; semantics of spreadsheet pivot tables and pandas pivot_table (margins computed from the data); Python decimal"
+  }
+}
