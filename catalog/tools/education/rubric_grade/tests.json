@@ -1,0 +1,706 @@
+[
+ {
+  "name": "hand-checked weighted rubric: 2 x 3/4 + 1 x 4/4 + 1 x 2/3 = 19/6 of 4 = 79.17 %, grade C, 7.92 on 10",
+  "input": {
+   "rubric": {
+    "criteria": [
+     {
+      "name": "Content",
+      "weight": 2,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Accurate and complete"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Accurate with minor gaps"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Some errors"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "Many errors"
+       }
+      ]
+     },
+     {
+      "name": "Organization",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Clear structure"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Mostly clear"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Hard to follow"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "No structure"
+       }
+      ]
+     },
+     {
+      "name": "Language",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Strong",
+        "points": 3,
+        "descriptor": "Fluent"
+       },
+       {
+        "label": "Adequate",
+        "points": 2,
+        "descriptor": "Some slips"
+       },
+       {
+        "label": "Weak",
+        "points": 1,
+        "descriptor": "Frequent errors"
+       }
+      ]
+     }
+    ]
+   },
+   "scores": {
+    "Content": "Good",
+    "Organization": "Excellent",
+    "Language": 2
+   },
+   "bands": [
+    {
+     "min_percent": 90,
+     "grade": "A"
+    },
+    {
+     "min_percent": 80,
+     "grade": "B"
+    },
+    {
+     "min_percent": 70,
+     "grade": "C"
+    },
+    {
+     "min_percent": 0,
+     "grade": "F"
+    }
+   ],
+   "scale": 10
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "results": [
+     {
+      "raw_points": "9",
+      "raw_max": "11",
+      "weighted_score": "19/6",
+      "weighted_max": "4",
+      "percentage": "79.17",
+      "percentage_exact": "475/6",
+      "score_on_scale": "7.92",
+      "grade": "C",
+      "feedback": [
+       "Content: Good (3/4) - Accurate with minor gaps",
+       "Organization: Excellent (4/4) - Clear structure",
+       "Language: Adequate (2/3) - Some slips"
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "hand-checked class of three: 93.75 % (A), 52.08 % (F), mean 75.00 %",
+  "input": {
+   "rubric": {
+    "criteria": [
+     {
+      "name": "Content",
+      "weight": 2,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Accurate and complete"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Accurate with minor gaps"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Some errors"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "Many errors"
+       }
+      ]
+     },
+     {
+      "name": "Organization",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Clear structure"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Mostly clear"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Hard to follow"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "No structure"
+       }
+      ]
+     },
+     {
+      "name": "Language",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Strong",
+        "points": 3,
+        "descriptor": "Fluent"
+       },
+       {
+        "label": "Adequate",
+        "points": 2,
+        "descriptor": "Some slips"
+       },
+       {
+        "label": "Weak",
+        "points": 1,
+        "descriptor": "Frequent errors"
+       }
+      ]
+     }
+    ]
+   },
+   "students": [
+    {
+     "student": "Ana",
+     "scores": {
+      "Content": "Good",
+      "Organization": "Excellent",
+      "Language": 2
+     }
+    },
+    {
+     "student": "Ben",
+     "scores": {
+      "Content": "Excellent",
+      "Organization": "Good",
+      "Language": "Strong"
+     }
+    },
+    {
+     "student": "Cy",
+     "scores": {
+      "Content": 2.5,
+      "Organization": "Fair",
+      "Language": "Weak"
+     }
+    }
+   ],
+   "bands": [
+    {
+     "min_percent": 90,
+     "grade": "A"
+    },
+    {
+     "min_percent": 80,
+     "grade": "B"
+    },
+    {
+     "min_percent": 70,
+     "grade": "C"
+    },
+    {
+     "min_percent": 0,
+     "grade": "F"
+    }
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "summary": {
+     "students": 3,
+     "mean_percentage": "75.00",
+     "min_percentage": "52.08",
+     "max_percentage": "93.75",
+     "grades": {
+      "A": 1,
+      "B": 0,
+      "C": 1,
+      "F": 1
+     }
+    }
+   }
+  }
+ },
+ {
+  "name": "points between levels take the descriptor of the level below and say so",
+  "input": {
+   "rubric": {
+    "criteria": [
+     {
+      "name": "Content",
+      "weight": 2,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Accurate and complete"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Accurate with minor gaps"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Some errors"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "Many errors"
+       }
+      ]
+     },
+     {
+      "name": "Organization",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Clear structure"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Mostly clear"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Hard to follow"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "No structure"
+       }
+      ]
+     },
+     {
+      "name": "Language",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Strong",
+        "points": 3,
+        "descriptor": "Fluent"
+       },
+       {
+        "label": "Adequate",
+        "points": 2,
+        "descriptor": "Some slips"
+       },
+       {
+        "label": "Weak",
+        "points": 1,
+        "descriptor": "Frequent errors"
+       }
+      ]
+     }
+    ]
+   },
+   "scores": {
+    "Content": 2.5,
+    "Organization": "Fair",
+    "Language": "Weak"
+   }
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "results": [
+     {
+      "criteria": [
+       {
+        "level": "Fair",
+        "points": "2.5",
+        "between_levels": true,
+        "share": "5/4"
+       },
+       {
+        "level": "Fair"
+       },
+       {
+        "level": "Weak"
+       }
+      ],
+      "percentage": "52.08"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "unweighted rubric: equal weights average the criterion percentages",
+  "input": {
+   "rubric": {
+    "criteria": [
+     {
+      "name": "A",
+      "levels": [
+       {
+        "label": "hi",
+        "points": 5
+       },
+       {
+        "label": "lo",
+        "points": 0
+       }
+      ]
+     },
+     {
+      "name": "B",
+      "levels": [
+       {
+        "label": "hi",
+        "points": 10
+       },
+       {
+        "label": "lo",
+        "points": 0
+       }
+      ]
+     }
+    ]
+   },
+   "scores": {
+    "A": "hi",
+    "B": 5
+   }
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "results": [
+     {
+      "percentage": "75.00",
+      "raw_points": "10",
+      "raw_max": "15"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "missing criterion score",
+  "input": {
+   "rubric": {
+    "criteria": [
+     {
+      "name": "Content",
+      "weight": 2,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Accurate and complete"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Accurate with minor gaps"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Some errors"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "Many errors"
+       }
+      ]
+     },
+     {
+      "name": "Organization",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Clear structure"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Mostly clear"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Hard to follow"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "No structure"
+       }
+      ]
+     },
+     {
+      "name": "Language",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Strong",
+        "points": 3,
+        "descriptor": "Fluent"
+       },
+       {
+        "label": "Adequate",
+        "points": 2,
+        "descriptor": "Some slips"
+       },
+       {
+        "label": "Weak",
+        "points": 1,
+        "descriptor": "Frequent errors"
+       }
+      ]
+     }
+    ]
+   },
+   "scores": {
+    "Content": "Good"
+   }
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "has no score for"
+  }
+ },
+ {
+  "name": "points above the maximum",
+  "input": {
+   "rubric": {
+    "criteria": [
+     {
+      "name": "Content",
+      "weight": 2,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Accurate and complete"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Accurate with minor gaps"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Some errors"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "Many errors"
+       }
+      ]
+     },
+     {
+      "name": "Organization",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Clear structure"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Mostly clear"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Hard to follow"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "No structure"
+       }
+      ]
+     },
+     {
+      "name": "Language",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Strong",
+        "points": 3,
+        "descriptor": "Fluent"
+       },
+       {
+        "label": "Adequate",
+        "points": 2,
+        "descriptor": "Some slips"
+       },
+       {
+        "label": "Weak",
+        "points": 1,
+        "descriptor": "Frequent errors"
+       }
+      ]
+     }
+    ]
+   },
+   "scores": {
+    "Content": 5,
+    "Organization": 1,
+    "Language": 1
+   }
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "exceeds the maximum"
+  }
+ },
+ {
+  "name": "unknown level label",
+  "input": {
+   "rubric": {
+    "criteria": [
+     {
+      "name": "Content",
+      "weight": 2,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Accurate and complete"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Accurate with minor gaps"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Some errors"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "Many errors"
+       }
+      ]
+     },
+     {
+      "name": "Organization",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Excellent",
+        "points": 4,
+        "descriptor": "Clear structure"
+       },
+       {
+        "label": "Good",
+        "points": 3,
+        "descriptor": "Mostly clear"
+       },
+       {
+        "label": "Fair",
+        "points": 2,
+        "descriptor": "Hard to follow"
+       },
+       {
+        "label": "Poor",
+        "points": 1,
+        "descriptor": "No structure"
+       }
+      ]
+     },
+     {
+      "name": "Language",
+      "weight": 1,
+      "levels": [
+       {
+        "label": "Strong",
+        "points": 3,
+        "descriptor": "Fluent"
+       },
+       {
+        "label": "Adequate",
+        "points": 2,
+        "descriptor": "Some slips"
+       },
+       {
+        "label": "Weak",
+        "points": 1,
+        "descriptor": "Frequent errors"
+       }
+      ]
+     }
+    ]
+   },
+   "scores": {
+    "Content": "Superb",
+    "Organization": 1,
+    "Language": 1
+   }
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "a level label or points"
+  }
+ }
+]

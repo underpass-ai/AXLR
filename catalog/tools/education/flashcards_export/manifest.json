@@ -1,0 +1,110 @@
+{
+  "name": "flashcards_export",
+  "description": "Convert CSV flashcards (front, back, tags, optional deck and extra fields) into an Anki-importable tab-separated text file with the file headers of the Anki manual (#separator:Tab, #html, #notetype, #deck, #tags, #columns, #tags column, #deck column), quoting fields that hold tabs, newlines or quotes as Anki expects, or turning newlines into <br> in HTML mode.",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "csv"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "csv": {
+        "type": "string",
+        "description": "CSV text"
+      },
+      "delimiter": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 1,
+        "default": ","
+      },
+      "header": {
+        "enum": [
+          true,
+          false,
+          "auto"
+        ],
+        "default": "auto",
+        "description": "auto: the first row is a header when one of its cells is 'front'"
+      },
+      "columns": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "front",
+          "back",
+          "tags",
+          "deck"
+        ],
+        "description": "Column names when there is no header row"
+      },
+      "deck": {
+        "type": "string",
+        "description": "#deck for every note"
+      },
+      "notetype": {
+        "type": "string",
+        "description": "#notetype for every note"
+      },
+      "tags": {
+        "type": [
+          "array",
+          "string"
+        ],
+        "items": {
+          "type": "string"
+        },
+        "description": "#tags added to every note"
+      },
+      "html": {
+        "type": "boolean",
+        "default": false
+      },
+      "newlines": {
+        "type": "string",
+        "enum": [
+          "br",
+          "quote"
+        ],
+        "description": "Default br with html, else quote"
+      }
+    }
+  },
+  "program": "python3",
+  "args": [
+    "flashcards_export.py"
+  ],
+  "files": [
+    "flashcards_export.py"
+  ],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "education",
+    "tags": [
+      "anki",
+      "flashcards",
+      "csv",
+      "tsv",
+      "spaced-repetition",
+      "export"
+    ],
+    "license": "MIT",
+    "requires": {
+      "program_min_version": "3.10",
+      "packages": []
+    },
+    "network": false,
+    "example": {
+      "input": {
+        "csv": "front,back,tags\nbonjour,hello,french greetings\n"
+      },
+      "output": {
+        "tsv": "#separator:Tab\n#html:false\n#columns:Front\tBack\tTags\n#tags column:3\nbonjour\thello\tfrench greetings\n",
+        "notes": 1
+      }
+    },
+    "source": "Anki Manual, Importing > Text Files > File Headers and escaping (https://docs.ankiweb.net/importing/text-files.html), Anki 2.1.54+"
+  }
+}

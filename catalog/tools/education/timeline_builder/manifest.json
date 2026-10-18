@@ -1,0 +1,33 @@
+{
+  "name": "timeline_builder",
+  "description": "Turn dated events (years, months or days, BCE/BC and CE/AD, points or ranges) into a chronologically sorted Markdown list, a Markdown table with durations and an ASCII timeline scaled exactly to a chosen width, and report duplicates, events on the same date, overlapping or nested ranges and points that fall within a range. Uses the historical convention with no year 0.",
+  "input_schema": {
+    "type": "object",
+    "required": ["events"],
+    "additionalProperties": false,
+    "properties": {
+      "events": {"type": "array", "minItems": 1, "maxItems": 500, "items": {"type": "object", "additionalProperties": false, "required": ["label"], "properties": {
+        "label": {"type": "string", "minLength": 1, "maxLength": 200},
+        "date": {"type": ["integer", "string"], "description": "Year (negative = BCE) or YYYY, YYYY-MM, YYYY-MM-DD, '44 BC', '500 BCE', 'AD 79', '79 CE'"},
+        "year": {"type": ["integer", "string"], "description": "Same as date"},
+        "start": {"type": ["integer", "string"]},
+        "end": {"type": ["integer", "string"]}}}},
+      "width": {"type": "integer", "minimum": 20, "maximum": 200, "default": 60},
+      "era": {"type": "string", "enum": ["BCE", "BC"], "default": "BCE", "description": "BCE/CE or BC/AD labels"},
+      "title": {"type": "string", "maxLength": 200}
+    }
+  },
+  "program": "python3",
+  "args": ["timeline_builder.py"],
+  "files": ["timeline_builder.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "education",
+    "tags": ["timeline", "history", "chronology", "markdown", "ascii", "bce"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"events": [{"label": "Augustus reigns", "start": "27 BC", "end": "AD 14"}, {"label": "Rome founded", "date": -753}], "era": "BC"}, "output": {"markdown_list": "- **753 BC** — Rome founded\n- **27 BC – AD 14** — Augustus reigns\n"}},
+    "source": "original; historical year numbering without a year 0 (1 BC is followed by AD 1), astronomical numbering (1 BC = year 0) for arithmetic"
+  }
+}
