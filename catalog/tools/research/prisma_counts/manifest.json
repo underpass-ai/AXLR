@@ -1,0 +1,46 @@
+{
+  "name": "prisma_counts",
+  "description": "PRISMA 2020 flow-diagram numbers for a systematic review: from the counts at each stage or from per-record screening decisions, derive records identified by source, removed before screening, screened, excluded, reports sought, not retrieved, assessed, excluded with reasons and included (studies and reports), for databases and registers and for other methods; check the arithmetic and return the template's box texts and a Mermaid flowchart.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "databases": {"type": ["integer", "object"], "minimum": 0, "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Total, or records per database"},
+      "registers": {"type": ["integer", "object"], "minimum": 0, "additionalProperties": {"type": "integer", "minimum": 0}, "default": 0},
+      "duplicates_removed": {"type": "integer", "minimum": 0, "default": 0},
+      "automation_removed": {"type": "integer", "minimum": 0, "default": 0},
+      "other_removed": {"type": "integer", "minimum": 0, "default": 0},
+      "records_excluded": {"type": "integer", "minimum": 0},
+      "reports_not_retrieved": {"type": "integer", "minimum": 0, "default": 0},
+      "reports_excluded": {"type": ["integer", "object"], "minimum": 0, "additionalProperties": {"type": "integer", "minimum": 0}, "description": "Reports excluded, by reason"},
+      "studies_included": {"type": "integer", "minimum": 0},
+      "records_screened": {"type": "integer", "minimum": 0, "description": "Optional, checked against the flow"},
+      "reports_sought": {"type": "integer", "minimum": 0},
+      "reports_assessed": {"type": "integer", "minimum": 0},
+      "reports_included": {"type": "integer", "minimum": 0},
+      "other_methods": {"type": "object", "additionalProperties": false, "properties": {
+        "sources": {"type": ["integer", "object"], "minimum": 0, "additionalProperties": {"type": "integer", "minimum": 0}},
+        "reports_not_retrieved": {"type": "integer", "minimum": 0},
+        "reports_excluded": {"type": ["integer", "object"], "minimum": 0, "additionalProperties": {"type": "integer", "minimum": 0}}}},
+      "records": {"type": "array", "maxItems": 200000, "description": "Per-record decisions instead of counts", "items": {"type": "object", "additionalProperties": false, "properties": {
+        "source": {"type": "string"}, "via": {"type": "string", "enum": ["database", "register", "other"]},
+        "removed": {"type": "string", "enum": ["duplicate", "automation", "other"]},
+        "screening": {"type": "string", "enum": ["include", "exclude"]},
+        "retrieved": {"type": "boolean"}, "excluded_reason": {"type": "string"}, "study": {"type": "string"}, "id": {"type": "string"}}}}
+    }
+  },
+  "program": "python3",
+  "args": ["prisma_counts.py"],
+  "files": ["prisma_counts.py"],
+  "catalog": {
+    "version": "1.0.1",
+    "category": "research",
+    "tags": ["prisma", "systematic-review", "meta-analysis", "flow-diagram", "screening", "mermaid", "evidence-synthesis"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"databases": {"MEDLINE": 120, "Embase": 85}, "registers": 15, "duplicates_removed": 40, "records_excluded": 125, "reports_not_retrieved": 5, "reports_excluded": {"Wrong population": 20, "Not an RCT": 20}, "studies_included": 8},
+                "output": {"consistent": true, "counts": {"screening": {"records_screened": 180, "reports_sought": 55, "reports_assessed": 50}, "included": {"studies_included": 8, "reports_included": 10}}}},
+    "source": "PRISMA 2020 flow diagram for new systematic reviews (Page MJ, McKenzie JE, Bossuyt PM et al., The PRISMA 2020 statement, BMJ 2021;372:n71, figure 1 and the prisma-statement.org templates)"
+  }
+}

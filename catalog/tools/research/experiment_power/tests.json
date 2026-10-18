@@ -1,0 +1,18 @@
+[
+  {"name": "Cohen (1988) / G*Power: d = 0.5, alpha .05 two-sided, power .80 gives 64 per group (total 128, actual power 0.8014596)", "input": {"design": "two_sample", "d": 0.5, "power": 0.8}, "expect": {"stdout_json": {"n1": 64, "n2": 64, "total_n": 128, "df": 126}}},
+  {"name": "G*Power actual power 0.8014596 for 64 + 64", "input": {"design": "two_sample", "d": 0.5, "n": 64}, "expect": {"stdout_contains": "\"power\": 0.80145"}},
+  {"name": "R power.t.test(power = .8, delta = 0.5): n = 63.76561", "input": {"design": "two_sample", "d": 0.5, "power": 0.8}, "expect": {"stdout_contains": "\"n_exact\": 63.7656"}},
+  {"name": "R help power.t.test(n = 20, delta = 1): power = 0.8689528", "input": {"design": "two_sample", "mean1": 1, "mean2": 0, "sd": 1, "n": 20}, "expect": {"stdout_contains": "\"power\": 0.86895"}},
+  {"name": "R help power.t.test(power = .90, delta = 1): n = 22.02110", "input": {"design": "two_sample", "d": 1, "power": 0.9}, "expect": {"stdout_contains": "\"n_exact\": 22.021"}},
+  {"name": "R help power.t.test(power = .90, delta = 1, alternative = \"one.sided\"): n = 17.84713", "input": {"design": "two_sample", "d": 1, "power": 0.9, "sides": 1}, "expect": {"stdout_contains": "\"n_exact\": 17.847"}},
+  {"name": "R help power.prop.test(p1 = .50, p2 = .75, power = .90): n = 76.7", "input": {"design": "two_proportions", "p1": 0.5, "p2": 0.75, "power": 0.9}, "expect": {"stdout_contains": "\"n_exact\": 76.70"}},
+  {"name": "R help power.prop.test(n = 50, p1 = .50, p2 = .75): power = 0.740", "input": {"design": "two_proportions", "p1": 0.5, "p2": 0.75, "n": 50}, "expect": {"stdout_contains": "\"power\": 0.7401"}},
+  {"name": "arcsine: h = pi/6 for .50 vs .75, n = 2 ((1.959964 + 1.281552) / h)^2 = 76.653 by hand", "input": {"design": "two_proportions", "p1": 0.5, "p2": 0.75, "power": 0.9, "method": "arcsine"}, "expect": {"stdout_contains": "\"n_exact\": 76.65"}},
+  {"name": "normal approximation by hand: one sample d = 0.5, n = ((1.959964 + 0.841621) / 0.5)^2 = 31.40, so 32", "input": {"design": "one_sample", "d": 0.5, "power": 0.8, "method": "normal"}, "expect": {"stdout_json": {"n": 32, "method": "normal approximation"}}},
+  {"name": "paired d_z from mean_diff / sd_diff = 0.5 with the t method needs 34 pairs (df 33)", "input": {"design": "paired", "mean_diff": 2, "sd_diff": 4, "power": 0.8}, "expect": {"stdout_json": {"n": 34, "df": 33, "d": 0.5, "d_from": "mean_diff / sd_diff (d_z)"}}},
+  {"name": "allocation ratio 2: 48 + 96", "input": {"design": "two_sample", "d": 0.5, "power": 0.8, "ratio": 2}, "expect": {"stdout_json": {"n1": 48, "n2": 96, "total_n": 144}}},
+  {"name": "smallest detectable effect with 64 per group at 80 % power", "input": {"design": "two_sample", "n": 64, "power": 0.8, "solve": "effect"}, "expect": {"stdout_contains": "\"d\": 0.4990"}},
+  {"name": "zero effect", "input": {"design": "two_sample", "d": 0, "power": 0.8}, "expect": {"exit": 2, "stdout_contains": "effect size is zero"}},
+  {"name": "n times ratio must be whole", "input": {"design": "two_sample", "d": 0.5, "n": 5, "ratio": 1.5}, "expect": {"exit": 2, "stdout_contains": "n * ratio must be a whole number"}},
+  {"name": "unknown design", "input": {"design": "anova", "d": 0.5}, "expect": {"exit": 2, "stdout_contains": "design must be"}}
+]
