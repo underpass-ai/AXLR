@@ -59,17 +59,17 @@ def sun(jd):
             "obliquity": math.degrees(obliq), "true_longitude": true_long % 360.0}
 
 
-def transit(day_jd0, longitude, guess):
+def transit(day_jd0, site_lon, guess):
     """Solar noon (JD) for the mean solar day starting at JD day_jd0 (0h UT)."""
     t = guess
     for _ in range(4):
-        t = day_jd0 + (720.0 - 4.0 * longitude - sun(t)["eot"]) / 1440.0
+        t = day_jd0 + (720.0 - 4.0 * site_lon - sun(t)["eot"]) / 1440.0
     return t
 
 
-def hour_angle(latitude, decl, depression):
+def hour_angle(site_lat, decl, depression):
     """Hour angle (deg) of the Sun at altitude -depression, or 'above'/'below' if never reached."""
-    lat, d = math.radians(latitude), math.radians(decl)
+    lat, d = math.radians(site_lat), math.radians(decl)
     num = math.sin(math.radians(-depression)) - math.sin(lat) * math.sin(d)
     den = math.cos(lat) * math.cos(d)
     if abs(den) < 1e-12:
@@ -82,30 +82,30 @@ def hour_angle(latitude, decl, depression):
     return math.degrees(math.acos(cos_h))
 
 
-def event(day_jd0, latitude, longitude, depression, sign, noon):
+def event(day_jd0, site_lat, site_lon, depression, sign, noon):
     """Rising (sign -1) or setting (sign +1) time (JD), iterated at the event, or a status."""
     t = noon
     for _ in range(5):
         info = sun(t)
-        h = hour_angle(latitude, info["declination"], depression)
+        h = hour_angle(site_lat, info["declination"], depression)
         if isinstance(h, str):
             return h
-        t = day_jd0 + (720.0 - 4.0 * longitude - info["eot"] + sign * 4.0 * h) / 1440.0
+        t = day_jd0 + (720.0 - 4.0 * site_lon - info["eot"] + sign * 4.0 * h) / 1440.0
     return t
 
 
-def elevation_azimuth(jd, latitude, longitude):
+def elevation_azimuth(jd, site_lat, site_lon):
     info = sun(jd)
     minutes = ((jd + 0.5) % 1.0) * 1440.0
-    true_solar = (minutes + info["eot"] + 4.0 * longitude) % 1440.0
+    true_solar = (minutes + info["eot"] + 4.0 * site_lon) % 1440.0
     ha = true_solar / 4.0 - 180.0
-    lat, d, har = math.radians(latitude), math.radians(info["declination"]), math.radians(ha)
+    lat, d, har = math.radians(site_lat), math.radians(info["declination"]), math.radians(ha)
     cos_zen = max(-1.0, min(1.0, math.sin(lat) * math.sin(d) + math.cos(lat) * math.cos(d) * math.cos(har)))
     zenith = math.acos(cos_zen)
     elevation = 90.0 - math.degrees(zenith)
     denom = math.cos(lat) * math.sin(zenith)
     if abs(denom) < 1e-12:
-        azimuth = 180.0 if latitude > 0 else 0.0
+        azimuth = 180.0 if site_lat > 0 else 0.0
     else:
         cos_az = max(-1.0, min(1.0, (math.sin(lat) * math.cos(zenith) - math.sin(d)) / denom))
         az = math.degrees(math.acos(cos_az))
@@ -191,8 +191,8 @@ def main():
         fail("date must be a date YYYY-MM-DD")
     if not 2 <= date.year <= 9998:
         fail("date must be between years 2 and 9998")
-    latitude = number(request, "latitude", -90, 90)
-    longitude = number(request, "longitude", -180, 180)
+    site_lat = number(request, "latitude", -90, 90)
+    site_lon = number(request, "longitude", -180, 180)
     zone, zone_name = zone_of(request)
     rounding = request.get("rounding", "second")
     if rounding not in ("second", "minute"):
@@ -213,16 +213,16 @@ def main():
     for shift in (-1, 0, 1):
         day = date + dt.timedelta(shift)
         jd0 = jd_of(dt.datetime(day.year, day.month, day.day, tzinfo=dt.timezone.utc))
-        noon = transit(jd0, longitude, jd0 + 0.5)
+        noon = transit(jd0, site_lon, jd0 + 0.5)
         on_date = moment_of(noon).astimezone(zone).date() == date
         candidates.append((not on_date, abs(noon - target), jd0, noon))
     _, _, day_jd0, noon = min(candidates)
 
-    noon_info, noon_elevation, _ = elevation_azimuth(noon, latitude, longitude)
-    result = {"date": date.isoformat(), "latitude": latitude, "longitude": longitude, "timezone": zone_name,
+    noon_info, noon_elevation, _ = elevation_azimuth(noon, site_lat, site_lon)
+    result = {"date": date.isoformat(), "latitude": site_lat, "longitude": site_lon, "timezone": zone_name,
               "solar_noon": local(noon), "solar_noon_elevation_deg": round(noon_elevation, 4)}
-    rise = event(day_jd0, latitude, longitude, DEPRESSIONS["sunrise_sunset"], -1, noon)
-    sets = event(day_jd0, latitude, longitude, DEPRESSIONS["sunrise_sunset"], 1, noon)
+    rise = event(day_jd0, site_lat, site_lon, DEPRESSIONS["sunrise_sunset"], -1, noon)
+    sets = event(day_jd0, site_lat, site_lon, DEPRESSIONS["sunrise_sunset"], 1, noon)
     status = "normal"
     if isinstance(rise, str) and isinstance(sets, str):
         status = "polar_day" if rise == "above" or sets == "above" else "polar_night"
@@ -240,8 +240,8 @@ def main():
     else:
         result["day_length"] = None
     for name in ("civil", "nautical", "astronomical"):
-        begin = event(day_jd0, latitude, longitude, DEPRESSIONS[name], -1, noon)
-        end = event(day_jd0, latitude, longitude, DEPRESSIONS[name], 1, noon)
+        begin = event(day_jd0, site_lat, site_lon, DEPRESSIONS[name], -1, noon)
+        end = event(day_jd0, site_lat, site_lon, DEPRESSIONS[name], 1, noon)
         entry = {"begin": None if isinstance(begin, str) else local(begin),
                  "end": None if isinstance(end, str) else local(end)}
         flags = {x for x in (begin, end) if isinstance(x, str)}
@@ -254,7 +254,7 @@ def main():
     if "datetime" in request:
         moment = parse_instant(request["datetime"])
         jd = jd_of(moment)
-        info, elevation, azimuth = elevation_azimuth(jd, latitude, longitude)
+        info, elevation, azimuth = elevation_azimuth(jd, site_lat, site_lon)
         eot_seconds = info["eot"] * 60
         result["position"] = {
             "datetime": moment.isoformat(), "julian_day": round(jd, 6),

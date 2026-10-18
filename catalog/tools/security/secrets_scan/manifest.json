@@ -17,7 +17,7 @@
   "args": ["secrets_scan.py"],
   "files": ["secrets_scan.py"],
   "catalog": {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "category": "security",
     "tags": ["secrets", "credentials", "gitleaks", "api-keys", "entropy", "redaction"],
     "license": "MIT",

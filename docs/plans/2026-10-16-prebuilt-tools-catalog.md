@@ -127,7 +127,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `style_lint` **1.0.0** | passive voice, filler words, adverbs, repeated words, sentence-length spread (heuristic, English and Spanish) | original |
 | `syllables_rhyme` **1.0.0** | syllable count, stress, rhyme scheme check (Spanish rules exact; English heuristic) | original |
 | `meter_check` **1.0.0** | scan verse against a meter (endecasílabo, alejandrino, iambic pentameter) | original |
-| `name_generator` **1.0.0** | seeded names for characters, places and products, by culture and style | original |
+| `name_generator` **1.0.1** | seeded names for characters, places and products, by culture and style | original |
 | `story_structure_check` **1.0.0** | outline beats against three-act, Save the Cat, hero's journey | original |
 | `md_convert` **1.0.0** | Markdown to HTML, plain text or a deck outline | original |
 | `latex_table` **1.0.0** | CSV to a LaTeX table with escaping and alignment | original |
@@ -220,7 +220,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `kana_romanize` **1.0.0** | Hepburn for kana (kanji needs `pykakasi`, tier 2) | pykakasi |
 | `pinyin_convert` | tier 2 with `pypinyin` | [python-pinyin](https://github.com/mozillazg/python-pinyin) |
 | `language_detect` **1.0.0** | character n-gram heuristic (tier 2 with `lingua`) | [lingua-py](https://github.com/pemistahl/lingua-py) |
-| `number_to_words` **1.0.0** | numbers, ordinals and currency to words (es, en, fr, de, pt) | original |
+| `number_to_words` **1.0.1** | numbers, ordinals and currency to words (es, en, fr, de, pt) | original |
 | `gender_agreement_es` **1.0.0** | agreement check for Spanish noun phrases (heuristic) | original |
 
 ### Geography and time
@@ -229,7 +229,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 |:--|:--|:--|
 | `haversine` **1.0.0** | great-circle distance and bearing, batch | original |
 | `tz_convert` | conversions, DST transitions, offsets at a date (`zoneinfo`) | stdlib |
-| `sun_times` **1.0.0** | sunrise, sunset, twilight by the NOAA algorithm | [astral](https://github.com/sffjunkie/astral) |
+| `sun_times` **1.0.1** | sunrise, sunset, twilight by the NOAA algorithm | [astral](https://github.com/sffjunkie/astral) |
 | `coord_convert` **1.0.0** | decimal degrees, DMS, UTM, geohash, what3words-style not included | original |
 | `calendar_convert` **1.0.0** | Gregorian, ISO week, Julian day, Hebrew, Islamic | original |
 | `iso_country_lookup` **1.0.0** | ISO 3166, currency, calling code, time zones | original |
@@ -257,7 +257,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `sbom_check` **1.0.0** | CycloneDX or SPDX JSON required fields and licence summary | original |
 | `jwt_decode` **1.0.0** | decode without verifying, with a clear warning | original |
 | `cert_inspect` **1.0.0** | PEM certificate fields and expiry (bash with openssl) | original |
-| `secrets_scan` **1.0.0** | key-like strings in files | gitleaks ideas |
+| `secrets_scan` **1.0.1** | key-like strings in files | gitleaks ideas |
 | `totp_generate` **1.0.0** | RFC 6238 code from a secret in the input | original |
 | `csp_lint` **1.0.0** | Content-Security-Policy weaknesses | original |
 

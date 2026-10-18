@@ -142,18 +142,18 @@ def build(rng, start, middle, end, max_middle):
     return word[:1].upper() + word[1:], [p for p in parts if p]
 
 
-def generate(rng, kind, style, gender, surname):
+def generate(rng, kind, style, form, surname):
     if kind == "character":
         table = GIVEN[style]
-        sex = gender if gender != "any" else rng.choice(["female", "male"])
-        given, parts = build(rng, table["start"], table["middle"], table[sex], table["max_middle"])
+        chosen_form = form if form != "any" else rng.choice(["female", "male"])
+        given, parts = build(rng, table["start"], table["middle"], table[chosen_form], table["max_middle"])
         words, all_parts = [given], [parts]
         if surname:
             s = SURNAME[style]
             family, fparts = build(rng, s["start"], s["middle"], s["end"], 1)
             words.append(family)
             all_parts.append(fparts)
-        return words, all_parts, sex
+        return words, all_parts, chosen_form
     if kind == "place":
         table = PLACE[style]
         prefix = rng.choice(table["prefix"])
@@ -189,8 +189,8 @@ def main():
     max_len = get_int(request, "max_length", 12, 1, 40)
     if min_len > max_len:
         fail("min_length is greater than max_length")
-    gender = request.get("gender", "any")
-    if gender not in ("any", "female", "male"):
+    form = request.get("gender", "any")
+    if form not in ("any", "female", "male"):
         fail("gender must be any, female or male")
     surname = get_bool(request, "surname", True)
     unique = get_bool(request, "unique", True)
@@ -198,7 +198,7 @@ def main():
     names, seen, attempts = [], set(), 0
     while len(names) < count and attempts < count * 200:
         attempts += 1
-        words, parts, sex = generate(rng, kind, style, gender, surname)
+        words, parts, chosen_form = generate(rng, kind, style, form, surname)
         checked = [w for w in words if w and " " not in w] if kind != "place" else [words[-1]]
         if not all(min_len <= letters(w) <= max_len for w in checked):
             continue
@@ -207,8 +207,8 @@ def main():
             continue
         seen.add(name)
         item = {"name": name, "parts": parts}
-        if sex:
-            item["gender"] = sex
+        if chosen_form:
+            item["gender"] = chosen_form
         names.append(item)
     lengths = [letters(w) for item in names for w in (item["name"].split() if kind == "character" else item["name"].split()[-1:])]
     checks = {"within_bounds": all(min_len <= n <= max_len for n in lengths),

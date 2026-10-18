@@ -64,8 +64,8 @@ def shannon(text):
     return -sum(c / len(text) * math.log2(c / len(text)) for c in counts.values())
 
 
-def redact(secret):
-    return secret[:4] + "*" * min(max(len(secret) - 4, 0), 12) + f" ({len(secret)} chars)"
+def redact(hit):
+    return hit[:4] + "*" * min(max(len(hit) - 4, 0), 12) + f" ({len(hit)} chars)"
 
 
 def read_relative(path):
@@ -90,23 +90,23 @@ def scan(name, text, rules, threshold, include_examples, findings, skipped):
     seen = set()
     for rule_id, description, pattern, group, minimum in rules:
         for match in re.finditer(pattern, text):
-            secret = match.group(group)
+            hit = match.group(group)
             start = match.start(group)
-            entropy = shannon(secret)
+            entropy = shannon(hit)
             limit = threshold if minimum == "threshold" else minimum
             if limit is not None and entropy < limit:
                 continue
             if rule_id == "generic-api-key":
                 # Skip what another rule already reported, and values that are plainly not secrets.
-                if any(s <= start < e for s, e in seen) or re.fullmatch(r"[a-z]+(?:[._-][a-z]+)*", secret) or re.fullmatch(r"[\d.]+", secret):
+                if any(s <= start < e for s, e in seen) or re.fullmatch(r"[a-z]+(?:[._-][a-z]+)*", hit) or re.fullmatch(r"[\d.]+", hit):
                     continue
-                if not re.search(r"\d", secret) and not re.search(r"[A-Z]", secret):
+                if not re.search(r"\d", hit) and not re.search(r"[A-Z]", hit):
                     continue
-            key = (start, start + len(secret))
+            key = (start, start + len(hit))
             if any(s <= start < e for s, e in seen):
                 continue
             seen.add(key)
-            placeholder = bool(PLACEHOLDER.search(secret))
+            placeholder = bool(PLACEHOLDER.search(hit))
             if placeholder and not include_examples:
                 skipped["placeholders"] += 1
                 continue
@@ -114,7 +114,7 @@ def scan(name, text, rules, threshold, include_examples, findings, skipped):
             findings.append({
                 "rule": rule_id, "description": description, "source": name,
                 "line": line + 1, "column": start - line_starts[line] + 1,
-                "secret_redacted": redact(secret), "length": len(secret), "entropy": round(entropy, 3),
+                "secret_redacted": redact(hit), "length": len(hit), "entropy": round(entropy, 3),
                 "looks_like_placeholder": placeholder,
                 "fingerprint": f"{name}:{rule_id}:{line + 1}",
             })

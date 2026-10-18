@@ -19,7 +19,7 @@
   "args": ["sun_times.py"],
   "files": ["sun_times.py"],
   "catalog": {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "category": "geography",
     "tags": ["sun", "sunrise", "sunset", "twilight", "astronomy", "solar-noon", "equation-of-time"],
     "license": "MIT",

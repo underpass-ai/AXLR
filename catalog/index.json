@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog": "axlr",
-  "generated_at": "2026-10-18T05:56:35Z",
+  "generated_at": "2026-10-18T06:45:27Z",
   "tools": [
     {
       "name": "business_days",
@@ -663,7 +663,7 @@
     },
     {
       "name": "sun_times",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "geography",
       "tags": [
         "sun",
@@ -683,9 +683,9 @@
       "network": false,
       "license": "MIT",
       "manifest": "tools/geography/sun_times/manifest.json",
-      "manifest_sha256": "ea7e491c1b22d98310246216e4543d2e85f9c040fb3acd6f0aa351337142ea7b",
+      "manifest_sha256": "a5c1087757989dc3c9c94eb8ccfc54bbe424b518439e54f917cedb5e4cf53a74",
       "files": {
-        "sun_times.py": "f0a1ca3c7f3605d39a011dab5717b01668eecfe43ec92ca0cd071fe21cceb411"
+        "sun_times.py": "827b304ac093130ac859f222f153ee4a1200a41375df1c704b0f99a944cb1564"
       }
     },
     {
@@ -1008,7 +1008,7 @@
     },
     {
       "name": "number_to_words",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "language",
       "tags": [
         "numbers",
@@ -1028,9 +1028,9 @@
       "network": false,
       "license": "MIT",
       "manifest": "tools/language/number_to_words/manifest.json",
-      "manifest_sha256": "82aa5d8887a8cd548d2d2a791642b9757fb7a4d43d182a5acc4539f6417b225f",
+      "manifest_sha256": "84c047b8874a221e549a4270477117d26da90320ed70d3868afb91a0f34e3b02",
       "files": {
-        "number_to_words.py": "40c7d7223e88acaf6f212095cbf14064748337332628803f87fe0d1a362ef0d2"
+        "number_to_words.py": "63c0ec69333dae6e0e79414fb8eef93de6e5e54c11343b94819ebb294c0dca94"
       }
     },
     {
@@ -1910,7 +1910,7 @@
     },
     {
       "name": "secrets_scan",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "security",
       "tags": [
         "secrets",
@@ -1929,9 +1929,9 @@
       "network": false,
       "license": "MIT",
       "manifest": "tools/security/secrets_scan/manifest.json",
-      "manifest_sha256": "6f2166615c6e5db82581121a1634f030d4492fc38efa6907c5aafa8539112ac7",
+      "manifest_sha256": "586e8ea9a14b2a8c71c78c1e3e2b324fc9e04012cfedff823ddd677f2a866a55",
       "files": {
-        "secrets_scan.py": "6c0e6f59530219f595ce14fee1f7177435b06dd3f65a85ddcc92034fe4c7d48e"
+        "secrets_scan.py": "779b8abc67543f761a73523f869c332cfd2fbf77382971a3a08c474463221465"
       }
     },
     {
@@ -2094,7 +2094,7 @@
     },
     {
       "name": "name_generator",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "category": "writing",
       "tags": [
         "names",
@@ -2113,9 +2113,9 @@
       "network": false,
       "license": "MIT",
       "manifest": "tools/writing/name_generator/manifest.json",
-      "manifest_sha256": "07bc370d19f0f394b01cab95b5558ae11106a3e8cc70b70414ae217c20e7942a",
+      "manifest_sha256": "a1f2e845f8693a2b6465b1cdeb0fc2426b2a36b22addc31495275a0a378a5855",
       "files": {
-        "name_generator.py": "f558fd1a72b9617d81184d4a9ae6c9c6ed4ef34e4909f30bbe3b31a536342856"
+        "name_generator.py": "20739d848a8c64f1f90261a2eef9963808fef2a08a3fda024b3b1ad4cf9f7749"
       }
     },
     {

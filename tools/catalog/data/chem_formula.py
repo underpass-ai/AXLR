@@ -31,7 +31,7 @@ FETCHED = "2026-10-18"
 
 
 def text_of(page):
-    page = re.sub(r"<script.*?</script>|<style.*?</style>", "", page, flags=re.S)
+    page = re.sub(r"<(script|style)\b.*?</\1\b[^>]*>", "", page, flags=re.S | re.I)
     page = re.sub(r"</t[dh]>", " ", page)
     page = re.sub(r"<[^>]+>", " ", page)
     page = html.unescape(page).replace(" ", " ")

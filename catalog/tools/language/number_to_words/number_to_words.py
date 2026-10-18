@@ -555,8 +555,8 @@ def read_fraction(fraction, language, style, opts):
 
 
 def counted(n, names, language, opts, is_sub):
-    singular, plural, gender = names[3:6] if is_sub else names[0:3]
-    o = dict(opts, gender="feminine" if gender == "f" else "masculine", before_noun=True)
+    singular, plural, grammatical = names[3:6] if is_sub else names[0:3]
+    o = dict(opts, gender="feminine" if grammatical == "f" else "masculine", before_noun=True)
     words = CARDINAL[language](n, o)
     noun = singular if n == 1 else plural
     if language in ("es", "pt", "fr") and n and n % 10 ** 6 == 0:
@@ -586,8 +586,8 @@ def main():
     variant = request.get("variant", VARIANTS[language][0])
     if variant not in VARIANTS[language]:
         fail(f"variant for {language} must be one of {', '.join(VARIANTS[language])}")
-    gender = request.get("gender", "masculine")
-    if gender not in ("masculine", "feminine"):
+    grammatical = request.get("gender", "masculine")
+    if grammatical not in ("masculine", "feminine"):
         fail("gender must be masculine or feminine")
     before_noun = request.get("before_noun", False)
     if not isinstance(before_noun, bool):
@@ -603,7 +603,7 @@ def main():
     number, negative, integer, fraction = parse_number(request["number"])
     if integer >= LIMIT:
         fail("number must be below 10^36")
-    opts = {"variant": variant, "gender": gender, "before_noun": before_noun, "orthography": orthography}
+    opts = {"variant": variant, "gender": grammatical, "before_noun": before_noun, "orthography": orthography}
     result = {"number": request["number"] if isinstance(request["number"], str) else str(request["number"]),
               "language": language, "mode": mode, "variant": variant}
 
@@ -611,7 +611,7 @@ def main():
         if negative or fraction.strip("0") or integer < 1:
             fail("ordinals need a positive integer")
         result["words"] = ORDINAL[language](integer, opts)
-        result["gender"] = gender
+        result["gender"] = grammatical
     elif mode == "cardinal":
         words = CARDINAL[language](integer, opts)
         if fraction:
