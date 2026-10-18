@@ -320,7 +320,7 @@ Implemented tools carry their version in bold in the tables above; each lives un
 | 2026-10-16 | reference entries (`seat_allocation`, `business_days`) | 2 | 10 |
 | 2026-10-18 | 1: the first batch and the Spanish administration set (PR #138) | 16 | 117 |
 | 2026-10-18 | 2: politics and civics, administration, mathematics, finance, law (PR #139) | 40 | 430 |
-| 2026-10-18 | 3: research, writing, education, language, geography, health, security, media, data, programming | 83 | 1040 |
+| 2026-10-18 | 3: research, writing, education, language, geography, health, security, media, data, programming (PR #140) | 83 | 1040 |
 | 2026-10-18 | 4: personal, games, cooking and engineering; `qr_generate` and `pinyin_convert` on the standard library; the network tools `doi_lookup`, `arxiv_lookup`, `fx_convert` (PR #141) | 17 | 198 |
 
 Production serves 158 tools after batch 4. Not implemented: `sympy_solve`, the one package-tier tool without a standard-library route: package-tier tools cannot be approved until the registry's sandbox installs packages, because their tests cannot run there. Where the catalog names a package and a stdlib route exists, the stdlib version is shipped and its README says what the package would add. `cooking_unit_convert` ships without its USDA ingredient densities (the FoodData Central API refused the generator's requests); densities are given in the input until `tools/catalog/data/cooking_unit_convert.py` is rerun.
