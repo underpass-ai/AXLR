@@ -15,7 +15,7 @@
   "args": ["iban_validate.py"],
   "files": ["iban_validate.py"],
   "catalog": {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "category": "administration",
     "tags": ["iban", "bank", "sepa", "checksum", "validation", "ccc"],
     "license": "MIT",

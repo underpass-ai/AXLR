@@ -119,10 +119,10 @@ def main():
     if "iban" in request:
         print(json.dumps({"registry": REGISTRY, **check(request["iban"])}))
         return
-    ibans = request.get("ibans")
-    if not isinstance(ibans, list) or not ibans:
+    batch = request.get("ibans")
+    if not isinstance(batch, list) or not batch:
         fail("give iban, ibans, or country and bban")
-    results = [check(i) for i in ibans]
+    results = [check(entry) for entry in batch]
     print(json.dumps({"registry": REGISTRY, "results": results, "valid": sum(r["valid"] for r in results), "invalid": sum(not r["valid"] for r in results)}))
 
 
