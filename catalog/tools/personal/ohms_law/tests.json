@@ -1,0 +1,15 @@
+[
+  {"name": "hand-checked textbook circuit: 12 V across 4 Ω draws 3 A and dissipates 36 W", "input": {"voltage": 12, "resistance": 4}, "expect": {"exit": 0, "stdout_json": {"current": {"exact": "3", "si": "3 A"}, "power": {"exact": "36"}}}},
+  {"name": "9 V at 20 mA: R = 450 Ω, P = 180 mW (SI prefixes in and out)", "input": {"voltage": "9V", "current": "20mA"}, "expect": {"exit": 0, "stdout_json": {"resistance": {"exact": "450"}, "power": {"exact": "9/50", "si": "180 mW"}}}},
+  {"name": "a 100 Ω quarter-watt resistor at full power: 5 V, 50 mA", "input": {"resistance": 100, "power": "0.25"}, "expect": {"exit": 0, "stdout_json": {"voltage": {"exact": "5"}, "current": {"exact": "1/20"}, "exact": true}}},
+  {"name": "1 W in 10 Ω: V = sqrt(10) is irrational", "input": {"resistance": 10, "power": 1}, "expect": {"exit": 0, "stdout_json": {"exact": false, "voltage": {"exact": null, "value": "3.16227766017"}}}},
+  {"name": "hand-checked network: 100 + (220 || 330) + 1k = 100 + 132 + 1000 = 1232 Ω", "input": {"operation": "network", "expression": "100 + (220 || 330) + 1k"}, "expect": {"exit": 0, "stdout_json": {"resistors": 4, "resistance": {"exact": "1232", "si": "1.232 kΩ"}}}},
+  {"name": "6 || 3 = 2 and three 4 Ω in parallel = 4/3, total 10/3 Ω; 10 V drives 3 A", "input": {"operation": "network", "expression": "(6||3) + (4 // 4 // 4)", "voltage": 10}, "expect": {"exit": 0, "stdout_json": {"resistance": {"exact": "10/3"}, "current": {"exact": "3"}, "power": {"exact": "30"}}}},
+  {"name": "divider 12 V, 10k over 4k7: Vout = 12 x 4.7/14.7 = 188/49 V", "input": {"operation": "divider", "vin": 12, "r1": "10k", "r2": "4k7"}, "expect": {"exit": 0, "stdout_json": {"vout": {"exact": "188/49"}, "ratio": "47/147"}}},
+  {"name": "loaded divider: 10k/10k from 10 V gives 5 V, with a 10k load 10/3 V", "input": {"operation": "divider", "vin": 10, "r1": "10k", "r2": "10k", "load": "10k"}, "expect": {"exit": 0, "stdout_json": {"vout_unloaded": {"exact": "5"}, "vout": {"exact": "10/3"}, "thevenin_resistance": {"exact": "5000"}}}},
+  {"name": "LED: 5 V supply, 2 V LED at 20 mA needs (5 - 2)/0.02 = 150 Ω dissipating 60 mW", "input": {"operation": "led", "supply": 5, "forward_voltage": 2, "current": "20mA"}, "expect": {"exit": 0, "stdout_json": {"resistance": {"exact": "150"}, "resistor_power": {"si": "60 mW"}}}},
+  {"name": "three 3.2 V LEDs on 12 V at 20 mA: (12 - 9.6)/0.02 = 120 Ω", "input": {"operation": "led", "supply": 12, "forward_voltage": "3.2", "current": "0.02", "count": 3}, "expect": {"exit": 0, "stdout_json": {"resistance": {"exact": "120"}, "resistor_power": {"exact": "6/125"}}}},
+  {"name": "LEDs need more than the supply", "input": {"operation": "led", "supply": 5, "forward_voltage": 3, "current": "0.01", "count": 2}, "expect": {"exit": 2, "stdout_contains": "does not exceed"}},
+  {"name": "solve needs two quantities", "input": {"voltage": 1}, "expect": {"exit": 2, "stdout_contains": "exactly two"}},
+  {"name": "unbalanced parentheses", "input": {"operation": "network", "expression": "1k + (2k"}, "expect": {"exit": 2, "stdout_contains": "missing )"}}
+]

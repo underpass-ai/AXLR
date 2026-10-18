@@ -1,0 +1,32 @@
+{
+  "name": "wordle_helper",
+  "description": "Wordle helper: score a guess against an answer with the game's rule for repeated letters, filter a word list by the green/yellow/grey feedback of earlier guesses, and rank the next guesses by expected information (entropy of the feedback pattern) or letter frequency. Uses the word list given or a bundled list of five-letter words from SCOWL (permissive ESDB licence).",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "guesses": {"type": "array", "maxItems": 20, "items": {"type": "object", "additionalProperties": false, "required": ["guess", "feedback"], "properties": {
+        "guess": {"type": "string"},
+        "feedback": {"type": "string", "description": "g/y/. per letter (also 2/1/0 or the coloured squares)"}
+      }}},
+      "words": {"type": "array", "maxItems": 50000, "items": {"type": "string"}, "description": "Allowed words, all the same length (default: bundled five-letter list)"},
+      "rank": {"type": "string", "enum": ["entropy", "frequency"], "default": "entropy"},
+      "top": {"type": "integer", "minimum": 1, "maximum": 100, "default": 10},
+      "hard_mode": {"type": "boolean", "default": false, "description": "Suggest only words that could still be the answer"},
+      "score": {"type": "object", "additionalProperties": false, "required": ["guess", "answer"], "properties": {"guess": {"type": "string"}, "answer": {"type": "string"}}, "description": "Only compute the feedback of one guess"}
+    }
+  },
+  "program": "python3",
+  "args": ["wordle_helper.py"],
+  "files": ["wordle_helper.py", "words5.txt"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["wordle", "word-games", "puzzle", "entropy", "information-theory", "games"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"words": ["abide", "aside", "snide", "tilde", "bride", "oxide"], "guesses": [{"guess": "speed", "feedback": "..y.y"}], "top": 2}, "output": {"candidates_count": 4, "candidates": ["abide", "bride", "oxide", "tilde"], "suggestions": [{"word": "abide", "entropy_bits": 2.0, "expected_remaining": 1.0, "patterns": 4, "possible_answer": true}, {"word": "bride", "entropy_bits": 2.0, "expected_remaining": 1.0, "patterns": 4, "possible_answer": true}]}},
+    "source": "original; feedback rules of the game Wordle (Josh Wardle, 2021; The New York Times); entropy ranking after Shannon (1948); word list from SCOWL/ESDB by Kevin Atkinson (ESDB licence), via tools/catalog/data/wordle_helper.py"
+  }
+}

@@ -1,0 +1,95 @@
+{
+  "name": "cooking_unit_convert",
+  "description": "Kitchen unit conversion: cups, tablespoons, teaspoons, fluid ounces, pints and millilitres under a stated cup definition (US customary 236.588 mL, US legal 240 mL, metric 250 mL, UK 284 mL); grams, ounces and pounds; volume to weight by a given density in g/mL (or the bundled ingredient table: water now, USDA FoodData Central rows when the generator's fetch succeeds); oven temperatures in °C, °F and gas marks (UK table and exact scale).",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "value": {
+        "type": [
+          "number",
+          "string"
+        ],
+        "description": "2, \"1.5\", \"3/4\", \"1 1/2\", \"½\""
+      },
+      "from": {
+        "type": "string",
+        "description": "ml, l, dl, cl, cup, tbsp, tsp, fl_oz, pint (in system); us_cup, legal_cup, metric_cup, uk_cup, us_tbsp, us_tsp, au_tbsp, us_fl_oz, uk_fl_oz, us_pint, uk_pint; g, kg, mg, oz, lb; C, F, gas_mark"
+      },
+      "to": {
+        "type": "string"
+      },
+      "system": {
+        "type": "string",
+        "enum": [
+          "us_customary",
+          "us_legal",
+          "metric",
+          "uk"
+        ],
+        "default": "us_customary",
+        "description": "Meaning of cup, tbsp, tsp, fl_oz and pint"
+      },
+      "ingredient": {
+        "type": "string",
+        "description": "Bundled ingredient for volume <-> weight (list: true lists them)"
+      },
+      "density": {
+        "type": [
+          "number",
+          "string"
+        ],
+        "description": "Grams per millilitre, instead of ingredient"
+      },
+      "digits": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 30,
+        "default": 6
+      },
+      "list": {
+        "type": "boolean",
+        "description": "List the ingredients, cup systems and gas marks"
+      }
+    }
+  },
+  "program": "python3",
+  "args": [
+    "cooking_unit_convert.py"
+  ],
+  "files": [
+    "cooking_unit_convert.py",
+    "cooking.json"
+  ],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": [
+      "cooking",
+      "kitchen",
+      "units",
+      "conversion",
+      "baking",
+      "oven-temperature",
+      "gas-mark"
+    ],
+    "license": "MIT",
+    "requires": {
+      "program_min_version": "3.10",
+      "packages": []
+    },
+    "network": false,
+    "example": {
+      "input": {
+        "value": 1,
+        "from": "tbsp",
+        "to": "ml"
+      },
+      "output": {
+        "result": "14.7868",
+        "exact": "473176473/32000000"
+      }
+    },
+    "source": "NIST Handbook 44 App. C (US customary measures); 21 CFR 101.9(b)(5)(viii) (US legal cup); NIST SP 811 App. B.8 (imperial); USDA FoodData Central SR Legacy household measures (public domain); the UK gas mark table; transcribed and fetched by tools/catalog/data/cooking_unit_convert.py"
+  }
+}

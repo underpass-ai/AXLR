@@ -1,0 +1,216 @@
+{
+ "generated": "2026-10-18",
+ "generator": "tools/catalog/data/unit_price_compare.py",
+ "source": "NIST SP 811 (2008) App. B.8; NIST Handbook 44 (2024) App. C; BIPM SI Brochure 9th ed.",
+ "licence": "NIST: US Government work, public domain (17 U.S.C. 105); SI Brochure: CC BY 3.0 IGO; numerical definitions only",
+ "base_units": {
+  "mass": "g",
+  "volume": "ml",
+  "count": "count"
+ },
+ "units": {
+  "mg": {
+   "family": "mass",
+   "factor": "0.001",
+   "aliases": [
+    "milligram",
+    "milligrams"
+   ],
+   "definition": "10^-3 g",
+   "source": "SI Brochure Table 7"
+  },
+  "g": {
+   "family": "mass",
+   "factor": "1",
+   "aliases": [
+    "gram",
+    "grams"
+   ],
+   "definition": "base unit of this table",
+   "source": "SI Brochure Table 2"
+  },
+  "kg": {
+   "family": "mass",
+   "factor": "1000",
+   "aliases": [
+    "kilogram",
+    "kilograms",
+    "kilo",
+    "kilos"
+   ],
+   "definition": "1000 g",
+   "source": "SI Brochure Table 2"
+  },
+  "oz": {
+   "family": "mass",
+   "factor": "28.349523125",
+   "aliases": [
+    "ounce",
+    "ounces",
+    "oz_av"
+   ],
+   "definition": "1/16 lb = 28.349523125 g",
+   "source": "NIST SP 811 App. B.8"
+  },
+  "lb": {
+   "family": "mass",
+   "factor": "453.59237",
+   "aliases": [
+    "lbs",
+    "pound",
+    "pounds"
+   ],
+   "definition": "0.45359237 kg exactly",
+   "source": "NIST SP 811 App. B.8 (1959 agreement)"
+  },
+  "ml": {
+   "family": "volume",
+   "factor": "1",
+   "aliases": [
+    "mL",
+    "millilitre",
+    "milliliter",
+    "millilitres",
+    "milliliters"
+   ],
+   "definition": "base unit of this table",
+   "source": "SI Brochure Table 8"
+  },
+  "cl": {
+   "family": "volume",
+   "factor": "10",
+   "aliases": [
+    "cL",
+    "centilitre",
+    "centiliter"
+   ],
+   "definition": "10 mL",
+   "source": "SI Brochure Tables 7, 8"
+  },
+  "dl": {
+   "family": "volume",
+   "factor": "100",
+   "aliases": [
+    "dL",
+    "decilitre",
+    "deciliter"
+   ],
+   "definition": "100 mL",
+   "source": "SI Brochure Tables 7, 8"
+  },
+  "l": {
+   "family": "volume",
+   "factor": "1000",
+   "aliases": [
+    "L",
+    "litre",
+    "liter",
+    "litres",
+    "liters"
+   ],
+   "definition": "1 dm^3 = 1000 mL",
+   "source": "SI Brochure Table 8"
+  },
+  "fl_oz": {
+   "family": "volume",
+   "factor": "29.5735295625",
+   "aliases": [
+    "floz",
+    "fl oz",
+    "us_fl_oz",
+    "fluid ounce",
+    "fluid ounces"
+   ],
+   "definition": "US fluid ounce, 1/128 US gal = 29.5735295625 mL",
+   "source": "NIST Handbook 44 App. C"
+  },
+  "pt": {
+   "family": "volume",
+   "factor": "473.176473",
+   "aliases": [
+    "pint",
+    "us_pint"
+   ],
+   "definition": "US liquid pint, 1/8 US gal",
+   "source": "NIST Handbook 44 App. C"
+  },
+  "qt": {
+   "family": "volume",
+   "factor": "946.352946",
+   "aliases": [
+    "quart",
+    "us_quart"
+   ],
+   "definition": "US liquid quart, 1/4 US gal",
+   "source": "NIST Handbook 44 App. C"
+  },
+  "gal": {
+   "family": "volume",
+   "factor": "3785.411784",
+   "aliases": [
+    "gallon",
+    "us_gal"
+   ],
+   "definition": "US gallon, 231 in^3 = 3.785411784 L",
+   "source": "NIST Handbook 44 App. C"
+  },
+  "uk_fl_oz": {
+   "family": "volume",
+   "factor": "28.4130625",
+   "aliases": [
+    "imp_fl_oz",
+    "imperial fluid ounce"
+   ],
+   "definition": "imperial fluid ounce, 1/160 imp gal = 28.4130625 mL",
+   "source": "NIST SP 811 App. B.8"
+  },
+  "uk_pint": {
+   "family": "volume",
+   "factor": "568.26125",
+   "aliases": [
+    "imp_pint",
+    "imperial pint"
+   ],
+   "definition": "imperial pint, 1/8 imp gal = 568.26125 mL",
+   "source": "NIST SP 811 App. B.8"
+  },
+  "uk_gal": {
+   "family": "volume",
+   "factor": "4546.09",
+   "aliases": [
+    "imp_gal",
+    "imperial gallon"
+   ],
+   "definition": "imperial gallon, 4.54609 L exactly",
+   "source": "NIST SP 811 App. B.8"
+  },
+  "count": {
+   "family": "count",
+   "factor": "1",
+   "aliases": [
+    "each",
+    "ea",
+    "item",
+    "items",
+    "unit",
+    "units",
+    "pc",
+    "pcs",
+    "piece",
+    "pieces",
+    "ct"
+   ],
+   "definition": "one item",
+   "source": "counting"
+  },
+  "dozen": {
+   "family": "count",
+   "factor": "12",
+   "aliases": [
+    "doz"
+   ],
+   "definition": "12 items",
+   "source": "counting"
+  }
+ }
+}

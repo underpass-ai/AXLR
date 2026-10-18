@@ -1,0 +1,29 @@
+{
+  "name": "resistor_color",
+  "description": "Resistor colour code per IEC 60062: decode 3, 4, 5 or 6 bands into resistance, tolerance, limits and temperature coefficient, or encode a value (4700, \"4k7\", \"R47\", \"10 kΩ\") into its 4-, 5- and 6-band codes; find the nearest standard value in the E3 to E192 series of IEC 60063 and which series a value belongs to. Bundled dated table of the colours and the official series values.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["decode", "encode", "nearest"], "description": "Default: decode when bands is given, else encode"},
+      "bands": {"type": "array", "minItems": 3, "maxItems": 6, "items": {"type": "string"}, "description": "Colour names from the head end: black brown red orange yellow green blue violet grey white gold silver pink"},
+      "value": {"type": ["number", "string"], "description": "Ohms: 4700, \"4.7k\", \"4k7\", \"R47\", \"2.2 MΩ\""},
+      "tolerance": {"type": ["number", "string"], "description": "Percent for the tolerance band (default 5 for 4 bands, 1 for 5 bands)"},
+      "tcr": {"type": "integer", "description": "ppm/K for a sixth band: 250, 100, 50, 15, 25, 20, 10, 5, 1"},
+      "series": {"type": "string", "enum": ["E3", "E6", "E12", "E24", "E48", "E96", "E192"], "default": "E24"}
+    }
+  },
+  "program": "python3",
+  "args": ["resistor_color.py"],
+  "files": ["resistor_color.py", "codes.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["electronics", "resistor", "color-code", "e-series", "iec-60062", "iec-60063"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"bands": ["brown", "black", "red", "gold"]}, "output": {"ohms": "1000", "value": "1 kΩ", "tolerance_pct": "5", "min_ohms": "950", "max_ohms": "1050"}},
+    "source": "IEC 60062:2016 (marking codes: colour code) and IEC 60063:2015 (preferred number series E3 to E192), transcribed by tools/catalog/data/resistor_color.py"
+  }
+}

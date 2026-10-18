@@ -1,0 +1,37 @@
+{
+  "name": "unit_price_compare",
+  "description": "Compare the price per unit of several offers with different sizes and units (g, kg, oz, lb; ml, l, US and imperial fl oz, pints, gallons; items and dozens), multipacks and deals such as \"3 for 2\", \"2 for 5.00\", \"buy 2 get 1 free\" or percent off: ranks them, names the cheapest per unit and what each other offer costs extra. Decimal arithmetic with exact NIST unit factors from a bundled dated table.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "offers": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"type": "object", "additionalProperties": false, "required": ["price", "size", "unit"], "properties": {
+        "name": {"type": "string"},
+        "price": {"type": ["number", "string"], "description": "Price of one pack as sold"},
+        "size": {"type": ["number", "string"], "description": "Quantity in one item of the pack"},
+        "unit": {"type": "string", "description": "g, kg, mg, oz, lb, ml, cl, dl, l, fl_oz, pt, qt, gal, uk_fl_oz, uk_pint, uk_gal, count, dozen (and aliases)"},
+        "count": {"type": "integer", "minimum": 1, "default": 1, "description": "Items in a multipack"},
+        "deal": {"type": ["string", "object"], "description": "\"3 for 2\", \"2 for 5.00\", \"buy 2 get 1 free\", \"bogo\", {buy, pay_for} or {buy, total_price}"},
+        "discount_pct": {"type": ["number", "string"], "description": "Percent off each pack"},
+        "discount_amount": {"type": ["number", "string"], "description": "Amount off each pack"}
+      }}},
+      "per": {"type": "string", "description": "Unit of the unit price, with an optional amount: \"kg\", \"100 g\", \"l\" (default kg, l or count)"},
+      "places": {"type": "integer", "minimum": 0, "maximum": 12, "default": 4},
+      "currency": {"type": "string"},
+      "list_units": {"type": "boolean", "description": "List the bundled units and their sources"}
+    }
+  },
+  "program": "python3",
+  "args": ["unit_price_compare.py"],
+  "files": ["unit_price_compare.py", "units.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["shopping", "unit-price", "groceries", "deals", "units", "comparison"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"offers": [{"name": "small", "price": "2.50", "size": 500, "unit": "g"}, {"name": "large", "price": "4.50", "size": 1, "unit": "kg"}, {"name": "deal", "price": "1.20", "size": 400, "unit": "g", "deal": "3 for 2"}]}, "output": {"best": "deal", "best_unit_price": "2.0000", "per": "kg"}},
+    "source": "original; unit factors from NIST SP 811 (2008) App. B.8 and NIST Handbook 44 App. C (avoirdupois pound 0.45359237 kg, US gallon 231 in^3, imperial gallon 4.54609 L)"
+  }
+}

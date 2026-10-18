@@ -1,0 +1,37 @@
+{
+  "name": "ohms_law",
+  "description": "Ohm's law and simple resistor circuits in exact fractions: solve voltage, current, resistance and power from any two; reduce series/parallel networks written as nested expressions (\"100 + (220 || 330) + 1k\"); unloaded and loaded voltage dividers; LED series resistors. Inputs and outputs with SI prefixes (4k7, 20 mA, 180 mW).",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["solve", "network", "divider", "led"], "default": "solve"},
+      "voltage": {"type": ["number", "string"], "description": "Volts: 12, \"3.3V\", \"500mV\"; solve, network"},
+      "current": {"type": ["number", "string"], "description": "Amperes: 0.02, \"20mA\"; solve, led"},
+      "resistance": {"type": ["number", "string"], "description": "Ohms: 4700, \"4.7k\", \"4k7\", \"470R\"; solve"},
+      "power": {"type": ["number", "string"], "description": "Watts: 0.25, \"250mW\"; solve"},
+      "expression": {"type": "string", "maxLength": 2000, "description": "network: + series, || or // parallel, parentheses"},
+      "vin": {"type": ["number", "string"], "description": "divider input voltage"},
+      "r1": {"type": ["number", "string"], "description": "divider top resistor"},
+      "r2": {"type": ["number", "string"], "description": "divider bottom resistor"},
+      "load": {"type": ["number", "string"], "description": "divider load across r2 (optional)"},
+      "supply": {"type": ["number", "string"], "description": "led supply voltage"},
+      "forward_voltage": {"type": ["number", "string"], "description": "led forward voltage of one LED"},
+      "count": {"type": "integer", "minimum": 1, "default": 1, "description": "LEDs in series"},
+      "digits": {"type": "integer", "minimum": 1, "maximum": 50, "default": 12, "description": "Significant digits of decimal renderings"}
+    }
+  },
+  "program": "python3",
+  "args": ["ohms_law.py"],
+  "files": ["ohms_law.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["electronics", "ohms-law", "resistors", "voltage-divider", "led", "circuits", "exact"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "network", "expression": "100 + (220 || 330) + 1k"}, "output": {"resistors": 4, "resistance": {"value": "1232", "unit": "Ω", "si": "1.232 kΩ", "exact": "1232"}}},
+    "source": "original; Ohm's law V = IR, Joule's law P = VI, the series and parallel resistance rules and the voltage-divider formula as in any circuits textbook (e.g. Horowitz and Hill, The Art of Electronics, ch. 1)"
+  }
+}

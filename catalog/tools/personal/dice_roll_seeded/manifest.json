@@ -1,0 +1,30 @@
+{
+  "name": "dice_roll_seeded",
+  "description": "Dice notation (NdM+K, several terms, keep/drop highest or lowest, exploding dice, d%, Fudge dice): a reproducible roll with random.Random(seed) showing every die, and the exact probability distribution of the total by convolution in fractions, with mean, variance, mode and the chance of reaching a target.",
+  "input_schema": {
+    "type": "object",
+    "required": ["notation"],
+    "additionalProperties": false,
+    "properties": {
+      "notation": {"type": "string", "maxLength": 200, "description": "e.g. \"2d6+3\", \"4d6dl1\", \"2d20kh1\", \"3d6!\", \"d%\", \"4dF\""},
+      "seed": {"type": ["integer", "string"], "description": "Roll with random.Random(seed); omit for no roll"},
+      "rolls": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 1},
+      "target": {"type": "integer", "description": "Report P(total >= target) and P(total <= target)"},
+      "explode_depth": {"type": "integer", "minimum": 0, "maximum": 50, "default": 8, "description": "Explosions per die kept in the table"},
+      "distribution": {"type": "boolean", "default": true, "description": "Include the table of totals"}
+    }
+  },
+  "program": "python3",
+  "args": ["dice_roll_seeded.py"],
+  "files": ["dice_roll_seeded.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["dice", "probability", "tabletop", "games", "random", "distribution", "exact"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"notation": "4d6dl1", "seed": 42, "distribution": false}, "output": {"roll": {"total": 13, "parts": [{"term": "4d6dl1", "dice": [6, 1, 1, 6], "total": 13, "kept": [6, 1, 6], "dropped": [1]}]}, "mean": {"exact": "15869/1296", "decimal": "12.2445987654"}}},
+    "source": "original; the common tabletop dice notation (as in Roll20 and AnyDice); distributions by discrete convolution"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "habit_streaks",
+  "description": "Habit tracking from a log of dates: current and longest streaks, completion rates over chosen windows, missed days and this week's progress, for daily, weekday, chosen-weekday or N-times-per-week (ISO week) habits, all counted relative to an as_of date given in the input so results are reproducible.",
+  "input_schema": {
+    "type": "object",
+    "required": ["as_of", "habits"],
+    "additionalProperties": false,
+    "properties": {
+      "as_of": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Day of the report"},
+      "habits": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"type": "object", "additionalProperties": false, "properties": {
+        "name": {"type": "string"},
+        "dates": {"type": "array", "items": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "description": "Days the habit was done"},
+        "schedule": {"type": ["string", "object"], "description": "\"daily\" (default), \"weekdays\", {\"days\": [1, 3, 5]} or {\"per_week\": 3}"},
+        "start": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Default: the first logged day"}
+      }}},
+      "windows": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 3660}, "default": [7, 30, 90], "description": "Days for completion rates"},
+      "today_pending": {"type": "boolean", "default": true, "description": "A scheduled as_of day (or current week) not yet done does not break the streak"},
+      "missed_limit": {"type": "integer", "minimum": 0, "maximum": 3660, "default": 31}
+    }
+  },
+  "program": "python3",
+  "args": ["habit_streaks.py"],
+  "files": ["habit_streaks.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "personal",
+    "tags": ["habits", "streaks", "tracking", "calendar", "productivity", "self-improvement"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"as_of": "2026-10-18", "habits": [{"name": "read", "dates": ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"], "start": "2026-10-10"}]}, "output": {"habits": [{"current_streak": 6, "longest_streak": 6, "today_pending": true, "completion": {"done": 6, "due": 8, "rate_pct": "75.0"}, "missed_recent": ["2026-10-10", "2026-10-11"]}]}},
+    "source": "original"
+  }
+}
