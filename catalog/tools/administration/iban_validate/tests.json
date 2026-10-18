@@ -1,0 +1,9 @@
+[
+  {"name": "the registry's GB example", "input": {"iban": "GB82 WEST 1234 5698 7654 32"}, "expect": {"exit": 0, "stdout_json": {"valid": true, "country": "GB", "fields": {"bank": "WEST", "branch": "123456", "account": "98765432"}}}},
+  {"name": "spanish example with its national check digits", "input": {"iban": "ES91 2100 0418 4502 0005 1332"}, "expect": {"exit": 0, "stdout_json": {"valid": true, "national_check_valid": true, "fields": {"bank": "2100", "branch": "0418", "national_check": "45"}}}},
+  {"name": "batch with a typo and a wrong length", "input": {"ibans": ["DE89370400440532013000", "GB82WEST12345698765433", "NL91ABNA041716430"]},
+   "expect": {"exit": 0, "stdout_json": {"valid": 1, "invalid": 2, "results": [{"valid": true}, {"valid": false, "reason": "check digits do not match (mod 97)"}, {"valid": false, "reason": "NL IBANs have 18 characters, this one has 17"}]}}},
+  {"name": "build the german example from its bban", "input": {"country": "DE", "bban": "370400440532013000"}, "expect": {"exit": 0, "stdout_json": {"iban": "DE89370400440532013000", "valid": true}}},
+  {"name": "mod 97 passes but the spanish account check does not", "input": {"country": "ES", "bban": "21000418460200051332"}, "expect": {"exit": 0, "stdout_json": {"valid": false, "national_check_valid": false, "reason": "Spanish account check digits should be 45"}}},
+  {"name": "nothing to check", "input": {}, "expect": {"exit": 2, "stdout_contains": "give iban"}}
+]

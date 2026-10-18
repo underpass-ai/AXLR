@@ -1,0 +1,10 @@
+[
+  {"name": "schulze example from Schulze (2011) and Wikipedia", "input": {"ballots": [{"ranking": ["A","C","B","E","D"], "count": 5}, {"ranking": ["A","D","E","C","B"], "count": 5}, {"ranking": ["B","E","D","A","C"], "count": 8}, {"ranking": ["C","A","B","E","D"], "count": 3}, {"ranking": ["C","A","E","B","D"], "count": 7}, {"ranking": ["C","B","A","D","E"], "count": 2}, {"ranking": ["D","C","E","B","A"], "count": 7}, {"ranking": ["E","B","A","D","C"], "count": 8}]},
+   "expect": {"exit": 0, "stdout_json": {"voters": 45, "condorcet_winner": null, "pairwise": {"A": {"B": 20, "D": 30}, "E": {"D": 31}}, "schulze": {"winners": ["E"], "ranking": ["E", "A", "C", "B", "D"], "strongest_paths": {"E": {"A": 25, "D": 31}, "A": {"E": 24}}}}}},
+  {"name": "condorcet winner and loser with a tie and an unranked candidate", "input": {"ballots": [["A", ["B", "C"]], ["A", "C", "B"], ["B", "A"]], "candidates": ["A", "B", "C"]},
+   "expect": {"exit": 0, "stdout_json": {"condorcet_winner": "A", "condorcet_loser": null, "smith_set": ["A"], "pairwise": {"A": {"B": 2, "C": 3}, "B": {"A": 1, "C": 1}, "C": {"B": 1}}, "copeland": {"scores": {"B": 0.5, "C": 0.5}}}}},
+  {"name": "rock paper scissors cycle keeps all in the smith set", "input": {"ballots": [["R", "S", "P"], ["S", "P", "R"], ["P", "R", "S"]]},
+   "expect": {"exit": 0, "stdout_json": {"condorcet_winner": null, "smith_set": ["R", "S", "P"], "copeland": {"scores": {"R": 1, "S": 1, "P": 1}}}}},
+  {"name": "candidate ranked twice", "input": {"ballots": [["A", "A"]]}, "expect": {"exit": 2, "stdout_contains": "ranks a candidate twice"}},
+  {"name": "no ballots", "input": {"ballots": []}, "expect": {"exit": 2, "stdout_contains": "ballots must be"}}
+]

@@ -1,0 +1,13 @@
+[
+  {"name": "Spain: the elements of art. 17 and one month to answer", "input": {"jurisdiction": "es", "authority": "Ministerio de Hacienda", "requester": {"name": "Ana López", "email": "ana@example.org"}, "information": ["Contratos menores de 2025", "Gasto en publicidad institucional"], "date": "2026-01-31"},
+   "expect": {"exit": 0, "stdout_json": {"language": "es", "subject": "Solicitud de acceso a información pública (Ley 19/2013)", "response_due": "2026-02-28"}}},
+  {"name": "Spain: no reasons needed and partial access asked", "input": {"jurisdiction": "es", "authority": "Ayuntamiento de Madrid", "requester": {"name": "Ana", "address": "Calle Mayor 1, Madrid"}, "information": "Actas de la junta de gobierno de 2025"},
+   "expect": {"exit": 0, "stdout_contains": "no está obligado a motivar la solicitud"}},
+  {"name": "EU: 15 working days from a Friday", "input": {"jurisdiction": "eu", "authority": "European Commission", "requester": {"name": "X", "email": "x@example.org"}, "information": "Minutes of the meeting of 3 March 2026", "date": "2026-10-16"},
+   "expect": {"exit": 0, "stdout_json": {"response_due": "2026-11-06", "law": "Regulation (EC) No 1049/2001 regarding public access to European Parliament, Council and Commission documents"}}},
+  {"name": "US: fee category and waiver in the letter, 20 working days", "input": {"jurisdiction": "us", "authority": "Environmental Protection Agency", "requester": {"name": "J. Doe", "email": "j@example.org"}, "information": "Emails about permit 123", "fee_category": "news_media", "fee_waiver": true, "fee_waiver_reason": "It informs public debate on air quality.", "date": "2026-10-16"},
+   "expect": {"exit": 0, "stdout_json": {"subject": "Freedom of Information Act request", "response_due": "2026-11-13"}}},
+  {"name": "UK: section 11 preference and the ICO next", "input": {"jurisdiction": "uk", "authority": "Home Office", "requester": {"name": "Sam", "email": "s@example.org"}, "information": "Number of visas issued in 2025"}, "expect": {"exit": 0, "stdout_contains": "Information Commissioner"}},
+  {"name": "a waiver needs a reason", "input": {"jurisdiction": "us", "authority": "FBI", "requester": {"name": "J", "email": "j@x"}, "information": "x", "fee_waiver": true}, "expect": {"exit": 2, "stdout_contains": "fee_waiver_reason"}},
+  {"name": "unknown jurisdiction", "input": {"jurisdiction": "fr", "authority": "x", "requester": {"name": "a", "email": "b"}, "information": "c"}, "expect": {"exit": 2, "stdout_contains": "jurisdiction must be"}}
+]

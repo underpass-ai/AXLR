@@ -1,0 +1,11 @@
+[
+  {"name": "Madrid noon in summer is 06:00 in New York and 19:00 in Tokyo", "input": {"datetime": "2026-07-01T12:00", "from_zone": "Europe/Madrid", "to_zones": ["America/New_York", "Asia/Tokyo", "UTC"]},
+   "expect": {"exit": 0, "stdout_json": {"from": {"utc_offset": "+02:00", "abbreviation": "CEST"}, "to": [{"datetime": "2026-07-01T06:00:00-04:00", "abbreviation": "EDT"}, {"datetime": "2026-07-01T19:00:00+09:00"}, {"datetime": "2026-07-01T10:00:00+00:00"}]}}},
+  {"name": "EU clocks change on the last Sundays of March and October at 01:00 UTC", "input": {"operation": "transitions", "zone": "Europe/Madrid", "year": 2026},
+   "expect": {"exit": 0, "stdout_json": {"transitions": [{"utc": "2026-03-29T01:00:00Z", "local_before": "2026-03-29T02:00:00", "local_after": "2026-03-29T03:00:00"}, {"utc": "2026-10-25T01:00:00Z", "offset_after": "+01:00"}]}}},
+  {"name": "US clocks change on 8 March and 1 November 2026", "input": {"operation": "transitions", "zone": "America/New_York", "year": 2026},
+   "expect": {"exit": 0, "stdout_json": {"transitions": [{"utc": "2026-03-08T07:00:00Z"}, {"utc": "2026-11-01T06:00:00Z", "abbreviation_after": "EST"}]}}},
+  {"name": "a local time in the spring gap is flagged", "input": {"operation": "offset", "zone": "Europe/Madrid", "datetime": "2026-03-29T02:30"}, "expect": {"exit": 0, "stdout_contains": "nonexistent"}},
+  {"name": "an input with an offset is converted as given", "input": {"datetime": "2026-01-15T09:00:00Z", "from_zone": "UTC", "to_zones": ["Asia/Kolkata"]}, "expect": {"exit": 0, "stdout_json": {"to": [{"datetime": "2026-01-15T14:30:00+05:30", "utc_offset": "+05:30"}]}}},
+  {"name": "unknown zone", "input": {"datetime": "2026-01-01T00:00", "from_zone": "Mars/Olympus", "to_zones": ["UTC"]}, "expect": {"exit": 2, "stdout_contains": "unknown zone"}}
+]

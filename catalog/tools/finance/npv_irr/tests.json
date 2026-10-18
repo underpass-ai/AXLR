@@ -1,0 +1,10 @@
+[
+  {"name": "numpy-financial irr example is 0.2809", "input": {"cashflows": [-100, 39, 59, 55, 20]}, "expect": {"exit": 0, "stdout_contains": "\"irr\": 0.280948421"}},
+  {"name": "numpy-financial npv at 0.281 is -0.00848", "input": {"cashflows": [-100, 39, 59, 55, 20], "rate": 0.281}, "expect": {"exit": 0, "stdout_json": {"npv": "-0.008479"}}},
+  {"name": "Excel IRR example: 8.66 % after five years", "input": {"cashflows": [-70000, 12000, 15000, 18000, 21000, 26000]}, "expect": {"exit": 0, "stdout_contains": "\"irr\": 0.08663"}},
+  {"name": "Excel MIRR example: 12.61 % with 10 % finance and 12 % reinvestment", "input": {"cashflows": [-120000, 39000, 30000, 21000, 37000, 46000], "rate": "10%", "reinvest_rate": "12%"}, "expect": {"exit": 0, "stdout_contains": "\"mirr\": 0.12609"}},
+  {"name": "two IRRs at 10 % and 20 %", "input": {"cashflows": [-100, 230, -132]}, "expect": {"exit": 0, "stdout_json": {"irr": null, "irr_candidates": [0.1, 0.2], "sign_changes": 2}}},
+  {"name": "payback in fractional periods", "input": {"cashflows": [-1000, 300, 400, 500], "rate": "8%"}, "expect": {"exit": 0, "stdout_json": {"npv": "17.629426", "payback_periods": 2.6}}},
+  {"name": "no investment", "input": {"cashflows": [100, 200]}, "expect": {"exit": 2, "stdout_contains": "at least one negative"}},
+  {"name": "rate below -100 %", "input": {"cashflows": [-1, 2], "rate": -1}, "expect": {"exit": 2, "stdout_contains": "greater than -100%"}}
+]
