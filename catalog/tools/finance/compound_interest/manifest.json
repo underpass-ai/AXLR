@@ -1,0 +1,35 @@
+{
+  "name": "compound_interest",
+  "description": "Compound-interest arithmetic: future and present value of a sum and of a level annuity (ordinary or due), the effective annual rate of a nominal rate compounded m times a year or continuously, the nominal rate of an effective one, doubling time exactly and by the rules of 72, 70 and 69.3, and the real rate by Fisher's equation. Decimal arithmetic, positive amounts.",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["future_value", "present_value", "effective_rate", "nominal_rate", "doubling_time", "real_rate"]},
+      "rate": {"type": ["number", "string"], "description": "Nominal annual rate: 0.05 or \"5%\""},
+      "compounding": {"type": ["integer", "string"], "description": "Compoundings (and payments) a year, default 1, or \"continuous\""},
+      "years": {"type": ["number", "string"]},
+      "periods": {"type": "integer", "minimum": 0, "description": "Instead of years: years x compounding"},
+      "present_value": {"type": ["number", "string"], "description": "future_value: sum invested now"},
+      "future_value": {"type": ["number", "string"], "description": "present_value: sum wanted at the end"},
+      "payment": {"type": ["number", "string"], "description": "Level payment each period"},
+      "due": {"type": "boolean", "default": false, "description": "Payments at the start of each period"},
+      "effective_rate": {"type": ["number", "string"], "description": "nominal_rate: the effective annual rate"},
+      "inflation": {"type": ["number", "string"], "description": "real_rate: the inflation rate"}
+    }
+  },
+  "program": "python3",
+  "args": ["compound_interest.py"],
+  "files": ["compound_interest.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["compound-interest", "future-value", "present-value", "annuity", "effective-rate", "rule-of-72", "fisher"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "effective_rate", "rate": "12%", "compounding": 12}, "output": {"effective_rate": "0.1268250301", "effective_rate_pct": "12.6825"}},
+    "source": "original; the time-value formulas of Excel FV, PV, EFFECT and NOMINAL, whose help-page examples the tests reproduce, and Fisher (1930) for the real rate"
+  }
+}

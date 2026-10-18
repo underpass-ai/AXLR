@@ -1,0 +1,14 @@
+[
+  {"name": "textbook: 1,000 at 5 % for 10 years compounded annually is 1,628.89", "input": {"operation": "future_value", "present_value": 1000, "rate": "5%", "years": 10}, "expect": {"exit": 0, "stdout_json": {"future_value": "1628.89", "growth_factor": "1.6288946268"}}},
+  {"name": "textbook: 12 % compounded monthly is an effective 12.6825 %", "input": {"operation": "effective_rate", "rate": "12%", "compounding": 12}, "expect": {"exit": 0, "stdout_json": {"effective_rate_pct": "12.6825"}}},
+  {"name": "Excel FV help example: 500 now and 200 a month due at 6 %/12 for 10 months is 2,581.40", "input": {"operation": "future_value", "present_value": 500, "payment": 200, "rate": 0.06, "compounding": 12, "periods": 10, "due": true}, "expect": {"exit": 0, "stdout_json": {"future_value": "2581.40", "annuity": "due"}}},
+  {"name": "Excel PV help example: 500 a month for 20 years at 8 % is worth 59,777.15", "input": {"operation": "present_value", "payment": 500, "rate": 0.08, "compounding": 12, "years": 20}, "expect": {"exit": 0, "stdout_json": {"present_value": "59777.15", "periods": "240"}}},
+  {"name": "Excel EFFECT help example: 5.25 % quarterly is 0.0535427", "input": {"operation": "effective_rate", "rate": "5.25%", "compounding": 4}, "expect": {"exit": 0, "stdout_contains": "\"effective_rate\": \"0.05354266"}},
+  {"name": "Excel NOMINAL help example: 5.3543 % effective, quarterly, is 0.05250032", "input": {"operation": "nominal_rate", "effective_rate": "5.3543%", "compounding": 4}, "expect": {"exit": 0, "stdout_contains": "\"nominal_rate\": \"0.05250031"}},
+  {"name": "continuous compounding: e^0.12 - 1", "input": {"operation": "effective_rate", "rate": "12%", "compounding": "continuous"}, "expect": {"exit": 0, "stdout_json": {"effective_rate": "0.1274968516"}}},
+  {"name": "doubling at 8 %: rule of 72 says 9 years, exactly ln 2 / ln 1.08", "input": {"operation": "doubling_time", "rate": "8%"}, "expect": {"exit": 0, "stdout_json": {"exact_years": "9.006468", "rule_of_72": {"years": "9.000000", "error_years": "-0.006468"}}}},
+  {"name": "Fisher: 10 % nominal with 3 % inflation is 6.7961 % real", "input": {"operation": "real_rate", "rate": "10%", "inflation": "3%"}, "expect": {"exit": 0, "stdout_json": {"real_rate_pct": "6.7961", "approximation_pct": "7.0000"}}},
+  {"name": "zero rate annuity sums the payments", "input": {"operation": "future_value", "payment": 100, "rate": 0, "periods": 12, "compounding": 12}, "expect": {"exit": 0, "stdout_json": {"future_value": "1200.00"}}},
+  {"name": "payments with continuous compounding", "input": {"operation": "future_value", "payment": 1, "rate": 0.05, "years": 1, "compounding": "continuous"}, "expect": {"exit": 2, "stdout_contains": "whole number of periods"}},
+  {"name": "unknown operation", "input": {"operation": "irr"}, "expect": {"exit": 2, "stdout_contains": "operation must be one of"}}
+]

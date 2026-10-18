@@ -1,0 +1,35 @@
+{
+  "name": "depreciation",
+  "description": "Depreciation schedule of an asset with each year's charge, accumulated depreciation and book value: straight-line, declining balance at any factor or rate with an optional switch to straight-line, double-declining, Excel's fixed-rate declining balance (DB), sum-of-the-years'-digits and units-of-production, with salvage value and a partial first year in months. Decimal arithmetic.",
+  "input_schema": {
+    "type": "object",
+    "required": ["method", "cost"],
+    "additionalProperties": false,
+    "properties": {
+      "method": {"type": "string", "enum": ["straight_line", "declining_balance", "double_declining", "fixed_declining_balance", "sum_of_years_digits", "units_of_production"]},
+      "cost": {"type": ["number", "string"]},
+      "salvage": {"type": ["number", "string"], "default": 0},
+      "life": {"type": "integer", "minimum": 1, "maximum": 200, "description": "Useful life in years; all methods but units_of_production"},
+      "first_year_months": {"type": "integer", "minimum": 1, "maximum": 12, "default": 12, "description": "Months of use in the first year"},
+      "factor": {"type": ["number", "string"], "default": 2, "description": "declining_balance: rate = factor / life"},
+      "rate": {"type": ["number", "string"], "description": "declining_balance: rate per year instead of factor"},
+      "switch_to_straight_line": {"type": "boolean", "default": false},
+      "total_units": {"type": ["number", "string"], "description": "units_of_production: lifetime units"},
+      "units": {"type": "array", "items": {"type": ["number", "string"]}, "maxItems": 200, "description": "units_of_production: units of each year"},
+      "start_year": {"type": "integer", "default": 1, "description": "Label of the first row"}
+    }
+  },
+  "program": "python3",
+  "args": ["depreciation.py"],
+  "files": ["depreciation.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["depreciation", "straight-line", "declining-balance", "sum-of-years-digits", "book-value", "accounting"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"method": "sum_of_years_digits", "cost": 30000, "salvage": 7500, "life": 10}, "output": {"total_depreciation": "22500.00", "final_book_value": "7500.00"}},
+    "source": "original; matches Excel's SLN, DDB, DB and SYD functions, whose help-page examples the tests reproduce"
+  }
+}

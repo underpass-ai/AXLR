@@ -1,0 +1,33 @@
+{
+  "name": "portfolio_stats",
+  "description": "Return and risk statistics from a price or return table given inline as CSV (a date column and one column per asset): per asset and for a weighted portfolio rebalanced each period, total and annualised return, mean and annualised volatility on simple or log returns, Sharpe ratio over a risk-free rate, maximum drawdown with peak, trough and recovery dates, the correlation matrix and beta to a benchmark column.",
+  "input_schema": {
+    "type": "object",
+    "required": ["csv"],
+    "additionalProperties": false,
+    "properties": {
+      "csv": {"type": "string", "description": "Header row, then one row per date, oldest first"},
+      "kind": {"type": "string", "enum": ["prices", "returns"], "default": "prices"},
+      "return_type": {"type": "string", "enum": ["simple", "log"], "default": "simple"},
+      "periods_per_year": {"type": "number", "exclusiveMinimum": 0, "default": 252},
+      "risk_free_rate": {"type": ["number", "string"], "default": 0, "description": "Annual: 0.03 or \"3%\""},
+      "weights": {"type": "object", "additionalProperties": {"type": ["number", "string"]}, "description": "Column: weight; normalised to sum 1"},
+      "benchmark": {"type": "string", "description": "Column to compute betas against"},
+      "date_column": {"type": "string", "description": "Default: the first column"},
+      "delimiter": {"type": "string", "minLength": 1, "maxLength": 1, "default": ","}
+    }
+  },
+  "program": "python3",
+  "args": ["portfolio_stats.py"],
+  "files": ["portfolio_stats.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["portfolio", "returns", "volatility", "sharpe-ratio", "drawdown", "correlation", "beta"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"csv": "date,A,B\n2026-01-01,100,50\n2026-01-02,120,55\n2026-01-03,90,60.5\n2026-01-04,105,55\n2026-01-05,135,66\n", "weights": {"A": 1, "B": 1}, "benchmark": "B"}, "output": {"assets": {"A": {"total_return": 0.35, "max_drawdown": -0.25, "peak": "2026-01-02", "trough": "2026-01-03", "recovery": "2026-01-05"}}, "portfolio": {"total_return": 0.3721684253, "max_drawdown": -0.075}, "beta": {"B": 1.0}}},
+    "source": "original; Sharpe (1966, 1994) for the ratio, sample (n-1) moments"
+  }
+}
