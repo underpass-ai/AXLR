@@ -13,5 +13,9 @@ type InstalledPluginPort interface {
 	List(context.Context, bool) ([]InstalledPlugin, error)
 	Install(context.Context, string) error
 	AddSource(context.Context, string) error
+	// Update replaces an installed package with a fresh copy of its source.
+	Update(context.Context, string) error
+	// Uninstall removes an installed package and its MCP registrations.
+	Uninstall(context.Context, string) error
 	Guidance(context.Context) (string, error)
 }

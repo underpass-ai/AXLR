@@ -7,6 +7,7 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"github.com/underpass-ai/AXLR/tui/dto"
 	"sort"
 	"sync"
 	"time"
@@ -23,6 +24,7 @@ type PluginManager struct {
 	persistInstallWithEnv func(context.Context, string, map[string]string, map[string]string) error
 	resolveEnv            func(string) string
 	persistURL            func(context.Context, root.PluginID, string) error
+	persistRemove         func(context.Context, string) ([]root.PluginID, []dto.MCPPluginConfig, error)
 }
 
 func (m *PluginManager) SetInstaller(install func(context.Context, string) error) {
@@ -80,6 +82,46 @@ func (m *PluginManager) InstallManifestWithEnvironment(ctx context.Context, path
 	}
 	m.profiles = append(m.profiles, domain.PluginProfile{ID: manifest.ID, Name: root.Text(manifest.ID), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
 	return nil
+}
+
+// SetRemover sets how package registrations leave the persistent
+// configuration.
+func (m *PluginManager) SetRemover(remove func(context.Context, string) ([]root.PluginID, []dto.MCPPluginConfig, error)) {
+	m.persistRemove = remove
+}
+
+// RemovePackageServers removes the registrations whose manifests live in dir:
+// the persistent configuration first, so a failure leaves no entry pointing
+// at a package that is about to disappear, then the running sessions.
+func (m *PluginManager) RemovePackageServers(ctx context.Context, dir string) ([]application.PackageServer, error) {
+	if m.persistRemove == nil {
+		return nil, errors.New("MCP removal requires persistent configuration")
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ids, entries, err := m.persistRemove(ctx, dir)
+	if err != nil {
+		return nil, err
+	}
+	removed := make([]application.PackageServer, 0, len(ids))
+	var unregisterErr error
+	for i, id := range ids {
+		approval := domain.ApprovalMode(entries[i].Approval)
+		if approval == "" {
+			approval = domain.ApprovalManual
+		}
+		removed = append(removed, application.PackageServer{ID: id, Manifest: entries[i].Manifest, Approval: approval, EnvFrom: entries[i].EnvFrom, Env: entries[i].Env})
+		if m.manager != nil {
+			unregisterErr = errors.Join(unregisterErr, m.manager.Unregister(ctx, id))
+		}
+		for j, profile := range m.profiles {
+			if profile.ID == id {
+				m.profiles = append(m.profiles[:j:j], m.profiles[j+1:]...)
+				break
+			}
+		}
+	}
+	return removed, unregisterErr
 }
 
 func (m *PluginManager) SetURLInstaller(install func(context.Context, root.PluginID, string) error) {

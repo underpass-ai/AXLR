@@ -25,7 +25,7 @@ The model picker filters to text models that support tools. Typing filters by ev
 | `/mcp` | Inspect connected MCP servers, tools and approvals |
 | `/approvals` | Show saved always-allow tools and autonomy mode |
 | `/autonomy on` / `/autonomy off` | Automatically approve permitted known tools, or restore normal policy; `/autonomy` alone shows the current state |
-| `/plugin` (alias `/plugins`) | Browse packages installed in AXLR and available sources |
+| `/plugin` (alias `/plugins`) | Browse, add, install, update (`U`) and remove (`X`) packages installed in AXLR |
 | `/theme` | Preview and save appearance |
 | `/changes` / `/diff` / `Ctrl+D` | Review this session's file changes; with a draft in the composer `Ctrl+D` deletes the character after the cursor instead |
 | `/undo` (alias `/deshacer`) | Put back every file the last turn changed, or the most recent turn that changed files when the last changed none, after a `y`; see [review file changes](#review-file-changes) |

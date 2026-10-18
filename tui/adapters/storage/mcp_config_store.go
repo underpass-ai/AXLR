@@ -180,6 +180,55 @@ func (s *MCPConfigStore) AddManifestWithEnvironment(ctx context.Context, path st
 	return s.write(ctx, config)
 }
 
+// RemoveManifestsUnder removes every registration whose manifest lives in
+// dir, such as the MCP definitions of one AXLR package, and returns the
+// removed entries with their IDs so an update can restore approval and
+// literal environment values. Other entries are kept as they are, without
+// loading their manifests.
+func (s *MCPConfigStore) RemoveManifestsUnder(ctx context.Context, dir string) ([]root.PluginID, []dto.MCPPluginConfig, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, nil, err
+	}
+	if !filepath.IsAbs(dir) {
+		return nil, nil, errors.New("MCP package directory must be absolute")
+	}
+	prefix := filepath.Clean(dir) + string(filepath.Separator)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	release, err := acquireMCPConfigLock(ctx, s.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer release()
+	config, err := readMCPConfig(s.Path)
+	if err != nil {
+		return nil, nil, err
+	}
+	var ids []root.PluginID
+	var removed []dto.MCPPluginConfig
+	kept := config.Plugins[:0:0]
+	for _, selected := range config.Plugins {
+		if !strings.HasPrefix(filepath.Clean(selected.Manifest), prefix) {
+			kept = append(kept, selected)
+			continue
+		}
+		manifest, err := plugins.LoadManifest(selected.Manifest)
+		if err != nil {
+			return nil, nil, errors.New("cannot validate configured MCP server")
+		}
+		ids = append(ids, manifest.ID)
+		removed = append(removed, selected)
+	}
+	if len(removed) == 0 {
+		return nil, nil, nil
+	}
+	config.Plugins = kept
+	if err := s.write(ctx, config); err != nil {
+		return nil, nil, err
+	}
+	return ids, removed, nil
+}
+
 // AddURL creates a private manifest for a Streamable HTTP MCP endpoint.
 func (s *MCPConfigStore) AddURL(ctx context.Context, id root.PluginID, endpoint string) error {
 	if _, err := root.NewPluginID(id.String()); err != nil {

@@ -106,6 +106,31 @@ func (m *Manager) Register(ctx context.Context, registration Registration) error
 	return nil
 }
 
+// Unregister closes a registered server's session and forgets it, so a
+// package that is uninstalled or replaced stops being discovered at once.
+// An unknown ID is not an error.
+func (m *Manager) Unregister(ctx context.Context, id domain.PluginID) error {
+	if err := m.acquire(ctx); err != nil {
+		return err
+	}
+	defer m.release()
+	if _, exists := m.registrations[id]; !exists {
+		return nil
+	}
+	delete(m.registrations, id)
+	delete(m.connected, id)
+	for i, known := range m.order {
+		if known == id {
+			m.order = append(m.order[:i:i], m.order[i+1:]...)
+			break
+		}
+	}
+	// The session is gone either way; a stdio server's exit status on close
+	// is not a reason to keep a removed package registered.
+	_ = m.client.Disconnect(mcpclient.ServerName(id))
+	return nil
+}
+
 func (m *Manager) acquire(ctx context.Context) error {
 	select {
 	case <-ctx.Done():
