@@ -1,0 +1,26 @@
+{
+  "name": "readability",
+  "description": "Readability scores of a text. English: Flesch reading ease with its band, Flesch-Kincaid grade, Gunning fog, SMOG, Coleman-Liau and ARI. Spanish: Fernández-Huerta and Szigriszt-Pazos with the INFLESZ band, from exact Spanish syllabification. Also the counts behind them: sentences, words, syllables, letters, polysyllables.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "minLength": 1},
+      "language": {"type": "string", "enum": ["en", "es"], "default": "en"}
+    }
+  },
+  "program": "python3",
+  "args": ["readability.py"],
+  "files": ["readability.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["readability", "flesch", "flesch-kincaid", "smog", "fernandez-huerta", "inflesz", "plain-language"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "El gato come pan. La niña lee un libro en el país.", "language": "es"}, "output": {"scores": {"szigriszt_pazos": 107.39, "inflesz_band": "muy fácil"}}},
+    "source": "Flesch (1948), Kincaid et al. (1975), Gunning (1952), McLaughlin (1969), Coleman & Liau (1975), Fernández Huerta (1959), Szigriszt Pazos (1993) and Barrio-Cantalejo et al. (2008, INFLESZ); formulas as in textstat (github.com/textstat/textstat)"
+  }
+}

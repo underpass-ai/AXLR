@@ -1,0 +1,16 @@
+[
+  {"name": "Ley 39/2015: ten working days from a Friday notification", "input": {"start": "2026-10-16", "amount": 10, "unit": "working_days", "rule": {"count_from": "next_day", "non_working_weekdays": [6, 7], "holidays": [], "if_last_day_non_working": "next_working_day"}},
+   "expect": {"exit": 0, "stdout_json": {"first_day_counted": "2026-10-17", "end": "2026-10-30", "weekday": "Friday", "skipped": {"non_working_weekdays": 4}}}},
+  {"name": "a holiday inside the count", "input": {"start": "2026-10-08", "amount": 10, "unit": "working_days", "rule": {"count_from": "next_day", "non_working_weekdays": [6, 7], "holidays": ["2026-10-12"], "if_last_day_non_working": "next_working_day"}},
+   "expect": {"exit": 0, "stdout_json": {"end": "2026-10-23", "skipped": {"holidays": 1}}}},
+  {"name": "judicial count with August non-working", "input": {"start": "2026-07-27", "amount": 20, "unit": "working_days", "rule": {"count_from": "next_day", "non_working_weekdays": [6, 7], "non_working_periods": [{"from": "08-01", "to": "08-31"}], "if_last_day_non_working": "next_working_day"}},
+   "expect": {"exit": 0, "stdout_json": {"end": "2026-09-22", "skipped": {"non_working_periods": 21}}}},
+  {"name": "one month from 31 January ends on the last day of February", "input": {"start": "2026-01-31", "amount": 1, "unit": "months", "rule": {"count_from": "next_day", "month_end": "same_day", "if_last_day_non_working": "keep"}},
+   "expect": {"exit": 0, "stdout_json": {"end": "2026-02-28"}}},
+  {"name": "a month ending on a Sunday moves to Monday", "input": {"start": "2026-09-04", "amount": 1, "unit": "months", "rule": {"count_from": "next_day", "non_working_weekdays": [6, 7], "if_last_day_non_working": "next_working_day"}},
+   "expect": {"exit": 0, "stdout_json": {"nominal_end": "2026-10-04", "end": "2026-10-05", "weekday": "Monday", "shifted_days": 1}}},
+  {"name": "fifteen calendar days counted from the same day", "input": {"start": "2026-03-01", "amount": 15, "unit": "calendar_days", "rule": {"count_from": "same_day", "if_last_day_non_working": "keep"}},
+   "expect": {"exit": 0, "stdout_json": {"end": "2026-03-15"}}},
+  {"name": "the rule is never assumed", "input": {"start": "2026-10-16", "amount": 10, "unit": "working_days"}, "expect": {"exit": 2, "stdout_contains": "rule is required"}},
+  {"name": "working days without non-working weekdays", "input": {"start": "2026-10-16", "amount": 10, "unit": "working_days", "rule": {"count_from": "next_day", "if_last_day_non_working": "keep"}}, "expect": {"exit": 2, "stdout_contains": "non_working_weekdays is required"}}
+]

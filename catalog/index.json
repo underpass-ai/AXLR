@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog": "axlr",
-  "generated_at": "2026-10-18T08:42:31Z",
+  "generated_at": "2026-10-18T08:55:59Z",
   "tools": [
     {
       "name": "business_days",
@@ -26,6 +26,113 @@
       "manifest_sha256": "02e55008ead6a80e471dbe632dc726b0b7239a444198c66f45d2ab36a07f03ae",
       "files": {
         "business_days.py": "9945f79f9b2d1b76bd8566ed2be5e90f87dbf33ed7353b5abc03d3c13c2d8920"
+      }
+    },
+    {
+      "name": "es_tax_id_validate",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "nif",
+        "nie",
+        "dni",
+        "cif",
+        "spain",
+        "tax-id",
+        "validation"
+      ],
+      "summary": "Validate Spanish tax identifiers: the DNI/NIF of a citizen, the NIE of a foreign national, the special K, L and M NIFs, and the NIF of a company or other legal entity (the former CIF) with its entity type and province code.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/es_tax_id_validate/manifest.json",
+      "manifest_sha256": "dfe8dd126fcf76855a91caa6b8c359691631cbb39a8e0f6ad41e6c67af954314",
+      "files": {
+        "es_tax_id_validate.py": "7cc47b2144c95b5343b2df358ab0e3b73eb6c6ed4c6b024f0be77d3a9b3033c6"
+      }
+    },
+    {
+      "name": "eu_vat_validate",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "vat",
+        "iva",
+        "eu",
+        "vies",
+        "tax-id",
+        "validation",
+        "intra-community"
+      ],
+      "summary": "Check EU VAT identification numbers offline: each member state's format and check-digit algorithm (Austria to Slovakia, Greece as EL, Spain's NIF forms, the Dutch mod-97 numbers) plus XI for Northern Ireland.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/eu_vat_validate/manifest.json",
+      "manifest_sha256": "a3097de2c883e0dc258886d94255dee9f4196a5b5c90e9415e767f57751a8c78",
+      "files": {
+        "eu_vat_validate.py": "16f030452cab7fc7fd109236c712cb699d7e14108ee4397b70f5d57cbdd03f2f"
+      }
+    },
+    {
+      "name": "iban_validate",
+      "version": "1.0.2",
+      "category": "administration",
+      "tags": [
+        "iban",
+        "bank",
+        "sepa",
+        "checksum",
+        "validation",
+        "ccc"
+      ],
+      "summary": "Validate IBANs (ISO 13616): allowed characters, the country's length, the mod-97 check digits, and the BBAN split into bank, branch and account for common countries; Spanish account check digits are verified too.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/iban_validate/manifest.json",
+      "manifest_sha256": "8fe6ad9b75f03a815fff119b75e26796d52e637a01ed776b9d1b23ddc863acc2",
+      "files": {
+        "iban_validate.py": "f84303b34acf45b7eb314e79d89a4a5a45946bdb6e7c05aebb4abbb87271ca7f"
+      }
+    },
+    {
+      "name": "invoice_calc",
+      "version": "1.0.0",
+      "category": "administration",
+      "tags": [
+        "invoice",
+        "vat",
+        "iva",
+        "irpf",
+        "withholding",
+        "decimal",
+        "billing"
+      ],
+      "summary": "Invoice totals in exact decimal arithmetic: line amounts with per-line and global discounts, tax base and VAT per rate, optional equivalence surcharge, withholding (such as Spanish IRPF) on the base, and the total due, rounded half up per line and per rate.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/administration/invoice_calc/manifest.json",
+      "manifest_sha256": "2b8e3816f87e21b096ff0c914b16366be6d1cfc3ee0df7ea4ca325e4d208c138",
+      "files": {
+        "invoice_calc.py": "edb5c88490622489eba30a86ce90cd7094bde80cef84bfcaa79ff33d7fe6860c"
       }
     },
     {
@@ -474,6 +581,32 @@
       }
     },
     {
+      "name": "srs_schedule",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "spaced-repetition",
+        "sm-2",
+        "supermemo",
+        "flashcards",
+        "anki",
+        "memory"
+      ],
+      "summary": "Spaced-repetition scheduling with SuperMemo 2: from a review graded 0 to 5 and the card's state (repetitions, easiness factor, last interval), the next interval in days, the new easiness and the next review date.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/srs_schedule/manifest.json",
+      "manifest_sha256": "0a7c2b91e7d6c39b6b719d6e54ad389d06204113063bdb250b508e02ac10ce83",
+      "files": {
+        "srs_schedule.py": "968f19f7e6e975c6820948f5fe0fd79bd4da2540e8059131fd04c7ce29fbc43d"
+      }
+    },
+    {
       "name": "timeline_builder",
       "version": "1.0.0",
       "category": "education",
@@ -523,6 +656,60 @@
       "manifest_sha256": "1f387e93fe98bfb01839c26952c4c4f155a495966470f96608de85a7181ae294",
       "files": {
         "fx_convert.py": "ef02a9e81a9eb5a59427308d87c201761f899e6b5b990c71cb212cd5d0432e49"
+      }
+    },
+    {
+      "name": "npv_irr",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "npv",
+        "irr",
+        "mirr",
+        "payback",
+        "investment",
+        "capital-budgeting",
+        "discounted-cash-flow"
+      ],
+      "summary": "Appraise a series of cash flows: net present value at a discount rate, internal rate of return (every IRR when the flows change sign more than once), modified IRR with separate finance and reinvestment rates, simple and discounted payback in fractional periods, and the profitability index.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/npv_irr/manifest.json",
+      "manifest_sha256": "6b077937e11f3293133c1e356a7d09f3fd6380c613e724d6538ddbdac5cffc9e",
+      "files": {
+        "npv_irr.py": "ea92e482795eec0ed03a2409d2dbb34634d6e66c53cde4080fb0269a7b1a0ab0"
+      }
+    },
+    {
+      "name": "tax_bracket_estimate",
+      "version": "1.0.0",
+      "category": "finance",
+      "tags": [
+        "tax",
+        "irpf",
+        "income-tax",
+        "brackets",
+        "marginal-rate",
+        "estimate"
+      ],
+      "summary": "Estimate progressive income tax from brackets: bundled dated tables (Spanish IRPF state scales of the general and savings bases for 2025, US federal 2025 single and married filing jointly) or any brackets given in the input.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/finance/tax_bracket_estimate/manifest.json",
+      "manifest_sha256": "ad5678f44e098061e0673149b0599159477918e7e8bfb3f9a4681b2f974513d2",
+      "files": {
+        "tax_bracket_estimate.py": "9cfef58eb69761eba9b6a82bdab8d59be110a8d321a3a8e951cfb24cd8cdb088",
+        "brackets.json": "de23adb3496755271fbaea3d9cd599e481ba493c20202c7f5313d66f1d47d754"
       }
     },
     {
@@ -712,6 +899,32 @@
       "manifest_sha256": "a5c1087757989dc3c9c94eb8ccfc54bbe424b518439e54f917cedb5e4cf53a74",
       "files": {
         "sun_times.py": "827b304ac093130ac859f222f153ee4a1200a41375df1c704b0f99a944cb1564"
+      }
+    },
+    {
+      "name": "tz_convert",
+      "version": "1.0.0",
+      "category": "geography",
+      "tags": [
+        "time-zones",
+        "dst",
+        "utc",
+        "zoneinfo",
+        "iana",
+        "scheduling"
+      ],
+      "summary": "Time zones from the IANA database: convert a date-time from one zone to several, show a zone's UTC offset, abbreviation and DST state at a moment, or list a year's daylight-saving transitions.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/geography/tz_convert/manifest.json",
+      "manifest_sha256": "627e8f693e4031980fdda81bf06f6775e9a155f487f83f68db172f92bed9f40c",
+      "files": {
+        "tz_convert.py": "44b44ae158caa6d179207b955f6320295fae4d1a291e33420d221716a9f5f592"
       }
     },
     {
@@ -1167,6 +1380,85 @@
       "manifest_sha256": "3edd856ddcb220ec2af1898a678c6ea216bda27ae0c923fed240bcd7bd9cc6d0",
       "files": {
         "unicode_tools.py": "bbb78b418c9213acf39f7da3075dbcec9e2db67b60baf59d906b8084b5bb362c"
+      }
+    },
+    {
+      "name": "deadline_calc",
+      "version": "1.0.0",
+      "category": "law",
+      "tags": [
+        "deadlines",
+        "plazos",
+        "dias-habiles",
+        "legal-terms",
+        "computo-de-plazos",
+        "procedure"
+      ],
+      "summary": "Compute a legal or administrative time limit from a counting rule stated in the input: working or calendar days, weeks, months or years; counting from the next day or the same day; non-working weekdays, holidays and periods such as August; how months end; and moving a last day that falls on a non-working day.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/law/deadline_calc/manifest.json",
+      "manifest_sha256": "2ed2ea13f40766e7c889b055a1f52ff8cb26214adeef327023cedc4502e9385a",
+      "files": {
+        "deadline_calc.py": "3ada1ec43dd9398de386566b3f0aa3833eebc179a98d6b100d58da94af5578fa"
+      }
+    },
+    {
+      "name": "exact_calc",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "calculator",
+        "fractions",
+        "exact",
+        "arithmetic",
+        "decimal",
+        "bignum"
+      ],
+      "summary": "Evaluate an arithmetic expression exactly over fractions: 0.1 + 0.2 is 3/10, 2**100 has every digit, binomials and factorials are exact.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/exact_calc/manifest.json",
+      "manifest_sha256": "e8c537adb0f00dc87535ffd65428cefe909c80d52400f2d3c22e7a59ccf34c36",
+      "files": {
+        "exact_calc.py": "2b233b4aff340a13f081b80bf1a02d38c41af025a17982d5a885edfef0610667"
+      }
+    },
+    {
+      "name": "stats_describe",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "statistics",
+        "mean",
+        "standard-deviation",
+        "confidence-interval",
+        "regression",
+        "correlation",
+        "quartiles"
+      ],
+      "summary": "Descriptive statistics of a list of numbers: mean, median, modes, sample and population variance and SD, quartiles and IQR, skewness, and a Student-t confidence interval for the mean.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/stats_describe/manifest.json",
+      "manifest_sha256": "dcdfaa08aaed2f6ceec9b201e9ffcb53f7517423cb01324986da96da0aab9d54",
+      "files": {
+        "stats_describe.py": "8782ad6c454b306f59398397f51e502b6a6d22dbd321c0b63c8023fc68612d7f"
       }
     },
     {
@@ -1674,6 +1966,58 @@
       }
     },
     {
+      "name": "transparency_request_draft",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "transparency",
+        "foia",
+        "access-to-information",
+        "ley-19-2013",
+        "public-records",
+        "accountability"
+      ],
+      "summary": "Draft an access-to-information request for Spain (Ley 19/2013), the EU institutions (Regulation 1049/2001), the US federal government (FOIA) or the UK (FOIA 2000): the letter with the elements the law requires and its legal basis, where to submit it, the response time and due date, and what to do after a refusal or silence.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/transparency_request_draft/manifest.json",
+      "manifest_sha256": "aaa552d3b7d6df85ce6c7bef9e23ac08f176834663ce02018870737b1e62734b",
+      "files": {
+        "transparency_request_draft.py": "34bed11ce7ad5f5eaceadb0ce75cef589dfc495d872cefae2ca00245fe3a83f0"
+      }
+    },
+    {
+      "name": "vote_condorcet",
+      "version": "1.0.0",
+      "category": "politics_civics",
+      "tags": [
+        "elections",
+        "condorcet",
+        "schulze",
+        "copeland",
+        "ranked-choice",
+        "smith-set"
+      ],
+      "summary": "Condorcet analysis of ranked ballots: the pairwise preference matrix, the Condorcet winner and loser, the Smith set, Copeland scores and the Schulze ranking with its strongest paths.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/politics_civics/vote_condorcet/manifest.json",
+      "manifest_sha256": "04aab81dbf11284a6e757dcf0e0e254fb9d2bd40e9aed93f6f5795ee1b5d2472",
+      "files": {
+        "vote_condorcet.py": "529507dafa79958259d59119ecfdb001481c5bb2b7c33b32da60fe4ba6596836"
+      }
+    },
+    {
       "name": "cron_explain",
       "version": "1.0.0",
       "category": "programming",
@@ -2044,6 +2388,35 @@
       }
     },
     {
+      "name": "citation_format",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "citations",
+        "bibliography",
+        "apa",
+        "mla",
+        "chicago",
+        "ieee",
+        "vancouver",
+        "bibtex",
+        "csl"
+      ],
+      "summary": "Format references in APA 7, MLA 9, Chicago author-date, IEEE or Vancouver (NLM) from CSL-JSON items or a BibTeX string: journal articles, books, chapters, conference papers, reports, theses and web pages, with author lists, et al.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/citation_format/manifest.json",
+      "manifest_sha256": "b08575fcaf252ad2394167cea7ef2d6f0233b1750a2c667e585d56fc9066188d",
+      "files": {
+        "citation_format.py": "0aff6e0acd47862623738def1ee876cefc4c4fe21f3184e33803faa7299746ab"
+      }
+    },
+    {
       "name": "data_dictionary",
       "version": "1.0.0",
       "category": "research",
@@ -2281,6 +2654,33 @@
       "manifest_sha256": "779bdf764b40990010e165ee28fba9995c5ff97596d6b09d7fa5e52ff0f0b98c",
       "files": {
         "csp_lint.py": "b0562499aafca32bfb004624abf2d23720daf1f5922862e3357d703d36e9784e"
+      }
+    },
+    {
+      "name": "hash_verify",
+      "version": "1.0.0",
+      "category": "security",
+      "tags": [
+        "hash",
+        "checksum",
+        "sha256",
+        "hmac",
+        "integrity",
+        "verify",
+        "blake2"
+      ],
+      "summary": "Hash a text, hex bytes or a workspace file with MD5, SHA-1, SHA-2, SHA-3 or BLAKE2, or compute an HMAC with a key, and verify against an expected checksum (hex or a sha256sum line) in constant time, guessing the algorithm from the digest length.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/security/hash_verify/manifest.json",
+      "manifest_sha256": "268d61cd2ecedbf8e55a88a948f6aa875a71d5527bf33960c264ebd975531ca1",
+      "files": {
+        "hash_verify.py": "a9bf09e675ca3e314d02cb232fe4bd41f814d1eeac84f6760c8902bd08514bd1"
       }
     },
     {
@@ -2571,6 +2971,33 @@
       "manifest_sha256": "0527c5a2003300bc0aea7e4941c1fd948e6872287324c547d3c19dc712fbd151",
       "files": {
         "name_generator.py": "6ee7103753725ec6c61dbf449e17a757ecb3a238ced54a73b8dde703550a391a"
+      }
+    },
+    {
+      "name": "readability",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "readability",
+        "flesch",
+        "flesch-kincaid",
+        "smog",
+        "fernandez-huerta",
+        "inflesz",
+        "plain-language"
+      ],
+      "summary": "Readability scores of a text.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/readability/manifest.json",
+      "manifest_sha256": "c2da7d7ee5149f0fe5f170827236bb430710d184be30fa6a5e1d2aa97145d45a",
+      "files": {
+        "readability.py": "19db127d62639bddf2b0307877488dd3c3c4b5ea4368e106cfb2efac3b2a9f11"
       }
     },
     {

@@ -1,0 +1,29 @@
+{
+  "name": "citation_format",
+  "description": "Format references in APA 7, MLA 9, Chicago author-date, IEEE or Vancouver (NLM) from CSL-JSON items or a BibTeX string: journal articles, books, chapters, conference papers, reports, theses and web pages, with author lists, et al. rules, page ranges and DOIs. Plain text and Markdown with italics.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "style": {"type": "string", "enum": ["apa", "mla", "chicago", "ieee", "vancouver"], "default": "apa"},
+      "items": {"type": "array", "items": {"type": "object"}, "description": "CSL-JSON: type, title, author [{family, given}], issued {date-parts}, container-title, volume, issue, page, DOI, URL, publisher, publisher-place, edition, editor"},
+      "bibtex": {"type": "string", "description": "One or more BibTeX entries instead of items"}
+    }
+  },
+  "program": "python3",
+  "args": ["citation_format.py"],
+  "files": ["citation_format.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["citations", "bibliography", "apa", "mla", "chicago", "ieee", "vancouver", "bibtex", "csl"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"style": "vancouver", "items": [{"type": "article-journal", "author": [{"family": "Halpern", "given": "Scott D"}, {"family": "Ubel", "given": "Peter A"}, {"family": "Caplan", "given": "Arthur L"}], "title": "Solid-organ transplantation in HIV-infected patients", "container-title": "N Engl J Med", "issued": {"date-parts": [[2002, 7, 25]]}, "volume": "347", "issue": "4", "page": "284-287"}]},
+      "output": {"references": [{"text": "1. Halpern SD, Ubel PA, Caplan AL. Solid-organ transplantation in HIV-infected patients. N Engl J Med. 2002 Jul 25;347(4):284-7."}]}
+    },
+    "source": "original; rules from the APA Publication Manual (7th ed.), MLA Handbook (9th ed.), Chicago Manual of Style (17th ed.), IEEE Reference Guide and NLM Citing Medicine; CSL-JSON input as in citation-style-language/styles"
+  }
+}

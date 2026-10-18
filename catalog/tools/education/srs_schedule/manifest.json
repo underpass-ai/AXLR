@@ -1,0 +1,29 @@
+{
+  "name": "srs_schedule",
+  "description": "Spaced-repetition scheduling with SuperMemo 2: from a review graded 0 to 5 and the card's state (repetitions, easiness factor, last interval), the next interval in days, the new easiness and the next review date. Or replay a card's whole review history. Exact easiness arithmetic.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "quality": {"type": "integer", "minimum": 0, "maximum": 5, "description": "5 perfect, 4 after hesitation, 3 with difficulty, 0-2 forgotten"},
+      "repetitions": {"type": "integer", "minimum": 0, "default": 0},
+      "easiness": {"type": ["number", "string"], "default": 2.5, "description": "At least 1.3"},
+      "interval": {"type": ["number", "string"], "default": 0, "description": "Days of the last interval"},
+      "review_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+      "reviews": {"type": "array", "items": {"type": "object", "required": ["date", "quality"], "additionalProperties": false, "properties": {"date": {"type": "string"}, "quality": {"type": "integer", "minimum": 0, "maximum": 5}}}, "description": "A whole history instead of one review"}
+    }
+  },
+  "program": "python3",
+  "args": ["srs_schedule.py"],
+  "files": ["srs_schedule.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "education",
+    "tags": ["spaced-repetition", "sm-2", "supermemo", "flashcards", "anki", "memory"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"quality": 3, "repetitions": 2, "easiness": 2.5, "interval": 6, "review_date": "2026-10-18"}, "output": {"repetitions": 3, "easiness": 2.36, "interval_days": 15, "next_review": "2026-11-02"}},
+    "source": "Woźniak, SuperMemo 2 algorithm (1987, published at super-memory.com); FSRS (py-fsrs) is not included"
+  }
+}

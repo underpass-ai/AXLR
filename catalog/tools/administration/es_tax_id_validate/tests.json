@@ -1,0 +1,11 @@
+[
+  {"name": "DNI letters: 12345678Z and python-stdnum's 54362315K", "input": {"ids": ["12345678Z", "54362315-K", "12345678A"]},
+   "expect": {"exit": 0, "stdout_json": {"valid": 2, "invalid": 1, "results": [{"valid": true, "type": "DNI"}, {"valid": true}, {"valid": false, "expected_check": "Z"}]}}},
+  {"name": "NIE with X prefix, python-stdnum's example", "input": {"id": "x-2482300w"}, "expect": {"exit": 0, "stdout_json": {"normalized": "X2482300W", "valid": true, "type": "NIE"}}},
+  {"name": "entity NIF J99216582 valid, J99216583 not", "input": {"ids": ["J99216582", "J99216583"]},
+   "expect": {"exit": 0, "stdout_json": {"results": [{"valid": true, "entity": "sociedad civil"}, {"valid": false, "expected_check": ["2", "B"]}]}}},
+  {"name": "the tax agency's own NIF ends in a letter", "input": {"id": "Q2826000H"}, "expect": {"exit": 0, "stdout_json": {"valid": true, "entity": "organismo público", "province_code": "28"}}},
+  {"name": "an S.L. needs a digit", "input": {"id": "B12345678"}, "expect": {"exit": 0, "stdout_json": {"valid": false, "expected_check": "4"}}},
+  {"name": "not an identifier", "input": {"id": "hola"}, "expect": {"exit": 0, "stdout_json": {"valid": false, "reason": "not the shape of a DNI, NIE, special NIF or entity NIF"}}},
+  {"name": "nothing given", "input": {}, "expect": {"exit": 2, "stdout_contains": "give id"}}
+]

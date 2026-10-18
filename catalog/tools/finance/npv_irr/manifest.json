@@ -1,0 +1,28 @@
+{
+  "name": "npv_irr",
+  "description": "Appraise a series of cash flows: net present value at a discount rate, internal rate of return (every IRR when the flows change sign more than once), modified IRR with separate finance and reinvestment rates, simple and discounted payback in fractional periods, and the profitability index. NPV in exact decimal arithmetic.",
+  "input_schema": {
+    "type": "object",
+    "required": ["cashflows"],
+    "additionalProperties": false,
+    "properties": {
+      "cashflows": {"type": "array", "minItems": 2, "items": {"type": ["number", "string"]}, "description": "One amount per period, period 0 first; outflows negative"},
+      "rate": {"type": ["number", "string"], "description": "Discount rate per period: 0.08 or \"8%\""},
+      "finance_rate": {"type": ["number", "string"], "description": "MIRR rate on the negative flows; default rate"},
+      "reinvest_rate": {"type": ["number", "string"], "description": "MIRR rate on the positive flows; default rate"}
+    }
+  },
+  "program": "python3",
+  "args": ["npv_irr.py"],
+  "files": ["npv_irr.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["npv", "irr", "mirr", "payback", "investment", "capital-budgeting", "discounted-cash-flow"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"cashflows": [-1000, 300, 400, 500], "rate": "8%"}, "output": {"npv": "17.629426", "payback_periods": 2.6}},
+    "source": "original; edge cases as in numpy-financial (github.com/numpy/numpy-financial) and the Excel IRR and MIRR examples"
+  }
+}

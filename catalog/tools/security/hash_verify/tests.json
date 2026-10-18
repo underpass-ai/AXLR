@@ -1,0 +1,10 @@
+[
+  {"name": "FIPS 180-4 and FIPS 202 vectors for abc", "input": {"text": "abc", "algorithms": ["sha1", "sha256", "sha3_256"]},
+   "expect": {"exit": 0, "stdout_json": {"digests": {"sha1": "a9993e364706816aba3e25717850c26c9cd0d89d", "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", "sha3_256": "3a985da74fe225b2045c172d6bd390bd855f086e3e9d525b46bfe24511431532"}}}},
+  {"name": "verify md5 of the empty string, algorithm guessed from the length", "input": {"text": "", "expected": "D41D8CD98F00B204E9800998ECF8427E"}, "expect": {"exit": 0, "stdout_json": {"verified": true, "matched_algorithm": "md5"}}},
+  {"name": "HMAC-SHA256 of the quick brown fox with key", "input": {"text": "The quick brown fox jumps over the lazy dog", "hmac_key": "key", "algorithms": ["sha256"]}, "expect": {"exit": 0, "stdout_json": {"hmac": true, "digests": {"sha256": "f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8"}}}},
+  {"name": "a sha256sum line that does not match", "input": {"hex": "61 62 63", "expected": "0000000000000000000000000000000000000000000000000000000000000000  file.txt"}, "expect": {"exit": 0, "stdout_json": {"bytes": 3, "verified": false, "matched_algorithm": null}}},
+  {"name": "hash a file in the working directory", "input": {"file": "hash_verify.py", "algorithms": ["sha512"]}, "expect": {"exit": 0, "stdout_json": {"file": "hash_verify.py"}}},
+  {"name": "paths outside the workspace are refused", "input": {"file": "../secrets"}, "expect": {"exit": 2, "stdout_contains": "relative path inside"}},
+  {"name": "two sources", "input": {"text": "a", "hex": "61"}, "expect": {"exit": 2, "stdout_contains": "exactly one of"}}
+]

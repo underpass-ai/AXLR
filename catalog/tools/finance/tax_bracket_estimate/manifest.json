@@ -1,0 +1,29 @@
+{
+  "name": "tax_bracket_estimate",
+  "description": "Estimate progressive income tax from brackets: bundled dated tables (Spanish IRPF state scales of the general and savings bases for 2025, US federal 2025 single and married filing jointly) or any brackets given in the input. Shows each bracket's tax, marginal and effective rates, and a tax-free allowance deducted from the base or taxed and subtracted as Spain's minimum. With a disclaimer.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "income": {"type": ["number", "string"], "description": "The taxable base"},
+      "table": {"type": "string", "enum": ["es_irpf_2025_state_general", "es_irpf_2025_state_savings", "us_federal_2025_single", "us_federal_2025_married_joint"]},
+      "brackets": {"type": "array", "items": {"type": "object", "required": ["up_to", "rate"], "additionalProperties": false, "properties": {"up_to": {"type": ["number", "string", "null"]}, "rate": {"type": ["number", "string"], "description": "Percent"}}}},
+      "allowance": {"type": ["number", "string"], "default": 0},
+      "allowance_method": {"type": "string", "enum": ["deduct_from_base", "tax_on_allowance"], "default": "deduct_from_base"},
+      "list_tables": {"type": "boolean"}
+    }
+  },
+  "program": "python3",
+  "args": ["tax_bracket_estimate.py"],
+  "files": ["tax_bracket_estimate.py", "brackets.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "finance",
+    "tags": ["tax", "irpf", "income-tax", "brackets", "marginal-rate", "estimate"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"income": 100000, "table": "us_federal_2025_single"}, "output": {"tax": "16914.00", "marginal_rate": "22", "effective_rate": "16.91"}},
+    "source": "original; tables from Ley 35/2006 arts. 63.1 and 66.1 (BOE) and IRS Revenue Procedure 2024-40, transcribed by tools/catalog/data/tax_brackets.py"
+  }
+}

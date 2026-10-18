@@ -1,0 +1,29 @@
+{
+  "name": "hash_verify",
+  "description": "Hash a text, hex bytes or a workspace file with MD5, SHA-1, SHA-2, SHA-3 or BLAKE2, or compute an HMAC with a key, and verify against an expected checksum (hex or a sha256sum line) in constant time, guessing the algorithm from the digest length. Warns when MD5 or SHA-1 is used.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "description": "Hashed as UTF-8"},
+      "hex": {"type": "string", "description": "Raw bytes as hexadecimal; spaces and colons ignored"},
+      "file": {"type": "string", "description": "Relative path inside the working directory"},
+      "algorithms": {"type": "array", "items": {"type": "string", "enum": ["md5", "sha1", "sha224", "sha256", "sha384", "sha512", "sha3_224", "sha3_256", "sha3_384", "sha3_512", "blake2b", "blake2s"]}, "default": ["sha256"]},
+      "expected": {"type": "string", "description": "A digest to verify against"},
+      "hmac_key": {"type": "string", "description": "Compute HMAC with this UTF-8 key"}
+    }
+  },
+  "program": "python3",
+  "args": ["hash_verify.py"],
+  "files": ["hash_verify.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "security",
+    "tags": ["hash", "checksum", "sha256", "hmac", "integrity", "verify", "blake2"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "abc"}, "output": {"digests": {"sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"}}},
+    "source": "Python hashlib and hmac; test vectors from FIPS 180-4, FIPS 202, RFC 1321 and RFC 2104"
+  }
+}
