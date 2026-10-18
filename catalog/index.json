@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog": "axlr",
-  "generated_at": "2026-10-18T09:35:59Z",
+  "generated_at": "2026-10-18T10:59:43Z",
   "tools": [
     {
       "name": "business_days",
@@ -2252,6 +2252,37 @@
       "manifest_sha256": "dcdfaa08aaed2f6ceec9b201e9ffcb53f7517423cb01324986da96da0aab9d54",
       "files": {
         "stats_describe.py": "8782ad6c454b306f59398397f51e502b6a6d22dbd321c0b63c8023fc68612d7f"
+      }
+    },
+    {
+      "name": "sympy_solve",
+      "version": "1.0.0",
+      "category": "mathematics",
+      "tags": [
+        "algebra",
+        "calculus",
+        "symbolic",
+        "sympy",
+        "solve",
+        "integrate",
+        "derivative",
+        "limit",
+        "series"
+      ],
+      "summary": "Symbolic mathematics with sympy: solve equations, simplify, expand, factor, differentiate, integrate (indefinite or definite), limits and series, with exact results as sympy text, LaTeX and a decimal value when numeric.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": [
+          "sympy"
+        ]
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/mathematics/sympy_solve/manifest.json",
+      "manifest_sha256": "589ca94b27b87caa4f23984ba160e85fa17d6082acaeec0f30718897f630d444",
+      "files": {
+        "sympy_solve.py": "69020aff2ae743f49191b9d72337a671add8c6d1d70ae48648cdf34fb9aa95a8"
       }
     },
     {
