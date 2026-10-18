@@ -1,0 +1,15 @@
+[
+  {"name": "ALA-LC / Hepburn: とうきょう Tōkyō (long o from ou), capitalized", "input": {"text": "とうきょう", "capitalize": true}, "expect": {"stdout_json": {"result": "Tōkyō", "system": "modified Hepburn"}}},
+  {"name": "Hepburn long vowels: おおさか ōsaka, おかあさん okāsan, すうがく sūgaku, おねえさん onēsan; せんせい sensei and おにいさん oniisan unchanged", "input": {"text": "おおさか おかあさん すうがく おねえさん せんせい おにいさん"}, "expect": {"stdout_json": {"result": "ōsaka okāsan sūgaku onēsan sensei oniisan"}}},
+  {"name": "modern Hepburn しんぶん shinbun; traditional Hepburn shimbun (as in Asahi Shimbun)", "input": {"text": "しんぶん", "n_before_bmp": "m"}, "expect": {"stdout_json": {"result": "shimbun"}}},
+  {"name": "modern Hepburn しんぶん shinbun by default", "input": {"text": "しんぶん"}, "expect": {"stdout_json": {"result": "shinbun"}}},
+  {"name": "ALA-LC / Hepburn sokuon: がっこう gakkō, まっちゃ matcha, いっしょ issho, みっつ mittsu", "input": {"text": "がっこう まっちゃ いっしょ みっつ"}, "expect": {"stdout_json": {"result": "gakkō matcha issho mittsu"}}},
+  {"name": "ALA-LC / Hepburn apostrophe: きんえん kin'en, しんよう shin'yō", "input": {"text": "きんえん しんよう"}, "expect": {"stdout_json": {"result": "kin'en shin'yō"}}},
+  {"name": "ISO 3602 / Kunrei table: しんぶん sinbun, ちゃ tya, ふじさん huzisan, まっちゃ mattya, とうきょう tôkyô", "input": {"text": "しんぶん ちゃ ふじさん まっちゃ とうきょう", "system": "kunrei"}, "expect": {"stdout_json": {"result": "sinbun tya huzisan mattya tôkyô", "system": "Kunrei-shiki (ISO 3602)"}}},
+  {"name": "katakana with choonpu and extensions: コーヒー kōhī, ファイル fairu, パーティー pātī, ヴァイオリン vaiorin", "input": {"text": "コーヒー ファイル パーティー ヴァイオリン"}, "expect": {"stdout_json": {"result": "kōhī fairu pātī vaiorin"}}},
+  {"name": "long vowels as spelled: コーヒー koohii, とうきょう toukyou", "input": {"text": "コーヒー とうきょう", "long_vowels": "as_is"}, "expect": {"stdout_json": {"result": "koohii toukyou"}}},
+  {"name": "half-width katakana and iteration marks", "input": {"text": "ｶﾞｯｺｳ いすゞ"}, "expect": {"stdout_json": {"result": "gakkō isuzu"}}},
+  {"name": "kanji left as-is and listed", "input": {"text": "東京はとうきょう。"}, "expect": {"stdout_json": {"result": "東京hatōkyō.", "unconverted": ["東", "京"]}}},
+  {"name": "bad system", "input": {"text": "かな", "system": "nihon"}, "expect": {"exit": 2, "stdout_contains": "system must be"}},
+  {"name": "text missing", "input": {"system": "hepburn"}, "expect": {"exit": 2, "stdout_contains": "text must be"}}
+]

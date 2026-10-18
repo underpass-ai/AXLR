@@ -1,0 +1,25 @@
+{
+  "name": "gender_agreement_es",
+  "description": "Check gender and number agreement in Spanish noun phrases (determiner, adjectives, noun, and an adjective after ser or estar) and suggest the corrected form. A heuristic: noun gender comes from a bundled lexicon of exceptions (el día, la mano, el problema and the Greek -ma nouns, la flor, el análisis, common-gender and either-gender nouns) or from the ending (-ción, -dad, -o, -a…), and it applies RAE's rule for feminine nouns beginning with stressed a or ha: el agua fría, las aguas, esta agua, mucha hambre, la fría agua.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "maxLength": 20000, "description": "Noun phrases or short sentences in Spanish"}
+    }
+  },
+  "program": "python3",
+  "args": ["gender_agreement_es.py"],
+  "files": ["gender_agreement_es.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "language",
+    "tags": ["spanish", "grammar", "agreement", "gender", "proofreading", "heuristic"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "el agua frío"}, "output": {"ok": false, "errors": 1, "phrases": [{"noun": "agua", "gender": "f", "number": "s", "issues": [{"word": "frío", "suggestion": "fría", "severity": "error"}]}]}},
+    "source": "original; rules from the RAE Diccionario panhispánico de dudas (entries el, un, este, agua, hambre) and the Nueva gramática de la lengua española, ch. 2 (género) and 3 (número)"
+  }
+}

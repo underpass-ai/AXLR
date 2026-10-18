@@ -1,0 +1,26 @@
+{
+  "name": "openapi_outline",
+  "description": "Outline an OpenAPI 3.0/3.1 or Swagger 2.0 document given inline as JSON or YAML: every endpoint with its method, operationId, summary, tags, parameters (path-level ones merged), request body and responses by status and media type, plus the component schemas, with $ref resolved inside the document. Returns a JSON outline and a Markdown summary, and warns about missing or duplicate operationIds and external refs. YAML is read by a built-in parser for the block subset OpenAPI files use; anchors and tags are refused clearly.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "maxLength": 2000000, "description": "The OpenAPI or Swagger document, JSON or YAML"},
+      "format": {"type": "string", "enum": ["both", "json", "markdown"], "default": "both"}
+    }
+  },
+  "program": "python3",
+  "args": ["openapi_outline.py"],
+  "files": ["openapi_outline.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "programming",
+    "tags": ["openapi", "swagger", "api", "documentation", "yaml", "rest"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "openapi: 3.0.0\ninfo:\n  title: Swagger Petstore\n  version: 1.0.0\npaths:\n  /pets/{petId}:\n    get:\n      summary: Info for a specific pet\n      operationId: showPetById\n      parameters:\n        - name: petId\n          in: path\n          required: true\n          schema:\n            type: string\n      responses:\n        '200':\n          description: Expected response to a valid request\n", "format": "json"}, "output": {"outline": {"spec": "OpenAPI 3.0.0", "paths": ["/pets/{petId}"], "operations": [{"method": "GET", "path": "/pets/{petId}", "operationId": "showPetById", "parameters": [{"name": "petId", "in": "path", "required": true, "type": "string"}]}]}}},
+    "source": "OpenAPI Specification 3.0.3 and 3.1.0 and Swagger 2.0 (OpenAPI Initiative); YAML 1.2 core schema for the block subset read"
+  }
+}

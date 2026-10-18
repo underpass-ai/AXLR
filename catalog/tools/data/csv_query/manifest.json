@@ -1,0 +1,33 @@
+{
+  "name": "csv_query",
+  "description": "Run one read-only SQL SELECT over one or more CSVs loaded as named tables into an in-memory SQLite database, with column types (INTEGER, REAL, TEXT) inferred and empty cells as NULL: GROUP BY, JOIN, window functions, CTEs. Returns JSON rows and the result as CSV. Read-only by construction: PRAGMA query_only, an authorizer that refuses ATTACH, PRAGMA, writes and load_extension, a single statement, a time budget and a row limit.",
+  "input_schema": {
+    "type": "object",
+    "required": ["sql"],
+    "additionalProperties": false,
+    "properties": {
+      "sql": {"type": "string", "maxLength": 100000, "description": "One SELECT, WITH ... SELECT or VALUES statement"},
+      "tables": {"type": "object", "additionalProperties": {"type": "string"}, "description": "{table name: CSV text}"},
+      "csv": {"type": "string", "description": "A single CSV, loaded as table data (or the name in table)"},
+      "table": {"type": "string", "default": "data"},
+      "paths": {"type": "object", "additionalProperties": {"type": "string"}, "description": "{table name: relative CSV path}"},
+      "delimiter": {"type": "string", "description": "Override the sniffed delimiter; \\t for tab"},
+      "infer_types": {"type": "boolean", "default": true},
+      "limit": {"type": "integer", "minimum": 1, "maximum": 100000, "default": 1000}
+    }
+  },
+  "program": "python3",
+  "args": ["csv_query.py"],
+  "files": ["csv_query.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "data",
+    "tags": ["csv", "sql", "sqlite", "query", "join", "group-by"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"tables": {"sales": "region,product,amount\nNorth,apple,10\nNorth,pear,5.5\nSouth,apple,7\nSouth,apple,3\n"}, "sql": "SELECT region, SUM(amount) AS total FROM sales GROUP BY region ORDER BY region"},
+                "output": {"columns": ["region", "total"], "rows": [{"region": "North", "total": 15.5}, {"region": "South", "total": 10.0}], "csv": "region,total\nNorth,15.5\nSouth,10.0\n"}},
+    "source": "Python sqlite3 (SQLite) in memory, after csvkit's csvsql --query, datasette and q; read-only through sqlite3 set_authorizer and PRAGMA query_only"
+  }
+}

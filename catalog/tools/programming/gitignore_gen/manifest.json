@@ -1,0 +1,28 @@
+{
+  "name": "gitignore_gen",
+  "description": "Build a .gitignore from named stacks (Python, Node, Go, Rust, Java, Maven, Gradle, C, C++, Dotnet, VisualStudio, Swift, Ruby, Rails, Android, Unity, Terraform, Flutter, macOS, Windows, Linux, JetBrains, VisualStudioCode, Vim and more: 44 templates with common aliases), combined in the order given with a header per section and repeated patterns removed when that cannot change what is ignored. The templates are bundled from github/gitignore (CC0-1.0) at a pinned commit, recorded in the output.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "stacks": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 50, "description": "Stack names or aliases, e.g. [\"Python\", \"macOS\", \"vscode\"]"},
+      "comments": {"type": "boolean", "default": true, "description": "Keep the templates' comment lines"},
+      "dedupe": {"type": "boolean", "default": true, "description": "Drop patterns already present in an earlier section"},
+      "extra": {"type": "array", "items": {"type": "string"}, "default": [], "description": "Your own patterns, appended in a Custom section"},
+      "list_stacks": {"type": "boolean", "description": "Only list the available stacks"}
+    }
+  },
+  "program": "python3",
+  "args": ["gitignore_gen.py"],
+  "files": ["gitignore_gen.py", "templates.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "programming",
+    "tags": ["git", "gitignore", "templates", "scaffolding", "devops", "repository"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"stacks": ["C", "C++"], "comments": false}, "output": {"stacks": ["C", "C++"], "sections": [{"name": "C", "path": "C.gitignore", "patterns": 36, "duplicates_dropped": 0}, {"name": "C++", "path": "C++.gitignore", "patterns": 20, "duplicates_dropped": 19}]}},
+    "source": "github/gitignore (CC0-1.0), commit 0e5d690153ca3da8a4a1aef2d053406f408f531c of 2026-10-02, bundled by tools/catalog/data/gitignore_gen.py; pattern semantics from git's gitignore(5)"
+  }
+}

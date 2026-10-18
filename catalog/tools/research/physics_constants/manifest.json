@@ -1,0 +1,28 @@
+{
+  "name": "physics_constants",
+  "description": "Look up the CODATA 2022 recommended values of the fundamental physical constants by symbol, exact name or keywords: value, standard uncertainty, relative uncertainty, unit, concise notation such as 9.1093837139(28)e-31 and whether the value is exact in the 2019 SI. All 355 constants of NIST's complete listing are bundled in a dated table; every answer names the source and fetch date.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "query": {"type": "string", "maxLength": 200, "description": "A symbol (h, m_e, N_A), an exact name, or keywords (\"proton mass\")"},
+      "name": {"type": "string", "maxLength": 200, "description": "Exact quantity name as NIST prints it, case-insensitive"},
+      "symbol": {"type": "string", "maxLength": 200},
+      "list": {"type": "boolean", "description": "List every constant name and its symbols"},
+      "limit": {"type": "integer", "minimum": 1, "maximum": 400, "default": 10, "description": "Maximum keyword matches returned"}
+    }
+  },
+  "program": "python3",
+  "args": ["physics_constants.py"],
+  "files": ["physics_constants.py", "constants.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["physics", "constants", "codata", "nist", "si", "uncertainty", "science"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"query": "electron mass"}, "output": {"match": "name", "results": [{"name": "electron mass", "value": "9.1093837139e-31", "uncertainty": "2.8e-40", "unit": "kg", "exact": false, "concise": "9.1093837139(28)e-31"}]}},
+    "source": "CODATA 2022 recommended values (Tiesinga, Mohr, Newell, Taylor), NIST Fundamental Physical Constants complete listing https://physics.nist.gov/cuu/Constants/Table/allascii.txt (public domain), fetched 2026-10-18 by tools/catalog/data/physics_constants.py"
+  }
+}

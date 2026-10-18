@@ -1,0 +1,38 @@
+{
+  "name": "quiz_cloze",
+  "description": "Make cloze (gap-fill) questions from a text: blank the most frequent or longest content words, a given list of words or phrases, or every n-th word, reproducibly with an optional seed; returns the gapped text with numbered blanks, the answer key and the same text in Anki cloze syntax ({{c1::...}}), one card per gap or all on one card. English or Spanish stopwords.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "minLength": 1, "maxLength": 200000},
+      "mode": {"type": "string", "enum": ["auto", "terms", "nth"], "default": "auto"},
+      "count": {"type": "integer", "minimum": 1, "maximum": 200, "default": 5, "description": "auto: distinct words to blank"},
+      "rank_by": {"type": "string", "enum": ["frequency", "length"], "default": "frequency"},
+      "min_length": {"type": "integer", "minimum": 1, "maximum": 30, "default": 4},
+      "terms": {"type": "array", "items": {"type": "string", "minLength": 1}, "description": "terms: words or phrases to blank"},
+      "every_n": {"type": "integer", "minimum": 2, "maximum": 100, "description": "nth: blank every n-th word"},
+      "offset": {"type": "integer", "minimum": 1, "maximum": 100, "description": "nth: first blank (1-based), default n"},
+      "content_only": {"type": "boolean", "default": false, "description": "nth: count content words only"},
+      "all_occurrences": {"type": "boolean", "default": false},
+      "language": {"type": "string", "enum": ["en", "es"], "default": "en"},
+      "seed": {"type": "integer", "description": "Shuffles ties (auto) and picks the offset (nth) reproducibly"},
+      "blank": {"type": "string", "minLength": 1, "maxLength": 40, "default": "_____"},
+      "anki_single_card": {"type": "boolean", "default": false}
+    }
+  },
+  "program": "python3",
+  "args": ["quiz_cloze.py"],
+  "files": ["quiz_cloze.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "education",
+    "tags": ["cloze", "quiz", "gap-fill", "anki", "assessment", "reading"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "The mitochondria is the powerhouse of the cell. The cell needs energy, and the mitochondria make it.", "count": 2}, "output": {"cloze_text": "The _____ (1) is the powerhouse of the _____ (2). The cell needs energy, and the mitochondria make it.", "answers": ["mitochondria", "cell"], "anki": "The {{c1::mitochondria}} is the powerhouse of the {{c2::cell}}. The cell needs energy, and the mitochondria make it."}},
+    "source": "original; fixed-ratio cloze procedure after Taylor (1953); Anki cloze deletion syntax from the Anki Manual (Editing > Cloze Deletion)"
+  }
+}

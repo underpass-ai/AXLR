@@ -1,0 +1,28 @@
+{
+  "name": "meter_check",
+  "description": "Scan verse for meter. Spanish: metric syllables with synalepha between words and the final-word rule (+1 aguda, −1 esdrújula), fitted to octosílabo, endecasílabo (with its accent types: heroico, melódico, sáfico, enfático, dactílico, mixto, yámbico) or alejandrino in two hemistichs of 7, choosing where a hiatus is needed and showing the scansion. English: an iambic pentameter heuristic.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "line": {"type": "string"},
+      "lines": {"type": "array", "items": {"type": "string"}, "description": "Several lines, scanned one by one"},
+      "language": {"type": "string", "enum": ["es", "en"], "default": "es"},
+      "meter": {"type": "string", "enum": ["auto", "octosilabo", "endecasilabo", "alejandrino", "iambic_pentameter"], "description": "es default auto (the count with every synalepha); en only iambic_pentameter"},
+      "syllables": {"type": "integer", "minimum": 2, "maximum": 20, "description": "es: any target count instead of meter"}
+    }
+  },
+  "program": "python3",
+  "args": ["meter_check.py"],
+  "files": ["meter_check.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["meter", "verse", "poetry", "spanish", "endecasilabo", "scansion", "syllables"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"line": "Escrito está en mi alma vuestro gesto", "meter": "endecasilabo"}, "output": {"fits": true, "metric_syllables": 11, "scansion": "Es-cri-to_es-tá_en-mi-al-ma-vues-tro-ges-to", "stresses": [2, 4, 6, 8, 10], "hiatus": ["mi alma"]}},
+    "source": "original; syllables by the RAE orthographic rules (Ortografía 2010, DPD 'tilde', 'diptongo', 'hiato'); synalepha and the final-word rule of Spanish metrics; endecasílabo types as defined in es.wikipedia 'Endecasílabo' (Ritmos y acentos, revision of 31 Dec 2025)"
+  }
+}

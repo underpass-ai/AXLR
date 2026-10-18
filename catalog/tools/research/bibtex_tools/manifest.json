@@ -1,0 +1,29 @@
+{
+  "name": "bibtex_tools",
+  "description": "Parse a BibTeX file (nested braces, quoted values, @string macros joined with #, month macros, @preamble, @comment), remove duplicates by DOI and then by normalised title and year, rename keys to authorYEARword with a/b suffixes on collisions, report missing required fields per entry type from the BibTeX documentation, and write the file back as clean, consistently formatted BibTeX.",
+  "input_schema": {
+    "type": "object",
+    "required": ["bibtex"],
+    "additionalProperties": false,
+    "properties": {
+      "bibtex": {"type": "string", "maxLength": 2000000, "description": "The .bib text"},
+      "operations": {"type": "array", "items": {"type": "string", "enum": ["dedupe", "normalize_keys", "check"]}, "default": ["dedupe", "normalize_keys", "check"], "description": "Applied in this order; [] only parses and rewrites"},
+      "merge": {"type": "boolean", "default": true, "description": "On dedupe, copy fields the kept entry lacks from its duplicates"},
+      "entries": {"type": "boolean", "default": true, "description": "Include the parsed entries as JSON"}
+    }
+  },
+  "program": "python3",
+  "args": ["bibtex_tools.py"],
+  "files": ["bibtex_tools.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["bibtex", "bibliography", "citations", "references", "latex", "deduplication"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"bibtex": "@article{a, author = {Ada Lovelace}, title = {Notes on the engine}, year = 1843}", "entries": false},
+                "output": {"keys": [{"old": "a", "new": "lovelace1843notes"}], "missing_fields": [{"key": "lovelace1843notes", "type": "article", "missing": ["journal"]}], "bibtex": "@article{lovelace1843notes,\n  author = {Ada Lovelace},\n  title = {Notes on the engine},\n  year = {1843},\n}\n"}},
+    "source": "BibTeX file format and required fields per entry type from btxdoc (Oren Patashnik, BibTeXing, 1988); key style after the authorYEARword keys of Google Scholar and JabRef"
+  }
+}

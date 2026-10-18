@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "catalog": "axlr",
-  "generated_at": "2026-10-18T04:18:24Z",
+  "generated_at": "2026-10-18T08:43:53Z",
   "tools": [
     {
       "name": "business_days",
@@ -238,6 +238,477 @@
       }
     },
     {
+      "name": "csv_json_convert",
+      "version": "1.0.1",
+      "category": "data",
+      "tags": [
+        "csv",
+        "json",
+        "jsonl",
+        "convert",
+        "flatten",
+        "nesting"
+      ],
+      "summary": "Convert CSV to JSON and back.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/csv_json_convert/manifest.json",
+      "manifest_sha256": "a3e5a4c62622233c237a1727c1e5f36f78235661509768e606450092fd696795",
+      "files": {
+        "csv_json_convert.py": "41366f147551212fea6dd09c0a6d951f9ea6738ed89374089e5b3fee0d349671"
+      }
+    },
+    {
+      "name": "csv_query",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "csv",
+        "sql",
+        "sqlite",
+        "query",
+        "join",
+        "group-by"
+      ],
+      "summary": "Run one read-only SQL SELECT over one or more CSVs loaded as named tables into an in-memory SQLite database, with column types (INTEGER, REAL, TEXT) inferred and empty cells as NULL: GROUP BY, JOIN, window functions, CTEs.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/csv_query/manifest.json",
+      "manifest_sha256": "9cb76662ad97911be2ef8bece330413d20966421e7ce756a9fcb24ccf72a66bd",
+      "files": {
+        "csv_query.py": "d13556e1a7e3064d70cfef8bd800a65722e7e355012f7bdff829877750760ceb"
+      }
+    },
+    {
+      "name": "csv_stats",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "csv",
+        "statistics",
+        "profiling",
+        "csvkit",
+        "data-quality",
+        "types"
+      ],
+      "summary": "Per-column statistics of a CSV, like csvkit's csvstat: inferred type (integer, decimal, boolean, date, datetime, text), nulls, distinct values, top values, min, max, sum, mean, median, sample variance and standard deviation, decimal places and text lengths.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/csv_stats/manifest.json",
+      "manifest_sha256": "89f44563056b7cd1948574bfed68946891a19be97d523231355e0c197ae58feb",
+      "files": {
+        "csv_stats.py": "78fe52005d50d34b45b4096b53e1b6695bde53b785f351bc1bbc05c373e23590"
+      }
+    },
+    {
+      "name": "dedupe_sort",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "dedupe",
+        "sort",
+        "natural-sort",
+        "lines",
+        "unicode",
+        "text-cleaning"
+      ],
+      "summary": "Deduplicate and sort lines of text: duplicates found exactly, ignoring case (Unicode case folding), after trimming, after Unicode normalisation (NFC or NFKC) or ignoring accents, keeping the first occurrence with a count of each line; sort by code point or naturally (file2 before file10, v1.9 before v1.10), case- and accent-insensitive without a locale, reversed; keep only duplicated or only unique lines, drop empty lines.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/dedupe_sort/manifest.json",
+      "manifest_sha256": "fd7a58ad55ab7290fa0731a4808a6bd20d40a5dd47642e27b827eb4c8ca5997e",
+      "files": {
+        "dedupe_sort.py": "a0848f18e681cf1a34582c333ef00172227c0732d3ed06427281c359a701fcf3"
+      }
+    },
+    {
+      "name": "encoding_detect",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "encoding",
+        "charset",
+        "utf-8",
+        "cp1252",
+        "bom",
+        "mojibake",
+        "unicode"
+      ],
+      "summary": "Detect the text encoding of bytes given as hex and convert them to UTF-8: byte-order marks (UTF-8, UTF-16, UTF-32), strict UTF-8 validation, UTF-16 and UTF-32 without a BOM from the pattern of NUL bytes, ISO-2022-JP escapes, and the single-byte Western encodings cp1252, latin-1, ISO-8859-15, cp850 and mac_roman ranked by how plausible their decoded characters are, with a confidence, the equivalent encodings and the decoded text.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/encoding_detect/manifest.json",
+      "manifest_sha256": "03ac7a1314e8db6a59e2e36862455b4f7573142c2968f710eddb4514bff25324",
+      "files": {
+        "encoding_detect.py": "f553768c8ab16ceae886536554328bd0448959f8300b8e31c4f1db36dd45cd78"
+      }
+    },
+    {
+      "name": "file_hash_tree",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "sha256",
+        "checksum",
+        "manifest",
+        "integrity",
+        "sha256sum",
+        "verify"
+      ],
+      "summary": "SHA-256 manifest of a set of files given inline ({path: content}, text or hex) or of a relative directory: entries sorted bytewise, lines identical to GNU sha256sum (escaped names included), a BSD-style variant and one digest of the whole tree; or verify files against a sha256sum or BSD manifest, listing matching, changed, missing and extra files.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/file_hash_tree/manifest.json",
+      "manifest_sha256": "b9eeb082da9aaabd9cf86e246e302377158d7016a246e1f44de3d41ee85c98a0",
+      "files": {
+        "file_hash_tree.py": "9e4b20cade7b84c3587c7e9413b199de2ac277f1bbbb1524d2c0f0c0359b5cd2"
+      }
+    },
+    {
+      "name": "format_convert",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "toml",
+        "yaml",
+        "ini",
+        "json",
+        "config",
+        "convert"
+      ],
+      "summary": "Convert between JSON, TOML, INI and a YAML subset.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/format_convert/manifest.json",
+      "manifest_sha256": "12b249d8188caaedd21d7e39792129c89ee2f12c51882df32a4cff598eb580a9",
+      "files": {
+        "format_convert.py": "90f45ed6b60befce31d30c3806dcad046943dd5e96ad04639088bc16dccfdb6c"
+      }
+    },
+    {
+      "name": "json_diff",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "json",
+        "diff",
+        "json-patch",
+        "json-pointer",
+        "rfc6902",
+        "compare"
+      ],
+      "summary": "Structural diff of two JSON values: every added, removed and changed value with its JSON Pointer path (RFC 6901), arrays compared by index, by a key field or by longest common subsequence, and the RFC 6902 JSON Patch that turns the first into the second, verified by applying it.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/json_diff/manifest.json",
+      "manifest_sha256": "56eab01cad216136ecdf27b61a0dfcc40b3e7fec57aac7ac359131f2f86c2ca2",
+      "files": {
+        "json_diff.py": "7800bf4192c5e857fdc25484d3f8a8312a62f4d2be870ccaa11a990fd997f8cf"
+      }
+    },
+    {
+      "name": "table_pivot",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "pivot",
+        "group-by",
+        "aggregate",
+        "csv",
+        "decimal",
+        "totals"
+      ],
+      "summary": "Group-by and pivot tables over CSV text: group rows by key columns and aggregate value columns with sum, count, mean, min, max and count distinct in exact Decimal arithmetic; optionally spread one column's values across the output columns (rows x columns) with a fill value for empty cells; row totals, a total row and the grand total computed from the underlying rows (a mean of all values, not of the cell means).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/table_pivot/manifest.json",
+      "manifest_sha256": "d182eac721eb2854ec60fbbac06b947fb58d4e8dbf391ee20d0aa531102da3c3",
+      "files": {
+        "table_pivot.py": "0a0b0acdd9f7d249daf86044e6807cc8e71f25d187ca144d7d5a599ea935356f"
+      }
+    },
+    {
+      "name": "xlsx_read",
+      "version": "1.0.0",
+      "category": "data",
+      "tags": [
+        "xlsx",
+        "excel",
+        "spreadsheet",
+        "csv",
+        "ooxml",
+        "dates"
+      ],
+      "summary": "Read the sheets of an Excel .xlsx workbook into CSV and JSON with no package: the file (hex or a relative path) is opened as a zip and its SpreadsheetML parsed: shared strings (rich text runs joined), inline strings, numbers, booleans, errors and formulas' cached values.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/data/xlsx_read/manifest.json",
+      "manifest_sha256": "12da04946e0f472c66b8936dc135418f334ce567438a43815c5abb6013d4f462",
+      "files": {
+        "xlsx_read.py": "285a82ec09b525c14921f6c4caa935005a5290ebfdd87436af1ef0b4f65cf5c2"
+      }
+    },
+    {
+      "name": "bloom_classify",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "bloom",
+        "taxonomy",
+        "learning-objectives",
+        "curriculum",
+        "assessment",
+        "teaching",
+        "spanish"
+      ],
+      "summary": "Classify learning objectives by the level of the revised Bloom taxonomy (Remember, Understand, Apply, Analyze, Evaluate, Create) from their main verb, in English or Spanish, with a bundled verb table built on the 19 cognitive processes of Anderson & Krathwohl (2001).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/bloom_classify/manifest.json",
+      "manifest_sha256": "9b2e7c72c5868b139aa753a8dc2a23e23450aa922982b8160a64f539dbf7428f",
+      "files": {
+        "bloom_classify.py": "f6a0a151505ba6d3e26676f6d69f27611322dd4a635d06cc780c8995aabe015c"
+      }
+    },
+    {
+      "name": "flashcards_export",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "anki",
+        "flashcards",
+        "csv",
+        "tsv",
+        "spaced-repetition",
+        "export"
+      ],
+      "summary": "Convert CSV flashcards (front, back, tags, optional deck and extra fields) into an Anki-importable tab-separated text file with the file headers of the Anki manual (#separator:Tab, #html, #notetype, #deck, #tags, #columns, #tags column, #deck column), quoting fields that hold tabs, newlines or quotes as Anki expects, or turning newlines into <br> in HTML mode.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/flashcards_export/manifest.json",
+      "manifest_sha256": "73028c220cbcb44023e59dbc0bbea918d526557b0113338d49a9d55d1a5d3431",
+      "files": {
+        "flashcards_export.py": "0472edc38693b0c90b8425039c8b121bb09359ecd3b2d5cc773029666bfd28fc"
+      }
+    },
+    {
+      "name": "grade_stats",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "grades",
+        "statistics",
+        "item-analysis",
+        "kr-20",
+        "reliability",
+        "curve",
+        "assessment"
+      ],
+      "summary": "Class grade statistics (mean, median, population and sample SD, distribution by bands or a histogram), grade curves (linear rescaling to a target mean and SD, square-root curve, top-score scaling) and classical item analysis of a students x items 0/1 matrix: difficulty p, point-biserial and corrected item-rest correlations, upper-lower 27 % discrimination D, and KR-20 and KR-21 reliability.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/grade_stats/manifest.json",
+      "manifest_sha256": "a98c2500b1476ff34579f319904898f3a4691b0d9bcebe29214c417efeaac1ee",
+      "files": {
+        "grade_stats.py": "6fccb5ef10a4db8bacb4f0d394cf15fb782c6ce869ef33b9f22294139c17103f"
+      }
+    },
+    {
+      "name": "lesson_plan_template",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "lesson-plan",
+        "teaching",
+        "bloom",
+        "curriculum",
+        "template",
+        "spanish"
+      ],
+      "summary": "Lesson plan skeleton for a subject, level and duration: warm-up, presentation, practice, production, assessment and closure with whole minutes allocated in proportion to stage weights (largest remainder, so they add up exactly), and objectives written with verbs of the revised Bloom taxonomy (Anderson & Krathwohl 2001) chosen by level, in English or Spanish.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/lesson_plan_template/manifest.json",
+      "manifest_sha256": "9e11e3c85251a4b137baef89c01d4cf63526e2bd37f5b327e83a680e8753ab5d",
+      "files": {
+        "lesson_plan_template.py": "502feb1db654efc4dde7f206b57ea0e16a6c2c5007d64d6e97e2b6815327790b"
+      }
+    },
+    {
+      "name": "quiz_cloze",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "cloze",
+        "quiz",
+        "gap-fill",
+        "anki",
+        "assessment",
+        "reading"
+      ],
+      "summary": "Make cloze (gap-fill) questions from a text: blank the most frequent or longest content words, a given list of words or phrases, or every n-th word, reproducibly with an optional seed; returns the gapped text with numbered blanks, the answer key and the same text in Anki cloze syntax ({{c1::...}}), one card per gap or all on one card.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/quiz_cloze/manifest.json",
+      "manifest_sha256": "40f0ad27b467c6873371f35520a4ed1bd116e0b942f5c52e376596699d371bc8",
+      "files": {
+        "quiz_cloze.py": "d943b7ea04a249e7d060ff0781bd729033ce7e42fd870e65a6987fe08ec8668d"
+      }
+    },
+    {
+      "name": "quiz_mcq_scaffold",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "quiz",
+        "multiple-choice",
+        "distractors",
+        "assessment",
+        "reading",
+        "teaching"
+      ],
+      "summary": "Multiple-choice question scaffolds from a text and a list of target terms: the sentence that first uses each term becomes the stem with the term blanked, and distractors are drawn from the other sentences of the same text with part-of-speech heuristics (same number of words, same capitalisation, similar length, same word ending, never a variant of the answer), chosen and shuffled reproducibly from a seed.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/quiz_mcq_scaffold/manifest.json",
+      "manifest_sha256": "88c7952e5b632c9b04c29b4e437828199858323559d2d93605160a0e02c205ba",
+      "files": {
+        "quiz_mcq_scaffold.py": "5037547cc2f929e2b84110194ac86b6fb7b727561fc9477ae194b09863847c95"
+      }
+    },
+    {
+      "name": "rubric_grade",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "rubric",
+        "grading",
+        "assessment",
+        "feedback",
+        "teaching",
+        "exact"
+      ],
+      "summary": "Score one student or a class against a weighted analytic rubric (criteria with weights; levels with points and descriptors), in exact fractions: per-criterion points and share, raw total, weighted percentage, an optional 0-to-N scale, a grade from bands given in the input, feedback lines built from the level descriptors, and a class summary.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/rubric_grade/manifest.json",
+      "manifest_sha256": "745850dddd5106fef3085813a2bea81ee89bf9c11c5a7bcefa1fa49aa8310403",
+      "files": {
+        "rubric_grade.py": "73963eec2b9378d42f32927c1d85e36b68f431c5707eb1c8a352eda0a08fccf1"
+      }
+    },
+    {
+      "name": "timeline_builder",
+      "version": "1.0.0",
+      "category": "education",
+      "tags": [
+        "timeline",
+        "history",
+        "chronology",
+        "markdown",
+        "ascii",
+        "bce"
+      ],
+      "summary": "Turn dated events (years, months or days, BCE/BC and CE/AD, points or ranges) into a chronologically sorted Markdown list, a Markdown table with durations and an ASCII timeline scaled exactly to a chosen width, and report duplicates, events on the same date, overlapping or nested ranges and points that fall within a range.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/education/timeline_builder/manifest.json",
+      "manifest_sha256": "3bcddad8fe398ff220a843983fe8aa3103f296c317216339291a1a6345e649ae",
+      "files": {
+        "timeline_builder.py": "f651be1bd7ff84971fee9920b45c6b68dd0e958ea63099abc79ed6d58b2928e9"
+      }
+    },
+    {
       "name": "break_even",
       "version": "1.0.0",
       "category": "finance",
@@ -422,6 +893,620 @@
       "manifest_sha256": "7324bbb3ebe05bd740f62c398d7f677533a4238b3ba540f1af98537c7a16dcd6",
       "files": {
         "portfolio_stats.py": "299c35d76400c05d8a4f400d3037c764a3702cf51d4202fbabbd10075166aafc"
+      }
+    },
+    {
+      "name": "calendar_convert",
+      "version": "1.0.0",
+      "category": "geography",
+      "tags": [
+        "calendar",
+        "julian-day",
+        "iso-week",
+        "hebrew-calendar",
+        "islamic-calendar",
+        "julian-calendar",
+        "dates"
+      ],
+      "summary": "Convert a date between the proleptic Gregorian and Julian calendars, the ISO week date, Julian day (JDN, and JD with a fraction of the day), R.D.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/geography/calendar_convert/manifest.json",
+      "manifest_sha256": "c8d17993aa134a7e21f1c57961a5f240f3b1547230831b7b358135082928d614",
+      "files": {
+        "calendar_convert.py": "8caf8031d7852cb70b7bea138b54da04c8cfeae7b0ad8ea218ce19ae52d485f5"
+      }
+    },
+    {
+      "name": "coord_convert",
+      "version": "1.0.0",
+      "category": "geography",
+      "tags": [
+        "coordinates",
+        "dms",
+        "utm",
+        "mgrs",
+        "geohash",
+        "wgs84",
+        "transverse-mercator"
+      ],
+      "summary": "Convert geographic coordinates on WGS-84 between notations: parse and format decimal degrees, degrees-minutes-seconds and degrees-decimal-minutes (N/S/E/W or signs, symbols ° ′ ″ ' \" d :), UTM both ways with zone and latitude band including the Norway (32V) and Svalbard (31X-37X) exceptions by Krueger's transverse Mercator series to sixth order as in Karney (2011) and GeographicLib, MGRS both ways (truncated, square centre on input, as GeoConvert), and geohash encode and decode with error bounds.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/geography/coord_convert/manifest.json",
+      "manifest_sha256": "6dafe5a6a42177d39ddab421c774fc4a1bd0cff3c8e542213279822450bd96a4",
+      "files": {
+        "coord_convert.py": "8c7fdad711fea5682fd4cc87332856270f01e7043b392a67188257170085e3e7"
+      }
+    },
+    {
+      "name": "geojson_tools",
+      "version": "1.0.0",
+      "category": "geography",
+      "tags": [
+        "geojson",
+        "area",
+        "centroid",
+        "bounding-box",
+        "point-in-polygon",
+        "validation",
+        "gis"
+      ],
+      "summary": "Measure and check GeoJSON (RFC 7946) given inline as a Geometry, Feature or FeatureCollection: bounding box, centroid, planar area (exact, in square degrees) and spherical area by spherical excess on a sphere of R = 6371.0088 km (the IUGG mean radius; spherical, not ellipsoidal), perimeter and line length, point-in-polygon with holes and boundary detection, and validation: closed rings of at least four positions, RFC 7946 winding (exterior counter-clockwise, holes clockwise), coordinate ranges, self-intersecting rings and holes outside their exterior.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/geography/geojson_tools/manifest.json",
+      "manifest_sha256": "bf4b8a8c5b47ae14216461cb465c778793a8ef6ce7ef56094b92d1e53e5d5c4f",
+      "files": {
+        "geojson_tools.py": "c160992f26cd96d4788ff2dafdc17d15898e3ae59a348f0fc9b01ad9e45f146f"
+      }
+    },
+    {
+      "name": "haversine",
+      "version": "1.0.0",
+      "category": "geography",
+      "tags": [
+        "distance",
+        "great-circle",
+        "haversine",
+        "vincenty",
+        "bearing",
+        "wgs84",
+        "geodesy"
+      ],
+      "summary": "Distance and bearing between points on the Earth: the haversine great-circle distance on a sphere (R = 6371.0088 km by default) and Vincenty's inverse formula on the WGS-84 or GRS80 ellipsoid (the more exact, to about half a millimetre), with initial and final bearings, the midpoint, and the destination reached from a start point, a bearing and a distance (spherical and Vincenty direct).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/geography/haversine/manifest.json",
+      "manifest_sha256": "58d1649cbaa7acc3048cfec8701b2695181484f6bdce4e7e1aa212149c4e4642",
+      "files": {
+        "haversine.py": "0e0dcffc14ea4bdaf74ecddc7f5e3ea711be269dab352cff727e4c7c88d2b202"
+      }
+    },
+    {
+      "name": "iso_country_lookup",
+      "version": "1.0.0",
+      "category": "geography",
+      "tags": [
+        "iso-3166",
+        "iso-4217",
+        "countries",
+        "currency",
+        "time-zones",
+        "calling-codes",
+        "geography"
+      ],
+      "summary": "Look up a country by ISO 3166-1 alpha-2, alpha-3 or numeric code or by English name, or find the countries that use a time zone, an ISO 4217 currency or an ITU-T E.164 calling code.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/geography/iso_country_lookup/manifest.json",
+      "manifest_sha256": "d63e1e7deea7a4f311f5b504fe9ba5dd2999ad40528c6d02fbc919364713db86",
+      "files": {
+        "iso_country_lookup.py": "510d53603f8bc9bc38c41695ef78e4f47942f7b257b02627c58f9832938df536",
+        "countries.json": "5e29fa99cef5592a9a8a360fc7f51fe7addcfa46fdecceb4eca4f94350d83d5d"
+      }
+    },
+    {
+      "name": "moon_phase",
+      "version": "1.0.0",
+      "category": "geography",
+      "tags": [
+        "moon",
+        "lunar-phase",
+        "full-moon",
+        "new-moon",
+        "astronomy",
+        "illumination"
+      ],
+      "summary": "The Moon's phase at a UTC instant: phase name (new, waxing crescent, first quarter, waxing gibbous, full, waning gibbous, last quarter, waning crescent), phase angle, illuminated fraction, age in days since the last new Moon, and the times of the previous new Moon and the next new Moon, first quarter, full Moon and last quarter; or every principal phase of a calendar year.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/geography/moon_phase/manifest.json",
+      "manifest_sha256": "05ba7eaf0ef126ef3a018de659f67c54a9b020f70a36684ae6597f74413797d6",
+      "files": {
+        "moon_phase.py": "1865cbe0e1447904f411a0132250a68ae134aae82a3ddc364fd54cf89b4da1eb"
+      }
+    },
+    {
+      "name": "sun_times",
+      "version": "1.0.1",
+      "category": "geography",
+      "tags": [
+        "sun",
+        "sunrise",
+        "sunset",
+        "twilight",
+        "astronomy",
+        "solar-noon",
+        "equation-of-time"
+      ],
+      "summary": "Sunrise, sunset, solar noon, day length and civil, nautical and astronomical twilight for a date and a latitude/longitude, in an IANA time zone or a fixed UTC offset, by the NOAA solar calculator algorithm (Meeus' low-accuracy solar position, as in NOAA's spreadsheet and the astral library).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/geography/sun_times/manifest.json",
+      "manifest_sha256": "a5c1087757989dc3c9c94eb8ccfc54bbe424b518439e54f917cedb5e4cf53a74",
+      "files": {
+        "sun_times.py": "827b304ac093130ac859f222f153ee4a1200a41375df1c704b0f99a944cb1564"
+      }
+    },
+    {
+      "name": "bmi_bsa",
+      "version": "1.0.0",
+      "category": "health",
+      "tags": [
+        "bmi",
+        "bsa",
+        "body-surface-area",
+        "anthropometry",
+        "who",
+        "mosteller",
+        "dubois"
+      ],
+      "summary": "Body-mass index with the WHO adult categories (and a percentile note under 18) and body-surface area by the Mosteller, DuBois, Haycock and Gehan-George formulas, from metric or imperial weight and height.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/health/bmi_bsa/manifest.json",
+      "manifest_sha256": "b3d5dea124dd43b52238aad86ec863ff20ff0270c36302bf36dd8a7d31538641",
+      "files": {
+        "bmi_bsa.py": "be05a7e8c51c3db93a908b76dfaff774a2f875126772d0ee5a6abab7ca6be28e"
+      }
+    },
+    {
+      "name": "dose_weight_based",
+      "version": "1.0.0",
+      "category": "health",
+      "tags": [
+        "dosage",
+        "dose-calculation",
+        "pediatrics",
+        "pharmacy",
+        "mg-per-kg",
+        "nursing"
+      ],
+      "summary": "Weight- or BSA-based dose arithmetic (amount per kg or per m2, per dose or per day split by frequency) with a hard maximum single dose that the input must give, an optional maximum daily dose, rounding to a given increment, and conversion to a volume from a concentration.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/health/dose_weight_based/manifest.json",
+      "manifest_sha256": "e41d00fd64528b7c9b89a46a12c279ecd5a0d6c814ce3f57c78556534ed474ba",
+      "files": {
+        "dose_weight_based.py": "8a373e54a4dc905e9a570212ea4134846a45685ac6c013852f13a277b30ca078"
+      }
+    },
+    {
+      "name": "egfr_calc",
+      "version": "1.0.0",
+      "category": "health",
+      "tags": [
+        "egfr",
+        "ckd-epi",
+        "kidney",
+        "creatinine",
+        "cystatin-c",
+        "nephrology"
+      ],
+      "summary": "Estimated glomerular filtration rate by the race-free CKD-EPI 2021 creatinine equation, and optionally the 2021 creatinine-cystatin C equation, with creatinine in mg/dL or umol/L, reported in whole numbers as the NKF recommends and staged G1 to G5 (KDIGO 2012).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/health/egfr_calc/manifest.json",
+      "manifest_sha256": "c93008250f4644023cd864e3c54c41c475574bd28586afa0cf9060d36ed0d8b1",
+      "files": {
+        "egfr_calc.py": "54de8eea8ba8122d1e808630874b6789790c1cdc1c9822ba4de79fd18fa01747"
+      }
+    },
+    {
+      "name": "heart_rate_zones",
+      "version": "1.0.0",
+      "category": "health",
+      "tags": [
+        "heart-rate",
+        "karvonen",
+        "training-zones",
+        "exercise",
+        "fitness",
+        "cardio"
+      ],
+      "summary": "Heart-rate training zones: maximum heart rate estimated by Tanaka (208 - 0.7 x age), Fox (220 - age) or Gellish (207 - 0.7 x age), or measured, and zones by heart-rate reserve (Karvonen, with resting heart rate) and by percentage of maximum, on default five-zone or custom boundaries.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/health/heart_rate_zones/manifest.json",
+      "manifest_sha256": "ef4151524dd99c675d5ee0934971b73a374211fb4dff8639885d4f1ef35871b8",
+      "files": {
+        "heart_rate_zones.py": "efecddbd907ed7e580eb862ff84040f75d262caaaaa1d31cce40cdfaf60c3b0c"
+      }
+    },
+    {
+      "name": "nutrition_totals",
+      "version": "1.0.0",
+      "category": "health",
+      "tags": [
+        "nutrition",
+        "recipe",
+        "reference-intakes",
+        "food-labelling",
+        "eu-1169-2011",
+        "calories"
+      ],
+      "summary": "Totals of energy and nutrients from a food table given in the input (amounts per 100 g) and the grams of each item, per item, in total and per serving, with the percentage of reference intakes: the adult reference intakes of Regulation (EU) No 1169/2011 Annex XIII (energy 8400 kJ / 2000 kcal, fat 70 g, saturates 20 g, carbohydrate 260 g, sugars 90 g, protein 50 g, salt 6 g, and the vitamin and mineral NRVs) by default, or values given in the input.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/health/nutrition_totals/manifest.json",
+      "manifest_sha256": "e71efaf3d7a20759c92e5ae4fc9d093bb4bd9f1b50b9bd8001a0320b18dc25ea",
+      "files": {
+        "nutrition_totals.py": "aae502e1905d0cf1aada442c6d53302e8108c2151daedf8f504f589816636277",
+        "reference_intakes.json": "caedf0956ff5ead915c4a82c566cbea5ad2968ba3bc4464439b4738c3f221dcb"
+      }
+    },
+    {
+      "name": "sleep_cycles",
+      "version": "1.0.0",
+      "category": "health",
+      "tags": [
+        "sleep",
+        "sleep-cycles",
+        "bedtime",
+        "wake-time",
+        "planner",
+        "wellbeing"
+      ],
+      "summary": "Plan bedtimes for a wake-up time, or wake-up times for a bedtime, in whole sleep cycles (90 minutes by default, configurable) plus the time it takes to fall asleep, across midnight, marking the options whose total sleep falls in a recommended range (default 7-9 hours for adults).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/health/sleep_cycles/manifest.json",
+      "manifest_sha256": "9006f319a61580425f6882f5268fc95b7068f94f6ae41b7b8c41fca31d7f27ba",
+      "files": {
+        "sleep_cycles.py": "c0b71cb647e59e00cb83bdd189c886438ab7198325596e99c4b96027b5ab2244"
+      }
+    },
+    {
+      "name": "unit_lab_convert",
+      "version": "1.0.0",
+      "category": "health",
+      "tags": [
+        "laboratory",
+        "units",
+        "si-units",
+        "conversion",
+        "glucose",
+        "cholesterol",
+        "creatinine"
+      ],
+      "summary": "Convert laboratory results between mg/dL, mg/L or g/L and mmol/L or umol/L for glucose, total, HDL and LDL cholesterol, triglycerides (as triolein), creatinine, urea, BUN, uric acid and calcium, with exact factors derived from molar masses computed from the IUPAC/CIAAW atomic weights.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/health/unit_lab_convert/manifest.json",
+      "manifest_sha256": "6127a671f35cf82b33333f3cdeb1312b3589615eda345f9c973b30a0013569a5",
+      "files": {
+        "unit_lab_convert.py": "86b07cd2018f75cc8001214cf6d14a1c06fbfc2325074f5deec508b26aca5dd4"
+      }
+    },
+    {
+      "name": "es_verb_conjugate",
+      "version": "1.0.0",
+      "category": "language",
+      "tags": [
+        "spanish",
+        "verbs",
+        "conjugation",
+        "grammar",
+        "rae",
+        "irregular-verbs"
+      ],
+      "summary": "Conjugate a Spanish verb in every simple and compound tense of the indicative and subjunctive (both -ra and -se imperfects, future subjunctive), the affirmative and negative imperative, gerund and participle, with optional voseo.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/es_verb_conjugate/manifest.json",
+      "manifest_sha256": "6593e32616554ba0a0294a775f4259480aca6925412fce3c57908955783908eb",
+      "files": {
+        "es_verb_conjugate.py": "8c8ef58826b50123b245894079907a50646ca2a44c096fa7e723a9d31e3c3bfb",
+        "irregulares.json": "73088d61c78dafe75b002e8ecb1289fc438acd1d5a50593d6439acdd691e31c9"
+      }
+    },
+    {
+      "name": "gender_agreement_es",
+      "version": "1.0.0",
+      "category": "language",
+      "tags": [
+        "spanish",
+        "grammar",
+        "agreement",
+        "gender",
+        "proofreading",
+        "heuristic"
+      ],
+      "summary": "Check gender and number agreement in Spanish noun phrases (determiner, adjectives, noun, and an adjective after ser or estar) and suggest the corrected form.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/gender_agreement_es/manifest.json",
+      "manifest_sha256": "3b114a1b535e4bc22bd98d58548add4dfe810f4844d734c574eaf9eb6f29ef2f",
+      "files": {
+        "gender_agreement_es.py": "675425d3dbced5cd8d54573317eb811489739e999a0de771c641065d3bf5b4ae"
+      }
+    },
+    {
+      "name": "hangul_romanize",
+      "version": "1.0.0",
+      "category": "language",
+      "tags": [
+        "korean",
+        "hangul",
+        "romanization",
+        "transliteration",
+        "revised-romanization",
+        "linguistics"
+      ],
+      "summary": "Romanize Korean Hangul with the Revised Romanization of Korean (2000): syllables decomposed into jamo, the rules' sound changes applied between syllables (liaison, coda neutralisation, nasalisation, ㄹ/ㄴ assimilation, palatalisation, aspiration with ㅎ), or the letter-by-letter transliteration of Article 8.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/hangul_romanize/manifest.json",
+      "manifest_sha256": "3ef7bc4a4188bde9582ba9f08fffbba2d3912378288b2b8aa74c0a4fdfbeea6c",
+      "files": {
+        "hangul_romanize.py": "3b960695ed7cb13934d8ba5f09e07905bd1c1bafcab5741543cb1f435d474676"
+      }
+    },
+    {
+      "name": "kana_romanize",
+      "version": "1.0.0",
+      "category": "language",
+      "tags": [
+        "japanese",
+        "kana",
+        "romanization",
+        "hepburn",
+        "kunrei",
+        "transliteration",
+        "linguistics"
+      ],
+      "summary": "Romanize Japanese hiragana and katakana in modified Hepburn (long vowels with macrons or as spelled, sokuon doubling with tch, n' before vowels and y, optional traditional m before b/m/p) or Kunrei-shiki (ISO 3602: si, ti, tu, hu, sya, circumflexes), with yoon and the katakana extensions for loanwords (fa, ti, vu).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/kana_romanize/manifest.json",
+      "manifest_sha256": "1d2d8c18a5f2403d962420acb6eadedf484c67e798b2d328d2826f9733e5f790",
+      "files": {
+        "kana_romanize.py": "f0d7a1515482f17aef5fe4963b01f3897922c50ce1f5e5fa503fecbde2a4ade9"
+      }
+    },
+    {
+      "name": "language_detect",
+      "version": "1.0.0",
+      "category": "language",
+      "tags": [
+        "language-identification",
+        "n-grams",
+        "nlp",
+        "text-classification",
+        "multilingual",
+        "heuristic"
+      ],
+      "summary": "Guess the language of a text among 20 languages (en es fr de pt it nl ca ro pl cs sv da no fi hu tr id ru el) by comparing its character 1-3-gram ranking with bundled profiles, the out-of-place method of Cavnar and Trenkle (1994).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/language_detect/manifest.json",
+      "manifest_sha256": "a96092cef857185ab3952c40122e44b4f3fb0c272d151f8c6c28d79608933dda",
+      "files": {
+        "language_detect.py": "eb631c82ffab37fb019086cb4bf6746687e48cab40d6fc843d87fedfa5cc3cd9",
+        "profiles.json": "91d0c9b1f98b8087bae47bfa41036228c68359a6cf89900ff5e47f776351ed94"
+      }
+    },
+    {
+      "name": "number_to_words",
+      "version": "1.0.2",
+      "category": "language",
+      "tags": [
+        "numbers",
+        "words",
+        "spelling",
+        "ordinals",
+        "currency",
+        "cheques",
+        "multilingual"
+      ],
+      "summary": "Write numbers out in words in Spanish, English, French, German or Portuguese: cardinals, ordinals and currency amounts.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/number_to_words/manifest.json",
+      "manifest_sha256": "2d44bdb3b751d0aa50261aa75d1f5986f4408b8a9ea7bb86c31737e0bbef7917",
+      "files": {
+        "number_to_words.py": "96a36e81aa7518ddb7506f1178b49709f7c8d126ca1e17e43cc5cbd836fb6fa4"
+      }
+    },
+    {
+      "name": "tokenize_text",
+      "version": "1.0.0",
+      "category": "language",
+      "tags": [
+        "tokenization",
+        "sentences",
+        "words",
+        "unicode",
+        "nlp",
+        "text-statistics"
+      ],
+      "summary": "Split text into words and sentences, Unicode-aware, with counts, frequencies and code-point offsets.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/tokenize_text/manifest.json",
+      "manifest_sha256": "e994b27841538a40f79e772220729acb02016aef7e8b60576edf3800f9212db3",
+      "files": {
+        "tokenize_text.py": "67ef9fdf44544e5f134aa93318540d1ddb3e9e3bcb5ef4df8fed2f8551bf26a6"
+      }
+    },
+    {
+      "name": "transliterate",
+      "version": "1.0.0",
+      "category": "language",
+      "tags": [
+        "transliteration",
+        "romanization",
+        "cyrillic",
+        "greek",
+        "arabic",
+        "iso-9",
+        "linguistics"
+      ],
+      "summary": "Transliterate Cyrillic, Greek and Arabic text into Latin letters from tables in the program: Cyrillic by ISO 9:1995 (Russian, Ukrainian, Belarusian, Serbian, Macedonian, Bulgarian), scholarly transliteration or BGN/PCGN 1947 for Russian (ye after vowels, kh, shch); Greek by ELOT 743 / ISO 843 transcription with its position rules (av/af, mp/b, ng, nch); Arabic by a simplified ALA-LC (consonants, long vowels, vowel marks when written).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/transliterate/manifest.json",
+      "manifest_sha256": "82605bfdc2764eaccc00f92da6d87be3ba60ed11dc488df893165d42115c1284",
+      "files": {
+        "transliterate.py": "3b75ac984297d12d32dba5689a1fefb78af487430cc67fc9a33f9e939d9f94a8"
+      }
+    },
+    {
+      "name": "unicode_tools",
+      "version": "1.0.1",
+      "category": "language",
+      "tags": [
+        "unicode",
+        "normalization",
+        "utf-8",
+        "code-points",
+        "homoglyphs",
+        "confusables",
+        "text"
+      ],
+      "summary": "Inspect and normalise Unicode text with the standard library's unicodedata: NFC, NFD, NFKC and NFKD with their code points, accent stripping, each character's code point, name, general category and script, UTF-8, UTF-16 and UTF-32 bytes in hex and decoding hex back to text, and a homoglyph check that flags words mixing Latin, Cyrillic and Greek or made only of Latin lookalikes, using pairs from Unicode TR39 confusables.txt.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/language/unicode_tools/manifest.json",
+      "manifest_sha256": "3edd856ddcb220ec2af1898a678c6ea216bda27ae0c923fed240bcd7bd9cc6d0",
+      "files": {
+        "unicode_tools.py": "bbb78b418c9213acf39f7da3075dbcec9e2db67b60baf59d906b8084b5bb362c"
       }
     },
     {
@@ -850,6 +1935,140 @@
       }
     },
     {
+      "name": "ascii_banner",
+      "version": "1.0.0",
+      "category": "media",
+      "tags": [
+        "ascii-art",
+        "banner",
+        "text",
+        "figlet",
+        "terminal",
+        "box-drawing"
+      ],
+      "summary": "Draw text as a large banner in a bundled 5-row block font (A-Z, 0-9 and common punctuation; an original font, MIT) with a chosen fill character, letter spacing and word wrapping, optionally inside a border, or put plain text in a box with ASCII, single, double, rounded or heavy line borders and left, centred or right alignment.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/media/ascii_banner/manifest.json",
+      "manifest_sha256": "c325eb08223ab3ef0f4f5becb923a94baf5fbf330fb1cd5689a026f1583125b1",
+      "files": {
+        "ascii_banner.py": "4ac5ab95791ec8bb4785ec10380edd7d61470d93863c216054e6ccf6aeaa9313"
+      }
+    },
+    {
+      "name": "color_tools",
+      "version": "1.0.0",
+      "category": "media",
+      "tags": [
+        "color",
+        "wcag",
+        "contrast",
+        "accessibility",
+        "palette",
+        "css",
+        "design"
+      ],
+      "summary": "Convert colours between hex, RGB, HSL, HSV and CMYK, compute the WCAG 2.x relative luminance and contrast ratio of two colours with AA/AAA verdicts for normal text, large text and UI components, find the nearest CSS named colours (CIELAB delta E), and build palettes from a seed: complementary, triadic, analogous, split-complementary, tetradic, tints and shades.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/media/color_tools/manifest.json",
+      "manifest_sha256": "7e28449754605b06bbcf02143d1fbccdc77141c66ac6b5e118a3fb7bed5c6a50",
+      "files": {
+        "color_tools.py": "f1954bd5dcde0cc5f445796fe3fb892abc8307694a0152e85c60214f5f43dc26"
+      }
+    },
+    {
+      "name": "image_info",
+      "version": "1.0.0",
+      "category": "media",
+      "tags": [
+        "images",
+        "png",
+        "jpeg",
+        "gif",
+        "webp",
+        "bmp",
+        "metadata",
+        "file-formats"
+      ],
+      "summary": "Read an image's format, width, height, bit depth, channels and colour type from its header without decoding pixels: PNG (IHDR, palette, transparency, dpi, APNG frames, chunk list, CRC check), JPEG (SOF markers, process, chroma subsampling, JFIF density, Exif APP1 presence, Adobe transform), GIF (screen, colour table, frames, loop, transparency), BMP (every DIB header version) and WebP (VP8, VP8L, VP8X).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/media/image_info/manifest.json",
+      "manifest_sha256": "09b6d6bb9a9b0379610c33fc744c25e982d402ec165cf98d8423aa9adecbc7e3",
+      "files": {
+        "image_info.py": "6fa4f8fc886078e6abe86fd4b290d3f1b79dbdb5560b29d69f296579a60da1d3"
+      }
+    },
+    {
+      "name": "srt_tools",
+      "version": "1.0.0",
+      "category": "media",
+      "tags": [
+        "subtitles",
+        "srt",
+        "webvtt",
+        "captions",
+        "video",
+        "timing"
+      ],
+      "summary": "Work with subtitles given as text, SubRip (.srt) or WebVTT (.vtt): parse the cues, shift every time by milliseconds, rescale the times for a frame-rate change (from_fps/to_fps or a factor), convert SRT to VTT and back (tags, entities, NOTE/STYLE blocks and cue settings handled), merge two files in time order, and find overlapping cues.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/media/srt_tools/manifest.json",
+      "manifest_sha256": "1a52816942ff0116cf2e7af10c2062a82333f4eb75fa111270f1924f81987043",
+      "files": {
+        "srt_tools.py": "056ead9fcbfa3a48e01255e342e79dba2659bd8dac397504573ed929edca4552"
+      }
+    },
+    {
+      "name": "wav_info",
+      "version": "1.0.0",
+      "category": "media",
+      "tags": [
+        "audio",
+        "wav",
+        "riff",
+        "duration",
+        "sample-rate",
+        "metadata",
+        "file-formats"
+      ],
+      "summary": "Read a WAV file's format and duration from its RIFF chunks: format tag (PCM, IEEE float, A-law, mu-law, ADPCM, MP3, or WAVE_FORMAT_EXTENSIBLE with its sub-format GUID and speaker mask), channels, sample rate, bit depth, block align, frames, exact duration and, for PCM and float, the peak sample in dBFS.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/media/wav_info/manifest.json",
+      "manifest_sha256": "c5f5547b763e98b1bf92b6c605f4cd04d8fc1251fa181eb418abb3118f205266",
+      "files": {
+        "wav_info.py": "717900bbfcb3e096ec59dce349e307eacf7347b551e616fd3d08e0d156a933ec"
+      }
+    },
+    {
       "name": "apportionment",
       "version": "1.0.0",
       "category": "politics_civics",
@@ -1109,6 +2328,984 @@
       "manifest_sha256": "c992d395b9e5705605514ded5407ddcc33fdc4c295b64fdd29d63569d59343f5",
       "files": {
         "vote_stv.py": "1c2c8aa5d061d36024e191b6b6b6f589f91baf4e6626f09270064ad27b34e27b"
+      }
+    },
+    {
+      "name": "cron_explain",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "cron",
+        "crontab",
+        "scheduling",
+        "timezone",
+        "dst",
+        "devops",
+        "spanish"
+      ],
+      "summary": "Explain a cron expression in English and Spanish and list its next runs after a given date-time in an IANA time zone, DST-aware.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/cron_explain/manifest.json",
+      "manifest_sha256": "4d808a2a4ad98f53e0fc82d6cb8dad9eee0fa5ff1c98378730b1102d9becfd5b",
+      "files": {
+        "cron_explain.py": "48d5571163432480b41186d0c32bbc62044ca034a077415397c79f7527a2229d"
+      }
+    },
+    {
+      "name": "diff_text",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "diff",
+        "difflib",
+        "text",
+        "compare",
+        "patch",
+        "similarity"
+      ],
+      "summary": "Compare two texts given inline: a unified diff with a chosen number of context lines, side-by-side rows (and a rendered table), a word-level diff with [-removed-]{+added+} markers, line counts and similarity ratios as exact fractions.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/diff_text/manifest.json",
+      "manifest_sha256": "2b5b48ed72b84eb5fda3f204bc1639b917df290e8f2b19a15f8d96a90da137b1",
+      "files": {
+        "diff_text.py": "ca13639f8bdcd073f49a17a3b9b9e20041e2d9d53e4874b0e11d075de8c9688e"
+      }
+    },
+    {
+      "name": "dockerfile_lint",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "docker",
+        "dockerfile",
+        "lint",
+        "containers",
+        "security",
+        "devops",
+        "hadolint"
+      ],
+      "summary": "Lint a Dockerfile given inline with rules modelled on hadolint, citing its rule ids: untagged or :latest base images (DL3006, DL3007), last USER root (DL3002), sudo (DL3004), apt-get without -y, --no-install-recommends, pinned versions or removal of the apt lists (DL3014, DL3015, DL3008, DL3009), apt instead of apt-get (DL3027), ADD for local files (DL3020), relative WORKDIR (DL3000), shell-form CMD/ENTRYPOINT (DL3025), MAINTAINER (DL4000), multiple CMD or ENTRYPOINT (DL4003, DL4004); plus its own: no USER at all, secret-looking ENV/ARG names, downloads piped into a shell.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/dockerfile_lint/manifest.json",
+      "manifest_sha256": "9c04804f385dd0ceb07e9227b96e04b7331d9f22e59bb44abee7129547ae2ee6",
+      "files": {
+        "dockerfile_lint.py": "40c4f6536fd187ef9400cd157d366689e30103f1d774a0200b52e2884469ff39"
+      }
+    },
+    {
+      "name": "env_example",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "dotenv",
+        "env",
+        "configuration",
+        "secrets",
+        "devops",
+        "twelve-factor"
+      ],
+      "summary": "Turn a .env file given inline into a .env.example: every value blanked or replaced by a type hint (<url>, <number>, <boolean>, <email>, <host>, <path>, <secret>, <interpolated>, <string>), with comments, blank lines, the export prefix and the quoting kept.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/env_example/manifest.json",
+      "manifest_sha256": "d2a68b472baaa679715de40a38b02e33574330e2f949357ce6038beddb2e99dd",
+      "files": {
+        "env_example.py": "ad7f4a8b1d32073da1043b9edb185aab20d36da5dda32bb1ee0dca1eb1313923"
+      }
+    },
+    {
+      "name": "gitignore_gen",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "git",
+        "gitignore",
+        "templates",
+        "scaffolding",
+        "devops",
+        "repository"
+      ],
+      "summary": "Build a .gitignore from named stacks (Python, Node, Go, Rust, Java, Maven, Gradle, C, C++, Dotnet, VisualStudio, Swift, Ruby, Rails, Android, Unity, Terraform, Flutter, macOS, Windows, Linux, JetBrains, VisualStudioCode, Vim and more: 44 templates with common aliases), combined in the order given with a header per section and repeated patterns removed when that cannot change what is ignored.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/gitignore_gen/manifest.json",
+      "manifest_sha256": "6b4f2b4fa67bb24731d3fd4188323a3125387e38c10ec2a81617ca959eb3fe68",
+      "files": {
+        "gitignore_gen.py": "089d8f6df2049bccf920b1f0e11ead63092225d177640614f3a9e9f806d6612b",
+        "templates.json": "fce98379c6645b8731d0b6752eb0c7439f3f4569aec7fa25f5cccb90840f29d8"
+      }
+    },
+    {
+      "name": "json_schema_check",
+      "version": "1.0.1",
+      "category": "programming",
+      "tags": [
+        "json",
+        "json-schema",
+        "validation",
+        "api",
+        "data-quality",
+        "schema"
+      ],
+      "summary": "Validate a JSON instance against a JSON Schema (a draft 2020-12 subset) and list every error with its instance path, schema path, keyword and message.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/json_schema_check/manifest.json",
+      "manifest_sha256": "2eb4c338c2a03e65a363039665a944982f0e82eec8e2690809e9d8305c5157af",
+      "files": {
+        "json_schema_check.py": "a21fd5fdff7eaf38dee788d71250f5a69a9c4eb5c46303ca87424b4b3e5c672b"
+      }
+    },
+    {
+      "name": "license_detect",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "license",
+        "spdx",
+        "open-source",
+        "compliance",
+        "detection",
+        "legal"
+      ],
+      "summary": "Identify the SPDX licence of a LICENSE or COPYING text by similarity against fingerprints of 28 common licences (MIT, MIT-0, BSD-2/3-Clause, 0BSD, ISC, Apache-2.0, GPL-2.0/3.0, LGPL-2.1/3.0, AGPL-3.0, MPL-2.0, EPL-1.0/2.0, EUPL-1.2, Unlicense, CC0-1.0, BSL-1.0, Zlib, CC-BY-4.0, CC-BY-SA-4.0, Artistic-2.0, WTFPL, OFL-1.1, PostgreSQL, BlueOak-1.0.0, UPL-1.0) built from the SPDX License List data, after SPDX-guideline normalisation.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/license_detect/manifest.json",
+      "manifest_sha256": "26ecefea9c93be304dfb1f7f3abfa0caae5fd274b2c5d0d1bc756d85b481bd73",
+      "files": {
+        "license_detect.py": "1ab40dc0a1620abebc253d8854ca654213d69bb0cc132fce5ccc266facdd193b",
+        "fingerprints.json": "5dc8a31dfb105ef750d6470870237b57095177175da251af6ed55981b29db9f2"
+      }
+    },
+    {
+      "name": "log_summarise",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "logs",
+        "log-analysis",
+        "drain",
+        "observability",
+        "devops",
+        "templates"
+      ],
+      "summary": "Summarise a log given inline by grouping its lines into templates: timestamps, UUIDs, IP addresses, hex ids, quoted strings and numbers are masked, then lines are clustered by Drain-like token similarity.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/log_summarise/manifest.json",
+      "manifest_sha256": "f43e663baab3063ae017f185dfedeba7a819ed8db4d7820b6063be9113cf1a63",
+      "files": {
+        "log_summarise.py": "b9ae29ab3b0420e2026b207c5607851eb41d0a22ab93ed7b4c9e960ced375a94"
+      }
+    },
+    {
+      "name": "openapi_outline",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "openapi",
+        "swagger",
+        "api",
+        "documentation",
+        "yaml",
+        "rest"
+      ],
+      "summary": "Outline an OpenAPI 3.0/3.1 or Swagger 2.0 document given inline as JSON or YAML: every endpoint with its method, operationId, summary, tags, parameters (path-level ones merged), request body and responses by status and media type, plus the component schemas, with $ref resolved inside the document.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/openapi_outline/manifest.json",
+      "manifest_sha256": "875770fb658ca70428ac7e5588b7b4c014a6e829eb6ac3e5f1b56eef7e258a78",
+      "files": {
+        "openapi_outline.py": "727867087c9a0e057bff68fc83ea686e4b6dbb45a63080c827a8d7ba31732881"
+      }
+    },
+    {
+      "name": "regex_test",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "regex",
+        "regular-expressions",
+        "python",
+        "text",
+        "testing",
+        "backtracking"
+      ],
+      "summary": "Run a Python regular expression over a text and list every match with its groups, named groups and spans, plus an optional substitution preview and split, under a hard time limit.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/regex_test/manifest.json",
+      "manifest_sha256": "842f24d65a062772a6b4b335eca7e518644a637390909d1e484e18781161f323",
+      "files": {
+        "regex_test.py": "f16b3622a8b02f8d99f9a6a85285506b7222283187ad5bf516da2ab19c3a5d3a"
+      }
+    },
+    {
+      "name": "semver_tools",
+      "version": "1.0.0",
+      "category": "programming",
+      "tags": [
+        "semver",
+        "versioning",
+        "npm",
+        "ranges",
+        "dependencies",
+        "release"
+      ],
+      "summary": "Parse, compare, sort and bump Semantic Versioning 2.0.0 versions and match them against npm (node-semver) ranges.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/programming/semver_tools/manifest.json",
+      "manifest_sha256": "ede2caf649f3cba8bfe74ae306e13a95b4ad0da4022356ef8112610920653ac0",
+      "files": {
+        "semver_tools.py": "6656381ea48b3b1b7f80d2566ff58546c4a197e4c65cb4d41eb5fab65eb1a1f2"
+      }
+    },
+    {
+      "name": "bibtex_tools",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "bibtex",
+        "bibliography",
+        "citations",
+        "references",
+        "latex",
+        "deduplication"
+      ],
+      "summary": "Parse a BibTeX file (nested braces, quoted values, @string macros joined with #, month macros, @preamble, @comment), remove duplicates by DOI and then by normalised title and year, rename keys to authorYEARword with a/b suffixes on collisions, report missing required fields per entry type from the BibTeX documentation, and write the file back as clean, consistently formatted BibTeX.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/bibtex_tools/manifest.json",
+      "manifest_sha256": "6d66fc489e53b2d6c34a551c5a040f8965ebc3955e2eecbe5cc78bbcac6a71f9",
+      "files": {
+        "bibtex_tools.py": "3948fc08bb8c0e3ed48c11ee22b38a0e59a3fe322639e9277571a1da3ec1e3cf"
+      }
+    },
+    {
+      "name": "chem_formula",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "chemistry",
+        "molar-mass",
+        "formula",
+        "stoichiometry",
+        "atomic-weights",
+        "iupac"
+      ],
+      "summary": "Parse a chemical formula with parentheses, brackets, hydrates (CuSO4·5H2O or CuSO4*5H2O), leading coefficients and ionic charges, and return the element counts, the Hill formula, the molar mass and the mass percent of each element, summed exactly in decimal from the bundled IUPAC/CIAAW abridged standard atomic weights 2024.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/chem_formula/manifest.json",
+      "manifest_sha256": "53d55c4399bab84aea514f913ac2c1eab9ad3eebc2eab9da8df18990aaf9ae0f",
+      "files": {
+        "chem_formula.py": "752e6b4030954562f4048a4f3574e3c0628649378fb45fe12fc7cad0d81b23bf",
+        "elements.json": "c1ac4b63fb2f6a9131930e23fbd6a11b5217a23b49106ec4483e1984ffb58cb9"
+      }
+    },
+    {
+      "name": "data_dictionary",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "data-dictionary",
+        "csv",
+        "profiling",
+        "metadata",
+        "documentation",
+        "data-quality"
+      ],
+      "summary": "Describe the columns of a CSV dataset and draft its data dictionary: per column the inferred type (integer, number, boolean, date, datetime, time, string), nulls, distinct values, examples, min/max and mean, and pattern hints (date format, e-mail, URL, UUID, identifier, categorical, zero-padded code, constant), plus a dictionary skeleton in JSON and Markdown with blank description fields to fill in.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/data_dictionary/manifest.json",
+      "manifest_sha256": "09aa948a1d9aaf5d14cbfa10d38b568dfdf655bc126405bf973a3c71ebcb2578",
+      "files": {
+        "data_dictionary.py": "a0a4d35adf675cbb7a7ef3f97724a7e47f9bb74ddfc946d95f29687fd79981fe"
+      }
+    },
+    {
+      "name": "dna_tools",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "dna",
+        "rna",
+        "bioinformatics",
+        "genetic-code",
+        "orf",
+        "translation",
+        "biology"
+      ],
+      "summary": "DNA and RNA sequence tools: reverse complement and complement with IUPAC ambiguity codes, GC content, base counts, transcription, translation with the standard genetic code (NCBI table 1) in 1, 3 or 6 frames, open reading frame search with a minimum length in all six frames, and approximate molecular weight of single- or double-stranded molecules.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/dna_tools/manifest.json",
+      "manifest_sha256": "3803d5559aab186a2a90220618744c2d6a31250ef6bc6355205d0bc3fc1787b9",
+      "files": {
+        "dna_tools.py": "1dc37599813bcaa9cb3995e3dde189b50cb5bb0564eab22f716d87a9d47d807b"
+      }
+    },
+    {
+      "name": "doi_isbn_validate",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "isbn",
+        "issn",
+        "doi",
+        "ismn",
+        "identifiers",
+        "checksum",
+        "bibliography"
+      ],
+      "summary": "Validate and normalise bibliographic identifiers: DOI syntax (bare, doi: or doi.org URL, with the resolver URL and Crossref-pattern warning), ISBN-10 and ISBN-13 check digits with conversion both ways, ISSN check digit with its EAN-13, and ISMN (979-0 and legacy M- forms).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/doi_isbn_validate/manifest.json",
+      "manifest_sha256": "45d9b16dff80f2a94ad0b86b2da630a7d27bcadb60e194ac9d9be73259be5fd6",
+      "files": {
+        "doi_isbn_validate.py": "e7e73c3e9a727bcc4d0eab5c05910a2b30064e12bc2227587c9eed64d33ea400"
+      }
+    },
+    {
+      "name": "experiment_power",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "statistics",
+        "power-analysis",
+        "sample-size",
+        "t-test",
+        "proportions",
+        "study-design"
+      ],
+      "summary": "Power and sample size for two-sample, one-sample and paired t tests (noncentral t, or the normal approximation) and for comparing two proportions (pooled normal approximation as R's power.prop.test, or Cohen's arcsine h): solve for the sample size per group, the achieved power or the smallest detectable effect, from Cohen's d or means and SD, alpha, one or two sides and an allocation ratio.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/experiment_power/manifest.json",
+      "manifest_sha256": "bb500ab09f4d9d9aeb7e070d7853b0cd940f60f09dbd1d0ff5f36aa18b7ff77a",
+      "files": {
+        "experiment_power.py": "fb1fc5af633135c9bb0d39a1ffafc0d46f508354345462f3844dca308e8eeff7"
+      }
+    },
+    {
+      "name": "physics_constants",
+      "version": "1.0.0",
+      "category": "research",
+      "tags": [
+        "physics",
+        "constants",
+        "codata",
+        "nist",
+        "si",
+        "uncertainty",
+        "science"
+      ],
+      "summary": "Look up the CODATA 2022 recommended values of the fundamental physical constants by symbol, exact name or keywords: value, standard uncertainty, relative uncertainty, unit, concise notation such as 9.1093837139(28)e-31 and whether the value is exact in the 2019 SI.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/physics_constants/manifest.json",
+      "manifest_sha256": "73e3a6dc241be3c497f416febe0b4a274bd5322deb56e8dd6c7f4af03ea46295",
+      "files": {
+        "physics_constants.py": "92c5d237b402391b16829071274433660c1d34152b74b27e2434e3fc7f5380ce",
+        "constants.json": "6832bcbc4e830a0c21dad64e0d67f0e15e3c28121f130f4b69d4f837a3f84249"
+      }
+    },
+    {
+      "name": "prisma_counts",
+      "version": "1.0.1",
+      "category": "research",
+      "tags": [
+        "prisma",
+        "systematic-review",
+        "meta-analysis",
+        "flow-diagram",
+        "screening",
+        "mermaid",
+        "evidence-synthesis"
+      ],
+      "summary": "PRISMA 2020 flow-diagram numbers for a systematic review: from the counts at each stage or from per-record screening decisions, derive records identified by source, removed before screening, screened, excluded, reports sought, not retrieved, assessed, excluded with reasons and included (studies and reports), for databases and registers and for other methods; check the arithmetic and return the template's box texts and a Mermaid flowchart.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/research/prisma_counts/manifest.json",
+      "manifest_sha256": "32afbfd7c185043936da52971202852585a36b06f27da06f197534ba5beef7e6",
+      "files": {
+        "prisma_counts.py": "e516871ac6219593ace217ab8e08b411eb759a1f587ed53168457cf1d5ab2964"
+      }
+    },
+    {
+      "name": "cert_inspect",
+      "version": "1.0.0",
+      "category": "security",
+      "tags": [
+        "x509",
+        "certificate",
+        "tls",
+        "openssl",
+        "expiry",
+        "pem"
+      ],
+      "summary": "Inspect a PEM X.509 certificate with openssl: subject, issuer, serial, notBefore and notAfter, SHA-256 fingerprint, subject alternative names, key type, size and curve, signature algorithm, and the days left until expiry relative to a date given in the input (the clock is never read).",
+      "program": "bash",
+      "requires": {
+        "program_min_version": "4.4",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/security/cert_inspect/manifest.json",
+      "manifest_sha256": "8b3b45e8c40fb3ef77373f24a556d3ed26cec0f96fca5a4e6f3ba6752206d9cc",
+      "files": {
+        "cert_inspect.sh": "f9c4c7a76445ed2d677a96fbf19b93a783cc45c543d40070fb3fb4f2244bb574"
+      }
+    },
+    {
+      "name": "csp_lint",
+      "version": "1.0.0",
+      "category": "security",
+      "tags": [
+        "csp",
+        "content-security-policy",
+        "xss",
+        "headers",
+        "web-security",
+        "lint"
+      ],
+      "summary": "Lint a Content-Security-Policy header value with CSP Level 3 semantics and the checks of Google's CSP Evaluator: unsafe-inline and unsafe-eval in scripts, wildcards, http:, https: and data: sources, missing object-src, base-uri, script-src, default-src and frame-ancestors, known allowlist-bypass hosts, short nonces, strict-dynamic and nonce/hash interplay, deprecated, unknown and misspelt directives, missing semicolons, reporting and report-only or meta delivery notes.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/security/csp_lint/manifest.json",
+      "manifest_sha256": "779bdf764b40990010e165ee28fba9995c5ff97596d6b09d7fa5e52ff0f0b98c",
+      "files": {
+        "csp_lint.py": "b0562499aafca32bfb004624abf2d23720daf1f5922862e3357d703d36e9784e"
+      }
+    },
+    {
+      "name": "jwt_decode",
+      "version": "1.0.0",
+      "category": "security",
+      "tags": [
+        "jwt",
+        "jws",
+        "jose",
+        "oauth",
+        "token",
+        "decode"
+      ],
+      "summary": "Decode a JSON Web Token's header and payload without verifying the signature, with a clear warning that it is not verified: alg, kid and typ, the registered claims, iat, nbf and exp as UTC dates and, against a time given in the input (the clock is never read), whether it is expired or not yet valid.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/security/jwt_decode/manifest.json",
+      "manifest_sha256": "144874a1abd982f306ed0743e19989ec5819170cb11d8f9e9e9030a709e7239e",
+      "files": {
+        "jwt_decode.py": "56cae7593152020bfcbf235bee220e28a4419f9d1922bf824cdccb07ab6b3e00"
+      }
+    },
+    {
+      "name": "password_entropy",
+      "version": "1.0.0",
+      "category": "security",
+      "tags": [
+        "password",
+        "entropy",
+        "strength",
+        "nist",
+        "800-63b",
+        "crack-time"
+      ],
+      "summary": "Estimate a password's strength without ever echoing it: the character-pool bound (length x log2 of the pool), a pattern-adjusted estimate that charges common passwords (a bundled list of the 2000 most common, from SecLists), l33t substitutions, keyboard runs, sequences, repeats, dates and context words at their guessing cost, crack-time estimates at stated guess rates (online and offline) and NIST SP 800-63B advice.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/security/password_entropy/manifest.json",
+      "manifest_sha256": "05c1328a984a78494470eb1caa8556fa79eda4b7c608e56fb217728d23593e22",
+      "files": {
+        "password_entropy.py": "6de3894cb31bc33b7757e6ddace2dcf6a90486e60f2f2b6f486022167db8eced",
+        "common_passwords.txt": "4d03381115e4c2d591e5698bbd1941bec8a34fe2650f588c164f57d8bfe1fcee"
+      }
+    },
+    {
+      "name": "sbom_check",
+      "version": "1.0.0",
+      "category": "security",
+      "tags": [
+        "sbom",
+        "cyclonedx",
+        "spdx",
+        "supply-chain",
+        "licenses",
+        "ntia"
+      ],
+      "summary": "Check a software bill of materials in CycloneDX JSON (1.4, 1.5, 1.6) or SPDX JSON (2.2, 2.3): the fields each specification requires, components without a version, purl or licence, duplicate components, bom-refs and SPDXIDs, dangling dependency and relationship references, the NTIA minimum elements, and a licence summary with SPDX ids counted and checked against the bundled SPDX License List (deprecated and unknown ids), NOASSERTION, NONE, LicenseRef- and expressions.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/security/sbom_check/manifest.json",
+      "manifest_sha256": "325ecf867ddaec3f0db9da68b511ce67fc79f651a2ad68c9c3ca9c2026623a82",
+      "files": {
+        "sbom_check.py": "40bc8918604ca9e1326b91b38ecb057365ce2b88e825589b5bfcaaebff382250",
+        "spdx_licenses.json": "6d0262d39a85fee5691f19f7d304cce8df8bc4055b8ed9d7e5ebdd35a6221add"
+      }
+    },
+    {
+      "name": "secrets_scan",
+      "version": "1.0.1",
+      "category": "security",
+      "tags": [
+        "secrets",
+        "credentials",
+        "gitleaks",
+        "api-keys",
+        "entropy",
+        "redaction"
+      ],
+      "summary": "Find key-like strings in text with rules modelled on gitleaks' default configuration: AWS access key ids and secret keys, GitHub, GitLab, Slack, Stripe, Google API and npm tokens, Slack webhooks, private-key PEM headers, JWTs and generic high-entropy values assigned to key, token, secret or password names (Shannon entropy threshold).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/security/secrets_scan/manifest.json",
+      "manifest_sha256": "586e8ea9a14b2a8c71c78c1e3e2b324fc9e04012cfedff823ddd677f2a866a55",
+      "files": {
+        "secrets_scan.py": "779b8abc67543f761a73523f869c332cfd2fbf77382971a3a08c474463221465"
+      }
+    },
+    {
+      "name": "totp_generate",
+      "version": "1.0.0",
+      "category": "security",
+      "tags": [
+        "totp",
+        "hotp",
+        "otp",
+        "2fa",
+        "mfa",
+        "rfc6238",
+        "rfc4226"
+      ],
+      "summary": "Generate and verify one-time passwords: TOTP (RFC 6238) for a time given in the input and HOTP (RFC 4226) for a counter, from a secret in base32 (as in authenticator apps), hex or ascii, with SHA-1, SHA-256 or SHA-512, 6 to 8 digits, any period and epoch.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/security/totp_generate/manifest.json",
+      "manifest_sha256": "35772abf018bbc4016c13bdd22b7b930fdeb7e7345d50f8e69ece00a101c982b",
+      "files": {
+        "totp_generate.py": "60739a56326703f4a327ca3d39d3cb8645ced1098fbd4143d40b6715e127a6f7"
+      }
+    },
+    {
+      "name": "anagram_wordplay",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "anagram",
+        "palindrome",
+        "lipogram",
+        "word-ladder",
+        "wordplay",
+        "letters"
+      ],
+      "summary": "Word play: single- and multi-word anagrams from a word list, palindrome check ignoring punctuation, case and accents, lipogram check with offsets, the shortest word ladder between two words, and letter frequencies with a pangram check.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/anagram_wordplay/manifest.json",
+      "manifest_sha256": "7573de8f83d83cf0873d6d052126ee846a8b8d9a4540921dc7f0352c3b65b31f",
+      "files": {
+        "anagram_wordplay.py": "77ed4ef45fc3c065b330b44aead68163a4ff00c3e0762ae6c96e70345dcf9623",
+        "words_en.txt": "60d1e7f72b9047cf6d12bed8166efe848f6e0cc8706321fbe150e2c5104f8861"
+      }
+    },
+    {
+      "name": "crossword_fill",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "crossword",
+        "puzzle",
+        "constraint-satisfaction",
+        "backtracking",
+        "word-games"
+      ],
+      "summary": "Fill a crossword grid (rows of '.', '#' and fixed letters) from a word list given in the input, by backtracking with the most-constrained slot first and forward checking, within a time limit.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/crossword_fill/manifest.json",
+      "manifest_sha256": "9e915b110993da39aa714dfb1e31caa283c11c7964debd80eba316cd0a3c4df3",
+      "files": {
+        "crossword_fill.py": "26aa6e3a22245f411cb85154a8af98a642af0a0b11c591fd5bf4ce747484a2c1"
+      }
+    },
+    {
+      "name": "latex_table",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "latex",
+        "table",
+        "csv",
+        "booktabs",
+        "siunitx",
+        "typesetting"
+      ],
+      "summary": "Turn CSV text into a LaTeX tabular: the ten special characters (# $ % & { } _ ~ ^ \\) escaped as the LaTeX reference manual prescribes, numeric columns right-aligned automatically or alignment given, \\hline or booktabs rules, optional siunitx S columns, caption and label in a table float.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/latex_table/manifest.json",
+      "manifest_sha256": "70eef34a50ed634cf11571056de2b61be0766cce89f4eae961b0f56c9db0ed42",
+      "files": {
+        "latex_table.py": "e9c47961db8662a1abb25fd3542fe452c24e1aa4240a009577155ed4551a5539"
+      }
+    },
+    {
+      "name": "md_convert",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "markdown",
+        "html",
+        "commonmark",
+        "gfm",
+        "conversion",
+        "slides"
+      ],
+      "summary": "Convert Markdown given inline to HTML (escaped: raw HTML is never passed through), to plain text, or to a slide-deck outline split on headings.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/md_convert/manifest.json",
+      "manifest_sha256": "35bcd762bd8e41d1af1ba4590979940780b3a149527dcc7ab20eea4ef6639d55",
+      "files": {
+        "md_convert.py": "035bb06e0e7116e3bed85c39f163f6336254fc7f5aa40dbee0ccb6a34980cc5f"
+      }
+    },
+    {
+      "name": "meter_check",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "meter",
+        "verse",
+        "poetry",
+        "spanish",
+        "endecasilabo",
+        "scansion",
+        "syllables"
+      ],
+      "summary": "Scan verse for meter.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/meter_check/manifest.json",
+      "manifest_sha256": "8bffef708c0b7951bd3cb67a83be38b86ecd18dd8c929ffd228cfb7111069dc7",
+      "files": {
+        "meter_check.py": "e9b5a867652c97aca4380effb8b8ef20e6148a8733f752ebb849932ac35bf6fb"
+      }
+    },
+    {
+      "name": "name_generator",
+      "version": "1.0.2",
+      "category": "writing",
+      "tags": [
+        "names",
+        "generator",
+        "fiction",
+        "worldbuilding",
+        "branding",
+        "random"
+      ],
+      "summary": "Seeded name generator for characters (Spanish, English, Nordic, Japanese, Greek or fantasy style, female or male, with surnames), places and products (tech, pharma, brand), built from syllable tables written for this tool.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/name_generator/manifest.json",
+      "manifest_sha256": "0527c5a2003300bc0aea7e4941c1fd948e6872287324c547d3c19dc712fbd151",
+      "files": {
+        "name_generator.py": "6ee7103753725ec6c61dbf449e17a757ecb3a238ced54a73b8dde703550a391a"
+      }
+    },
+    {
+      "name": "slug_title_case",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "slug",
+        "title-case",
+        "chicago",
+        "ap-style",
+        "apa",
+        "typography",
+        "smart-quotes"
+      ],
+      "summary": "Text casing and typography: URL slugs (Unicode transliterated to ASCII through NFKD, a chosen separator, cut at a word boundary), title case by style guide (Chicago 18th and 17th editions, AP, APA: minor words, hyphenated compounds, acronyms kept), sentence case keeping listed proper nouns, and smart quotes, apostrophes and dashes in English or Spanish.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/slug_title_case/manifest.json",
+      "manifest_sha256": "319237efa354d75c838f34c87921f5289fbec834ea3d85f4b6a89de1d8a0a846",
+      "files": {
+        "slug_title_case.py": "cad5c59fee9b1c64d0c0fe737daaeda793c546292c6dd78ba33081568ce7397e"
+      }
+    },
+    {
+      "name": "story_structure_check",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "story-structure",
+        "save-the-cat",
+        "three-act",
+        "heros-journey",
+        "outline",
+        "screenwriting"
+      ],
+      "summary": "Check an outline's beats against a story structure: Save the Cat (Blake Snyder's 15 beats on their published pages of a 110-page script), Syd Field's three-act paradigm, or Christopher Vogler's 12-stage hero's journey.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/story_structure_check/manifest.json",
+      "manifest_sha256": "92e4744aded3cd0e39e4dd3252bbfa7e91902ad791c207e10350e146bf08b672",
+      "files": {
+        "story_structure_check.py": "594f47e6c8c7578c5c52a61f763d40fb970709a630086c7e242ba61d0e2658be"
+      }
+    },
+    {
+      "name": "style_lint",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "style",
+        "lint",
+        "passive-voice",
+        "editing",
+        "spanish",
+        "prose"
+      ],
+      "summary": "Heuristic style checks for English and Spanish prose: possible passive voice (be + past participle; ser/estar + participio), filler words, adverbs in -ly or -mente, a word repeated within a few words, very long sentences and low variety of sentence length.",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/style_lint/manifest.json",
+      "manifest_sha256": "69d4c7dd439e044514be4335171955b750b8713f5a6c6d1f9eb54f4983f8e205",
+      "files": {
+        "style_lint.py": "2dd6cea2414b62cb20cdeccbcad0dca990453b9f314ed99bdf41a75c1822209d"
+      }
+    },
+    {
+      "name": "syllables_rhyme",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "syllables",
+        "rhyme",
+        "spanish",
+        "poetry",
+        "stress",
+        "metrics",
+        "accentuation"
+      ],
+      "summary": "Syllables, stress and rhyme: Spanish syllabification and stressed syllable by the RAE's orthographic rules (diphthongs, triphthongs, hiatus, intercalated h, aguda/llana/esdrújula), consonant or assonant rhyme between two words from the stressed vowel, and the rhyme scheme of a stanza (ABBA, -a-a).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/syllables_rhyme/manifest.json",
+      "manifest_sha256": "21d6d4700497d7d74ba22cc1abd9210aad7112e6a2c3164a8d470b6c0160666f",
+      "files": {
+        "syllables_rhyme.py": "d061c83a5d6232aca32851c8894147ede34ba2ca70a465f7b9d687111c629893"
+      }
+    },
+    {
+      "name": "text_report",
+      "version": "1.0.0",
+      "category": "writing",
+      "tags": [
+        "word-count",
+        "text-statistics",
+        "reading-time",
+        "ngrams",
+        "frequency",
+        "lexical-diversity"
+      ],
+      "summary": "Text statistics: characters, letters, words, sentences and paragraphs, the most frequent words with optional English or Spanish stopword removal, top 2- and 3-grams, reading and speaking time at stated words per minute, the longest sentences, and lexical diversity (type-token ratio, optional MTLD).",
+      "program": "python3",
+      "requires": {
+        "program_min_version": "3.10",
+        "packages": []
+      },
+      "network": false,
+      "license": "MIT",
+      "manifest": "tools/writing/text_report/manifest.json",
+      "manifest_sha256": "9a74d98173c9efccd326d28c30a20c100c69d9b9b624f04a0b1946b295c800ef",
+      "files": {
+        "text_report.py": "37353daaa60ccf49cda7b181105b78265317b66d924e09ef200e7f32329f98a9"
       }
     }
   ],

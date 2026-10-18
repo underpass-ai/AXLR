@@ -1,0 +1,36 @@
+{
+  "name": "calendar_convert",
+  "description": "Convert a date between the proleptic Gregorian and Julian calendars, the ISO week date, Julian day (JDN, and JD with a fraction of the day), R.D. fixed day numbers, the arithmetic Hebrew calendar (month names, leap years, year length, optional molad) and the tabular Islamic calendar, with the day of the week. Every conversion goes through R.D. day numbers with the algorithms of Dershowitz and Reingold's Calendrical Calculations; years are astronomical (0 = 1 BCE). The Islamic calendar is the arithmetic one (leap years 2, 5, 7, 10, 13, 16, 18, 21, 24, 26, 29 of each 30), not a sighting-based or Umm al-Qura calendar, so it can differ from the observed date by a day or two.",
+  "input_schema": {
+    "type": "object",
+    "required": ["from"],
+    "additionalProperties": false,
+    "properties": {
+      "from": {"type": "string", "enum": ["gregorian", "julian", "iso_week", "jd", "jdn", "rd", "hebrew", "islamic"]},
+      "date": {"type": "string", "description": "YYYY-MM-DD (gregorian, julian; astronomical year, may be negative) or YYYY-Www-D (iso_week)"},
+      "year": {"type": "integer", "description": "Instead of date; hebrew and islamic always use year/month/day"},
+      "month": {"type": ["integer", "string"], "description": "1-12, or for hebrew 1-13 in D&R numbering (Nisan = 1, Tishrei = 7, Adar II = 13); hebrew and islamic also take month names"},
+      "day": {"type": "integer"},
+      "week": {"type": "integer", "minimum": 1, "maximum": 53, "description": "iso_week"},
+      "weekday": {"type": "integer", "minimum": 1, "maximum": 7, "description": "iso_week, Monday = 1"},
+      "jd": {"type": ["number", "string"], "description": "Julian date (from jd); the fraction gives the time of day, UT"},
+      "jdn": {"type": "integer", "description": "Julian day number (from jdn): the JD at noon of that day"},
+      "rd": {"type": "integer", "description": "R.D. fixed day number (from rd); R.D. 1 = 1 January 1 CE Gregorian"},
+      "time": {"type": "string", "pattern": "^\\d{2}:\\d{2}(:\\d{2}(\\.\\d+)?)?$", "description": "Universal time of day added to jd; not with from jd"},
+      "molad": {"type": "boolean", "default": false, "description": "Also give the molad of the Hebrew month"}
+    }
+  },
+  "program": "python3",
+  "args": ["calendar_convert.py"],
+  "files": ["calendar_convert.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "geography",
+    "tags": ["calendar", "julian-day", "iso-week", "hebrew-calendar", "islamic-calendar", "julian-calendar", "dates"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"from": "hebrew", "year": 5787, "month": "Tishrei", "day": 1}, "output": {"rd": 739871, "jdn": 2461296, "jd": 2461295.5, "weekday": {"name": "Saturday", "iso": 6}, "gregorian": {"date": "2026-09-12"}, "julian": {"date": "2026-08-30"}, "iso_week": {"date": "2026-W37-6"}, "hebrew": {"date": "1 Tishrei 5787", "leap_year": true, "days_in_year": 385}, "islamic": {"date": "29 Rabi' al-Awwal 1448 AH"}}},
+    "source": "Dershowitz and Reingold, Calendrical Calculations (Cambridge University Press), chapters 1-3, 5, 7 and 8: R.D. fixed dates, Gregorian, Julian, ISO, arithmetic Islamic and Hebrew calendars, molad"
+  }
+}

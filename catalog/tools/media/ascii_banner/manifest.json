@@ -1,0 +1,33 @@
+{
+  "name": "ascii_banner",
+  "description": "Draw text as a large banner in a bundled 5-row block font (A-Z, 0-9 and common punctuation; an original font, MIT) with a chosen fill character, letter spacing and word wrapping, optionally inside a border, or put plain text in a box with ASCII, single, double, rounded or heavy line borders and left, centred or right alignment.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "maxLength": 2000, "description": "Newlines start new lines"},
+      "mode": {"type": "string", "enum": ["banner", "box"], "default": "banner"},
+      "fill": {"type": "string", "default": "#", "description": "One character, or \"block\" for a full block"},
+      "spacing": {"type": "integer", "minimum": 0, "maximum": 4, "default": 1},
+      "max_width": {"type": "integer", "minimum": 10, "maximum": 1000, "default": 120},
+      "border": {"type": "string", "enum": ["none", "ascii", "single", "double", "rounded", "heavy"], "description": "Default none for banner, ascii for box"},
+      "padding": {"type": "integer", "minimum": 0, "maximum": 4, "default": 1},
+      "align": {"type": "string", "enum": ["left", "center", "right"], "default": "left"},
+      "unknown": {"type": "string", "enum": ["replace", "error"], "default": "replace"}
+    }
+  },
+  "program": "python3",
+  "args": ["ascii_banner.py"],
+  "files": ["ascii_banner.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "media",
+    "tags": ["ascii-art", "banner", "text", "figlet", "terminal", "box-drawing"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "HI"}, "output": {"width": 9, "height": 5, "lines": ["#   # ###", "#   #  # ", "#####  # ", "#   #  # ", "#   # ###"]}},
+    "source": "original 5-row block font (MIT) in the manner of FIGlet banners; borders from the Unicode Box Drawing block (U+2500-U+257F)"
+  }
+}

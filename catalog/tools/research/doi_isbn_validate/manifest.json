@@ -1,0 +1,27 @@
+{
+  "name": "doi_isbn_validate",
+  "description": "Validate and normalise bibliographic identifiers: DOI syntax (bare, doi: or doi.org URL, with the resolver URL and Crossref-pattern warning), ISBN-10 and ISBN-13 check digits with conversion both ways, ISSN check digit with its EAN-13, and ISMN (979-0 and legacy M- forms). Hyphens, spaces and labels are accepted; the type is detected automatically or given. One value or a list.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "value": {"type": "string", "maxLength": 2000},
+      "identifiers": {"type": "array", "items": {"type": "string", "maxLength": 2000}, "minItems": 1, "maxItems": 1000},
+      "type": {"type": "string", "enum": ["auto", "doi", "isbn", "issn", "ismn"], "default": "auto"},
+      "issue": {"type": "string", "pattern": "^\\d{2}$", "default": "00", "description": "Issue/variant digits of the ISSN's EAN-13"}
+    }
+  },
+  "program": "python3",
+  "args": ["doi_isbn_validate.py"],
+  "files": ["doi_isbn_validate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["isbn", "issn", "doi", "ismn", "identifiers", "checksum", "bibliography"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"value": "0-306-40615-2"}, "output": {"type": "isbn", "format": "ISBN-10", "valid": true, "isbn10": "0306406152", "isbn13": "9780306406157"}},
+    "source": "ISO 2108 (ISBN) check digits as in the ISBN Users' Manual (International ISBN Agency); ISO 3297 (ISSN) mod-11 check digit and the GS1 977 EAN-13; ISO 10957 (ISMN); ISO 26324 and the DOI Handbook (DOI syntax); Crossref's recommended DOI pattern"
+  }
+}

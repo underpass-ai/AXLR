@@ -1,0 +1,27 @@
+{
+  "name": "chem_formula",
+  "description": "Parse a chemical formula with parentheses, brackets, hydrates (CuSO4·5H2O or CuSO4*5H2O), leading coefficients and ionic charges, and return the element counts, the Hill formula, the molar mass and the mass percent of each element, summed exactly in decimal from the bundled IUPAC/CIAAW abridged standard atomic weights 2024. Accepts Unicode subscripts and superscripts and several formulas at once.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "formula": {"type": "string", "maxLength": 500, "description": "Ca(OH)2, K4[Fe(CN)6], CuSO4·5H2O, SO4^2-, NH4+"},
+      "formulas": {"type": "array", "items": {"type": "string", "maxLength": 500}, "minItems": 1, "maxItems": 100},
+      "decimals": {"type": "integer", "minimum": 0, "maximum": 6, "default": 2, "description": "Digits of molar_mass_rounded and mass_percent"},
+      "masses": {"type": "object", "additionalProperties": {"type": ["number", "string"]}, "description": "Atomic weights for elements without a standard atomic weight (Tc, Pm, Po...) or overrides, by symbol"}
+    }
+  },
+  "program": "python3",
+  "args": ["chem_formula.py"],
+  "files": ["chem_formula.py", "elements.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["chemistry", "molar-mass", "formula", "stoichiometry", "atomic-weights", "iupac"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"formula": "CuSO4·5H2O"}, "output": {"hill": "CuH10O9S", "counts": {"Cu": 1, "S": 1, "O": 9, "H": 10}, "molar_mass": "249.6770", "molar_mass_rounded": "249.68", "unit": "g/mol"}},
+    "source": "IUPAC/CIAAW Abridged Standard Atomic Weights 2024 (Atomic Weights 2021 report, Prohaska et al., Pure Appl. Chem. 94 (2022) 573-600, with the 2024 revisions of Gd, Lu, Zr), https://www.ciaaw.org/abridged-atomic-weights.htm, fetched 2026-10-18 by tools/catalog/data/chem_formula.py; Hill system for the formula order"
+  }
+}

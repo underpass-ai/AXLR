@@ -1,0 +1,188 @@
+[
+ {
+  "name": "hand-checked constraints, seed 1: chlorophyll (11 letters, lower case) gets lower-case one-word distractors within 3 letters, none from its own sentence",
+  "input": {
+   "text": "Photosynthesis takes place in the chloroplast. Plants absorb sunlight with chlorophyll and release oxygen. The Calvin cycle fixes carbon dioxide into sugar. Respiration happens in the mitochondria, where glucose is broken down. Darwin and Mendel studied heredity in very different ways.",
+   "terms": [
+    "chlorophyll",
+    "oxygen",
+    "Calvin cycle",
+    "Mendel",
+    "respiration"
+   ],
+   "seed": 1
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "questions": [
+     {
+      "n": 1,
+      "stem": "Plants absorb sunlight with _____ and release oxygen.",
+      "choices": [
+       {
+        "label": "A",
+        "text": "mitochondria"
+       },
+       {
+        "label": "B",
+        "text": "chloroplast"
+       },
+       {
+        "label": "C",
+        "text": "chlorophyll"
+       },
+       {
+        "label": "D",
+        "text": "heredity"
+       }
+      ],
+      "answer": "C",
+      "notes": []
+     },
+     {
+      "n": 2,
+      "answer": "D",
+      "answer_text": "oxygen"
+     },
+     {
+      "n": 3,
+      "answer_text": "Calvin cycle",
+      "notes": [
+       "relaxed: capitalisation"
+      ]
+     },
+     {
+      "n": 4,
+      "stem": "Darwin and _____ studied heredity in very different ways.",
+      "answer_text": "Mendel"
+     },
+     {
+      "n": 5,
+      "stem": "_____ happens in the mitochondria, where glucose is broken down.",
+      "answer_text": "respiration",
+      "choices": [
+       {
+        "text": "chlorophyll"
+       },
+       {
+        "text": "respiration"
+       },
+       {
+        "text": "sunlight"
+       },
+       {
+        "text": "different"
+       }
+      ]
+     }
+    ],
+    "answer_key": [
+     "1-C",
+     "2-D",
+     "3-C",
+     "4-B",
+     "5-B"
+    ],
+    "not_found": []
+   }
+  }
+ },
+ {
+  "name": "a capitalised term gets capitalised distractors (Calvin, never the sentence-initial Darwin)",
+  "input": {
+   "text": "Photosynthesis takes place in the chloroplast. Plants absorb sunlight with chlorophyll and release oxygen. The Calvin cycle fixes carbon dioxide into sugar. Respiration happens in the mitochondria, where glucose is broken down. Darwin and Mendel studied heredity in very different ways.",
+   "terms": [
+    "Mendel"
+   ],
+   "options": 2,
+   "seed": 3
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_contains": "\"text\": \"Calvin\""
+  }
+ },
+ {
+  "name": "a term variant (chloroplasts / chloroplast) is never a distractor and a missing term is reported",
+  "input": {
+   "text": "Chloroplasts hold pigments. Each chloroplast has thylakoids and stroma. Pigments absorb light energy.",
+   "terms": [
+    "chloroplast",
+    "ribosome"
+   ],
+   "options": 3,
+   "seed": 5
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "not_found": [
+     "ribosome"
+    ],
+    "questions": [
+     {
+      "answer_text": "chloroplast",
+      "choices": [
+       {},
+       {},
+       {}
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "too few candidates are reported, not invented",
+  "input": {
+   "text": "Paris is lovely. Rome too.",
+   "terms": [
+    "lovely"
+   ],
+   "options": 4
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "questions": [
+     {
+      "short_of_distractors": 3,
+      "choices": [
+       {
+        "text": "lovely"
+       }
+      ]
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "no term in the text",
+  "input": {
+   "text": "Photosynthesis takes place in the chloroplast. Plants absorb sunlight with chlorophyll and release oxygen. The Calvin cycle fixes carbon dioxide into sugar. Respiration happens in the mitochondria, where glucose is broken down. Darwin and Mendel studied heredity in very different ways.",
+   "terms": [
+    "quark"
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "none of the terms"
+  }
+ },
+ {
+  "name": "too many options",
+  "input": {
+   "text": "Photosynthesis takes place in the chloroplast. Plants absorb sunlight with chlorophyll and release oxygen. The Calvin cycle fixes carbon dioxide into sugar. Respiration happens in the mitochondria, where glucose is broken down. Darwin and Mendel studied heredity in very different ways.",
+   "terms": [
+    "oxygen"
+   ],
+   "options": 9
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "options must be"
+  }
+ }
+]

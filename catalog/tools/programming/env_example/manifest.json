@@ -1,0 +1,26 @@
+{
+  "name": "env_example",
+  "description": "Turn a .env file given inline into a .env.example: every value blanked or replaced by a type hint (<url>, <number>, <boolean>, <email>, <host>, <path>, <secret>, <interpolated>, <string>), with comments, blank lines, the export prefix and the quoting kept. Flags duplicate keys, secret-looking keys that carry a value, values that look like AWS, GitHub, Slack, Stripe or Google keys, JWTs, PEM private keys or URLs with a password, and commented-out assignments. No input value is ever printed.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "maxLength": 500000, "description": "The .env content"},
+      "hints": {"type": "boolean", "default": true, "description": "true: a type hint in place of each value; false: empty values"}
+    }
+  },
+  "program": "python3",
+  "args": ["env_example.py"],
+  "files": ["env_example.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "programming",
+    "tags": ["dotenv", "env", "configuration", "secrets", "devops", "twelve-factor"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "# App\nexport PORT=8080\nDATABASE_URL=\"postgres://admin:hunter2@db:5432/shop\"\nDEBUG=true\nPORT=9090\n"}, "output": {"example": "# App\nexport PORT=<number>\nDATABASE_URL=\"<secret>\"\nDEBUG=<boolean>\nPORT=<number>\n", "duplicates": [{"key": "PORT", "lines": [2, 5], "note": "most loaders keep the last one"}]}},
+    "source": "original; .env syntax as read by python-dotenv and docker compose (export prefix, quotes, inline comments, multi-line quoted values); token shapes from the providers' published key formats"
+  }
+}

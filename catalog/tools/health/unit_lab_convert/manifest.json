@@ -1,0 +1,29 @@
+{
+  "name": "unit_lab_convert",
+  "description": "Convert laboratory results between mg/dL, mg/L or g/L and mmol/L or umol/L for glucose, total, HDL and LDL cholesterol, triglycerides (as triolein), creatinine, urea, BUN, uric acid and calcium, with exact factors derived from molar masses computed from the IUPAC/CIAAW atomic weights. Every output carries a disclaimer: not medical advice, verify with a clinician.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "analyte": {"type": "string", "enum": ["glucose", "cholesterol_total", "cholesterol_hdl", "cholesterol_ldl", "triglycerides", "creatinine", "urea", "bun", "uric_acid", "calcium"]},
+      "value": {"type": ["number", "string"], "description": "Number or decimal string"},
+      "from": {"type": "string", "enum": ["mg/dL", "mg/L", "g/L", "mmol/L", "umol/L", "µmol/L"]},
+      "to": {"type": "string", "enum": ["mg/dL", "mg/L", "g/L", "mmol/L", "umol/L", "µmol/L"], "description": "Default: the analyte's usual unit on the other side"},
+      "decimals": {"type": "integer", "minimum": 0, "maximum": 12, "default": 2},
+      "list_analytes": {"type": "boolean", "description": "List analytes, formulas, molar masses and factors"}
+    }
+  },
+  "program": "python3",
+  "args": ["unit_lab_convert.py"],
+  "files": ["unit_lab_convert.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "health",
+    "tags": ["laboratory", "units", "si-units", "conversion", "glucose", "cholesterol", "creatinine"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"analyte": "glucose", "value": 100, "from": "mg/dL"}, "output": {"to": "mmol/L", "result": "5.55", "factor": "0.05550745", "molar_mass_g_mol": "180.156"}},
+    "source": "Molar masses from IUPAC/CIAAW standard atomic weights (conventional values, https://www.ciaaw.org/atomic-weights.htm); triglyceride convention as triolein (C57H104O6); BUN as urea nitrogen (2 N per urea)"
+  }
+}

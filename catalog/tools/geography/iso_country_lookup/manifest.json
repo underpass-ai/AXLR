@@ -1,0 +1,29 @@
+{
+  "name": "iso_country_lookup",
+  "description": "Look up a country by ISO 3166-1 alpha-2, alpha-3 or numeric code or by English name, or find the countries that use a time zone, an ISO 4217 currency or an ITU-T E.164 calling code. Each answer gives the codes, English names, current currencies, calling codes and IANA time zones from a bundled dated table (tz database 2026e, public domain; Unicode CLDR 48.2 and the CLDR 33.1 telephone codes, Unicode License) and names its sources. No capitals.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "code": {"type": ["string", "integer"], "description": "Alpha-2 (ES), alpha-3 (ESP) or numeric (724)"},
+      "name": {"type": "string", "description": "English name; case and accents ignored, a partial name returns candidates"},
+      "zone": {"type": "string", "description": "IANA time zone, e.g. Europe/Madrid"},
+      "currency": {"type": "string", "description": "ISO 4217 code, e.g. EUR"},
+      "calling_code": {"type": ["string", "integer"], "description": "\"+34\", \"34\" or 34"},
+      "list": {"type": "boolean", "description": "true: list every country"}
+    }
+  },
+  "program": "python3",
+  "args": ["iso_country_lookup.py"],
+  "files": ["iso_country_lookup.py", "countries.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "geography",
+    "tags": ["iso-3166", "iso-4217", "countries", "currency", "time-zones", "calling-codes", "geography"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"code": "ES"}, "output": {"match": "alpha2", "country": {"alpha2": "ES", "alpha3": "ESP", "numeric": "724", "name": "Spain", "currencies": [{"code": "EUR", "name": "Euro", "numeric": "978", "cldr_fraction_digits": 2}], "calling_codes": ["+34"], "zones": ["Europe/Madrid", "Africa/Ceuta", "Atlantic/Canary"]}}},
+    "source": "original; table built by tools/catalog/data/iso_country_lookup.py from the IANA tz database 2026e (iso3166.tab, zone.tab, zone1970.tab), Unicode CLDR 48.2 (supplementalData.xml codeMappings and currencyData, main/en.xml) and CLDR 33.1 telephoneCodeData.xml"
+  }
+}

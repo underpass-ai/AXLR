@@ -1,0 +1,166 @@
+[
+ {
+  "name": "hand-checked auto selection: mitochondria and cell occur twice (stopwords and words under 4 letters excluded), the longer first; first occurrences blanked",
+  "input": {
+   "text": "The mitochondria is the powerhouse of the cell. The cell needs energy, and the mitochondria make it.",
+   "count": 2
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "selected_words": [
+     "mitochondria",
+     "cell"
+    ],
+    "cloze_text": "The _____ (1) is the powerhouse of the _____ (2). The cell needs energy, and the mitochondria make it.",
+    "answers": [
+     "mitochondria",
+     "cell"
+    ],
+    "answer_key": [
+     {
+      "n": 1,
+      "word_number": 2
+     },
+     {
+      "n": 2,
+      "word_number": 8
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "Anki manual cloze syntax: {{c1::...}}, {{c2::...}} make one card per deletion",
+  "input": {
+   "text": "The mitochondria is the powerhouse of the cell. The cell needs energy, and the mitochondria make it.",
+   "mode": "terms",
+   "terms": [
+    "powerhouse of the cell",
+    "energy",
+    "ribosome"
+   ]
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "anki": "The mitochondria is the {{c1::powerhouse of the cell}}. The cell needs {{c2::energy}}, and the mitochondria make it.",
+    "not_found": [
+     "ribosome"
+    ],
+    "blanks": 2
+   }
+  }
+ },
+ {
+  "name": "Anki manual cloze syntax: the same c1 on every deletion hides them all on one card",
+  "input": {
+   "text": "The mitochondria is the powerhouse of the cell. The cell needs energy, and the mitochondria make it.",
+   "count": 2,
+   "all_occurrences": true,
+   "anki_single_card": true
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "anki": "The {{c1::mitochondria}} is the powerhouse of the {{c1::cell}}. The {{c1::cell}} needs energy, and the {{c1::mitochondria}} make it.",
+    "blanks": 4
+   }
+  }
+ },
+ {
+  "name": "classic every-5th-word cloze: words 5, 10 and 15",
+  "input": {
+   "text": "The mitochondria is the powerhouse of the cell. The cell needs energy, and the mitochondria make it.",
+   "mode": "nth",
+   "every_n": 5
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "answers": [
+     "powerhouse",
+     "cell",
+     "mitochondria"
+    ],
+    "offset": 5,
+    "answer_key": [
+     {
+      "word_number": 5
+     },
+     {
+      "word_number": 10
+     },
+     {
+      "word_number": 15
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "seeded tie-break is reproducible and equals random.Random(42).shuffle of the sorted tie group",
+  "input": {
+   "text": "Alpha, bravo, delta and gamma are words; kilo too.",
+   "count": 2,
+   "seed": 42
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "selected_words": [
+     "gamma",
+     "bravo"
+    ],
+    "answers": [
+     "bravo",
+     "gamma"
+    ]
+   }
+  }
+ },
+ {
+  "name": "Spanish stopwords and length ranking",
+  "input": {
+   "text": "La fotosíntesis transforma la energía de la luz en energía química dentro del cloroplasto.",
+   "language": "es",
+   "count": 2,
+   "rank_by": "length"
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "selected_words": [
+     "fotosíntesis",
+     "cloroplasto"
+    ]
+   }
+  }
+ },
+ {
+  "name": "terms none found",
+  "input": {
+   "text": "The mitochondria is the powerhouse of the cell. The cell needs energy, and the mitochondria make it.",
+   "mode": "terms",
+   "terms": [
+    "nucleus"
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "nothing to blank"
+  }
+ },
+ {
+  "name": "every_n too small",
+  "input": {
+   "text": "The mitochondria is the powerhouse of the cell. The cell needs energy, and the mitochondria make it.",
+   "mode": "nth",
+   "every_n": 1
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "every_n must be"
+  }
+ }
+]

@@ -1,0 +1,30 @@
+{
+  "name": "geojson_tools",
+  "description": "Measure and check GeoJSON (RFC 7946) given inline as a Geometry, Feature or FeatureCollection: bounding box, centroid, planar area (exact, in square degrees) and spherical area by spherical excess on a sphere of R = 6371.0088 km (the IUGG mean radius; spherical, not ellipsoidal), perimeter and line length, point-in-polygon with holes and boundary detection, and validation: closed rings of at least four positions, RFC 7946 winding (exterior counter-clockwise, holes clockwise), coordinate ranges, self-intersecting rings and holes outside their exterior.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["summary", "bbox", "centroid", "area", "perimeter", "contains", "validate"], "default": "summary"},
+      "geojson": {"type": "object", "description": "GeoJSON Geometry, Feature or FeatureCollection, inline"},
+      "text": {"type": "string", "description": "The same GeoJSON as a JSON string, instead of geojson"},
+      "point": {"type": "array", "minItems": 2, "maxItems": 3, "items": {"type": "number"}, "description": "contains: [lon, lat]"},
+      "points": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"type": "array", "minItems": 2, "maxItems": 3, "items": {"type": "number"}}, "description": "contains: [[lon, lat], ...]"},
+      "radius_km": {"type": "number", "exclusiveMinimum": 0, "default": 6371.0088, "description": "Sphere radius for spherical area, perimeter and length"}
+    }
+  },
+  "program": "python3",
+  "args": ["geojson_tools.py"],
+  "files": ["geojson_tools.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "geography",
+    "tags": ["geojson", "area", "centroid", "bounding-box", "point-in-polygon", "validation", "gis"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "area", "geojson": {"type": "Polygon", "coordinates": [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]]}},
+                "output": {"area": {"spherical_km2": 12364.0319095, "planar_deg2_exact": "1", "radius_km": 6371.0088, "model": "sphere"}}},
+    "source": "original; RFC 7946 (The GeoJSON Format, 2016) for structure and winding; spherical excess of great-circle polygons summed per edge, tan(E/2) = tan(Δλ/2)·sin((φ1+φ2)/2)/cos((φ2−φ1)/2) (Napier's analogies; Todhunter, Spherical Trigonometry; as in Wikipedia's 'Spherical trigonometry', from latitude and longitude), on the IUGG mean radius R1 = 6371.0088 km (Moritz, Geodetic Reference System 1980); shoelace area and centroid"
+  }
+}
