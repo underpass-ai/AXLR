@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Run every catalog tool's tests.json with the axlr_run_tool contract: arguments as one
-JSON object on stdin, result as exit code, stdout and stderr; only PATH and HOME in the
+JSON object on stdin (object keys sorted, as the registry's runner sends them), result as exit code, stdout and stderr; only PATH and HOME in the
 environment; the tool's directory as working directory.
 
 Usage: python3 tools/catalog/run_tests.py [catalog/tools]
@@ -13,21 +13,33 @@ import sys
 
 
 def contains(actual, expected):
-    """expected is a subset of actual, recursively (dicts by key, lists by position)."""
+    """expected is a subset of actual, recursively (dicts by key, lists by position). Scalars
+    compare as the registry's runner (serde_json) does: an integer never equals a float, so
+    1 and 1.0 differ, and a boolean is not a number."""
     if isinstance(expected, dict):
         return isinstance(actual, dict) and all(k in actual and contains(actual[k], v) for k, v in expected.items())
     if isinstance(expected, list):
         return isinstance(actual, list) and len(actual) == len(expected) and all(contains(a, e) for a, e in zip(actual, expected))
-    return actual == expected
+    return type(actual) is type(expected) and actual == expected
+
+
+def strict_json(text):
+    """Parse as the registry does: no unpaired surrogate escapes (serde_json refuses them)."""
+    value = json.loads(text)
+    json.dumps(value, ensure_ascii=False).encode("utf-8")
+    return value
 
 
 def run(tool_dir):
     manifest = json.loads((tool_dir / "manifest.json").read_text())
-    cases = json.loads((tool_dir / "tests.json").read_text())
+    try:
+        cases = strict_json((tool_dir / "tests.json").read_text())
+    except (ValueError, UnicodeEncodeError) as error:
+        return 1, [("tests.json", [f"the registry cannot parse it: {error}"])]
     env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/")}
     failures = []
     for case in cases:
-        proc = subprocess.run([manifest["program"], *manifest["args"]], input=json.dumps(case["input"]),
+        proc = subprocess.run([manifest["program"], *manifest["args"]], input=json.dumps(case["input"], sort_keys=True),
                               capture_output=True, text=True, cwd=tool_dir, env=env, timeout=30)
         expect = case["expect"]
         problems = []
@@ -35,8 +47,8 @@ def run(tool_dir):
             problems.append(f"exit {proc.returncode} != {expect.get('exit', 0)}; stderr: {proc.stderr.strip()[:200]}")
         if "stdout_json" in expect:
             try:
-                out = json.loads(proc.stdout)
-            except ValueError:
+                out = strict_json(proc.stdout)
+            except (ValueError, UnicodeEncodeError):
                 problems.append(f"stdout is not JSON: {proc.stdout[:200]!r}")
             else:
                 if not contains(out, expect["stdout_json"]):
