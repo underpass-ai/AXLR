@@ -98,7 +98,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `unit_convert` **1.0.0** | conversion with dimensional check from a bundled table (tier 2 with `pint`) | [pint](https://github.com/hgrecco/pint) |
 | `base_convert` **1.0.0** | bases 2–36, Roman numerals, two's complement | original |
 | `sequence_tools` **1.0.0** | OEIS-style detection of arithmetic, geometric and polynomial sequences; next terms | original |
-| `sympy_solve` | solve, simplify, differentiate, integrate, limit, series (tier 2 with `sympy`) | sympy |
+| `sympy_solve` **1.0.0** | solve, simplify, expand, factor, differentiate, integrate, limit, series (tier 2 with `sympy`) | sympy |
 | `sampling_plan` **1.0.0** | sample size for proportions and means, stratified allocation | original |
 | `rounding_report` **1.0.0** | significant figures, uncertainty propagation | original |
 
@@ -313,7 +313,7 @@ No maintained small repository exists for D'Hondt and Sainte-Laguë (the best ha
 
 ## Status
 
-Implemented tools carry their version in bold in the tables above; each lives under [`catalog/tools/`](../../catalog/tools/) with its manifest, program, `tests.json` and README, passes [`tools/catalog/run_tests.py`](../../tools/catalog/run_tests.py) (which sends inputs and compares outputs exactly as the registry's runner does: keys sorted, numbers typed) and the pre-flight copy of the registry's policy scan, and is approved and served by the registry (`https://registry.underpassai.com/index.json`). Bundled data tables are written by scripts under [`tools/catalog/data/`](../../tools/catalog/data/) that name their sources, licences and dates. The registry's sandbox runs Python 3.12 and Node 22 since axlr-registry v0.3.4, without network and without third-party packages.
+Implemented tools carry their version in bold in the tables above; each lives under [`catalog/tools/`](../../catalog/tools/) with its manifest, program, `tests.json` and README, passes [`tools/catalog/run_tests.py`](../../tools/catalog/run_tests.py) (which sends inputs and compares outputs exactly as the registry's runner does: keys sorted, numbers typed) and the pre-flight copy of the registry's policy scan, and is approved and served by the registry (`https://registry.underpassai.com/index.json`). Bundled data tables are written by scripts under [`tools/catalog/data/`](../../tools/catalog/data/) that name their sources, licences and dates. The registry's sandbox runs Python 3.12 and Node 22 since axlr-registry v0.3.4, without network; since v0.3.5 its image carries the Python packages a tier-2 tool may declare, today `sympy` 1.13.3 only (adding one is a registry release).
 
 | Date | Batch | Tools added | Test cases |
 |:--|:--|--:|--:|
@@ -322,5 +322,6 @@ Implemented tools carry their version in bold in the tables above; each lives un
 | 2026-10-18 | 2: politics and civics, administration, mathematics, finance, law (PR #139) | 40 | 430 |
 | 2026-10-18 | 3: research, writing, education, language, geography, health, security, media, data, programming (PR #140) | 83 | 1040 |
 | 2026-10-18 | 4: personal, games, cooking and engineering; `qr_generate` and `pinyin_convert` on the standard library; the network tools `doi_lookup`, `arxiv_lookup`, `fx_convert` (PR #141) | 17 | 198 |
+| 2026-10-18 | 5: `sympy_solve`, the package-tier tool, once the sandbox carried sympy | 1 | 14 |
 
-Production serves 158 tools after batch 4. Not implemented: `sympy_solve`, the one package-tier tool without a standard-library route: package-tier tools cannot be approved until the registry's sandbox installs packages, because their tests cannot run there. Where the catalog names a package and a stdlib route exists, the stdlib version is shipped and its README says what the package would add. `cooking_unit_convert` ships without its USDA ingredient densities (the FoodData Central API refused the generator's requests); densities are given in the input until `tools/catalog/data/cooking_unit_convert.py` is rerun.
+Production serves 159 tools after batch 5: every tier 1–3 tool of the tables above. `sympy_solve` is the one tool that needs a package; the sandbox tests it with the sympy the image pins, and the console's install card warns when the package is missing on the machine. Where the catalog names a package and a stdlib route exists, the stdlib version is shipped and its README says what the package would add. `cooking_unit_convert` ships without its USDA ingredient densities (the FoodData Central API refused the generator's requests); densities are given in the input until `tools/catalog/data/cooking_unit_convert.py` is rerun.

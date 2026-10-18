@@ -1,0 +1,35 @@
+{
+  "name": "sympy_solve",
+  "description": "Symbolic mathematics with sympy: solve equations, simplify, expand, factor, differentiate, integrate (indefinite or definite), limits and series, with exact results as sympy text, LaTeX and a decimal value when numeric. One expression per call; the variable is inferred when there is one.",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation", "expression"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["solve", "simplify", "expand", "factor", "differentiate", "integrate", "limit", "series"]},
+      "expression": {"type": "string", "maxLength": 2000, "description": "sympy syntax (x**2, sin(x), exp(x), pi, E, oo; ^ allowed); for solve, an equation lhs = rhs or an expression equal to zero"},
+      "symbol": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$", "description": "The variable; default: the single free symbol, or x"},
+      "order": {"type": "integer", "minimum": 1, "maximum": 30, "description": "Derivative order (default 1) or series order (default 6)"},
+      "point": {"type": ["number", "string"], "description": "Limit point or series expansion point (default 0); oo for infinity"},
+      "direction": {"type": "string", "enum": ["+", "-", "+-"], "description": "One-sided limit direction (default two-sided)"},
+      "lower": {"type": ["number", "string"], "description": "Lower bound of a definite integral"},
+      "upper": {"type": ["number", "string"], "description": "Upper bound of a definite integral"}
+    }
+  },
+  "program": "python3",
+  "args": ["sympy_solve.py"],
+  "files": ["sympy_solve.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["algebra", "calculus", "symbolic", "sympy", "solve", "integrate", "derivative", "limit", "series"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": ["sympy"]},
+    "network": false,
+    "example": {
+      "input": {"operation": "solve", "expression": "x^2 - 5x + 6 = 0"},
+      "output": {"solutions": [{"result": "2"}, {"result": "3"}], "count": 2}
+    },
+    "source": "sympy 1.13 (https://www.sympy.org); the sandbox image pins sympy 1.13.3"
+  }
+}
