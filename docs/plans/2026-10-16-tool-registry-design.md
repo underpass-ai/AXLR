@@ -1,6 +1,8 @@
 # Pre-forged tools and downloadable ceremonies: registry, web and install design
 
-Status: proposed (16 Oct 2026). Companion catalogs: [pre-forged tools](2026-10-16-prebuilt-tools-catalog.md) and [downloadable ceremonies](2026-10-16-ceremony-catalog.md). Nothing here is implemented; the reference entries under [`catalog/`](../../catalog/) prove the manifest shapes only.
+Status: proposed (16 Oct 2026). Companion catalogs: [pre-forged tools](2026-10-16-prebuilt-tools-catalog.md) and [downloadable ceremonies](2026-10-16-ceremony-catalog.md). Nothing here was implemented when it was written; the reference entries under [`catalog/`](../../catalog/) proved the manifest shapes only.
+
+Update, 18 Oct 2026 (v0.11.0): decisions D1 to D4 are implemented in the console (#137): signed-index install, `/tools`, `axlr_catalog`, `axlr_install_tool` and publishing to the registry, documented in [installing catalog tools](../console.md#installing-catalog-tools) and [publishing a tool to a catalog](../console.md#publishing-a-tool-to-a-catalog). The official catalog at `https://registry.underpassai.com/index.json` serves the 159 tools under [`catalog/tools/`](../../catalog/tools/). Not implemented yet: installing ceremonies from a catalog (D5; the console ignores an index's `ceremonies`), and open mechanism 5, honouring an index's `revocations` and `revoked_keys` and verifying the publisher's signature on install. The text below is the design as proposed.
 
 ## Goal
 
