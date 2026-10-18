@@ -1,0 +1,36 @@
+{
+  "name": "grade_stats",
+  "description": "Class grade statistics (mean, median, population and sample SD, distribution by bands or a histogram), grade curves (linear rescaling to a target mean and SD, square-root curve, top-score scaling) and classical item analysis of a students x items 0/1 matrix: difficulty p, point-biserial and corrected item-rest correlations, upper-lower 27 % discrimination D, and KR-20 and KR-21 reliability. Exact fractions for means and variances.",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["stats", "curve", "item_analysis"]},
+      "scores": {"type": "array", "minItems": 1, "items": {"type": ["number", "string"]}},
+      "max_score": {"type": ["number", "string"], "default": 100},
+      "bands": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["min", "label"], "properties": {"min": {"type": ["number", "string"]}, "label": {"type": "string"}}}},
+      "method": {"type": "string", "enum": ["linear", "sqrt", "top_score"]},
+      "target_mean": {"type": ["number", "string"]},
+      "target_sd": {"type": ["number", "string"], "description": "Omitted: shift to target_mean only"},
+      "clip": {"type": "boolean", "default": true},
+      "matrix": {"type": "array", "minItems": 2, "items": {"type": "array", "minItems": 2, "items": {"type": "integer", "enum": [0, 1]}}},
+      "group_fraction": {"type": ["number", "string"], "default": 0.27},
+      "variance": {"type": "string", "enum": ["population", "sample"], "default": "population", "description": "Total-score variance in KR-20/KR-21"},
+      "decimals": {"type": "integer", "minimum": 0, "maximum": 10, "default": 2}
+    }
+  },
+  "program": "python3",
+  "args": ["grade_stats.py"],
+  "files": ["grade_stats.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "education",
+    "tags": ["grades", "statistics", "item-analysis", "kr-20", "reliability", "curve", "assessment"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "item_analysis", "matrix": [[1, 1, 1], [1, 1, 0], [1, 0, 1], [0, 1, 0], [1, 0, 0], [0, 0, 0]]}, "output": {"kr20": "0.3636", "kr20_exact": "4/11", "sum_pq_exact": "25/36", "total_variance_exact": "11/12"}},
+    "source": "Kuder & Richardson, Psychometrika 1937;2:151-160 (formulas 20 and 21); Kelley 1939 upper and lower 27 % groups; point-biserial as the Pearson item-total correlation"
+  }
+}

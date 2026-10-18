@@ -1,0 +1,30 @@
+{
+  "name": "secrets_scan",
+  "description": "Find key-like strings in text with rules modelled on gitleaks' default configuration: AWS access key ids and secret keys, GitHub, GitLab, Slack, Stripe, Google API and npm tokens, Slack webhooks, private-key PEM headers, JWTs and generic high-entropy values assigned to key, token, secret or password names (Shannon entropy threshold). Every match is redacted to its first 4 characters and reported with rule, file, line, column and entropy. Text inline or relative files.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "description": "Text to scan"},
+      "files": {"type": "object", "additionalProperties": {"type": "string"}, "description": "More texts {name: content}"},
+      "paths": {"type": "array", "items": {"type": "string"}, "description": "Relative paths inside the working directory"},
+      "entropy_threshold": {"type": "number", "minimum": 0, "maximum": 8, "default": 3.5, "description": "Bits per character for the generic rule"},
+      "rules": {"type": "array", "items": {"type": "string"}, "description": "Rule ids to run (default all)"},
+      "include_examples": {"type": "boolean", "default": true, "description": "Keep matches that look like documented placeholders (EXAMPLE, xxxx, fake)"}
+    }
+  },
+  "program": "python3",
+  "args": ["secrets_scan.py"],
+  "files": ["secrets_scan.py"],
+  "catalog": {
+    "version": "1.0.1",
+    "category": "security",
+    "tags": ["secrets", "credentials", "gitleaks", "api-keys", "entropy", "redaction"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "[default]\naws_access_key_id = AKIAIOSFODNN7EXAMPLE\naws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY\n"},
+                "output": {"count": 2, "findings": [{"rule": "aws-access-token", "line": 2, "secret_redacted": "AKIA************ (20 chars)", "entropy": 3.684}, {"rule": "aws-secret-access-key", "line": 3, "secret_redacted": "wJal************ (40 chars)"}]}},
+    "source": "Rules adapted from gitleaks' default config/gitleaks.toml (Zachary Rice, MIT); Shannon entropy as in gitleaks' generic-api-key rule"
+  }
+}

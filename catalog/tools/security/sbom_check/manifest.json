@@ -1,0 +1,28 @@
+{
+  "name": "sbom_check",
+  "description": "Check a software bill of materials in CycloneDX JSON (1.4, 1.5, 1.6) or SPDX JSON (2.2, 2.3): the fields each specification requires, components without a version, purl or licence, duplicate components, bom-refs and SPDXIDs, dangling dependency and relationship references, the NTIA minimum elements, and a licence summary with SPDX ids counted and checked against the bundled SPDX License List (deprecated and unknown ids), NOASSERTION, NONE, LicenseRef- and expressions.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "sbom": {"type": "object", "description": "The SBOM as a JSON object"},
+      "sbom_text": {"type": "string", "description": "Or the SBOM as JSON text"},
+      "path": {"type": "string", "description": "Or a relative path to the JSON file"},
+      "max_list": {"type": "integer", "minimum": 0, "default": 100, "description": "Longest list of component names per category"}
+    }
+  },
+  "program": "python3",
+  "args": ["sbom_check.py"],
+  "files": ["sbom_check.py", "spdx_licenses.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "security",
+    "tags": ["sbom", "cyclonedx", "spdx", "supply-chain", "licenses", "ntia"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"sbom": {"bomFormat": "CycloneDX", "specVersion": "1.5", "serialNumber": "urn:uuid:3e671687-395b-41f5-a30f-a58921a69b79", "version": 1, "components": [{"type": "library", "name": "acme-library"}]}},
+                "output": {"format": "CycloneDX", "spec_version": "1.5", "valid": true, "errors": [], "components": {"count": 1, "without_version": {"count": 1, "names": ["acme-library"]}}}},
+    "source": "CycloneDX specification 1.4-1.6 (ECMA-424) JSON schemas; SPDX specification 2.2 and 2.3 (ISO/IEC 5962:2021 for 2.2.1) clauses 6-11 and Annex D; NTIA minimum elements (2021); SPDX License List 3.29.0 bundled by tools/catalog/data/sbom_check.py"
+  }
+}

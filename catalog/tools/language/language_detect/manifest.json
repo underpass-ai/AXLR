@@ -1,0 +1,29 @@
+{
+  "name": "language_detect",
+  "description": "Guess the language of a text among 20 languages (en es fr de pt it nl ca ro pl cs sv da no fi hu tr id ru el) by comparing its character 1-3-gram ranking with bundled profiles, the out-of-place method of Cavnar and Trenkle (1994). Returns the top candidates with distances and scores, and \"unknown\" when the text is too short, too far from every profile or too close between two languages. A heuristic: short texts and close languages are unreliable. Profiles are counts from Unicode CLDR 48.2 locale data (Unicode License); no UDHR text was used.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "maxLength": 100000},
+      "top_k": {"type": "integer", "minimum": 1, "maximum": 20, "default": 3},
+      "languages": {"type": "array", "items": {"type": "string", "enum": ["en", "es", "fr", "de", "pt", "it", "nl", "ca", "ro", "pl", "cs", "sv", "da", "no", "fi", "hu", "tr", "id", "ru", "el"]}, "description": "Restrict the candidates to these"},
+      "max_distance": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.6, "description": "unknown above this distance"},
+      "min_margin": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.01, "description": "unknown when the best two are closer than this"}
+    }
+  },
+  "program": "python3",
+  "args": ["language_detect.py"],
+  "files": ["language_detect.py", "profiles.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "language",
+    "tags": ["language-identification", "n-grams", "nlp", "text-classification", "multilingual", "heuristic"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "Paris est la capitale de la France et le chef-lieu de la région Île-de-France."}, "output": {"language": "fr", "name": "French", "reliable": true, "candidates": [{"language": "fr", "distance": 0.3919, "score": 0.6081}, {"language": "it"}, {"language": "en"}]}},
+    "source": "W. B. Cavnar and J. M. Trenkle, N-Gram-Based Text Categorization (SDAIR 1994), out-of-place measure; profiles counted by tools/catalog/data/language_detect.py from Unicode CLDR 48.2 common/main and common/annotations (Unicode License v3)"
+  }
+}

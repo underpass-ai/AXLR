@@ -1,0 +1,32 @@
+{
+  "name": "dna_tools",
+  "description": "DNA and RNA sequence tools: reverse complement and complement with IUPAC ambiguity codes, GC content, base counts, transcription, translation with the standard genetic code (NCBI table 1) in 1, 3 or 6 frames, open reading frame search with a minimum length in all six frames, and approximate molecular weight of single- or double-stranded molecules. Accepts FASTA, whitespace and numbering.",
+  "input_schema": {
+    "type": "object",
+    "required": ["sequence"],
+    "additionalProperties": false,
+    "properties": {
+      "sequence": {"type": "string", "maxLength": 2000000, "description": "IUPAC nucleotide letters; FASTA headers, spaces and digits are ignored"},
+      "operation": {"type": "string", "enum": ["summary", "reverse_complement", "complement", "gc_content", "transcribe", "back_transcribe", "translate", "orfs", "molecular_weight"], "default": "summary"},
+      "frames": {"type": "integer", "enum": [1, 3, 6], "default": 1},
+      "to_stop": {"type": "boolean", "default": false},
+      "min_aa": {"type": "integer", "minimum": 1, "maximum": 100000, "default": 30, "description": "ORF minimum length in amino acids, stop excluded"},
+      "starts": {"type": "string", "enum": ["ATG", "table"], "default": "ATG", "description": "table: ATG, CTG and TTG"},
+      "require_stop": {"type": "boolean", "default": true},
+      "strands": {"type": "string", "enum": ["single", "double"], "default": "single"}
+    }
+  },
+  "program": "python3",
+  "args": ["dna_tools.py"],
+  "files": ["dna_tools.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["dna", "rna", "bioinformatics", "genetic-code", "orf", "translation", "biology"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"sequence": "ATGGCCATTGTAATGGGCCGCTGAAAGGGTGCCCGATAG"}, "output": {"reverse_complement": "CTATCGGGCACCCTTTCAGCGGCCCATTACAATGGCCAT", "translations": [{"frame": "+1", "protein": "MAIVMGR*KGAR*"}]}},
+    "source": "NCBI translation table 1 (The Standard Code); IUPAC-IUB nucleotide ambiguity codes (Nomenclature Committee, 1985); behaviour matched to Biopython's Seq.reverse_complement, translate and gc_fraction; molecular weights after Thermo Fisher Scientific's DNA and RNA molecular weight formulas"
+  }
+}

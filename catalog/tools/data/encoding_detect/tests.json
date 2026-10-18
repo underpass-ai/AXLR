@@ -1,0 +1,18 @@
+[
+  {"name": "hand-built bytes: \"caf\u00e9\" in cp1252 is 63 61 66 e9 (not valid UTF-8); cp1252, latin-1 and ISO-8859-15 give the same text", "input": {"hex": "636166e9"}, "expect": {"exit": 0, "stdout_json": {"encoding": "cp1252", "text": "caf\u00e9", "utf8_hex": "636166c3a9", "equivalent_encodings": ["latin-1", "iso-8859-15"], "method": "single-byte plausibility (not valid UTF-8)"}}},
+  {"name": "hand-built bytes: \"caf\u00e9\" in UTF-8 is 63 61 66 c3 a9", "input": {"hex": "636166c3a9"}, "expect": {"exit": 0, "stdout_json": {"encoding": "utf-8", "text": "caf\u00e9", "method": "strict UTF-8 validation"}}},
+  {"name": "UTF-8 byte-order mark EF BB BF (Unicode standard, table 2-4)", "input": {"hex": "efbbbf636166c3a9"}, "expect": {"exit": 0, "stdout_json": {"encoding": "utf-8", "bom": "utf-8", "text": "caf\u00e9", "confidence": 1.0}}},
+  {"name": "UTF-16LE byte-order mark FF FE", "input": {"hex": "fffe630061006600e900"}, "expect": {"exit": 0, "stdout_json": {"encoding": "utf-16-le", "bom": "utf-16-le", "text": "caf\u00e9"}}},
+  {"name": "UTF-32BE byte-order mark 00 00 FE FF", "input": {"hex": "0000feff000000e9"}, "expect": {"exit": 0, "stdout_json": {"encoding": "utf-32-be", "text": "\u00e9"}}},
+  {"name": "UTF-16BE without a BOM, from the NUL in every other byte", "input": {"hex": "00680065006c006c006f00200077006f0072006c0064"}, "expect": {"exit": 0, "stdout_json": {"encoding": "utf-16-be", "text": "hello world", "method": "NUL byte pattern (no BOM)"}}},
+  {"name": "Greek UTF-16LE without a BOM (NULs only in the space)", "input": {"hex": "9a03b103bb03b703bc03ad03c103b1032000ba03cc03c303bc03b503"}, "expect": {"exit": 0, "stdout_json": {"encoding": "utf-16-le", "text": "\u039a\u03b1\u03bb\u03b7\u03bc\u03ad\u03c1\u03b1 \u03ba\u03cc\u03c3\u03bc\u03b5"}}},
+  {"name": "cp1252 typographic quotes, dash, ellipsis and euro (80, 85, 93, 94, 96) rule out latin-1, whose 0x80-0x9F are control characters", "input": {"hex": "c76120636ffb7465203520802097207472e873206368657285"}, "expect": {"exit": 0, "stdout_json": {"encoding": "cp1252", "text": "\u00c7a co\u00fbte 5 \u20ac \u2014 tr\u00e8s cher\u2026"}}},
+  {"name": "ISO-8859-15 euro sign at A4 (cp1252 reads it as the currency sign)", "input": {"hex": "c76120636ffb7465203520a4207472e8732063686572"}, "expect": {"exit": 0, "stdout_json": {"encoding": "iso-8859-15"}}},
+  {"name": "cp850 (DOS) German text: \u00fc 81 and \u00df e1", "input": {"hex": "477281e16520617573204d816e6368656e2c20477294e165"}, "expect": {"exit": 0, "stdout_json": {"encoding": "cp850", "text": "Gr\u00fc\u00dfe aus M\u00fcnchen, Gr\u00f6\u00dfe"}}},
+  {"name": "mac_roman German text", "input": {"hex": "47729fa76520617573204d9f6e6368656e2c2047729aa765"}, "expect": {"exit": 0, "stdout_json": {"encoding": "mac_roman"}}},
+  {"name": "7-bit ASCII", "input": {"hex": "48656c6c6f"}, "expect": {"exit": 0, "stdout_json": {"encoding": "ascii", "text": "Hello"}}},
+  {"name": "decode with a given encoding", "input": {"hex": "636166e9", "encoding": "latin-1"}, "expect": {"exit": 0, "stdout_json": {"encoding": "latin-1", "method": "given", "text": "caf\u00e9"}}},
+  {"name": "given encoding that does not fit", "input": {"hex": "636166e9", "encoding": "utf-8"}, "expect": {"exit": 2, "stdout_contains": "not valid utf-8"}},
+  {"name": "bad hex", "input": {"hex": "6g"}, "expect": {"exit": 2, "stdout_contains": "not valid hexadecimal"}},
+  {"name": "no input", "input": {}, "expect": {"exit": 2, "stdout_contains": "exactly one of hex"}}
+]

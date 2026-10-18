@@ -1,0 +1,31 @@
+{
+  "name": "slug_title_case",
+  "description": "Text casing and typography: URL slugs (Unicode transliterated to ASCII through NFKD, a chosen separator, cut at a word boundary), title case by style guide (Chicago 18th and 17th editions, AP, APA: minor words, hyphenated compounds, acronyms kept), sentence case keeping listed proper nouns, and smart quotes, apostrophes and dashes in English or Spanish.",
+  "input_schema": {
+    "type": "object",
+    "required": ["operation", "text"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["slug", "title_case", "sentence_case", "smart_quotes"]},
+      "text": {"type": "string"},
+      "style": {"type": "string", "enum": ["chicago", "chicago17", "ap", "apa"], "default": "chicago", "description": "title_case; chicago is the 18th edition (2024)"},
+      "separator": {"type": "string", "enum": ["-", "_", "."], "default": "-"},
+      "max_length": {"type": "integer", "minimum": 1, "maximum": 2000, "default": 80},
+      "keep": {"type": "array", "items": {"type": "string"}, "description": "sentence_case: proper nouns to keep"},
+      "language": {"type": "string", "enum": ["en", "es"], "default": "en", "description": "smart_quotes"}
+    }
+  },
+  "program": "python3",
+  "args": ["slug_title_case.py"],
+  "files": ["slug_title_case.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["slug", "title-case", "chicago", "ap-style", "apa", "typography", "smart-quotes"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "title_case", "style": "chicago", "text": "the gospel according to matthew"}, "output": {"result": "The Gospel According to Matthew"}},
+    "source": "original; The Chicago Manual of Style 18th ed. (2024) 8.160-8.162 and 17th ed. 8.159-8.161 as illustrated in the CMOS Q&A; AP Stylebook composition titles; APA Publication Manual 7th ed. 6.17; RAE Ortografía (2010) on quotation marks"
+  }
+}

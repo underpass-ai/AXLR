@@ -1,0 +1,199 @@
+[
+ {
+  "name": "hand-checked sample log (ISO 8601, syslog with year, Apache CLF, a bare line): 6 templates counted and timed",
+  "input": {
+   "text": "2026-10-18T09:00:01Z INFO Started worker 1 in 120 ms\n2026-10-18T09:00:02Z INFO Started worker 2 in 98 ms\n2026-10-18T09:00:05Z WARN Disk usage at 91% on /dev/sda1\n2026-10-18T09:01:00Z ERROR Request 3f2a9c1e-7b4d-4c3e-9a1f-0e8b7c6d5a4b failed for user \"alice\": timeout after 30s\n2026-10-18T09:02:00Z ERROR Request 9b1c2d3e-4f5a-4b6c-8d7e-1f2a3b4c5d6e failed for user \"bob\": timeout after 30s\n2026-10-18T09:03:10Z INFO Started worker 3 in 101 ms\n2026-10-18T09:04:00Z WARN Disk usage at 95% on /dev/sda1\nOct 18 09:05:00 web01 sshd[4242]: Accepted publickey for deploy from 10.0.0.7 port 52144 ssh2\nOct 18 09:06:30 web01 sshd[4250]: Accepted publickey for deploy from 10.0.0.9 port 52188 ssh2\n127.0.0.1 - frank [18/Oct/2026:09:07:00 +0000] \"GET /index.html HTTP/1.1\" 200 2326\n127.0.0.1 - frank [18/Oct/2026:09:08:00 +0000] \"GET /about.html HTTP/1.1\" 404 512\nconnection reset by peer\n",
+   "year": 2026
+  },
+  "expect": {
+   "stdout_json": {
+    "lines": 12,
+    "template_count": 6,
+    "levels": {
+     "ERROR": 2,
+     "WARN": 2,
+     "INFO": 3,
+     "UNKNOWN": 5
+    },
+    "first_timestamp": "2026-10-18T09:00:01Z",
+    "last_timestamp": "2026-10-18T09:08:00+00:00",
+    "lines_without_timestamp": 1,
+    "templates": [
+     {
+      "template": "INFO Started worker <NUM> in <NUM> ms",
+      "count": 3,
+      "share": "25.0%",
+      "first_timestamp": "2026-10-18T09:00:01Z",
+      "last_timestamp": "2026-10-18T09:03:10Z",
+      "levels": {
+       "INFO": 3
+      },
+      "first_line": 1
+     },
+     {
+      "template": "WARN Disk usage at <NUM>% on /dev/sda1",
+      "count": 2,
+      "first_timestamp": "2026-10-18T09:00:05Z",
+      "last_timestamp": "2026-10-18T09:04:00Z"
+     },
+     {
+      "template": "ERROR Request <UUID> failed for user <STR>: timeout after <NUM>s",
+      "count": 2,
+      "levels": {
+       "ERROR": 2
+      }
+     },
+     {
+      "template": "web01 sshd[<NUM>]: Accepted publickey for deploy from <IP> port <NUM> ssh2",
+      "count": 2,
+      "first_timestamp": "2026-10-18T09:05:00",
+      "last_timestamp": "2026-10-18T09:06:30"
+     },
+     {
+      "template": "<IP> - frank <STR> <NUM> <NUM>",
+      "count": 2,
+      "first_timestamp": "2026-10-18T09:07:00+00:00",
+      "last_timestamp": "2026-10-18T09:08:00+00:00"
+     },
+     {
+      "template": "connection reset by peer",
+      "count": 1,
+      "first_timestamp": null,
+      "levels": {
+       "UNKNOWN": 1
+      }
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "syslog without a year: --MM-DD shown and left out of the overall range",
+  "input": {
+   "text": "Oct 18 09:05:00 web01 cron[1]: job 7 done\nOct 18 09:06:00 web01 cron[2]: job 8 done\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "first_timestamp": null,
+    "templates": [
+     {
+      "template": "web01 cron[<NUM>]: job <NUM> done",
+      "count": 2,
+      "first_timestamp": "--10-18T09:05:00",
+      "last_timestamp": "--10-18T09:06:00"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "out-of-order lines: first and last are the earliest and latest, not the first and last seen; comma milliseconds and offsets",
+  "input": {
+   "text": "2026-10-18 10:00:00,500+02:00 ERROR [main] db: connection to 10.1.2.3:5432 lost (attempt 2)\n2026-10-18 07:30:00,250Z ERROR [main] db: connection to 10.1.2.4:5432 lost (attempt 1)\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "template_count": 1,
+    "first_timestamp": "2026-10-18T07:30:00.250Z",
+    "last_timestamp": "2026-10-18T10:00:00.500+02:00",
+    "templates": [
+     {
+      "template": "ERROR [main] db: connection to <IP> lost (attempt <NUM>)",
+      "count": 2
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "Drain similarity at 0.6: alice and bob share 5 of 6 tokens (one template with <*>), carol only 3 of 6 (her own template)",
+  "input": {
+   "text": "user alice logged in from web\nuser bob logged in from web\nuser carol logged out from api\n",
+   "similarity": 0.6
+  },
+  "expect": {
+   "stdout_json": {
+    "template_count": 2,
+    "templates": [
+     {
+      "template": "user <*> logged in from web",
+      "count": 2
+     },
+     {
+      "template": "user carol logged out from api",
+      "count": 1
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "Drain similarity at 0.5: carol's 3 of 6 is enough, all three lines merge",
+  "input": {
+   "text": "user alice logged in from web\nuser bob logged in from web\nuser carol logged out from api\n",
+   "similarity": 0.5
+  },
+  "expect": {
+   "stdout_json": {
+    "template_count": 1,
+    "templates": [
+     {
+      "template": "user <*> logged <*> from <*>",
+      "count": 3
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "logfmt level and masks: quoted strings, hex ids, decimals",
+  "input": {
+   "text": "level=warn msg=\"slow query\" took=1.5s id=0xdeadbeef\nlevel=warn msg=\"slow query\" took=2.25s id=0xcafebabe\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "levels": {
+     "WARN": 2
+    },
+    "templates": [
+     {
+      "template": "level=warn msg=<STR> took=<NUM>s id=<HEX>",
+      "count": 2
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "masks can be switched off",
+  "input": {
+   "text": "job 1 done\njob 2 done\n",
+   "mask": [],
+   "similarity": 0.9
+  },
+  "expect": {
+   "stdout_json": {
+    "template_count": 2
+   }
+  }
+ },
+ {
+  "name": "bad similarity",
+  "input": {
+   "text": "x",
+   "similarity": 2
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "similarity must be a number from 0 to 1"
+  }
+ },
+ {
+  "name": "text missing",
+  "input": {},
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "text must be a string"
+  }
+ }
+]

@@ -1,0 +1,31 @@
+{
+  "name": "file_hash_tree",
+  "description": "SHA-256 manifest of a set of files given inline ({path: content}, text or hex) or of a relative directory: entries sorted bytewise, lines identical to GNU sha256sum (escaped names included), a BSD-style variant and one digest of the whole tree; or verify files against a sha256sum or BSD manifest, listing matching, changed, missing and extra files. Also SHA-512, SHA-1, MD5 and BLAKE2b.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["manifest", "verify"], "default": "manifest"},
+      "files": {"type": "object", "additionalProperties": {"type": "string"}, "description": "{path: UTF-8 text content}"},
+      "files_hex": {"type": "object", "additionalProperties": {"type": "string"}, "description": "{path: content as hex}"},
+      "directory": {"type": "string", "description": "A relative directory to walk instead"},
+      "include": {"type": "array", "items": {"type": "string"}, "description": "Glob patterns (directory mode)"},
+      "exclude": {"type": "array", "items": {"type": "string"}, "description": "Glob patterns to skip (directory mode)"},
+      "algorithm": {"type": "string", "enum": ["sha256", "sha512", "sha1", "md5", "blake2b"], "default": "sha256"},
+      "manifest": {"type": "string", "description": "verify: checksum lines"}
+    }
+  },
+  "program": "python3",
+  "args": ["file_hash_tree.py"],
+  "files": ["file_hash_tree.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "data",
+    "tags": ["sha256", "checksum", "manifest", "integrity", "sha256sum", "verify"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"files": {"abc.txt": "abc", "empty.txt": ""}}, "output": {"count": 2, "manifest": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad  abc.txt\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  empty.txt\n"}},
+    "source": "FIPS 180-4 (SHA-2) through hashlib; manifest format of GNU coreutils sha256sum (text and binary mode, backslash escaping) and BSD cksum --tag lines"
+  }
+}

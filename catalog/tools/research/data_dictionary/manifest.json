@@ -1,0 +1,31 @@
+{
+  "name": "data_dictionary",
+  "description": "Describe the columns of a CSV dataset and draft its data dictionary: per column the inferred type (integer, number, boolean, date, datetime, time, string), nulls, distinct values, examples, min/max and mean, and pattern hints (date format, e-mail, URL, UUID, identifier, categorical, zero-padded code, constant), plus a dictionary skeleton in JSON and Markdown with blank description fields to fill in.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "csv": {"type": "string", "maxLength": 20000000, "description": "The CSV text"},
+      "path": {"type": "string", "description": "Or a relative path to a CSV file inside the working directory"},
+      "delimiter": {"type": "string", "enum": ["auto", ",", ";", "\t", "|"], "default": "auto"},
+      "header": {"type": "boolean", "default": true},
+      "null_values": {"type": "array", "items": {"type": "string"}, "description": "Default: empty, NA, N/A, NULL, null, None, NaN, nan, -"},
+      "max_examples": {"type": "integer", "minimum": 0, "maximum": 10, "default": 3},
+      "dataset": {"type": "string", "maxLength": 200, "default": "dataset"}
+    }
+  },
+  "program": "python3",
+  "args": ["data_dictionary.py"],
+  "files": ["data_dictionary.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["data-dictionary", "csv", "profiling", "metadata", "documentation", "data-quality"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"csv": "id,joined,country\n1,2024-01-15,ES\n2,2024-02-29,ES\n3,,FR\n", "dataset": "members"},
+                "output": {"rows": 3, "columns": [{"name": "id", "type": "integer", "hints": ["identifier: unique and never null"]}, {"name": "joined", "type": "date", "format": "YYYY-MM-DD", "nulls": 1, "min": "2024-01-15", "max": "2024-02-29"}, {"name": "country", "type": "string", "distinct": 2}]}},
+    "source": "original; column profiling in the manner of pandas describe and frictionless infer, Python csv module (RFC 4180 dialects)"
+  }
+}

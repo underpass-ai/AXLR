@@ -1,0 +1,33 @@
+{
+  "name": "name_generator",
+  "description": "Seeded name generator for characters (Spanish, English, Nordic, Japanese, Greek or fantasy style, female or male, with surnames), places and products (tech, pharma, brand), built from syllable tables written for this tool. The same seed always gives the same names; length bounds and uniqueness are enforced and checked, and each name shows the syllables it was built from.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "kind": {"type": "string", "enum": ["character", "place", "product"]},
+      "style": {"type": "string", "enum": ["spanish", "english", "nordic", "japanese", "greek", "fantasy", "tech", "pharma", "brand"], "description": "character: spanish english nordic japanese greek fantasy; place: spanish english nordic fantasy; product: tech pharma brand"},
+      "count": {"type": "integer", "minimum": 1, "maximum": 200, "default": 10},
+      "seed": {"type": "integer", "default": 0},
+      "min_length": {"type": "integer", "minimum": 1, "maximum": 40, "default": 3},
+      "max_length": {"type": "integer", "minimum": 1, "maximum": 40, "default": 12},
+      "gender": {"type": "string", "enum": ["any", "female", "male"], "default": "any"},
+      "surname": {"type": "boolean", "default": true},
+      "unique": {"type": "boolean", "default": true},
+      "list_styles": {"type": "boolean", "default": false}
+    }
+  },
+  "program": "python3",
+  "args": ["name_generator.py"],
+  "files": ["name_generator.py"],
+  "catalog": {
+    "version": "1.0.2",
+    "category": "writing",
+    "tags": ["names", "generator", "fiction", "worldbuilding", "branding", "random"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"kind": "product", "style": "pharma", "count": 5, "seed": 42, "min_length": 6, "max_length": 8}, "output": {"count": 5, "names": [{"name": "Mirivax"}, {"name": "Dexpril"}, {"name": "Celatex"}, {"name": "Celvax"}, {"name": "Venpril"}], "checks": {"within_bounds": true, "unique": true}}},
+    "source": "original; syllable tables written for this tool (MIT); Python's random.Random (Mersenne Twister, reproducible for a given seed)"
+  }
+}

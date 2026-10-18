@@ -1,0 +1,355 @@
+[
+ {
+  "name": "hadolint wiki DL3006 problematic code: FROM debian",
+  "input": {
+   "text": "FROM debian\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "AXL001",
+     "DL3006"
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3007 problematic code: FROM debian:latest; the correct code debian:jessie passes DL3006/DL3007",
+  "input": {
+   "text": "FROM debian:latest\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "AXL001",
+     "DL3007"
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3006/DL3007 correct code: FROM debian:jessie",
+  "input": {
+   "text": "FROM debian:jessie\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [],
+    "passed": true
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3002 problematic code: FROM busybox, USER root, RUN ...",
+  "input": {
+   "text": "FROM busybox\nUSER root\nRUN ...\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3002",
+     "DL3006"
+    ],
+    "findings": [
+     {
+      "line": 1,
+      "rule": "DL3006"
+     },
+     {
+      "line": 2,
+      "rule": "DL3002",
+      "severity": "warning"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3002 correct code: a later USER guest",
+  "input": {
+   "text": "FROM busybox\nUSER root\nRUN ...\nUSER guest\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3006"
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3004 problematic code: RUN sudo apt-get install",
+  "input": {
+   "text": "FROM busybox:1.36\nRUN sudo apt-get install\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3004",
+     "DL3009",
+     "DL3014",
+     "DL3015"
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3008 problematic code: apt-get install python; correct code python=2.7.* is pinned",
+  "input": {
+   "text": "FROM busybox:1.36\nRUN apt-get install python\nRUN apt-get install -y --no-install-recommends python=2.7.* && rm -rf /var/lib/apt/lists/*\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3008",
+     "DL3009",
+     "DL3014",
+     "DL3015"
+    ],
+    "findings": [
+     {
+      "line": 2,
+      "rule": "DL3008"
+     },
+     {
+      "line": 2,
+      "rule": "DL3009"
+     },
+     {
+      "line": 2,
+      "rule": "DL3014"
+     },
+     {
+      "line": 2,
+      "rule": "DL3015"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3009: problematic code without rm of the lists, correct code with apt-get clean and rm -rf /var/lib/apt/lists/* over continuation lines",
+  "input": {
+   "text": "FROM debian:12\nRUN apt-get update && apt-get install --no-install-recommends -y python\nRUN apt-get update && apt-get install --no-install-recommends -y python \\\n && apt-get clean \\\n && rm -rf /var/lib/apt/lists/*\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3008",
+     "DL3009"
+    ],
+    "findings": [
+     {
+      "line": 2,
+      "rule": "DL3008"
+     },
+     {
+      "line": 2,
+      "rule": "DL3009"
+     },
+     {
+      "line": 3,
+      "rule": "DL3008"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3014 problematic code: apt-get install python=2.7 without -y",
+  "input": {
+   "text": "FROM debian:12\nRUN apt-get install python=2.7 && rm -rf /var/lib/apt/lists/*\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3014",
+     "DL3015"
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3015 problematic code: apt-get install -y python=2.7",
+  "input": {
+   "text": "FROM busybox:1.36\nRUN apt-get install -y python=2.7 && rm -rf /var/lib/apt/lists/*\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3015"
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3020 problematic code: ADD requirements.txt; URLs and archives are fine",
+  "input": {
+   "text": "FROM python:3.4\nADD requirements.txt /usr/src/app/\nADD https://example.com/x.tar.gz /opt/\nADD app.tar.gz /opt/\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3020"
+    ],
+    "findings": [
+     {
+      "line": 2,
+      "rule": "DL3020",
+      "severity": "error"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL4000 problematic code: MAINTAINER",
+  "input": {
+   "text": "FROM busybox:1.36\nMAINTAINER Lukas Martinelli <me@lukasmartinelli.ch>\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL4000"
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL4003 problematic code: CMD /bin/true then CMD /bin/false (also DL3025 shell form)",
+  "input": {
+   "text": "FROM busybox:1.36\nCMD /bin/true\nCMD /bin/false\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3025",
+     "DL4003"
+    ],
+    "findings": [
+     {
+      "line": 2,
+      "rule": "DL3025"
+     },
+     {
+      "line": 3,
+      "rule": "DL3025"
+     },
+     {
+      "line": 3,
+      "rule": "DL4003"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3000 problematic code: WORKDIR usr/src/app",
+  "input": {
+   "text": "FROM busybox:1.36\nWORKDIR usr/src/app\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3000"
+    ]
+   }
+  }
+ },
+ {
+  "name": "hadolint wiki DL3027 problematic code: RUN apt install curl=1.1.0",
+  "input": {
+   "text": "FROM busybox:1.36\nRUN apt install curl=1.1.0\nUSER app\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "DL3027"
+    ]
+   }
+  }
+ },
+ {
+  "name": "own rules: secrets in ENV/ARG names (value never shown), curl piped to sh; multi-stage alias, digest pin, ignore comment",
+  "input": {
+   "text": "FROM golang:1.23 AS build\n# hadolint ignore=DL3008,DL3009\nRUN apt-get update && apt-get install -y --no-install-recommends git\nFROM build AS test\nFROM gcr.io/distroless/static@sha256:0123abcd\nENV API_TOKEN=hunter2 DEBUG=1\nARG GITHUB_TOKEN\nRUN curl -fsSL https://get.example.com | sh\nUSER 65532:65532\nENTRYPOINT [\"/app\"]\n"
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [
+     "AXL002",
+     "AXL003"
+    ],
+    "findings": [
+     {
+      "line": 6,
+      "rule": "AXL002",
+      "detail": "ENV API_TOKEN (value not shown)"
+     },
+     {
+      "line": 7,
+      "rule": "AXL002",
+      "detail": "ARG GITHUB_TOKEN (value not shown)"
+     },
+     {
+      "line": 8,
+      "rule": "AXL003"
+     }
+    ],
+    "stages": [
+     {
+      "image": "golang:1.23",
+      "alias": "build"
+     },
+     {
+      "image": "build",
+      "alias": "test"
+     },
+     {
+      "image": "gcr.io/distroless/static@sha256:0123abcd",
+      "alias": null
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "ignore list from the input",
+  "input": {
+   "text": "FROM debian\n",
+   "ignore": [
+    "AXL001",
+    "DL3006"
+   ]
+  },
+  "expect": {
+   "stdout_json": {
+    "rules_fired": [],
+    "passed": true
+   }
+  }
+ },
+ {
+  "name": "empty text",
+  "input": {
+   "text": "  "
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "text must be the Dockerfile content"
+  }
+ },
+ {
+  "name": "unknown rule id in ignore",
+  "input": {
+   "text": "FROM debian\n",
+   "ignore": [
+    "DL9999"
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "unknown rule id"
+  }
+ }
+]

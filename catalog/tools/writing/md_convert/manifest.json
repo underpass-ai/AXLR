@@ -1,0 +1,27 @@
+{
+  "name": "md_convert",
+  "description": "Convert Markdown given inline to HTML (escaped: raw HTML is never passed through), to plain text, or to a slide-deck outline split on headings. Covers a CommonMark subset (headings, emphasis with the CommonMark delimiter rules, code spans and blocks, lists, links, images, autolinks, block quotes, breaks, escapes, entities) plus GFM pipe tables; no link reference definitions.",
+  "input_schema": {
+    "type": "object",
+    "required": ["markdown"],
+    "additionalProperties": false,
+    "properties": {
+      "markdown": {"type": "string"},
+      "to": {"type": "string", "enum": ["html", "text", "slides"], "default": "html"},
+      "split_level": {"type": "integer", "minimum": 1, "maximum": 6, "default": 2, "description": "slides: headings of this level or higher start a slide"}
+    }
+  },
+  "program": "python3",
+  "args": ["md_convert.py"],
+  "files": ["md_convert.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["markdown", "html", "commonmark", "gfm", "conversion", "slides"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"markdown": "# Notes\n\nSome *emphasis* and a [link](/uri \"title\").\n"}, "output": {"html": "<h1>Notes</h1>\n<p>Some <em>emphasis</em> and a <a href=\"/uri\" title=\"title\">link</a>.</p>\n"}},
+    "source": "original; CommonMark Spec 0.31.2 (2024, spec.commonmark.org) and the GitHub Flavored Markdown Spec 0.29-gfm tables extension, whose examples the tests reproduce"
+  }
+}

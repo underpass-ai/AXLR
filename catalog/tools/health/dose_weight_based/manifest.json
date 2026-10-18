@@ -1,0 +1,40 @@
+{
+  "name": "dose_weight_based",
+  "description": "Weight- or BSA-based dose arithmetic (amount per kg or per m2, per dose or per day split by frequency) with a hard maximum single dose that the input must give, an optional maximum daily dose, rounding to a given increment, and conversion to a volume from a concentration. Exact fractions; flags every cap and rounding. It never suggests a dose, and every output carries a disclaimer: not medical advice, verify with a clinician or pharmacist.",
+  "input_schema": {
+    "type": "object",
+    "required": ["dose", "max_dose"],
+    "additionalProperties": false,
+    "properties": {
+      "dose": {"type": ["number", "string"], "description": "Amount per kg or per m2, from the prescription"},
+      "basis": {"type": "string", "enum": ["kg", "m2"], "default": "kg"},
+      "weight_kg": {"type": ["number", "string"], "description": "Required with basis kg"},
+      "bsa_m2": {"type": ["number", "string"], "description": "Required with basis m2"},
+      "dose_unit": {"type": "string", "maxLength": 20, "default": "mg"},
+      "dose_period": {"type": "string", "enum": ["per_dose", "per_day"], "default": "per_dose", "description": "per_day is divided by frequency_per_day"},
+      "frequency_per_day": {"type": "integer", "minimum": 1, "maximum": 24, "default": 1},
+      "max_dose": {"type": ["number", "string"], "description": "Hard maximum single dose in dose_unit (required)"},
+      "max_daily_dose": {"type": ["number", "string"]},
+      "rounding_increment": {"type": ["number", "string"], "description": "Dose rounded to a multiple of this"},
+      "rounding": {"type": "string", "enum": ["nearest", "down"], "default": "nearest"},
+      "concentration": {"oneOf": [
+        {"type": ["number", "string"], "description": "dose_unit per mL"},
+        {"type": "object", "additionalProperties": false, "required": ["amount", "volume_ml"], "properties": {"amount": {"type": ["number", "string"]}, "volume_ml": {"type": ["number", "string"]}}}
+      ]},
+      "volume_increment": {"type": ["number", "string"], "description": "mL; the measured volume never exceeds the dose"}
+    }
+  },
+  "program": "python3",
+  "args": ["dose_weight_based.py"],
+  "files": ["dose_weight_based.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "health",
+    "tags": ["dosage", "dose-calculation", "pediatrics", "pharmacy", "mg-per-kg", "nursing"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"dose": 15, "weight_kg": 80, "max_dose": 1000, "frequency_per_day": 4}, "output": {"calculated_dose": "1200", "dose_per_administration": "1000", "capped": true}},
+    "source": "Standard dosage-calculation arithmetic: dose = amount per kg (or m2) x weight (or BSA); volume = desired / have x quantity (the D/H x Q formula of nursing and pharmacy dosage texts)"
+  }
+}

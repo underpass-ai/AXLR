@@ -1,0 +1,27 @@
+{
+  "name": "es_verb_conjugate",
+  "description": "Conjugate a Spanish verb in every simple and compound tense of the indicative and subjunctive (both -ra and -se imperfects, future subjunctive), the affirmative and negative imperative, gerund and participle, with optional voseo. Regular -ar, -er and -ir verbs follow RAE's models amar, temer and partir with the automatic spelling changes (busqué, venzo, cojo, sigo, conozco, construyo, leyó); 171 bundled verbs cover the common irregulars (ser, ir, estar, haber, tener, hacer, decir, poder, venir…), the stem changes e>ie, o>ue, u>ue, e>i, e>ie/i, o>ue/u, written accents (envío, reúno), irregular participles and derived verbs (mantener, producir).",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "verb": {"type": "string", "maxLength": 40, "description": "Infinitive without pronouns, e.g. tener, reír"},
+      "voseo": {"type": "boolean", "default": false, "description": "Add the vos forms (amás, amá, sos)"},
+      "compound": {"type": "boolean", "default": true, "description": "Include the compound tenses with haber"},
+      "list": {"type": "boolean", "description": "List the bundled irregular verbs by model"}
+    }
+  },
+  "program": "python3",
+  "args": ["es_verb_conjugate.py"],
+  "files": ["es_verb_conjugate.py", "irregulares.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "language",
+    "tags": ["spanish", "verbs", "conjugation", "grammar", "rae", "irregular-verbs"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"verb": "tener", "compound": false}, "output": {"participio": "tenido", "indicativo": {"presente": {"yo": "tengo", "tú": "tienes", "él": "tiene", "nosotros": "tenemos", "vosotros": "tenéis", "ellos": "tienen"}, "preterito_perfecto_simple": {"yo": "tuve", "él": "tuvo"}, "futuro_simple": {"yo": "tendré"}}, "imperativo": {"afirmativo": {"tú": "ten"}}}},
+    "source": "RAE and ASALE, Nueva gramática de la lengua española (2009), ch. 4 and its conjugation models; Ortografía de la lengua española (2010); DLE conjugation tables; irregular verbs transcribed by tools/catalog/data/es_verb_conjugate.py (approach after mlconjug3)"
+  }
+}

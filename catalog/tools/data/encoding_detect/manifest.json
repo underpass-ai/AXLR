@@ -1,0 +1,28 @@
+{
+  "name": "encoding_detect",
+  "description": "Detect the text encoding of bytes given as hex and convert them to UTF-8: byte-order marks (UTF-8, UTF-16, UTF-32), strict UTF-8 validation, UTF-16 and UTF-32 without a BOM from the pattern of NUL bytes, ISO-2022-JP escapes, and the single-byte Western encodings cp1252, latin-1, ISO-8859-15, cp850 and mac_roman ranked by how plausible their decoded characters are, with a confidence, the equivalent encodings and the decoded text. Standard library only; charset_normalizer would be the tier-2 alternative.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "hex": {"type": "string", "description": "The bytes as hex"},
+      "path": {"type": "string", "description": "Or a relative path to the file"},
+      "encoding": {"type": "string", "description": "Skip detection and decode with this codec"},
+      "candidates": {"type": "array", "items": {"type": "string"}, "description": "Single-byte encodings to rank (default cp1252, latin-1, iso-8859-15, cp850, mac_roman)"},
+      "max_text": {"type": "integer", "minimum": 0, "default": 100000}
+    }
+  },
+  "program": "python3",
+  "args": ["encoding_detect.py"],
+  "files": ["encoding_detect.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "data",
+    "tags": ["encoding", "charset", "utf-8", "cp1252", "bom", "mojibake", "unicode"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"hex": "636166e9"}, "output": {"encoding": "cp1252", "text": "café", "utf8_hex": "636166c3a9", "equivalent_encodings": ["latin-1", "iso-8859-15"]}},
+    "source": "Unicode Standard 15, section 2.6 and table 2-4 (byte-order marks); RFC 3629 (UTF-8); WHATWG Encoding (latin-1 read as windows-1252); plausibility ranking after charset_normalizer's mess detection, simplified"
+  }
+}

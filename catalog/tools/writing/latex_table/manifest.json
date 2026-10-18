@@ -1,0 +1,34 @@
+{
+  "name": "latex_table",
+  "description": "Turn CSV text into a LaTeX tabular: the ten special characters (# $ % & { } _ ~ ^ \\) escaped as the LaTeX reference manual prescribes, numeric columns right-aligned automatically or alignment given, \\hline or booktabs rules, optional siunitx S columns, caption and label in a table float. Returns the LaTeX and the packages it needs.",
+  "input_schema": {
+    "type": "object",
+    "required": ["csv"],
+    "additionalProperties": false,
+    "properties": {
+      "csv": {"type": "string"},
+      "delimiter": {"type": "string", "minLength": 1, "maxLength": 1, "default": ","},
+      "header": {"type": "boolean", "default": true},
+      "align": {"type": "string", "pattern": "^[lcrS]+$", "description": "One letter per column; default automatic"},
+      "booktabs": {"type": "boolean", "default": false},
+      "siunitx": {"type": "boolean", "default": false},
+      "caption": {"type": "string"},
+      "label": {"type": "string", "pattern": "^[A-Za-z0-9:._-]+$"},
+      "position": {"type": "string", "default": "htbp"},
+      "escape": {"type": "boolean", "default": true}
+    }
+  },
+  "program": "python3",
+  "args": ["latex_table.py"],
+  "files": ["latex_table.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["latex", "table", "csv", "booktabs", "siunitx", "typesetting"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"csv": "Item,Qty,Price\nApples,3,1.20\nPears & plums,12,0.5\n", "booktabs": true}, "output": {"alignment": "lrr", "numeric_columns": [2, 3], "packages": ["booktabs"]}},
+    "source": "original; escaping as in the LaTeX2e unofficial reference manual (latexref.xyz), 23.1 Printing special characters; booktabs and siunitx package conventions"
+  }
+}

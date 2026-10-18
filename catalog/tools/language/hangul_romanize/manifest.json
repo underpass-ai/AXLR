@@ -1,0 +1,28 @@
+{
+  "name": "hangul_romanize",
+  "description": "Romanize Korean Hangul with the Revised Romanization of Korean (2000): syllables decomposed into jamo, the rules' sound changes applied between syllables (liaison, coda neutralisation, nasalisation, ㄹ/ㄴ assimilation, palatalisation, aspiration with ㅎ), or the letter-by-letter transliteration of Article 8. Options keep h after ㄱ/ㄷ/ㅂ in nouns (묵호 Mukho) and capitalize each word.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string", "minLength": 1, "maxLength": 100000, "description": "Korean text; non-Hangul characters are copied unchanged"},
+      "mode": {"type": "string", "enum": ["pronunciation", "transliteration"], "default": "pronunciation", "description": "pronunciation: the RR with sound changes; transliteration: Article 8, letter by letter, reversible"},
+      "capitalize": {"type": "boolean", "default": false, "description": "Upper-case the first letter of each run of Hangul (proper names)"},
+      "keep_h": {"type": "boolean", "default": false, "description": "Do not aspirate ㄱ/ㄷ/ㅂ before ㅎ (nouns: 묵호 Mukho, 집현전 Jiphyeonjeon)"}
+    }
+  },
+  "program": "python3",
+  "args": ["hangul_romanize.py"],
+  "files": ["hangul_romanize.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "language",
+    "tags": ["korean", "hangul", "romanization", "transliteration", "revised-romanization", "linguistics"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "대관령", "capitalize": true}, "output": {"result": "Daegwallyeong", "mode": "pronunciation"}},
+    "source": "Romanization of Korean, Ministry of Culture and Tourism notice 2000-8 (National Institute of the Korean Language), with the sound changes of the Standard Korean Pronunciation rules; Hangul decomposition per Unicode chapter 3.12 (as in Tyriar/hangul-romanization)"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "color_tools",
+  "description": "Convert colours between hex, RGB, HSL, HSV and CMYK, compute the WCAG 2.x relative luminance and contrast ratio of two colours with AA/AAA verdicts for normal text, large text and UI components, find the nearest CSS named colours (CIELAB delta E), and build palettes from a seed: complementary, triadic, analogous, split-complementary, tetradic, tints and shades. Reads hex, rgb(), hsl(), hsv(), cmyk() and the 148 CSS named colours.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["convert", "contrast", "nearest_named", "palette"], "default": "convert"},
+      "color": {"type": ["string", "object"], "description": "#rgb, #rrggbb, #rrggbbaa, rgb(), hsl(), hsv(), cmyk(), a CSS name, or {r, g, b, a}"},
+      "foreground": {"type": ["string", "object"]},
+      "background": {"type": ["string", "object"]},
+      "count": {"type": "integer", "minimum": 1, "maximum": 20, "default": 3},
+      "scheme": {"type": "string", "enum": ["complementary", "triadic", "analogous", "split_complementary", "tetradic", "tints", "shades", "all"], "default": "all"},
+      "steps": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5}
+    }
+  },
+  "program": "python3",
+  "args": ["color_tools.py"],
+  "files": ["color_tools.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "media",
+    "tags": ["color", "wcag", "contrast", "accessibility", "palette", "css", "design"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "contrast", "foreground": "#777777", "background": "white"}, "output": {"ratio": "4.48:1", "wcag": {"AA_normal_text": false, "AA_large_text": true, "AAA_normal_text": false}}},
+    "source": "WCAG 2.2 (W3C) definitions of relative luminance and contrast ratio, success criteria 1.4.3, 1.4.6 and 1.4.11; CSS Color Module Level 4 (W3C) named colours and HSL conversion; IEC 61966-2-1 sRGB; CIE 1976 L*a*b*"
+  }
+}

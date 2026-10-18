@@ -1,0 +1,126 @@
+[
+ {
+  "name": "Anki manual, Importing > Text Files > File Headers: #separator:Tab, #html:false, #tags column:N, and a field with quotes put in quotes with each quote doubled",
+  "input": {
+   "csv": "front,back,tags\nbonjour,hello,french greetings\n\"merci\",\"thank you, \"\"thanks\"\"\",french\n"
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "tsv": "#separator:Tab\n#html:false\n#columns:Front\tBack\tTags\n#tags column:3\nbonjour\thello\tfrench greetings\nmerci\t\"thank you, \"\"thanks\"\"\"\tfrench\n",
+    "notes": 2,
+    "columns": [
+     "front",
+     "back",
+     "tags"
+    ]
+   }
+  }
+ },
+ {
+  "name": "Anki manual: #deck column:N and HTML newlines as <br> with #html:true; an empty front is skipped",
+  "input": {
+   "csv": "Capital of France?,Paris,geo europe,Geography::Europe\nLine one,\"two\nlines\",,Geography::Europe\n,empty,,X\n",
+   "html": true
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "tsv": "#separator:Tab\n#html:true\n#columns:Front\tBack\tTags\tDeck\n#tags column:3\n#deck column:4\nCapital of France?\tParis\tgeo europe\tGeography::Europe\nLine one\ttwo<br>lines\t\tGeography::Europe\n",
+    "notes": 2,
+    "skipped": [
+     {
+      "row": 3,
+      "reason": "empty front"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "Anki manual: #notetype, #deck and #tags (space-separated, added to every note) headers",
+  "input": {
+   "csv": "a;b\nc;d\n",
+   "delimiter": ";",
+   "header": false,
+   "columns": [
+    "front",
+    "back"
+   ],
+   "deck": "Vocab",
+   "tags": "lesson1, unit2",
+   "notetype": "Basic (and reversed card)"
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "header_lines": [
+     "#separator:Tab",
+     "#html:false",
+     "#notetype:Basic (and reversed card)",
+     "#deck:Vocab",
+     "#tags:lesson1 unit2",
+     "#columns:Front\tBack"
+    ],
+    "notes": 2
+   }
+  }
+ },
+ {
+  "name": "plain text keeps a newline and a tab inside a quoted field",
+  "input": {
+   "csv": "front,back\n\"two\nlines\",\"tab\there\"\n"
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "tsv": "#separator:Tab\n#html:false\n#columns:Front\tBack\n\"two\nlines\"\t\"tab\there\"\n"
+   }
+  }
+ },
+ {
+  "name": "extra note fields go between back and tags",
+  "input": {
+   "csv": "front,back,example,tags\nperro,dog,El perro ladra,es\n"
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "columns": [
+     "front",
+     "back",
+     "example",
+     "tags"
+    ],
+    "header_lines": [
+     "#separator:Tab",
+     "#html:false",
+     "#columns:Front\tBack\tExample\tTags",
+     "#tags column:4"
+    ]
+   }
+  }
+ },
+ {
+  "name": "br newlines without html",
+  "input": {
+   "csv": "front,back\na,b\n",
+   "newlines": "br"
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "needs html true"
+  }
+ },
+ {
+  "name": "more fields than columns",
+  "input": {
+   "csv": "a,b,c,d,e\n",
+   "header": false
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "only 4 columns are named"
+  }
+ }
+]

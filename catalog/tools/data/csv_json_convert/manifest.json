@@ -1,0 +1,36 @@
+{
+  "name": "csv_json_convert",
+  "description": "Convert CSV to JSON and back. CSV to JSON nests dotted column names (address.city) into objects and numbered parts (tags.0) into arrays, infers numbers, booleans and null (leading zeros stay text), and writes an array, JSON Lines or an object keyed by a column. JSON (an array of objects or JSON Lines) to CSV flattens nested objects and arrays into dotted columns in first-seen order, so the two directions round-trip. Inline text or a relative file.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "csv": {"type": "string"},
+      "json": {"description": "A JSON array of objects, or one object"},
+      "json_text": {"type": "string", "description": "JSON or JSON Lines text"},
+      "path": {"type": "string", "description": "Relative path: .csv/.tsv/.txt read as CSV, anything else as JSON"},
+      "to": {"type": "string", "enum": ["json", "csv"]},
+      "delimiter": {"type": "string", "description": "Sniffed when reading CSV; ',' when writing; \\t for tab"},
+      "nest": {"type": "boolean", "default": true},
+      "separator": {"type": "string", "default": "."},
+      "infer_types": {"type": "boolean", "default": true},
+      "empty": {"type": "string", "enum": ["null", "omit", "string"], "default": "null"},
+      "format": {"type": "string", "enum": ["array", "jsonl", "keyed"], "default": "array"},
+      "key_column": {"type": "string"},
+      "arrays": {"type": "string", "enum": ["index", "json"], "default": "index"}
+    }
+  },
+  "program": "python3",
+  "args": ["csv_json_convert.py"],
+  "files": ["csv_json_convert.py"],
+  "catalog": {
+    "version": "1.0.1",
+    "category": "data",
+    "tags": ["csv", "json", "jsonl", "convert", "flatten", "nesting"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"csv": "id,address.city,tags.0,tags.1\n1,Madrid,a,b\n"}, "output": {"to": "json", "json": [{"id": 1, "address": {"city": "Madrid"}, "tags": ["a", "b"]}]}},
+    "source": "After csvkit's csvjson and in2csv (wireservice/csvkit); dotted-key nesting as in the flat and flatten-json conventions; Python csv and json"
+  }
+}

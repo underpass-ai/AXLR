@@ -1,0 +1,182 @@
+[
+ {
+  "name": "github/gitignore Python.gitignore (commit 0e5d690): the section starts with its comment and __pycache__/, *.py[codz], *$py.class",
+  "input": {
+   "stacks": [
+    "Python"
+   ]
+  },
+  "expect": {
+   "stdout_contains": "### Python ### (github/gitignore Python.gitignore)\\n# Byte-compiled / optimized / DLL files\\n__pycache__/\\n*.py[codz]\\n*$py.class\\n"
+  }
+ },
+ {
+  "name": "github/gitignore Global/macOS.gitignore contains .DS_Store; aliases mac and golang",
+  "input": {
+   "stacks": [
+    "golang",
+    "mac"
+   ]
+  },
+  "expect": {
+   "stdout_json": {
+    "stacks": [
+     "Go",
+     "macOS"
+    ],
+    "sections": [
+     {
+      "name": "Go",
+      "path": "Go.gitignore"
+     },
+     {
+      "name": "macOS",
+      "path": "Global/macOS.gitignore"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "github/gitignore Global/macOS.gitignore line .DS_Store is present",
+  "input": {
+   "stacks": [
+    "macOS"
+   ],
+   "comments": false
+  },
+  "expect": {
+   "stdout_contains": "### macOS ### (github/gitignore Global/macOS.gitignore)\\n.DS_Store\\n"
+  }
+ },
+ {
+  "name": "github/gitignore Node.gitignore line node_modules/ is present",
+  "input": {
+   "stacks": [
+    "node"
+   ]
+  },
+  "expect": {
+   "stdout_contains": "\\nnode_modules/\\n"
+  }
+ },
+ {
+  "name": "C then C++: the 19 patterns C++.gitignore repeats from C.gitignore are dropped",
+  "input": {
+   "stacks": [
+    "C",
+    "C++"
+   ],
+   "comments": false
+  },
+  "expect": {
+   "stdout_json": {
+    "sections": [
+     {
+      "name": "C",
+      "patterns": 36,
+      "duplicates_dropped": 0
+     },
+     {
+      "name": "C++",
+      "patterns": 20,
+      "duplicates_dropped": 19
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "a repeated pattern after a negation is kept (gitignore: the last matching pattern wins)",
+  "input": {
+   "stacks": [
+    "VisualStudioCode"
+   ],
+   "extra": [
+    "!.vscode/settings.json",
+    "*.vsix",
+    ".vscode/*"
+   ]
+  },
+  "expect": {
+   "stdout_json": {
+    "sections": [
+     {
+      "name": "VisualStudioCode",
+      "patterns": 8
+     },
+     {
+      "name": "Custom",
+      "patterns": 3,
+      "duplicates_dropped": 0
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "without dedupe every line stays",
+  "input": {
+   "stacks": [
+    "C",
+    "C++"
+   ],
+   "dedupe": false,
+   "comments": false
+  },
+  "expect": {
+   "stdout_json": {
+    "sections": [
+     {
+      "name": "C",
+      "duplicates_dropped": 0
+     },
+     {
+      "name": "C++",
+      "patterns": 39,
+      "duplicates_dropped": 0
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "source commit is recorded",
+  "input": {
+   "stacks": [
+    "Rust"
+   ]
+  },
+  "expect": {
+   "stdout_json": {
+    "source": {
+     "repository": "https://github.com/github/gitignore",
+     "commit": "0e5d690153ca3da8a4a1aef2d053406f408f531c",
+     "license": "CC0-1.0"
+    }
+   }
+  }
+ },
+ {
+  "name": "unknown stack",
+  "input": {
+   "stacks": [
+    "Cobol85"
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "unknown stack(s): Cobol85"
+  }
+ },
+ {
+  "name": "no stacks",
+  "input": {
+   "stacks": []
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "stacks must be a non-empty list"
+  }
+ }
+]
