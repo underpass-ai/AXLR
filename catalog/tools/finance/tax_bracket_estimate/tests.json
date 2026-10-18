@@ -1,0 +1,9 @@
+[
+  {"name": "US single 2025: $5,578.50 plus 22 % over $48,475", "input": {"income": 100000, "table": "us_federal_2025_single"}, "expect": {"exit": 0, "stdout_json": {"year": 2025, "tax": "16914.00", "marginal_rate": "22", "effective_rate": "16.91"}}},
+  {"name": "Spanish state scale: 2,112.75 at 20,200 plus 15 %", "input": {"income": "30000", "table": "es_irpf_2025_state_general"}, "expect": {"exit": 0, "stdout_json": {"tax": "3582.75", "brackets": [{"tax": "1182.75"}, {"tax": "930.00"}, {"tax": "1470.00"}]}}},
+  {"name": "Spanish minimum taxed at the scale and subtracted", "input": {"income": "30000", "table": "es_irpf_2025_state_general", "allowance": 5550, "allowance_method": "tax_on_allowance"}, "expect": {"exit": 0, "stdout_json": {"tax_before_allowance": "3582.75", "allowance_relief": "527.25", "tax": "3055.50"}}},
+  {"name": "brackets from the input with a deduction", "input": {"income": 1500, "allowance": 500, "brackets": [{"up_to": 500, "rate": 0}, {"up_to": null, "rate": 20}]}, "expect": {"exit": 0, "stdout_json": {"taxable_base": "1000", "tax": "100.00", "table": "given in the input"}}},
+  {"name": "every answer carries a disclaimer", "input": {"income": 10, "table": "us_federal_2025_married_joint"}, "expect": {"exit": 0, "stdout_contains": "not tax advice"}},
+  {"name": "unknown table", "input": {"income": 1, "table": "fr_2025"}, "expect": {"exit": 2, "stdout_contains": "unknown table"}},
+  {"name": "brackets that do not end open", "input": {"income": 1, "brackets": [{"up_to": 10, "rate": 5}]}, "expect": {"exit": 2, "stdout_contains": "must have up_to null"}}
+]

@@ -1,0 +1,26 @@
+{
+  "name": "eu_vat_validate",
+  "description": "Check EU VAT identification numbers offline: each member state's format and check-digit algorithm (Austria to Slovakia, Greece as EL, Spain's NIF forms, the Dutch mod-97 numbers) plus XI for Northern Ireland. Says whether a number is well formed; whether it is registered is VIES's answer.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "vat": {"type": "string", "description": "With its country prefix; spaces, dots and dashes ignored"},
+      "vats": {"type": "array", "items": {"type": "string"}},
+      "country": {"type": "string", "pattern": "^[A-Za-z]{2}$", "description": "Prefix to assume when the numbers have none"}
+    }
+  },
+  "program": "python3",
+  "args": ["eu_vat_validate.py"],
+  "files": ["eu_vat_validate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["vat", "iva", "eu", "vies", "tax-id", "validation", "intra-community"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"vat": "DE 136 695 976"}, "output": {"vat": "DE136695976", "valid": true, "country_name": "Germany"}},
+    "source": "national VAT number algorithms as implemented and documented by python-stdnum (github.com/arthurdejong/python-stdnum); EU Commission VIES format rules"
+  }
+}

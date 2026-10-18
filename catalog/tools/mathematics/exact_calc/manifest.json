@@ -1,0 +1,27 @@
+{
+  "name": "exact_calc",
+  "description": "Evaluate an arithmetic expression exactly over fractions: 0.1 + 0.2 is 3/10, 2**100 has every digit, binomials and factorials are exact. Parsed into a syntax tree with a whitelist, never eval. Irrational results (sqrt of a non-square, pi, ln, exp, trig) come out as decimals at a chosen precision, marked inexact.",
+  "input_schema": {
+    "type": "object",
+    "required": ["expression"],
+    "additionalProperties": false,
+    "properties": {
+      "expression": {"type": "string", "maxLength": 10000, "description": "+ - * / // % ** (or ^), parentheses, and sqrt abs floor ceil trunc round min max gcd lcm factorial binomial perm ln log log10 exp sin cos tan atan, pi, e"},
+      "variables": {"type": "object", "additionalProperties": {"type": ["number", "string"]}, "description": "Names to substitute, numbers or decimal strings"},
+      "precision": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 30, "description": "Significant digits of the decimal rendering"}
+    }
+  },
+  "program": "python3",
+  "args": ["exact_calc.py"],
+  "files": ["exact_calc.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["calculator", "fractions", "exact", "arithmetic", "decimal", "bignum"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"expression": "0.1 + 0.2"}, "output": {"result": "3/10", "decimal": "0.3", "exact": true}},
+    "source": "original; Python fractions and decimal, ast whitelist evaluation"
+  }
+}

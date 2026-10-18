@@ -1,0 +1,35 @@
+{
+  "name": "vote_condorcet",
+  "description": "Condorcet analysis of ranked ballots: the pairwise preference matrix, the Condorcet winner and loser, the Smith set, Copeland scores and the Schulze ranking with its strongest paths. Ballots may tie candidates and leave some unranked.",
+  "input_schema": {
+    "type": "object",
+    "required": ["ballots"],
+    "additionalProperties": false,
+    "properties": {
+      "ballots": {"type": "array", "minItems": 1, "description": "Each a ranking (list of names; an inner list is a tie) or {ranking, count}", "items": {
+        "anyOf": [
+          {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]}},
+          {"type": "object", "required": ["ranking"], "additionalProperties": false, "properties": {
+            "ranking": {"type": "array", "items": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]}},
+            "count": {"type": "integer", "minimum": 0, "default": 1}}}
+        ]}},
+      "candidates": {"type": "array", "items": {"type": "string"}, "description": "Every candidate, including any no ballot ranks; default the names on the ballots"}
+    }
+  },
+  "program": "python3",
+  "args": ["vote_condorcet.py"],
+  "files": ["vote_condorcet.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": ["elections", "condorcet", "schulze", "copeland", "ranked-choice", "smith-set"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"ballots": [{"ranking": ["A", "B", "C"], "count": 4}, {"ranking": ["B", "C", "A"], "count": 3}, {"ranking": ["C", "A", "B"], "count": 2}]},
+      "output": {"condorcet_winner": null, "schulze": {"winners": ["A"]}}
+    },
+    "source": "original; Schulze, A new monotonic, clone-independent… single-winner election method, Social Choice and Welfare 36 (2011); ideas from CIVS (github.com/andrewcmyers/civs)"
+  }
+}

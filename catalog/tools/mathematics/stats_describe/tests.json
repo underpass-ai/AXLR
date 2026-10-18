@@ -1,0 +1,12 @@
+[
+  {"name": "textbook data set with population sd 2", "input": {"data": [2, 4, 4, 4, 5, 5, 7, 9]},
+   "expect": {"exit": 0, "stdout_json": {"count": 8, "mean": 5.0, "median": 4.5, "modes": [4.0], "sd_population": 2.0, "exact": {"variance_sample": "32/7"}, "quartiles": {"q1": 4.0, "q3": 6.5}}}},
+  {"name": "t quantile for 7 degrees of freedom is 2.3646", "input": {"data": [2, 4, 4, 4, 5, 5, 7, 9]}, "expect": {"exit": 0, "stdout_contains": "\"t\": 2.364624"}},
+  {"name": "anscombe set one: slope 0.5, intercept 3", "input": {"x": [10, 8, 13, 9, 11, 14, 6, 4, 12, 7, 5], "y": ["8.04", "6.95", "7.58", "8.81", "8.33", "9.96", "7.24", "4.26", "10.84", "4.82", "5.68"]},
+   "expect": {"exit": 0, "stdout_json": {"regression": {"exact": {"slope": "5501/11000", "intercept": "33001/11000"}}, "x": {"mean": 9.0}}}},
+  {"name": "anscombe set one: r is 0.816", "input": {"x": [10, 8, 13, 9, 11, 14, 6, 4, 12, 7, 5], "y": ["8.04", "6.95", "7.58", "8.81", "8.33", "9.96", "7.24", "4.26", "10.84", "4.82", "5.68"]},
+   "expect": {"exit": 0, "stdout_contains": "\"pearson_r\": 0.81642"}},
+  {"name": "inclusive quartiles as in Excel", "input": {"data": [1, 2, 3, 4, 5, 6, 7, 8], "quantile_method": "inclusive"}, "expect": {"exit": 0, "stdout_json": {"quartiles": {"q1": 2.75, "q2": 4.5, "q3": 6.25}}}},
+  {"name": "one value is not enough", "input": {"data": [1]}, "expect": {"exit": 2, "stdout_contains": "at least two"}},
+  {"name": "unequal pairs", "input": {"x": [1, 2], "y": [1, 2, 3]}, "expect": {"exit": 2, "stdout_contains": "same length"}}
+]

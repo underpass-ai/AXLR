@@ -1,0 +1,25 @@
+{
+  "name": "es_tax_id_validate",
+  "description": "Validate Spanish tax identifiers: the DNI/NIF of a citizen, the NIE of a foreign national, the special K, L and M NIFs, and the NIF of a company or other legal entity (the former CIF) with its entity type and province code. A wrong check letter or digit comes back with the correct one.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "id": {"type": "string", "description": "Spaces, dots, dashes and an ES prefix are ignored"},
+      "ids": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "program": "python3",
+  "args": ["es_tax_id_validate.py"],
+  "files": ["es_tax_id_validate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["nif", "nie", "dni", "cif", "spain", "tax-id", "validation"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"id": "Q2826000H"}, "output": {"valid": true, "type": "NIF_entity", "entity": "organismo público"}},
+    "source": "Real Decreto 1065/2007 (NIF) and Orden EHA/451/2008 (entity letters); check algorithms as in python-stdnum (github.com/arthurdejong/python-stdnum)"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "transparency_request_draft",
+  "description": "Draft an access-to-information request for Spain (Ley 19/2013), the EU institutions (Regulation 1049/2001), the US federal government (FOIA) or the UK (FOIA 2000): the letter with the elements the law requires and its legal basis, where to submit it, the response time and due date, and what to do after a refusal or silence. Not legal advice.",
+  "input_schema": {
+    "type": "object",
+    "required": ["jurisdiction", "authority", "requester", "information"],
+    "additionalProperties": false,
+    "properties": {
+      "jurisdiction": {"type": "string", "enum": ["es", "eu", "us", "uk"]},
+      "authority": {"type": "string", "description": "The public body addressed"},
+      "requester": {"type": "object", "required": ["name"], "additionalProperties": false, "properties": {"name": {"type": "string"}, "email": {"type": "string"}, "address": {"type": "string"}}},
+      "information": {"anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}], "description": "What is requested, as precisely as possible"},
+      "format": {"type": "string", "enum": ["electronic", "paper", "inspection"], "default": "electronic"},
+      "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Submission date, for the response due date"},
+      "fee_category": {"type": "string", "enum": ["news_media", "educational", "commercial", "other"], "description": "US only"},
+      "fee_waiver": {"type": "boolean", "description": "US only"},
+      "fee_waiver_reason": {"type": "string"}
+    }
+  },
+  "program": "python3",
+  "args": ["transparency_request_draft.py"],
+  "files": ["transparency_request_draft.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "politics_civics",
+    "tags": ["transparency", "foia", "access-to-information", "ley-19-2013", "public-records", "accountability"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {
+      "input": {"jurisdiction": "es", "authority": "Ministerio de Hacienda", "requester": {"name": "Ana López", "email": "ana@example.org"}, "information": ["Contratos menores de 2025"], "date": "2026-01-31"},
+      "output": {"subject": "Solicitud de acceso a información pública (Ley 19/2013)", "response_due": "2026-02-28"}
+    },
+    "source": "original; Ley 19/2013 arts. 12-24, Regulation (EC) 1049/2001 arts. 2-8, 5 U.S.C. § 552, Freedom of Information Act 2000 ss. 1-17 and 50"
+  }
+}

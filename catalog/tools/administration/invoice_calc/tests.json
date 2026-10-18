@@ -1,0 +1,12 @@
+[
+  {"name": "freelancer invoice with 21 % VAT and 15 % IRPF", "input": {"lines": [{"description": "Consulting", "quantity": 10, "unit_price": "100.00", "vat_percent": 21}], "withholding_percent": 15},
+   "expect": {"exit": 0, "stdout_json": {"base": "1000.00", "vat": "210.00", "withholding": "150.00", "total": "1060.00"}}},
+  {"name": "two rates and discounts", "input": {"lines": [{"quantity": 3, "unit_price": "19.99", "vat_percent": 21, "discount_percent": 10}, {"quantity": "2.5", "unit_price": "4.00", "vat_percent": 10}], "global_discount_percent": 5},
+   "expect": {"exit": 0, "stdout_json": {"gross": "69.97", "taxes": [{"vat_percent": "21", "base": "51.27", "vat": "10.77"}, {"vat_percent": "10", "base": "9.50", "vat": "0.95"}], "base": "60.77", "vat": "11.72", "total": "72.49"}}},
+  {"name": "equivalence surcharge", "input": {"lines": [{"quantity": 1, "unit_price": "200", "vat_percent": 21, "surcharge_percent": "5.2"}]},
+   "expect": {"exit": 0, "stdout_json": {"taxes": [{"base": "200.00", "vat": "42.00", "surcharge": "10.40"}], "total": "252.40"}}},
+  {"name": "0.1 + 0.2 is exact", "input": {"lines": [{"quantity": 1, "unit_price": 0.1, "vat_percent": 0}, {"quantity": 1, "unit_price": 0.2, "vat_percent": 0}]},
+   "expect": {"exit": 0, "stdout_json": {"total": "0.30"}}},
+  {"name": "missing vat", "input": {"lines": [{"quantity": 1, "unit_price": 1}]}, "expect": {"exit": 2, "stdout_contains": "vat_percent is required"}},
+  {"name": "discount over 100", "input": {"lines": [{"quantity": 1, "unit_price": 1, "vat_percent": 21, "discount_percent": 120}]}, "expect": {"exit": 2, "stdout_contains": "between 0 and 100"}}
+]
