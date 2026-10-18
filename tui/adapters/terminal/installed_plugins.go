@@ -26,7 +26,10 @@ type InstalledPlugins struct {
 	loadedAvailable       bool
 	addingMarketplace     bool
 	searching, confirming bool
-	w, h                  int
+	// pending is the change the confirmation applies: install, update or
+	// remove.
+	pending string
+	w, h    int
 }
 
 func NewInstalledPlugins() InstalledPlugins {
@@ -164,6 +167,12 @@ func (p *InstalledPlugins) Update(msg tea.Msg) ControlIntent {
 			switch key.String() {
 			case "enter":
 				p.confirming = false
+				switch p.pending {
+				case "update":
+					return "catalog-update"
+				case "remove":
+					return "catalog-remove"
+				}
 				return "catalog-change"
 			case "esc":
 				p.confirming = false
@@ -226,7 +235,19 @@ func (p *InstalledPlugins) Update(msg tea.Msg) ControlIntent {
 			return ""
 		case "enter", "i":
 			if len(p.visible()) > 0 && p.Selected < len(p.Items) && !p.Items[p.Selected].Installed {
-				p.confirming = true
+				p.confirming, p.pending = true, "install"
+			}
+			return ""
+		case "u":
+			// Built-in entries have no package to update; a package that
+			// records no source has nothing to update from.
+			if item, ok := p.selectedInstalled(); ok && item.Source != "" {
+				p.confirming, p.pending = true, "update"
+			}
+			return ""
+		case "x":
+			if _, ok := p.selectedInstalled(); ok {
+				p.confirming, p.pending = true, "remove"
 			}
 			return ""
 		}
@@ -236,6 +257,16 @@ func (p *InstalledPlugins) Update(msg tea.Msg) ControlIntent {
 	}
 	p.Details, _ = p.Details.Update(msg)
 	return ""
+}
+
+// selectedInstalled is the selected package when it is installed and owned
+// by AXLR's package directory rather than built in.
+func (p *InstalledPlugins) selectedInstalled() (application.InstalledPlugin, bool) {
+	if len(p.visible()) == 0 || p.Selected >= len(p.Items) {
+		return application.InstalledPlugin{}, false
+	}
+	item := p.Items[p.Selected]
+	return item, item.Installed && !item.Builtin
 }
 
 func (p InstalledPlugins) View(w, h int) string {
@@ -296,7 +327,14 @@ func (p InstalledPlugins) View(w, h int) string {
 	detail := p.Details.View()
 	if p.confirming && len(visible) > 0 {
 		item := p.Items[p.Selected]
-		detail = p.Theme.Tf("catalog.confirmInstall", item.ID)
+		switch p.pending {
+		case "update":
+			detail = p.Theme.Tf("catalog.confirmUpdate", item.ID, item.Source)
+		case "remove":
+			detail = p.Theme.Tf("catalog.confirmRemove", item.ID)
+		default:
+			detail = p.Theme.Tf("catalog.confirmInstall", item.ID)
+		}
 		detail += "\n\n" + p.Theme.T("catalog.confirmHint")
 	}
 	if wide {

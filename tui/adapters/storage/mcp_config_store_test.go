@@ -380,3 +380,48 @@ func TestMCPConfigStorePackageEnvironment(t *testing.T) {
 		t.Fatal("provider credential forwarded")
 	}
 }
+
+// A package's entries leave together; an entry outside its directory stays,
+// even one whose manifest can no longer be loaded.
+func TestMCPConfigStoreRemovesOnlyOnePackagesManifests(t *testing.T) {
+	path := configuredPlugin(t)
+	store := &MCPConfigStore{Path: path}
+	ctx := context.Background()
+	pkg := filepath.Join(t.TempDir(), "sample")
+	for _, name := range []string{"a", "b"} {
+		manifest := filepath.Join(pkg, ".axlr-mcp", name+".json")
+		if err := os.MkdirAll(filepath.Dir(manifest), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(manifest, portableManifest([]byte(`{"manifest_version":1,"id":"sample-`+name+`","command":"/bin/echo","args":[],"allow_tools":["*"]}`)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AddManifestWithEnvironment(ctx, manifest, map[string]string{"HOME": "HOME"}, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SaveApproval(ctx, "sample-b", domain.ApprovalAuto); err != nil {
+		t.Fatal(err)
+	}
+	// A sibling whose name only starts like the package is not inside it.
+	if _, _, err := store.RemoveManifestsUnder(ctx, pkg[:len(pkg)-1]); err != nil {
+		t.Fatal(err)
+	}
+	if config, _ := readMCPConfig(path); len(config.Plugins) != 3 {
+		t.Fatalf("prefix removed entries: %+v", config.Plugins)
+	}
+	ids, removed, err := store.RemoveManifestsUnder(ctx, pkg)
+	if err != nil || len(ids) != 2 || ids[0] != "sample-a" || ids[1] != "sample-b" || removed[1].Approval != "auto" || removed[0].EnvFrom["HOME"] != "HOME" {
+		t.Fatalf("removed: %v %+v %v", ids, removed, err)
+	}
+	config, err := readMCPConfig(path)
+	if err != nil || len(config.Plugins) != 1 || config.Plugins[0].Name != "KMP" {
+		t.Fatalf("kept: %+v %v", config, err)
+	}
+	if ids, _, err := store.RemoveManifestsUnder(ctx, pkg); err != nil || len(ids) != 0 {
+		t.Fatalf("second removal: %v %v", ids, err)
+	}
+	if _, _, err := store.RemoveManifestsUnder(ctx, "relative"); err == nil {
+		t.Fatal("relative directory accepted")
+	}
+}

@@ -41,6 +41,23 @@ func TestRegisterThirdPartyHTTPServer(t *testing.T) {
 	if err != nil || len(tools) != 1 || tools[0].Ref.ToolName != "ping" {
 		t.Fatalf("HTTP tools: %+v %v", tools, err)
 	}
+	// An uninstalled package's server is forgotten at once, and the same ID
+	// can be registered again by the package's update.
+	if err := manager.Unregister(context.Background(), "remote"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ListServer(context.Background(), "remote"); err == nil {
+		t.Fatal("unregistered server still listed")
+	}
+	if err := manager.Unregister(context.Background(), "remote"); err != nil {
+		t.Fatalf("unknown server: %v", err)
+	}
+	if err := manager.Register(context.Background(), registration); err != nil {
+		t.Fatalf("register again: %v", err)
+	}
+	if tools, err := manager.ListServer(context.Background(), "remote"); err != nil || len(tools) != 1 {
+		t.Fatalf("re-registered tools: %+v %v", tools, err)
+	}
 }
 
 func pluginRegistration(t *testing.T, id string, allowed []domain.PluginToolName, extraEnv ...string) Registration {

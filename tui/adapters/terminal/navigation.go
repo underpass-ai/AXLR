@@ -538,7 +538,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		return m.toggleLastToolResult(), nil, true
 	case "jobs":
 		return m.openJobsPanel(), nil, true
-	case "plugins", "catalog-refresh", "catalog-change", "catalog-marketplace":
+	case "plugins", "catalog-refresh", "catalog-change", "catalog-marketplace", "catalog-update", "catalog-remove":
 		if m.Busy {
 			m.Status.Error = m.Theme.T("error.pluginsBusy")
 			return m, nil, true
@@ -551,15 +551,17 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		}
 		catalog := m.deps.InstalledPlugins
 		change := intent == "catalog-change"
+		update := intent == "catalog-update"
+		remove := intent == "catalog-remove"
 		marketplace := intent == "catalog-marketplace"
 		marketplaceSource := strings.TrimSpace(m.InstalledPlugins.MarketplaceInput.Value())
 		var selected application.InstalledPlugin
-		if change {
+		if change || update || remove {
 			if m.overlay != "plugins" || len(m.InstalledPlugins.Items) == 0 {
 				return m, nil, true
 			}
 			selected = m.InstalledPlugins.Items[m.InstalledPlugins.Selected]
-			if selected.Installed || selected.Builtin {
+			if selected.Builtin || selected.Installed == change {
 				return m, nil, true
 			}
 		}
@@ -581,6 +583,16 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			}
 			if change {
 				if err := catalog.Install(ctx, selected.ID); err != nil {
+					return err
+				}
+			}
+			if update {
+				if err := catalog.Update(ctx, selected.ID); err != nil {
+					return err
+				}
+			}
+			if remove {
+				if err := catalog.Uninstall(ctx, selected.ID); err != nil {
 					return err
 				}
 			}

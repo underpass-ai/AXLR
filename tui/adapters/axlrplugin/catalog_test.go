@@ -100,8 +100,20 @@ func TestCodexPluginSourceAndPathSafety(t *testing.T) {
 	if err := catalog.AddSource(ctx, source); err != nil {
 		t.Fatal(err)
 	}
-	if err := catalog.AddSource(ctx, source); err == nil {
-		t.Fatal("duplicate source accepted")
+	// Adding a staged source again replaces the staged copy with the source's.
+	mustWrite(t, filepath.Join(source, ".codex-plugin", "plugin.json"), `{"name":"sample","version":"1.1","skills":"./skills/"}`)
+	if err := catalog.AddSource(ctx, source); err != nil {
+		t.Fatalf("staged copy not replaced: %v", err)
+	}
+	if items, err := catalog.List(ctx, true); err != nil || len(items) != 4 || items[3].Version != "1.1" || items[3].Installed {
+		t.Fatalf("staged: %#v %v", items, err)
+	}
+	// An installed package is refused, pointing at the update key.
+	if err := catalog.Install(ctx, "sample"); err != nil {
+		t.Fatal(err)
+	}
+	if err := catalog.AddSource(ctx, source); err == nil || !strings.Contains(err.Error(), "press U to update") {
+		t.Fatalf("installed source re-added: %v", err)
 	}
 	if err := catalog.AddSource(ctx, source+"#../escape"); err == nil {
 		t.Fatal("traversal accepted")

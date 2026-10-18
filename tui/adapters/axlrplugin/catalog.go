@@ -18,7 +18,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 const maxPackageBytes = 64 << 20
@@ -88,12 +90,7 @@ func (c *Catalog) List(ctx context.Context, available bool) ([]application.Insta
 			if err != nil {
 				return nil, fmt.Errorf("AXLR plugin %s: %w", entry.Name(), err)
 			}
-			origin, _ := os.ReadFile(filepath.Join(base, part, entry.Name(), ".axlr-source.json"))
-			var source struct {
-				Source string `json:"source"`
-			}
-			_ = json.Unmarshal(origin, &source)
-			items = append(items, application.InstalledPlugin{ID: m.ID, Name: m.Name, Version: m.Version, Source: source.Source, Description: m.Description, Components: m.components(), Installed: part == "installed"})
+			items = append(items, application.InstalledPlugin{ID: m.ID, Name: m.Name, Version: m.Version, Source: recordedSource(filepath.Join(base, part, entry.Name())), Description: m.Description, Components: m.components(), Installed: part == "installed"})
 			seen[m.ID] = true
 		}
 	}
@@ -101,35 +98,34 @@ func (c *Catalog) List(ctx context.Context, available bool) ([]application.Insta
 	return items, nil
 }
 
-func (c *Catalog) AddSource(ctx context.Context, source string) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	base, err := c.base()
-	if err != nil {
-		return err
-	}
+type candidate struct {
+	root     string
+	manifest manifest
+}
+
+// fetchSource resolves a recorded or typed source to its validated packages.
+// cleanup removes a Git checkout; the candidates live inside it until then.
+func fetchSource(ctx context.Context, base, source string) ([]candidate, func(), error) {
+	cleanup := func() {}
 	if strings.TrimSpace(source) != source || source == "" || strings.ContainsAny(source, "\x00\n\r") {
-		return errors.New("invalid plugin source")
-	}
-	if err := os.MkdirAll(filepath.Join(base, "staged"), 0700); err != nil {
-		return err
+		return nil, cleanup, errors.New("invalid plugin source")
 	}
 	location, subdir, err := parseSource(source)
 	if err != nil {
-		return err
+		return nil, cleanup, err
 	}
 	var root string
 	if strings.HasPrefix(location, "https://") {
 		checkout, err := os.MkdirTemp(base, ".clone-*")
 		if err != nil {
-			return err
+			return nil, cleanup, err
 		}
-		defer os.RemoveAll(checkout)
+		cleanup = func() { _ = os.RemoveAll(checkout) }
 		cloneCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
 		command := exec.CommandContext(cloneCtx, "git", "clone", "--depth", "1", "--", location, filepath.Join(checkout, "repo"))
 		if output, err := command.CombinedOutput(); err != nil {
-			return fmt.Errorf("cannot fetch AXLR plugin source: %w (%s)", err, shortError(output))
+			return nil, cleanup, fmt.Errorf("cannot fetch AXLR plugin source: %w (%s)", err, shortError(output))
 		}
 		root = filepath.Join(checkout, "repo", subdir)
 	} else {
@@ -137,16 +133,16 @@ func (c *Catalog) AddSource(ctx context.Context, source string) error {
 	}
 	root, err = filepath.EvalSymlinks(root)
 	if err != nil {
-		return err
+		return nil, cleanup, err
 	}
-	candidates := []string{}
+	paths := []string{}
 	if _, err := os.Stat(filepath.Join(root, ".agents", "plugins", "marketplace.json")); err == nil {
 		data, err := os.ReadFile(filepath.Join(root, ".agents", "plugins", "marketplace.json"))
 		if err != nil {
-			return err
+			return nil, cleanup, err
 		}
 		if len(data) > 64<<10 {
-			return errors.New("marketplace exceeds 64 KiB")
+			return nil, cleanup, errors.New("marketplace exceeds 64 KiB")
 		}
 		var market struct {
 			Plugins []struct {
@@ -161,106 +157,172 @@ func (c *Catalog) AddSource(ctx context.Context, source string) error {
 			} `json:"plugins"`
 		}
 		if err := json.Unmarshal(data, &market); err != nil {
-			return err
+			return nil, cleanup, err
 		}
 		for _, entry := range market.Plugins {
 			if entry.Policy.Installation == "NOT_AVAILABLE" {
 				continue
 			}
 			if entry.Source.Source != "local" {
-				return fmt.Errorf("marketplace plugin %s uses unsupported source", entry.Name)
+				return nil, cleanup, fmt.Errorf("marketplace plugin %s uses unsupported source", entry.Name)
 			}
 			path, err := safeChild(root, entry.Source.Path)
 			if err != nil {
-				return err
+				return nil, cleanup, err
 			}
 			path, err = filepath.EvalSymlinks(path)
 			if err != nil {
-				return err
+				return nil, cleanup, err
 			}
 			rel, err := filepath.Rel(root, path)
 			if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
-				return errors.New("marketplace plugin escapes source")
+				return nil, cleanup, errors.New("marketplace plugin escapes source")
 			}
-			candidates = append(candidates, path)
+			paths = append(paths, path)
 		}
-		if len(candidates) == 0 {
-			return errors.New("marketplace has no available plugins")
+		if len(paths) == 0 {
+			return nil, cleanup, errors.New("marketplace has no available plugins")
 		}
 	} else {
-		candidates = append(candidates, root)
+		paths = append(paths, root)
 	}
 	// Validate every package before exposing candidates in the catalog.
-	type candidate struct {
-		root     string
-		manifest manifest
-	}
-	valid := make([]candidate, 0, len(candidates))
+	valid := make([]candidate, 0, len(paths))
 	seen := map[string]bool{}
-	for _, path := range candidates {
+	for _, path := range paths {
 		m, err := loadManifest(path)
 		if err != nil {
-			return err
+			return nil, cleanup, err
 		}
-		if m.ID == "axlr" || m.ID == "kmp" || m.ID == "made" {
+		if builtinPackage(m.ID) {
 			continue
 		}
 		if seen[m.ID] {
-			return errors.New("duplicate plugin in source")
+			return nil, cleanup, errors.New("duplicate plugin in source")
 		}
 		seen[m.ID] = true
-		for _, part := range []string{"installed", "staged"} {
-			if _, err := os.Stat(filepath.Join(base, part, m.ID)); err == nil {
-				return fmt.Errorf("AXLR plugin %s already exists", m.ID)
-			} else if !errors.Is(err, os.ErrNotExist) {
-				return err
-			}
-		}
 		valid = append(valid, candidate{path, m})
 	}
 	if len(valid) == 0 {
-		return errors.New("all source plugins are already built into AXLR")
+		return nil, cleanup, errors.New("all source plugins are already built into AXLR")
 	}
-	staged := []string{}
+	return valid, cleanup, nil
+}
+
+func builtinPackage(id string) bool { return id == "axlr" || id == "kmp" || id == "made" }
+
+// copyCandidate copies a package into a hidden directory under dir, with the
+// source it came from, so a later rename exposes it whole.
+func copyCandidate(ctx context.Context, dir string, item candidate, source string) (string, error) {
+	temp, err := os.MkdirTemp(dir, ".plugin-*")
+	if err != nil {
+		return "", err
+	}
+	if err := copyPackage(ctx, item.root, temp); err != nil {
+		os.RemoveAll(temp)
+		return "", err
+	}
+	data, _ := json.Marshal(struct {
+		Source string `json:"source"`
+	}{source})
+	if err := os.WriteFile(filepath.Join(temp, ".axlr-source.json"), data, 0600); err != nil {
+		os.RemoveAll(temp)
+		return "", err
+	}
+	return temp, nil
+}
+
+// asideName returns an unused hidden path beside dir for a copy that is
+// being replaced or removed; hidden names are never listed or indexed.
+func asideName(dir, label string) (string, error) {
+	aside, err := os.MkdirTemp(filepath.Dir(dir), "."+label+"-"+filepath.Base(dir)+"-*")
+	if err != nil {
+		return "", err
+	}
+	if err := os.Remove(aside); err != nil {
+		return "", err
+	}
+	return aside, nil
+}
+
+// AddSource stages every package a source provides. A package that is already
+// staged is replaced by the source's copy; one that is installed is refused,
+// because Update is how an installed package changes.
+func (c *Catalog) AddSource(ctx context.Context, source string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	base, err := c.base()
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(source) != source || source == "" || strings.ContainsAny(source, "\x00\n\r") {
+		return errors.New("invalid plugin source")
+	}
+	if err := os.MkdirAll(filepath.Join(base, "staged"), 0700); err != nil {
+		return err
+	}
+	valid, cleanup, err := fetchSource(ctx, base, source)
+	defer cleanup()
+	if err != nil {
+		return err
+	}
 	for _, item := range valid {
-		temp, err := os.MkdirTemp(filepath.Join(base, "staged"), ".plugin-*")
+		if _, err := os.Stat(filepath.Join(base, "installed", item.manifest.ID)); err == nil {
+			return fmt.Errorf("AXLR plugin %s is already installed; select it in /plugin and press U to update it", item.manifest.ID)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+	type change struct{ dest, previous string }
+	changes := []change{}
+	rollback := func() {
+		for i := len(changes) - 1; i >= 0; i-- {
+			_ = os.RemoveAll(changes[i].dest)
+			if changes[i].previous != "" {
+				_ = os.Rename(changes[i].previous, changes[i].dest)
+			}
+		}
+	}
+	for _, item := range valid {
+		temp, err := copyCandidate(ctx, filepath.Join(base, "staged"), item, source)
 		if err != nil {
-			rollbackStaged(staged)
-			return err
-		}
-		if err := copyPackage(ctx, item.root, temp); err != nil {
-			os.RemoveAll(temp)
-			rollbackStaged(staged)
-			return err
-		}
-		data, _ := json.Marshal(struct {
-			Source string `json:"source"`
-		}{source})
-		if err := os.WriteFile(filepath.Join(temp, ".axlr-source.json"), data, 0600); err != nil {
-			os.RemoveAll(temp)
-			rollbackStaged(staged)
+			rollback()
 			return err
 		}
 		dest := filepath.Join(base, "staged", item.manifest.ID)
+		previous := ""
+		if _, err := os.Stat(dest); err == nil {
+			if previous, err = asideName(dest, "old"); err == nil {
+				err = os.Rename(dest, previous)
+			}
+			if err != nil {
+				os.RemoveAll(temp)
+				rollback()
+				return err
+			}
+		}
 		if err := os.Rename(temp, dest); err != nil {
 			os.RemoveAll(temp)
-			rollbackStaged(staged)
+			if previous != "" {
+				_ = os.Rename(previous, dest)
+			}
+			rollback()
 			return err
 		}
-		staged = append(staged, dest)
+		changes = append(changes, change{dest, previous})
+	}
+	for _, item := range changes {
+		if item.previous != "" {
+			_ = os.RemoveAll(item.previous)
+		}
 	}
 	return nil
-}
-func rollbackStaged(paths []string) {
-	for _, path := range paths {
-		_ = os.RemoveAll(path)
-	}
 }
 
 func (c *Catalog) Install(ctx context.Context, id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if !packageID.MatchString(id) || id == "axlr" || id == "kmp" || id == "made" {
+	if !packageID.MatchString(id) || builtinPackage(id) {
 		return errors.New("invalid AXLR plugin ID")
 	}
 	base, err := c.base()
@@ -292,27 +354,13 @@ func (c *Catalog) Install(ctx context.Context, id string) error {
 		_ = os.Rename(installed, stage)
 		return err
 	}
-	if len(mcpPaths) > 0 {
-		if c.MCP == nil {
-			_ = os.Rename(installed, stage)
-			return errors.New("AXLR MCP installer is unavailable")
-		}
-		for _, definition := range mcpPaths {
-			installer, ok := c.MCP.(interface {
-				InstallManifestWithEnvironment(context.Context, string, map[string]string, map[string]string) error
-			})
-			if ok {
-				if err := installer.InstallManifestWithEnvironment(ctx, definition.Path, definition.EnvFrom, definition.Env); err != nil {
-					return err
-				}
-			} else {
-				if len(definition.EnvFrom) > 0 || len(definition.Env) > 0 {
-					return errors.New("AXLR MCP installer cannot set package environment")
-				}
-				if err := c.MCP.InstallManifest(ctx, definition.Path); err != nil {
-					return err
-				}
-			}
+	if len(mcpPaths) > 0 && c.MCP == nil {
+		_ = os.Rename(installed, stage)
+		return errors.New("AXLR MCP installer is unavailable")
+	}
+	for _, definition := range mcpPaths {
+		if err := c.registerServer(ctx, definition.Path, definition.EnvFrom, definition.Env, domain.ApprovalManual); err != nil {
+			return err
 		}
 	}
 	return nil
@@ -389,6 +437,200 @@ func renderSkillIndex(builtin string, packages []indexedPackage) string {
 		index.WriteString(line)
 	}
 	return index.String()
+}
+
+// registerServer persists and starts one package MCP server; a server that
+// was automatic before an update is made automatic again.
+func (c *Catalog) registerServer(ctx context.Context, path string, envFrom, env map[string]string, approval domain.ApprovalMode) error {
+	installer, ok := c.MCP.(interface {
+		InstallManifestWithEnvironment(context.Context, string, map[string]string, map[string]string) error
+	})
+	if ok {
+		if err := installer.InstallManifestWithEnvironment(ctx, path, envFrom, env); err != nil {
+			return err
+		}
+	} else {
+		if len(envFrom) > 0 || len(env) > 0 {
+			return errors.New("AXLR MCP installer cannot set package environment")
+		}
+		if err := c.MCP.InstallManifest(ctx, path); err != nil {
+			return err
+		}
+	}
+	if approval != domain.ApprovalAuto {
+		return nil
+	}
+	manifest, err := plugins.LoadManifest(path)
+	if err != nil {
+		return err
+	}
+	return c.MCP.SetApproval(ctx, manifest.ID, approval)
+}
+
+// removeServers takes a package's MCP registrations out of the configuration
+// and the running console. A package without servers, or a catalog without
+// an MCP manager, has nothing to remove.
+func (c *Catalog) removeServers(ctx context.Context, dir string) ([]application.PackageServer, error) {
+	if c.MCP == nil {
+		return nil, nil
+	}
+	remover, ok := c.MCP.(application.PackageServerRemover)
+	if !ok {
+		if _, err := os.Stat(filepath.Join(dir, ".axlr-mcp")); err == nil {
+			return nil, errors.New("AXLR MCP manager cannot remove package servers")
+		}
+		return nil, nil
+	}
+	return remover.RemovePackageServers(ctx, dir)
+}
+
+// restoreServers registers again what removeServers returned, as it was.
+func (c *Catalog) restoreServers(ctx context.Context, servers []application.PackageServer) error {
+	var result error
+	for _, server := range servers {
+		result = errors.Join(result, c.registerServer(ctx, server.Manifest, server.EnvFrom, server.Env, server.Approval))
+	}
+	return result
+}
+
+func (c *Catalog) installedPackage(id string) (string, manifest, error) {
+	if !packageID.MatchString(id) || builtinPackage(id) {
+		return "", manifest{}, errors.New("invalid AXLR plugin ID")
+	}
+	base, err := c.base()
+	if err != nil {
+		return "", manifest{}, err
+	}
+	installed := filepath.Join(base, "installed", id)
+	m, err := loadManifest(installed)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", m, fmt.Errorf("AXLR plugin %s is not installed", id)
+	}
+	if err != nil {
+		return "", m, err
+	}
+	if m.ID != id {
+		return "", m, errors.New("AXLR plugin identity changed")
+	}
+	return installed, m, nil
+}
+
+// Update replaces an installed package with a fresh copy of the source it
+// was added from. The new copy is complete before the old one moves aside,
+// and any failure puts the old copy and its MCP registrations back. Each
+// server keeps its approval; its environment comes from the new package.
+func (c *Catalog) Update(ctx context.Context, id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	installed, _, err := c.installedPackage(id)
+	if err != nil {
+		return err
+	}
+	base, err := c.base()
+	if err != nil {
+		return err
+	}
+	source := recordedSource(installed)
+	if source == "" {
+		return fmt.Errorf("AXLR plugin %s records no source to update from", id)
+	}
+	valid, cleanup, err := fetchSource(ctx, base, source)
+	defer cleanup()
+	if err != nil {
+		return err
+	}
+	var item *candidate
+	for i := range valid {
+		if valid[i].manifest.ID == id {
+			item = &valid[i]
+		}
+	}
+	if item == nil {
+		return fmt.Errorf("source %s no longer provides AXLR plugin %s", source, id)
+	}
+	temp, err := copyCandidate(ctx, filepath.Join(base, "installed"), *item, source)
+	if err != nil {
+		return err
+	}
+	removed, err := c.removeServers(ctx, installed)
+	if err != nil {
+		os.RemoveAll(temp)
+		return errors.Join(err, c.restoreServers(ctx, removed))
+	}
+	old, err := asideName(installed, "old")
+	if err == nil {
+		err = os.Rename(installed, old)
+	}
+	if err != nil {
+		os.RemoveAll(temp)
+		return errors.Join(err, c.restoreServers(ctx, removed))
+	}
+	undo := func(cause error) error {
+		_, removeErr := c.removeServers(ctx, installed)
+		_ = os.RemoveAll(installed)
+		if renameErr := os.Rename(old, installed); renameErr != nil {
+			return errors.Join(cause, removeErr, renameErr)
+		}
+		return errors.Join(cause, removeErr, c.restoreServers(ctx, removed))
+	}
+	if err := os.Rename(temp, installed); err != nil {
+		os.RemoveAll(temp)
+		return undo(err)
+	}
+	definitions, err := materializeMCP(installed, item.manifest)
+	if err != nil {
+		return undo(err)
+	}
+	if len(definitions) > 0 && c.MCP == nil {
+		return undo(errors.New("AXLR MCP installer is unavailable"))
+	}
+	approvals := map[string]domain.ApprovalMode{}
+	for _, server := range removed {
+		approvals[server.ID.String()] = server.Approval
+	}
+	for _, definition := range definitions {
+		approval := domain.ApprovalManual
+		if manifest, err := plugins.LoadManifest(definition.Path); err == nil && approvals[manifest.ID.String()] != "" {
+			approval = approvals[manifest.ID.String()]
+		}
+		if err := c.registerServer(ctx, definition.Path, definition.EnvFrom, definition.Env, approval); err != nil {
+			return undo(err)
+		}
+	}
+	_ = os.RemoveAll(old)
+	return nil
+}
+
+// Uninstall removes an installed package: its MCP registrations leave the
+// configuration and the running console first, so no entry is left pointing
+// at a directory that no longer exists, then the package directory goes.
+func (c *Catalog) Uninstall(ctx context.Context, id string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	installed, _, err := c.installedPackage(id)
+	if err != nil {
+		return err
+	}
+	if _, err := c.removeServers(ctx, installed); err != nil {
+		return err
+	}
+	aside, err := asideName(installed, "removed")
+	if err != nil {
+		return err
+	}
+	if err := os.Rename(installed, aside); err != nil {
+		return err
+	}
+	return os.RemoveAll(aside)
+}
+
+func recordedSource(dir string) string {
+	data, _ := os.ReadFile(filepath.Join(dir, ".axlr-source.json"))
+	var source struct {
+		Source string `json:"source"`
+	}
+	_ = json.Unmarshal(data, &source)
+	return source.Source
 }
 
 func (c *Catalog) Guidance(ctx context.Context) (string, error) {

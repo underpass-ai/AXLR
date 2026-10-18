@@ -435,6 +435,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	pluginManager.SetInstaller(configStore.AddManifest)
 	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, locals.pluginGetenv(getenv, nil))
 	pluginManager.SetURLInstaller(configStore.AddURL)
+	pluginManager.SetRemover(configStore.RemoveManifestsUnder)
 	pluginManager.Diagnostics = trace
 	approvalSettings, err := storage.NewApprovalSettingsInUserSettings(settingsStore, filepath.Join(filepath.Dir(configPath), "approvals.json"), pluginManager)
 	if err != nil {
