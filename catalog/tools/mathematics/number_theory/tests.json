@@ -1,0 +1,23 @@
+[
+  {"name": "Cole (1903): 2^67 - 1 = 193707721 x 761838257287", "input": {"operation": "factor", "n": "147573952589676412927"},
+   "expect": {"exit": 0, "stdout_json": {"complete": true, "factors": [{"prime": "193707721", "exponent": 1}, {"prime": "761838257287", "exponent": 1}]}}},
+  {"name": "Euler (1732): Fermat number 2^32 + 1 = 641 x 6700417", "input": {"operation": "factor", "n": 4294967297}, "expect": {"exit": 0, "stdout_json": {"product": "641 * 6700417"}}},
+  {"name": "negative number with repeated factors", "input": {"operation": "factor", "n": -360}, "expect": {"exit": 0, "stdout_json": {"sign": -1, "product": "2^3 * 3^2 * 5"}}},
+  {"name": "Sorenson and Webster (Math. Comp. 2017): 318665857834031151167461 is a strong pseudoprime to bases 2..37, caught by base 41", "input": {"operation": "is_prime", "n": "318665857834031151167461"},
+   "expect": {"exit": 0, "stdout_json": {"is_prime": false, "certainty": "deterministic"}}},
+  {"name": "Carmichael number 561 is composite", "input": {"operation": "is_prime", "n": 561}, "expect": {"exit": 0, "stdout_json": {"is_prime": false, "smallest_factor": "3"}}},
+  {"name": "Mersenne prime 2^127 - 1 is a probable prime above the deterministic bound", "input": {"operation": "is_prime", "n": "170141183460469231731687303715884105727"}, "expect": {"exit": 0, "stdout_json": {"is_prime": true, "certainty": "probable"}}},
+  {"name": "Euler's totient of 36 is 12", "input": {"operation": "totient", "n": 36}, "expect": {"exit": 0, "stdout_json": {"totient": "12"}}},
+  {"name": "divisors of 36, sigma 91", "input": {"operation": "divisors", "n": 36}, "expect": {"exit": 0, "stdout_json": {"count": 9, "sum": "91", "divisors": ["1", "2", "3", "4", "6", "9", "12", "18", "36"]}}},
+  {"name": "Sunzi Suanjing: remainders 2, 3, 2 by 3, 5, 7 give 23 mod 105", "input": {"operation": "crt", "residues": [2, 3, 2], "moduli": [3, 5, 7]}, "expect": {"exit": 0, "stdout_json": {"solution": "23", "modulus": "105"}}},
+  {"name": "CRT with non-coprime moduli: compatible and incompatible", "input": {"operation": "crt", "residues": [1, 3], "moduli": [4, 6]}, "expect": {"exit": 0, "stdout_json": {"solution": "9", "modulus": "12"}}},
+  {"name": "CRT incompatible", "input": {"operation": "crt", "residues": [1, 2], "moduli": [4, 6]}, "expect": {"exit": 0, "stdout_json": {"solution": null}}},
+  {"name": "extended Euclid on 240 and 46: 240(-9) + 46(47) = 2", "input": {"operation": "egcd", "a": 240, "b": 46}, "expect": {"exit": 0, "stdout_json": {"gcd": "2", "x": "-9", "y": "47"}}},
+  {"name": "modular exponentiation: 4^13 mod 497 = 445", "input": {"operation": "mod_pow", "base": 4, "exponent": 13, "m": 497}, "expect": {"exit": 0, "stdout_json": {"result": "445"}}},
+  {"name": "inverse of 3 mod 11 is 4; 4 mod 10 has none", "input": {"operation": "mod_inverse", "a": 3, "m": 11}, "expect": {"exit": 0, "stdout_json": {"inverse": "4"}}},
+  {"name": "no inverse when not coprime", "input": {"operation": "mod_inverse", "a": 4, "m": 10}, "expect": {"exit": 0, "stdout_json": {"inverse": null, "gcd": "2"}}},
+  {"name": "smallest 13-digit prime is 1000000000039", "input": {"operation": "next_prime", "n": "1000000000000"}, "expect": {"exit": 0, "stdout_json": {"prime": "1000000000039"}}},
+  {"name": "gcd and lcm", "input": {"operation": "lcm", "values": [4, 6, 10]}, "expect": {"exit": 0, "stdout_json": {"result": "60"}}},
+  {"name": "not an integer", "input": {"operation": "factor", "n": "12.5"}, "expect": {"exit": 2, "stdout_contains": "decimal digits"}},
+  {"name": "unknown operation", "input": {"operation": "sqrt", "n": 4}, "expect": {"exit": 2, "stdout_contains": "operation must be"}}
+]
