@@ -1,0 +1,28 @@
+{
+  "name": "doc_template_fill",
+  "description": "Fill {{placeholders}} (with optional {{field|default}}) in plain text or in a Word .docx given as hex, with no package: the .docx is opened as a zip and the text runs of the body, headers, footers, notes and comments are rewritten, joining the runs of each paragraph so a placeholder Word split across runs is still found. Returns the filled text or .docx (hex), the paragraph texts, and the placeholders found, missing and defaulted.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "values": {"type": "object", "additionalProperties": {"type": ["string", "number", "boolean", "null"]}, "default": {}},
+      "text": {"type": "string"},
+      "docx_hex": {"type": "string", "description": "The .docx file as hex"},
+      "missing": {"type": "string", "enum": ["keep", "empty", "error"], "default": "keep"}
+    }
+  },
+  "program": "python3",
+  "args": ["doc_template_fill.py"],
+  "files": ["doc_template_fill.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["templates", "docx", "word", "placeholders", "documents", "mail-merge"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "Hello {{ name }}, your order {{order}} ships {{when|soon}}.", "values": {"name": "Ana", "order": 1042}},
+                "output": {"format": "text", "text": "Hello Ana, your order 1042 ships soon.", "missing": [], "defaults_used": ["when"]}},
+    "source": "ECMA-376 Office Open XML, Part 1 section 17.3 (paragraphs, runs and text); approach after docxtpl (elapouya/python-docx-template), stdlib zipfile only"
+  }
+}

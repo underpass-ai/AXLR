@@ -1,0 +1,45 @@
+{
+  "name": "letter_formal",
+  "description": "Formal letter skeleton in Spanish, English (UK or US), French, German, Portuguese or Italian, in a formal, very formal or administrative register: sender and recipient blocks, the date written as each language writes it, subject line, and the salutation and matching closing for a named recipient or nobody in particular (Dear Sir or Madam / Yours faithfully, Dear Ms Smith / Yours sincerely, Sehr geehrte Damen und Herren / Mit freundlichen Grüßen, Madame, Monsieur / Veuillez agréer...).",
+  "input_schema": {
+    "type": "object",
+    "required": ["language", "date"],
+    "additionalProperties": false,
+    "properties": {
+      "language": {"type": "string", "enum": ["es", "en", "fr", "de", "pt", "it"]},
+      "register": {"type": "string", "enum": ["formal", "very_formal", "administrative"], "default": "formal"},
+      "variant": {"type": "string", "enum": ["uk", "us"], "default": "uk", "description": "English only"},
+      "date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+      "place": {"type": "string", "description": "City for the date line"},
+      "sender": {"type": "object", "additionalProperties": false, "properties": {
+        "name": {"type": "string"}, "position": {"type": "string"}, "organisation": {"type": "string"},
+        "address": {"type": "array", "items": {"type": "string"}}, "email": {"type": "string"}, "phone": {"type": "string"}}},
+      "recipient": {"type": "object", "additionalProperties": false, "properties": {
+        "name": {"type": "string"}, "surname": {"type": "string", "description": "Default: the last word of name"},
+        "gender": {"type": "string", "enum": ["female", "male", "unspecified"], "default": "unspecified"},
+        "title": {"type": "string", "description": "e.g. Dr, Prof., Dott.ssa"},
+        "position": {"type": "string", "description": "French very formal: 'le Directeur' gives 'Monsieur le Directeur'"},
+        "organisation": {"type": "string"},
+        "address": {"type": "array", "items": {"type": "string"}}}},
+      "subject": {"type": "string"},
+      "reference": {"type": "string"},
+      "body": {"type": ["string", "array"], "items": {"type": "string"}, "description": "Paragraphs; default a placeholder"},
+      "request": {"type": "string", "description": "What is asked; SOLICITA in Spanish administrative letters"},
+      "enclosures": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "program": "python3",
+  "args": ["letter_formal.py"],
+  "files": ["letter_formal.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["letters", "correspondence", "salutations", "multilingual", "templates", "writing"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"language": "fr", "date": "2026-10-01", "place": "Paris", "subject": "Demande"},
+                "output": {"salutation": "Madame, Monsieur,", "closing": "Veuillez agréer, Madame, Monsieur, l'expression de mes salutations distinguées.", "date_line": "Paris, le 1er octobre 2026"}},
+    "source": "original; salutation and closing rules from Cambridge Dictionary (UK faithfully/sincerely), The Gregg Reference Manual (US), DIN 5008 and Duden (German), service-public.fr model letters (French), RAE Diccionario panhispánico de dudas (Spanish)"
+  }
+}

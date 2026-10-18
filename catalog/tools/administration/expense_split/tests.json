@@ -1,0 +1,19 @@
+[
+  {"name": "hand-checked Splitwise-style trip: A pays 90 dinner, B pays 30 taxi, both split by A, B, C: balances +50, -10, -40; C pays A 40, B pays A 10",
+   "input": {"expenses": [{"description": "Dinner", "paid_by": "A", "amount": "90.00", "among": ["A", "B", "C"]}, {"description": "Taxi", "paid_by": "B", "amount": 30, "among": ["A", "B", "C"]}], "currency": "EUR"},
+   "expect": {"stdout_json": {"balances": {"A": "50.00", "B": "-10.00", "C": "-40.00"}, "transfers": [{"from": "C", "to": "A", "amount": "40.00"}, {"from": "B", "to": "A", "amount": "10.00"}], "transfer_count": 2, "total_spent": "120.00"}}},
+  {"name": "100.00 among three: 33.34, 33.33, 33.33, the extra cent to the first in among",
+   "input": {"expenses": [{"paid_by": "A", "amount": "100.00", "among": ["B", "A", "C"]}]},
+   "expect": {"stdout_json": {"expenses": [{"shares": {"B": "33.34", "A": "33.33", "C": "33.33"}}], "balances": {"A": "66.67", "B": "-33.34", "C": "-33.33"}}}},
+  {"name": "weights 1:2:2 of 100 give 20, 40, 40", "input": {"expenses": [{"paid_by": "A", "amount": 100, "weights": {"A": 1, "B": 2, "C": 2}}]},
+   "expect": {"stdout_json": {"expenses": [{"method": "weights", "shares": {"A": "20.00", "B": "40.00", "C": "40.00"}}]}}},
+  {"name": "fewest transfers: balances A -8, B +6, C -2, D +3, E +4, F -3 settle in 4 (greedy alone needs 5), hand-checked",
+   "input": {"participants": ["A", "B", "C", "D", "E", "F"], "decimals": 0, "expenses": [{"paid_by": "B", "amount": 6, "among": ["A"]}, {"paid_by": "E", "amount": 4, "shares": {"A": 2, "C": 2}}, {"paid_by": "D", "amount": 3, "among": ["F"]}]},
+   "expect": {"stdout_json": {"balances": {"A": "-8", "B": "6", "C": "-2", "D": "3", "E": "4", "F": "-3"}, "transfer_count": 4,
+     "transfers": [{"from": "A", "to": "B", "amount": "6"}, {"from": "A", "to": "E", "amount": "2"}, {"from": "C", "to": "E", "amount": "2"}, {"from": "F", "to": "D", "amount": "3"}]}}},
+  {"name": "a payment already made is counted", "input": {"expenses": [{"paid_by": "A", "amount": 60, "among": ["A", "B"]}], "payments": [{"from": "B", "to": "A", "amount": 30}]},
+   "expect": {"stdout_json": {"balances": {"A": "0.00", "B": "0.00"}, "transfers": []}}},
+  {"name": "shares that do not add up", "input": {"expenses": [{"paid_by": "A", "amount": 10, "shares": {"A": 4, "B": 5}}]}, "expect": {"exit": 2, "stdout_contains": "shares add up to 9.00, not 10.00"}},
+  {"name": "too many decimals", "input": {"expenses": [{"paid_by": "A", "amount": "1.005", "among": ["A", "B"]}]}, "expect": {"exit": 2, "stdout_contains": "more decimals"}},
+  {"name": "unknown participant", "input": {"participants": ["A", "B"], "expenses": [{"paid_by": "Z", "amount": 1}]}, "expect": {"exit": 2, "stdout_contains": "is not in participants"}}
+]

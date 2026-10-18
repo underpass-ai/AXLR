@@ -1,0 +1,28 @@
+{
+  "name": "holiday_table",
+  "description": "Public holidays of a country and year (2024 to 2032) from a bundled dated table computed from each holiday's legal rule: Spain, Portugal, France, Germany (nationwide), Italy, England and Wales (bank holidays with substitute days) and the US (federal, with observed days). Each row gives the date, the observed day off, local and English names, national or regional scope and the legal source; regional, local and one-off holidays must be added.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "country": {"type": "string", "enum": ["ES", "PT", "FR", "DE", "IT", "GB-ENG", "US"], "description": "GB-ENG covers England and Wales"},
+      "year": {"type": "integer", "minimum": 2024, "maximum": 2032},
+      "region": {"type": "string", "description": "ISO 3166-2 code, e.g. FR-67; filters regional rows"},
+      "include_regional": {"type": "boolean", "default": true},
+      "list_countries": {"type": "boolean"}
+    }
+  },
+  "program": "python3",
+  "args": ["holiday_table.py"],
+  "files": ["holiday_table.py", "holidays.json"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["holidays", "calendar", "bank-holidays", "federal-holidays", "working-days", "dates"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"country": "GB-ENG", "year": 2026}, "output": {"count": 8, "days_off": ["2026-01-01", "2026-04-03", "2026-04-06", "2026-05-04", "2026-05-25", "2026-08-31", "2026-12-25", "2026-12-28"]}},
+    "source": "rules from Estatuto de los Trabajadores art. 37.2, Código do Trabalho art. 234, Code du travail L3133-1 and L3134-13, Einigungsvertrag and Länder laws, Legge 260/1949 and 151/2025, Banking and Financial Dealings Act 1971, 5 U.S.C. 6103 and EO 11582; computed by tools/catalog/data/holiday_table.py (rules read 2026-10-18); checked against opm.gov and gov.uk/bank-holidays; scope modelled on vacanza/holidays"
+  }
+}

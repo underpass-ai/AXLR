@@ -1,0 +1,64 @@
+{
+  "name": "ics_generate",
+  "description": "Write an RFC 5545 iCalendar file for one event or a recurring one: RRULE from structured fields (FREQ, INTERVAL, COUNT or UNTIL, BYDAY, BYMONTHDAY, BYMONTH, WKST), EXDATE, alarms, organizer and attendees, floating, UTC or IANA TZID times with a VTIMEZONE derived from zoneinfo, text escaping, 75-octet line folding and CRLF. UID and DTSTAMP are given or deterministic, so the same input gives the same file.",
+  "input_schema": {
+    "type": "object",
+    "required": ["summary", "start"],
+    "additionalProperties": false,
+    "properties": {
+      "summary": {"type": "string"},
+      "start": {"type": "string", "description": "YYYY-MM-DD (all day) or YYYY-MM-DDTHH:MM[:SS] with optional Z or +HH:MM"},
+      "end": {"type": "string", "description": "Same form as start"},
+      "duration_minutes": {"type": "integer", "minimum": 1},
+      "tzid": {"type": "string", "description": "IANA zone, e.g. Europe/Madrid; a naive start is local to it"},
+      "utc": {"type": "boolean", "default": false, "description": "Write times in UTC (Z)"},
+      "description": {"type": "string"},
+      "location": {"type": "string"},
+      "url": {"type": "string"},
+      "status": {"type": "string", "enum": ["TENTATIVE", "CONFIRMED", "CANCELLED"]},
+      "transparency": {"type": "string", "enum": ["OPAQUE", "TRANSPARENT"]},
+      "categories": {"type": "array", "items": {"type": "string"}},
+      "sequence": {"type": "integer", "minimum": 0},
+      "rrule": {"type": "object", "required": ["freq"], "additionalProperties": false, "properties": {
+        "freq": {"type": "string", "enum": ["DAILY", "WEEKLY", "MONTHLY", "YEARLY"]},
+        "interval": {"type": "integer", "minimum": 1},
+        "count": {"type": "integer", "minimum": 1},
+        "until": {"type": "string", "description": "Date or date-time; converted to UTC when start has a TZID or is UTC"},
+        "byday": {"type": "array", "items": {"type": "string", "pattern": "^([+-]?\\d{1,2})?(MO|TU|WE|TH|FR|SA|SU)$"}},
+        "bymonthday": {"type": "array", "items": {"type": "integer"}},
+        "bymonth": {"type": "array", "items": {"type": "integer", "minimum": 1, "maximum": 12}},
+        "wkst": {"type": "string", "enum": ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]}}},
+      "exdates": {"type": "array", "items": {"type": "string"}},
+      "alarms": {"type": "array", "items": {"type": "object", "required": ["minutes_before"], "additionalProperties": false, "properties": {
+        "minutes_before": {"type": "integer"},
+        "action": {"type": "string", "enum": ["DISPLAY", "AUDIO"], "default": "DISPLAY"},
+        "description": {"type": "string"}}}},
+      "organizer": {"type": "object", "required": ["email"], "additionalProperties": false, "properties": {"email": {"type": "string"}, "name": {"type": "string"}}},
+      "attendees": {"type": "array", "items": {"type": "object", "required": ["email"], "additionalProperties": false, "properties": {
+        "email": {"type": "string"}, "name": {"type": "string"},
+        "role": {"type": "string", "enum": ["CHAIR", "REQ-PARTICIPANT", "OPT-PARTICIPANT", "NON-PARTICIPANT"]},
+        "partstat": {"type": "string", "enum": ["NEEDS-ACTION", "ACCEPTED", "DECLINED", "TENTATIVE", "DELEGATED"]},
+        "rsvp": {"type": "boolean", "default": true},
+        "cutype": {"type": "string", "enum": ["INDIVIDUAL", "GROUP", "RESOURCE", "ROOM", "UNKNOWN"]}}}},
+      "uid": {"type": "string", "description": "Default: derived from a SHA-256 of the input"},
+      "dtstamp": {"type": "string", "description": "UTC date-time; default fixed 19700101T000000Z"},
+      "prodid": {"type": "string"},
+      "method": {"type": "string", "enum": ["PUBLISH", "REQUEST", "CANCEL"]},
+      "include_vtimezone": {"type": "boolean", "default": true}
+    }
+  },
+  "program": "python3",
+  "args": ["ics_generate.py"],
+  "files": ["ics_generate.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "administration",
+    "tags": ["icalendar", "ics", "rfc5545", "calendar", "events", "recurrence"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"summary": "Team sync", "start": "2026-10-20T10:00", "tzid": "Europe/Madrid", "duration_minutes": 30, "rrule": {"freq": "WEEKLY", "count": 10, "byday": ["TU"]}, "uid": "sync@example.com"},
+                "output": {"uid": "sync@example.com", "time_mode": "tzid", "dtstamp": "19700101T000000Z"}},
+    "source": "RFC 5545 (Internet Calendaring and Scheduling Core Object Specification), sections 3.1, 3.2, 3.3.10, 3.3.11, 3.6.1, 3.6.5, 3.6.6 and 3.8.5.3; output modelled on the icalendar library (collective/icalendar)"
+  }
+}
