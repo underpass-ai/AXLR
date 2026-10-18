@@ -54,9 +54,9 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `seat_allocation` | D'Hondt, Sainte-Laguë, modified Sainte-Laguë, Hare; threshold; award order and ties (**reference entry**) | original |
+| `seat_allocation` **1.0.0** | D'Hondt, Sainte-Laguë, modified Sainte-Laguë, Hare; threshold; award order and ties (**reference entry**) | original |
 | `seat_allocation_droop` | Droop and Imperiali quotas, largest remainder | original |
-| `vote_condorcet` | pairwise matrix, Condorcet winner, Schulze and Copeland | [CIVS](https://github.com/andrewcmyers/civs) ideas |
+| `vote_condorcet` **1.0.0** | pairwise matrix, Condorcet winner, Schulze and Copeland | [CIVS](https://github.com/andrewcmyers/civs) ideas |
 | `vote_irv` | instant-runoff rounds with tie handling and exhausted ballots | original |
 | `vote_borda` | Borda and Dowdall scores | original |
 | `vote_stv` | single transferable vote (Gregory method) | original |
@@ -64,19 +64,19 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `gerrymander_metrics` | efficiency gap, Polsby-Popper and Reock compactness from district vote and geometry data | original |
 | `poll_margin_error` | sample size, margin of error, lead significance | original |
 | `legislative_calendar` | term deadlines from a bill's dates with a session calendar given in the input | original |
-| `transparency_request_draft` | access-to-information request template per jurisdiction (Spain Ley 19/2013, EU 1049/2001, US FOIA, UK FOIA), with "not legal advice" | original |
+| `transparency_request_draft` **1.0.0** | access-to-information request template per jurisdiction (Spain Ley 19/2013, EU 1049/2001, US FOIA, UK FOIA), with "not legal advice" | original |
 | `budget_breakdown` | per-capita, per-programme and year-over-year breakdown of a public budget CSV | original |
 
 ### Administration and office
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `business_days` | count, add, list working days with weekends and holidays given in the input (**reference entry**) | original |
+| `business_days` **1.0.0** | count, add, list working days with weekends and holidays given in the input (**reference entry**) | original |
 | `holiday_table` | holidays for a country and region and year, from a bundled dated table (tier 2 with `holidays`) | [vacanza/holidays](https://github.com/vacanza/holidays) |
-| `invoice_calc` | lines, discounts, VAT per rate, withholding, totals in `Decimal` | original |
-| `iban_validate` | IBAN checksum, country length, BBAN split | [python-stdnum](https://github.com/arthurdejong/python-stdnum) |
-| `es_tax_id_validate` | Spanish NIF, NIE and CIF check letter | python-stdnum |
-| `eu_vat_validate` | EU VAT number syntax and checksum per country | python-stdnum |
+| `invoice_calc` **1.0.0** | lines, discounts, VAT per rate, withholding, totals in `Decimal` | original |
+| `iban_validate` **1.0.0** | IBAN checksum, country length, BBAN split | [python-stdnum](https://github.com/arthurdejong/python-stdnum) |
+| `es_tax_id_validate` **1.0.0** | Spanish NIF, NIE and CIF check letter | python-stdnum |
+| `eu_vat_validate` **1.0.0** | EU VAT number syntax and checksum per country | python-stdnum |
 | `ics_generate` | RFC 5545 event or recurring event, with alarms and attendees | [icalendar](https://github.com/collective/icalendar) |
 | `meeting_planner` | overlap of working hours across time zones (`zoneinfo`) | original |
 | `mail_merge` | CSV plus a text template to many documents | original |
@@ -89,8 +89,8 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `exact_calc` | expression evaluator over `Fraction` and `Decimal` with an AST whitelist (no `eval`) | original |
-| `stats_describe` | mean, median, SD, quartiles, confidence interval, correlation, linear regression | stdlib `statistics` |
+| `exact_calc` **1.0.0** | expression evaluator over `Fraction` and `Decimal` with an AST whitelist (no `eval`) | original |
+| `stats_describe` **1.0.0** | mean, median, SD, quartiles, confidence interval, correlation, linear regression | stdlib `statistics` |
 | `prob_dist` | binomial, Poisson, normal, hypergeometric pmf and cdf; combinatorics | stdlib |
 | `hypothesis_test` | Welch t, paired t, chi-square, Fisher exact, with p-values (exact where stdlib allows; tier 2 with `scipy` otherwise) | scipy |
 | `number_theory` | factorisation, gcd/lcm, primality (Miller-Rabin), modular inverse, totient, CRT | original |
@@ -106,7 +106,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `citation_format` | BibTeX or CSL-JSON to APA 7, MLA 9, Chicago, IEEE, Vancouver | [CSL styles](https://github.com/citation-style-language/styles) |
+| `citation_format` **1.0.0** | BibTeX or CSL-JSON to APA 7, MLA 9, Chicago, IEEE, Vancouver | [CSL styles](https://github.com/citation-style-language/styles) |
 | `bibtex_tools` | parse, deduplicate, normalise keys, find missing fields | original |
 | `doi_isbn_validate` | DOI syntax, ISBN-10/13 checksum and conversion, ISSN | original |
 | `doi_lookup` | metadata from Crossref (tier 3) | Crossref REST |
@@ -122,7 +122,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `readability` | Flesch, Flesch-Kincaid, Gunning Fog, SMOG; Spanish via Fernández-Huerta and Szigriszt-Pazos | [textstat](https://github.com/textstat/textstat) |
+| `readability` **1.0.0** | Flesch, Flesch-Kincaid, Gunning Fog, SMOG; Spanish via Fernández-Huerta and Szigriszt-Pazos | [textstat](https://github.com/textstat/textstat) |
 | `text_report` | word and sentence counts, frequency, n-grams, reading time, longest sentences | original |
 | `style_lint` | passive voice, filler words, adverbs, repeated words, sentence-length spread (heuristic, English and Spanish) | original |
 | `syllables_rhyme` | syllable count, stress, rhyme scheme check (Spanish rules exact; English heuristic) | original |
@@ -170,13 +170,13 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `npv_irr` | NPV, IRR (Newton with bisection fallback), MIRR, payback | [numpy-financial](https://github.com/numpy/numpy-financial) |
+| `npv_irr` **1.0.0** | NPV, IRR (Newton with bisection fallback), MIRR, payback | [numpy-financial](https://github.com/numpy/numpy-financial) |
 | `loan_amortization` | payment and table for French, German and American systems; early repayment | original |
 | `compound_interest` | future and present value, effective rates, rule of 72 | original |
 | `inflation_adjust` | CPI adjustment from a bundled dated table (Spain INE, US CPI-U, euro area HICP) | original |
 | `break_even` | break-even, contribution margin, sensitivity | original |
 | `portfolio_stats` | return, volatility, Sharpe, drawdown from a price CSV | original |
-| `tax_bracket_estimate` | bracket-based estimate from a yearly table given in the input or bundled with its year (IRPF, federal income tax), with a disclaimer | original |
+| `tax_bracket_estimate` **1.0.0** | bracket-based estimate from a yearly table given in the input or bundled with its year (IRPF, federal income tax), with a disclaimer | original |
 | `fx_convert` | ECB reference rates (tier 3) | ECB |
 | `depreciation` | straight-line, declining balance, sum-of-years tables | original |
 | `cashflow_forecast` | monthly cash-flow projection from recurring items | original |
@@ -185,7 +185,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `deadline_calc` | calendar versus working-day terms, from a jurisdiction rule given in the input (e.g. "10 hábiles, agosto inhábil"); never guesses the rule | original |
+| `deadline_calc` **1.0.0** | calendar versus working-day terms, from a jurisdiction rule given in the input (e.g. "10 hábiles, agosto inhábil"); never guesses the rule | original |
 | `clause_checklist` | checklist per contract type (NDA, services, lease, employment) | original |
 | `gdpr_ropa_template` | Article 30 record of processing skeleton | original |
 | `dpia_screening` | DPIA need screening from the EDPB criteria | original |
@@ -200,7 +200,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 |:--|:--|:--|
 | `quiz_cloze` | cloze questions from a text, with answer key | original |
 | `quiz_mcq_scaffold` | multiple-choice scaffolds with distractors from the same text | original |
-| `srs_schedule` | SM-2 next interval (tier 2 with `fsrs` for FSRS) | [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) |
+| `srs_schedule` **1.0.0** | SM-2 next interval (tier 2 with `fsrs` for FSRS) | [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) |
 | `rubric_grade` | weighted rubric scoring and feedback report | original |
 | `grade_stats` | class statistics, curves, item difficulty and discrimination | original |
 | `flashcards_export` | CSV to Anki-importable TSV | original |
@@ -228,7 +228,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | Tool | Description | Source |
 |:--|:--|:--|
 | `haversine` | great-circle distance and bearing, batch | original |
-| `tz_convert` | conversions, DST transitions, offsets at a date (`zoneinfo`) | stdlib |
+| `tz_convert` **1.0.0** | conversions, DST transitions, offsets at a date (`zoneinfo`) | stdlib |
 | `sun_times` | sunrise, sunset, twilight by the NOAA algorithm | [astral](https://github.com/sffjunkie/astral) |
 | `coord_convert` | decimal degrees, DMS, UTM, geohash, what3words-style not included | original |
 | `calendar_convert` | Gregorian, ISO week, Julian day, Hebrew, Islamic | original |
@@ -252,7 +252,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `hash_verify` | MD5, SHA-1, SHA-256, SHA-512, BLAKE2 and verify | stdlib |
+| `hash_verify` **1.0.0** | MD5, SHA-1, SHA-256, SHA-512, BLAKE2 and verify | stdlib |
 | `password_entropy` | entropy estimate, never echoes the password | original |
 | `sbom_check` | CycloneDX or SPDX JSON required fields and licence summary | original |
 | `jwt_decode` | decode without verifying, with a clear warning | original |
@@ -310,3 +310,12 @@ Fourteen tier-1 tools, one or two per domain, each the kind of computation a mod
 | [heuer/segno](https://github.com/heuer/segno) | 814 | 2026-07-23 | pure-Python QR |
 
 No maintained small repository exists for D'Hondt and Sainte-Laguë (the best have about 14 stars) or for GDPR templates; those are original tools, which is why `seat_allocation` is the first reference entry.
+
+## Status
+
+Implemented tools carry their version in bold in the tables above; each lives under [`catalog/tools/`](../../catalog/tools/) with its manifest, program, `tests.json` and README, passes [`tools/catalog/run_tests.py`](../../tools/catalog/run_tests.py) and the pre-flight copy of the registry's policy scan ([`tools/catalog/policy_scan.py`](../../tools/catalog/policy_scan.py)), and is approved and served by the registry (`https://registry.underpassai.com/index.json`). Bundled data tables are written by scripts under [`tools/catalog/data/`](../../tools/catalog/data/) that name their sources. The registry's sandbox runs Python 3.12 and Node 22 since axlr-registry v0.3.4.
+
+| Date | Batch | Tools added | Live in production | Test cases |
+|:--|:--|--:|--:|--:|
+| 2026-10-16 | reference entries (`seat_allocation`, `business_days`) | 2 | 2 | 10 |
+| 2026-10-18 | 1: the first batch and the Spanish administration set | 16 | 18 | 117 |
