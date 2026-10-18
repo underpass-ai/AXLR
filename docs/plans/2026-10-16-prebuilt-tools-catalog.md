@@ -54,7 +54,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `seat_allocation` | D'Hondt, Sainte-Laguë, modified Sainte-Laguë, Hare; threshold; award order and ties (**reference entry**) | original |
+| `seat_allocation` **1.0.0** | D'Hondt, Sainte-Laguë, modified Sainte-Laguë, Hare; threshold; award order and ties (**reference entry**) | original |
 | `seat_allocation_droop` | Droop and Imperiali quotas, largest remainder | original |
 | `vote_condorcet` | pairwise matrix, Condorcet winner, Schulze and Copeland | [CIVS](https://github.com/andrewcmyers/civs) ideas |
 | `vote_irv` | instant-runoff rounds with tie handling and exhausted ballots | original |
@@ -71,7 +71,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `business_days` | count, add, list working days with weekends and holidays given in the input (**reference entry**) | original |
+| `business_days` **1.0.0** | count, add, list working days with weekends and holidays given in the input (**reference entry**) | original |
 | `holiday_table` | holidays for a country and region and year, from a bundled dated table (tier 2 with `holidays`) | [vacanza/holidays](https://github.com/vacanza/holidays) |
 | `invoice_calc` | lines, discounts, VAT per rate, withholding, totals in `Decimal` | original |
 | `iban_validate` | IBAN checksum, country length, BBAN split | [python-stdnum](https://github.com/arthurdejong/python-stdnum) |
@@ -109,8 +109,8 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `citation_format` | BibTeX or CSL-JSON to APA 7, MLA 9, Chicago, IEEE, Vancouver | [CSL styles](https://github.com/citation-style-language/styles) |
 | `bibtex_tools` | parse, deduplicate, normalise keys, find missing fields | original |
 | `doi_isbn_validate` | DOI syntax, ISBN-10/13 checksum and conversion, ISSN | original |
-| `doi_lookup` | metadata from Crossref (tier 3) | Crossref REST |
-| `arxiv_lookup` | search and fetch arXiv metadata (tier 3) | arXiv API |
+| `doi_lookup` **1.0.0** | metadata from Crossref (tier 3) | Crossref REST |
+| `arxiv_lookup` **1.0.0** | search and fetch arXiv metadata (tier 3) | arXiv API |
 | `chem_formula` | parse `Ca(OH)2`, molar mass, mass percent, from a bundled element table | original |
 | `physics_constants` | CODATA 2022 constants with units and uncertainty | NIST |
 | `dna_tools` | reverse complement, GC content, translation, ORF search | Biopython ideas |
@@ -177,7 +177,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `break_even` | break-even, contribution margin, sensitivity | original |
 | `portfolio_stats` | return, volatility, Sharpe, drawdown from a price CSV | original |
 | `tax_bracket_estimate` | bracket-based estimate from a yearly table given in the input or bundled with its year (IRPF, federal income tax), with a disclaimer | original |
-| `fx_convert` | ECB reference rates (tier 3) | ECB |
+| `fx_convert` **1.0.0** | ECB reference rates (tier 3) | ECB |
 | `depreciation` | straight-line, declining balance, sum-of-years tables | original |
 | `cashflow_forecast` | monthly cash-flow projection from recurring items | original |
 
@@ -218,7 +218,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `es_verb_conjugate` | regular Spanish conjugation plus bundled irregulars | [mlconjug3](https://github.com/Ars-Linguistica/mlconjug3) ideas |
 | `hangul_romanize` | Revised Romanization from Hangul decomposition | [hangul-romanization](https://github.com/Tyriar/hangul-romanization) |
 | `kana_romanize` | Hepburn for kana (kanji needs `pykakasi`, tier 2) | pykakasi |
-| `pinyin_convert` | tier 2 with `pypinyin` | [python-pinyin](https://github.com/mozillazg/python-pinyin) |
+| `pinyin_convert` **1.0.0** | tier 2 with `pypinyin` | [python-pinyin](https://github.com/mozillazg/python-pinyin) |
 | `language_detect` | character n-gram heuristic (tier 2 with `lingua`) | [lingua-py](https://github.com/pemistahl/lingua-py) |
 | `number_to_words` | numbers, ordinals and currency to words (es, en, fr, de, pt) | original |
 | `gender_agreement_es` | agreement check for Spanish noun phrases (heuristic) | original |
@@ -266,7 +266,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | Tool | Description | Source |
 |:--|:--|:--|
 | `image_info` | dimensions and format from PNG, JPEG, GIF headers; EXIF tier 2 with Pillow | Pillow |
-| `qr_generate` | QR code to SVG (tier 2 with `segno`, pure Python) | [segno](https://github.com/heuer/segno) |
+| `qr_generate` **1.0.0** | QR code to SVG (tier 2 with `segno`, pure Python) | [segno](https://github.com/heuer/segno) |
 | `wav_info` | duration and format of WAV | stdlib `wave` |
 | `color_tools` | hex, RGB, HSL, WCAG contrast, palette from a seed | original |
 | `srt_tools` | shift, convert, merge subtitles | original |
@@ -276,12 +276,12 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 
 | Tool | Description | Source |
 |:--|:--|:--|
-| `eisenhower_matrix` | tasks to quadrants with a plan | original |
-| `habit_streaks` | streaks and rates from a log | original |
-| `unit_price_compare` | price per unit across offers | original |
-| `sudoku_solve`, `chess_fen_validate`, `dice_roll_seeded`, `wordle_helper` | puzzles and games | original |
-| `recipe_scale`, `cooking_unit_convert` | scale servings, convert cups and grams by ingredient density | original |
-| `resistor_color`, `ohms_law`, `beam_load` | electronics and statics | original |
+| `eisenhower_matrix` **1.0.0** | tasks to quadrants with a plan | original |
+| `habit_streaks` **1.0.0** | streaks and rates from a log | original |
+| `unit_price_compare` **1.0.0** | price per unit across offers | original |
+| `sudoku_solve` **1.0.0**, `chess_fen_validate` **1.0.0**, `dice_roll_seeded` **1.0.0**, `wordle_helper` **1.0.0** | puzzles and games | original |
+| `recipe_scale` **1.0.0**, `cooking_unit_convert` **1.0.0** | scale servings, convert cups and grams by ingredient density | original |
+| `resistor_color` **1.0.0**, `ohms_law` **1.0.0**, `beam_load` **1.0.0** | electronics and statics | original |
 
 ## First batch
 
@@ -310,3 +310,17 @@ Fourteen tier-1 tools, one or two per domain, each the kind of computation a mod
 | [heuer/segno](https://github.com/heuer/segno) | 814 | 2026-07-23 | pure-Python QR |
 
 No maintained small repository exists for D'Hondt and Sainte-Laguë (the best have about 14 stars) or for GDPR templates; those are original tools, which is why `seat_allocation` is the first reference entry.
+
+## Status
+
+Implemented tools carry their version in bold in the tables above; each lives under [`catalog/tools/`](../../catalog/tools/) with its manifest, program, `tests.json` and README, passes [`tools/catalog/run_tests.py`](../../tools/catalog/run_tests.py) (inputs sent and outputs compared as the registry's runner does) and the pre-flight copy of the registry's policy scan, and is approved and served by the registry (`https://registry.underpassai.com/index.json`). Bundled data tables are written by scripts under [`tools/catalog/data/`](../../tools/catalog/data/) that name their sources, licences and dates. The registry's sandbox runs Python 3.12 and Node 22 since axlr-registry v0.3.4, without network and without third-party packages.
+
+| Date | Batch | Tools added | Test cases |
+|:--|:--|--:|--:|
+| 2026-10-16 | reference entries (`seat_allocation`, `business_days`) | 2 | 10 |
+| 2026-10-18 | 1: the first batch and the Spanish administration set (PR #138) | 16 | 117 |
+| 2026-10-18 | 2: politics and civics, administration, mathematics, finance, law (PR #139) | 40 | 430 |
+| 2026-10-18 | 3: research, writing, education, language, geography, health, security, media, data, programming (PR #140) | 83 | 1040 |
+| 2026-10-18 | 4: personal, games, cooking and engineering; `qr_generate` and `pinyin_convert` on the standard library; the network tools `doi_lookup`, `arxiv_lookup`, `fx_convert` | 17 | 198 |
+
+Production serves 158 tools after batch 4. Not implemented: `sympy_solve`, the one package-tier tool without a standard-library route: package-tier tools cannot be approved until the registry's sandbox installs packages, because their tests cannot run there. Where the catalog names a package and a stdlib route exists, the stdlib version is shipped and its README says what the package would add. `cooking_unit_convert` ships without its USDA ingredient densities (the FoodData Central API refused the generator's requests); densities are given in the input until `tools/catalog/data/cooking_unit_convert.py` is rerun.
