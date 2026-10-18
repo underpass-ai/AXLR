@@ -1,0 +1,33 @@
+{
+  "name": "story_structure_check",
+  "description": "Check an outline's beats against a story structure: Save the Cat (Blake Snyder's 15 beats on their published pages of a 110-page script), Syd Field's three-act paradigm, or Christopher Vogler's 12-stage hero's journey. Give each scene's beat and its position (percent, or page of total_pages); get missing, early, late and out-of-order beats with the expected range in percent and pages.",
+  "input_schema": {
+    "type": "object",
+    "required": ["framework"],
+    "additionalProperties": false,
+    "properties": {
+      "framework": {"type": "string", "enum": ["three_act", "save_the_cat", "heros_journey"]},
+      "scenes": {"type": "array", "items": {"type": "object", "required": ["beat"], "additionalProperties": false, "properties": {
+        "beat": {"type": "string", "description": "Beat id or name, e.g. catalyst, \"Break into Two\", pp1"},
+        "position": {"type": ["number", "string"], "description": "Percent of the story, 0-100"},
+        "page": {"type": ["number", "string"], "description": "Page or minute; needs total_pages"},
+        "title": {"type": "string"}}}},
+      "total_pages": {"type": ["number", "string"]},
+      "tolerance": {"type": ["number", "string"], "default": 5, "description": "Percentage points allowed around each expected range"},
+      "list_beats": {"type": "boolean", "default": false}
+    }
+  },
+  "program": "python3",
+  "args": ["story_structure_check.py"],
+  "files": ["story_structure_check.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["story-structure", "save-the-cat", "three-act", "heros-journey", "outline", "screenwriting"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"framework": "save_the_cat", "total_pages": 110, "scenes": [{"beat": "Catalyst", "page": 12}, {"beat": "Midpoint", "page": 55}, {"beat": "Theme Stated", "position": 40}]}, "output": {"summary": {"ok": 2, "early": 0, "late": 1, "missing": 12}, "misplaced": ["theme_stated"]}},
+    "source": "original; Blake Snyder, Save the Cat! (2005), ch. 4 (Beat Sheet pages); Syd Field, Screenplay (1979) and The Screenwriter's Workbook (1984); Christopher Vogler, The Writer's Journey (3rd ed. 2007)"
+  }
+}

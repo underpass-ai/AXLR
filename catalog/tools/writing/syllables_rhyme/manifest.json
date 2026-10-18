@@ -1,0 +1,119 @@
+{
+  "name": "syllables_rhyme",
+  "description": "Syllables, stress and rhyme: Spanish syllabification and stressed syllable by the RAE's orthographic rules (diphthongs, triphthongs, hiatus, intercalated h, aguda/llana/esdrújula), consonant or assonant rhyme between two words from the stressed vowel, and the rhyme scheme of a stanza (ABBA, -a-a). English is a stated heuristic: vowel-group syllable counts and rhyme by the spelling after the last vowel.",
+  "input_schema": {
+    "type": "object",
+    "required": [
+      "operation"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {
+        "type": "string",
+        "enum": [
+          "syllables",
+          "rhyme",
+          "scheme"
+        ]
+      },
+      "language": {
+        "type": "string",
+        "enum": [
+          "es",
+          "en"
+        ],
+        "default": "es"
+      },
+      "words": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "syllables: one word per item"
+      },
+      "text": {
+        "type": "string",
+        "description": "syllables: running text; scheme: one verse per line"
+      },
+      "a": {
+        "type": "string",
+        "description": "rhyme: first word"
+      },
+      "b": {
+        "type": "string",
+        "description": "rhyme: second word"
+      },
+      "lines": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "scheme: the verses"
+      },
+      "kind": {
+        "type": "string",
+        "enum": [
+          "any",
+          "consonant",
+          "assonant"
+        ],
+        "default": "any"
+      },
+      "case": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "upper",
+          "lower"
+        ],
+        "default": "auto",
+        "description": "auto: capitals for lines of more than 8 metric syllables"
+      }
+    }
+  },
+  "program": "python3",
+  "args": [
+    "syllables_rhyme.py"
+  ],
+  "files": [
+    "syllables_rhyme.py"
+  ],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": [
+      "syllables",
+      "rhyme",
+      "spanish",
+      "poetry",
+      "stress",
+      "metrics",
+      "accentuation"
+    ],
+    "license": "MIT",
+    "requires": {
+      "program_min_version": "3.10",
+      "packages": []
+    },
+    "network": false,
+    "example": {
+      "input": {
+        "operation": "rhyme",
+        "a": "canción",
+        "b": "corazón"
+      },
+      "output": {
+        "rhyme": "consonant",
+        "tails": [
+          "ón",
+          "ón"
+        ],
+        "assonance": [
+          "o",
+          "o"
+        ]
+      }
+    },
+    "source": "original; RAE and ASALE, Ortografía de la lengua española (2010) and Diccionario panhispánico de dudas, 2nd ed., entries 'tilde', 'diptongo' and 'hiato'; consonant and assonant rhyme as usually defined in Spanish metrics"
+  }
+}

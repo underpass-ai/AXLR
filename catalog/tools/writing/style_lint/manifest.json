@@ -1,0 +1,30 @@
+{
+  "name": "style_lint",
+  "description": "Heuristic style checks for English and Spanish prose: possible passive voice (be + past participle; ser/estar + participio), filler words, adverbs in -ly or -mente, a word repeated within a few words, very long sentences and low variety of sentence length. Each finding has code-point offsets. Pattern matching, not grammar: review every finding.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string"},
+      "language": {"type": "string", "enum": ["en", "es"], "default": "en"},
+      "checks": {"type": "array", "items": {"type": "string", "enum": ["passive", "filler", "adverb", "repetition", "long_sentence", "sentence_variety"]}},
+      "long_sentence_words": {"type": "integer", "minimum": 5, "maximum": 500, "default": 30},
+      "repeat_window": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 10},
+      "min_repeat_length": {"type": "integer", "minimum": 1, "maximum": 50, "default": 4}
+    }
+  },
+  "program": "python3",
+  "args": ["style_lint.py"],
+  "files": ["style_lint.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["style", "lint", "passive-voice", "editing", "spanish", "prose"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "The report was written by the committee. It was really very long."}, "output": {"heuristic": true, "summary": {"passive": 1, "filler": 2}, "total": 3}},
+    "source": "original; heuristics in the spirit of plain-language style advice (Strunk and White, the US Plain Language guidelines, Fundéu); word lists written for this tool"
+  }
+}

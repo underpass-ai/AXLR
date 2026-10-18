@@ -1,0 +1,32 @@
+{
+  "name": "text_report",
+  "description": "Text statistics: characters, letters, words, sentences and paragraphs, the most frequent words with optional English or Spanish stopword removal, top 2- and 3-grams, reading and speaking time at stated words per minute, the longest sentences, and lexical diversity (type-token ratio, optional MTLD). Tokenizer rules are stated in the output.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "text": {"type": "string"},
+      "stopwords": {"type": "string", "enum": ["none", "en", "es"], "default": "none"},
+      "top_n": {"type": "integer", "minimum": 1, "maximum": 100, "default": 10},
+      "ngrams": {"type": "array", "items": {"type": "integer", "enum": [2, 3]}, "default": [2, 3]},
+      "reading_wpm": {"type": ["number", "string"], "default": 238},
+      "speaking_wpm": {"type": ["number", "string"], "default": 150},
+      "longest_n": {"type": "integer", "minimum": 0, "maximum": 50, "default": 3},
+      "mtld": {"type": "boolean", "default": false}
+    }
+  },
+  "program": "python3",
+  "args": ["text_report.py"],
+  "files": ["text_report.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "writing",
+    "tags": ["word-count", "text-statistics", "reading-time", "ngrams", "frequency", "lexical-diversity"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"text": "The cat sat on the mat. The dog didn't sit! Did the bird fly away?\n\nYes, it flew.", "top_n": 1}, "output": {"characters": 81, "words": 18, "sentences": 4, "paragraphs": 2, "top_words": [{"word": "the", "count": 4}], "reading_time": {"wpm": 238, "seconds": 5}}},
+    "source": "original; reading speed default from Brysbaert (2019), 'How many words do we read per minute?', J. Memory and Language 109; MTLD from McCarthy and Jarvis (2010), Behavior Research Methods 42(2)"
+  }
+}
