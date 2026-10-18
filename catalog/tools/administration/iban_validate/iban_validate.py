@@ -62,28 +62,28 @@ def spanish_check(bank, branch, account):
 def check(raw):
     if not isinstance(raw, str):
         return {"input": raw, "valid": False, "reason": "not a string"}
-    iban = re.sub(r"[\s-]", "", raw).upper()
-    if iban.startswith("IBAN"):
-        iban = iban[4:]
-    result = {"input": raw, "iban": iban, "valid": False}
-    if not re.fullmatch(r"[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}", iban):
+    code = re.sub(r"[\s-]", "", raw).upper()
+    if code.startswith("IBAN"):
+        code = code[4:]
+    result = {"input": raw, "iban": code, "valid": False}
+    if not re.fullmatch(r"[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}", code):
         result["reason"] = "an IBAN is two letters, two digits and up to 30 letters or digits"
         return result
-    country = iban[:2]
+    country = code[:2]
     result["country"] = country
     expected = LENGTHS.get(country)
     if expected is None:
         result["reason"] = f"{country} is not an IBAN country in the bundled registry"
         return result
-    if len(iban) != expected:
-        result["reason"] = f"{country} IBANs have {expected} characters, this one has {len(iban)}"
+    if len(code) != expected:
+        result["reason"] = f"{country} IBANs have {expected} characters, this one has {len(code)}"
         return result
-    if mod97(iban[4:] + iban[:4]) != 1:
+    if mod97(code[4:] + code[:4]) != 1:
         result["reason"] = "check digits do not match (mod 97)"
         return result
-    bban = iban[4:]
-    result.update({"valid": True, "check_digits": iban[2:4], "bban": bban,
-                   "formatted": " ".join(iban[i:i + 4] for i in range(0, len(iban), 4))})
+    bban = code[4:]
+    result.update({"valid": True, "check_digits": code[2:4], "bban": bban,
+                   "formatted": " ".join(code[i:i + 4] for i in range(0, len(code), 4))})
     layout = LAYOUTS.get(country)
     if layout:
         fields, at = {}, 0

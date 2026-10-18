@@ -74,7 +74,7 @@ Tier 1 unless marked. "Source" names the implementation to learn from or "origin
 | `business_days` **1.0.0** | count, add, list working days with weekends and holidays given in the input (**reference entry**) | original |
 | `holiday_table` | holidays for a country and region and year, from a bundled dated table (tier 2 with `holidays`) | [vacanza/holidays](https://github.com/vacanza/holidays) |
 | `invoice_calc` **1.0.0** | lines, discounts, VAT per rate, withholding, totals in `Decimal` | original |
-| `iban_validate` **1.0.1** | IBAN checksum, country length, BBAN split | [python-stdnum](https://github.com/arthurdejong/python-stdnum) |
+| `iban_validate` **1.0.2** | IBAN checksum, country length, BBAN split | [python-stdnum](https://github.com/arthurdejong/python-stdnum) |
 | `es_tax_id_validate` **1.0.0** | Spanish NIF, NIE and CIF check letter | python-stdnum |
 | `eu_vat_validate` **1.0.0** | EU VAT number syntax and checksum per country | python-stdnum |
 | `ics_generate` | RFC 5545 event or recurring event, with alarms and attendees | [icalendar](https://github.com/collective/icalendar) |
