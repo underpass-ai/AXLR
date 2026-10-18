@@ -1,0 +1,28 @@
+{
+  "name": "stats_describe",
+  "description": "Descriptive statistics of a list of numbers: mean, median, modes, sample and population variance and SD, quartiles and IQR, skewness, and a Student-t confidence interval for the mean. With paired x and y: Pearson and Spearman correlation, the least-squares line, r squared and the slope's p-value. Sums are exact fractions.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "data": {"type": "array", "minItems": 2, "items": {"type": ["number", "string"]}},
+      "x": {"type": "array", "minItems": 2, "items": {"type": ["number", "string"]}},
+      "y": {"type": "array", "minItems": 2, "items": {"type": ["number", "string"]}},
+      "confidence": {"type": "number", "exclusiveMinimum": 0, "exclusiveMaximum": 1, "default": 0.95},
+      "quantile_method": {"type": "string", "enum": ["exclusive", "inclusive"], "default": "exclusive"}
+    }
+  },
+  "program": "python3",
+  "args": ["stats_describe.py"],
+  "files": ["stats_describe.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "mathematics",
+    "tags": ["statistics", "mean", "standard-deviation", "confidence-interval", "regression", "correlation", "quartiles"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"data": [2, 4, 4, 4, 5, 5, 7, 9]}, "output": {"mean": 5.0, "sd_population": 2.0, "median": 4.5, "exact": {"variance_sample": "32/7"}}},
+    "source": "Python statistics; Student-t quantiles through the regularized incomplete beta function (Numerical Recipes, ch. 6.4)"
+  }
+}
