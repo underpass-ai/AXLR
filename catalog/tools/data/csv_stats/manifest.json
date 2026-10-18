@@ -1,0 +1,31 @@
+{
+  "name": "csv_stats",
+  "description": "Per-column statistics of a CSV, like csvkit's csvstat: inferred type (integer, decimal, boolean, date, datetime, text), nulls, distinct values, top values, min, max, sum, mean, median, sample variance and standard deviation, decimal places and text lengths. The dialect is sniffed (comma, semicolon, tab, pipe) or given; numbers are summed exactly and printed as decimal strings. CSV inline or a relative file.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "csv": {"type": "string", "description": "The CSV text"},
+      "path": {"type": "string", "description": "Or a relative path to a CSV file"},
+      "delimiter": {"type": "string", "description": "Override the sniffed delimiter; \\t for tab"},
+      "header": {"type": "boolean", "default": true},
+      "null_values": {"type": "array", "items": {"type": "string"}, "description": "Default: empty, NA, N/A, null, NULL, None, nan, NaN, -"},
+      "top": {"type": "integer", "minimum": 0, "maximum": 1000, "default": 5},
+      "columns": {"type": "array", "items": {"type": "string"}},
+      "precision": {"type": "integer", "minimum": 1, "maximum": 100, "default": 28, "description": "Significant digits of mean, variance and stdev"}
+    }
+  },
+  "program": "python3",
+  "args": ["csv_stats.py"],
+  "files": ["csv_stats.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "data",
+    "tags": ["csv", "statistics", "profiling", "csvkit", "data-quality", "types"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"csv": "x,y\n10,8.04\n8,6.95\n13,7.58\n9,8.81\n11,8.33\n14,9.96\n6,7.24\n4,4.26\n12,10.84\n7,4.82\n5,5.68\n", "columns": ["x"]}, "output": {"rows": 11, "stats": [{"column": "x", "type": "integer", "mean": "9", "variance": "11", "median": "9"}]}},
+    "source": "Behaviour of csvkit's csvstat (wireservice/csvkit, type inference after agate); Python csv.Sniffer for the dialect"
+  }
+}

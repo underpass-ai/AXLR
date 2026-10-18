@@ -1,0 +1,26 @@
+{
+  "name": "moon_phase",
+  "description": "The Moon's phase at a UTC instant: phase name (new, waxing crescent, first quarter, waxing gibbous, full, waning gibbous, last quarter, waning crescent), phase angle, illuminated fraction, age in days since the last new Moon, and the times of the previous new Moon and the next new Moon, first quarter, full Moon and last quarter; or every principal phase of a calendar year. Phase times are Meeus' true phases (Astronomical Algorithms, chapter 49, with all periodic and planetary corrections) in dynamical time, converted to UTC with the Espenak-Meeus delta T polynomials, and agree with the US Naval Observatory to within a minute; the illuminated fraction uses Meeus' lower-accuracy formula 48.4.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["at", "year"], "default": "at"},
+      "datetime": {"type": "string", "description": "ISO 8601 instant, years 1000-3000: 2026-10-18T00:00:00Z; an offset is converted, a naive time is UTC"},
+      "year": {"type": "integer", "minimum": 1000, "maximum": 3000, "description": "operation year"}
+    }
+  },
+  "program": "python3",
+  "args": ["moon_phase.py"],
+  "files": ["moon_phase.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "geography",
+    "tags": ["moon", "lunar-phase", "full-moon", "new-moon", "astronomy", "illumination"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"datetime": "2026-10-19T00:00:00Z"}, "output": {"phase_name": "First Quarter", "waxing": true, "illuminated_fraction": 0.5315, "age_days": 8.3403, "previous_new_moon": {"phase": "New Moon", "utc": "2026-10-10T15:49:56Z"}, "next": [{"phase": "Full Moon", "utc": "2026-10-26T04:11:43Z"}, {"phase": "Last Quarter", "utc": "2026-11-01T20:28:22Z"}, {"phase": "New Moon", "utc": "2026-11-09T07:01:57Z"}, {"phase": "First Quarter", "utc": "2026-11-17T11:47:44Z"}]}},
+    "source": "Meeus, Astronomical Algorithms (2nd ed., Willmann-Bell 1998), chapter 49 (phases of the Moon) and formula 48.4 (illuminated fraction); Espenak and Meeus, Five Millennium Canon of Solar Eclipses (NASA TP-2006-214141), delta T polynomials"
+  }
+}

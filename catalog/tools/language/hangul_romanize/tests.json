@@ -1,0 +1,18 @@
+[
+  {"name": "한국 Hanguk (the RR spelling used by the Korean government), capitalized", "input": {"text": "한국", "capitalize": true}, "expect": {"stdout_json": {"result": "Hanguk", "syllables": 2}}},
+  {"name": "RR 2000 Ch.3 Art. 1.1 nasalisation and ㄹ: 백마 Baengma, 종로 Jongno, 왕십리 Wangsimni, 별내 Byeollae, 신라 Silla", "input": {"text": "백마 종로 왕십리 별내 신라", "capitalize": true}, "expect": {"stdout_json": {"result": "Baengma Jongno Wangsimni Byeollae Silla"}}},
+  {"name": "RR 2000 Ch.2 Art. 2 note 2 (ㄹ r/l/ll): 설악 Seorak, 울릉 Ulleung, 대관령 Daegwallyeong; city name 울산 Ulsan", "input": {"text": "설악 울산 울릉 대관령", "capitalize": true}, "expect": {"stdout_json": {"result": "Seorak Ulsan Ulleung Daegwallyeong"}}},
+  {"name": "RR 2000 Ch.3 Art. 1.3 palatalisation: 해돋이 haedoji, 같이 gachi, 굳히다 guchida", "input": {"text": "해돋이 같이 굳히다"}, "expect": {"stdout_json": {"result": "haedoji gachi guchida"}}},
+  {"name": "RR 2000 Ch.3 Art. 1.4 aspiration: 좋고 joko, 놓다 nota, 잡혀 japyeo, 낳지 nachi", "input": {"text": "좋고 놓다 잡혀 낳지"}, "expect": {"stdout_json": {"result": "joko nota japyeo nachi"}}},
+  {"name": "RR 2000 Ch.3 Art. 1.4 nouns keep h: 묵호 Mukho, 집현전 Jiphyeonjeon", "input": {"text": "묵호 집현전", "capitalize": true, "keep_h": true}, "expect": {"stdout_json": {"result": "Mukho Jiphyeonjeon"}}},
+  {"name": "RR 2000 Ch.2 Art. 2 note 1: codas 백암 Baegam, 옥천 Okcheon, 합덕 Hapdeok, 월곶 Wolgot, 한밭 Hanbat", "input": {"text": "백암 옥천 합덕 월곶 한밭", "capitalize": true}, "expect": {"stdout_json": {"result": "Baegam Okcheon Hapdeok Wolgot Hanbat"}}},
+  {"name": "RR 2000 Ch.2 Art. 2 note 1: 벚꽃 beotkkot", "input": {"text": "벚꽃"}, "expect": {"stdout_json": {"result": "beotkkot"}}},
+  {"name": "hand-derived from Standard Pronunciation art. 12, 14, 18 (double finals, ㅎ): 읽는 ingneun, 않는 anneun, 끓는 kkeulleun, 싫어 sireo, 값 gap", "input": {"text": "읽는 않는 끓는 싫어 값"}, "expect": {"stdout_json": {"result": "ingneun anneun kkeulleun sireo gap"}}},
+  {"name": "RR 2000 Ch.3 Art. 8 transliteration examples: 집 jib, 짚 jip, 밖 bakk, 값 gabs, 붓꽃 buskkoch, 먹는 meogneun, 독립 doglib, 문리 munli", "input": {"text": "집 짚 밖 값 붓꽃 먹는 독립 문리", "mode": "transliteration"}, "expect": {"stdout_json": {"result": "jib jip bakk gabs buskkoch meogneun doglib munli"}}},
+  {"name": "RR 2000 Ch.3 Art. 8 examples with hyphens: 물엿 mul-yeos, 굳이 gud-i, 좋다 johda, 가곡 gagog, 조랑말 jolangmal, 없었습니다 eobs-eoss-seubnida", "input": {"text": "물엿 굳이 좋다 가곡 조랑말 없었습니다", "mode": "transliteration"}, "expect": {"stdout_json": {"result": "mul-yeos gud-i johda gagog jolangmal eobs-eoss-seubnida", "mode": "transliteration"}}},
+  {"name": "non-Hangul passes through and Hanja is listed", "input": {"text": "서울(漢陽) 2024"}, "expect": {"stdout_json": {"result": "seoul(漢陽) 2024", "unconverted": ["漢", "陽"]}}},
+  {"name": "limit: n-insertion (Ch.3 Art. 1.2, 학여울 Hangnyeoul) is not detected", "input": {"text": "학여울", "capitalize": true}, "expect": {"stdout_json": {"result": "Hagyeoul"}}},
+  {"name": "bad mode", "input": {"text": "한국", "mode": "phonetic"}, "expect": {"exit": 2, "stdout_contains": "mode must be"}},
+  {"name": "empty text", "input": {"text": ""}, "expect": {"exit": 2, "stdout_contains": "text must be"}},
+  {"name": "unknown field", "input": {"text": "한국", "style": "x"}, "expect": {"exit": 2, "stdout_contains": "unknown fields"}}
+]

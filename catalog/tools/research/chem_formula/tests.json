@@ -1,0 +1,14 @@
+[
+  {"name": "textbook: water H2O 18.015 g/mol (11.19 % H, 88.81 % O)", "input": {"formula": "H2O"}, "expect": {"stdout_json": {"molar_mass": "18.0150", "counts": {"H": 2, "O": 1}, "elements": [{"symbol": "H", "mass_percent": "11.19"}, {"symbol": "O", "mass_percent": "88.81"}]}}},
+  {"name": "textbook: calcium hydroxide Ca(OH)2 74.09 g/mol", "input": {"formula": "Ca(OH)2"}, "expect": {"stdout_json": {"molar_mass": "74.0920", "molar_mass_rounded": "74.09", "hill": "CaH2O2"}}},
+  {"name": "textbook: copper(II) sulfate pentahydrate CuSO4·5H2O 249.68 g/mol", "input": {"formula": "CuSO4·5H2O"}, "expect": {"stdout_json": {"molar_mass": "249.6770", "molar_mass_rounded": "249.68", "counts": {"Cu": 1, "S": 1, "O": 9, "H": 10}, "parts": [{"part": "CuSO4", "coefficient": 1}, {"part": "5H2O", "coefficient": 5}]}}},
+  {"name": "the hydrate written with an asterisk gives the same", "input": {"formula": "CuSO4*5H2O", "decimals": 3}, "expect": {"stdout_json": {"molar_mass_rounded": "249.677", "atoms": 21}}},
+  {"name": "textbook: glucose C6H12O6 180.16 g/mol, 40.00 % carbon, Hill order C H O", "input": {"formula": "C6H12O6"}, "expect": {"stdout_json": {"molar_mass_rounded": "180.16", "hill": "C6H12O6", "elements": [{"symbol": "C", "mass_percent": "40.00"}, {"symbol": "H"}, {"symbol": "O"}]}}},
+  {"name": "nested brackets K4[Fe(CN)6], Hill order with carbon first", "input": {"formula": "K4[Fe(CN)6]"}, "expect": {"stdout_json": {"counts": {"K": 4, "Fe": 1, "C": 6, "N": 6}, "hill": "C6FeK4N6", "molar_mass": "368.345"}}},
+  {"name": "charges: SO4^2-, NH4+ and Unicode superscripts", "input": {"formulas": ["SO4^2-", "NH4+", "SO₄²⁻", "Fe+++"]}, "expect": {"stdout_json": {"results": [{"charge": -2, "hill": "O4S^2-"}, {"charge": 1, "hill": "H4N^+"}, {"charge": -2, "molar_mass": "96.056"}, {"charge": 3, "hill": "Fe^3+"}]}}},
+  {"name": "an element without a standard atomic weight needs masses", "input": {"formula": "TcO4-"}, "expect": {"exit": 2, "stdout_contains": "has no standard atomic weight"}},
+  {"name": "masses supplies it", "input": {"formula": "TcO4-", "masses": {"Tc": 98}}, "expect": {"stdout_json": {"molar_mass": "161.996", "elements": [{"symbol": "O"}, {"symbol": "Tc", "weight_source": "input"}]}}},
+  {"name": "unbalanced parenthesis", "input": {"formula": "Ca(OH"}, "expect": {"exit": 2, "stdout_contains": "missing ')'"}},
+  {"name": "unknown element", "input": {"formula": "Xx2"}, "expect": {"exit": 2, "stdout_contains": "unknown element 'Xx'"}},
+  {"name": "an error in a list is reported per formula", "input": {"formulas": ["NaCl", "bad("]}, "expect": {"stdout_json": {"results": [{"molar_mass": "58.440"}, {"formula": "bad(", "error": "element symbols start with a capital letter: 'b' at position 1"}]}}}
+]

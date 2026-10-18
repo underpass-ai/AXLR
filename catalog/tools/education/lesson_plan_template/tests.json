@@ -1,0 +1,14 @@
+[
+  {"name": "hand-checked allocation: 50 min at 10/25/25/20/10/10 % is 5, 12.5, 12.5, 10, 5, 5; the spare minute goes to the first 0.5 remainder", "input": {"subject": "Biology", "topic": "photosynthesis", "duration_minutes": 50},
+   "expect": {"exit": 0, "stdout_json": {"stages": [{"stage": "warm_up", "minutes": 5, "start_minute": 0}, {"stage": "presentation", "minutes": 13, "exact_share": "25/2"}, {"stage": "practice", "minutes": 12, "start_minute": 18}, {"stage": "production", "minutes": 10}, {"stage": "assessment", "minutes": 5}, {"stage": "closure", "minutes": 5, "end_minute": 50}]}}},
+  {"name": "hand-checked allocation: 55 min is 5.5, 13.75, 13.75, 11, 5.5, 5.5; three spare minutes go to the .75s and the first .5", "input": {"subject": "Historia", "duration_minutes": 55, "language": "es", "level": "university", "objectives": [{"level": "analyze", "content": "las causas de la Revolución Francesa"}, {"level": "analyze", "content": "fuentes primarias"}]},
+   "expect": {"exit": 0, "stdout_json": {"stages": [{"minutes": 6, "title": "Activación"}, {"minutes": 14}, {"minutes": 14}, {"minutes": 11}, {"minutes": 5}, {"minutes": 5}],
+     "objectives": [{"verb": "diferenciar", "level_name": "Analizar", "text": "Al final de la sesión, el alumnado será capaz de diferenciar las causas de la Revolución Francesa."}, {"verb": "organizar"}]}}},
+  {"name": "Anderson & Krathwohl 2001 process verbs by level for a primary class: identify (Remember), explain (Understand), use (Apply)", "input": {"subject": "Science", "topic": "magnets", "duration_minutes": 45, "level": "primary"},
+   "expect": {"exit": 0, "stdout_json": {"objectives": [{"level": "remember", "verb": "identify"}, {"level": "understand", "verb": "explain"}, {"level": "apply", "verb": "use", "text": "By the end of the lesson, students will be able to use [content about magnets]."}]}}},
+  {"name": "custom weights with a stage left out add up to the duration", "input": {"subject": "Maths", "duration_minutes": 60, "stage_weights": {"warm_up": 1, "presentation": 2, "practice": 3, "closure": 1}, "objectives": [{"level": "create", "content": "a survey", "verb": "design"}]},
+   "expect": {"exit": 0, "stdout_json": {"stages": [{"stage": "warm_up", "minutes": 9}, {"stage": "presentation", "minutes": 17}, {"stage": "practice", "minutes": 26}, {"stage": "closure", "minutes": 8}], "objectives": [{"verb": "design"}]}}},
+  {"name": "markdown has the sequence table", "input": {"subject": "Art", "duration_minutes": 30}, "expect": {"exit": 0, "stdout_contains": "| Warm-up | 3 | 0–3 |"}},
+  {"name": "duration too short", "input": {"subject": "Art", "duration_minutes": 5}, "expect": {"exit": 2, "stdout_contains": "duration_minutes must be"}},
+  {"name": "unknown Bloom level", "input": {"subject": "Art", "duration_minutes": 30, "objectives": [{"level": "know"}]}, "expect": {"exit": 2, "stdout_contains": "level must be one of"}}
+]

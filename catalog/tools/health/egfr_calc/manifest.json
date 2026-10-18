@@ -1,0 +1,29 @@
+{
+  "name": "egfr_calc",
+  "description": "Estimated glomerular filtration rate by the race-free CKD-EPI 2021 creatinine equation, and optionally the 2021 creatinine-cystatin C equation, with creatinine in mg/dL or umol/L, reported in whole numbers as the NKF recommends and staged G1 to G5 (KDIGO 2012). Adults only. Every output carries a disclaimer: not medical advice, verify with a clinician.",
+  "input_schema": {
+    "type": "object",
+    "required": ["age", "sex", "creatinine"],
+    "additionalProperties": false,
+    "properties": {
+      "age": {"type": "number", "minimum": 18, "maximum": 130, "description": "Years"},
+      "sex": {"type": "string", "enum": ["female", "male"]},
+      "creatinine": {"type": ["number", "string"], "description": "IDMS-standardised serum creatinine"},
+      "creatinine_unit": {"type": "string", "enum": ["mg/dL", "umol/L", "µmol/L"], "default": "mg/dL", "description": "88.4 umol/L = 1 mg/dL"},
+      "cystatin_c": {"type": ["number", "string"], "description": "Serum cystatin C in mg/L; adds eGFRcr-cys"}
+    }
+  },
+  "program": "python3",
+  "args": ["egfr_calc.py"],
+  "files": ["egfr_calc.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "health",
+    "tags": ["egfr", "ckd-epi", "kidney", "creatinine", "cystatin-c", "nephrology"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"age": 50, "sex": "female", "creatinine": 1.0}, "output": {"egfr_cr": {"egfr": 69, "egfr_unrounded": "68.63", "stage": "G2"}}},
+    "source": "Inker LA et al., New creatinine- and cystatin C-based equations to estimate GFR without race, N Engl J Med 2021;385:1737-49; National Kidney Foundation implementation guidance and test values; KDIGO 2012 CKD guideline (G categories)"
+  }
+}

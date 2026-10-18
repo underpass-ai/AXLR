@@ -1,0 +1,32 @@
+{
+  "name": "srt_tools",
+  "description": "Work with subtitles given as text, SubRip (.srt) or WebVTT (.vtt): parse the cues, shift every time by milliseconds, rescale the times for a frame-rate change (from_fps/to_fps or a factor), convert SRT to VTT and back (tags, entities, NOTE/STYLE blocks and cue settings handled), merge two files in time order, and find overlapping cues. Returns the cues as JSON and the rewritten file.",
+  "input_schema": {
+    "type": "object",
+    "required": ["text"],
+    "additionalProperties": false,
+    "properties": {
+      "operation": {"type": "string", "enum": ["parse", "shift", "scale", "convert", "merge", "overlaps"], "default": "parse"},
+      "text": {"type": "string", "maxLength": 10000000, "description": "The subtitle file; WEBVTT header means WebVTT, else SRT"},
+      "text2": {"type": "string", "maxLength": 10000000, "description": "merge: the second file, same format"},
+      "offset_ms": {"type": "integer", "description": "shift: milliseconds to add; merge: shift applied to text2"},
+      "factor": {"type": ["number", "string"], "description": "scale: multiply every time"},
+      "from_fps": {"type": ["number", "string"]},
+      "to_fps": {"type": ["number", "string"]},
+      "output": {"type": "string", "enum": ["srt", "vtt"], "description": "Format written; default the input's (convert: the other)"}
+    }
+  },
+  "program": "python3",
+  "args": ["srt_tools.py"],
+  "files": ["srt_tools.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "media",
+    "tags": ["subtitles", "srt", "webvtt", "captions", "video", "timing"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"operation": "shift", "offset_ms": 2500, "text": "1\n00:00:01,000 --> 00:00:04,000\nHello\n"}, "output": {"count": 1, "subtitles": "1\n00:00:03,500 --> 00:00:06,500\nHello\n"}},
+    "source": "SubRip .srt format as documented by the SubRip/Matroska community; W3C WebVTT: The Web Video Text Tracks Format (Candidate Recommendation) for cues, timestamps, NOTE/STYLE/REGION blocks and escapes"
+  }
+}

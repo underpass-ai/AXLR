@@ -1,0 +1,37 @@
+{
+  "name": "experiment_power",
+  "description": "Power and sample size for two-sample, one-sample and paired t tests (noncentral t, or the normal approximation) and for comparing two proportions (pooled normal approximation as R's power.prop.test, or Cohen's arcsine h): solve for the sample size per group, the achieved power or the smallest detectable effect, from Cohen's d or means and SD, alpha, one or two sides and an allocation ratio.",
+  "input_schema": {
+    "type": "object",
+    "required": ["design"],
+    "additionalProperties": false,
+    "properties": {
+      "design": {"type": "string", "enum": ["two_sample", "one_sample", "paired", "two_proportions"]},
+      "solve": {"type": "string", "enum": ["n", "power", "effect"], "description": "Default: power when n is given, else n"},
+      "d": {"type": ["number", "string"], "description": "Cohen's d (d_z for paired)"},
+      "mean1": {"type": ["number", "string"]}, "mean2": {"type": ["number", "string"]}, "sd": {"type": ["number", "string"]},
+      "mean": {"type": ["number", "string"]}, "mu0": {"type": ["number", "string"]},
+      "mean_diff": {"type": ["number", "string"]}, "sd_diff": {"type": ["number", "string"]},
+      "p1": {"type": ["number", "string"]}, "p2": {"type": ["number", "string"]},
+      "alpha": {"type": ["number", "string"], "default": 0.05},
+      "sides": {"type": "integer", "enum": [1, 2], "default": 2},
+      "power": {"type": ["number", "string"], "default": 0.8, "description": "Target power (solve n or effect)"},
+      "n": {"type": "integer", "minimum": 2, "maximum": 10000000, "description": "Group 1 size, or subjects/pairs"},
+      "ratio": {"type": ["number", "string"], "default": 1, "description": "n2 / n1"},
+      "method": {"type": "string", "enum": ["t", "normal", "arcsine"], "description": "t designs: t (default) or normal; two_proportions: normal (default) or arcsine"}
+    }
+  },
+  "program": "python3",
+  "args": ["experiment_power.py"],
+  "files": ["experiment_power.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "research",
+    "tags": ["statistics", "power-analysis", "sample-size", "t-test", "proportions", "study-design"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"design": "two_sample", "d": 0.5, "power": 0.8}, "output": {"n_exact": 63.76561, "n1": 64, "n2": 64, "total_n": 128, "power": 0.8014595579, "df": 126}},
+    "source": "Cohen (1988), Statistical Power Analysis for the Behavioral Sciences; noncentral t CDF by Lenth (1989), Applied Statistics algorithm AS 243; matches R's power.t.test and power.prop.test and G*Power 3"
+  }
+}

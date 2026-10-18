@@ -1,0 +1,26 @@
+{
+  "name": "csp_lint",
+  "description": "Lint a Content-Security-Policy header value with CSP Level 3 semantics and the checks of Google's CSP Evaluator: unsafe-inline and unsafe-eval in scripts, wildcards, http:, https: and data: sources, missing object-src, base-uri, script-src, default-src and frame-ancestors, known allowlist-bypass hosts, short nonces, strict-dynamic and nonce/hash interplay, deprecated, unknown and misspelt directives, missing semicolons, reporting and report-only or meta delivery notes. Each finding has a severity and a fix.",
+  "input_schema": {
+    "type": "object",
+    "required": ["policy"],
+    "additionalProperties": false,
+    "properties": {
+      "policy": {"type": "string", "maxLength": 100000, "description": "The header value; a leading 'Content-Security-Policy:' is ignored; commas separate policies"},
+      "delivery": {"type": "string", "enum": ["header", "report-only", "meta"], "default": "header"}
+    }
+  },
+  "program": "python3",
+  "args": ["csp_lint.py"],
+  "files": ["csp_lint.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "security",
+    "tags": ["csp", "content-security-policy", "xss", "headers", "web-security", "lint"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"policy": "script-src 'unsafe-inline'"}, "output": {"strict_csp": false, "effective_script_directive": "script-src", "counts": {"high": 2, "medium": 2, "syntax": 0, "low": 1, "info": 2}}},
+    "source": "W3C Content Security Policy Level 3; checks after Google's CSP Evaluator (google/csp-evaluator, Apache-2.0) and Weichselbaum et al., CSP Is Dead, Long Live CSP! (ACM CCS 2016)"
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "name": "number_to_words",
+  "description": "Write numbers out in words in Spanish, English, French, German or Portuguese: cardinals, ordinals and currency amounts. Follows each language's rules: Spanish uno/un/una and veintiún, cien/ciento, long scale (un millón, mil millones, un billón); French quatre-vingts, soixante et onze, Belgian and Swiss septante/huitante/nonante and the 1990 hyphenation; German compounds (eintausendzweihundertvierunddreißig) with separate Million/Milliarde nouns; English short scale with US or British 'and'; Portuguese 'e' rules, pt-PT long and pt-BR short scale. Negatives, decimals and EUR, USD, GBP, CHF, MXN, BRL or your own currency names.",
+  "input_schema": {
+    "type": "object",
+    "required": ["number", "language"],
+    "additionalProperties": false,
+    "properties": {
+      "number": {"type": ["integer", "number", "string"], "description": "Integer, or a decimal string with a point (\"-1234.05\"); below 10^36"},
+      "language": {"type": "string", "enum": ["es", "en", "fr", "de", "pt"]},
+      "mode": {"type": "string", "enum": ["cardinal", "ordinal", "currency"], "default": "cardinal"},
+      "variant": {"type": "string", "enum": ["en-US", "en-GB", "fr-FR", "fr-BE", "fr-CH", "pt-PT", "pt-BR", "es", "de"], "description": "Default: en-US, fr-FR, pt-PT"},
+      "gender": {"type": "string", "enum": ["masculine", "feminine"], "default": "masculine", "description": "es, fr, pt (una, une, duas, doscientas); de with before_noun (eine)"},
+      "before_noun": {"type": "boolean", "default": false, "description": "Cardinal placed before a noun: es un/veintiún, primer/tercer; de ein/eine"},
+      "orthography": {"type": "string", "enum": ["traditional", "1990"], "default": "traditional", "description": "French: 1990 joins every compound numeral with hyphens"},
+      "decimals": {"type": "string", "enum": ["digits", "number"], "description": "Fractional part digit by digit or as a number; default digits for en and de, number for es, fr, pt"},
+      "currency": {"type": "string", "enum": ["EUR", "USD", "GBP", "CHF", "MXN", "BRL"]},
+      "unit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["singular", "plural"],
+        "properties": {
+          "singular": {"type": "string"}, "plural": {"type": "string"}, "gender": {"type": "string", "enum": ["m", "f", "n"]},
+          "sub_singular": {"type": "string"}, "sub_plural": {"type": "string"}, "sub_gender": {"type": "string", "enum": ["m", "f", "n"]}
+        },
+        "description": "Your own currency names (100 subunits per unit), instead of currency"
+      }
+    }
+  },
+  "program": "python3",
+  "args": ["number_to_words.py"],
+  "files": ["number_to_words.py"],
+  "catalog": {
+    "version": "1.0.2",
+    "category": "language",
+    "tags": ["numbers", "words", "spelling", "ordinals", "currency", "cheques", "multilingual"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"number": "21.50", "language": "es", "mode": "currency", "currency": "EUR"}, "output": {"amount": "21.50", "words": "veintiún euros con cincuenta céntimos"}},
+    "source": "original; rules from the RAE Diccionario panhispánico de dudas and Nueva gramática (numerales), the Académie française and the 1990 Rectifications de l'orthographe, Duden (Zahlwörter), and standard English and Portuguese grammars"
+  }
+}

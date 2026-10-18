@@ -1,0 +1,23 @@
+[
+  {"name": "ISO 3166-1 / ISO 4217 / ITU-T E.164 published assignments: Spain is ES, ESP, 724, euro EUR 978, +34; tz zone.tab gives Europe/Madrid, Africa/Ceuta, Atlantic/Canary", "input": {"code": "ES"}, "expect": {"exit": 0, "stdout_json": {"match": "alpha2", "country": {"alpha2": "ES", "alpha3": "ESP", "numeric": "724", "name": "Spain", "currencies": [{"code": "EUR", "numeric": "978"}], "calling_codes": ["+34"], "zones": ["Europe/Madrid", "Africa/Ceuta", "Atlantic/Canary"]}}}},
+  {"name": "numeric code as an integer, ISO 3166-1 numeric 724 is Spain", "input": {"code": 724}, "expect": {"exit": 0, "stdout_json": {"match": "numeric", "country": {"alpha2": "ES"}}}},
+  {"name": "ISO 3166-1: DEU / 276 is Germany; lowercase alpha-3", "input": {"code": "deu"}, "expect": {"exit": 0, "stdout_json": {"match": "alpha3", "country": {"alpha2": "DE", "numeric": "276"}}}},
+  {"name": "ISO 3166-1 numeric 004 is Afghanistan (leading zeros)", "input": {"code": "4"}, "expect": {"exit": 0, "stdout_json": {"country": {"alpha2": "AF", "alpha3": "AFG", "numeric": "004"}}}},
+  {"name": "name lookup ignores case and finds the former name: Turkey is TR, TUR, 792, Turkish lira TRY 949, +90", "input": {"name": "turkey"}, "expect": {"exit": 0, "stdout_json": {"match": "exact", "country": {"alpha2": "TR", "alpha3": "TUR", "numeric": "792", "currencies": [{"code": "TRY", "numeric": "949"}], "calling_codes": ["+90"]}}}},
+  {"name": "name lookup ignores accents and the apostrophe form", "input": {"name": "COTE D'IVOIRE"}, "expect": {"exit": 0, "stdout_json": {"country": {"alpha2": "CI", "alpha3": "CIV", "numeric": "384"}}}},
+  {"name": "partial name with several candidates: korea", "input": {"name": "korea"}, "expect": {"exit": 0, "stdout_json": {"match": "ambiguous", "candidates": [{"alpha2": "KP", "name": "North Korea"}, {"alpha2": "KR", "name": "South Korea"}]}}},
+  {"name": "a partial name with one candidate is returned", "input": {"name": "guinea-"}, "expect": {"exit": 0, "stdout_json": {"match": "partial", "country": {"alpha2": "GW", "alpha3": "GNB"}}}},
+  {"name": "zone1970.tab's own example: Europe/Zurich is shared by CH, DE and LI", "input": {"zone": "Europe/Zurich"}, "expect": {"exit": 0, "stdout_json": {"count": 3, "countries": [{"alpha2": "CH", "in_zone_tab": true}, {"alpha2": "DE", "in_zone_tab": false, "in_zone1970_tab": true}, {"alpha2": "LI", "in_zone1970_tab": true}]}}},
+  {"name": "zone.tab: Atlantic/Canary is Spain, Canary Islands", "input": {"zone": "Atlantic/Canary"}, "expect": {"exit": 0, "stdout_json": {"count": 1, "countries": [{"alpha2": "ES", "zone_comment": "Canary Islands"}]}}},
+  {"name": "ITU-T E.164: +7 is shared by Kazakhstan and Russia", "input": {"calling_code": "+7"}, "expect": {"exit": 0, "stdout_json": {"calling_code": "+7", "count": 2, "countries": [{"alpha2": "KZ"}, {"alpha2": "RU"}]}}},
+  {"name": "ITU-T E.164: 34 is Spain", "input": {"calling_code": 34}, "expect": {"exit": 0, "stdout_json": {"calling_code": "+34", "countries": [{"alpha2": "ES"}]}}},
+  {"name": "ISO 4217: CHF 756 is used by Switzerland and Liechtenstein", "input": {"currency": "chf"}, "expect": {"exit": 0, "stdout_json": {"currency": {"code": "CHF", "numeric": "756"}, "count": 2, "countries": [{"alpha2": "CH"}, {"alpha2": "LI"}]}}},
+  {"name": "Panama uses the balboa and the US dollar", "input": {"code": "PA"}, "expect": {"exit": 0, "stdout_contains": "\"currencies\": [{\"code\": \"PAB\""}},
+  {"name": "euro reverse lookup includes Spain", "input": {"currency": "EUR"}, "expect": {"exit": 0, "stdout_contains": "{\"alpha2\": \"ES\", \"alpha3\": \"ESP\", \"numeric\": \"724\", \"name\": \"Spain\"}"}},
+  {"name": "list all countries", "input": {"list": true}, "expect": {"exit": 0, "stdout_json": {"count": 249}}},
+  {"name": "every answer names its sources", "input": {"code": "FR"}, "expect": {"exit": 0, "stdout_json": {"source": {"tz_version": "2026e", "datasets": {"calling_codes": {"licence": "Unicode License (data files)"}}}}}},
+  {"name": "unknown code", "input": {"code": "XX"}, "expect": {"exit": 2, "stdout_contains": "no country with alpha2 code XX"}},
+  {"name": "two queries at once", "input": {"code": "ES", "name": "Spain"}, "expect": {"exit": 2, "stdout_contains": "exactly one of"}},
+  {"name": "malformed calling code", "input": {"calling_code": "+34-91"}, "expect": {"exit": 2, "stdout_contains": "calling_code must be"}},
+  {"name": "unknown field", "input": {"country": "ES"}, "expect": {"exit": 2, "stdout_contains": "unknown field: country"}}
+]

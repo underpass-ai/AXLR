@@ -1,0 +1,26 @@
+{
+  "name": "bloom_classify",
+  "description": "Classify learning objectives by the level of the revised Bloom taxonomy (Remember, Understand, Apply, Analyze, Evaluate, Create) from their main verb, in English or Spanish, with a bundled verb table built on the 19 cognitive processes of Anderson & Krathwohl (2001). Recognises inflected forms, names the taxonomy process, flags verbs listed at more than one level and non-measurable verbs such as understand or know, and summarises the levels of a list.",
+  "input_schema": {
+    "type": "object",
+    "required": ["objectives"],
+    "additionalProperties": false,
+    "properties": {
+      "objectives": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"type": "string", "minLength": 1, "maxLength": 2000}},
+      "language": {"type": "string", "enum": ["en", "es", "auto"], "default": "auto"}
+    }
+  },
+  "program": "python3",
+  "args": ["bloom_classify.py"],
+  "files": ["bloom_classify.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "education",
+    "tags": ["bloom", "taxonomy", "learning-objectives", "curriculum", "assessment", "teaching", "spanish"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"objectives": ["Students will be able to compare the French and American revolutions"]}, "output": {"results": [{"verb": "compare", "level": "understand", "level_name": "Understand", "process": "comparing", "ambiguous": true}]}},
+    "source": "Anderson & Krathwohl (eds.), A Taxonomy for Learning, Teaching, and Assessing: A Revision of Bloom's Taxonomy of Educational Objectives, 2001, Table 5.1 (the cognitive process dimension); Krathwohl, Theory Into Practice 2002;41(4):212-218. Verb table compiled for this tool"
+  }
+}

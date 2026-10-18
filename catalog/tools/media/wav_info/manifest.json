@@ -1,0 +1,25 @@
+{
+  "name": "wav_info",
+  "description": "Read a WAV file's format and duration from its RIFF chunks: format tag (PCM, IEEE float, A-law, mu-law, ADPCM, MP3, or WAVE_FORMAT_EXTENSIBLE with its sub-format GUID and speaker mask), channels, sample rate, bit depth, block align, frames, exact duration and, for PCM and float, the peak sample in dBFS. Reports truncated or inconsistent headers and cross-checks PCM with Python's wave module. Bytes as hex or a relative file path.",
+  "input_schema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "hex": {"type": "string", "description": "The file's bytes as hexadecimal; a header alone is enough for the format and declared duration"},
+      "path": {"type": "string", "description": "Relative path to the WAV file inside the working directory"}
+    }
+  },
+  "program": "python3",
+  "args": ["wav_info.py"],
+  "files": ["wav_info.py"],
+  "catalog": {
+    "version": "1.0.0",
+    "category": "media",
+    "tags": ["audio", "wav", "riff", "duration", "sample-rate", "metadata", "file-formats"],
+    "license": "MIT",
+    "requires": {"program_min_version": "3.10", "packages": []},
+    "network": false,
+    "example": {"input": {"hex": "524946462c00000057415645666d74201000000001000100401f0000803e00000200100064617461080000000000002000c00010"}, "output": {"format_name": "PCM", "channels": 1, "sample_rate": 8000, "bits_per_sample": 16, "frames": 4, "duration_exact": "1/2000", "peak_dbfs": -6.02}},
+    "source": "Microsoft/IBM Multimedia Programming Interface and Data Specifications 1.0 (RIFF WAVE, 1991) and the WAVE_FORMAT_EXTENSIBLE documentation (mmreg.h / ksmedia.h); Python's wave module for the PCM cross-check"
+  }
+}

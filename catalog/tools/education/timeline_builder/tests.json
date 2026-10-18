@@ -1,0 +1,258 @@
+[
+ {
+  "name": "no year 0 in the historical calendar (1 BC is followed by AD 1): 27 BC to AD 14 is 40 years, 1 BC to AD 1 is 1 year",
+  "input": {
+   "events": [
+    {
+     "label": "Augustus reigns",
+     "start": "27 BC",
+     "end": "AD 14"
+    },
+    {
+     "label": "1 BC to AD 1",
+     "start": -1,
+     "end": 1
+    },
+    {
+     "label": "Caesar killed",
+     "date": "-44-03-15"
+    },
+    {
+     "label": "Rome founded",
+     "date": -753
+    }
+   ],
+   "width": 30,
+   "era": "BC"
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "markdown_table": "| Start | End | Event | Years |\n|:--|:--|:--|--:|\n| 753 BC |  | Rome founded |  |\n| 44-03-15 BC |  | Caesar killed |  |\n| 27 BC | AD 14 | Augustus reigns | 40 |\n| 1 BC | AD 1 | 1 BC to AD 1 | 1 |\n",
+    "overlaps": [
+     {
+      "events": [
+       1,
+       2
+      ],
+      "kind": "contains"
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "hand-checked sort, duplicates, containment and an event during a range",
+  "input": {
+   "events": [
+    {
+     "label": "Battle of Hastings",
+     "date": "1066-10-14"
+    },
+    {
+     "label": "Hundred Years' War",
+     "start": 1337,
+     "end": 1453
+    },
+    {
+     "label": "Founding of Rome (traditional)",
+     "date": "753 BC"
+    },
+    {
+     "label": "Black Death in Europe",
+     "start": "1347",
+     "end": "1351"
+    },
+    {
+     "label": "Fall of Constantinople",
+     "date": 1453
+    },
+    {
+     "label": "battle of hastings",
+     "date": "1066-10-14"
+    },
+    {
+     "label": "Eruption of Vesuvius",
+     "date": "AD 79"
+    }
+   ],
+   "width": 50
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "markdown_list": "- **753 BCE** — Founding of Rome (traditional)\n- **79 CE** — Eruption of Vesuvius\n- **1066-10-14** — Battle of Hastings\n- **1066-10-14** — battle of hastings\n- **1337 CE – 1453 CE** — Hundred Years' War\n- **1347 CE – 1351 CE** — Black Death in Europe\n- **1453 CE** — Fall of Constantinople\n",
+    "duplicates": [
+     {
+      "events": [
+       1,
+       6
+      ],
+      "label": "Battle of Hastings"
+     }
+    ],
+    "overlaps": [
+     {
+      "events": [
+       2,
+       4
+      ],
+      "kind": "contains"
+     }
+    ],
+    "during": [
+     {
+      "event": 5,
+      "during": "Hundred Years' War"
+     }
+    ],
+    "same_date": []
+   }
+  }
+ },
+ {
+  "name": "hand-checked ASCII scale: 753 BCE (astronomical -752) to the end of 1453 over 50 columns; 79 CE at (79 + 752)/2206 x 49 = 18.46 -> column 18",
+  "input": {
+   "events": [
+    {
+     "label": "Battle of Hastings",
+     "date": "1066-10-14"
+    },
+    {
+     "label": "Hundred Years' War",
+     "start": 1337,
+     "end": 1453
+    },
+    {
+     "label": "Founding of Rome (traditional)",
+     "date": "753 BC"
+    },
+    {
+     "label": "Black Death in Europe",
+     "start": "1347",
+     "end": "1351"
+    },
+    {
+     "label": "Fall of Constantinople",
+     "date": 1453
+    },
+    {
+     "label": "battle of hastings",
+     "date": "1066-10-14"
+    },
+    {
+     "label": "Eruption of Vesuvius",
+     "date": "AD 79"
+    }
+   ],
+   "width": 50
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_contains": "\\n                  *                                 79 CE  Eruption of Vesuvius\\n"
+  }
+ },
+ {
+  "name": "month ranges overlap; two points on one day are same_date and during the first range",
+  "input": {
+   "events": [
+    {
+     "label": "A",
+     "start": "2000-01",
+     "end": "2000-06"
+    },
+    {
+     "label": "B",
+     "start": "2000-06",
+     "end": "2000-12"
+    },
+    {
+     "label": "C",
+     "date": "2000-03-01"
+    },
+    {
+     "label": "D",
+     "date": "2000-03-01"
+    }
+   ],
+   "width": 20
+  },
+  "expect": {
+   "exit": 0,
+   "stdout_json": {
+    "ascii": "2000-01      2000-12\n+------------------+\n[=========]           2000-01 – 2000-06  A\n   *                  2000-03-01  C\n   *                  2000-03-01  D\n        [==========]  2000-06 – 2000-12  B\n",
+    "same_date": [
+     {
+      "events": [
+       3,
+       4
+      ]
+     }
+    ],
+    "overlaps": [
+     {
+      "events": [
+       1,
+       2
+      ],
+      "kind": "overlap"
+     }
+    ],
+    "during": [
+     {
+      "event": 3
+     },
+     {
+      "event": 4
+     }
+    ]
+   }
+  }
+ },
+ {
+  "name": "year 0 does not exist",
+  "input": {
+   "events": [
+    {
+     "label": "x",
+     "date": 0
+    }
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "no year 0"
+  }
+ },
+ {
+  "name": "30 February",
+  "input": {
+   "events": [
+    {
+     "label": "x",
+     "date": "2000-02-30"
+    }
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "outside the month"
+  }
+ },
+ {
+  "name": "range ending before it starts",
+  "input": {
+   "events": [
+    {
+     "label": "x",
+     "start": 1500,
+     "end": 1400
+    }
+   ]
+  },
+  "expect": {
+   "exit": 2,
+   "stdout_contains": "ends before it starts"
+  }
+ }
+]
