@@ -225,6 +225,35 @@ func TestABlockedTaskDoesNotNameABinaryScopeFileAsNew(t *testing.T) {
 	}
 }
 
+// startFailBench fails every task's start, as BeginTask did beside an
+// untracked .pyc on 20 October 2026.
+type startFailBench struct{ scriptedBench }
+
+func (b *startFailBench) BeginTask(context.Context, *domain.Session, domain.PlanRecord, domain.PlanTask) error {
+	return errors.New("read __pycache__/calc.pyc: not UTF-8 text")
+}
+
+// A task that never started points to no session: its worker session was
+// never saved, so /plan must not name it and the picker must not offer it.
+func TestATaskThatFailsToStartNamesNoSession(t *testing.T) {
+	plans := &memoryPlans{}
+	_ = plans.Save(context.Background(), domain.PlanRecord{ID: "p", Session: "s", Workspace: domain.Workspace(t.TempDir()), Worker: "local/gemma", Status: domain.PlanReady, Waves: 1, Tasks: []domain.PlanTask{
+		{ID: "a", Wave: 1, Scope: []string{"calc.py"}, Status: domain.TaskPending},
+	}})
+	store := &memoryStore{}
+	bench := &startFailBench{scriptedBench{files: map[string][]byte{"calc.py": []byte("x")}, plans: plans}}
+	runner := &PlanRunner{Plans: plans, Store: store, Workbench: benchPort{bench}, RunToken: "t"}
+	if err := runner.Start(context.Background(), "p"); err != nil {
+		t.Fatal(err)
+	}
+	runner.Wait()
+	runner.Close()
+	task := plans.records[0].Tasks[0]
+	if task.Status != domain.TaskBlocked || !strings.HasPrefix(task.Reason, "start: ") || task.Session != "" {
+		t.Fatalf("task %+v", task)
+	}
+}
+
 // reconcileBench is a scripted bench whose Begin plays a reconciling worker:
 // it changes its scope file and ends with a summary and a note.
 type reconcileBench struct {

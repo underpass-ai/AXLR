@@ -343,10 +343,17 @@ func (r *PlanRunner) runTask(ctx context.Context, workbench PlanWorkbench, planI
 		return
 	}
 	task, _ := record.Task(taskID)
+	// stored is true once the worker session is in the store. On 20 October
+	// 2026 a task that failed to start kept the id of a session never saved,
+	// which /plan showed and the session picker offered to open.
+	stored := false
 	fail := func(reason string) {
 		r.update(ctx, planID, func(p *domain.PlanRecord) {
 			if t, ok := p.Task(taskID); ok && t.Status != domain.TaskDone {
 				t.Status, t.Reason = domain.TaskBlocked, bounded(reason, 600)
+				if !stored {
+					t.Session = ""
+				}
 			}
 		})
 	}
@@ -424,6 +431,7 @@ func (r *PlanRunner) runTask(ctx context.Context, workbench PlanWorkbench, planI
 		fail(err.Error())
 		return
 	}
+	stored = true
 	err = workbench.Begin(ctx, &child, TaskPrompt(record, *task), nil)
 	retries := 0
 	for {
