@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -378,6 +379,67 @@ func TestMCPConfigStorePackageEnvironment(t *testing.T) {
 	}
 	if err := store.AddManifestWithEnvironment(context.Background(), manifest, map[string]string{"OPENROUTER_API_KEY": "OPENROUTER_API_KEY"}, nil); err == nil {
 		t.Fatal("provider credential forwarded")
+	}
+}
+
+// A package whose server manifest was deleted or corrupted can still be
+// removed: the entry leaves with the ID it was saved with. On 20 October
+// 2026 a review found that one unreadable manifest refused the whole
+// removal, so /plugin could neither remove nor update the package. The
+// console starts without such an entry and says so.
+func TestMCPConfigStoreRemovesAPackageWithUnreadableManifests(t *testing.T) {
+	path := configuredPlugin(t)
+	store := &MCPConfigStore{Path: path}
+	ctx := context.Background()
+	pkg := filepath.Join(t.TempDir(), "sample")
+	for _, name := range []string{"a", "b", "c"} {
+		manifest := filepath.Join(pkg, ".axlr-mcp", name+".json")
+		if err := os.MkdirAll(filepath.Dir(manifest), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(manifest, portableManifest([]byte(`{"manifest_version":1,"id":"sample-`+name+`","command":"/bin/echo","args":[],"allow_tools":["*"]}`)), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := store.AddManifestWithEnvironment(ctx, manifest, map[string]string{"HOME": "HOME"}, map[string]string{"TOKEN": name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.SaveApproval(ctx, "sample-b", domain.ApprovalAuto); err != nil {
+		t.Fatal(err)
+	}
+	// a's manifest is deleted, b's corrupted, and c's entry lost its name
+	// as well as its manifest.
+	if err := os.Remove(filepath.Join(pkg, ".axlr-mcp", "a.json")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pkg, ".axlr-mcp", "b.json"), []byte("{not json"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(pkg, ".axlr-mcp", "c.json")); err != nil {
+		t.Fatal(err)
+	}
+	config, err := readMCPConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config.Plugins[3].Name = ""
+	if err := store.write(ctx, config); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadMCPConfiguration(path, func(string) string { return "" })
+	if err != nil || len(loaded.Registrations) != 1 || loaded.Registrations[0].Manifest.ID != "kmp" || len(loaded.Unreadable) != 3 {
+		t.Fatalf("startup: %+v %v", loaded, err)
+	}
+	if !strings.Contains(loaded.Unreadable[0], "MCP server sample-a is not started") || !strings.Contains(loaded.Unreadable[0], "a.json") || !strings.Contains(loaded.Unreadable[0], "failed") {
+		t.Fatalf("startup warning: %s", loaded.Unreadable[0])
+	}
+	ids, removed, err := store.RemoveManifestsUnder(ctx, pkg)
+	if err != nil || len(ids) != 2 || len(removed) != 2 || ids[0] != "sample-a" || ids[1] != "sample-b" || removed[1].Approval != "auto" || removed[0].Env["TOKEN"] != "a" {
+		t.Fatalf("removed: %v %+v %v", ids, removed, err)
+	}
+	config, err = readMCPConfig(path)
+	if err != nil || len(config.Plugins) != 1 || config.Plugins[0].Name != "KMP" {
+		t.Fatalf("kept: %+v %v", config, err)
 	}
 }
 

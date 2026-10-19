@@ -9,4 +9,7 @@ import (
 type MCPConfiguration struct {
 	Registrations []plugins.Registration
 	Profiles      []domain.PluginProfile
+	// Unreadable says, one line each, which entries were left out because
+	// their manifest could not be loaded; the console starts without them.
+	Unreadable []string
 }

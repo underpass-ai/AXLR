@@ -185,6 +185,12 @@ func (s *MCPConfigStore) AddManifestWithEnvironment(ctx context.Context, path st
 // removed entries with their IDs so an update can restore approval and
 // literal environment values. Other entries are kept as they are, without
 // loading their manifests.
+//
+// An entry under dir whose manifest cannot be loaded is removed too, with
+// the ID its entry names. On 20 October 2026 a review found that one
+// deleted or corrupted .axlr-mcp/<server>.json refused the whole removal,
+// so /plugin could neither remove nor update the package that would
+// rewrite it. The path decides what goes; the manifest only names it.
 func (s *MCPConfigStore) RemoveManifestsUnder(ctx context.Context, dir string) ([]root.PluginID, []dto.MCPPluginConfig, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
@@ -212,14 +218,16 @@ func (s *MCPConfigStore) RemoveManifestsUnder(ctx context.Context, dir string) (
 			kept = append(kept, selected)
 			continue
 		}
-		manifest, err := plugins.LoadManifest(selected.Manifest)
+		id, err := packageServerID(selected)
 		if err != nil {
-			return nil, nil, errors.New("cannot validate configured MCP server")
+			// Nothing names the server, so nothing can register it again
+			// or unregister it: the entry still leaves the configuration.
+			continue
 		}
-		ids = append(ids, manifest.ID)
+		ids = append(ids, id)
 		removed = append(removed, selected)
 	}
-	if len(removed) == 0 {
+	if len(kept) == len(config.Plugins) {
 		return nil, nil, nil
 	}
 	config.Plugins = kept
@@ -227,6 +235,17 @@ func (s *MCPConfigStore) RemoveManifestsUnder(ctx context.Context, dir string) (
 		return nil, nil, err
 	}
 	return ids, removed, nil
+}
+
+// packageServerID is the ID of a package's registration: its manifest's,
+// or, when the manifest cannot be loaded, the one its entry was saved
+// with (AddManifest names an entry by its manifest's ID).
+func packageServerID(selected dto.MCPPluginConfig) (root.PluginID, error) {
+	manifest, err := plugins.LoadManifest(selected.Manifest)
+	if err == nil {
+		return manifest.ID, nil
+	}
+	return root.NewPluginID(selected.Name)
 }
 
 // AddURL creates a private manifest for a Streamable HTTP MCP endpoint.
