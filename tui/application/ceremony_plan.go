@@ -326,39 +326,66 @@ func planWaves(tasks []taskArgument) (map[string]int, []string) {
 }
 
 // citedExcerpts verifies each citation and extracts its region with a
-// margin: the quote must be on the cited line, whitespace collapsed.
+// margin: the quote must be on the cited line, whitespace collapsed. The
+// regions of one file are merged where they overlap or touch, so each line
+// reaches the pack once: on 20 October 2026 two citations of the 12-line
+// test_calc.py put "--- test_calc.py:1-12 ---" in a task's pack twice.
 func (d *CeremonyDriver) citedExcerpts(ctx context.Context, task domain.PlanTask) ([]string, []string, error) {
-	var excerpts, problems []string
+	type region struct{ first, last int }
+	var problems, order []string
+	regions, lines := map[string][]region{}, map[string][]string{}
 	for _, cite := range task.Context {
 		clean, ok := workspacePath(cite.Path)
 		if !ok {
 			problems = append(problems, fmt.Sprintf("task %s: cited path %q is outside the workspace", task.ID, cite.Path))
 			continue
 		}
-		content, found, err := d.Files.Read(ctx, clean, maxCitedFile)
-		if errors.Is(err, ErrNotText) {
-			problems = append(problems, fmt.Sprintf("task %s: cited file %s is not UTF-8 text; cite a text file", task.ID, clean))
+		file, read := lines[clean]
+		if !read {
+			content, found, err := d.Files.Read(ctx, clean, maxCitedFile)
+			if errors.Is(err, ErrNotText) {
+				problems = append(problems, fmt.Sprintf("task %s: cited file %s is not UTF-8 text; cite a text file", task.ID, clean))
+				continue
+			}
+			if err != nil {
+				return nil, nil, err
+			}
+			if !found {
+				problems = append(problems, fmt.Sprintf("task %s: cited file %s does not exist", task.ID, clean))
+				continue
+			}
+			file = strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
+			lines[clean] = file
+		}
+		if cite.Line < 1 || cite.Line > len(file) {
+			problems = append(problems, fmt.Sprintf("task %s: %s has %d lines; line %d is out of range", task.ID, clean, len(file), cite.Line))
 			continue
 		}
-		if err != nil {
-			return nil, nil, err
-		}
-		if !found {
-			problems = append(problems, fmt.Sprintf("task %s: cited file %s does not exist", task.ID, clean))
-			continue
-		}
-		lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
-		if cite.Line < 1 || cite.Line > len(lines) {
-			problems = append(problems, fmt.Sprintf("task %s: %s has %d lines; line %d is out of range", task.ID, clean, len(lines), cite.Line))
-			continue
-		}
-		quote, actual := collapse(cite.Quote), collapse(lines[cite.Line-1])
+		quote, actual := collapse(cite.Quote), collapse(file[cite.Line-1])
 		if len(quote) < minCitationQuote || !strings.Contains(actual, quote) {
 			problems = append(problems, fmt.Sprintf("task %s: %s:%d does not contain the quote (at least %d characters); the line reads %q", task.ID, clean, cite.Line, minCitationQuote, bounded(actual, 80)))
 			continue
 		}
-		first, last := max(1, cite.Line-citationMargin), min(len(lines), cite.Line+citationMargin)
-		excerpts = append(excerpts, fmt.Sprintf("--- %s:%d-%d ---\n%s", clean, first, last, strings.Join(lines[first-1:last], "\n")))
+		if _, seen := regions[clean]; !seen {
+			order = append(order, clean)
+		}
+		regions[clean] = append(regions[clean], region{max(1, cite.Line-citationMargin), min(len(file), cite.Line+citationMargin)})
+	}
+	var excerpts []string
+	for _, p := range order {
+		spans := regions[p]
+		sort.Slice(spans, func(i, j int) bool { return spans[i].first < spans[j].first })
+		merged := spans[:1]
+		for _, next := range spans[1:] {
+			if last := &merged[len(merged)-1]; next.first <= last.last+1 {
+				last.last = max(last.last, next.last)
+			} else {
+				merged = append(merged, next)
+			}
+		}
+		for _, r := range merged {
+			excerpts = append(excerpts, fmt.Sprintf("--- %s:%d-%d ---\n%s", p, r.first, r.last, strings.Join(lines[p][r.first-1:r.last], "\n")))
+		}
 	}
 	return excerpts, problems, nil
 }
