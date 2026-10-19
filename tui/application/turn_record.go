@@ -101,21 +101,12 @@ func BuildTurnRecord(s domain.Session, index, turn int, about string, cost *Turn
 		}
 	}
 	answer := ""
-	bookkeeping := false
-	for i := index + 1; i < len(messages); i++ {
+	end, answerAt := turnSpan(messages, index)
+	if answerAt >= 0 {
+		answer = string(messages[answerAt].Content)
+	}
+	for i := index + 1; i < end; i++ {
 		message := messages[i]
-		if message.Role == root.RoleUser {
-			if !strings.HasPrefix(string(message.Content), "[AXLR") {
-				break // the next turn
-			}
-			// What the model says after a console message (the memory
-			// reminder, a budget note) is bookkeeping, not its answer to
-			// the person; the person's answer is the one before it.
-			bookkeeping = true
-		}
-		if message.Role == root.RoleAssistant && len(message.ToolCalls) == 0 && strings.TrimSpace(string(message.Content)) != "" && (!bookkeeping || answer == "") {
-			answer = string(message.Content)
-		}
 		for _, call := range message.ToolCalls {
 			if !sideEffectTools[call.Name] {
 				record.Reads++
@@ -177,6 +168,29 @@ func BuildTurnRecord(s domain.Session, index, turn int, about string, cost *Turn
 		record.FinishedAt = messageTime(state, len(messages)-1)
 	}
 	return record
+}
+
+// turnSpan bounds the turn that starts at the person's prompt at index:
+// end is the person's next message (or the transcript's end) and answerAt
+// the model's answer to the person, -1 for none. What the model says after
+// a console message (the memory reminder, a budget note) is bookkeeping,
+// not its answer to the person; the person's answer is the one before it.
+func turnSpan(messages []root.Message, index int) (end, answerAt int) {
+	end, answerAt = len(messages), -1
+	bookkeeping := false
+	for i := index + 1; i < len(messages); i++ {
+		message := messages[i]
+		if message.Role == root.RoleUser {
+			if !strings.HasPrefix(string(message.Content), "[AXLR") {
+				return i, answerAt // the next turn
+			}
+			bookkeeping = true
+		}
+		if message.Role == root.RoleAssistant && len(message.ToolCalls) == 0 && strings.TrimSpace(string(message.Content)) != "" && (!bookkeeping || answerAt < 0) {
+			answerAt = i
+		}
+	}
+	return end, answerAt
 }
 
 // HasResults reports whether the turn left something KMP should hold: a
