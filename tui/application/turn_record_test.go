@@ -165,6 +165,11 @@ func TestClassifyOutcomeReadsEveryResultShape(t *testing.T) {
 		`{"status":"completed","output":{"is_error":true}}`:                            turnError,
 		`{"error":"KMP is not connected in this console"}`:                             turnError,
 		`{"accepted":true}`: turnCompleted,
+		`{"accepted":true,"status":"committed","ref":"project:x:entry:decision:y"}`:     turnCompleted,
+		`{"accepted":true,"repair":"r1","status":"queued"}`:                             turnCompleted,
+		`{"accepted":false,"status":"needs_review"}`:                                    turnError,
+		`{"accepted":false,"status":"refused","error":"summary_en is required"}`:        turnError,
+		`{"status":"timed_out","output":null,"error":{"code":"timeout","message":"x"}}`: turnError,
 	} {
 		if got, _ := classifyOutcome(result); got != want {
 			t.Fatalf("%q: got %s, want %s", result, got, want)
