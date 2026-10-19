@@ -13,6 +13,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
+	"github.com/underpass-ai/AXLR/tui/adapters/typesafe"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -109,6 +110,43 @@ func TestRunJevNeedsItsKeyOnlyWhenEnabled(t *testing.T) {
 	output.Reset()
 	if code := run(context.Background(), []string{"--root", t.TempDir(), "--model", "test/model"}, func(k string) string { return env[k] }, func(tea.Model) error { return nil }, &output); code != 0 || !strings.Contains(output.String(), "Jev enabled") || strings.Contains(output.String(), "typesafe-never-print") {
 		t.Fatalf("Jev on: code=%d output=%s", code, &output)
+	}
+}
+
+// jevJudge hands the policy to the final check and, through Decisions,
+// to the settlement; the default is legacy and an incoherent switch is
+// refused.
+func TestJevJudgeCarriesThePolicy(t *testing.T) {
+	getenv := func(name string) string {
+		if name == "TYPESAFE_API_KEY" {
+			return "typesafe-never-print"
+		}
+		return ""
+	}
+	judge, err := jevJudge(&storage.JevSettings{FinalCheck: true}, getenv)
+	if err != nil || judge.Decisions.Policy != application.JudgePolicyLegacy || judge.Decisions.Supersede || judge.Decisions.Model != typesafe.DefaultModel {
+		t.Fatalf("default: %+v %v", judge, err)
+	}
+	judge, err = jevJudge(&storage.JevSettings{FinalCheck: true, Model: "jev-1.13.0", JudgePolicy: "axlr-v2", V2Supersede: true}, getenv)
+	if err != nil || judge.Decisions != (application.JudgeDecisions{Policy: application.JudgePolicyAXLRv2, Supersede: true, Model: "jev-1.13.0"}) {
+		t.Fatalf("axlr-v2: %+v %v", judge, err)
+	}
+	var ceremony application.SessionCeremony
+	settleWith(&ceremony, judge)
+	if ceremony.Judge != judge.Port || ceremony.Decisions != judge.Decisions {
+		t.Fatalf("the settlement did not get the policy: %+v", ceremony.Decisions)
+	}
+	info := jevInfo(judge, &storage.JevSettings{FinalCheck: true, Model: "jev-1.13.0"})
+	if info.Policy != "axlr-v2" || !info.Supersede {
+		t.Fatalf("info %+v", info)
+	}
+	if judge, err := jevJudge(&storage.JevSettings{JudgePolicy: "axlr-v2"}, getenv); judge != nil || err != nil {
+		t.Fatalf("a policy turned Jev on: %+v %v", judge, err)
+	}
+	for _, settings := range []storage.JevSettings{{FinalCheck: true, JudgePolicy: "axlr-v5"}, {FinalCheck: true, V2Supersede: true}} {
+		if _, err := jevJudge(&settings, getenv); err == nil {
+			t.Fatalf("%+v accepted", settings)
+		}
 	}
 }
 

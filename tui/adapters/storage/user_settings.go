@@ -9,6 +9,7 @@ import (
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -301,6 +302,13 @@ func (s UserSettings) Validate() error {
 		}
 		if j.TimeoutMS != 0 && (j.TimeoutMS < 1000 || j.TimeoutMS > 60000) {
 			return errors.New("settings jev.timeout_ms must be between 1000 and 60000")
+		}
+		policy, err := application.ParseJudgePolicy(j.JudgePolicy)
+		if err != nil {
+			return errors.New("settings " + err.Error())
+		}
+		if j.V2Supersede && policy != application.JudgePolicyAXLRv2 {
+			return errors.New("settings jev.v2_supersede needs jev.judge_policy axlr-v2")
 		}
 	}
 	if len(s.FavoriteModels) > maxFavoriteModels {

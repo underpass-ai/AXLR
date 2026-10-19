@@ -53,7 +53,10 @@ type SessionCeremony struct {
 	// Judge is TypeSafe Jev, which decides what a turn settles
 	// (session_settle.go); nil leaves it to the model and the reminder.
 	Judge JudgementPort
-	Now   func() time.Time
+	// Decisions is the policy Jev settles under (judge_policy_v2.go); the
+	// zero value is legacy.
+	Decisions JudgeDecisions
+	Now       func() time.Time
 	// Log reports what the console did or could not do; nil says nothing.
 	Log func(string)
 

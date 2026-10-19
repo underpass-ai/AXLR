@@ -168,11 +168,11 @@ func (c *Client) verdict(data []byte, question application.JudgementQuestion) (a
 		return application.JudgementVerdict{}, errors.New("TypeSafe answers do not match the question sent")
 	}
 	var answer struct {
-		Type          string             `json:"type"`
-		Noul          *float64           `json:"noul"`
-		Choice        string             `json:"choice"`
-		Probabilities map[string]float64 `json:"probabilities"`
-		Confidence    *float64           `json:"confidence"`
+		Type          string              `json:"type"`
+		Noul          *float64            `json:"noul"`
+		Choice        string              `json:"choice"`
+		Probabilities map[string]*float64 `json:"probabilities"`
+		Confidence    *float64            `json:"confidence"`
 	}
 	if err := json.Unmarshal(raw, &answer); err != nil {
 		return application.JudgementVerdict{}, errors.New("invalid TypeSafe answer")
@@ -188,18 +188,22 @@ func (c *Client) verdict(data []byte, question application.JudgementQuestion) (a
 	if answer.Type != "choice" || !probability(answer.Confidence) || len(answer.Probabilities) != len(question.Options) {
 		return application.JudgementVerdict{}, errors.New("TypeSafe returned an invalid choice answer")
 	}
+	// A null probability is no probability: decoded into a float64 it
+	// would read as 0 and pass for an answer.
+	probabilities := make(map[string]float64, len(question.Options))
 	offered := false
 	for _, option := range question.Options {
 		p, ok := answer.Probabilities[option]
-		if !ok || !probability(&p) {
+		if !ok || !probability(p) {
 			return application.JudgementVerdict{}, errors.New("TypeSafe probabilities do not cover the options offered")
 		}
+		probabilities[option] = *p
 		offered = offered || option == answer.Choice
 	}
 	if !offered {
 		return application.JudgementVerdict{}, errors.New("TypeSafe chose an option that was not offered")
 	}
-	verdict.Choice, verdict.Probabilities, verdict.Confidence = answer.Choice, answer.Probabilities, answer.Confidence
+	verdict.Choice, verdict.Probabilities, verdict.Confidence = answer.Choice, probabilities, answer.Confidence
 	return verdict, nil
 }
 

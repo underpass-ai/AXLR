@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -103,11 +104,29 @@ func jevJudge(settings *storage.JevSettings, getenv func(string) string) (*appli
 	if !settings.Enabled() {
 		return nil, nil
 	}
+	policy, err := application.ParseJudgePolicy(settings.JudgePolicy)
+	if err != nil {
+		return nil, err
+	}
+	if settings.V2Supersede && policy != application.JudgePolicyAXLRv2 {
+		return nil, errors.New("jev.v2_supersede needs jev.judge_policy axlr-v2")
+	}
 	client, err := typesafe.New(typesafe.Config{APIKey: getenv("TYPESAFE_API_KEY"), Model: settings.Model, Timeout: time.Duration(settings.TimeoutMS) * time.Millisecond})
 	if err != nil {
 		return nil, fmt.Errorf("jev: %w", err)
 	}
-	return &application.Judge{Port: client, Tool: settings.Tool, FinalCheck: settings.FinalCheck, Threshold: settings.FinalThreshold}, nil
+	model := settings.Model
+	if model == "" {
+		model = typesafe.DefaultModel
+	}
+	decisions := application.JudgeDecisions{Policy: policy, Supersede: settings.V2Supersede, Model: model}
+	return &application.Judge{Port: client, Tool: settings.Tool, FinalCheck: settings.FinalCheck, Threshold: settings.FinalThreshold, Decisions: decisions}, nil
+}
+
+// settleWith hands Jev to the settlement under the final check's policy:
+// the port alone would leave the settlement asking the legacy questions.
+func settleWith(c *application.SessionCeremony, judge *application.Judge) {
+	c.Judge, c.Decisions = judge.Port, judge.Decisions
 }
 
 // jevInfo is what /axlr-info says of Jev: off without a judge.
@@ -115,7 +134,7 @@ func jevInfo(judge *application.Judge, settings *storage.JevSettings) terminal.J
 	if judge == nil || settings == nil {
 		return terminal.JevInfo{}
 	}
-	info := terminal.JevInfo{Model: settings.Model, Tool: judge.Tool, FinalCheck: judge.FinalCheck, Threshold: judge.Threshold}
+	info := terminal.JevInfo{Model: settings.Model, Tool: judge.Tool, FinalCheck: judge.FinalCheck, Threshold: judge.Threshold, Policy: string(judge.Decisions.Policy), Supersede: judge.Decisions.Supersede}
 	if info.Model == "" {
 		info.Model = typesafe.DefaultModel
 	}

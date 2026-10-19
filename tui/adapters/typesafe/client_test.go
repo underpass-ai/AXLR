@@ -90,6 +90,23 @@ func TestJudgeRejectsAnswersThatDoNotMatchTheQuestion(t *testing.T) {
 	}
 }
 
+// A null probability is refused, under every policy: decoded into a number
+// it read as 0 and passed for an answer covering the option.
+func TestJudgeRefusesANullProbability(t *testing.T) {
+	for name, reply := range map[string]string{
+		"null option":     `{"model":"jev-1.13.0","answers":{"q":{"type":"choice","choice":"a","probabilities":{"a":1,"b":null},"confidence":0.5}}}`,
+		"null choice":     `{"model":"jev-1.13.0","answers":{"q":{"type":"choice","choice":"a","probabilities":{"a":null,"b":0},"confidence":0.5}}}`,
+		"null confidence": `{"model":"jev-1.13.0","answers":{"q":{"type":"choice","choice":"a","probabilities":{"a":1,"b":0},"confidence":null}}}`,
+		"string":          `{"model":"jev-1.13.0","answers":{"q":{"type":"choice","choice":"a","probabilities":{"a":"1","b":0},"confidence":0.5}}}`,
+		"extra option":    `{"model":"jev-1.13.0","answers":{"q":{"type":"choice","choice":"a","probabilities":{"a":1,"c":0},"confidence":0.5}}}`,
+	} {
+		srv := server(t, func(w http.ResponseWriter, _ map[string]any) { _, _ = io.WriteString(w, reply) })
+		if _, err := client(t, srv).Judge(context.Background(), application.JudgementQuestion{State: "s", Question: "q?", Options: []string{"a", "b"}}); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}
+
 func TestJudgeRetriesRateLimitsAndNeverPrintsTheKey(t *testing.T) {
 	var calls atomic.Int32
 	srv := server(t, func(w http.ResponseWriter, _ map[string]any) {
