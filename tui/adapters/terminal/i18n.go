@@ -67,7 +67,7 @@ func (t Theme) Tn(label string, n int, args ...any) string {
 var enMessages = map[string]string{
 	"palette.updatesTitle":                 "Update engines",
 	"palette.updatesDescription":           "Update the local MADE and KMP packages connected to AXLR",
-	"help.commandsUpdate":                  "/update · update MADE and KMP · /axlr-info logo, versions and Jev · /natural-writing pastes typed in, for demos",
+	"help.commandsUpdate":                  "/update · update MADE and KMP · /axlr-info logo, versions and Jev · /natural-writing pastes typed in, for demos · /help this help",
 	"approval.typingGuard":                 "An approval card opened while you typed: those keys were not taken as an answer; read it, then press a key",
 	"help.commandsMemory":                  "/memory save the project's memory as the checkout's bundle · /memory compare <about>… · /memory forget <ref> [why]",
 	"slash.model":                          "choose the model",
@@ -393,6 +393,7 @@ var enMessages = map[string]string{
 	"notice.naturalWritingOn":              "Natural writing on · a key completes a paste",
 	"notice.naturalWritingOff":             "Natural writing off",
 	"slash.axlrInfo":                       "the AXLR logo, its version, the engines and Jev",
+	"slash.help":                           "keys, commands and the help topics (F1)",
 	"axlrInfo.tagline":                     "Execute with AXLR. Remember with KMP. Coordinate with MADE.",
 	"axlrInfo.model":                       "model %s via %s",
 	"axlrInfo.openRouter":                  "OpenRouter",
@@ -1017,7 +1018,7 @@ var enMessages = map[string]string{
 var esMessages = map[string]string{
 	"palette.updatesTitle":                 "Actualizar motores",
 	"palette.updatesDescription":           "Actualizar los paquetes locales de MADE y KMP conectados a AXLR",
-	"help.commandsUpdate":                  "/update · actualizar MADE y KMP · /axlr-info logo, versiones y Jev · /natural-writing teclear lo pegado, para demos (/escritura-natural)",
+	"help.commandsUpdate":                  "/update · actualizar MADE y KMP · /axlr-info logo, versiones y Jev · /natural-writing teclear lo pegado, para demos (/escritura-natural) · /help esta ayuda (/ayuda)",
 	"approval.typingGuard":                 "Se abrió una tarjeta de aprobación mientras escribías: esas teclas no se tomaron como respuesta; léela y pulsa una tecla",
 	"help.commandsMemory":                  "/memory save guardar la memoria del proyecto como bundle del repositorio · /memory compare <about>… · /memory forget <ref> [motivo]",
 	"slash.model":                          "elegir el modelo",
@@ -1343,6 +1344,7 @@ var esMessages = map[string]string{
 	"notice.naturalWritingOn":              "Escritura natural activada · una tecla completa lo pegado",
 	"notice.naturalWritingOff":             "Escritura natural desactivada",
 	"slash.axlrInfo":                       "el logo de AXLR, su versión, los motores y Jev",
+	"slash.help":                           "teclas, comandos y temas de ayuda (F1)",
 	"axlrInfo.tagline":                     "Ejecuta con AXLR. Recuerda con KMP. Coordina con MADE.",
 	"axlrInfo.model":                       "modelo %s vía %s",
 	"axlrInfo.openRouter":                  "OpenRouter",

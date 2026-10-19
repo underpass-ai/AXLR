@@ -1041,6 +1041,12 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "/axlr-info" {
 				return m.openAxlrInfo(false)
 			}
+			if command == "/help" {
+				// On 20 October 2026 /help was "Unknown command" while the
+				// footer offered f1 help.
+				m.Composer.Input.Reset()
+				return m.Update(ControlIntent("help"))
+			}
 			if command == "/export" {
 				return m.exportSession("")
 			}

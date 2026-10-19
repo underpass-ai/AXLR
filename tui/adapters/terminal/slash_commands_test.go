@@ -28,7 +28,7 @@ func TestSlashSuggestionsListMatchingCommands(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	for draft, want := range map[string]string{
-		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/undo,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/ceremony,/stop-ceremony,/tools,/copy,/clean-screen,/export,/usage,/axlr-info,/natural-writing,/session,/memory,/exit",
+		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/undo,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/ceremony,/stop-ceremony,/tools,/copy,/clean-screen,/export,/usage,/axlr-info,/natural-writing,/session,/memory,/help,/exit",
 		"/m":         "/model,/mcp,/memory,/improve,/theme,/autonomy on,/autonomy off,/normal,/ceremony,/stop-ceremony,/tools,/clean-screen",
 		"/trab":      "/jobs",
 		"/cl":        "/clean-screen,/new",
@@ -411,5 +411,19 @@ func TestTheMenuOffersACommandsVerbsOnceItIsTyped(t *testing.T) {
 	}
 	if got := names("/m"); strings.Contains(got, "save") {
 		t.Fatalf("/m offers verbs: %q", got)
+	}
+}
+
+// /help and /ayuda open the help F1 opens (20 October 2026: /help was an
+// unknown command while the footer offered f1 help).
+func TestSlashHelpOpensTheHelp(t *testing.T) {
+	for _, command := range []string{"/help", "/ayuda"} {
+		m := sized()
+		m.Composer.Input.SetValue(command)
+		next, _ := m.Update(ControlIntent("send"))
+		m = next.(AppModel)
+		if m.overlay != "help" || m.Composer.Input.Value() != "" || m.Status.Error != "" {
+			t.Fatalf("%s: overlay=%q draft=%q error=%q", command, m.overlay, m.Composer.Input.Value(), m.Status.Error)
+		}
 	}
 }
