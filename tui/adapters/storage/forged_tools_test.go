@@ -219,6 +219,16 @@ func TestForgedToolStoreReadsAndWritesToolFiles(t *testing.T) {
 			t.Fatalf("%v accepted: %v", bad, err)
 		}
 	}
+	// "." and ".." are clean and slash-free but name no tool: they would
+	// write into .axlr/tools/ and .axlr/, which both exist by now.
+	for _, tool := range []string{".", ".."} {
+		if err := store.WriteToolFile(ctx, workspace, tool, "catalog.json", []byte(`{}`)); err == nil {
+			t.Fatalf("wrote into tool %q", tool)
+		}
+		if _, err := store.ReadToolFile(ctx, workspace, tool, "catalog.json"); err == nil || errors.Is(err, application.ErrNoToolFile) {
+			t.Fatalf("read tool %q: %v", tool, err)
+		}
+	}
 	stored, _, err := store.Forge(ctx, workspace, forgedTool("echo_it"), []application.ForgedFile{{Path: "run.sh", Content: "cat -n"}})
 	if err != nil {
 		t.Fatal(err)
