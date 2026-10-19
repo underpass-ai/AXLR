@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -94,8 +95,19 @@ func collapse(text string) string { return strings.TrimSpace(whitespace.ReplaceA
 
 // verifyPlan checks a proposal mechanically, without a model: ids,
 // dependencies and waves, scopes, citations, commands and the size of every
-// context pack. It runs each check command once, as the baseline.
+// context pack. It runs each check command once, as the baseline, and only
+// on a proposal whose structure and citations hold.
 func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepDone) (planVerification, error) {
+	v, err := d.verifyPlanBeforeCommands(ctx, slug, done)
+	if err != nil || len(v.defects) > 0 {
+		return v, err
+	}
+	return d.verifyPlanCommands(ctx, v, done)
+}
+
+// verifyPlanBeforeCommands is the part of verifyPlan that runs nothing: the
+// structure, the citations and the packs. It reads workspace files only.
+func (d *CeremonyDriver) verifyPlanBeforeCommands(ctx context.Context, slug string, done stepDone) (planVerification, error) {
 	var v planVerification
 	defect := func(format string, args ...any) { v.defects = append(v.defects, fmt.Sprintf(format, args...)) }
 	proposal := done.planDone
@@ -110,6 +122,9 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 	}
 	if strings.TrimSpace(done.SummaryEN) == "" {
 		defect("plan: summary_en is missing")
+	}
+	if _, ok := proposal.E2ECheck.command(); !ok {
+		defect("plan: e2e_check {program, args} is missing")
 	}
 	ids := map[string]int{}
 	for i, task := range proposal.Tasks {
@@ -225,10 +240,15 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 			defect("task %s: its context pack is %d bytes (at most %d); split the task or cite less", tasks[i].ID, len(tasks[i].Pack), maxTaskPack)
 		}
 	}
-	if len(v.defects) > 0 {
-		v.defects = boundDefects(v.defects)
-		return v, nil
-	}
+	v.tasks, v.defects = tasks, boundDefects(v.defects)
+	return v, nil
+}
+
+// verifyPlanCommands runs each check command of a proposal that passed
+// verifyPlanBeforeCommands once, as its baseline.
+func (d *CeremonyDriver) verifyPlanCommands(ctx context.Context, v planVerification, done stepDone) (planVerification, error) {
+	defect := func(format string, args ...any) { v.defects = append(v.defects, fmt.Sprintf(format, args...)) }
+	proposal, tasks := done.planDone, v.tasks
 	for i := range tasks {
 		result, err := d.Checks.Run(ctx, tasks[i].UnitCheck)
 		if err != nil {
@@ -240,10 +260,7 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 		}
 		tasks[i].Baseline = result.ExitCode
 	}
-	e2e, ok := proposal.E2ECheck.command()
-	if !ok {
-		defect("plan: e2e_check {program, args} is missing")
-	} else {
+	if e2e, ok := proposal.E2ECheck.command(); ok {
 		result, err := d.Checks.Run(ctx, e2e)
 		if err != nil {
 			return v, err
@@ -440,6 +457,43 @@ func planSlug(brief string) string {
 	return slug
 }
 
+// refusesPlanBeforeItsCommands is true for a decompose hand-back whose
+// structure or citations fail: decompose returns those defects to the
+// planner without running any command, so the approval card for its check
+// commands would ask the person about commands that never run. On 20
+// October 2026 the person approved that card twice for plans the console
+// then refused (a test-first task with only tests in its scope, a citation
+// of the wrong line). It reads workspace files and runs nothing.
+func (d *CeremonyDriver) refusesPlanBeforeItsCommands(ctx context.Context, s domain.Session, arguments root.JSONValue) bool {
+	if d == nil || d.Engine == nil || d.Checks == nil || d.Plans == nil || d.Files == nil {
+		return false
+	}
+	run, live := s.Ceremony()
+	if !live || run.Step != "decompose" || run.Plan == nil || run.Generic != nil || run.AwaitingPerson() {
+		return false
+	}
+	done, _, err := decodeStepDoneFor(run, arguments)
+	if err != nil {
+		return false
+	}
+	v, err := d.verifyPlanBeforeCommands(ctx, run.Plan.ID, done)
+	return err == nil && len(v.defects) > 0
+}
+
+type withheldCommandsKey struct{}
+
+// withholdCommands marks a step_done approved without the person's card
+// because its plan was defective: if the plan passes when decompose checks
+// it again, its unapproved commands do not run.
+func withholdCommands(ctx context.Context) context.Context {
+	return context.WithValue(ctx, withheldCommandsKey{}, true)
+}
+
+func commandsWithheld(ctx context.Context) bool {
+	withheld, _ := ctx.Value(withheldCommandsKey{}).(bool)
+	return withheld
+}
+
 // decompose handles the planner's hand-back: verify, then record the plan
 // and go to approval, or return the exact defects for the next round.
 func (d *CeremonyDriver) decompose(ctx context.Context, s domain.Session, run domain.CeremonyRun, done stepDone, report map[string]any) (map[string]any, string, bool, string, error) {
@@ -450,7 +504,16 @@ func (d *CeremonyDriver) decompose(ctx context.Context, s domain.Session, run do
 	if err != nil {
 		return nil, "", false, "", err
 	}
-	v, err := d.verifyPlan(ctx, run.Plan.ID, done)
+	var v planVerification
+	if commandsWithheld(ctx) && unapproved(run, done.planDone.commands()) {
+		// Approved without a card because it looked defective: its commands
+		// must not run unless that still holds.
+		if v, err = d.verifyPlanBeforeCommands(ctx, run.Plan.ID, done); err == nil && len(v.defects) == 0 {
+			return nil, "", false, "the workspace changed while the console checked this plan; call axlr_step_done again with the whole plan", nil
+		}
+	} else {
+		v, err = d.verifyPlan(ctx, run.Plan.ID, done)
+	}
 	if err != nil {
 		return nil, "", false, "", err
 	}
