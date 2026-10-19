@@ -231,6 +231,56 @@ func TestInstallRegistersTheToolWithItsOrigin(t *testing.T) {
 	}
 }
 
+// Approved on its card, an install writes the tool the card showed. On 20
+// October 2026 a review found that the approval staged the call's
+// arguments again, so a refresh of the shared cache between the card and
+// the key press installed a newer version than the card showed.
+func TestInstallWritesTheToolItsCardShowed(t *testing.T) {
+	forged, catalog := &forgedMemory{}, newCatalogMemory()
+	s := turnSession(t)
+	host := HostToolUseCase{Forge: forged, Catalog: catalog}
+	install := hostIdentity(t, domain.HostOperationInstallTool)
+	card, err := (CatalogUseCase{Catalog: catalog, Forge: forged}).Stage(context.Background(), "/ws", InstallRequest{Name: "seat_allocation"})
+	if err != nil || card.Key() != "axlr/seat_allocation@1.0.0" {
+		t.Fatalf("card = %s, %v", card.Key(), err)
+	}
+	// Another console refreshed the index: 1.1.0 is the newest now.
+	catalog.add("seat_allocation", "1.1.0", "python3", []ForgedFile{{Path: "seat_allocation.py", Content: "print('1.1.0')\n"}}, false)
+	approved := WithInstallCard(WithToolCall(context.Background(), "one"), "one", card)
+	outcome, err := host.Execute(approved, s, install, object(t, `{"name":"seat_allocation"}`))
+	if err != nil || outcome.IsError || !strings.Contains(string(outcome.Content), `"version":"1.0.0"`) || len(forged.tools) != 1 || forged.tools[0].Origin.Version != "1.0.0" {
+		t.Fatalf("install = %s, %v, %+v", outcome.Content, err, forged.tools)
+	}
+	// Without its card (approved as local_write in autonomy) or for
+	// another call, the call's arguments are staged as before.
+	forged.tools = nil
+	other := WithInstallCard(WithToolCall(context.Background(), "two"), "one", card)
+	outcome, _ = host.Execute(other, s, install, object(t, `{"name":"seat_allocation"}`))
+	if outcome.IsError || !strings.Contains(string(outcome.Content), `"version":"1.1.0"`) {
+		t.Fatalf("install of another call = %s", outcome.Content)
+	}
+	// The version the card showed has new files in the refreshed index:
+	// nothing is installed.
+	forged.tools = nil
+	changed := newCatalogMemory()
+	changed.index.Tools, changed.files = nil, map[string][]ForgedFile{}
+	changed.add("seat_allocation", "1.0.0", "python3", []ForgedFile{{Path: "seat_allocation.py", Content: "print('republished')\n"}}, false)
+	host.Catalog = changed
+	outcome, _ = host.Execute(approved, s, install, object(t, `{"name":"seat_allocation"}`))
+	if !outcome.IsError || !strings.Contains(string(outcome.Content), "the catalog changed since the card showed axlr/seat_allocation@1.0.0") || len(forged.tools) != 0 {
+		t.Fatalf("changed files installed: %s, %+v", outcome.Content, forged.tools)
+	}
+	// The version the card showed left the index: nothing is installed.
+	gone := newCatalogMemory()
+	gone.index.Tools, gone.files = nil, map[string][]ForgedFile{}
+	gone.add("seat_allocation", "1.1.0", "python3", []ForgedFile{{Path: "seat_allocation.py", Content: "print('1.1.0')\n"}}, false)
+	host.Catalog = gone
+	outcome, _ = host.Execute(approved, s, install, object(t, `{"name":"seat_allocation"}`))
+	if !outcome.IsError || !strings.Contains(string(outcome.Content), "the card showed axlr/seat_allocation@1.0.0, which cannot be installed now") || !strings.Contains(string(outcome.Content), "call axlr_install_tool again") || len(forged.tools) != 0 {
+		t.Fatalf("withdrawn version installed: %s, %+v", outcome.Content, forged.tools)
+	}
+}
+
 func TestInstallRefusesADigestMismatchAndBadRequests(t *testing.T) {
 	forged, catalog := &forgedMemory{}, newCatalogMemory()
 	s := turnSession(t)

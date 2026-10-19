@@ -30,7 +30,13 @@ func LoadMCPConfig(path string, getenv func(string) string) ([]plugins.Registrat
 	return configuration.Registrations, err
 }
 
-// LoadMCPConfiguration validates registrations and their explicit plugin policies.
+// LoadMCPConfiguration validates registrations and their explicit plugin
+// policies. An entry whose manifest cannot be loaded is left out and named
+// in Unreadable instead of stopping the console: on 20 October 2026 a
+// review found that one deleted .axlr-mcp/<server>.json of an AXLR package
+// kept the console from starting, and with it /plugin, which removes or
+// updates the package. A server left out runs nothing; the configuration's
+// own errors still stop the console.
 func LoadMCPConfiguration(path string, getenv func(string) string) (MCPConfiguration, error) {
 	if getenv == nil {
 		return MCPConfiguration{}, errors.New("MCP environment resolver is required")
@@ -42,10 +48,16 @@ func LoadMCPConfiguration(path string, getenv func(string) string) (MCPConfigura
 	profiles := make([]domain.PluginProfile, 0, len(config.Plugins))
 	seen := map[root.PluginID]bool{}
 	registrations := make([]plugins.Registration, 0, len(config.Plugins))
+	var unreadable []string
 	for _, selected := range config.Plugins {
 		manifest, err := plugins.LoadManifest(selected.Manifest)
 		if err != nil {
-			return MCPConfiguration{}, err
+			name := selected.Name
+			if name == "" {
+				name = filepath.Base(selected.Manifest)
+			}
+			unreadable = append(unreadable, fmt.Sprintf("MCP server %s is not started: loading its manifest %s failed (%v); /plugin updates or removes the package that owns it, or remove the entry from %s", name, selected.Manifest, err, path))
+			continue
 		}
 		if seen[manifest.ID] {
 			return MCPConfiguration{}, errors.New("duplicate MCP plugin ID")
@@ -99,7 +111,7 @@ func LoadMCPConfiguration(path string, getenv func(string) string) (MCPConfigura
 		}
 		registrations = append(registrations, registration)
 	}
-	return MCPConfiguration{Registrations: registrations, Profiles: profiles}, nil
+	return MCPConfiguration{Registrations: registrations, Profiles: profiles, Unreadable: unreadable}, nil
 }
 
 // checkMCPConfigFile names the path, the first failing requirement and the

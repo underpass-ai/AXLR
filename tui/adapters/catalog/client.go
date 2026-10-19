@@ -127,7 +127,7 @@ func (c *Client) read(ctx context.Context, refresh, fetchStale bool) ([]applicat
 		}
 		stale := cacheErr != nil || refresh || (fetchStale && c.now().Sub(cached.fetchedAt) > c.maxAge())
 		if stale {
-			fresh, err := c.fetchIndex(ctx, entry, key)
+			fresh, err := c.fetchIndex(ctx, entry, key, cached.index.GeneratedAt)
 			if err != nil {
 				state.Warning = err.Error()
 			} else {
@@ -162,7 +162,7 @@ func (c *Client) Stage(ctx context.Context, catalog, name, version string) (appl
 	if err != nil {
 		// Never fetched: the first read. A stale cache is kept as it is,
 		// so the card and the install that follows see one index.
-		if cached, err = c.fetchIndex(ctx, entry, key); err != nil {
+		if cached, err = c.fetchIndex(ctx, entry, key, ""); err != nil {
 			return application.StagedTool{}, err
 		}
 	}
@@ -336,8 +336,13 @@ func (c *Client) readCache(entry Catalog, key PublicKey) (catalogCache, error) {
 }
 
 // fetchIndex downloads, verifies and caches a catalog's index; on any
-// failure the cache is left as it was.
-func (c *Client) fetchIndex(ctx context.Context, entry Catalog, key PublicKey) (catalogCache, error) {
+// failure the cache is left as it was. cachedAt is the generated_at of the
+// cached index ("" without one): an index generated before it is refused.
+// On 20 October 2026 a review found that any validly signed index was
+// accepted, so a replayed old one, from an attacker or a stale mirror,
+// could bring back versions the catalog had withdrawn. The cache's
+// fetched_at is not renewed by a refusal, so the next listing tries again.
+func (c *Client) fetchIndex(ctx context.Context, entry Catalog, key PublicKey, cachedAt string) (catalogCache, error) {
 	if !filepath.IsAbs(c.Dir) {
 		return catalogCache{}, errors.New("catalog cache directory must be absolute")
 	}
@@ -356,6 +361,9 @@ func (c *Client) fetchIndex(ctx context.Context, entry Catalog, key PublicKey) (
 	if err != nil {
 		return catalogCache{}, err
 	}
+	if olderIndex(index.GeneratedAt, cachedAt) {
+		return catalogCache{}, fmt.Errorf("catalog %s: the index served was generated at %s, before the cached one (%s); an older index is refused and the cached one is kept", entry.Name, index.GeneratedAt, cachedAt)
+	}
 	dir := c.cacheDir(entry)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return catalogCache{}, err
@@ -367,6 +375,18 @@ func (c *Client) fetchIndex(ctx context.Context, entry Catalog, key PublicKey) (
 		}
 	}
 	return catalogCache{index: index, raw: raw, fetchedAt: now}, nil
+}
+
+// olderIndex reports whether an index generated at fetched predates the
+// cached one generated at cached; an equal time is the same index served
+// again. A time that does not parse as RFC 3339 orders nothing.
+func olderIndex(fetched, cached string) bool {
+	if cached == "" {
+		return false
+	}
+	fresh, freshErr := time.Parse(time.RFC3339, fetched)
+	known, knownErr := time.Parse(time.RFC3339, cached)
+	return freshErr == nil && knownErr == nil && fresh.Before(known)
 }
 
 func parseIndex(entry Catalog, raw []byte) (application.CatalogIndex, error) {
