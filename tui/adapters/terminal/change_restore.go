@@ -134,7 +134,13 @@ func (m AppModel) askUndo() (AppModel, tea.Cmd) {
 	}
 	m.undoRefs = turnMemoryRefs(state, turn)
 	if len(m.undoRefs) > 0 && m.deps.MemoryForget != nil {
-		m.Status.Notice += m.Theme.counted("undo.forgetToo", len(m.undoRefs))
+		// f goes before "any other key keeps it", the question's last option.
+		notice, forget := m.Status.Notice, m.Theme.counted("undo.forgetToo", len(m.undoRefs))
+		if i := strings.LastIndex(notice, " · "); i >= 0 {
+			m.Status.Notice = notice[:i] + forget + notice[i:]
+		} else {
+			m.Status.Notice = notice + forget
+		}
 	}
 	return m, nil
 }

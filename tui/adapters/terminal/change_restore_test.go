@@ -261,7 +261,7 @@ func TestUndoOffersToCloseTheTurnsMemories(t *testing.T) {
 	defer m.zones.Close()
 	m.Composer.Input.SetValue("/undo")
 	m = update(m, ControlIntent("send"))
-	if !strings.Contains(m.Status.Notice, "f restores and closes the memory it recorded") {
+	if !strings.Contains(m.Status.Notice, "y restores · f restores and closes the memory it recorded · any other key keeps it") {
 		t.Fatalf("notice %q", m.Status.Notice)
 	}
 	next, cmd := m.Update(typed('f'))
