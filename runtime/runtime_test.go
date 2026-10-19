@@ -400,3 +400,38 @@ func TestAXLRHelperProcess(t *testing.T) {
 	}
 	os.Exit(5)
 }
+
+// A new file's missing directories are created inside the root (20 October
+// 2026: notas/2026-10-20.md needed a read and a mkdir -p first), never
+// through a link that leaves it, and replace still needs the file.
+func TestWriteCreateMakesMissingDirectoriesInsideTheRoot(t *testing.T) {
+	dir, outside := t.TempDir(), t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(dir, "out")); err != nil {
+		t.Fatal(err)
+	}
+	e, err := newTestExecutor(t, Config{Root: dir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(args string) dto.Response {
+		return e.Execute(context.Background(), dto.Request{ProtocolVersion: 1, RequestID: "r", Tool: "write", Arguments: json.RawMessage(args)})
+	}
+	if r := run(`{"path":"notas/2026/hoy.md","content":"uno","mode":"create"}`); r.Status != "completed" {
+		t.Fatalf("%+v", r)
+	}
+	if b, err := os.ReadFile(filepath.Join(dir, "notas", "2026", "hoy.md")); err != nil || string(b) != "uno" {
+		t.Fatalf("%q %v", b, err)
+	}
+	if r := run(`{"path":"out/new/x.md","content":"uno","mode":"create"}`); r.Status == "completed" {
+		t.Fatalf("created through a link out of the root: %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(outside, "new")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a directory was made outside the root: %v", err)
+	}
+	if r := run(`{"path":"otra/x.md","content":"uno","mode":"replace","expected_sha256":"0000000000000000000000000000000000000000000000000000000000000000"}`); r.Status == "completed" {
+		t.Fatalf("%+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "otra")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("replace made a directory: %v", err)
+	}
+}
