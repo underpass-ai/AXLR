@@ -1,7 +1,9 @@
 package application
 
 import (
+	"context"
 	"encoding/json"
+
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -64,6 +66,22 @@ func approvesInSession(policy ToolApprovalPolicyPort, s domain.Session, id domai
 		}
 	}
 	return approvesInMode(policy, s.Mode(), id, arguments)
+}
+
+// approvesCall is approvesInSession plus what only the ceremony driver can
+// tell, reading the workspace: a decompose hand-back the console will return
+// for its defects without running a command needs no card for its commands.
+// withheld is true in that case, and the caller marks the context with
+// withholdCommands so the commands still do not run if the plan passes when
+// decompose reads it again.
+func approvesCall(ctx context.Context, policy ToolApprovalPolicyPort, ceremonies *CeremonyDriver, s domain.Session, id domain.ToolIdentity, arguments root.JSONValue) (approved, withheld bool) {
+	if approvesInSession(policy, s, id, arguments) {
+		return true, false
+	}
+	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationStepDone && ceremonies.refusesPlanBeforeItsCommands(ctx, s, arguments) {
+		return true, true
+	}
+	return false, false
 }
 
 // approvesInMode adds the work mode: a call the mode puts under the user's

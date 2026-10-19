@@ -129,8 +129,22 @@ func (d *CeremonyDriver) taskDigests(ctx context.Context, task *domain.TaskRun) 
 	return digests, nil
 }
 
+// opaqueDigest stands for the digest of a file that is not UTF-8 text, which
+// the runtime does not read. It is not hex, so no SHA-256 equals it, and not
+// empty, so the file still counts as present.
+const opaqueDigest = "opaque: not UTF-8 text"
+
+// fileDigest is the SHA-256 of a workspace file, "" when it is missing and
+// opaqueDigest when it is binary. On 20 October 2026 a /plan task blocked at
+// start in a repository with an untracked __pycache__/calc.cpython-312.pyc:
+// every changed path is digested and the binary read failed the task. A
+// binary file in the scope or protected list keeps opaqueDigest too, so a
+// change to it goes undetected; the model's write tools write text only.
 func (d *CeremonyDriver) fileDigest(ctx context.Context, path string) (string, error) {
 	content, found, err := d.Files.Read(ctx, path, maxDigestedFile)
+	if errors.Is(err, ErrNotText) {
+		return opaqueDigest, nil
+	}
 	if err != nil || !found {
 		return "", err
 	}
@@ -197,6 +211,14 @@ func (d *CeremonyDriver) changedByTask(ctx context.Context, task *domain.TaskRun
 		now, err := d.fileDigest(ctx, p)
 		if err != nil {
 			return nil, err
+		}
+		if now == opaqueDigest && !slices.Contains(task.Scope, p) {
+			// A binary file outside the scope is not reported as the task's
+			// change: running the unit check regenerates caches such as
+			// Python's .pyc, which the worker could not restore, and the
+			// scope is a contract over the text files the model's write
+			// tools change, which never write a binary file.
+			continue
 		}
 		if before, known := task.Start[p]; !known || before != now {
 			out = append(out, p)

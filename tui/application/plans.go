@@ -343,10 +343,17 @@ func (r *PlanRunner) runTask(ctx context.Context, workbench PlanWorkbench, planI
 		return
 	}
 	task, _ := record.Task(taskID)
+	// stored is true once the worker session is in the store. On 20 October
+	// 2026 a task that failed to start kept the id of a session never saved,
+	// which /plan showed and the session picker offered to open.
+	stored := false
 	fail := func(reason string) {
 		r.update(ctx, planID, func(p *domain.PlanRecord) {
 			if t, ok := p.Task(taskID); ok && t.Status != domain.TaskDone {
 				t.Status, t.Reason = domain.TaskBlocked, bounded(reason, 600)
+				if !stored {
+					t.Session = ""
+				}
 			}
 		})
 	}
@@ -371,10 +378,16 @@ func (r *PlanRunner) runTask(ctx context.Context, workbench PlanWorkbench, planI
 	// A task that does not finish must not leave half its work behind: the
 	// next tasks and the sync would build on it. Its scope files are put back
 	// as they were; files it created are named, not deleted.
-	saved := map[string][]byte{}
+	saved, opaque := map[string][]byte{}, map[string]bool{}
 	for _, p := range task.Scope {
-		if content, found, err := workbench.ReadFile(ctx, p); err == nil && found {
+		content, found, err := workbench.ReadFile(ctx, p)
+		switch {
+		case err == nil && found:
 			saved[p] = content
+		case errors.Is(err, ErrNotText):
+			// A binary scope file cannot be read back to restore it, and it
+			// is not a file the task created.
+			opaque[p] = true
 		}
 	}
 	defer func() {
@@ -392,7 +405,7 @@ func (r *PlanRunner) runTask(ctx context.Context, workbench PlanWorkbench, planI
 				if now, _, _ := workbench.ReadFile(ctx, p); string(now) != string(original) && workbench.WriteFile(context.WithoutCancel(ctx), p, original) == nil {
 					restored = append(restored, p)
 				}
-			} else if workbench.Digest(ctx, p) != "" {
+			} else if !opaque[p] && workbench.Digest(ctx, p) != "" {
 				created = append(created, p)
 			}
 		}
@@ -418,6 +431,7 @@ func (r *PlanRunner) runTask(ctx context.Context, workbench PlanWorkbench, planI
 		fail(err.Error())
 		return
 	}
+	stored = true
 	err = workbench.Begin(ctx, &child, TaskPrompt(record, *task), nil)
 	retries := 0
 	for {

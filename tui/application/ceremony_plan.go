@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -94,8 +95,19 @@ func collapse(text string) string { return strings.TrimSpace(whitespace.ReplaceA
 
 // verifyPlan checks a proposal mechanically, without a model: ids,
 // dependencies and waves, scopes, citations, commands and the size of every
-// context pack. It runs each check command once, as the baseline.
+// context pack. It runs each check command once, as the baseline, and only
+// on a proposal whose structure and citations hold.
 func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepDone) (planVerification, error) {
+	v, err := d.verifyPlanBeforeCommands(ctx, slug, done)
+	if err != nil || len(v.defects) > 0 {
+		return v, err
+	}
+	return d.verifyPlanCommands(ctx, v, done)
+}
+
+// verifyPlanBeforeCommands is the part of verifyPlan that runs nothing: the
+// structure, the citations and the packs. It reads workspace files only.
+func (d *CeremonyDriver) verifyPlanBeforeCommands(ctx context.Context, slug string, done stepDone) (planVerification, error) {
 	var v planVerification
 	defect := func(format string, args ...any) { v.defects = append(v.defects, fmt.Sprintf(format, args...)) }
 	proposal := done.planDone
@@ -110,6 +122,9 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 	}
 	if strings.TrimSpace(done.SummaryEN) == "" {
 		defect("plan: summary_en is missing")
+	}
+	if _, ok := proposal.E2ECheck.command(); !ok {
+		defect("plan: e2e_check {program, args} is missing")
 	}
 	ids := map[string]int{}
 	for i, task := range proposal.Tasks {
@@ -150,9 +165,11 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 				continue
 			}
 			t.Scope = append(t.Scope, clean)
-			if _, found, err := d.Files.Read(ctx, clean, 1); err != nil {
+			// A binary file exists: it is not new, and reading it must not
+			// fail the plan (20 October 2026, an untracked .pyc).
+			if _, found, err := d.Files.Read(ctx, clean, 1); err != nil && !errors.Is(err, ErrNotText) {
 				return v, err
-			} else if !found {
+			} else if !found && err == nil {
 				t.New = append(t.New, clean)
 			}
 		}
@@ -223,10 +240,15 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 			defect("task %s: its context pack is %d bytes (at most %d); split the task or cite less", tasks[i].ID, len(tasks[i].Pack), maxTaskPack)
 		}
 	}
-	if len(v.defects) > 0 {
-		v.defects = boundDefects(v.defects)
-		return v, nil
-	}
+	v.tasks, v.defects = tasks, boundDefects(v.defects)
+	return v, nil
+}
+
+// verifyPlanCommands runs each check command of a proposal that passed
+// verifyPlanBeforeCommands once, as its baseline.
+func (d *CeremonyDriver) verifyPlanCommands(ctx context.Context, v planVerification, done stepDone) (planVerification, error) {
+	defect := func(format string, args ...any) { v.defects = append(v.defects, fmt.Sprintf(format, args...)) }
+	proposal, tasks := done.planDone, v.tasks
 	for i := range tasks {
 		result, err := d.Checks.Run(ctx, tasks[i].UnitCheck)
 		if err != nil {
@@ -238,10 +260,7 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 		}
 		tasks[i].Baseline = result.ExitCode
 	}
-	e2e, ok := proposal.E2ECheck.command()
-	if !ok {
-		defect("plan: e2e_check {program, args} is missing")
-	} else {
+	if e2e, ok := proposal.E2ECheck.command(); ok {
 		result, err := d.Checks.Run(ctx, e2e)
 		if err != nil {
 			return v, err
@@ -324,35 +343,66 @@ func planWaves(tasks []taskArgument) (map[string]int, []string) {
 }
 
 // citedExcerpts verifies each citation and extracts its region with a
-// margin: the quote must be on the cited line, whitespace collapsed.
+// margin: the quote must be on the cited line, whitespace collapsed. The
+// regions of one file are merged where they overlap or touch, so each line
+// reaches the pack once: on 20 October 2026 two citations of the 12-line
+// test_calc.py put "--- test_calc.py:1-12 ---" in a task's pack twice.
 func (d *CeremonyDriver) citedExcerpts(ctx context.Context, task domain.PlanTask) ([]string, []string, error) {
-	var excerpts, problems []string
+	type region struct{ first, last int }
+	var problems, order []string
+	regions, lines := map[string][]region{}, map[string][]string{}
 	for _, cite := range task.Context {
 		clean, ok := workspacePath(cite.Path)
 		if !ok {
 			problems = append(problems, fmt.Sprintf("task %s: cited path %q is outside the workspace", task.ID, cite.Path))
 			continue
 		}
-		content, found, err := d.Files.Read(ctx, clean, maxCitedFile)
-		if err != nil {
-			return nil, nil, err
+		file, read := lines[clean]
+		if !read {
+			content, found, err := d.Files.Read(ctx, clean, maxCitedFile)
+			if errors.Is(err, ErrNotText) {
+				problems = append(problems, fmt.Sprintf("task %s: cited file %s is not UTF-8 text; cite a text file", task.ID, clean))
+				continue
+			}
+			if err != nil {
+				return nil, nil, err
+			}
+			if !found {
+				problems = append(problems, fmt.Sprintf("task %s: cited file %s does not exist", task.ID, clean))
+				continue
+			}
+			file = strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
+			lines[clean] = file
 		}
-		if !found {
-			problems = append(problems, fmt.Sprintf("task %s: cited file %s does not exist", task.ID, clean))
+		if cite.Line < 1 || cite.Line > len(file) {
+			problems = append(problems, fmt.Sprintf("task %s: %s has %d lines; line %d is out of range", task.ID, clean, len(file), cite.Line))
 			continue
 		}
-		lines := strings.Split(strings.TrimSuffix(string(content), "\n"), "\n")
-		if cite.Line < 1 || cite.Line > len(lines) {
-			problems = append(problems, fmt.Sprintf("task %s: %s has %d lines; line %d is out of range", task.ID, clean, len(lines), cite.Line))
-			continue
-		}
-		quote, actual := collapse(cite.Quote), collapse(lines[cite.Line-1])
+		quote, actual := collapse(cite.Quote), collapse(file[cite.Line-1])
 		if len(quote) < minCitationQuote || !strings.Contains(actual, quote) {
 			problems = append(problems, fmt.Sprintf("task %s: %s:%d does not contain the quote (at least %d characters); the line reads %q", task.ID, clean, cite.Line, minCitationQuote, bounded(actual, 80)))
 			continue
 		}
-		first, last := max(1, cite.Line-citationMargin), min(len(lines), cite.Line+citationMargin)
-		excerpts = append(excerpts, fmt.Sprintf("--- %s:%d-%d ---\n%s", clean, first, last, strings.Join(lines[first-1:last], "\n")))
+		if _, seen := regions[clean]; !seen {
+			order = append(order, clean)
+		}
+		regions[clean] = append(regions[clean], region{max(1, cite.Line-citationMargin), min(len(file), cite.Line+citationMargin)})
+	}
+	var excerpts []string
+	for _, p := range order {
+		spans := regions[p]
+		sort.Slice(spans, func(i, j int) bool { return spans[i].first < spans[j].first })
+		merged := spans[:1]
+		for _, next := range spans[1:] {
+			if last := &merged[len(merged)-1]; next.first <= last.last+1 {
+				last.last = max(last.last, next.last)
+			} else {
+				merged = append(merged, next)
+			}
+		}
+		for _, r := range merged {
+			excerpts = append(excerpts, fmt.Sprintf("--- %s:%d-%d ---\n%s", p, r.first, r.last, strings.Join(lines[p][r.first-1:r.last], "\n")))
+		}
 	}
 	return excerpts, problems, nil
 }
@@ -407,6 +457,43 @@ func planSlug(brief string) string {
 	return slug
 }
 
+// refusesPlanBeforeItsCommands is true for a decompose hand-back whose
+// structure or citations fail: decompose returns those defects to the
+// planner without running any command, so the approval card for its check
+// commands would ask the person about commands that never run. On 20
+// October 2026 the person approved that card twice for plans the console
+// then refused (a test-first task with only tests in its scope, a citation
+// of the wrong line). It reads workspace files and runs nothing.
+func (d *CeremonyDriver) refusesPlanBeforeItsCommands(ctx context.Context, s domain.Session, arguments root.JSONValue) bool {
+	if d == nil || d.Engine == nil || d.Checks == nil || d.Plans == nil || d.Files == nil {
+		return false
+	}
+	run, live := s.Ceremony()
+	if !live || run.Step != "decompose" || run.Plan == nil || run.Generic != nil || run.AwaitingPerson() {
+		return false
+	}
+	done, _, err := decodeStepDoneFor(run, arguments)
+	if err != nil {
+		return false
+	}
+	v, err := d.verifyPlanBeforeCommands(ctx, run.Plan.ID, done)
+	return err == nil && len(v.defects) > 0
+}
+
+type withheldCommandsKey struct{}
+
+// withholdCommands marks a step_done approved without the person's card
+// because its plan was defective: if the plan passes when decompose checks
+// it again, its unapproved commands do not run.
+func withholdCommands(ctx context.Context) context.Context {
+	return context.WithValue(ctx, withheldCommandsKey{}, true)
+}
+
+func commandsWithheld(ctx context.Context) bool {
+	withheld, _ := ctx.Value(withheldCommandsKey{}).(bool)
+	return withheld
+}
+
 // decompose handles the planner's hand-back: verify, then record the plan
 // and go to approval, or return the exact defects for the next round.
 func (d *CeremonyDriver) decompose(ctx context.Context, s domain.Session, run domain.CeremonyRun, done stepDone, report map[string]any) (map[string]any, string, bool, string, error) {
@@ -417,7 +504,16 @@ func (d *CeremonyDriver) decompose(ctx context.Context, s domain.Session, run do
 	if err != nil {
 		return nil, "", false, "", err
 	}
-	v, err := d.verifyPlan(ctx, run.Plan.ID, done)
+	var v planVerification
+	if commandsWithheld(ctx) && unapproved(run, done.planDone.commands()) {
+		// Approved without a card because it looked defective: its commands
+		// must not run unless that still holds.
+		if v, err = d.verifyPlanBeforeCommands(ctx, run.Plan.ID, done); err == nil && len(v.defects) == 0 {
+			return nil, "", false, "the workspace changed while the console checked this plan; call axlr_step_done again with the whole plan", nil
+		}
+	} else {
+		v, err = d.verifyPlan(ctx, run.Plan.ID, done)
+	}
 	if err != nil {
 		return nil, "", false, "", err
 	}
