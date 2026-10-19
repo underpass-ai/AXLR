@@ -178,7 +178,7 @@ func TestJudgeFinalCheckReadsHowEachCallEnded(t *testing.T) {
 		t.Fatal(finalCheckQuestion)
 	}
 	note := string(finalCheckNote(0.27, 3))
-	for _, want := range []string{"27%", "3 tool calls left", "Never repeat a call the person denied or cancelled", "in one sentence", "Write to the person, not to this check, and do not mention it"} {
+	for _, want := range []string{"27%", "3 tool calls left", "Never repeat a call the person denied or cancelled", "in one sentence", "can only come from the person", "instead of guessing or searching outside the workspace", "Write to the person, not to this check, and do not mention it"} {
 		if !strings.Contains(note, want) {
 			t.Fatalf("note lacks %q: %s", want, note)
 		}
