@@ -136,9 +136,59 @@ func catalogToolView(match CatalogMatch) map[string]any {
 	return view
 }
 
+// installCardKey carries the install card the person approved.
+type installCardKey struct{}
+
+// installCard is what an axlr_install_tool card showed: the call it was
+// for and the staged tool on it.
+type installCard struct {
+	call   root.ToolCallID
+	staged StagedTool
+}
+
+// WithInstallCard carries the staged tool the card of call showed to its
+// approval, so the install writes that tool and no other. On 20 October
+// 2026 a review found that the approved call staged the tool again from
+// its arguments: the catalog cache is shared by every console, and
+// another console's /tools or axlr_catalog could refresh it between the
+// card and the key press, so a call without a version installed a newer
+// one than the card showed.
+func WithInstallCard(ctx context.Context, call root.ToolCallID, staged StagedTool) context.Context {
+	return context.WithValue(ctx, installCardKey{}, installCard{call: call, staged: staged})
+}
+
+// shownInstall is the staged tool the card of the call being executed
+// showed, if the person approved that call on its card. An approval that
+// covers several calls carries the card of the first alone.
+func shownInstall(ctx context.Context) (StagedTool, bool) {
+	card, ok := ctx.Value(installCardKey{}).(installCard)
+	call, executing := ToolCallOf(ctx)
+	if !ok || !executing || card.call != call {
+		return StagedTool{}, false
+	}
+	return card.staged, true
+}
+
+// sameStagedTool reports whether two stagings are the same tool: the
+// catalog, name and version, and the digests the signed index gives its
+// manifest and files.
+func sameStagedTool(a, b StagedTool) bool {
+	if a.Key() != b.Key() || a.Entry.ManifestSHA256 != b.Entry.ManifestSHA256 || len(a.Entry.Files) != len(b.Entry.Files) {
+		return false
+	}
+	for name, digest := range a.Entry.Files {
+		if other, listed := b.Entry.Files[name]; !listed || !strings.EqualFold(other, digest) {
+			return false
+		}
+	}
+	return true
+}
+
 // hostInstall is axlr_install_tool: the approved call stages the tool
-// again from the same cached index (the card showed the same bytes) and
-// registers it.
+// again (the collision checks and the digests hold at the time of the
+// write) and registers it. Approved on its card, the call is pinned to
+// the catalog and version the card showed, and the tool staged again must
+// be the one on the card; otherwise nothing is installed.
 func (u HostToolUseCase) hostInstall(ctx context.Context, session domain.Session, arguments root.JSONValue) (any, error) {
 	if u.Catalog == nil || u.Forge == nil {
 		return nil, errors.New("tool catalogs are not enabled in this console")
@@ -147,11 +197,26 @@ func (u HostToolUseCase) hostInstall(ctx context.Context, session domain.Session
 	if err != nil {
 		return nil, err
 	}
+	card, shown := shownInstall(ctx)
+	if shown {
+		if card.Entry.Name != request.Name {
+			return nil, fmt.Errorf("the card showed %s, not %s; nothing was installed", card.Key(), request.Name)
+		}
+		request.Catalog, request.Version = card.Catalog, card.Entry.Version
+	}
 	use := CatalogUseCase{Catalog: u.Catalog, Forge: u.Forge}
 	state := session.Export()
 	staged, err := use.Stage(ctx, string(state.Workspace), request)
 	if err != nil {
+		if shown {
+			// The version may be gone from a refreshed index, or a tool
+			// of the same name arrived meanwhile.
+			return nil, fmt.Errorf("the card showed %s, which cannot be installed now: %v; nothing was installed; call %s again for a new card", card.Key(), err, HostInstallToolName)
+		}
 		return nil, err
+	}
+	if shown && !sameStagedTool(card, staged) {
+		return nil, fmt.Errorf("the catalog changed since the card showed %s: it now has different files for it; nothing was installed; call %s again for a new card", card.Key(), HostInstallToolName)
 	}
 	stored, replaced, err := use.Install(ctx, string(state.Workspace), staged, string(state.ID))
 	if err != nil {

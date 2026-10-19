@@ -525,6 +525,26 @@ func (m AppModel) installCardReady() bool {
 	return m.installStaged != nil && m.installStagedCall == p.Call.ID
 }
 
+// shownInstall is the staged tool the pending install's card shows, for
+// the approval to install exactly that (application.WithInstallCard); ok
+// is false when no install waits or its card shows no files yet.
+func (m AppModel) shownInstall() (root.ToolCallID, application.StagedTool, bool) {
+	p, _, ok := m.pendingInstall()
+	if !ok || m.installStaged == nil || m.installStagedCall != p.Call.ID {
+		return "", application.StagedTool{}, false
+	}
+	return p.Call.ID, *m.installStaged, true
+}
+
+// withShownInstall carries the card's staged tool, if one is shown, to
+// the operation that resolves the call.
+func withShownInstall(ctx context.Context, call root.ToolCallID, staged application.StagedTool, shown bool) context.Context {
+	if !shown {
+		return ctx
+	}
+	return application.WithInstallCard(ctx, call, staged)
+}
+
 // stageInstallCard fetches the pending install's files in the background;
 // the completion fills the card. nil when nothing is pending or it is
 // already staged or staging.

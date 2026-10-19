@@ -838,7 +838,10 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 		m.resumeTurnClock()
 		resolve := m.deps.Resolve
 		settings := m.deps.ApprovalSettings
+		// An install writes the tool its card showed, not one staged anew.
+		cardCall, card, shown := m.shownInstall()
 		cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+			ctx = withShownInstall(ctx, cardCall, card, shown)
 			if intent == "autonomy-on" {
 				if settings == nil {
 					return errors.New(m.Theme.T("error.approvalSettings"))
