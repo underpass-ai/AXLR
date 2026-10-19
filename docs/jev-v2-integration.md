@@ -113,7 +113,7 @@ go-v2 resolved both members of 26 of the 30 episodes in every repeat. Repeats an
 
 Per turn, a settled turn under v2 asks gate, sentence and kind, three sequential decisions of about 6.4 × 10⁻⁵ USD and about 0.63 s at the median when the gate passes, plus supersede when its switch is on. The final check is one decision of about 2.2 × 10⁻⁵ USD.
 
-The receipts, manifest and summary are in the private lab checkout under `results/axlr-go-port/` (not pushed). They hold the cases' text and are not published here.
+The receipts, manifest and summary are in the private lab repository under [`results/axlr-go-port/`](https://github.com/underpass-ai/jev-judge-lab/tree/e4762de/results/axlr-go-port) (commit `e4762de`). They hold the cases' text and are not published here.
 
 ## Coverage lost to the 24 KiB bound
 
