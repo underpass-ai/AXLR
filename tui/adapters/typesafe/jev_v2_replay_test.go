@@ -33,6 +33,7 @@ type oracleRow struct {
 	Error    string                         `json:"error"`
 	Receipts []oracleReceipt                `json:"receipts"`
 	Question *application.JudgementQuestion `json:"question"`
+	Mapping  map[string]string              `json:"mapping"`
 }
 
 func readOracle(t *testing.T, path string) []oracleRow {
