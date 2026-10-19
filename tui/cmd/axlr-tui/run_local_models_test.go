@@ -131,6 +131,11 @@ func TestJevJudgeCarriesThePolicy(t *testing.T) {
 	if err != nil || judge.Decisions != (application.JudgeDecisions{Policy: application.JudgePolicyAXLRv2, Supersede: true, Model: "jev-1.13.0"}) {
 		t.Fatalf("axlr-v2: %+v %v", judge, err)
 	}
+	var ceremony application.SessionCeremony
+	settleWith(&ceremony, judge)
+	if ceremony.Judge != judge.Port || ceremony.Decisions != judge.Decisions {
+		t.Fatalf("the settlement did not get the policy: %+v", ceremony.Decisions)
+	}
 	info := jevInfo(judge, &storage.JevSettings{FinalCheck: true, Model: "jev-1.13.0"})
 	if info.Policy != "axlr-v2" || !info.Supersede {
 		t.Fatalf("info %+v", info)

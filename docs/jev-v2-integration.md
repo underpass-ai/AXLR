@@ -122,7 +122,7 @@ v2 sends the whole evidence or nothing. Over the 95 sessions recorded on the dev
 | Decision | Unasked | State size p50 / p90 |
 |:--|--:|--:|
 | Final check | 12 of 168 (7.1%) | 4,229 / 14,735 bytes |
-| Settlement gate | 14 of 125 (11.2%) | 8,004 / 16,714 bytes |
+| Settlement gate | 10 of 77 (13.0%) | 7,932 / 16,714 bytes |
 
 Legacy asks those turns with bounded excerpts. Splitting evidence across questions was not evaluated and is not done.
 

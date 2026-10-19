@@ -53,8 +53,8 @@ func TestJudgeV2CoverageOfRecordedSessions(t *testing.T) {
 				if err != nil {
 					continue // not a turn this decision reads
 				}
-				if !final && len(evidence.Tools) == 0 {
-					continue // settle asks only after results
+				if !final && !application.BuildTurnRecord(s, i, 1, "project:coverage", nil).HasResults() {
+					continue // settle asks only after a turn with results
 				}
 				count := families[family]
 				count.asked++

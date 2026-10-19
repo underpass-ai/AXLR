@@ -123,6 +123,12 @@ func jevJudge(settings *storage.JevSettings, getenv func(string) string) (*appli
 	return &application.Judge{Port: client, Tool: settings.Tool, FinalCheck: settings.FinalCheck, Threshold: settings.FinalThreshold, Decisions: decisions}, nil
 }
 
+// settleWith hands Jev to the settlement under the final check's policy:
+// the port alone would leave the settlement asking the legacy questions.
+func settleWith(c *application.SessionCeremony, judge *application.Judge) {
+	c.Judge, c.Decisions = judge.Port, judge.Decisions
+}
+
 // jevInfo is what /axlr-info says of Jev: off without a judge.
 func jevInfo(judge *application.Judge, settings *storage.JevSettings) terminal.JevInfo {
 	if judge == nil || settings == nil {
