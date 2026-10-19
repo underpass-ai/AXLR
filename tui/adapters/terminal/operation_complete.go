@@ -26,6 +26,8 @@ type operationComplete struct {
 	MemorySaved     *application.BundleSaved
 	MemoryCompared  *application.CompareResult
 	MemoryForgotten *application.ForgetReceipt
+	// UndoMemories is what /undo did with the memories its turn recorded.
+	UndoMemories *undoMemories
 	// Tools is a /tools operation's outcome.
 	Tools    *toolsOutcome
 	Session  domain.Session

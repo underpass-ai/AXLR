@@ -162,6 +162,8 @@ type AppModel struct {
 	undoAsking       bool
 	// undoTurn is the earlier turn /undo asks to undo, 0 for the last.
 	undoTurn int
+	// undoRefs are the memories the turn /undo asks about recorded.
+	undoRefs []string
 	// toolsStaged is the catalog tool /tools staged, waiting for the y
 	// toolsAsking asks for; toolsQueue is what /tools update installs next.
 	toolsStaged *application.StagedTool
@@ -901,6 +903,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.restoreOperation = 0
 			if v.Err == nil {
 				m.Status.Notice = m.restoredNotice(v.Session.Export())
+				if v.UndoMemories != nil {
+					m.Status.Notice += m.undoMemoriesNotice(*v.UndoMemories)
+				}
 			} else if changed := (application.FileChangedError{}); errors.As(v.Err, &changed) {
 				m.Status.Error = m.Theme.Tf("changes.restoreChanged", singleLine(string(changed.Path)))
 			} else if missing := (application.FileMissingError{}); errors.As(v.Err, &missing) {
