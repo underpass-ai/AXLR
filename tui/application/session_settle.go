@@ -71,6 +71,10 @@ func (c *SessionCeremony) settle(ctx context.Context, s domain.Session, instance
 	}
 	ctx, cancel := context.WithTimeout(ctx, settleTimeout)
 	defer cancel()
+	if c.Decisions.v2() {
+		c.settleV2(ctx, s, instance, record, stepRef)
+		return
+	}
 	actions := record.Evidence(stepRef)[1:]
 	if len(actions) > settleActionLines {
 		actions = actions[:settleActionLines]

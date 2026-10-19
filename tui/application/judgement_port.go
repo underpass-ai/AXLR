@@ -72,12 +72,15 @@ type JudgementVerdict struct {
 // Judge enables TypeSafe Jev in a console. Tool offers axlr_judge to the
 // model; FinalCheck asks Jev, when the model ends a request with a final
 // answer, whether that answer completes it, and below Threshold returns the
-// verdict to the model once.
+// verdict to the model once. Decisions selects how the final check is
+// asked (judge_policy_v2.go); the console hands the same policy to the
+// settlement (SessionCeremony.Decisions).
 type Judge struct {
 	Port       JudgementPort
 	Tool       bool
 	FinalCheck bool
 	Threshold  float64
+	Decisions  JudgeDecisions
 }
 
 func (j *Judge) offersTool() bool  { return j != nil && j.Port != nil && j.Tool }

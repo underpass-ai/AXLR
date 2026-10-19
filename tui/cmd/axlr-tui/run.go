@@ -624,8 +624,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			sessionCeremony.Journal = journal
 		}
 		if judge != nil {
-			// Jev decides what each turn settled (decision D5).
+			// Jev decides what each turn settled (decision D5), under the
+			// same policy as the final check.
 			sessionCeremony.Judge = judge.Port
+			sessionCeremony.Decisions = judge.Decisions
 		}
 		for _, line := range []string{
 			ensureWorkGrant(ctx, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}, filepath.Join(stateBase, "axlr", "made-grant"), madesetup.WorkGrantFor(madeWorkIdentity(configPath, registrations))),

@@ -29,12 +29,15 @@ var (
 
 // JevInfo is how TypeSafe Jev is connected: its pinned model and the
 // methods on, the axlr_judge tool and the final check with its threshold.
-// The zero value is Jev off.
+// The zero value is Jev off. Policy names the automatic decisions' policy
+// when it is not legacy; Supersede is axlr-v2's supersede switch.
 type JevInfo struct {
 	Model      string
 	Tool       bool
 	FinalCheck bool
 	Threshold  float64
+	Policy     string
+	Supersede  bool
 }
 
 // emblem is the logo as a grid of colours, "" for a transparent pixel.
@@ -288,6 +291,12 @@ func (m AppModel) axlrInfoJev() string {
 	}
 	if len(methods) == 0 {
 		return theme.Muted(theme.T("axlrInfo.jevOff"))
+	}
+	if jev.Policy != "" && jev.Policy != "legacy" {
+		methods = append(methods, theme.Tf("axlrInfo.jevPolicy", jev.Policy))
+		if jev.Supersede {
+			methods = append(methods, theme.T("axlrInfo.jevSupersede"))
+		}
 	}
 	return theme.Tf("axlrInfo.jev", jev.Model, strings.Join(methods, " + "))
 }

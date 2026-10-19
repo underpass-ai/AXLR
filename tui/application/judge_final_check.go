@@ -65,12 +65,20 @@ func checkFinalAnswer(ctx context.Context, s *domain.Session, u ContinueTurnUseC
 	if left <= 0 {
 		return false, nil
 	}
-	state, err := finalCheckState(messages[start:])
+	question, err := u.Judge.finalQuestion(messages, start)
 	if err != nil {
+		// Evidence axlr-v2 cannot send whole is an omission, counted so
+		// the coverage the bound costs is measured; the answer stands.
+		if u.Diagnostics != nil && u.Judge.Decisions.v2() {
+			_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticJudgement, ErrorClass: DiagnosticErrorInvalidState})
+		}
 		return false, nil
 	}
 	started := time.Now()
-	verdict, err := u.Judge.Port.Judge(ctx, JudgementQuestion{State: state, Question: finalCheckQuestion})
+	verdict, err := u.Judge.Port.Judge(ctx, question)
+	if err == nil && u.Judge.Decisions.v2() {
+		err = ValidateJudgementVerdict(question, verdict, u.Judge.Decisions.Model)
+	}
 	if u.Diagnostics != nil {
 		class := DiagnosticErrorNone
 		if err != nil {
@@ -98,6 +106,22 @@ func checkFinalAnswer(ctx context.Context, s *domain.Session, u ContinueTurnUseC
 	}
 	*s = next
 	return true, emitSession(s, emit)
+}
+
+// finalQuestion is the final check's question for the request that starts
+// at start: the legacy state and question, or under axlr-v2 the whole
+// request, answer and tool results with the lab's final question.
+func (j *Judge) finalQuestion(messages []root.Message, start int) (JudgementQuestion, error) {
+	if !j.Decisions.v2() {
+		state, err := finalCheckState(messages[start:])
+		return JudgementQuestion{State: state, Question: finalCheckQuestion}, err
+	}
+	evidence, err := JudgeTurnEvidenceOf(messages, start, true)
+	if err != nil {
+		return JudgementQuestion{}, err
+	}
+	compiled, err := CompileJudgeV2(JudgeFamilyFinal, evidence.Dossier())
+	return compiled.Question, err
 }
 
 // finalCheckQuestion is what Jev is asked. A call the person denied or

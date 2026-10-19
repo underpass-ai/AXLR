@@ -94,13 +94,43 @@ func TestUserSettingsJevSection(t *testing.T) {
 	if (&JevSettings{}).Enabled() || (*JevSettings)(nil).Enabled() {
 		t.Fatal("Jev enabled without a switch")
 	}
-	for _, jev := range []string{`{"final_threshold":1}`, `{"final_threshold":-0.1}`, `{"timeout_ms":10}`} {
+	for _, jev := range []string{`{"final_threshold":1}`, `{"final_threshold":-0.1}`, `{"timeout_ms":10}`, `{"judge_policy":"axlr-v5"}`, `{"judge_policy":"V2"}`, `{"v2_supersede":true}`, `{"judge_policy":"legacy","v2_supersede":true}`} {
 		if err := os.WriteFile(path, []byte(`{"jev":`+jev+`}`), 0600); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := store.Load(context.Background()); err == nil {
 			t.Errorf("jev %s accepted", jev)
 		}
+	}
+}
+
+// judge_policy and v2_supersede are opt-in: settings without them keep
+// the legacy questions, and choosing a policy turns no switch on.
+func TestUserSettingsJevPolicy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	store, _ := NewUserSettingsStore(path, DefaultUserSettings())
+	for raw, want := range map[string]JevSettings{
+		`{"jev":{"tool":true,"final_check":true}}`:                                                {Tool: true, FinalCheck: true},
+		`{"jev":{"final_check":true,"judge_policy":"legacy"}}`:                                    {FinalCheck: true, JudgePolicy: "legacy"},
+		`{"jev":{"final_check":true,"judge_policy":"axlr-v2"}}`:                                   {FinalCheck: true, JudgePolicy: "axlr-v2"},
+		`{"jev":{"final_check":true,"judge_policy":"axlr-v2","v2_supersede":true}}`:               {FinalCheck: true, JudgePolicy: "axlr-v2", V2Supersede: true},
+		`{"jev":{"tool":false,"final_check":false,"judge_policy":"axlr-v2","v2_supersede":true}}`: {JudgePolicy: "axlr-v2", V2Supersede: true},
+	} {
+		if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+			t.Fatal(err)
+		}
+		got, err := store.Load(context.Background())
+		if err != nil || *got.Jev != want {
+			t.Fatalf("%s: %+v %v", raw, got.Jev, err)
+		}
+		if got.Jev.Enabled() != (want.Tool || want.FinalCheck) {
+			t.Fatalf("%s: a policy changed whether Jev is on", raw)
+		}
+	}
+	settings := UserSettings{}
+	CompleteDefaults(&settings, true)
+	if settings.Jev.JudgePolicy != "" || settings.Jev.V2Supersede {
+		t.Fatalf("defaults moved to a policy: %+v", settings.Jev)
 	}
 }
 
