@@ -492,8 +492,10 @@ TypeSafe Jev, an external judgement model. Absent, or with both switches off, no
 | `final_threshold` | number | `0` (0.5) | From 0 up to but not including 1: the probability below which a final answer goes back to the model. `0` means the default 0.5 |
 | `model` | string | `"jev-1.13.0"` | The pinned Jev version: 1 to 64 letters, digits, `.`, `_` or `-`, and not a `-latest` alias |
 | `timeout_ms` | integer | `0` (20,000) | One request's timeout; `0`, or 1,000 to 60,000 |
+| `judge_policy` | string | `""` (legacy) | How the final check and the settlement ask Jev: `legacy` or `axlr-v2` ([AXLR v2](jev-v2-integration.md)). Turns nothing on |
+| `v2_supersede` | boolean | `false` | Under `axlr-v2`, ask whether a settled memory replaces a recalled one; for evaluation only |
 
-Refused while reading: `settings jev.final_threshold must be between 0 and 1`, `settings jev.timeout_ms must be between 1000 and 60000`. `model` is checked only when a switch is on, at launch (`jev: jev.model must be a pinned version such as jev-1.13.0`). With either switch on, `TYPESAFE_API_KEY` must be set or the launch stops (`jev: TYPESAFE_API_KEY is required for Jev`), and the launch says on stderr that questions and final answers are sent to TypeSafe. See [Jev](console.md#jev-an-external-judge-off-by-default).
+Refused while reading: `settings jev.final_threshold must be between 0 and 1`, `settings jev.timeout_ms must be between 1000 and 60000`, `settings jev.judge_policy must be legacy or axlr-v2, not "…"`, `settings jev.v2_supersede needs jev.judge_policy axlr-v2`. `model` is checked only when a switch is on, at launch (`jev: jev.model must be a pinned version such as jev-1.13.0`). With either switch on, `TYPESAFE_API_KEY` must be set or the launch stops (`jev: TYPESAFE_API_KEY is required for Jev`), and the launch says on stderr that questions and final answers are sent to TypeSafe. See [Jev](console.md#jev-an-external-judge-off-by-default).
 
 ```json
 "jev": {"tool": true, "final_check": true, "final_threshold": 0.5, "model": "jev-1.13.0", "timeout_ms": 20000}

@@ -13,6 +13,7 @@ AXLR is Underpass's default engine for agentic execution, supported by KMP memor
 | Install packages or connect MCP tools | [Plugins and MCP](plugins.md) |
 | Install pre-forged tools from a signed catalog, or publish your own | [Console: catalog tools](console.md#installing-catalog-tools) |
 | Resolve a visible failure | [Troubleshooting](troubleshooting.md) |
+| Ask Jev's automatic decisions as the JEV lab's AXLR v2 does, and roll back | [Jev's AXLR v2 policy](jev-v2-integration.md) |
 
 ## Operational runbooks
 

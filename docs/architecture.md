@@ -41,7 +41,7 @@ flowchart TB
 | `tui/adapters/terminal/`, `tui/cmd/axlr-tui/` | Console UI and composition, models, approvals, package browsing and engine preparation |
 | `tui/adapters/ceremonyhost/`, `tui/adapters/madesetup/` | Pinned MADE procedures, actual check execution, KMP outcome calls and operator preparation |
 | `tui/application/` plans | `ceremony_plan.go` (decompose verification, approval), `ceremony_task.go` (start, red, green, hand-back), `ceremony_sync.go` (integrate, reconcile), `plans.go` (the background runner) |
-| `tui/adapters/typesafe/` | TypeSafe Jev judgement client behind `JudgementPort`, used by `axlr_judge` and the final check |
+| `tui/adapters/typesafe/` | TypeSafe Jev judgement client behind `JudgementPort`, used by `axlr_judge`, the final check and the settlement; its tests hold the offline replay and the opt-in live comparison of [AXLR v2](jev-v2-integration.md) |
 | `tui/adapters/localmodels/` | Routing of configured local models to their servers, the merged `/model` catalog and each model's context window |
 | `tui/adapters/storage/`, `tui/adapters/diagnostics/` | Private sessions, settings, MCP config and diagnostics |
 | `tui/service/`, `tui/cmd/axlr-serve/` | HTTP/mTLS adapter, principal roles, event journals, direct calls, idempotency and remote engines |
