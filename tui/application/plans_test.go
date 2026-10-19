@@ -190,6 +190,41 @@ func TestABlockedTaskPutsItsScopeBack(t *testing.T) {
 	}
 }
 
+// binaryBench holds one binary scope file the runtime cannot read as text.
+type binaryBench struct{ scriptedBench }
+
+func (b *binaryBench) ReadFile(ctx context.Context, path string) ([]byte, bool, error) {
+	if path == "logo.png" {
+		return nil, false, fmt.Errorf("read %s: binary data: %w", path, ErrNotText)
+	}
+	return b.scriptedBench.ReadFile(ctx, path)
+}
+func (b *binaryBench) Digest(ctx context.Context, path string) string {
+	if path == "logo.png" {
+		return opaqueDigest
+	}
+	return b.scriptedBench.Digest(ctx, path)
+}
+
+// A binary scope file that was there before the task is not one it left
+// behind, though it cannot be read back to restore it (20 October 2026).
+func TestABlockedTaskDoesNotNameABinaryScopeFileAsNew(t *testing.T) {
+	plans := &memoryPlans{}
+	_ = plans.Save(context.Background(), domain.PlanRecord{ID: "p", Session: "s", Workspace: domain.Workspace(t.TempDir()), Worker: "local/gemma", Status: domain.PlanReady, Waves: 1, Tasks: []domain.PlanTask{
+		{ID: "a", Wave: 1, Scope: []string{"shared.go", "logo.png"}, Status: domain.TaskPending},
+	}})
+	bench := &binaryBench{scriptedBench{files: map[string][]byte{"shared.go": []byte("original")}, plans: plans, outcome: map[string]domain.TaskStatus{"a": domain.TaskBlocked}}}
+	runner := &PlanRunner{Plans: plans, Store: &memoryStore{}, Workbench: benchPort{bench}, RunToken: "t"}
+	if err := runner.Start(context.Background(), "p"); err != nil {
+		t.Fatal(err)
+	}
+	runner.Wait()
+	runner.Close()
+	if reason := plans.records[0].Tasks[0].Reason; !strings.Contains(reason, "restored shared.go") || strings.Contains(reason, "logo.png") {
+		t.Fatalf("reason = %q", reason)
+	}
+}
+
 // reconcileBench is a scripted bench whose Begin plays a reconciling worker:
 // it changes its scope file and ends with a summary and a note.
 type reconcileBench struct {

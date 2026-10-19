@@ -150,9 +150,11 @@ func (d *CeremonyDriver) verifyPlan(ctx context.Context, slug string, done stepD
 				continue
 			}
 			t.Scope = append(t.Scope, clean)
-			if _, found, err := d.Files.Read(ctx, clean, 1); err != nil {
+			// A binary file exists: it is not new, and reading it must not
+			// fail the plan (20 October 2026, an untracked .pyc).
+			if _, found, err := d.Files.Read(ctx, clean, 1); err != nil && !errors.Is(err, ErrNotText) {
 				return v, err
-			} else if !found {
+			} else if !found && err == nil {
 				t.New = append(t.New, clean)
 			}
 		}
@@ -334,6 +336,10 @@ func (d *CeremonyDriver) citedExcerpts(ctx context.Context, task domain.PlanTask
 			continue
 		}
 		content, found, err := d.Files.Read(ctx, clean, maxCitedFile)
+		if errors.Is(err, ErrNotText) {
+			problems = append(problems, fmt.Sprintf("task %s: cited file %s is not UTF-8 text; cite a text file", task.ID, clean))
+			continue
+		}
 		if err != nil {
 			return nil, nil, err
 		}

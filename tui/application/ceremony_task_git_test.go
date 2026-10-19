@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
+	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -42,13 +44,17 @@ func (c gitDirChecks) Run(ctx context.Context, command domain.CheckCommand) (Che
 	return CheckResult{Ran: true, ExitCode: code, Output: output, Stdout: stdout.String()}, nil
 }
 
-// gitDirFiles reads the same directory for the task's digests.
+// gitDirFiles reads the same directory for the task's digests and, like
+// ceremonyhost.Files over the runtime, refuses a file that is not UTF-8 text.
 type gitDirFiles struct{ dir string }
 
 func (f gitDirFiles) Read(_ context.Context, path string, max int) ([]byte, bool, error) {
 	content, err := os.ReadFile(filepath.Join(f.dir, path))
 	if os.IsNotExist(err) {
 		return nil, false, nil
+	}
+	if err == nil && (!utf8.Valid(content) || bytes.IndexByte(content, 0) >= 0) {
+		return nil, false, fmt.Errorf("read %s: binary data: %w", path, ErrNotText)
 	}
 	if len(content) > max {
 		content = content[:max]
@@ -166,5 +172,60 @@ func (truncatedStatus) Run(context.Context, domain.CheckCommand) (CheckResult, e
 func TestTaskScopeCheckRefusesACutGitStatus(t *testing.T) {
 	if _, _, err := (&CeremonyDriver{Checks: truncatedStatus{}}).gitChanged(context.Background()); err == nil || !strings.Contains(err.Error(), "scope cannot be checked") {
 		t.Fatalf("a cut git status must fail loudly: %v", err)
+	}
+}
+
+// pyc is the start of a CPython 3.12 bytecode cache: a magic number, then
+// NUL flags, not text.
+const pyc = "\xcb\x0d\x0d\x0a\x00\x00\x00\x00\xe3\x00\x00\x00"
+
+// On 20 October 2026 a /plan task blocked at start in a repository with an
+// untracked __pycache__/calc.cpython-312.pyc: the digest of every changed
+// path read it as text and the runtime refused it.
+func TestATaskStartsBesideAnUntrackedBinaryFile(t *testing.T) {
+	dir := gitRepository(t, map[string]string{"calc.py": "def add(a, b):\n    return a + b\n"})
+	writeFile(t, dir, "__pycache__/calc.cpython-312.pyc", pyc)
+	files := gitDirFiles{dir: dir}
+	plans := &memoryPlans{}
+	task := domain.PlanTask{ID: "add-sub", Goal: "Add sub.", Scope: []string{"calc.py", "test_calc.py"}, UnitCheck: domain.CheckCommand{Program: "true"}, TestFirst: true, Wave: 1, Status: domain.TaskRunning}
+	plan := domain.PlanRecord{ID: "p-1", Session: "0123456789abcdef0123456789abcdef", Workspace: domain.Workspace(dir), Worker: "local/gemma", Status: domain.PlanRunning, Waves: 1, Tasks: []domain.PlanTask{task}}
+	_ = plans.Save(context.Background(), plan)
+	d := &CeremonyDriver{Engine: &fakeEngine{}, Checks: gitDirChecks{dir: dir}, Files: files, Plans: plans, Now: func() time.Time { return time.Unix(1, 0) }}
+	s := turnSession(t)
+	if err := s.SetMode(domain.ModeTask); err != nil {
+		t.Fatal(err)
+	}
+	if err := d.BeginTask(context.Background(), &s, plan, task); err != nil {
+		t.Fatalf("the task must start beside a binary file: %v", err)
+	}
+	run, _ := s.Ceremony()
+	if run.Step != "red" || run.Task.Start["__pycache__/calc.cpython-312.pyc"] != opaqueDigest {
+		t.Fatalf("step %s, start digests %v", run.Step, run.Task.Start)
+	}
+}
+
+// Running the unit check regenerates Python's bytecode cache outside the
+// scope; the worker cannot restore it, so it is not a change of the task's.
+// A text file changed outside the scope still is.
+func TestTaskScopeCheckIgnoresABinaryCacheButNotText(t *testing.T) {
+	dir := gitRepository(t, map[string]string{"calc.py": "x = 1\n", "README.md": "calc\n"})
+	d := &CeremonyDriver{Checks: gitDirChecks{dir: dir}, Files: gitDirFiles{dir: dir}}
+	task := &domain.TaskRun{Scope: []string{"calc.py", "logo.bin"}}
+	start, err := d.taskDigests(context.Background(), task)
+	if err != nil || !task.Git {
+		t.Fatalf("digests: git=%v err=%v", task.Git, err)
+	}
+	task.Start = start
+	writeFile(t, dir, "calc.py", "x = 2\n")
+	writeFile(t, dir, "__pycache__/calc.cpython-312.pyc", pyc)
+	writeFile(t, dir, "logo.bin", pyc)
+	changed, err := d.changedByTask(context.Background(), task)
+	if err != nil || strings.Join(changed, ",") != "calc.py,logo.bin" {
+		t.Fatalf("changed %q err=%v, want the scope files only", changed, err)
+	}
+	writeFile(t, dir, "README.md", "tampered\n")
+	changed, err = d.changedByTask(context.Background(), task)
+	if err != nil || strings.Join(changed, ",") != "README.md,calc.py,logo.bin" {
+		t.Fatalf("changed %q err=%v, want README.md reported", changed, err)
 	}
 }
