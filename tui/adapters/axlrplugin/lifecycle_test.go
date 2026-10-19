@@ -251,3 +251,47 @@ func TestUninstallRefusesWhenServersCannotBeRemoved(t *testing.T) {
 		t.Fatalf("package removed: %v", err)
 	}
 }
+
+// An update keeps the literal environment values set by hand for a server
+// that survives it, and takes the new package's own. On 20 October 2026 a
+// review found that the update registered the new package's environment
+// alone, so a token set in the MCP configuration was lost.
+func TestUpdateKeepsThePersonsEnvironment(t *testing.T) {
+	ctx := context.Background()
+	l := newLifecycle(t)
+	write := func(version, mode string) {
+		mustWrite(t, filepath.Join(l.source, ".codex-plugin", "plugin.json"), `{"name":"sample","version":"`+version+`","description":"Example","skills":"./skills/","mcpServers":{"tools":{"command":"/bin/echo","args":["x"],"env":{"MODE":"`+mode+`"},"env_vars":["REGION"]}}}`)
+		mustWrite(t, filepath.Join(l.source, "skills", "first", "SKILL.md"), "---\nname: first\ndescription: first skill\n---\nUse it.\n")
+	}
+	write("1.0.0", "one")
+	if err := l.catalog.AddSource(ctx, l.source); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.catalog.Install(ctx, "sample"); err != nil {
+		t.Fatal(err)
+	}
+	store := &storage.MCPConfigStore{Path: l.config}
+	if err := store.SetPluginEnvironment(ctx, "sample-tools", "API_TOKEN", "set-by-hand"); err != nil {
+		t.Fatal(err)
+	}
+	write("2.0.0", "two")
+	if err := l.catalog.Update(ctx, "sample"); err != nil {
+		t.Fatal(err)
+	}
+	var config struct {
+		Plugins []struct {
+			Env     map[string]string `json:"env"`
+			EnvFrom map[string]string `json:"env_from"`
+		} `json:"plugins"`
+	}
+	if err := json.Unmarshal([]byte(l.configText(t)), &config); err != nil {
+		t.Fatal(err)
+	}
+	if len(config.Plugins) != 1 {
+		t.Fatalf("registrations: %s", l.configText(t))
+	}
+	env, from := config.Plugins[0].Env, config.Plugins[0].EnvFrom
+	if env["API_TOKEN"] != "set-by-hand" || env["MODE"] != "two" || len(env) != 2 || from["REGION"] != "REGION" {
+		t.Fatalf("environment after update: env %v, env_from %v", env, from)
+	}
+}
