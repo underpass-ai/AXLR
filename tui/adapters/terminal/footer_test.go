@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 func TestFooterHintsStateAndTokensFitOneRow(t *testing.T) {
@@ -114,7 +115,7 @@ func TestFooterCountsOneChangedFileInTheSingular(t *testing.T) {
 		m := sized()
 		m.Theme.Locale = locale
 		m.Changes.records = make([]changeRecord, 1)
-		m.Changes.files = make([]changeFile, 1)
+		m.Changes.files = []changeFile{{Net: domain.FileChange{Created: true}}}
 		footer := ansi.Strip(m.footerView())
 		if strings.Contains(footer, plural) || !strings.Contains(footer, "ctrl+d "+Translate(locale, "changes.oneFile")) {
 			t.Fatalf("%s footer: %q", locale, footer)
@@ -129,9 +130,25 @@ func TestFooterCountsChangedFilesNotEdits(t *testing.T) {
 	m := sized()
 	defer m.zones.Close()
 	m.Changes.records = make([]changeRecord, 4)
-	m.Changes.files = make([]changeFile, 2)
+	m.Changes.files = []changeFile{{Net: domain.FileChange{Before: "a", After: "b"}}, {Net: domain.FileChange{Created: true}}}
 	if footer := ansi.Strip(m.footerView()); !strings.Contains(footer, "ctrl+d "+m.Theme.Tf("changes.files", 2)) {
 		t.Fatalf("footer: %q", footer)
+	}
+}
+
+// On 20 October 2026, after /undo put test_calc.py back, the footer still
+// counted it (+0 -0) among the changed files.
+func TestFooterLeavesOutFilesWithNoNetChange(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Changes.records = make([]changeRecord, 3)
+	m.Changes.files = []changeFile{{Net: domain.FileChange{Before: "a", After: "b"}}, {Net: domain.FileChange{Before: "same", After: "same"}}}
+	if footer := ansi.Strip(m.footerView()); !strings.Contains(footer, "ctrl+d "+m.Theme.T("changes.oneFile")) {
+		t.Fatalf("footer: %q", footer)
+	}
+	m.Changes.files = m.Changes.files[1:]
+	if footer := ansi.Strip(m.footerView()); strings.Contains(footer, "ctrl+d") {
+		t.Fatalf("footer offers changes with none left: %q", footer)
 	}
 }
 
