@@ -36,6 +36,7 @@ func CatalogTool() domain.AvailableTool {
 func InstallTool() domain.AvailableTool {
 	identity, _ := domain.NewHostToolIdentity(domain.HostOperationInstallTool)
 	schema, _ := root.NewJSONObject([]byte(`{"type":"object","properties":{"name":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,47}$"},"version":{"type":"string","pattern":"^\\d+\\.\\d+\\.\\d+$"},"catalog":{"type":"string","pattern":"^[a-z][a-z0-9_-]{0,31}$"}},"required":["name"],"additionalProperties":false}`))
+	schema = requiredWhy(schema)
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostInstallToolName,
 		Description: "Install a tool of a catalog (found with axlr_catalog) into this workspace as a forged tool: the console fetches its files, verifies them against the catalog's signed index and shows them on the install card; on approval they are written under " + ForgedToolsDir + "/<name>/ and the tool is registered with its origin, callable at once with axlr_run_tool. version defaults to the newest and catalog to the only one that has the tool. Do not forge a copy of a catalog tool instead. Approved like local_write.",
