@@ -3,6 +3,7 @@ package application
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -48,10 +49,21 @@ func languageGuidance(language string) string {
 // whyTools are the tools whose calls carry a why.
 var whyTools = map[root.ToolName]bool{"local_write": true, "local_edit": true, "local_exec": true, HostCallToolName: true, HostRunToolName: true}
 
-// whyTolerated are the local reads, which need no why but accept one: on
-// 13 October 2026 claude-haiku-5.5, told to give its writes and commands
-// a why, gave its reads one too and the read schema refused the call.
-var whyTolerated = map[root.ToolName]bool{"local_read": true, "local_search": true, "local_list": true}
+// whyTolerated are the tools that need no why but accept one: the local
+// reads (on 13 October 2026 claude-haiku-5.5, told to give its writes and
+// commands a why, gave its reads one too and the read schema refused the
+// call) and the host tools that write a workspace tool. On 20 October 2026
+// claude-haiku-5.5 sent axlr_forge_tool a why eight times in one session,
+// each refused as "arguments must match its schema" without naming the
+// field, and the tool was never created.
+var whyTolerated = map[root.ToolName]bool{"local_read": true, "local_search": true, "local_list": true, HostForgeToolName: true, HostRemoveToolName: true, HostInstallToolName: true}
+
+// schemaError is a host tool's refusal of arguments that do not decode,
+// naming what the decoder found (an unknown field, a wrong type), so the
+// model can correct the call instead of resending it.
+func schemaError(refusal string, err error) error {
+	return fmt.Errorf("%s (%s)", refusal, strings.TrimPrefix(err.Error(), "json: "))
+}
 
 // RequireWhy returns the snapshot with why required on every side-effect
 // tool's schema and accepted on the local reads. The console applies it to
@@ -89,7 +101,7 @@ func withWhy(schema root.JSONValue, required bool) (root.JSONValue, error) {
 	if _, present := properties[WhyArgument]; !present {
 		description := whyDescription
 		if !required {
-			description = "Optional here: reads need no why."
+			description = "Optional here: this call needs no why."
 		}
 		property, _ := json.Marshal(map[string]any{"type": "string", "minLength": 1, "maxLength": WhyMaxRunes, "description": description})
 		properties[WhyArgument] = property
