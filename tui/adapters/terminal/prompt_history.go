@@ -16,8 +16,28 @@ func (m *AppModel) resetPromptHistory() {
 			m.promptHistory = append(m.promptHistory, typed)
 		}
 	}
+	m.promptHistory = append(m.promptHistory, m.commandHistory...)
 	m.historyIndex = len(m.promptHistory)
 	m.historyDraft = ""
+}
+
+// rememberCommand keeps a slash command for ↑: on 20 October 2026 ↑ never
+// recalled /tools publish, which the person had to type again each time.
+// The commands typed in this console stay across its sessions; a command
+// repeated at once is kept once.
+func (m *AppModel) rememberCommand(command string) {
+	if command == "" {
+		return
+	}
+	if n := len(m.commandHistory); n == 0 || m.commandHistory[n-1] != command {
+		m.commandHistory = append(m.commandHistory, command)
+	}
+	if n := len(m.promptHistory); n > 0 && m.promptHistory[n-1] == command {
+		m.historyIndex = n
+		m.historyDraft = ""
+		return
+	}
+	m.rememberPrompt(command)
 }
 
 func (m *AppModel) rememberPrompt(prompt string) {
