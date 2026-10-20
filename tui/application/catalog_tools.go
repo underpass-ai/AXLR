@@ -239,7 +239,7 @@ func decodeInstallRequest(arguments root.JSONValue) (InstallRequest, error) {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 		Catalog string `json:"catalog"`
-		// Why is accepted and not needed (whyTolerated).
+		// Why is the call's reason (whyTools).
 		Why string `json:"why"`
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))

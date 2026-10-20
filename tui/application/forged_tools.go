@@ -109,7 +109,7 @@ type forgeArgs struct {
 	Program     string          `json:"program"`
 	Args        []string        `json:"args"`
 	Files       []ForgedFile    `json:"files"`
-	// Why is accepted and not needed (whyTolerated).
+	// Why is the call's reason (whyTools); the card shows it.
 	Why string `json:"why"`
 }
 
