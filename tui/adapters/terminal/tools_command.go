@@ -149,7 +149,7 @@ func parseInstallArguments(fields []string) (application.InstallRequest, error) 
 // openToolsPanel shows the overview, or the search for terms, read in an
 // operation.
 func (m AppModel) openToolsPanel(refresh bool, terms []string) (AppModel, tea.Cmd) {
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)
@@ -199,7 +199,7 @@ func toolsCompletion(cmd tea.Cmd, outcome *toolsOutcome) tea.Cmd {
 
 // stageTool fetches a tool for its card; queue is what follows it.
 func (m AppModel) stageTool(request application.InstallRequest, queue []string) (AppModel, tea.Cmd) {
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)
@@ -248,7 +248,7 @@ func (m AppModel) installStagedTool() (AppModel, tea.Cmd) {
 // updateTools refreshes the catalogs and stages the installed tools they
 // have newer, one card at a time; name limits it to one tool.
 func (m AppModel) updateTools(name string) (AppModel, tea.Cmd) {
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)
@@ -392,8 +392,14 @@ func (m AppModel) answerTools(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		}
 		return m, nil
 	}
-	m.toolsAsking = false
 	publishing := m.publishBundle != nil
+	if publishing && k.String() != "y" && k.String() != "n" && k.String() != "esc" {
+		// An upload leaves the workspace: only y sends it and only n or Esc
+		// gives up, so a stray Enter neither publishes nor drops the card.
+		m.Status.Notice = m.Theme.Tf("tools.publishConfirm", m.publishDraft.Tool.Name, m.publishDraft.Metadata.Version, m.publishDraft.Catalog, m.publishBundle.KeyID)
+		return m, nil
+	}
+	m.toolsAsking = false
 	if k.String() != "y" {
 		m.toolsStaged, m.toolsQueue = nil, nil
 		m.Status.Notice = m.Theme.T("tools.kept")

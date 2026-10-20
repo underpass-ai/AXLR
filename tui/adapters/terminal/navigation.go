@@ -1067,7 +1067,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case "help", "info", "approvals":
 		m.Help.Top = 0
 		if intent == "info" {
-			m.Info = NewTranscript()
+			m.Info = m.themedTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 			m.Info.SetWidth(w)
 			m.Info.Viewport.SetHeight(h)
@@ -1078,7 +1078,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.Info.SetContent(content)
 			m.Info.Viewport.GotoTop()
 		} else if intent == "approvals" {
-			m.Info = NewTranscript()
+			m.Info = m.themedTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 			m.Info.SetWidth(w)
 			m.Info.Viewport.SetHeight(h)

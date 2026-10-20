@@ -118,7 +118,7 @@ func (m AppModel) canRaise() bool {
 }
 
 func (m AppModel) openUsagePanel() AppModel {
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)

@@ -13,7 +13,7 @@ import (
 // MADE instance, its turns and the last turn's record, action by action
 // (decision J6 of the lifecycle integration design).
 func (m AppModel) openSessionPanel() AppModel {
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)

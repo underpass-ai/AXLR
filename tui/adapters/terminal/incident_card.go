@@ -46,7 +46,7 @@ func (m AppModel) openIncidentCard() AppModel {
 		m.Status.Error = m.Theme.T("incident.unavailable")
 		return m
 	}
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(max(1, h-2))

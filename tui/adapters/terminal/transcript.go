@@ -475,3 +475,13 @@ func (t *Transcript) ToggleNote(key string) {
 	}
 	t.expanded[key] = !t.expanded[key]
 }
+
+// themedTranscript is a panel's transcript in the console's theme. On 20
+// October 2026 the /tools publish panel was unreadable on the paper theme:
+// every panel built with NewTranscript rendered its text in the dark
+// theme's foreground, light blue-gray on a light background.
+func (m AppModel) themedTranscript() Transcript {
+	t := NewTranscript()
+	t.theme = m.Theme
+	return t
+}

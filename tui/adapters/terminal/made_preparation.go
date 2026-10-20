@@ -21,7 +21,7 @@ func (m AppModel) prepareMADE() (AppModel, tea.Cmd) {
 		return m, nil
 	}
 	m.overlay = "made-setup"
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	width, height := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(width)
 	m.Info.Viewport.SetHeight(height)

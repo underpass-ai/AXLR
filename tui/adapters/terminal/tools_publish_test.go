@@ -14,6 +14,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // keysFake is an in-memory ClientKeyPort.
@@ -280,5 +281,44 @@ func TestToolsPublishVerbsNeedTheRegistry(t *testing.T) {
 	}
 	if usage := slashUsage("/tools"); !strings.Contains(usage, "/tools publish <name>[@version] [--to <catalog>]") || !strings.Contains(usage, "/tools enroll <publisher> <namespace>…") {
 		t.Fatalf("usage %q", usage)
+	}
+}
+
+// On 20 October 2026 the /tools publish panel was unreadable on the paper
+// theme: panels rendered their text in the dark theme's colours. Every
+// panel's transcript now carries the console's theme.
+func TestPanelsRenderInTheConsoleTheme(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.Theme.ID = domain.ThemePaper
+	for _, open := range []func(AppModel) AppModel{
+		func(m AppModel) AppModel { return m.openToolsOverlay("text") },
+		func(m AppModel) AppModel { return m.openUsagePanel() },
+		func(m AppModel) AppModel { return m.openSessionPanel() },
+	} {
+		if got := open(m).Info.theme.ID; got != domain.ThemePaper {
+			t.Fatalf("a panel renders in theme %q", got)
+		}
+	}
+}
+
+// On 20 October 2026 the person pressed another key at the upload question,
+// which then lived only in the status line, and the panel closed with
+// nothing uploaded and nothing said: only y uploads, only n or Esc gives
+// up, and any other key keeps the question.
+func TestThePublishQuestionTakesOnlyYNOrEsc(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	m.overlay = "tools"
+	m.publishDraft = &application.PublishDraft{Catalog: "axlr", Tool: application.ForgedTool{Name: "qa8_probe"}, Metadata: application.PublishMetadata{Version: "1.0.0"}}
+	m.publishBundle = &application.PublishBundle{KeyID: "abc"}
+	m.toolsAsking = true
+	m, _ = m.answerTools(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !m.toolsAsking || m.publishBundle == nil || m.overlay != "tools" || !strings.Contains(m.Status.Notice, "y uploads · n or Esc") {
+		t.Fatalf("Enter dropped the question: asking %v, notice %q", m.toolsAsking, m.Status.Notice)
+	}
+	m, _ = m.answerTools(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	if m.toolsAsking || m.publishBundle != nil || m.Status.Notice != "Nothing published" {
+		t.Fatalf("n kept the upload: notice %q", m.Status.Notice)
 	}
 }
