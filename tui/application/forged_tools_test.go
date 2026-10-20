@@ -62,7 +62,7 @@ func object(t *testing.T, text string) root.JSONValue {
 	return value
 }
 
-const forgeArguments = `{"name":"word_count","description":"Count the words of text.","input_schema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]},"program":"python3","args":[".axlr/tools/word_count/main.py"],"files":[{"path":"main.py","content":"import json,sys\nprint(len(json.load(sys.stdin)['text'].split()))\n"}]}`
+const forgeArguments = `{"name":"word_count","description":"Count the words of text.","input_schema":{"type":"object","properties":{"text":{"type":"string"}},"required":["text"]},"program":"python3","args":[".axlr/tools/word_count/main.py"],"files":[{"path":"main.py","content":"import json,sys\nprint(len(json.load(sys.stdin)['text'].split()))\n"}],"why":"count the words of a text"}`
 
 // Forging writes code into the workspace and running a forged tool runs a
 // program: the modes and the approval policy treat them as local_write and
@@ -414,16 +414,17 @@ func TestForgedCallsTheConsoleWouldRefuseAreRefusedBeforeTheCard(t *testing.T) {
 		invalid   bool
 		want      string
 	}{
-		"path outside the tool": {tool: ForgeTool(), arguments: `{"name":"evil","description":"qa","input_schema":{"type":"object"},"program":"python3","args":[".axlr/tools/evil/main.py"],"files":[{"path":"../../escape.py","content":"x"},{"path":"main.py","content":"x"}]}`, want: `axlr_forge_tool: file path "../../escape.py" must be inside the tool's directory`},
-		"args name no file":     {tool: ForgeTool(), arguments: `{"name":"evil","description":"qa","input_schema":{"type":"object"},"program":"bash","args":["/etc/passwd"],"files":[{"path":"run.sh","content":"x"}]}`, want: "args must name one of the tool's files"},
-		"bad name":              {tool: ForgeTool(), arguments: `{"name":"Bad Name!","description":"qa","input_schema":{"type":"object"},"program":"python3","args":["main.py"],"files":[{"path":"main.py","content":"x"}]}`, want: "name must be 2-48 lowercase"},
+		"path outside the tool": {tool: ForgeTool(), arguments: `{"name":"evil","description":"qa","input_schema":{"type":"object"},"program":"python3","args":[".axlr/tools/evil/main.py"],"files":[{"path":"../../escape.py","content":"x"},{"path":"main.py","content":"x"}],"why":"qa"}`, want: `axlr_forge_tool: file path "../../escape.py" must be inside the tool's directory`},
+		"args name no file":     {tool: ForgeTool(), arguments: `{"name":"evil","description":"qa","input_schema":{"type":"object"},"program":"bash","args":["/etc/passwd"],"files":[{"path":"run.sh","content":"x"}],"why":"qa"}`, want: "args must name one of the tool's files"},
+		"bad name":              {tool: ForgeTool(), arguments: `{"name":"Bad Name!","description":"qa","input_schema":{"type":"object"},"program":"python3","args":["main.py"],"files":[{"path":"main.py","content":"x"}],"why":"qa"}`, want: "name must be 2-48 lowercase"},
 		"valid forge":           {tool: ForgeTool(), arguments: forgeArguments},
 		"changed tool":          {tool: RunTool(), arguments: `{"name":"csv_stats","arguments":{"path":"a.csv"},"why":"stats of the sample"}`, verifyErr: errors.New(`forged tool "csv_stats" changed since it was forged (main.py)`), want: "axlr_run_tool: forged tool \"csv_stats\" changed since it was forged"},
 		"unknown tool":          {tool: RunTool(), arguments: `{"name":"missing","arguments":{},"why":"run the missing tool"}`, want: `unknown forged tool "missing"`},
 		"arguments off schema":  {tool: RunTool(), arguments: `{"name":"csv_stats","arguments":{"path":5},"why":"stats of the sample"}`, invalid: true, want: "arguments do not match csv_stats's input_schema"},
 		"valid run":             {tool: RunTool(), arguments: `{"name":"csv_stats","arguments":{"path":"a.csv"},"why":"stats of the sample"}`},
-		"unregistered removal":  {tool: RemoveTool(), arguments: `{"name":"stray"}`, want: `axlr_remove_tool: unknown forged tool "stray"`},
-		"registered removal":    {tool: RemoveTool(), arguments: `{"name":"csv_stats"}`},
+		"unregistered removal":  {tool: RemoveTool(), arguments: `{"name":"stray","why":"drop it"}`, want: `axlr_remove_tool: unknown forged tool "stray"`},
+		"registered removal":    {tool: RemoveTool(), arguments: `{"name":"csv_stats","why":"drop it"}`},
+		"forge without why":     {tool: ForgeTool(), arguments: `{"name":"word_count","description":"qa","input_schema":{"type":"object"},"program":"python3","args":[".axlr/tools/word_count/main.py"],"files":[{"path":"main.py","content":"x"}]}`, want: "axlr_forge_tool: " + MissingWhy},
 	} {
 		t.Run(name, func(t *testing.T) {
 			forged := &forgedMemory{tools: []ForgedTool{registered}, verifyErr: test.verifyErr}
@@ -497,7 +498,9 @@ func TestForgeTakesAWhyAndNamesAnUnknownField(t *testing.T) {
 	if err := removableError(context.Background(), forged, turnSession(t), object(t, `{"name":"word_count","why":"ya no hace falta"}`)); err != nil && strings.Contains(err.Error(), "must be name") {
 		t.Fatal(err)
 	}
-	for _, tool := range RequireWhy([]domain.AvailableTool{ForgeTool(), RemoveTool(), InstallTool()}) {
+	// The constructors' own schemas: the session gets these tools after the
+	// catalog's RequireWhy.
+	for _, tool := range []domain.AvailableTool{ForgeTool(), RemoveTool(), InstallTool()} {
 		var schema struct {
 			Properties map[string]json.RawMessage `json:"properties"`
 			Required   []string                   `json:"required"`

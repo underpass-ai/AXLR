@@ -83,6 +83,18 @@ func RequireWhy(tools []domain.AvailableTool) []domain.AvailableTool {
 	return out
 }
 
+// requiredWhy is a host tool's own schema with why required. The console
+// adds axlr_forge_tool, axlr_remove_tool and axlr_install_tool to a session
+// after the catalog's RequireWhy, so their constructors carry it, as
+// axlr_run_tool's literal schema does: on 20 October 2026 a forge without
+// a why reached the card although whyTools named it.
+func requiredWhy(schema root.JSONValue) root.JSONValue {
+	if patched, err := withWhy(schema, true); err == nil {
+		return patched
+	}
+	return schema
+}
+
 // withWhy adds the why property to a schema, and its requirement when
 // required.
 func withWhy(schema root.JSONValue, required bool) (root.JSONValue, error) {

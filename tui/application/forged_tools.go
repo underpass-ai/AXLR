@@ -61,6 +61,7 @@ func forgeSchema() string {
 func ForgeTool() domain.AvailableTool {
 	identity, _ := domain.NewHostToolIdentity(domain.HostOperationForgeTool)
 	schema, _ := root.NewJSONObject([]byte(forgeSchema()))
+	schema = requiredWhy(schema)
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostForgeToolName,
 		Description: "Create or replace a tool of this workspace when no local, host, plugin or forged tool does the job (search axlr_tools first; it lists forged tools). Write it as small files under " + ForgedToolsDir + "/<name>/; the console runs program (a name on PATH, such as python3, bash or node) with args from the workspace root, passes the arguments as one JSON object on stdin and returns stdout, stderr and the exit code. args must name one of the tool's files by its workspace path, " + ForgedToolsDir + "/<name>/<file>. input_schema is the JSON Schema of the arguments; description says what it does and returns. Keep it focused, deterministic and free of secrets; print the result on stdout and fail with a nonzero exit and a message on stderr. To fix a tool, forge it again under the same name; to drop one, call axlr_remove_tool, not a file deletion. Approved like local_write; the tool is callable at once with axlr_run_tool.",
@@ -83,6 +84,7 @@ func RunTool() domain.AvailableTool {
 func RemoveTool() domain.AvailableTool {
 	identity, _ := domain.NewHostToolIdentity(domain.HostOperationRemoveTool)
 	schema, _ := root.NewJSONObject([]byte(`{"type":"object","properties":{"name":{"type":"string","pattern":"^[a-z][a-z0-9_]{1,47}$"}},"required":["name"],"additionalProperties":false}`))
+	schema = requiredWhy(schema)
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostRemoveToolName,
 		Description: "Uninstall a tool forged with axlr_forge_tool in this workspace by its exact name: deletes its directory under " + ForgedToolsDir + "/ and unregisters it, so axlr_tools no longer lists it. Deleting the files any other way leaves the tool registered and broken. Works on a tool whose files are already missing or changed. Approved like local_write.",

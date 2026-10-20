@@ -30,7 +30,7 @@ func pickerKey(p ModelPicker, z *zone.Manager, key tea.KeyPressMsg) (ModelPicker
 
 func pickerZone(t *testing.T, z *zone.Manager, id string) *zone.ZoneInfo {
 	t.Helper()
-	for deadline := time.Now().Add(time.Second); time.Now().Before(deadline); {
+	for deadline := time.Now().Add(zoneWait); time.Now().Before(deadline); {
 		if hit := z.Get(id); hit != nil {
 			return hit
 		}

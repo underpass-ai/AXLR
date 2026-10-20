@@ -209,7 +209,7 @@ func TestAppModelVisibleControlsKeyboardMouseParity(t *testing.T) {
 	m = update(m, ControlIntent("close"))
 	m.View()
 	z := m.zones.Get(m.prefix + "help")
-	for deadline := time.Now().Add(time.Second); z == nil && time.Now().Before(deadline); {
+	for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
 		z = m.zones.Get(m.prefix + "help")
 	}
@@ -348,7 +348,7 @@ func TestAppModelMouseSendAndCancel(t *testing.T) {
 	m.View()
 	for _, id := range []string{"send"} {
 		z := m.zones.Get(m.prefix + id)
-		for deadline := time.Now().Add(time.Second); z == nil && time.Now().Before(deadline); {
+		for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
 			time.Sleep(time.Millisecond)
 			z = m.zones.Get(m.prefix + id)
 		}
@@ -369,7 +369,7 @@ func TestAppModelMouseSendAndCancel(t *testing.T) {
 	})
 	m.View()
 	z := m.zones.Get(m.prefix + "cancel")
-	for deadline := time.Now().Add(time.Second); z == nil && time.Now().Before(deadline); {
+	for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
 		z = m.zones.Get(m.prefix + "cancel")
 	}
