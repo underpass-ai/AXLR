@@ -171,7 +171,7 @@ func TestChangeReviewScrollsAndMouseSelectsFiles(t *testing.T) {
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
 	m.View()
 	z := m.zones.Get(m.prefix + "changes-change-1")
-	for deadline := time.Now().Add(time.Second); z == nil && time.Now().Before(deadline); {
+	for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
 		z = m.zones.Get(m.prefix + "changes-change-1")
 	}

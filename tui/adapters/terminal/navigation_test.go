@@ -55,11 +55,17 @@ func drain(t *testing.T, m AppModel, cmd tea.Cmd) AppModel {
 	}
 	return m
 }
+
+// zoneWait is how long a test waits for bubblezone to scan a rendered
+// view. On 20 October 2026 a macos-15 runner took over a second and
+// TestNavigationMousePaletteSearchAndHelp failed with "missing zone help".
+const zoneWait = 5 * time.Second
+
 func click(t *testing.T, m AppModel, id string) (tea.Model, tea.Cmd) {
 	t.Helper()
 	m.View()
 	z := m.zones.Get(m.prefix + id)
-	for deadline := time.Now().Add(time.Second); z == nil && time.Now().Before(deadline); {
+	for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
 		time.Sleep(time.Millisecond)
 		z = m.zones.Get(m.prefix + id)
 	}
