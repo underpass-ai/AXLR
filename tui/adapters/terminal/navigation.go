@@ -92,6 +92,8 @@ func (m *AppModel) syncApproval() {
 				target = m.Theme.Tf("approval.removeToolTarget", forgedName(p.Call.Arguments.Bytes()))
 			case domain.HostOperationInstallTool:
 				target = m.Theme.Tf("approval.installTarget", forgedName(p.Call.Arguments.Bytes()))
+			case domain.HostOperationPublishTool:
+				target = m.Theme.Tf("approval.publishTarget", forgedName(p.Call.Arguments.Bytes()))
 			}
 		}
 	}
@@ -1065,7 +1067,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 	case "help", "info", "approvals":
 		m.Help.Top = 0
 		if intent == "info" {
-			m.Info = NewTranscript()
+			m.Info = m.themedTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 			m.Info.SetWidth(w)
 			m.Info.Viewport.SetHeight(h)
@@ -1076,7 +1078,7 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			m.Info.SetContent(content)
 			m.Info.Viewport.GotoTop()
 		} else if intent == "approvals" {
-			m.Info = NewTranscript()
+			m.Info = m.themedTranscript()
 			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 			m.Info.SetWidth(w)
 			m.Info.Viewport.SetHeight(h)

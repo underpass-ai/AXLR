@@ -106,6 +106,9 @@ type AppModel struct {
 	// message, so its cancellation is not reported as an error.
 	steerCancelled uint64
 	promptHistory  []string
+	// commandHistory is the slash commands typed in this console, which ↑
+	// recalls after the session's prompts.
+	commandHistory []string
 	historyIndex   int
 	historyDraft   string
 	events         <-chan tea.Msg
@@ -989,6 +992,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 				command = suggestions[min(m.slashSelected, len(suggestions)-1)].name
 			}
 			command, args, known := parseSlash(command)
+			if known {
+				m.rememberCommand(strings.TrimSpace(command + " " + args))
+			}
 			if known && args != "" {
 				return m.slashWithText(command, args)
 			}

@@ -147,7 +147,7 @@ func (m AppModel) armCeremony(listed []application.CeremonyDefinitionSummary, ar
 // openCeremoniesPanel opens the list of published definitions; the
 // operation that reads it fills the panel.
 func (m AppModel) openCeremoniesPanel() (AppModel, tea.Cmd) {
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)

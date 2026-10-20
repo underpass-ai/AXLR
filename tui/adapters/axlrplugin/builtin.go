@@ -1,27 +1,44 @@
 package axlrplugin
 
 import (
+	"embed"
 	"errors"
+	"io/fs"
 	"unicode/utf8"
 
 	"github.com/underpass-ai/AXLR/tui/application"
 )
 
-// The console ships no built-in skill: the axlr-session skill, which asked
-// the model to settle the session's context, read KMP's guide and compare
-// abouts, was retired on 13 October 2026 (decision D8 of the lifecycle
-// integration design) when the console took over the session's memory
-// protocol; its title duty is one sentence of the system prompt and its
-// inter-about reference is in docs/runbooks/kmp.md. The ceremony
-// definitions the console drives are not a skill either: they live in
+// The console's own skills ship inside the binary, readable without a
+// copied package or a live MCP engine. The axlr-session skill was retired
+// on 13 October 2026 (decision D8 of the lifecycle integration design)
+// when the console took over the session's memory protocol. On 20 October
+// 2026 axlr-publish-tool joined: the person asked the agent to publish a
+// forged tool and it did not know the files a registry needs. The ceremony
+// definitions the console drives are not a skill: they live in
 // tui/adapters/ceremonyhost/definitions and are published through /mcp → P.
 // The axlr and made namespaces stay reserved, so a copied package cannot
 // pose as the console's own guidance.
 
-func builtinSkillIndex() (string, error) { return "", nil }
+const builtinPublishSkill = "axlr-publish-tool"
+const builtinPublishRoot = "builtin/axlr/skills/" + builtinPublishSkill + "/"
 
-func readBuiltinSkill(string, string, string) ([]byte, error) {
-	return nil, errors.New("built-in skill resource is unavailable")
+//go:embed builtin/axlr/skills/axlr-publish-tool
+var builtinResources embed.FS
+
+func builtinSkillIndex() (string, error) {
+	data, err := builtinResources.ReadFile(builtinPublishRoot + "SKILL.md")
+	if err != nil {
+		return "", err
+	}
+	return "\n- axlr: The console's own skills. " + builtinPublishSkill + " (" + skillDescription(string(data)) + ")", nil
+}
+
+func readBuiltinSkill(plugin, skill, resource string) ([]byte, error) {
+	if plugin != "axlr" || skill != builtinPublishSkill || !fs.ValidPath(resource) || resource != "SKILL.md" {
+		return nil, errors.New("built-in skill resource is unavailable")
+	}
+	return builtinResources.ReadFile(builtinPublishRoot + resource)
 }
 
 func skillPage(plugin, skill, resource string, data []byte, offset, limit int) (application.SkillPage, error) {

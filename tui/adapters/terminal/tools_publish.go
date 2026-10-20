@@ -313,12 +313,16 @@ func (m AppModel) completePublish(outcome toolsOutcome) (AppModel, tea.Cmd) {
 		}
 		m.publishBundle = outcome.bundle
 		m.toolsAsking = true
+		question := m.Theme.Tf("tools.publishConfirm", m.publishDraft.Tool.Name, m.publishDraft.Metadata.Version, m.publishDraft.Catalog, outcome.bundle.KeyID)
 		if m.overlay == "tools" {
-			m.Info.SetContent(publishCard(*m.publishDraft, *outcome.bundle, m.Theme))
+			// The question heads the card: on 20 October 2026 it was only in
+			// the status line, the person pressed another key and the panel
+			// closed with nothing uploaded and nothing said.
+			m.Info.SetContent("▲ " + question + "\n\n" + publishCard(*m.publishDraft, *outcome.bundle, m.Theme))
 			m.Info.Viewport.GotoTop()
 		}
 		m.Status.Error = ""
-		m.Status.Notice = m.Theme.Tf("tools.publishConfirm", m.publishDraft.Tool.Name, m.publishDraft.Metadata.Version, m.publishDraft.Catalog, outcome.bundle.KeyID)
+		m.Status.Notice = question
 		return m, nil
 	case outcome.retryAfter > 0:
 		m.publishLog = append(m.publishLog, outcome.content)
@@ -440,7 +444,7 @@ func (m *AppModel) renderPublishLog() {
 
 // openToolsOverlay opens the panel with text.
 func (m AppModel) openToolsOverlay(text string) AppModel {
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)

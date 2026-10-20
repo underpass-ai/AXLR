@@ -114,7 +114,7 @@ func (m AppModel) compareMemory(others []string) (tea.Model, tea.Cmd) {
 	}
 	m.Composer.Input.Reset()
 	m.Status.Error = ""
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)

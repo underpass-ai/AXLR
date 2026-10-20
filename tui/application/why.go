@@ -52,7 +52,7 @@ func languageGuidance(language string) string {
 // times, each refused as "arguments must match its schema" without naming
 // the field, and the tool was never created: a forge is a write, so it
 // takes the why every write takes.
-var whyTools = map[root.ToolName]bool{"local_write": true, "local_edit": true, "local_exec": true, HostCallToolName: true, HostRunToolName: true, HostForgeToolName: true, HostRemoveToolName: true, HostInstallToolName: true}
+var whyTools = map[root.ToolName]bool{"local_write": true, "local_edit": true, "local_exec": true, HostCallToolName: true, HostRunToolName: true, HostForgeToolName: true, HostRemoveToolName: true, HostInstallToolName: true, HostPublishToolName: true}
 
 // whyTolerated are the local reads, which need no why but accept one: on
 // 13 October 2026 claude-haiku-5.5, told to give its writes and commands

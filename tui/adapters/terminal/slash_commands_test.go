@@ -427,3 +427,31 @@ func TestSlashHelpOpensTheHelp(t *testing.T) {
 		}
 	}
 }
+
+// ↑ recalls the slash commands typed in this console, after the session's
+// prompts (20 October 2026: /tools publish had to be typed again each time).
+func TestUpRecallsSlashCommands(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	for _, command := range []string{"/usage", "/help", "/help"} {
+		m.Composer.Input.SetValue(command)
+		next, _ := m.Update(ControlIntent("send"))
+		m = next.(AppModel)
+		m.overlay = ""
+	}
+	m.Composer.Input.Reset()
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	m = next.(AppModel)
+	if got := m.Composer.Input.Value(); got != "/help" {
+		t.Fatalf("↑ recalled %q", got)
+	}
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
+	m = next.(AppModel)
+	if got := m.Composer.Input.Value(); got != "/usage" {
+		t.Fatalf("a second ↑ recalled %q (a repeated command is kept once)", got)
+	}
+	m.resetPromptHistory()
+	if n := len(m.promptHistory); n == 0 || m.promptHistory[n-1] != "/help" {
+		t.Fatalf("a new session's history dropped the commands: %q", m.promptHistory)
+	}
+}

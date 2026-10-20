@@ -13,6 +13,9 @@ type headAdmission struct {
 	// Forge checks forged-tool calls before their card; nil leaves that to
 	// the host tool.
 	Forge ForgedToolsPort
+	// Publisher checks axlr_publish_tool before its card; nil leaves that
+	// to the host tool.
+	Publisher ToolPublisherPort
 	// TurnLimit is the turn's tool-call budget; zero means
 	// domain.MaxTurnToolCalls.
 	TurnLimit int

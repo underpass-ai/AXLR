@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -63,4 +64,29 @@ func forgeCardOf(program string, args []string, description string, inputSchema 
 func savesAlwaysAllow(snapshot []domain.AvailableTool, p domain.PendingTool) bool {
 	tool, _, known, err := application.ResolveToolCall(snapshot, p.Call)
 	return known && err == nil && tool.Identity.Kind != domain.ToolKindHost
+}
+
+// publishApprovalCard says what an axlr_publish_tool approval sends and where,
+// with the model's why first: a publication leaves the workspace, so the
+// person reads it before the upload, autonomy included.
+func publishApprovalCard(arguments root.JSONValue, theme Theme) string {
+	var call struct {
+		Name    string `json:"name"`
+		Version string `json:"version"`
+		Catalog string `json:"catalog"`
+	}
+	_ = json.Unmarshal(arguments.Bytes(), &call)
+	what := call.Name + "@" + call.Version
+	if call.Version == "" {
+		what = call.Name + " (" + theme.T("approval.publishDefaultVersion") + ")"
+	}
+	where := call.Catalog
+	if where == "" {
+		where = theme.T("approval.publishDefaultCatalog")
+	}
+	text := theme.Tf("approval.publishCard", what, where)
+	if why := application.CallWhy(arguments); why != "" {
+		text = theme.Tf("approval.why", strings.ReplaceAll(why, "\n", " ")) + "\n\n" + text
+	}
+	return text
 }

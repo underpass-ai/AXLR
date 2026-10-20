@@ -75,7 +75,7 @@ func (m AppModel) activePlans() []domain.PlanRecord {
 
 func (m AppModel) openPlanPanel() AppModel {
 	m = m.loadPlans()
-	m.Info = NewTranscript()
+	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(max(1, h-2))

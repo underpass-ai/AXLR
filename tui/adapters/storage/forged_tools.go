@@ -211,6 +211,13 @@ func (s *ForgedToolStore) Verify(ctx context.Context, workspace string, tool app
 	}
 	sort.Strings(names)
 	for _, name := range names {
+		if name == application.PublishTestsFile || name == application.PublishCatalogFile {
+			// The registry's test cases and the catalog block are publishing
+			// data beside the tool, never part of what runs; /tools publish
+			// writes catalog.json. On 20 October 2026 a publish saved it and
+			// the tool, forged with it, could no longer run or be published.
+			continue
+		}
 		data, err := root.ReadFile(path.Join(application.ForgedToolsDir, tool.Name, name))
 		if err != nil {
 			return fmt.Errorf("forged tool %q is missing %s; forge it again or remove it with axlr_remove_tool", tool.Name, name)

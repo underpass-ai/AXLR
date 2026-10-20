@@ -241,3 +241,31 @@ func TestForgedToolStoreReadsAndWritesToolFiles(t *testing.T) {
 		t.Fatalf("catalog.json became a tool file: %v", stored.Files)
 	}
 }
+
+// tests.json and catalog.json are publishing data, not what runs: /tools
+// publish rewrites catalog.json, and on 20 October 2026 the tool forged
+// with it could no longer run or be published.
+func TestForgedToolStoreDoesNotVerifyThePublishingFiles(t *testing.T) {
+	workspace := t.TempDir()
+	store := &ForgedToolStore{Dir: t.TempDir()}
+	ctx := context.Background()
+	stored, _, err := store.Forge(ctx, workspace, forgedTool("echo_it"), []application.ForgedFile{{Path: "run.sh", Content: "cat"}, {Path: "tests.json", Content: "[]"}, {Path: "catalog.json", Content: "{}"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(workspace, ".axlr", "tools", "echo_it")
+	for _, name := range []string{"tests.json", "catalog.json"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(`{"changed":true}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.Verify(ctx, workspace, stored); err != nil {
+		t.Fatalf("a publishing file blocked the tool: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "run.sh"), []byte("rm -rf"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Verify(ctx, workspace, stored); err == nil || !strings.Contains(err.Error(), "changed since it was forged") {
+		t.Fatalf("a changed program passed: %v", err)
+	}
+}
