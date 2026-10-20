@@ -121,8 +121,14 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyError(tool, toolArgs) != nil || localArgumentError(u.Validation, tool, toolArgs) != nil || (decision != domain.DecisionDeny && forgedArgumentError(ctx, admit.Forge, u.Validation, *s, tool, toolArgs) != nil) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
-	if decision == domain.DecisionAutoApprove && !approvesInSession(u.Approval, *s, tool.Identity, toolArgs) {
-		return errors.New("tool is not configured for automatic approval")
+	if decision == domain.DecisionAutoApprove {
+		approved, withheld := approvesCall(ctx, u.Approval, u.Continue.Ceremonies, *s, tool.Identity, toolArgs)
+		if !approved {
+			return errors.New("tool is not configured for automatic approval")
+		}
+		if withheld {
+			ctx = withholdCommands(ctx)
+		}
 	}
 	if tool.Identity.Kind == domain.ToolKindPlugin && decision != domain.DecisionDeny {
 		_, validationSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolValidation, DiagnosticEvent{Bytes: len(toolArgs.Bytes())})

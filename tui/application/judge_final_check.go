@@ -134,13 +134,16 @@ const finalCheckQuestion = "Does `answer` complete what `request` asks? Judge on
 // reaches the person as a reply, so the note asks for one written to the
 // person that never mentions the check: on 14 October 2026 glm-5.3-flash
 // answered the note itself ("La respuesta está completa; no falta nada por
-// hacer") and the person read it as a second reply.
+// hacer") and the person read it as a second reply. On 20 October 2026 an
+// answer that asked the person for the venv to use got 45%, and the
+// follow-up ran find over the whole home directory and other sessions'
+// scratchpads looking for one: what only the person knows is asked for.
 func finalCheckNote(yes float64, left int) root.Text {
 	calls := fmt.Sprintf("%d tool calls", left)
 	if left == 1 {
 		calls = "1 tool call"
 	}
-	return root.Text(fmt.Sprintf("%s An independent check that saw only the person's request, your last answer and the tool activity estimates a %.0f%% probability that your answer completes the request. If something the person asked is still missing, do it now (this request has %s left) and then tell the person what changed. Never repeat a call the person denied or cancelled: that was their decision. If nothing is missing, tell the person so in one sentence. Write to the person, not to this check, and do not mention it.", jevFinalPrefix, yes*100, calls))
+	return root.Text(fmt.Sprintf("%s An independent check that saw only the person's request, your last answer and the tool activity estimates a %.0f%% probability that your answer completes the request. If something the person asked is still missing, do it now (this request has %s left) and then tell the person what changed. Never repeat a call the person denied or cancelled: that was their decision. If what is missing can only come from the person (a path, a choice, a credential), ask them for it in one sentence instead of guessing or searching outside the workspace. If nothing is missing, tell the person so in one sentence. Write to the person, not to this check, and do not mention it.", jevFinalPrefix, yes*100, calls))
 }
 
 // personDecided reports a request in which the person denied or cancelled

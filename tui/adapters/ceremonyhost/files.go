@@ -67,6 +67,12 @@ func (f Files) Read(ctx context.Context, path string, maxBytes int) ([]byte, boo
 			if result.Error.Code == "not_found" {
 				return nil, false, nil
 			}
+			if result.Error.Code == "invalid_text" {
+				// On 20 October 2026 a plan task blocked at start because an
+				// untracked __pycache__/*.pyc was refused as text and the
+				// code was dropped here; the console digests it as opaque.
+				return nil, false, fmt.Errorf("read %s: %s: %w", path, result.Error.Message, application.ErrNotText)
+			}
 			return nil, false, fmt.Errorf("read %s: %s", path, result.Error.Message)
 		}
 		var page struct {

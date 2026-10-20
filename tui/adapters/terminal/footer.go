@@ -47,7 +47,7 @@ func (m AppModel) hintRow() string {
 		}
 		hints = append(hints, footerHint{"continue", "ctrl+r", label})
 	}
-	if count := len(m.Changes.files); count > 0 {
+	if count := m.Changes.changedFiles(); count > 0 {
 		// Files, as /changes lists them: on 10 October 2026 the hint read
 		// "4 changes" for four edits to two files.
 		label := m.Theme.Tn("changes.files", count, count)

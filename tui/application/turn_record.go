@@ -350,6 +350,10 @@ func actionTarget(call root.ToolCall) string {
 // it. On 14 October 2026 the final check took every result holding
 // `"error"` for a failure, `"error":null` included, and Jev doubted three
 // of four correct answers.
+// runtimeStatuses are the statuses of the runtime's envelope (runtime
+// executor and codec, domain faults); any other status is a host tool's.
+var runtimeStatuses = map[string]bool{"completed": true, "failed": true, "rejected": true, "cancelled": true, "timed_out": true}
+
 func classifyOutcome(result string) (outcome, reason string) {
 	switch {
 	case result == "":
@@ -383,6 +387,25 @@ func classifyOutcome(result string) (outcome, reason string) {
 		}
 		if json.Unmarshal([]byte(result), &host) == nil && host.Error != "" {
 			return turnError, excerpt(host.Error, 200)
+		}
+		return turnCompleted, ""
+	}
+	if envelope.Status != "" && !runtimeStatuses[envelope.Status] {
+		// A host tool's own JSON that carries a status of its own: axlr_remember
+		// answers {"accepted":true,"status":"committed"} and axlr_repair
+		// {"accepted":true,"status":"queued"}. On 20 October 2026 /session
+		// showed a committed memory as "error (committed)", and the legacy
+		// final check told Jev the call had failed.
+		var host struct {
+			Error    string `json:"error"`
+			Accepted *bool  `json:"accepted"`
+		}
+		_ = json.Unmarshal([]byte(result), &host)
+		switch {
+		case host.Error != "":
+			return turnError, excerpt(host.Error, 200)
+		case host.Accepted != nil && !*host.Accepted:
+			return turnError, envelope.Status
 		}
 		return turnCompleted, ""
 	}

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -328,5 +329,91 @@ func TestAPlanBriefSaysItIsABriefOnThePersonsMessage(t *testing.T) {
 	}
 	if record := BuildTurnRecord(s, 0, 1, "project:x", nil); record.Prompt != "Add LineCount with its test" {
 		t.Fatalf("record prompt %q", record.Prompt)
+	}
+}
+
+// On 20 October 2026 two citations of the 12-line test_calc.py put the same
+// "--- test_calc.py:1-12 ---" excerpt in a task's pack twice. Regions of one
+// file are merged where they overlap or touch; distant ones stay apart.
+func TestPlanPacksQuoteEachCitedLineOnce(t *testing.T) {
+	short := "import unittest\nfrom calc import add, sub\n\n\nclass TestCalc(unittest.TestCase):\n    def test_add(self):\n        self.assertEqual(add(2, 3), 5)\n\n    def test_sub(self):\n        self.assertEqual(sub(5, 3), 2)\n\n\n"
+	var long strings.Builder
+	for i := 1; i <= 100; i++ {
+		fmt.Fprintf(&long, "line number %03d of the long file\n", i)
+	}
+	d := &CeremonyDriver{Files: &fakeFiles{files: map[string][]byte{"test_calc.py": []byte(short), "long.txt": []byte(long.String())}}}
+	task := domain.PlanTask{ID: "add-sub-test", Context: []domain.Citation{
+		{Path: "test_calc.py", Line: 7, Quote: "self.assertEqual(add(2, 3), 5)"},
+		{Path: "long.txt", Line: 5, Quote: "line number 005"},
+		{Path: "test_calc.py", Line: 10, Quote: "self.assertEqual(sub(5, 3), 2)"},
+		{Path: "long.txt", Line: 90, Quote: "line number 090"},
+		{Path: "long.txt", Line: 30, Quote: "line number 030"},
+	}}
+	excerpts, problems, err := d.citedExcerpts(context.Background(), task)
+	if err != nil || len(problems) > 0 {
+		t.Fatalf("problems %v err %v", problems, err)
+	}
+	var heads []string
+	for _, excerpt := range excerpts {
+		heads = append(heads, strings.SplitN(excerpt, "\n", 2)[0])
+	}
+	// long.txt 5 → 1-25 and 30 → 10-50 overlap; 90 → 70-100 stays apart.
+	if got := strings.Join(heads, " | "); got != "--- test_calc.py:1-12 --- | --- long.txt:1-50 --- | --- long.txt:70-100 ---" {
+		t.Fatalf("excerpts %s", got)
+	}
+	if !strings.HasSuffix(excerpts[1], "line number 050 of the long file") || strings.Count(excerpts[1], "line number 010") != 1 {
+		t.Fatalf("merged excerpt:\n%s", excerpts[1])
+	}
+}
+
+// On 20 October 2026 the person approved the card of a plan's check commands
+// twice, and each time the console then refused the plan for a defect found
+// without running anything: a test-first task with only tests in its scope,
+// then a citation of the wrong line. Such a hand-back goes back to the
+// planner without a card and runs nothing; a sound plan keeps its card.
+func TestADefectivePlanGoesBackWithoutTheCommandsCard(t *testing.T) {
+	stepDone, _ := domain.NewHostToolIdentity(domain.HostOperationStepDone)
+	testsOnly := strings.Replace(goodTasks, `"scope":["lines.go","lines_test.go"]`, `"scope":["lines_test.go"],"test_first":true`, 1)
+	wrongLine := strings.Replace(goodTasks, `"line":8`, `"line":7`, 1)
+	for name, tasks := range map[string]string{"test-first over tests only": testsOnly, "wrong line": wrongLine} {
+		d, _, _, _, s := planDriver(t)
+		if err := s.BeginTurn("planifica", append(turnTools(), HostTools()...)); err != nil {
+			t.Fatal(err)
+		}
+		handBack := root.ToolCall{ID: "decompose-1", Name: HostStepDoneName, Arguments: mustObject(t, planArgs(t, tasks))}
+		if err := s.CompleteAssistant(assistant("", handBack)); err != nil {
+			t.Fatal(err)
+		}
+		if approved, withheld := approvesCall(context.Background(), nil, d, s, stepDone, handBack.Arguments); !approved || !withheld {
+			t.Fatalf("%s: the defective plan raised the commands card", name)
+		}
+		store := &memoryStore{}
+		u := ResolveToolUseCase{Store: store, Continue: ContinueTurnUseCase{Store: store, Ceremonies: d}}
+		if err := u.resolveOne(context.Background(), &s, "decompose-1", domain.DecisionAutoApprove, ignoreEvent); err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if run, live := s.Ceremony(); !live || run.Step != "decompose" || run.Iteration != 2 || len(run.Plan.Defects) == 0 || len(run.Approved) != 0 {
+			t.Fatalf("%s: the plan did not go back with its defects: %+v", name, run)
+		}
+		if runs := d.Checks.(*fakeChecks).runs; len(runs) != 0 {
+			t.Fatalf("%s: a command ran without the person: %v", name, runs)
+		}
+	}
+	d, _, _, _, s := planDriver(t)
+	if approved, _ := approvesCall(context.Background(), nil, d, s, stepDone, mustObject(t, planArgs(t, goodTasks))); approved {
+		t.Fatal("a sound plan's commands skipped the card")
+	}
+}
+
+// A plan approved without a card because it looked defective must not run
+// its commands if it passes when decompose reads the workspace again.
+func TestAPlanApprovedAsDefectiveRunsNoCommandIfItPasses(t *testing.T) {
+	d, _, _, _, s := planDriver(t)
+	result, err := d.StepDone(withholdCommands(context.Background()), s, mustObject(t, planArgs(t, goodTasks)))
+	if err != nil || !strings.Contains(string(result.Outcome.Content), "workspace changed") {
+		t.Fatalf("outcome %s err %v", result.Outcome.Content, err)
+	}
+	if runs := d.Checks.(*fakeChecks).runs; len(runs) != 0 {
+		t.Fatalf("a command ran without the person: %v", runs)
 	}
 }

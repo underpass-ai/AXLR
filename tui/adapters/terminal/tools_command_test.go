@@ -290,3 +290,39 @@ func TestTheInstallCardShowsTheFilesBeforeApproval(t *testing.T) {
 		t.Fatalf("failed staging: %s", m.Approval.Details.Text())
 	}
 }
+
+// A on the install card installs the tool the card showed. On 20 October
+// 2026 a review found that the approval staged the call again from the
+// shared cache, which another console may refresh in between: here the
+// index now has 1.1.0 instead of the 1.0.0 on the card, and nothing is
+// installed rather than a version the person never saw.
+func TestApprovingTheInstallCardInstallsWhatItShowed(t *testing.T) {
+	forge, catalog := &forgeFake{}, newCatalogFake("business_days")
+	s := navSession(t)
+	args, _ := root.NewJSONValue([]byte(`{"name":"business_days"}`))
+	schema, _ := root.NewJSONValue([]byte(`{"type":"object"}`))
+	s.BeginTurn("install", []domain.AvailableTool{{Definition: root.ToolDefinition{Name: application.HostInstallToolName, Description: "install", Parameters: schema}, Identity: domain.ToolIdentity{Kind: domain.ToolKindHost, LocalOperation: domain.HostOperationInstallTool}}})
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "one", Name: application.HostInstallToolName, Arguments: args}}}}); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	defer m.zones.Close()
+	m.deps.ToolCatalog = application.CatalogUseCase{Catalog: catalog, Forge: forge}
+	m.deps.Resolve.Store = m.deps.Store
+	m.deps.Resolve.Continue.Forge, m.deps.Resolve.Continue.Catalog = forge, catalog
+	m.deps.Resolve.Continue.Models = navStream{}
+	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 40})
+	m.installStagedCall, m.installStaged = "", nil
+	stage := m.stageInstallCard()
+	m = update(m, stage())
+	if call, card, shown := m.shownInstall(); !shown || call != "one" || card.Key() != "axlr/business_days@1.0.0" {
+		t.Fatalf("card = %v %s %v", shown, card.Key(), call)
+	}
+	catalog.index.Tools[0].Version = "1.1.0"
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
+	m = drain(t, next.(AppModel), cmd)
+	activity := m.deps.Session.Export().Activity
+	if len(activity) != 1 || activity[0].Outcome == nil || !activity[0].Outcome.IsError || !strings.Contains(string(activity[0].Outcome.Content), "the card showed axlr/business_days@1.0.0, which cannot be installed now") || len(forge.tools) != 0 {
+		t.Fatalf("error %q, activity %+v, installed %+v", m.Status.Error, activity, forge.tools)
+	}
+}

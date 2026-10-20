@@ -518,7 +518,8 @@ func (c *Catalog) installedPackage(id string) (string, manifest, error) {
 // Update replaces an installed package with a fresh copy of the source it
 // was added from. The new copy is complete before the old one moves aside,
 // and any failure puts the old copy and its MCP registrations back. Each
-// server keeps its approval; its environment comes from the new package.
+// server that survives the update keeps its approval and the literal
+// environment values the person set (keptEnvironment).
 func (c *Catalog) Update(ctx context.Context, id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -584,21 +585,49 @@ func (c *Catalog) Update(ctx context.Context, id string) error {
 	if len(definitions) > 0 && c.MCP == nil {
 		return undo(errors.New("AXLR MCP installer is unavailable"))
 	}
-	approvals := map[string]domain.ApprovalMode{}
+	previous := map[string]application.PackageServer{}
 	for _, server := range removed {
-		approvals[server.ID.String()] = server.Approval
+		previous[server.ID.String()] = server
 	}
 	for _, definition := range definitions {
-		approval := domain.ApprovalManual
-		if manifest, err := plugins.LoadManifest(definition.Path); err == nil && approvals[manifest.ID.String()] != "" {
-			approval = approvals[manifest.ID.String()]
+		approval, env := domain.ApprovalManual, definition.Env
+		if manifest, err := plugins.LoadManifest(definition.Path); err == nil {
+			if server, found := previous[manifest.ID.String()]; found {
+				approval = server.Approval
+				env = keptEnvironment(definition, server.Env)
+			}
 		}
-		if err := c.registerServer(ctx, definition.Path, definition.EnvFrom, definition.Env, approval); err != nil {
+		if err := c.registerServer(ctx, definition.Path, definition.EnvFrom, env, approval); err != nil {
 			return undo(err)
 		}
 	}
 	_ = os.RemoveAll(old)
 	return nil
+}
+
+// keptEnvironment is a surviving server's literal environment after an
+// update: the new package's values, and the person's for every key the new
+// package neither sets nor takes from the host. On 20 October 2026 a review
+// found that an update registered the new package's environment alone, so
+// a value set by hand in the MCP configuration was lost although
+// PackageServer promised to restore it. The configuration does not say
+// who set a value, so a literal an older version set and the new one no
+// longer names is kept too; it reaches only that package's server.
+func keptEnvironment(definition mcpDefinition, previous map[string]string) map[string]string {
+	env := make(map[string]string, len(definition.Env)+len(previous))
+	for key, value := range previous {
+		if _, packaged := definition.Env[key]; packaged {
+			continue
+		}
+		if _, resolved := definition.EnvFrom[key]; resolved {
+			continue
+		}
+		env[key] = value
+	}
+	for key, value := range definition.Env {
+		env[key] = value
+	}
+	return env
 }
 
 // Uninstall removes an installed package: its MCP registrations leave the

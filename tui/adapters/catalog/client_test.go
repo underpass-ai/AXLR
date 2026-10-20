@@ -116,6 +116,49 @@ func TestClientFetchesVerifiesAndCachesTheIndex(t *testing.T) {
 	}
 }
 
+// A validly signed index generated before the cached one is refused and
+// the cached one kept; the same time again, or a later one, is read. On 20
+// October 2026 a review found that a replayed old index was accepted, and
+// with it the versions the catalog had withdrawn since.
+func TestClientRefusesAnIndexOlderThanTheCachedOne(t *testing.T) {
+	server := serveCatalog(t)
+	client := server.client(t)
+	states, err := client.Catalogs(context.Background(), false)
+	if err != nil || states[0].Index == nil || states[0].Warning != "" {
+		t.Fatalf("states = %+v, %v", states, err)
+	}
+	current := states[0].Index.GeneratedAt
+	cachedPath := filepath.Join(client.Dir, "axlr", "index.json")
+	cachedBytes, err := os.ReadFile(cachedPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := string(server.index)
+	serve := func(generatedAt string) {
+		server.index = []byte(strings.Replace(original, `"generated_at": "`+current+`"`, `"generated_at": "`+generatedAt+`"`, 1))
+		if generatedAt != current && string(server.index) == original {
+			t.Fatalf("the index names no generated_at %s", current)
+		}
+		server.signature = Sign(server.private, server.key.ID, server.index, "timestamp:1760000000\tfile:index.json", true)
+	}
+	serve("2026-01-01T00:00:00Z")
+	states, _ = client.Catalogs(context.Background(), true)
+	if states[0].Index == nil || states[0].Index.GeneratedAt != current || !strings.Contains(states[0].Warning, "before the cached one") {
+		t.Fatalf("older index accepted: %+v", states[0])
+	}
+	if now, err := os.ReadFile(cachedPath); err != nil || string(now) != string(cachedBytes) {
+		t.Fatalf("the cache changed: %v", err)
+	}
+	serve(current)
+	if states, _ = client.Catalogs(context.Background(), true); states[0].Index == nil || states[0].Warning != "" {
+		t.Fatalf("the same index again refused: %+v", states[0])
+	}
+	serve("2099-01-01T00:00:00Z")
+	if states, _ = client.Catalogs(context.Background(), true); states[0].Index == nil || states[0].Warning != "" || states[0].Index.GeneratedAt != "2099-01-01T00:00:00Z" {
+		t.Fatalf("newer index refused: %+v", states[0])
+	}
+}
+
 // A catalog without a key, with a bad key or off https is never read.
 func TestClientRefusesKeylessAndInsecureCatalogs(t *testing.T) {
 	server := serveCatalog(t)

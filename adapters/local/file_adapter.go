@@ -124,7 +124,17 @@ func (a *FileAdapter) Replace(path domain.RelativePath, content []byte, permissi
 }
 
 func (a *FileAdapter) publish(path domain.RelativePath, content []byte, mode os.FileMode, create bool) error {
-	dir, err := a.root.OpenRoot(filepath.Dir(string(path)))
+	parent := filepath.Dir(string(path))
+	dir, err := a.root.OpenRoot(parent)
+	if create && errors.Is(err, os.ErrNotExist) {
+		// A new file's missing directories are created inside the root, which
+		// keeps them in the workspace. On 20 October 2026 creating
+		// notas/2026-10-20.md failed, and the model spent a read and a
+		// mkdir -p before writing it again.
+		if err = a.root.MkdirAll(parent, 0o755); err == nil {
+			dir, err = a.root.OpenRoot(parent)
+		}
+	}
 	if err != nil {
 		return fileError(err)
 	}

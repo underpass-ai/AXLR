@@ -319,8 +319,12 @@ func (s *ForgedToolStore) WriteToolFile(ctx context.Context, workspace, tool, fi
 	return root.WriteFile(path.Join(dir, file), data, 0o644)
 }
 
+// checkToolFileName accepts a bare file name in a tool's own directory.
+// On 20 October 2026 a review found that the tool name "." or ".." passed
+// as clean and slash-free, so WriteToolFile wrote into .axlr/tools/ or
+// .axlr/ itself; neither is a tool's directory.
 func checkToolFileName(tool, file string) error {
-	if tool == "" || file == "" || path.Clean(tool) != tool || path.Clean(file) != file || strings.ContainsAny(tool+file, `/\`) || file == "." || file == ".." {
+	if tool == "" || file == "" || path.Clean(tool) != tool || path.Clean(file) != file || strings.ContainsAny(tool+file, `/\`) || tool == "." || tool == ".." || file == "." || file == ".." {
 		return fmt.Errorf("%q is not a bare file name of tool %q", file, tool)
 	}
 	return nil

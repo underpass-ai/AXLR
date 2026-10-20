@@ -42,8 +42,12 @@ func (m AppModel) approveAll() (tea.Model, tea.Cmd) {
 		}
 	}
 	resolve := m.deps.Resolve
+	// The card on screen is the first call's: an install there writes the
+	// tool the card showed.
+	cardCall, card, shown := m.shownInstall()
 	m.resumeTurnClock()
 	cmd := m.BeginOperation(func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+		ctx = withShownInstall(ctx, cardCall, card, shown)
 		for s.Status() == domain.StatusApproval {
 			pending := s.Pending()
 			if len(pending) == 0 || !batch[pending[0].Call.ID] {

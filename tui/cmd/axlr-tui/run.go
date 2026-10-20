@@ -392,9 +392,20 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
+	// An entry whose manifest cannot be loaded is left out, said on the
+	// console and in the log, so /plugin can remove or update its package.
+	var startupWarnings []string
+	for _, line := range persisted.Unreadable {
+		fmt.Fprintln(stderr, "axlr-tui:", line)
+		startupWarnings = append(startupWarnings, line)
+	}
 	if settings.EnginesRequired() {
 		if missing := missingEngines(persisted.Registrations); len(missing) > 0 {
-			return fail(fmt.Errorf("%s required to start and not connected (settings engines.required): run axlr-tui setup, or set engines.required to false in %s", strings.Join(missing, " and "), settingsPath))
+			err := fmt.Errorf("%s required to start and not connected (settings engines.required): run axlr-tui setup, or set engines.required to false in %s", strings.Join(missing, " and "), settingsPath)
+			if len(persisted.Unreadable) > 0 {
+				err = fmt.Errorf("%w; %s", err, strings.Join(persisted.Unreadable, "; "))
+			}
+			return fail(err)
 		}
 	}
 	registrations, err := pluginRegistrations(paths, selections, getenv, locals.keyEnvs)
@@ -617,7 +628,6 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		kmpMemory = &memory
 		sessionCeremony.Identity = &application.MemoryIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewMemoryAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: memory, Recall: memory, UserAbout: userAbout(getenv)}
 	}
-	var startupWarnings []string
 	if ceremonies != nil {
 		sessionCeremony.Engine = ceremonies.Engine
 		if journal, ok := ceremonies.Memory.(application.JournalPort); ok {

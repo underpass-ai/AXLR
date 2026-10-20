@@ -615,6 +615,19 @@ func (t Theme) reviewLine(text, color string) string {
 	return lipgloss.NewStyle().Foreground(lipgloss.Color(color)).Background(lipgloss.Color(t.palette().Background)).Render(text)
 }
 
+// changedFiles counts the files whose net change is not empty: a file an
+// /undo put back keeps its steps in the list, but on 20 October 2026 the
+// footer read "ctrl+d 2 files" with one of them at +0 -0.
+func (v ChangeViewer) changedFiles() int {
+	count := 0
+	for _, f := range v.files {
+		if f.Net.Created || f.Net.Unavailable != "" || f.Net.Before != f.Net.After {
+			count++
+		}
+	}
+	return count
+}
+
 // countLine reads "2 files · 3 changes", with singular forms.
 func (v ChangeViewer) countLine() string {
 	files, changes := v.Theme.Tn("changes.files", len(v.files), len(v.files)), v.Theme.Tn("changes.changes", len(v.records), len(v.records))

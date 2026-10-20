@@ -208,3 +208,78 @@ func TestRestoreOfAMissingFileIsRefusedInThePersonsLanguage(t *testing.T) {
 		t.Fatalf("error %q", m.Status.Error)
 	}
 }
+
+type forgetStub struct{ requests []application.ForgetRequest }
+
+func (f *forgetStub) Forget(_ context.Context, r application.ForgetRequest) (application.ForgetReceipt, error) {
+	f.requests = append(f.requests, r)
+	return application.ForgetReceipt{Ref: r.Ref}, nil
+}
+
+// rememberModel has one turn that wrote a.go and recorded a memory.
+func rememberModel(t *testing.T) (AppModel, fakeFiles, *forgetStub) {
+	t.Helper()
+	s := navSession(t)
+	schema, _ := root.NewJSONValue([]byte(`{"type":"object"}`))
+	tools := []domain.AvailableTool{
+		{Definition: root.ToolDefinition{Name: "local_write", Description: "write", Parameters: schema}, Identity: domain.ToolIdentity{Kind: domain.ToolKindLocal, LocalOperation: "write"}},
+		{Definition: root.ToolDefinition{Name: application.HostRememberName, Description: "remember", Parameters: schema}, Identity: domain.ToolIdentity{Kind: domain.ToolKindHost, LocalOperation: domain.HostOperationRemember}},
+	}
+	if err := s.BeginTurn("rename it", tools); err != nil {
+		t.Fatal(err)
+	}
+	write, _ := root.NewJSONValue([]byte(`{"path":"a.go","content":"x"}`))
+	remember, _ := root.NewJSONValue([]byte(`{"kind":"decision","text":"Renamed one to two"}`))
+	calls := []root.ToolCall{{ID: "w1", Name: "local_write", Arguments: write}, {ID: "r1", Name: application.HostRememberName, Arguments: remember}}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: calls}}); err != nil {
+		t.Fatal(err)
+	}
+	change := domain.FileChange{Path: "a.go", Before: "one\n", After: "two\n"}
+	if err := s.RecordToolOutcome("w1", domain.DecisionApprove, domain.ToolOutcome{Content: "{}", Change: &change}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordToolOutcome("r1", domain.DecisionApprove, domain.ToolOutcome{Content: `{"accepted":true,"status":"committed","ref":"project:x:entry:decision:renamed"}`}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "done"}}); err != nil {
+		t.Fatal(err)
+	}
+	m := navModel(t, &s)
+	files := fakeFiles{"a.go": "two\n"}
+	m.deps.Start = application.StartTurnUseCase{Store: m.deps.Store, Tools: files}
+	forget := &forgetStub{}
+	m.deps.MemoryForget = forget
+	m = update(m, tea.WindowSizeMsg{Width: 120, Height: 30})
+	return m, files, forget
+}
+
+// On 20 October 2026 /undo put calc.py back while the turn's memory of the
+// rename stayed current: /undo now offers f, which also closes the turn's
+// memories, and y says which memory stays.
+func TestUndoOffersToCloseTheTurnsMemories(t *testing.T) {
+	m, files, forget := rememberModel(t)
+	defer m.zones.Close()
+	m.Composer.Input.SetValue("/undo")
+	m = update(m, ControlIntent("send"))
+	if !strings.Contains(m.Status.Notice, "y restores · f restores and closes the memory it recorded · any other key keeps it") {
+		t.Fatalf("notice %q", m.Status.Notice)
+	}
+	next, cmd := m.Update(typed('f'))
+	m = drain(t, next.(AppModel), cmd)
+	if files["a.go"] != "one\n" || len(forget.requests) != 1 || forget.requests[0].Ref != "project:x:entry:decision:renamed" || forget.requests[0].Command != "/undo" {
+		t.Fatalf("files %v, forget %+v", files, forget.requests)
+	}
+	if !strings.Contains(m.Status.Notice, "closed the memory it recorded") {
+		t.Fatalf("notice %q", m.Status.Notice)
+	}
+
+	m, files, forget = rememberModel(t)
+	defer m.zones.Close()
+	m.Composer.Input.SetValue("/undo")
+	m = update(m, ControlIntent("send"))
+	next, cmd = m.Update(typed('y'))
+	m = drain(t, next.(AppModel), cmd)
+	if files["a.go"] != "one\n" || len(forget.requests) != 0 || !strings.Contains(m.Status.Notice, "its memory stays: /memory forget project:x:entry:decision:renamed") {
+		t.Fatalf("files %v, forget %+v, notice %q", files, forget.requests, m.Status.Notice)
+	}
+}
