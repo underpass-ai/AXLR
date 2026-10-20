@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -463,5 +464,45 @@ func TestForgedCallsTheConsoleWouldRefuseAreRefusedBeforeTheCard(t *testing.T) {
 				t.Fatalf("not refused before the card with %q: %+v", test.want, refused)
 			}
 		})
+	}
+}
+
+// On 20 October 2026 claude-haiku-5.5 sent axlr_forge_tool a why eight
+// times, each refused as "arguments must match its schema" without naming
+// the field: the forge, remove and install tools accept a why (their
+// schemas offer it), and a field they do not know is named in the refusal.
+func TestForgeAcceptsAWhyAndNamesAnUnknownField(t *testing.T) {
+	forged := &forgedMemory{}
+	var args map[string]any
+	if err := json.Unmarshal([]byte(forgeArguments), &args); err != nil {
+		t.Fatal(err)
+	}
+	args["why"] = "Crear la herramienta de alarma de costes que pidió la persona."
+	encoded, _ := json.Marshal(args)
+	host := HostToolUseCase{Forge: forged}
+	outcome, err := host.Execute(context.Background(), turnSession(t), hostIdentity(t, domain.HostOperationForgeTool), object(t, string(encoded)))
+	if err != nil || outcome.IsError || len(forged.tools) != 1 {
+		t.Fatalf("outcome = %s, %v", outcome.Content, err)
+	}
+	delete(args, "why")
+	args["reason"] = "x"
+	encoded, _ = json.Marshal(args)
+	if _, _, err := parseForge(object(t, string(encoded))); err == nil || !strings.Contains(err.Error(), `unknown field "reason"`) {
+		t.Fatalf("refusal does not name the field: %v", err)
+	}
+	if _, err := decodeInstallRequest(object(t, `{"name":"business_days","why":"instalarla"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := removableError(context.Background(), forged, turnSession(t), object(t, `{"name":"word_count","why":"ya no hace falta"}`)); err != nil && strings.Contains(err.Error(), "must be name") {
+		t.Fatal(err)
+	}
+	for _, tool := range RequireWhy([]domain.AvailableTool{ForgeTool(), RemoveTool()}) {
+		var schema struct {
+			Properties map[string]json.RawMessage `json:"properties"`
+			Required   []string                   `json:"required"`
+		}
+		if json.Unmarshal(tool.Definition.Parameters.Bytes(), &schema) != nil || schema.Properties["why"] == nil || slices.Contains(schema.Required, "why") {
+			t.Fatalf("%s: why must be offered, not required: %s", tool.Definition.Name, tool.Definition.Parameters.Bytes())
+		}
 	}
 }

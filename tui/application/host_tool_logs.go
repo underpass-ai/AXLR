@@ -65,7 +65,7 @@ func hostLogs(ctx context.Context, port AppLogPort, arguments root.JSONValue) (a
 	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&args); err != nil {
-		return nil, errors.New("axlr_logs takes lines, level, contains and all_consoles")
+		return nil, schemaError("axlr_logs takes lines, level, contains and all_consoles", err)
 	}
 	query := AppLogQuery{Lines: 50, Level: "INFO"}
 	if args.Lines != nil {

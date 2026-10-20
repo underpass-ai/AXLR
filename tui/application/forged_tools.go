@@ -109,6 +109,8 @@ type forgeArgs struct {
 	Program     string          `json:"program"`
 	Args        []string        `json:"args"`
 	Files       []ForgedFile    `json:"files"`
+	// Why is accepted and not needed (whyTolerated).
+	Why string `json:"why"`
 }
 
 // parseForge decodes and validates axlr_forge_tool's arguments without
@@ -118,7 +120,7 @@ func parseForge(arguments root.JSONValue) (forgeArgs, []ForgedFile, error) {
 	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&args); err != nil {
-		return args, nil, errors.New("axlr_forge_tool arguments must match its schema: name, description, input_schema, program, args, files")
+		return args, nil, schemaError("axlr_forge_tool arguments must match its schema: name, description, input_schema, program, args, files", err)
 	}
 	files, err := validateForge(args.Name, args.Description, args.InputSchema, args.Program, args.Args, args.Files)
 	return args, files, err
@@ -153,10 +155,13 @@ func (u HostToolUseCase) hostRemove(ctx context.Context, session domain.Session,
 	}
 	var args struct {
 		Name string `json:"name"`
+		Why  string `json:"why"`
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&args); err != nil || args.Name == "" {
+	if err := decoder.Decode(&args); err != nil {
+		return nil, schemaError("axlr_remove_tool arguments must be name", err)
+	} else if args.Name == "" {
 		return nil, errors.New("axlr_remove_tool arguments must be name")
 	}
 	if !forgedToolName.MatchString(args.Name) {
@@ -342,10 +347,13 @@ func forgedArgumentError(ctx context.Context, forge ForgedToolsPort, validation 
 func removableError(ctx context.Context, forge ForgedToolsPort, s domain.Session, arguments root.JSONValue) error {
 	var args struct {
 		Name string `json:"name"`
+		Why  string `json:"why"`
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&args); err != nil || args.Name == "" {
+	if err := decoder.Decode(&args); err != nil {
+		return schemaError("axlr_remove_tool arguments must be name", err)
+	} else if args.Name == "" {
 		return errors.New("axlr_remove_tool arguments must be name")
 	}
 	tools, err := forge.List(ctx, string(s.Export().Workspace))

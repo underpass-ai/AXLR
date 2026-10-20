@@ -58,7 +58,7 @@ func (u HostToolUseCase) hostCatalog(ctx context.Context, session domain.Session
 	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&args); err != nil {
-		return nil, errors.New("axlr_catalog arguments must match its schema: query, name, catalog, limit")
+		return nil, schemaError("axlr_catalog arguments must match its schema: query, name, catalog, limit", err)
 	}
 	if args.Catalog != "" && !catalogName.MatchString(args.Catalog) {
 		return nil, errors.New("catalog must be a configured catalog's name")
@@ -239,10 +239,14 @@ func decodeInstallRequest(arguments root.JSONValue) (InstallRequest, error) {
 		Name    string `json:"name"`
 		Version string `json:"version"`
 		Catalog string `json:"catalog"`
+		// Why is accepted and not needed (whyTolerated).
+		Why string `json:"why"`
 	}
 	decoder := json.NewDecoder(strings.NewReader(string(arguments.Bytes())))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&args); err != nil || args.Name == "" {
+	if err := decoder.Decode(&args); err != nil {
+		return InstallRequest{}, schemaError("axlr_install_tool arguments must be name, with version and catalog optional", err)
+	} else if args.Name == "" {
 		return InstallRequest{}, errors.New("axlr_install_tool arguments must be name, with version and catalog optional")
 	}
 	if !forgedToolName.MatchString(args.Name) {
