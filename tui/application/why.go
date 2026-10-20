@@ -46,17 +46,18 @@ func languageGuidance(language string) string {
 	return "The person's console is in " + name + ": write each call's why in " + name + ".\n"
 }
 
-// whyTools are the tools whose calls carry a why.
-var whyTools = map[root.ToolName]bool{"local_write": true, "local_edit": true, "local_exec": true, HostCallToolName: true, HostRunToolName: true}
+// whyTools are the tools whose calls carry a why: every side effect,
+// including the host tools that write, replace or remove a workspace tool.
+// On 20 October 2026 claude-haiku-5.5 sent axlr_forge_tool a why eight
+// times, each refused as "arguments must match its schema" without naming
+// the field, and the tool was never created: a forge is a write, so it
+// takes the why every write takes.
+var whyTools = map[root.ToolName]bool{"local_write": true, "local_edit": true, "local_exec": true, HostCallToolName: true, HostRunToolName: true, HostForgeToolName: true, HostRemoveToolName: true, HostInstallToolName: true}
 
-// whyTolerated are the tools that need no why but accept one: the local
-// reads (on 13 October 2026 claude-haiku-5.5, told to give its writes and
-// commands a why, gave its reads one too and the read schema refused the
-// call) and the host tools that write a workspace tool. On 20 October 2026
-// claude-haiku-5.5 sent axlr_forge_tool a why eight times in one session,
-// each refused as "arguments must match its schema" without naming the
-// field, and the tool was never created.
-var whyTolerated = map[root.ToolName]bool{"local_read": true, "local_search": true, "local_list": true, HostForgeToolName: true, HostRemoveToolName: true, HostInstallToolName: true}
+// whyTolerated are the local reads, which need no why but accept one: on
+// 13 October 2026 claude-haiku-5.5, told to give its writes and commands
+// a why, gave its reads one too and the read schema refused the call.
+var whyTolerated = map[root.ToolName]bool{"local_read": true, "local_search": true, "local_list": true}
 
 // schemaError is a host tool's refusal of arguments that do not decode,
 // naming what the decoder found (an unknown field, a wrong type), so the
@@ -101,7 +102,7 @@ func withWhy(schema root.JSONValue, required bool) (root.JSONValue, error) {
 	if _, present := properties[WhyArgument]; !present {
 		description := whyDescription
 		if !required {
-			description = "Optional here: this call needs no why."
+			description = "Optional here: reads need no why."
 		}
 		property, _ := json.Marshal(map[string]any{"type": "string", "minLength": 1, "maxLength": WhyMaxRunes, "description": description})
 		properties[WhyArgument] = property

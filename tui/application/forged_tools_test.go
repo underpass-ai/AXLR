@@ -469,9 +469,10 @@ func TestForgedCallsTheConsoleWouldRefuseAreRefusedBeforeTheCard(t *testing.T) {
 
 // On 20 October 2026 claude-haiku-5.5 sent axlr_forge_tool a why eight
 // times, each refused as "arguments must match its schema" without naming
-// the field: the forge, remove and install tools accept a why (their
-// schemas offer it), and a field they do not know is named in the refusal.
-func TestForgeAcceptsAWhyAndNamesAnUnknownField(t *testing.T) {
+// the field: forge, remove and install are writes and take the why every
+// write takes, required by their schemas, and a field they do not know is
+// named in the refusal.
+func TestForgeTakesAWhyAndNamesAnUnknownField(t *testing.T) {
 	forged := &forgedMemory{}
 	var args map[string]any
 	if err := json.Unmarshal([]byte(forgeArguments), &args); err != nil {
@@ -496,13 +497,16 @@ func TestForgeAcceptsAWhyAndNamesAnUnknownField(t *testing.T) {
 	if err := removableError(context.Background(), forged, turnSession(t), object(t, `{"name":"word_count","why":"ya no hace falta"}`)); err != nil && strings.Contains(err.Error(), "must be name") {
 		t.Fatal(err)
 	}
-	for _, tool := range RequireWhy([]domain.AvailableTool{ForgeTool(), RemoveTool()}) {
+	for _, tool := range RequireWhy([]domain.AvailableTool{ForgeTool(), RemoveTool(), InstallTool()}) {
 		var schema struct {
 			Properties map[string]json.RawMessage `json:"properties"`
 			Required   []string                   `json:"required"`
 		}
-		if json.Unmarshal(tool.Definition.Parameters.Bytes(), &schema) != nil || schema.Properties["why"] == nil || slices.Contains(schema.Required, "why") {
-			t.Fatalf("%s: why must be offered, not required: %s", tool.Definition.Name, tool.Definition.Parameters.Bytes())
+		if json.Unmarshal(tool.Definition.Parameters.Bytes(), &schema) != nil || schema.Properties["why"] == nil || !slices.Contains(schema.Required, "why") {
+			t.Fatalf("%s: why must be required: %s", tool.Definition.Name, tool.Definition.Parameters.Bytes())
+		}
+		if err := whyError(tool, object(t, `{"name":"word_count"}`)); err == nil || !strings.Contains(err.Error(), MissingWhy) {
+			t.Fatalf("%s without a why: %v", tool.Definition.Name, err)
 		}
 	}
 }

@@ -26,6 +26,10 @@ func NewApprovalDialog(p domain.PendingTool, target string, theme Theme) Approva
 	if p.Call.Name == application.HostForgeToolName {
 		if readable, ok := forgeCard(p.Call.Arguments.Bytes()); ok {
 			content = readable
+			// The model's reason comes first, as on a file change's card.
+			if why := application.CallWhy(p.Call.Arguments); why != "" {
+				content = theme.Tf("approval.why", strings.ReplaceAll(why, "\n", " ")) + "\n\n" + content
+			}
 		}
 	}
 	if p.Call.Name == application.HostStepDoneName {
