@@ -32,6 +32,9 @@ func NewApprovalDialog(p domain.PendingTool, target string, theme Theme) Approva
 			}
 		}
 	}
+	if p.Call.Name == application.HostPublishToolName {
+		content = publishApprovalCard(p.Call.Arguments, theme)
+	}
 	if p.Call.Name == application.HostStepDoneName {
 		if uses, ok := stepDoneCommands(p.Call.Arguments.Bytes()); ok {
 			content = checkCommandsCard(uses, content, theme)

@@ -114,11 +114,11 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	started := time.Now()
 
 	tool, toolArgs, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending[0].Call)
-	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Continue.Forge, TurnLimit: u.Continue.turnLimit()}
+	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Continue.Forge, Publisher: u.Continue.Publisher, TurnLimit: u.Continue.turnLimit()}
 	if !known || resolveErr != nil || s.HeadOverBudget(admit.turnLimit()) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
-	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyError(tool, toolArgs) != nil || localArgumentError(u.Validation, tool, toolArgs) != nil || (decision != domain.DecisionDeny && forgedArgumentError(ctx, admit.Forge, u.Validation, *s, tool, toolArgs) != nil) {
+	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyError(tool, toolArgs) != nil || localArgumentError(u.Validation, tool, toolArgs) != nil || (decision != domain.DecisionDeny && (forgedArgumentError(ctx, admit.Forge, u.Validation, *s, tool, toolArgs) != nil || publishArgumentError(ctx, admit.Publisher, *s, tool, toolArgs) != nil)) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
 	if decision == domain.DecisionAutoApprove {
@@ -203,7 +203,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			outcome, step = result.Outcome, &result
 		} else if tool.Identity.Kind == domain.ToolKindHost {
 			hostCtx, hostSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolExecution, DiagnosticEvent{Bytes: len(toolArgs.Bytes())})
-			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills, Labels: u.Continue.SessionLabels, Repairs: u.Continue.SelfRepair, Judge: u.Continue.Judge.toolPort(), Windows: u.Continue.Windows, Memory: u.Continue.Remember, Recall: u.Continue.Recall, Forge: u.Continue.Forge, Catalog: u.Continue.Catalog, Tools: u.Tools, Validation: u.Validation, Logs: u.Continue.Logs}).Execute(hostCtx, *s, tool.Identity, toolArgs)
+			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills, Labels: u.Continue.SessionLabels, Repairs: u.Continue.SelfRepair, Judge: u.Continue.Judge.toolPort(), Windows: u.Continue.Windows, Memory: u.Continue.Remember, Recall: u.Continue.Recall, Forge: u.Continue.Forge, Catalog: u.Continue.Catalog, Publisher: u.Continue.Publisher, Tools: u.Tools, Validation: u.Validation, Logs: u.Continue.Logs}).Execute(hostCtx, *s, tool.Identity, toolArgs)
 			class := DiagnosticErrorNone
 			if runErr != nil || outcome.IsError {
 				class = DiagnosticErrorTool

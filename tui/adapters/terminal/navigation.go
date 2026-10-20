@@ -92,6 +92,8 @@ func (m *AppModel) syncApproval() {
 				target = m.Theme.Tf("approval.removeToolTarget", forgedName(p.Call.Arguments.Bytes()))
 			case domain.HostOperationInstallTool:
 				target = m.Theme.Tf("approval.installTarget", forgedName(p.Call.Arguments.Bytes()))
+			case domain.HostOperationPublishTool:
+				target = m.Theme.Tf("approval.publishTarget", forgedName(p.Call.Arguments.Bytes()))
 			}
 		}
 	}

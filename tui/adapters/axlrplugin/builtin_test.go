@@ -8,14 +8,15 @@ import (
 	"testing"
 )
 
-// The console ships no built-in skill since 13 October 2026: the index
-// lists none, the axlr and made namespaces refuse every read and a copied
+// The console's only built-in skill is axlr-publish-tool (since 20 October
+// 2026; axlr-session was retired on 13 October 2026): the index lists no
+// other, the axlr and made namespaces refuse every other read and a copied
 // package cannot pose as one of them.
-func TestBuiltinNamespacesHoldNoSkillAndCannotBeShadowed(t *testing.T) {
+func TestBuiltinNamespacesHoldOnlyThePublishSkillAndCannotBeShadowed(t *testing.T) {
 	catalog := Catalog{Root: t.TempDir()}
 	ctx := context.Background()
 	guidance, err := catalog.Guidance(ctx)
-	if err != nil || strings.Contains(guidance, "axlr:") || strings.Contains(guidance, "axlr-session") || strings.Contains(guidance, "axlr-ceremonies") {
+	if err != nil || strings.Contains(guidance, "axlr:axlr-") || strings.Contains(guidance, "axlr-session") || strings.Contains(guidance, "axlr-ceremonies") {
 		t.Fatalf("built-in skill index: %q %v", guidance, err)
 	}
 	entries, err := os.ReadDir(catalog.Root)
@@ -64,5 +65,26 @@ func TestSkillPagesKeepCharactersWhole(t *testing.T) {
 	}
 	if _, err := skillPage("p", "s", "SKILL.md", data, len(data)+1, 37); err == nil {
 		t.Fatal("an offset past the data was accepted")
+	}
+}
+
+// The console's own publish skill is listed and readable without a copied
+// package (20 October 2026: the agent did not know how to publish a tool).
+func TestThePublishSkillIsBuiltIn(t *testing.T) {
+	index, err := builtinSkillIndex()
+	if err != nil || !strings.Contains(index, "\n- axlr: The console's own skills. axlr-publish-tool (Publish a tool forged") {
+		t.Fatalf("index %q, %v", index, err)
+	}
+	catalog := &Catalog{Root: t.TempDir()}
+	page, err := catalog.ReadSkill(context.Background(), "axlr", "axlr-publish-tool", "SKILL.md", 0, 4096)
+	if err != nil || !strings.Contains(page.Text, "tests.json") || !strings.Contains(page.Text, "axlr_publish_tool") {
+		t.Fatalf("page %+v, %v", page, err)
+	}
+	if _, err := catalog.ReadSkill(context.Background(), "axlr", "axlr-publish-tool", "../builtin.go", 0, 10); err == nil {
+		t.Fatal("a path out of the skill was served")
+	}
+	guidance, err := catalog.Guidance(context.Background())
+	if err != nil || !strings.Contains(guidance, "axlr-publish-tool") {
+		t.Fatalf("guidance %q, %v", guidance, err)
 	}
 }

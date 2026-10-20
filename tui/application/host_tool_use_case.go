@@ -36,6 +36,8 @@ type HostToolUseCase struct {
 	// Catalog serves axlr_catalog and axlr_install_tool with Forge; nil
 	// offers neither.
 	Catalog CatalogPort
+	// Publisher serves axlr_publish_tool; nil offers it not.
+	Publisher ToolPublisherPort
 }
 
 // historyPageLimit is the largest encoded axlr_history page that the
@@ -94,6 +96,8 @@ func (u HostToolUseCase) Execute(ctx context.Context, session domain.Session, id
 		result, err = u.hostCatalog(ctx, session, arguments)
 	case domain.HostOperationInstallTool:
 		result, err = u.hostInstall(ctx, session, arguments)
+	case domain.HostOperationPublishTool:
+		result, err = u.hostPublish(ctx, session, arguments)
 	case domain.HostOperationHistory:
 		result, err = hostHistory(session.Messages(), arguments, u.historyPageLimit(session))
 	case domain.HostOperationSkill:

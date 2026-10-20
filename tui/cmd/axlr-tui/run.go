@@ -751,6 +751,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		// The registry's client identity: one key under the state, signed
 		// requests for /tools enroll and /tools publish.
 		toolCatalogUseCase = application.CatalogUseCase{Catalog: toolCatalog, Forge: forged, Keys: &toolregistry.KeyStore{Dir: filepath.Join(stateBase, "axlr", "registry")}, Registry: &toolregistry.Client{}, Files: forged}
+		// axlr_publish_tool takes the steps /tools publish takes, on a card.
+		continuation.Publisher = toolCatalogUseCase
 	}
 	if _, kmp := activeEngineCommands["kmp"]; kmp {
 		// axlr_remember writes the model's memories in one call;
