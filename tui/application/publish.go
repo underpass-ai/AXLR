@@ -1,11 +1,13 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"path"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -275,7 +277,33 @@ func (u CatalogUseCase) SaveMetadata(ctx context.Context, workspace string, draf
 	if err != nil {
 		return err
 	}
-	return u.Files.WriteToolFile(ctx, workspace, draft.Tool.Name, PublishCatalogFile, append(data, '\n'))
+	data = append(data, '\n')
+	if stored, err := u.Files.ReadToolFile(ctx, workspace, draft.Tool.Name, PublishCatalogFile); err == nil {
+		var kept PublishMetadata
+		if json.Unmarshal(stored, &kept) == nil && reflect.DeepEqual(normalizedMetadata(kept), normalizedMetadata(draft.Metadata)) {
+			// The block the agent forged stays byte for byte as written.
+			return nil
+		}
+	}
+	return u.Files.WriteToolFile(ctx, workspace, draft.Tool.Name, PublishCatalogFile, data)
+}
+
+// normalizedMetadata reads empty and absent lists alike, as catalog.json's
+// readers do.
+func normalizedMetadata(meta PublishMetadata) PublishMetadata {
+	if meta.Tags == nil {
+		meta.Tags = []string{}
+	}
+	if meta.Requires.Packages == nil {
+		meta.Requires.Packages = []string{}
+	}
+	if len(meta.Example) > 0 {
+		var compact bytes.Buffer
+		if json.Compact(&compact, meta.Example) == nil {
+			meta.Example = compact.Bytes()
+		}
+	}
+	return meta
 }
 
 // Bundle builds the signed upload of a draft whose fields are complete:
