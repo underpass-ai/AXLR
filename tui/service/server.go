@@ -26,6 +26,13 @@ type Dependencies struct {
 	Approval   application.ToolApprovalPolicyPort
 	Validation application.ToolArgumentValidationPort
 	Ready      func(context.Context) error
+	// Sessions is the store the loop was composed with (OpenSessions); nil
+	// opens one under the state directory.
+	Sessions *Sessions
+	// Lifecycle runs each session's MADE instance and memory context, as
+	// the console does (decision D4); nil records nothing. CloseSession and
+	// shutdown close the instances it opened.
+	Lifecycle *application.SessionCeremony
 }
 
 type Server struct {
@@ -61,13 +68,13 @@ func NewServer(cfg Config, deps Dependencies) (*Server, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := secureStateDirectory(cfg.StateDir); err != nil {
-		return nil, err
+	sessions := deps.Sessions
+	if sessions == nil {
+		if sessions, err = OpenSessions(cfg); err != nil {
+			return nil, err
+		}
 	}
-	base, err := storage.NewService(filepath.Join(cfg.StateDir, "sessions"))
-	if err != nil {
-		return nil, err
-	}
+	base := sessions.base
 	events, err := newEventStore(filepath.Join(cfg.StateDir, "events"))
 	if err != nil {
 		base.Close()
@@ -92,7 +99,7 @@ func NewServer(cfg Config, deps Dependencies) (*Server, error) {
 		base.Close()
 		return nil, err
 	}
-	wrapped := &sessionStore{next: base}
+	wrapped := sessions.wrapped
 	if err := recoverSessions(wrapped, events); err != nil {
 		audit.Close()
 		base.Close()
@@ -107,6 +114,9 @@ func NewServer(cfg Config, deps Dependencies) (*Server, error) {
 	deps.Start.Continue.Store = wrapped
 	deps.Resolve.Store = wrapped
 	deps.Resolve.Continue.Store = wrapped
+	if deps.Lifecycle != nil {
+		deps.Lifecycle.Store = wrapped
+	}
 	root, stop := context.WithCancel(context.Background())
 	return &Server{Config: cfg, deps: deps, base: base, sessions: wrapped, events: events, keys: keys, calls: calls, audit: audit, principals: policy, operations: map[string]context.CancelFunc{}, locks: map[string]*sync.Mutex{}, callLocks: map[string]*sync.Mutex{}, directSlots: make(chan struct{}, 8), streamSlots: make(chan struct{}, 64), root: root, stop: stop}, nil
 }
@@ -120,6 +130,7 @@ func (s *Server) Close() error {
 	}
 	s.mu.Unlock()
 	s.jobs.Wait()
+	s.closeInstances()
 	return errors.Join(s.base.Close(), s.audit.Close())
 }
 
@@ -197,6 +208,7 @@ func (s *Server) apiRoutes() *http.ServeMux {
 	mux.HandleFunc("GET /v1/sessions/{id}/events", s.handleEvents)
 	mux.HandleFunc("POST /v1/sessions/{id}/approvals/{call_id}", s.handleApproval)
 	mux.HandleFunc("POST /v1/sessions/{id}/cancel", s.handleCancel)
+	mux.HandleFunc("POST /v1/sessions/{id}/close", s.handleCloseSession)
 	mux.HandleFunc("GET /v1/tools", s.handleTools)
 	mux.HandleFunc("POST /v1/tool-calls", s.handleCreateToolCall)
 	mux.HandleFunc("GET /v1/tool-calls/{id}", s.handleGetToolCall)

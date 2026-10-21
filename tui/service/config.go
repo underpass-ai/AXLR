@@ -20,18 +20,23 @@ type EngineConfig struct {
 }
 
 type Config struct {
-	APIListen       string       `json:"api_listen"`
-	GRPCListen      string       `json:"grpc_listen,omitempty"`
-	ProbeListen     string       `json:"probe_listen"`
-	Workspace       string       `json:"workspace"`
-	StateDir        string       `json:"state_dir"`
-	ServerCertFile  string       `json:"server_cert_file"`
-	ServerKeyFile   string       `json:"server_key_file"`
-	ClientCAFile    string       `json:"client_ca_file"`
-	PrincipalsFile  string       `json:"principals_file"`
-	ModelAPIKeyFile string       `json:"model_api_key_file"`
-	KMP             EngineConfig `json:"kmp"`
-	MADE            EngineConfig `json:"made"`
+	APIListen       string `json:"api_listen"`
+	GRPCListen      string `json:"grpc_listen,omitempty"`
+	ProbeListen     string `json:"probe_listen"`
+	Workspace       string `json:"workspace"`
+	StateDir        string `json:"state_dir"`
+	ServerCertFile  string `json:"server_cert_file"`
+	ServerKeyFile   string `json:"server_key_file"`
+	ClientCAFile    string `json:"client_ca_file"`
+	PrincipalsFile  string `json:"principals_file"`
+	ModelAPIKeyFile string `json:"model_api_key_file"`
+	// SettingsFile is a console settings.json the service reads for what
+	// the console's loop reads there: local models, the context cap, Jev,
+	// forged tools and catalogs, the cost cap and the exec sandbox. Empty
+	// keeps the defaults.
+	SettingsFile string       `json:"settings_file,omitempty"`
+	KMP          EngineConfig `json:"kmp"`
+	MADE         EngineConfig `json:"made"`
 }
 
 func LoadConfig(path string) (Config, error) {
@@ -80,6 +85,9 @@ func (c Config) Validate() error {
 		if !filepath.IsAbs(value) || strings.ContainsRune(value, 0) {
 			return fmt.Errorf("%s must be an absolute path", name)
 		}
+	}
+	if c.SettingsFile != "" && (!filepath.IsAbs(c.SettingsFile) || strings.ContainsRune(c.SettingsFile, 0)) {
+		return errors.New("settings_file must be an absolute path")
 	}
 	for name, engine := range map[string]EngineConfig{"kmp": c.KMP, "made": c.MADE} {
 		if engine.Endpoint == "" || engine.ServerName == "" || !filepath.IsAbs(engine.TLSDir) || !filepath.IsAbs(engine.Command) {

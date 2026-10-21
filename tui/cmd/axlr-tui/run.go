@@ -355,7 +355,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		return fail(fmt.Errorf("no model provider: run axlr-tui setup, set OPENROUTER_API_KEY (create a key at https://openrouter.ai/keys), or configure local_models in %s for models that need no key", settingsPath))
 	}
 	if key != "" {
-		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP, Models: openRouterModelOptions(settings)})
+		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP, Models: compose.OpenRouterModelOptions(settings)})
 		if err != nil {
 			return fail(err)
 		}
