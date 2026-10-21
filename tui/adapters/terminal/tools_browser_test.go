@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -175,5 +176,34 @@ func TestToolsBrowserInstallsAndComesBack(t *testing.T) {
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 	if m.overlay != "" {
 		t.Fatalf("esc left %q", m.overlay)
+	}
+}
+
+// The row drawn as selected is the tool Enter installs, past the first
+// page of a long catalog too: the stored list is sized, not only the copy
+// the view draws.
+func TestToolsBrowserHighlightMatchesTheSelectedToolPastAPage(t *testing.T) {
+	names := make([]string, 40)
+	for i := range names {
+		names[i] = fmt.Sprintf("tool_%02d", i)
+	}
+	m := toolsModel(t, &forgeFake{}, newCatalogFake(names...))
+	defer m.zones.Close()
+	m = runTools(t, m, "/tools")
+	for i := 0; i < 15; i++ {
+		m = update(m, tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	row, ok := m.Tools.Selected()
+	if !ok || row.name != "tool_15" {
+		t.Fatalf("selected %+v", row)
+	}
+	var drawn string
+	for _, line := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+		if f := strings.Fields(line); len(f) > 1 && (strings.HasPrefix(f[0], "▌") || strings.HasPrefix(f[0], ">")) {
+			drawn = f[1]
+		}
+	}
+	if drawn != "tool_15" {
+		t.Fatalf("drawn %q, selected %q", drawn, row.name)
 	}
 }

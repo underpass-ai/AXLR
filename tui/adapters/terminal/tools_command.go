@@ -510,6 +510,8 @@ func (m AppModel) showToolsBrowser(outcome toolsOutcome) (AppModel, tea.Cmd) {
 	} else {
 		m.Tools = newToolsBrowserOverview(*outcome.overview, m.Theme.Locale)
 	}
+	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
+	m.Tools.SetSize(w, h)
 	var cmd tea.Cmd
 	if reload {
 		for i, section := range m.Tools.sections {
@@ -534,10 +536,17 @@ func (m AppModel) showToolsBrowser(outcome toolsOutcome) (AppModel, tea.Cmd) {
 	return m, cmd
 }
 
+// sizeTools sizes the stored browser for the overlay's body.
+func (m *AppModel) sizeTools() {
+	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
+	m.Tools.SetSize(w, h)
+}
+
 // toolsBrowserKey takes a key in the browser.
 func (m AppModel) toolsBrowserKey(msg tea.Msg) (AppModel, tea.Cmd) {
 	var action toolsAction
 	var cmd tea.Cmd
+	m.sizeTools()
 	m.Tools, action, cmd = m.Tools.Update(msg)
 	switch action.kind {
 	case "close":

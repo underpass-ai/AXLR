@@ -190,10 +190,12 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			next, cmd := m.toolsBrowserKey(msg)
 			return next, cmd, true
 		case tea.MouseWheelMsg:
+			m.sizeTools()
 			m.Tools.Wheel(msg)
 			return m, nil, true
 		case tea.MouseClickMsg:
 			// A row selects; the close button falls through.
+			m.sizeTools()
 			if m.Tools.Click(m.zones, m.prefix, msg) {
 				return m, nil, true
 			}

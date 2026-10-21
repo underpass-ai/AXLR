@@ -85,6 +85,8 @@ type ToolsBrowser struct {
 	// notice is a line the footer shows until the next key.
 	notice  string
 	loading bool
+	// the row's column widths, from SetSize.
+	nameWidth, catWidth, versionWidth int
 }
 
 // newToolsBrowserOverview lists /tools: the workspace's tools and the
@@ -559,33 +561,9 @@ func (b *ToolsBrowser) View(theme Theme, zones *zone.Manager, prefix string, wid
 	} else {
 		lines = append(lines, paint.fg(p.Border, false, strings.Repeat(pick(theme.Monochrome, "-", "─"), width)))
 	}
-	listHeight := height - 4
-	detailWidth := 0
-	if width >= 96 {
-		detailWidth = min(64, max(34, width*2/5))
-	}
-	listWidth := width
-	if detailWidth > 0 {
-		listWidth = width - detailWidth - 3
-	} else {
-		listHeight -= 2
-	}
-	nameWidth, catWidth, versionWidth := 8, 0, 5
-	for _, item := range b.List.Items() {
-		row := item.(catalogRow)
-		nameWidth = max(nameWidth, ansi.StringWidth(row.name))
-		catWidth = max(catWidth, ansi.StringWidth(row.category))
-		version := row.version
-		if row.state == rowUpdate {
-			version = row.installed + "→" + row.available
-		}
-		versionWidth = max(versionWidth, ansi.StringWidth(version))
-	}
-	nameWidth = min(nameWidth, max(10, listWidth/3))
-	catWidth = min(catWidth, 16)
-	versionWidth = min(versionWidth, 13)
-	b.List.SetDelegate(toolsDelegate{theme: theme, zones: zones, prefix: prefix, nameWidth: nameWidth, catW: catWidth, versionW: versionWidth})
-	b.List.SetSize(listWidth, max(1, listHeight))
+	listWidth, listHeight, detailWidth := toolsLayout(width, height)
+	b.SetSize(width, height)
+	b.List.SetDelegate(toolsDelegate{theme: theme, zones: zones, prefix: prefix, nameWidth: b.nameWidth, catW: b.catWidth, versionW: b.versionWidth})
 	listView := b.List.View()
 	if len(b.List.VisibleItems()) == 0 {
 		empty := theme.T("tools.noneInSection")
@@ -626,6 +604,50 @@ func (b *ToolsBrowser) View(theme Theme, zones *zone.Manager, prefix string, wid
 	}
 	lines = append(lines, "", b.footerView(theme, width))
 	return strings.Join(lines, "\n")
+}
+
+// toolsLayout splits the body: the list's width and height, and the
+// details' width, 0 on a narrow terminal that shows them below instead.
+func toolsLayout(width, height int) (int, int, int) {
+	width, height = max(20, width), max(6, height)
+	listHeight := height - 4
+	detailWidth := 0
+	if width >= 96 {
+		detailWidth = min(64, max(34, width*2/5))
+	}
+	listWidth := width
+	if detailWidth > 0 {
+		listWidth = width - detailWidth - 3
+	} else {
+		listHeight -= 2
+	}
+	return listWidth, max(1, listHeight), detailWidth
+}
+
+// SetSize sizes the list for a body of width and height cells. The
+// stored browser is sized before each key, click and selection, not only
+// the copy the view draws: a list left at its default 12 rows a page
+// resolves clicks against the wrong page of rows.
+func (b *ToolsBrowser) SetSize(width, height int) {
+	if b.sections == nil {
+		return // not opened yet: the zero list has no delegate
+	}
+	listWidth, listHeight, _ := toolsLayout(width, height)
+	b.nameWidth, b.catWidth, b.versionWidth = 8, 0, 5
+	for _, item := range b.List.Items() {
+		row := item.(catalogRow)
+		b.nameWidth = max(b.nameWidth, ansi.StringWidth(row.name))
+		b.catWidth = max(b.catWidth, ansi.StringWidth(row.category))
+		version := row.version
+		if row.state == rowUpdate {
+			version = row.installed + "→" + row.available
+		}
+		b.versionWidth = max(b.versionWidth, ansi.StringWidth(version))
+	}
+	b.nameWidth = min(b.nameWidth, max(10, listWidth/3))
+	b.catWidth = min(b.catWidth, 16)
+	b.versionWidth = min(b.versionWidth, 13)
+	b.List.SetSize(listWidth, listHeight)
 }
 
 // tabsView is the section switcher, and the filter when one is typed.
