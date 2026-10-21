@@ -45,7 +45,7 @@ Start with the visible symptom, then use the relevant check. AXLR prints startup
 | `OpenRouter invalid_request (HTTP 400): … is not a valid model ID` | The session's model id is not one OpenRouter serves | Choose another with `/model` |
 | The model answers in text, or repeats the same call | The server's tool-call parser does not match the model's template | Fix the server's parser or template; AXLR receives only what the server returns |
 | The answer ends with raw markup such as `<|tool_call>call:local_write{…}` | The server's streaming parser leaked a tool call as text | Set `"stream": false` on that local model. A ceremony whose model does this twice is cancelled with the reason; a restored one with its step open can be stopped with `/stop-ceremony` |
-| `… stream inactivity timeout` | A cold prefill took longer than `stream_idle_seconds` | Raise `stream_idle_seconds` or lower `context_tokens` |
+| `… stream inactivity timeout` | A cold prefill took longer than `stream_idle_seconds`, or an OpenRouter model sent nothing for that long | Raise `stream_idle_seconds` (in `local_models`, or in `models` for an OpenRouter model) or lower `context_tokens` |
 | A long session is refused by the server for its context length | `context_tokens` is larger than the server's window | Set `context_tokens` at or below the server's `-c` or `--max-model-len` |
 
 Smoke test for a server, which must return `tool_calls` with valid JSON, not text:

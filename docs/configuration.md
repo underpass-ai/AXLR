@@ -316,7 +316,7 @@ Object mapping an exact OpenRouter model id to request options, at most 64 entri
 
 Validation is strict, because a misspelt key would otherwise leave routing as it was without a word. Entries are checked in id order, so the first error is stable. Every refusal begins `settings models <id>` and names the key path (`provider.sort.by`):
 
-- the id must be a [model id](#model-identifiers) and must not be the `id` of a `local_models` entry (`settings models <id> is a local model; provider, reasoning and max_tokens are sent only to OpenRouter`);
+- the id must be a [model id](#model-identifiers) and must not be the `id` of a `local_models` entry (`settings models <id> is a local model; provider, reasoning, max_tokens and stream_idle_seconds apply only to OpenRouter; set stream_idle_seconds in its local_models entry`);
 - the entry, and every nested object, must be a JSON object whose keys are all known; key names are case-sensitive here;
 - no value may be `null` (`… must not be null`).
 
@@ -327,6 +327,7 @@ An entry holds up to three keys:
 | `provider` | object | OpenRouter's [provider routing](https://openrouter.ai/docs/features/provider-routing), sent as written; keys below |
 | `reasoning` | object | OpenRouter's [reasoning](https://openrouter.ai/docs/use-cases/reasoning-tokens) object; keys below |
 | `max_tokens` | integer | Caps the completion: a whole number from 1 to 1,000,000 |
+| `stream_idle_seconds` | integer | Seconds an OpenRouter stream may send nothing before it is cut: 1 to 300. Absent: 300, the length a stream may last. Not sent to OpenRouter. Until 22 October 2026 the limit was a fixed 60 seconds, and Claude Haiku 5.5, silent for a minute before a large write, was cut on every attempt ([#167](https://github.com/underpass-ai/AXLR/issues/167)) |
 
 `provider` keys:
 

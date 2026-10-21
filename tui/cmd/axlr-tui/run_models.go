@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/underpass-ai/AXLR/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 )
@@ -13,7 +15,7 @@ func openRouterModelOptions(settings storage.UserSettings) map[string]openrouter
 	configured := settings.ModelRequestOptions()
 	options := make(map[string]openrouter.ModelOptions, len(configured))
 	for id, entry := range configured {
-		options[id] = openrouter.ModelOptions{Provider: entry.Provider, Reasoning: entry.Reasoning, MaxTokens: entry.MaxTokens}
+		options[id] = openrouter.ModelOptions{Provider: entry.Provider, Reasoning: entry.Reasoning, MaxTokens: entry.MaxTokens, StreamInactivityTimeout: time.Duration(entry.StreamIdleSeconds) * time.Second}
 	}
 	return options
 }

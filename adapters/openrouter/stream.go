@@ -42,7 +42,8 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	streamCtx, cancelStream := context.WithCancelCause(ctx)
 	defer cancelStream(nil)
 	timeout := &StreamTimeoutError{provider: c.provider}
-	inactivityTimer := time.AfterFunc(c.streamInactivityTimeout, func() { cancelStream(timeout) })
+	idle := c.inactivityTimeout(wire.Model)
+	inactivityTimer := time.AfterFunc(idle, func() { cancelStream(timeout) })
 	defer inactivityTimer.Stop()
 	maximumDurationTimeout := &StreamTimeoutError{maximumDuration: true, provider: c.provider}
 	maximumDurationTimer := time.AfterFunc(c.streamMaxDuration, func() { cancelStream(maximumDurationTimeout) })
@@ -141,6 +142,17 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 				return sent(), err
 			}
 		}
-		inactivityTimer.Reset(c.streamInactivityTimeout)
+		inactivityTimer.Reset(idle)
 	}
+}
+
+// inactivityTimeout is how long a stream of model may send nothing: the
+// model's own option on OpenRouter, the client's otherwise.
+func (c *Client) inactivityTimeout(model string) time.Duration {
+	if c.endpoint == endpoint {
+		if options := c.models[model].StreamInactivityTimeout; options > 0 {
+			return options
+		}
+	}
+	return c.streamInactivityTimeout
 }
