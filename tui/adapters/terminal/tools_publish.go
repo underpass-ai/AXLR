@@ -451,6 +451,7 @@ func (m AppModel) openToolsOverlay(text string) AppModel {
 	m.Info.SetContent(text)
 	m.Info.Viewport.GotoTop()
 	m.overlay = "tools"
+	m.toolsBrowsing = false
 	m.Status.Error = ""
 	return m
 }

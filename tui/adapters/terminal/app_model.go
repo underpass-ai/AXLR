@@ -172,6 +172,11 @@ type AppModel struct {
 	toolsStaged *application.StagedTool
 	toolsAsking bool
 	toolsQueue  []string
+	// Tools is the /tools browser, shown in place of m.Info while
+	// toolsBrowsing; toolsReturn brings it back after an install it began.
+	Tools         ToolsBrowser
+	toolsBrowsing bool
+	toolsReturn   bool
 	// publishDraft is the tool /tools publish is reading, publishAsking
 	// the catalog field the composer answers, publishBundle the signed
 	// upload waiting for y, publishLog the run's panel lines; publishGen
@@ -476,6 +481,7 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.record(application.DiagnosticEvent{Stage: application.DiagnosticResize, Width: v.Width, Height: v.Height})
 		m.Layout = NewLayout(v.Width, v.Height)
+		m.sizeTools()
 		if m.overlay == "models" {
 			m.Models.Input.SetWidth(max(1, v.Width-9))
 			m.Models.pageSize = max(1, v.Height-7)
