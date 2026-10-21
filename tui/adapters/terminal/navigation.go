@@ -181,6 +181,24 @@ func (m AppModel) navigation(msg tea.Msg) (tea.Model, tea.Cmd, bool) {
 			return m, cmd, true
 		}
 	}
+	if m.overlay == "tools" && m.toolsBrowsing && !m.toolsAsking && m.publishAsking == "" && !m.approvalFocus() {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg, tea.PasteMsg, list.FilterMatchesMsg:
+			if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
+				return m, nil, false
+			}
+			next, cmd := m.toolsBrowserKey(msg)
+			return next, cmd, true
+		case tea.MouseWheelMsg:
+			m.Tools.Wheel(msg)
+			return m, nil, true
+		case tea.MouseClickMsg:
+			// A row selects; the close button falls through.
+			if m.Tools.Click(m.zones, m.prefix, msg) {
+				return m, nil, true
+			}
+		}
+	}
 	if m.overlay == "theme" && !m.approvalFocus() {
 		switch msg.(type) {
 		case tea.KeyPressMsg, tea.PasteMsg, tea.MouseClickMsg, tea.MouseWheelMsg:
@@ -1197,7 +1215,12 @@ func (m AppModel) overlayView(base string) string {
 		if m.overlay == "updates" {
 			title, subtitle = m.Theme.T("update.title"), m.Theme.T("update.subtitle")
 		}
-		body = m.Theme.Overlay(title, subtitle, m.Info.View(), m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
+		content := m.Info.View()
+		if m.overlay == "tools" && m.toolsBrowsing && !m.toolsAsking && m.publishAsking == "" {
+			w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
+			content = m.Tools.View(m.Theme, m.zones, m.prefix, w, h)
+		}
+		body = m.Theme.Overlay(title, subtitle, content, m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)
 	case "incident":
 		title, subtitle, content := m.incidentCardView()
 		body = m.Theme.Overlay(title, subtitle, content, m.zones.Mark(m.prefix+"close", "["+m.Theme.T("common.close")+"]"), m.Layout.Width, m.Layout.Height-1)

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -22,7 +23,13 @@ import (
 // toolsOutcome is what a /tools operation hands back: the panel's text,
 // a staged tool waiting for y, a tool installed or removed.
 type toolsOutcome struct {
-	content   string
+	content string
+	// overview or search fills the browser; reload keeps the browser on
+	// screen while it is read again, with keep selected.
+	overview  *application.CatalogOverview
+	search    *toolsSearch
+	reload    bool
+	keep      string
 	staged    *application.StagedTool
 	installed *application.ForgedTool
 	replaced  bool
@@ -41,6 +48,13 @@ type toolsOutcome struct {
 	bundle     *application.PublishBundle
 	report     *application.VersionReport
 	retryAfter time.Duration
+}
+
+// toolsSearch is what /tools search found.
+type toolsSearch struct {
+	terms    []string
+	matches  []application.CatalogMatch
+	catalogs []application.CatalogState
 }
 
 // installStagedMsg is the model's pending axlr_install_tool call staged
@@ -149,18 +163,37 @@ func parseInstallArguments(fields []string) (application.InstallRequest, error) 
 // openToolsPanel shows the overview, or the search for terms, read in an
 // operation.
 func (m AppModel) openToolsPanel(refresh bool, terms []string) (AppModel, tea.Cmd) {
-	m.Info = m.themedTranscript()
+	m.Info = NewTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)
 	m.Info.Viewport.SetHeight(h)
 	m.Info.SetContent(m.Theme.T("tools.loading"))
 	m.Info.Viewport.GotoTop()
 	m.overlay = "tools"
+	m.toolsBrowsing = false
 	m.Status.Error = ""
+	return m.readTools(refresh, terms, toolsOutcome{})
+}
+
+// reloadTools reads the browser's tools again with the browser still on
+// screen, keeping the selected tool; refresh fetches the catalogs anew.
+func (m AppModel) reloadTools(refresh bool) (AppModel, tea.Cmd) {
+	outcome := toolsOutcome{reload: true}
+	if row, ok := m.Tools.Selected(); ok {
+		outcome.keep = row.name
+	}
+	var terms []string
+	if m.Tools.search != "" {
+		terms = strings.Fields(m.Tools.search)
+	}
+	m.Tools.loading = true
+	return m.readTools(refresh, terms, outcome)
+}
+
+// readTools reads the overview, or the search for terms, into the outcome.
+func (m AppModel) readTools(refresh bool, terms []string, outcome toolsOutcome) (AppModel, tea.Cmd) {
 	use := m.deps.ToolCatalog
 	workspace := string(m.Header.State.Workspace)
-	theme := m.Theme
-	var outcome toolsOutcome
 	cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 		ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		defer cancel()
@@ -169,14 +202,14 @@ func (m AppModel) openToolsPanel(refresh bool, terms []string) (AppModel, tea.Cm
 			if err != nil {
 				return err
 			}
-			outcome.content = toolsSearchContent(terms, matches, catalogs, theme)
+			outcome.search = &toolsSearch{terms: terms, matches: matches, catalogs: catalogs}
 			return nil
 		}
 		overview, err := use.Overview(ctx, workspace, refresh)
 		if err != nil {
 			return err
 		}
-		outcome.content = toolsOverviewContent(overview, theme)
+		outcome.overview = &overview
 		return nil
 	})
 	return m, toolsCompletion(cmd, &outcome)
@@ -206,6 +239,7 @@ func (m AppModel) stageTool(request application.InstallRequest, queue []string) 
 	m.Info.SetContent(m.Theme.Tf("tools.staging", request.Name))
 	m.Info.Viewport.GotoTop()
 	m.overlay = "tools"
+	m.toolsBrowsing = false
 	m.Status.Error = ""
 	use := m.deps.ToolCatalog
 	workspace := string(m.Header.State.Workspace)
@@ -255,6 +289,7 @@ func (m AppModel) updateTools(name string) (AppModel, tea.Cmd) {
 	m.Info.SetContent(m.Theme.T("tools.loading"))
 	m.Info.Viewport.GotoTop()
 	m.overlay = "tools"
+	m.toolsBrowsing = false
 	m.Status.Error = ""
 	use := m.deps.ToolCatalog
 	workspace := string(m.Header.State.Workspace)
@@ -281,7 +316,7 @@ func (m AppModel) updateTools(name string) (AppModel, tea.Cmd) {
 					}
 				}
 			}
-			outcome.content = toolsOverviewContent(overview, theme) + "\n" + theme.T("tools.current")
+			outcome.overview, outcome.notice = &overview, theme.T("tools.current")
 			return nil
 		}
 		staged, err := use.Stage(ctx, workspace, application.InstallRequest{Name: names[0]})
@@ -315,14 +350,31 @@ func (m AppModel) removeTool(name string) (AppModel, tea.Cmd) {
 
 // completeTools applies a /tools operation's outcome.
 func (m AppModel) completeTools(outcome toolsOutcome, err error) (AppModel, tea.Cmd) {
+	m.Tools.loading = false
+	if err != nil && m.toolsReturn && m.overlay == "tools" {
+		// An install begun in the browser failed: back to the browser.
+		m.toolsReturn, m.toolsBrowsing, m.toolsQueue = false, true, nil
+		m.Status.Error = err.Error()
+		return m, nil
+	}
+	if outcome.reload && err != nil && m.overlay == "tools" && m.toolsBrowsing {
+		// The browser stays: the catalogs could not be read again.
+		m.Status.Error = err.Error()
+		return m, nil
+	}
 	if m.overlay == "tools" {
 		switch {
 		case err != nil:
+			m.toolsBrowsing = false
 			m.Info.SetContent(err.Error())
 		case outcome.content != "":
+			m.toolsBrowsing = false
 			m.Info.SetContent(outcome.content)
 		}
 		m.Info.Viewport.GotoTop()
+	}
+	if err == nil && (outcome.overview != nil || outcome.search != nil) {
+		return m.showToolsBrowser(outcome)
 	}
 	if err != nil {
 		m.toolsQueue = nil
@@ -347,6 +399,9 @@ func (m AppModel) completeTools(outcome toolsOutcome, err error) (AppModel, tea.
 	}
 	if outcome.removed != "" {
 		m.Status.Notice = m.Theme.Tf("notice.toolRemoved", outcome.removed)
+		if m.overlay == "tools" && m.toolsBrowsing {
+			return m.reloadTools(false)
+		}
 		return m, nil
 	}
 	if outcome.installed != nil {
@@ -362,6 +417,13 @@ func (m AppModel) completeTools(outcome toolsOutcome, err error) (AppModel, tea.
 			next := m.toolsQueue[0]
 			m.toolsQueue = m.toolsQueue[1:]
 			return m.stageTool(application.InstallRequest{Name: next}, m.toolsQueue)
+		}
+		if m.toolsReturn && m.overlay == "tools" {
+			// Back to the browser it was installed from, on the tool.
+			m.toolsReturn = false
+			m.Tools.loading = true
+			m.toolsBrowsing = true
+			return m.readTools(false, strings.Fields(m.Tools.search), toolsOutcome{reload: true, keep: outcome.installed.Name})
 		}
 		return m, nil
 	}
@@ -409,7 +471,12 @@ func (m AppModel) answerTools(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		}
 		if m.overlay == "tools" {
 			m.overlay = ""
+			if m.toolsReturn && !publishing {
+				// Declined in the browser: back to it.
+				m.overlay, m.toolsBrowsing = "tools", true
+			}
 		}
+		m.toolsReturn = false
 		return m, nil
 	}
 	if m.Busy {
@@ -426,6 +493,7 @@ func (m AppModel) answerTools(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 // closeTools forgets the staged tool and its question when the panel
 // closes by a click, so the next character typed is not its answer.
 func (m *AppModel) closeTools() {
+	m.toolsReturn = false
 	if m.overlay == "tools" && (m.toolsAsking || m.publishAsking != "") {
 		m.toolsAsking, m.toolsStaged, m.toolsQueue = false, nil, nil
 		m.Status.Notice = m.Theme.T("tools.kept")
@@ -433,64 +501,66 @@ func (m *AppModel) closeTools() {
 	}
 }
 
-// toolsOverviewContent renders /tools: the workspace's tools, the updates
-// and each catalog's tools.
-func toolsOverviewContent(overview application.CatalogOverview, theme Theme) string {
-	var b strings.Builder
-	b.WriteString(theme.T("tools.installedTitle") + "\n")
-	if len(overview.Installed) == 0 {
-		b.WriteString("  " + theme.T("tools.noneInstalled") + "\n")
+// showToolsBrowser fills the browser with what was read; a reload keeps
+// its section, filter and selected tool.
+func (m AppModel) showToolsBrowser(outcome toolsOutcome) (AppModel, tea.Cmd) {
+	previous, reload := m.Tools, outcome.reload && m.toolsBrowsing
+	if outcome.search != nil {
+		m.Tools = newToolsBrowserSearch(outcome.search.terms, outcome.search.matches, outcome.search.catalogs, m.Theme.Locale)
+	} else {
+		m.Tools = newToolsBrowserOverview(*outcome.overview, m.Theme.Locale)
 	}
-	for _, tool := range overview.Installed {
-		origin := theme.T("tools.forgedHere")
-		if tool.Origin != nil {
-			origin = theme.Tf("tools.fromCatalog", tool.Origin.Catalog, tool.Origin.Version)
+	var cmd tea.Cmd
+	if reload {
+		for i, section := range m.Tools.sections {
+			if section.id == previous.sections[previous.section].id {
+				m.Tools.section = i
+				cmd = m.Tools.applySection()
+			}
 		}
-		fmt.Fprintf(&b, "  %s · %s\n    %s\n", tool.Name, origin, singleLine(tool.Description))
-	}
-	if len(overview.Updates) > 0 {
-		b.WriteString("\n" + theme.T("tools.updatesTitle") + "\n")
-		for _, update := range overview.Updates {
-			fmt.Fprintf(&b, "  %s · %s → %s · %s\n", update.Name, update.Installed, update.Available, update.Catalog)
-		}
-	}
-	for _, state := range overview.Catalogs {
-		fmt.Fprintf(&b, "\n%s\n", theme.Tf("tools.catalogTitle", state.Name))
-		if state.Warning != "" {
-			fmt.Fprintf(&b, "  ▲ %s\n", singleLine(state.Warning))
-		}
-		if state.Index == nil {
-			continue
-		}
-		for _, match := range application.NewestOfEach(state.Index.Tools) {
-			fmt.Fprintf(&b, "  %s %s · %s\n    %s\n", match.Name, match.Version, match.Category, singleLine(match.Summary))
+		if filter := previous.List.FilterValue(); filter != "" && previous.List.FilterState() == list.FilterApplied {
+			m.Tools.List.SetFilterText(filter)
 		}
 	}
-	b.WriteString("\n" + theme.T("tools.hint"))
-	return b.String()
+	if outcome.keep != "" {
+		m.Tools.SelectName(outcome.keep)
+	}
+	if m.overlay == "tools" {
+		m.toolsBrowsing = true
+	}
+	if outcome.notice != "" {
+		m.Status.Notice = outcome.notice
+	}
+	return m, cmd
 }
 
-// toolsSearchContent renders /tools search.
-func toolsSearchContent(terms []string, matches []application.CatalogMatch, catalogs []application.CatalogState, theme Theme) string {
-	var b strings.Builder
-	b.WriteString(theme.Tf("tools.searchTitle", strings.Join(terms, " ")) + "\n")
-	if len(matches) == 0 {
-		b.WriteString("  " + theme.T("tools.noMatch") + "\n")
-	}
-	for _, match := range matches {
-		installed := ""
-		if match.InstalledVersion != "" {
-			installed = " · " + theme.Tf("tools.installedVersion", match.InstalledVersion)
-		}
-		fmt.Fprintf(&b, "  %s %s · %s · %s%s\n    %s\n", match.Tool.Name, match.Tool.Version, match.Catalog, match.Tool.Category, installed, singleLine(match.Tool.Summary))
-	}
-	for _, state := range catalogs {
-		if state.Warning != "" {
-			fmt.Fprintf(&b, "\n▲ %s\n", singleLine(state.Warning))
+// toolsBrowserKey takes a key in the browser.
+func (m AppModel) toolsBrowserKey(msg tea.Msg) (AppModel, tea.Cmd) {
+	var action toolsAction
+	var cmd tea.Cmd
+	m.Tools, action, cmd = m.Tools.Update(msg)
+	switch action.kind {
+	case "close":
+		m.overlay = ""
+		m.toolsBrowsing = false
+		return m, nil
+	case "install", "remove", "refresh":
+		if m.Busy || m.knownPending() {
+			m.Status.Error = m.Theme.T("mode.busy")
+			return m, cmd
 		}
 	}
-	b.WriteString("\n" + theme.T("tools.hint"))
-	return b.String()
+	switch action.kind {
+	case "install":
+		m.toolsQueue = nil
+		m.toolsReturn = true
+		return m.stageTool(application.InstallRequest{Name: action.name, Catalog: action.catalog}, nil)
+	case "remove":
+		return m.removeTool(action.name)
+	case "refresh":
+		return m.reloadTools(true)
+	}
+	return m, cmd
 }
 
 // installCard is the forge card with the origin line and the warnings:

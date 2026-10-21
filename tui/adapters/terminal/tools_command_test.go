@@ -118,18 +118,19 @@ func TestToolsPanelListsInstalledAndCatalogTools(t *testing.T) {
 	if m.overlay != "tools" {
 		t.Fatalf("overlay = %q", m.overlay)
 	}
-	text := m.Info.Text()
-	for _, want := range []string{"word_count · forged here", "seat_allocation · catalog axlr · 0.9.0", "seat_allocation · 0.9.0 → 1.0.0 · axlr", "Catalog axlr", "business_days 1.0.0 · administration", "/tools install <name>"} {
+	if !m.toolsBrowsing {
+		t.Fatalf("no browser:\n%s", m.Info.Text())
+	}
+	text := ansi.Strip(m.View().Content)
+	for _, want := range []string{"Tools", "All 3", "Installed 2", "Updates 1", "administration 2", "word_count", "seat_allocation", "0.9.0→1.0.0", "business_days", "3 of 3", "⏎ install"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("panel lacks %q:\n%s", want, text)
 		}
 	}
-	if !strings.Contains(ansi.Strip(m.View().Content), "Tools") {
-		t.Fatal("the panel has no title")
-	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = runTools(t, m, "/herramientas search dates")
-	if text := m.Info.Text(); !strings.Contains(text, "business_days 1.0.0 · axlr") || !strings.Contains(text, "seat_allocation 1.0.0 · axlr · administration · installed 0.9.0") {
+	text = ansi.Strip(m.View().Content)
+	if !strings.Contains(text, "Matching dates 2") || !strings.Contains(text, "business_days") || !strings.Contains(text, "0.9.0→1.0.0") {
 		t.Fatalf("search:\n%s", text)
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEscape})
@@ -216,8 +217,8 @@ func TestToolsInstallAsksOnACardThenRegistersTheTool(t *testing.T) {
 	}
 	m = update(m, tea.KeyPressMsg{Code: tea.KeyEscape})
 	m = runTools(t, m, "/tools update")
-	if !strings.Contains(m.Info.Text(), "newest version") {
-		t.Fatalf("nothing to update:\n%s", m.Info.Text())
+	if !m.toolsBrowsing || !strings.Contains(m.Status.Notice, "newest version") {
+		t.Fatalf("nothing to update: %q\n%s", m.Status.Notice, m.Info.Text())
 	}
 	// A failed staging says so in the panel and installs nothing.
 	catalog.fail = errors.New("catalog axlr: file business_days.py does not match the digest")
