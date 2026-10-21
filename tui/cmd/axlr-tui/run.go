@@ -449,7 +449,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
-	sandbox, sandboxUnavailable, err := execSandbox(ctx, settings.ExecSandbox(), exec.LookPath, stderr)
+	sandbox, sandboxUnavailable, err := compose.ExecSandbox(ctx, "axlr-tui", settings.ExecSandbox(), exec.LookPath, stderr)
 	if err != nil {
 		return fail(err)
 	}

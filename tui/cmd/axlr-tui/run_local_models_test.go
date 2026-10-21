@@ -78,7 +78,6 @@ func TestRunRefusesLocalModelSetupErrors(t *testing.T) {
 	}
 }
 
-
 func TestRunJevNeedsItsKeyOnlyWhenEnabled(t *testing.T) {
 	env := cliEnv(t)
 	writeSettings(t, env, `{"jev":{"tool":false,"final_check":false}}`)
@@ -97,8 +96,6 @@ func TestRunJevNeedsItsKeyOnlyWhenEnabled(t *testing.T) {
 		t.Fatalf("Jev on: code=%d output=%s", code, &output)
 	}
 }
-
-
 
 // jevInfo tells /axlr-info the judge's policy.
 func TestJevInfoCarriesThePolicy(t *testing.T) {

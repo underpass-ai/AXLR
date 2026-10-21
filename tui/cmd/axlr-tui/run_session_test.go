@@ -96,4 +96,3 @@ func TestMissingEnginesNamesWhatIsNotConnected(t *testing.T) {
 		t.Fatalf("%v", got)
 	}
 }
-
