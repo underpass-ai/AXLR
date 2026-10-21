@@ -48,7 +48,7 @@ func (s *Server) handleCloseSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.deps.Lifecycle != nil {
-		if err := s.deps.Lifecycle.Close(r.Context(), &session, "closed"); err != nil {
+		if err := s.deps.Lifecycle.Close(context.WithoutCancel(r.Context()), &session, "closed"); err != nil {
 			writeError(w, requestID(r), 500, "storage_error", "unable to close session")
 			return
 		}
