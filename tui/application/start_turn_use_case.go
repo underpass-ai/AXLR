@@ -20,6 +20,9 @@ type StartTurnUseCase struct {
 }
 
 func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, prompt root.Text, emit func(Event) error) error {
+	if u.Approval != nil {
+		u.Continue.Approval = u.Approval
+	}
 	if session == nil || u.Catalog == nil || u.Store == nil {
 		return errors.New("start turn requires session, catalog and store")
 	}

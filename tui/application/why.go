@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,6 +26,10 @@ const WhyMaxRunes = 240
 
 // MissingWhy is the refusal of a side-effect call without a why.
 const MissingWhy = "give why: one sentence saying what this call is for"
+
+// whyReminder ends the result of a side effect that ran without a why
+// because no card needed one (headAdmission.whyError).
+const whyReminder = "Note: this call had no why. It ran because it needed no approval; give why first in every write, edit and command."
 
 // whyDescription is the property's description in the patched schemas.
 const whyDescription = "One sentence in the person's language saying what this call is for (required): the console shows it on the approval card and records it with the turn."
@@ -96,59 +101,164 @@ func requiredWhy(schema root.JSONValue) root.JSONValue {
 }
 
 // withWhy adds the why property to a schema, and its requirement when
-// required.
+// required. why comes FIRST in properties and in required, the rest keeping
+// their order: models fill arguments in schema order, and until 22 October
+// 2026 the alphabetical order put why after a write's content. Claude Haiku
+// 5.5 then wrote a whole file, forgot the why, was refused and sent the file
+// again: five times in one run, about 30,000 output tokens each.
 func withWhy(schema root.JSONValue, required bool) (root.JSONValue, error) {
-	var object map[string]json.RawMessage
-	if err := json.Unmarshal(schema.Bytes(), &object); err != nil {
+	fields, err := orderedObject(schema.Bytes())
+	if err != nil {
 		return schema, err
 	}
-	var properties map[string]json.RawMessage
-	if raw, ok := object["properties"]; ok {
-		if err := json.Unmarshal(raw, &properties); err != nil {
+	var properties []orderedField
+	if raw, ok := fields.get("properties"); ok {
+		if properties, err = orderedObject(raw); err != nil {
 			return schema, err
 		}
 	}
-	if properties == nil {
-		properties = map[string]json.RawMessage{}
-	}
-	if _, present := properties[WhyArgument]; !present {
+	property, present := orderedFields(properties).get(WhyArgument)
+	if !present {
 		description := whyDescription
 		if !required {
 			description = "Optional here: reads need no why."
 		}
-		property, _ := json.Marshal(map[string]any{"type": "string", "minLength": 1, "maxLength": WhyMaxRunes, "description": description})
-		properties[WhyArgument] = property
+		property, _ = json.Marshal(map[string]any{"type": "string", "minLength": 1, "maxLength": WhyMaxRunes, "description": description})
 	}
-	encodedProperties, err := json.Marshal(properties)
-	if err != nil {
-		return schema, err
-	}
-	object["properties"] = encodedProperties
+	properties = append([]orderedField{{WhyArgument, property}}, orderedFields(properties).without(WhyArgument)...)
+	fields = fields.with("properties", encodeOrdered(properties))
 	if required {
 		var names []string
-		if raw, ok := object["required"]; ok {
+		if raw, ok := fields.get("required"); ok {
 			if err := json.Unmarshal(raw, &names); err != nil {
 				return schema, err
 			}
 		}
-		found := false
+		ordered := []string{WhyArgument}
 		for _, name := range names {
-			found = found || name == WhyArgument
+			if name != WhyArgument {
+				ordered = append(ordered, name)
+			}
 		}
-		if !found {
-			names = append(names, WhyArgument)
-		}
-		encodedRequired, err := json.Marshal(names)
+		encodedRequired, err := json.Marshal(ordered)
 		if err != nil {
 			return schema, err
 		}
-		object["required"] = encodedRequired
+		fields = fields.with("required", encodedRequired)
 	}
-	encoded, err := json.Marshal(object)
+	return root.NewJSONObject(encodeOrdered(fields))
+}
+
+// whyOptional is the tool with why no longer required, for the schema
+// checks of a call let through without one (headAdmission.whyError).
+func whyOptional(tool domain.AvailableTool) domain.AvailableTool {
+	fields, err := orderedObject(tool.Definition.Parameters.Bytes())
 	if err != nil {
-		return schema, err
+		return tool
 	}
-	return root.NewJSONObject(encoded)
+	raw, ok := fields.get("required")
+	if !ok {
+		return tool
+	}
+	var names []string
+	if json.Unmarshal(raw, &names) != nil {
+		return tool
+	}
+	kept := make([]string, 0, len(names))
+	for _, name := range names {
+		if name != WhyArgument {
+			kept = append(kept, name)
+		}
+	}
+	encoded, _ := json.Marshal(kept)
+	if schema, err := root.NewJSONObject(encodeOrdered(fields.with("required", encoded))); err == nil {
+		tool.Definition.Parameters = schema
+	}
+	return tool
+}
+
+// orderedField is one member of a JSON object, read in document order.
+type orderedField struct {
+	name  string
+	value json.RawMessage
+}
+
+type orderedFields []orderedField
+
+func (f orderedFields) get(name string) (json.RawMessage, bool) {
+	for _, field := range f {
+		if field.name == name {
+			return field.value, true
+		}
+	}
+	return nil, false
+}
+
+func (f orderedFields) without(name string) []orderedField {
+	out := make([]orderedField, 0, len(f))
+	for _, field := range f {
+		if field.name != name {
+			out = append(out, field)
+		}
+	}
+	return out
+}
+
+// with replaces a member's value in place, or appends it.
+func (f orderedFields) with(name string, value json.RawMessage) orderedFields {
+	out := append(orderedFields(nil), f...)
+	for i := range out {
+		if out[i].name == name {
+			out[i].value = value
+			return out
+		}
+	}
+	return append(out, orderedField{name, value})
+}
+
+// orderedObject reads a JSON object's members in document order, which a
+// Go map would sort.
+func orderedObject(raw []byte) (orderedFields, error) {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	if token, err := decoder.Token(); err != nil || token != json.Delim('{') {
+		return nil, errors.New("schema must be a JSON object")
+	}
+	var fields orderedFields
+	for decoder.More() {
+		token, err := decoder.Token()
+		if err != nil {
+			return nil, err
+		}
+		name, ok := token.(string)
+		if !ok {
+			return nil, errors.New("schema member name must be a string")
+		}
+		var value json.RawMessage
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		fields = append(fields, orderedField{name, value})
+	}
+	if _, err := decoder.Token(); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
+func encodeOrdered(fields []orderedField) json.RawMessage {
+	var out bytes.Buffer
+	out.WriteByte('{')
+	for i, field := range fields {
+		if i > 0 {
+			out.WriteByte(',')
+		}
+		name, _ := json.Marshal(field.name)
+		out.Write(name)
+		out.WriteByte(':')
+		out.Write(field.value)
+	}
+	out.WriteByte('}')
+	return out.Bytes()
 }
 
 // RequiresWhy reports whether a tool's schema, as the snapshot froze it,

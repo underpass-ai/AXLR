@@ -33,8 +33,13 @@ func TestRequireWhyPatchesOnlyTheSideEffectTools(t *testing.T) {
 	if err := json.Unmarshal(patched[0].Definition.Parameters.Bytes(), &schema); err != nil {
 		t.Fatal(err)
 	}
-	if schema.Properties["why"].Type != "string" || schema.Properties["why"].MaxLength != WhyMaxRunes || strings.Join(schema.Required, ",") != "program,why" {
+	if schema.Properties["why"].Type != "string" || schema.Properties["why"].MaxLength != WhyMaxRunes || strings.Join(schema.Required, ",") != "why,program" {
 		t.Fatalf("exec schema %s", patched[0].Definition.Parameters.Bytes())
+	}
+	// why comes first, so a model writes it before a long content: on 22
+	// October 2026, last in the schema, it was forgotten after whole files.
+	if !strings.HasPrefix(string(patched[0].Definition.Parameters.Bytes()), `{"type":"object","properties":{"why":`) {
+		t.Fatalf("why is not the first property: %s", patched[0].Definition.Parameters.Bytes())
 	}
 	if !RequiresWhy(patched[0]) || RequiresWhy(exec) || RequiresWhy(patched[1]) {
 		t.Fatal("RequiresWhy must follow the frozen schema")

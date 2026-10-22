@@ -16,8 +16,13 @@ type ContinueTurnUseCase struct {
 	// Windows sizes the default projection to the session model: its window
 	// when known, the prompt budget otherwise; nil uses the default prompt
 	// budget.
-	Windows        ModelContextWindowPort
-	Validation     ToolArgumentValidationPort
+	Windows    ModelContextWindowPort
+	Validation ToolArgumentValidationPort
+	// Approval is the policy of the use case driving this turn, set by
+	// StartTurnUseCase, ResolveToolUseCase and AgentTurnUseCase from their
+	// own: the head's admission lets a call it approves without a card run
+	// without a why. nil refuses every side effect without one.
+	Approval       ToolApprovalPolicyPort
 	Models         ModelStreamPort
 	Store          SessionStorePort
 	Diagnostics    DiagnosticPort
