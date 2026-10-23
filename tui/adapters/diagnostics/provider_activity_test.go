@@ -3,6 +3,7 @@ package diagnostics
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -49,12 +50,17 @@ func TestOpaqueReasoningNotifiesWithoutExposingText(t *testing.T) {
 	}
 }
 
-// Reasoning progress counts the reasoning bytes, never its text, at the
-// first frame and then every reasoningStep bytes, so a model that
-// reasons for minutes shows it is still at work.
+// Reasoning progress counts the reasoning bytes at the first frame and
+// then every reasoningStep bytes, so a model that reasons for minutes shows
+// it is still at work; each report carries the text streamed since the
+// previous one.
 func TestReasoningProgressCountsBytesInSteps(t *testing.T) {
 	var told []int
-	ctx := application.WithReasoningProgress(context.Background(), func(bytes int) { told = append(told, bytes) })
+	var text strings.Builder
+	ctx := application.WithReasoningProgress(context.Background(), func(bytes int, delta string) {
+		told = append(told, bytes)
+		text.WriteString(delta)
+	})
 	body := &streamBody{ctx: ctx}
 	frame := []byte(`{"choices":[{"delta":{"reasoning":"0123456789abcdef"}}]}`) // 16 bytes
 	for range 70 {
@@ -63,5 +69,9 @@ func TestReasoningProgressCountsBytesInSteps(t *testing.T) {
 	// 16 at once, then each time 512 more have come: 528, 1040.
 	if !reflect.DeepEqual(told, []int{16, 528, 1040}) {
 		t.Fatalf("progress %v", told)
+	}
+	// Reported text is the reasoning up to the last report, in order.
+	if text.Len() != 1040 || !strings.HasPrefix(text.String(), "0123456789abcdef0123") {
+		t.Fatalf("text %d bytes", text.Len())
 	}
 }
