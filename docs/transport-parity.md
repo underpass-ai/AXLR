@@ -1,6 +1,6 @@
 # HTTP, gRPC and MCP service parity
 
-`axlr-serve` exposes one inventory of 18 capabilities through HTTP operations,
+`axlr-serve` exposes one inventory of 19 capabilities through HTTP operations,
 gRPC and Streamable HTTP MCP. They share the existing session store, journal,
 tool resolver, approval policy, audit trail and idempotency store. Existing
 REST `/v1` routes remain available.
@@ -52,6 +52,7 @@ are the same values returned by the REST API.
 | `StreamEvents` | `axlr_stream_events` | `session_id` | Replay/follow the journal with a resume cursor |
 | `DecideSessionTool` | `axlr_decide_session_tool` | `session_id`, `call_id`, `decision`, `expected_revision`, `idempotency_key` | Approve/deny the exact pending call |
 | `CancelSessionTurn` | `axlr_cancel_session_turn` | `session_id`, `expected_revision` | Cancel without undoing completed effects |
+| `CloseSession` | `axlr_close_session` | `session_id`, `expected_revision` | End the session's MADE instance; the transcript stays |
 | `ListTools` | `axlr_list_tools` | — | List identities/schemas; optional `origin` is `local` or `mcp` |
 | `CreateToolCall` | `axlr_create_tool_call` | `tool`, `arguments`, `idempotency_key` | Create an exact registered call intent |
 | `GetToolCall` | `axlr_get_tool_call` | `call_id` | Read durable status/result |
@@ -145,7 +146,7 @@ window as HTTP before closing them.
 
 ## Verification
 
-`tui/service/transport_parity_test.go` exercises all 18 verbs over real mTLS HTTP,
+`tui/service/transport_parity_test.go` exercises all 19 verbs over real mTLS HTTP,
 gRPC and MCP with fake model/tool ports. It checks colliding plugin names,
 cross-transport approval/replay executing once, ordered events and MCP live
 progress, roles/unmapped certificates, exact uint64 values, proto/catalogue

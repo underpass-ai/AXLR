@@ -108,3 +108,56 @@ func TestExecRefusesItsFlagsAlone(t *testing.T) {
 		}
 	}
 }
+
+// A write without a why runs when --approve lets it run without a card,
+// and the next request tells the model to give one; with a card due, it is
+// refused as before (22 October 2026: each refusal made Claude Haiku 5.5
+// send the whole file again).
+func TestExecRunsAnUnapprovedWhylessWriteOnlyWithoutACard(t *testing.T) {
+	const writeChunk = `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"write-1","type":"function","function":{"name":"local_write","arguments":"{\"path\":\"page.html\",\"content\":\"<p>hi</p>\",\"mode\":\"create\"}"}}]},"finish_reason":"tool_calls"}]}`
+	for name, tc := range map[string]struct {
+		approve  []string
+		written  bool
+		reminder bool
+	}{
+		"without a card":  {approve: []string{"--approve", "local"}, written: true, reminder: true},
+		"with a card due": {written: false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			env := cliEnv(t)
+			workspace := t.TempDir()
+			previous := http.DefaultTransport
+			defer func() { http.DefaultTransport = previous }()
+			var bodies []string
+			http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				data, _ := io.ReadAll(r.Body)
+				bodies = append(bodies, string(data))
+				chunk := answerChunk
+				if len(bodies) == 1 {
+					chunk = writeChunk
+				}
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: " + chunk + "\n\ndata: [DONE]\n\n")), Header: make(http.Header)}, nil
+			})
+			code, _, stderr := execRun(t, env, append([]string{"--root", workspace, "--model", "test/model", "--exec", "write the page"}, tc.approve...)...)
+			if code != execCompleted {
+				t.Fatalf("code=%d stderr=%s", code, stderr)
+			}
+			_, err := os.Stat(filepath.Join(workspace, "page.html"))
+			if (err == nil) != tc.written {
+				t.Fatalf("written=%v, want %v", err == nil, tc.written)
+			}
+			if len(bodies) != 2 {
+				t.Fatalf("%d requests", len(bodies))
+			}
+			if got := strings.Contains(bodies[1], "this call had no why"); got != tc.reminder {
+				t.Fatalf("reminder=%v in %s", got, bodies[1])
+			}
+			if !tc.written && !strings.Contains(bodies[1], "give why") {
+				t.Fatalf("the refusal does not ask for a why: %s", bodies[1])
+			}
+			if !strings.Contains(bodies[0], `"properties":{"why":`) {
+				t.Fatal("why is not the first property of the schemas")
+			}
+		})
+	}
+}

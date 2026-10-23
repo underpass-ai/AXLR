@@ -126,6 +126,34 @@ paths:
         '202':
           description: Cancellation requested; external effects cannot be rolled back.
         default: {$ref: '#/components/responses/Error'}
+  /v1/sessions/{id}/close:
+    parameters:
+      - {$ref: '#/components/parameters/SessionID'}
+    post:
+      operationId: closeSession
+      description: Ends the session's MADE instance and journals session.closed; the transcript stays and a later turn continues in the instance's successor. Refuses a running turn with 409 operation_in_progress.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [expected_revision]
+              properties:
+                expected_revision: {type: integer, minimum: 1}
+      responses:
+        '200':
+          description: Session closed.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_id: {type: string}
+                  status: {type: string, enum: [closed]}
+                  revision: {type: integer}
+        default: {$ref: '#/components/responses/Error'}
   /v1/tools:
     get:
       operationId: listTools

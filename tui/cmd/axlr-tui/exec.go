@@ -103,6 +103,10 @@ func execTurn(ctx context.Context, start application.StartTurnUseCase, agent app
 			} else {
 				_, _ = io.WriteString(out, string(e.Text))
 			}
+		case application.EventReasoningProgress:
+			if e.ReasoningText != "" {
+				write(execEvent{Type: "reasoning", Text: e.ReasoningText})
+			}
 		case application.EventToolActivity:
 			kind := "tool.requested"
 			if e.Tool.Outcome != nil {
