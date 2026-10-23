@@ -2,6 +2,9 @@ package compose
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"strings"
 	"testing"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -129,5 +132,36 @@ func TestEquipFollowsSettingsAndMemory(t *testing.T) {
 	tools, err = Equip(&full, Equipment{Settings: storage.DefaultUserSettings(), State: t.TempDir(), Memory: true})
 	if err != nil || full.Forge == nil || full.Catalog == nil || full.Publisher == nil || full.Remember == nil || full.Recall == nil || tools.Catalog == nil {
 		t.Fatalf("defaults not equipped %+v %v", full, err)
+	}
+}
+
+// Connect builds the client each entry's api names: chat completions by
+// default, the native Anthropic and OpenAI Responses clients otherwise; a
+// remote entry without its key stops the launch naming the variable.
+func TestLocalModelsConnectByAPI(t *testing.T) {
+	setup := NewLocalModels(storage.UserSettings{LocalModels: []storage.LocalModel{
+		{ID: "local/qwen", URL: "http://127.0.0.1:8080/v1", ContextTokens: 65536},
+		{ID: "anthropic/sonnet", URL: "https://api.anthropic.com", Model: "claude-sonnet-5-5", API: "anthropic", APIKeyEnv: "ANTHROPIC_API_KEY", ContextTokens: 200000},
+		{ID: "openai/gpt", URL: "https://api.openai.com/v1", Model: "gpt-5", API: "responses", APIKeyEnv: "OPENAI_API_KEY", ContextTokens: 400000},
+	}}, func(name string) string {
+		return map[string]string{"ANTHROPIC_API_KEY": "sk-ant-x", "OPENAI_API_KEY": "sk-proj-x"}[name]
+	})
+	routes, err := setup.Connect(&http.Client{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[root.ModelID]string{"local/qwen": "*openrouter.Client", "anthropic/sonnet": "*anthropic.Client", "openai/gpt": "*openai.Client"} {
+		if got := fmt.Sprintf("%T", routes[id].Client); got != want {
+			t.Fatalf("%s: %s, want %s", id, got, want)
+		}
+	}
+	if routes["anthropic/sonnet"].Upstream != "claude-sonnet-5-5" || routes["openai/gpt"].Upstream != "gpt-5" || !setup.KeyEnvs["ANTHROPIC_API_KEY"] || len(setup.Secrets) != 2 {
+		t.Fatalf("routes %+v keys %+v", routes, setup.KeyEnvs)
+	}
+	missing := NewLocalModels(storage.UserSettings{LocalModels: []storage.LocalModel{
+		{ID: "anthropic/sonnet", URL: "https://api.anthropic.com", API: "anthropic", APIKeyEnv: "ANTHROPIC_API_KEY", ContextTokens: 200000},
+	}}, func(string) string { return "" })
+	if _, err := missing.Connect(&http.Client{}); err == nil || !strings.Contains(err.Error(), "set ANTHROPIC_API_KEY") {
+		t.Fatalf("missing key: %v", err)
 	}
 }

@@ -87,3 +87,19 @@ func TestAStreamTimeoutRowReadsInThePersonsLanguage(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+// An empty account of another endpoint is not sent to OpenRouter's credits
+// page: the hint names this server, in both languages.
+func TestTurnFailureHintsLocalCreditsApart(t *testing.T) {
+	remote := &openrouter.ProviderError{StatusCode: 402, Category: openrouter.CategoryInsufficientCredits}
+	local := &openrouter.ProviderError{StatusCode: 402, Category: openrouter.CategoryInsufficientCredits, Provider: "model endpoint api.openai.com", Message: "You exceeded your current quota"}
+	if providerHintKind(remote) != "credits" || providerHintKind(local) != "credits_local" {
+		t.Fatalf("kinds %q %q", providerHintKind(remote), providerHintKind(local))
+	}
+	for _, theme := range []Theme{{Locale: English}, {Locale: Spanish}} {
+		hint := theme.providerHint(providerHintKind(local))
+		if hint == "" || strings.Contains(hint, "openrouter") {
+			t.Fatalf("local credits hint %q", hint)
+		}
+	}
+}

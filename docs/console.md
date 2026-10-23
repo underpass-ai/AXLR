@@ -308,19 +308,20 @@ A page holds at most `max_results` matches (default 50, at most 200) or `max_ent
 
 ## Local models
 
-`local_models` lists OpenAI-compatible servers, such as `llama-server` or vLLM, that `/model` lists together with OpenRouter's catalog; favorites keep a model on top. Each entry has:
+`local_models` lists model servers that `/model` lists together with OpenRouter's catalog; favorites keep a model on top. By default an entry is an OpenAI-compatible server, such as `llama-server` or vLLM; with `api` it is the Anthropic Messages API or the OpenAI Responses API spoken directly, without OpenRouter (see [native APIs](configuration.md#native-apis)). Each entry has:
 
 | Key | Meaning |
 |:--|:--|
 | `id` | The model id the session saves and `/model` shows; a `local/` prefix groups the entries and keeps them apart from OpenRouter ids |
 | `name` | Display name; default `id` |
-| `url` | The server's OpenAI base URL, such as `http://127.0.0.1:8080/v1`; the console posts to `<url>/chat/completions` |
-| `model` | The name sent to the server; default `id`. vLLM needs its `--served-model-name`; llama.cpp ignores it |
-| `api_key_env` | The environment variable holding the server's key. A loopback URL (`localhost`, `127.0.0.0/8`, `::1`) needs no key and receives no `Authorization` header; any other host must use `https` and a key |
+| `url` | The server's base URL, such as `http://127.0.0.1:8080/v1`; the console posts to `<url>/chat/completions`, or to `<url>/v1/messages` and `<url>/responses` for the native APIs |
+| `model` | The name sent to the server; default `id`. vLLM needs its `--served-model-name`; llama.cpp ignores it; Anthropic and OpenAI need their own ids |
+| `api` | `chat` (default), `anthropic` or `responses`: the protocol the server speaks |
+| `api_key_env` | The environment variable holding the server's key. A loopback URL (`localhost`, `127.0.0.0/8`, `::1`) needs no key and receives no `Authorization` header; any other host must use `https` and a key, sent as a bearer token or, for `anthropic`, as `x-api-key` |
 | `context_tokens` | Required, at least 4096: the window the console respects for this model. It may be smaller than the server's own `-c` or `--max-model-len` |
 | `tools` | Default `true`. AXLR needs native tool calls, so `false` hides the model from `/model` instead of degrading it |
 | `stream` | Default `true`. `false` asks the server for whole replies: the text appears at once and the "reasoning" status is not shown, but a server whose streaming tool-call parser leaks calls as text (vLLM 0.22.1 with `gemma4` did, once in three replays of the same request, while its non-streaming parser never did) returns real `tool_calls` |
-| `thinking` | `false` sends `chat_template_kwargs: {"enable_thinking": false}`, which llama.cpp and vLLM pass to the chat template; plan workers want short replies, and Qwen3.8-27B spent 4,000 tokens thinking before one worker call when it was on. Unset leaves the server's default |
+| `thinking` | `false` sends `chat_template_kwargs: {"enable_thinking": false}`, which llama.cpp and vLLM pass to the chat template; plan workers want short replies, and Qwen3.8-27B spent 4,000 tokens thinking before one worker call when it was on. For the native APIs it sends no thinking or reasoning configuration at all. Unset leaves the default |
 | `stream_idle_seconds`, `stream_max_minutes` | Stream limits; defaults 600 seconds without a byte and 60 minutes in total, since a cold prefill of a long prompt on a local GPU takes minutes before the first token |
 
 The top-level `context_tokens` caps the window for every model, local or OpenRouter; a local model's own `context_tokens` applies when it is smaller. The console turns a local model's window into the byte budget of the [model context](#model-context): the message history may use three quarters of the window at three bytes per token, which leaves room for the guidance, the tool schemas and the reply. A model without a known window gets the prompt budget of `prompt_tokens` instead, bounded by the cap when there is one.
