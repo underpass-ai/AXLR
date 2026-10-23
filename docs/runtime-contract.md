@@ -68,7 +68,7 @@ The approval level is the run's own policy on top of `settings.json`: `none` app
 Where the result is:
 
 - `axlr-tui --exec --json` and `--decide --json` end with one line `{"type":"result","result":{…}}`, after the `completed`, `decision.required` or `failed` line. Without `--json`, stdout is the answer and the exit code the status.
-- `axlr-serve` puts it in `GetSession` (`result`, null until a turn ends) and in the payload of the event that ends a turn: `approval.required`, `turn.completed`, `turn.interrupted` or `operation.failed`. The service's `error` is the operation's error code, never its message.
+- `axlr-serve` puts it in `GetSession` (`result`, null until a turn ends) and in the payload of the event that ends a turn: `approval.required`, `turn.completed`, `turn.interrupted` (the answer's end, a cancellation) or `operation.failed`. The service's `error` is the operation's error code, never its message. One exception: the `turn.interrupted` the service journals at start, for a session a crash left running, carries the status alone; read that session's result from `GetSession`.
 
 ## Events
 

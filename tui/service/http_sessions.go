@@ -488,7 +488,11 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, requestID(r), 500, "storage_error", "unable to cancel turn")
 			return
 		}
-		_, _ = s.events.Append(id, session.Export().OperationID, "turn.interrupted", map[string]any{"status": "interrupted"})
+		payload := map[string]any{"status": "interrupted"}
+		if result := s.executionResult(session, ""); result != nil {
+			payload["result"] = result
+		}
+		_, _ = s.events.Append(id, session.Export().OperationID, "turn.interrupted", payload)
 	}
 	writeJSON(w, 202, map[string]any{"session_id": id, "status": "cancelling"})
 }

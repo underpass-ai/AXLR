@@ -532,3 +532,46 @@ func TestSessionApprovalAdvancesOnlyThePendingCall(t *testing.T) {
 	}
 	response.Body.Close()
 }
+
+// A cancelled turn is journaled with the execution's result: interrupted,
+// with the pending call it cut, so a client reads where the session stands.
+func TestCancelJournalsTheResult(t *testing.T) {
+	s, ts, client, _ := testServer(t)
+	id, _ := domain.NewSessionID("fedcba9876543210fedcba9876543210")
+	session, err := domain.NewSession(id, domain.Workspace(t.TempDir()), "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tools, err := s.deps.Catalog.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	args, _ := root.NewJSONObject([]byte(`{"path":"sample.txt"}`))
+	if err := session.BeginTurn("read the file", tools); err != nil {
+		t.Fatal(err)
+	}
+	call := root.ToolCall{ID: "read-once", Name: "local_read", Arguments: args}
+	if err := session.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{call}}}); err != nil {
+		t.Fatal(err)
+	}
+	session.SetServiceMetadata("alice", 0, "original-turn")
+	if err := s.sessions.Save(context.Background(), session); err != nil {
+		t.Fatal(err)
+	}
+	response := apiRequest(t, client, "POST", ts.URL+"/v1/sessions/"+string(id)+"/cancel", `{"expected_revision":1}`, "")
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("cancel: %d", response.StatusCode)
+	}
+	response.Body.Close()
+	events, _, err := s.events.Read(string(id), 0)
+	if err != nil || len(events) == 0 || events[len(events)-1].Type != "turn.interrupted" {
+		t.Fatalf("events %+v: %v", events, err)
+	}
+	payload, _ := json.Marshal(events[len(events)-1].Payload)
+	var terminal struct {
+		Result *dto.ExecutionResult `json:"result"`
+	}
+	if err := json.Unmarshal(payload, &terminal); err != nil || terminal.Result == nil || terminal.Result.Status != "interrupted" || len(terminal.Result.Calls) != 1 || terminal.Result.Calls[0].ID != "read-once" {
+		t.Fatalf("payload %s: %v", payload, err)
+	}
+}
