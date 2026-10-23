@@ -250,13 +250,21 @@ func TestMTLSRolesSessionsAndIdempotentTurn(t *testing.T) {
 	if got.Status != "complete" || got.Result == nil || got.Result.Schema != dto.ExecutionResultSchema || got.Result.Status != "completed" || got.Result.Answer != "hello" || got.Result.Session != created.ID || len(got.Result.Sessions) != 1 || len(got.Result.Calls) != 0 || got.Result.Usage.Requests != 0 {
 		t.Fatalf("session result: %+v %+v", got, got.Result)
 	}
-	events, _, err := s.events.Read(created.ID, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	completed := events[len(events)-1]
-	if completed.Type != "turn.completed" {
-		t.Fatalf("last event %+v", completed)
+	// The session is saved before the journal gets turn.completed: wait
+	// for it.
+	var completed Event
+	for {
+		events, _, err := s.events.Read(created.ID, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if completed = events[len(events)-1]; completed.Type == "turn.completed" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("last event %+v", completed)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 	payload, _ := json.Marshal(completed.Payload)
 	var terminal struct {
