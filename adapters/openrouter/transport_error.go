@@ -1,15 +1,5 @@
 package openrouter
 
-type TransportError struct {
-	Cause error
-	// Provider names a non-OpenRouter endpoint; empty means OpenRouter.
-	Provider string
-}
+import "github.com/underpass-ai/AXLR/adapters/provider"
 
-func (e *TransportError) Error() string {
-	if e.Provider != "" && e.Provider != providerName {
-		return e.Provider + " transport failure"
-	}
-	return "OpenRouter transport failure"
-}
-func (e *TransportError) Unwrap() error { return e.Cause }
+type TransportError = provider.TransportError

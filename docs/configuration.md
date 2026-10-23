@@ -261,25 +261,26 @@ Number, in dollars. Absent or `0`: no limit. Otherwise up to 10,000 (`settings m
 
 ### local_models
 
-Array of at most 16 objects (`settings.json lists too many local models`): OpenAI-compatible servers (llama.cpp, vLLM, Ollama, LM Studio) that `/model` lists beside OpenRouter's catalog. With at least one entry `OPENROUTER_API_KEY` is optional. Written by the setup assistant, which adds or replaces the entry with the same `id`.
+Array of at most 16 objects (`settings.json lists too many local models`): model servers that `/model` lists beside OpenRouter's catalog. By default an entry is an OpenAI-compatible chat completions server (llama.cpp, vLLM, Ollama, LM Studio); with `api` it is instead the Anthropic Messages API or the OpenAI Responses API, spoken natively since 23 October 2026, so reasoning across tool calls, prompt caching and usage no longer depend on OpenRouter's translation. With at least one entry `OPENROUTER_API_KEY` is optional. Written by the setup assistant, which adds or replaces the entry with the same `id`.
 
 | Key | Type | Default | Limits and meaning |
 |:--|:--|:--|:--|
 | `id` | string | required | A [model id](#model-identifiers), unique in the list (`settings local_models lists <id> twice`). What the session saves and `/model` shows; the `local/` prefix is a convention that keeps it apart from OpenRouter ids. Must not also be a key of [`models`](#models-per-model-openrouter-options) |
 | `name` | string | the `id` | Display name: valid UTF-8, at most 200 bytes, no line breaks |
-| `url` | string | required | The server's OpenAI base URL, such as `http://127.0.0.1:8080/v1`. Absolute `http` or `https`, with a host, without user info, query or fragment. Trailing slashes are dropped and `/chat/completions` appended |
-| `model` | string | the `id` | A [model id](#model-identifiers): the name sent to the server. vLLM needs its `--served-model-name`; llama.cpp ignores it |
-| `api_key_env` | string | none | Name of the environment variable holding the server's key (`^[A-Za-z_][A-Za-z0-9_]*$`). The key is sent as a bearer token when the variable is set |
+| `url` | string | required | The server's base URL, such as `http://127.0.0.1:8080/v1`. Absolute `http` or `https`, with a host, without user info, query or fragment. Trailing slashes are dropped and the endpoint of the `api` appended: `/chat/completions` for `chat`, `/v1/messages` for `anthropic` (`/messages` when the url already ends in `/v1`), `/responses` for `responses` |
+| `model` | string | the `id` | A [model id](#model-identifiers): the name sent to the server. vLLM needs its `--served-model-name`; llama.cpp ignores it; Anthropic and OpenAI need their own ids (`claude-sonnet-5-5`, `gpt-5`) |
+| `api` | string | `"chat"` | The protocol: `chat` (OpenAI chat completions, what every local server speaks), `anthropic` (the Anthropic Messages API) or `responses` (the OpenAI Responses API). Anything else: `settings local_models <id> api must be chat, anthropic or responses`. See [native APIs](#native-apis) |
+| `api_key_env` | string | none | Name of the environment variable holding the server's key (`^[A-Za-z_][A-Za-z0-9_]*$`). When the variable is set the key is sent as a bearer token, or as `x-api-key` for `anthropic` |
 | `context_tokens` | integer | required | From 4,096 to 16,777,216: the window the console respects for this model, which may be smaller than the server's own. The top-level `context_tokens` lowers it further |
 | `tools` | boolean | `true` | `false` hides the model from `/model`: AXLR needs native tool calls and does not degrade without them |
 | `stream` | boolean | `true` | `false` asks for whole replies instead of a stream, for servers whose streaming tool-call parser leaks calls as text |
-| `thinking` | boolean | unset | `false` sends `chat_template_kwargs: {"enable_thinking": false}`. Unset and `true` both leave the server's default |
+| `thinking` | boolean | unset | `false` turns the model's thinking configuration off: for `chat` it sends `chat_template_kwargs: {"enable_thinking": false}`; for `anthropic` it sends no `thinking` object (needed for models before Claude 4.6, which do not accept adaptive thinking); for `responses` it sends no `reasoning` and asks for no encrypted reasoning (needed for a model without reasoning, which refuses the parameter). Unset and `true` both leave the default described under [native APIs](#native-apis) |
 | `stream_idle_seconds` | integer | `0` (600) | Seconds without a byte before the stream is abandoned; `0` to 3,600 |
 | `stream_max_minutes` | integer | `0` (60) | Minutes a whole reply may take; `0` to 720 |
 
 The long stream defaults are deliberate: a cold prefill of a long prompt on a local GPU takes minutes before the first token, and decoding runs at a few tokens per second.
 
-Refusals while reading the file: `settings local_models entry has an invalid id`, `settings local_models <id> has an invalid name`, `… url must be an absolute http(s) URL without credentials, query or fragment`, `… has an invalid model`, `… api_key_env must be an environment variable name`, `… context_tokens must be between 4096 and 16777216` (also when it is missing), `… stream_idle_seconds must be between 1 and 3600`, `… stream_max_minutes must be between 1 and 720`.
+Refusals while reading the file: `settings local_models entry has an invalid id`, `settings local_models <id> has an invalid name`, `… url must be an absolute http(s) URL without credentials, query or fragment`, `… has an invalid model`, `… api must be chat, anthropic or responses`, `… api_key_env must be an environment variable name`, `… context_tokens must be between 4096 and 16777216` (also when it is missing), `… stream_idle_seconds must be between 1 and 3600`, `… stream_max_minutes must be between 1 and 720`.
 
 Two more rules are checked when the launch connects to the server, and stop it:
 
@@ -304,11 +305,43 @@ Every `api_key_env` variable, like `OPENROUTER_API_KEY`, is a **model key**: it 
     "context_tokens": 65536,
     "stream": false,
     "thinking": false
+  },
+  {
+    "id": "anthropic/sonnet",
+    "url": "https://api.anthropic.com",
+    "model": "claude-sonnet-5-5",
+    "api": "anthropic",
+    "api_key_env": "ANTHROPIC_API_KEY",
+    "context_tokens": 200000
+  },
+  {
+    "id": "openai/gpt",
+    "url": "https://api.openai.com/v1",
+    "model": "gpt-5",
+    "api": "responses",
+    "api_key_env": "OPENAI_API_KEY",
+    "context_tokens": 400000
   }
 ]
 ```
 
 Serving is outside AXLR; [local models](console.md#local-models) lists the server flags native tool calls need, and [troubleshooting](troubleshooting.md#local-models) has a smoke test.
+
+#### Native APIs
+
+An entry with `api: "anthropic"` or `api: "responses"` reaches the provider directly, through [adapters/anthropic](../adapters/anthropic) or [adapters/openai](../adapters/openai), with the same tools, approvals, context cap and usage ledger as any other model. What each protocol sends and reads:
+
+| | `anthropic` | `responses` |
+|:--|:--|:--|
+| Request | `POST <url>/v1/messages`, headers `x-api-key` and `anthropic-version: 2023-06-01`; `max_tokens` 32,000 | `POST <url>/responses`, header `Authorization: Bearer`; `store: false`, so the provider keeps no state and AXLR's history is the record |
+| Messages | The system prompt as the top-level `system` with a cache breakpoint on its last block, and the request's `cache_control` for the automatic breakpoint; every tool result of a turn in one `user` message, as the API requires | Every message an `input` item; a tool result a `function_call_output` |
+| Tools | `name`, `description`, `input_schema` | `type: function`, `name`, `description`, `parameters` |
+| Reasoning | `thinking: {type: adaptive, display: summarized}` so the console shows it as it streams, and `block_binding.prefix_mismatch_behavior: drop_block` under the beta `thinking-binding-controls-2026-08-01`, since AXLR cuts its history at the context cap and an account enforced on preserved thinking would otherwise refuse a replayed block (HTTP 400 `Invalid signature in thinking block`). The signed `thinking` and `redacted_thinking` blocks go back first in their assistant message, unmodified, for the rest of the turn | `reasoning: {summary: auto}` and `include: ["reasoning.encrypted_content"]`; the reasoning items go back before their turn's message and function calls, unmodified. An item without encrypted content is not kept, since a stateless request could not send it back |
+| Usage | `input_tokens` plus the cache reads and writes as the prompt, `cache_read_input_tokens` as cached, `cache_creation_input_tokens` as cache writes; no cost and no separate count of thinking tokens | `input_tokens`, `cached_tokens`, `output_tokens`, `reasoning_tokens`; no cost |
+| Stop | `end_turn` → `stop`, `tool_use` → `tool_calls`, `max_tokens` → `length` with the output-limit note; a `refusal` keeps its category and explanation in the answer | `completed` → `stop` or `tool_calls`; `incomplete` for `max_output_tokens` → `length` with the note; a refusal part keeps its text in the answer |
+| Errors | HTTP status and the error type (`overloaded_error` is HTTP 529, retried later like a rate limit); a bare `model: <id>` message is an unknown model | HTTP status and the string code: `insufficient_quota` under HTTP 429 is reported as no credits, not as a rate limit |
+
+The provider reports no cost, so the [usage ledger](console.md#usage) counts these requests as unknown cost, never $0, as it does for every local server. A mid-conversation system message, which Anthropic alternation forbids, is sent as user text. The adapters' unit tests replay recorded streams; the shapes above were checked against the providers' documentation of October 2026 and not yet against the live services.
 
 ### models (per-model OpenRouter options)
 

@@ -47,7 +47,9 @@ func (t Transport) classify(target *url.URL) (application.DiagnosticEndpoint, bo
 		}
 	}
 	switch rest {
-	case "/chat/completions":
+	case "/chat/completions", "/messages", "/v1/messages", "/responses":
+		// The three completion endpoints: OpenAI chat completions, the
+		// Anthropic Messages API and the OpenAI Responses API.
 		return application.DiagnosticEndpointChat, true
 	case "/models":
 		return application.DiagnosticEndpointModels, true
