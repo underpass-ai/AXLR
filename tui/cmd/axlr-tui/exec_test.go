@@ -308,7 +308,9 @@ func TestExecRefusesAForbiddenCallUnderThePolicy(t *testing.T) {
 	if strings.Contains(bodies[0], `"name":"local_exec"`) || strings.Contains(bodies[0], `"name":"local_write"`) || !strings.Contains(bodies[0], `"name":"local_read"`) {
 		t.Fatalf("the offered tools ignore the policy: %s", bodies[0])
 	}
-	// The session keeps the policy: a later --decide applies it too.
+	// A decision cannot run what the policy forbids: a run without a
+	// policy stops at the command; --decide approve under the policy
+	// refuses it instead of running it.
 	scriptedModel(t, execChunk, answerChunk)
 	code, stdout, stderr = execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--json")
 	if code != execNeedsDecision {
@@ -344,5 +346,23 @@ func TestExecRefusesAnInvalidPolicyFile(t *testing.T) {
 	code, _, stderr := execRun(t, env, "--root", t.TempDir(), "--model", "test/model", "--exec", "say done", "--policy", filepath.Join(t.TempDir(), "missing.json"))
 	if code != execFailed || !strings.Contains(stderr, "--policy") {
 		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+}
+
+// The policy only narrows: under act-within-policy with --approve none the
+// command still waits for the decision the settings do not take.
+func TestExecPolicyOnlyNarrowsTheApprovalLevel(t *testing.T) {
+	env := cliEnv(t)
+	env["PATH"] = os.Getenv("PATH")
+	workspace := t.TempDir()
+	scriptedModel(t, execChunk, answerChunk)
+	policy := writePolicy(t, `{"level": "act-within-policy", "tools": {"allow": [{"name": "local_*"}]}}`)
+	code, stdout, stderr := execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--policy", policy, "--json")
+	result := execResult(t, stdout)
+	if code != execNeedsDecision || result.Status != "needs_decision" || result.Pending == nil || result.Pending.Tool != "local_exec" {
+		t.Fatalf("code=%d stderr=%s %+v", code, stderr, result)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err == nil {
+		t.Fatal("the command ran without a decision")
 	}
 }
