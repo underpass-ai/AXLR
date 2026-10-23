@@ -91,6 +91,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	jsonFlag := flags.Bool("json", false, "with --exec: write the turn's events as JSON lines")
 	modeFlag := flags.String("mode", "", "with --exec: normal, review, writer or research")
 	decideFlag := flags.String("decide", "", "with --session: approve or deny the session's pending call without the console, run the turn to its end and exit as --exec does")
+	policyFlag := flags.String("policy", "", "with --exec or --decide: a JSON file with the execution's policy (docs/runtime-contract.md): its autonomy level and the tools it may use; the session keeps it")
 	callFlag := flags.String("call", "", "with --decide: the id of the pending call, to make sure it is the one")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
@@ -122,8 +123,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
 		}
 	}
-	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "") {
-		return fail(errors.New("--approve, --json and --mode go with --exec or --decide"))
+	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "") {
+		return fail(errors.New("--approve, --json, --mode and --policy go with --exec or --decide"))
 	}
 	if *callFlag != "" && *decideFlag == "" {
 		return fail(errors.New("--call goes with --decide"))
@@ -852,6 +853,20 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		if session.Mode() != execWorkMode && (*modeFlag != "" || !resuming) {
 			if err := session.SetMode(execWorkMode); err != nil {
+				return fail(err)
+			}
+			if err := loggedStore.Save(ctx, *session); err != nil {
+				return fail(err)
+			}
+		}
+		if *policyFlag != "" {
+			// The execution's policy is the session's from now on: this
+			// run's calls and every later turn or decision apply it.
+			executionPolicy, err := readExecPolicy(*policyFlag)
+			if err != nil {
+				return fail(err)
+			}
+			if err := session.SetPolicy(executionPolicy); err != nil {
 				return fail(err)
 			}
 			if err := loggedStore.Save(ctx, *session); err != nil {

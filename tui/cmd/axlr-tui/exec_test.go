@@ -197,6 +197,7 @@ func TestExecRefusesItsFlagsAlone(t *testing.T) {
 		{"--session", "0123456789abcdef0123456789abcdef", "--decide", "maybe"},
 		{"--session", "0123456789abcdef0123456789abcdef", "--decide", "approve", "--exec", "x"},
 		{"--call", "c1"},
+		{"--policy", "policy.json"},
 	} {
 		env := cliEnv(t)
 		code, _, stderr := execRun(t, env, append([]string{"--root", t.TempDir(), "--model", "test/model"}, args...)...)
@@ -256,5 +257,112 @@ func TestExecRunsAnUnapprovedWhylessWriteOnlyWithoutACard(t *testing.T) {
 				t.Fatal("why is not the first property of the schemas")
 			}
 		})
+	}
+}
+
+// writePolicy writes a policy file for --policy.
+func writePolicy(t *testing.T, policy string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "policy.json")
+	if err := os.WriteFile(path, []byte(policy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// Under an allow list of reads the model's command is refused outside the
+// model, before any card: the run ends completed, not needs_decision, the
+// call is "forbidden" in the result, the model read why, and local_exec
+// was not among the tools it was offered.
+func TestExecRefusesAForbiddenCallUnderThePolicy(t *testing.T) {
+	env := cliEnv(t)
+	env["PATH"] = os.Getenv("PATH")
+	workspace := t.TempDir()
+	previous := http.DefaultTransport
+	defer func() { http.DefaultTransport = previous }()
+	var bodies []string
+	http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		data, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(data))
+		chunk := answerChunk
+		if len(bodies) == 1 {
+			chunk = execChunk
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: " + chunk + "\n\ndata: [DONE]\n\n")), Header: make(http.Header)}, nil
+	})
+	policy := writePolicy(t, `{"policy": {"level": "observe", "tools": {"allow": [{"name": "local_read"}, {"name": "local_search"}, {"name": "local_list"}]}}}`)
+	code, stdout, stderr := execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--approve", "all", "--policy", policy, "--json")
+	if code != execCompleted {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err == nil {
+		t.Fatal("the forbidden command ran")
+	}
+	result := execResult(t, stdout)
+	if result.Status != "completed" || result.Pending != nil || len(result.Calls) != 1 || result.Calls[0].Tool != "local_exec" || result.Calls[0].Status != "forbidden" || result.Calls[0].Decision != "deny" {
+		t.Fatalf("%+v", result)
+	}
+	if len(bodies) != 2 || !strings.Contains(bodies[1], "forbidden by the execution's policy: local_exec is not in the execution's allow list") {
+		t.Fatalf("the model did not read the refusal: %d requests, %s", len(bodies), bodies[len(bodies)-1])
+	}
+	if strings.Contains(bodies[0], `"name":"local_exec"`) || strings.Contains(bodies[0], `"name":"local_write"`) || !strings.Contains(bodies[0], `"name":"local_read"`) {
+		t.Fatalf("the offered tools ignore the policy: %s", bodies[0])
+	}
+	// A decision cannot run what the policy forbids: a run without a
+	// policy stops at the command; --decide approve under the policy
+	// refuses it instead of running it.
+	scriptedModel(t, execChunk, answerChunk)
+	code, stdout, stderr = execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--json")
+	if code != execNeedsDecision {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	pending := execResult(t, stdout)
+	scriptedModel(t, answerChunk)
+	code, stdout, stderr = execRun(t, env, "--root", workspace, "--session", pending.Session, "--decide", "approve", "--policy", policy, "--json")
+	decided := execResult(t, stdout)
+	if code != execCompleted || decided.Status != "completed" || len(decided.Calls) != 1 || decided.Calls[0].Status != "forbidden" {
+		t.Fatalf("code=%d stderr=%s %+v", code, stderr, decided)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err == nil {
+		t.Fatal("the decision ran a forbidden command")
+	}
+}
+
+// A policy file the contract does not describe stops the run before any
+// request.
+func TestExecRefusesAnInvalidPolicyFile(t *testing.T) {
+	env := cliEnv(t)
+	calls := scriptedModel(t, answerChunk)
+	for name, policy := range map[string]string{
+		"unknown field": `{"level":"observe","tools":{},"budget":{}}`,
+		"unknown level": `{"level":"autonomous","tools":{}}`,
+		"not json":      `observe`,
+	} {
+		code, _, stderr := execRun(t, env, "--root", t.TempDir(), "--model", "test/model", "--exec", "say done", "--policy", writePolicy(t, policy))
+		if code != execFailed || !strings.Contains(stderr, "--policy") || *calls != 0 {
+			t.Fatalf("%s: code=%d calls=%d stderr=%s", name, code, *calls, stderr)
+		}
+	}
+	code, _, stderr := execRun(t, env, "--root", t.TempDir(), "--model", "test/model", "--exec", "say done", "--policy", filepath.Join(t.TempDir(), "missing.json"))
+	if code != execFailed || !strings.Contains(stderr, "--policy") {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+}
+
+// The policy only narrows: under act-within-policy with --approve none the
+// command still waits for the decision the settings do not take.
+func TestExecPolicyOnlyNarrowsTheApprovalLevel(t *testing.T) {
+	env := cliEnv(t)
+	env["PATH"] = os.Getenv("PATH")
+	workspace := t.TempDir()
+	scriptedModel(t, execChunk, answerChunk)
+	policy := writePolicy(t, `{"level": "act-within-policy", "tools": {"allow": [{"name": "local_*"}]}}`)
+	code, stdout, stderr := execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--policy", policy, "--json")
+	result := execResult(t, stdout)
+	if code != execNeedsDecision || result.Status != "needs_decision" || result.Pending == nil || result.Pending.Tool != "local_exec" {
+		t.Fatalf("code=%d stderr=%s %+v", code, stderr, result)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err == nil {
+		t.Fatal("the command ran without a decision")
 	}
 }

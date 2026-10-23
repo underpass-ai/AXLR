@@ -18,6 +18,8 @@ func executionCallOf(record PendingTool) ExecutionCall {
 	switch {
 	case record.Outcome == nil:
 		call.Status = ExecutionCallPending
+	case forbidden(record.Decision, *record.Outcome):
+		call.Status = ExecutionCallForbidden
 	case record.Decision == DecisionDeny:
 		call.Status = ExecutionCallDenied
 	case record.Outcome.Uncertain:

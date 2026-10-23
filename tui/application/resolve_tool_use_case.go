@@ -122,6 +122,10 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		return rejectUnknown(ctx, s, admit, emit)
 	}
 	checked, whyErr := admit.whyError(*s, tool, toolArgs)
+	if _, forbidden := policyRefusal(*s, tool, toolArgs); forbidden {
+		// A decision taken under the policy cannot run what it forbids.
+		return rejectUnknown(ctx, s, admit, emit)
+	}
 	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyErr != nil || localArgumentError(u.Validation, checked, toolArgs) != nil || (decision != domain.DecisionDeny && (forgedArgumentError(ctx, admit.Forge, u.Validation, *s, checked, toolArgs) != nil || publishArgumentError(ctx, admit.Publisher, *s, checked, toolArgs) != nil)) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}

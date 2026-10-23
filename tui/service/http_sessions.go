@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/adapters/contract"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -20,7 +22,8 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Model string `json:"model"`
+		Model  string          `json:"model"`
+		Policy json.RawMessage `json:"policy"`
 	}
 	if !readJSON(w, r, &input) {
 		return
@@ -29,6 +32,15 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, requestID(r), 422, "invalid_model", "invalid model")
 		return
+	}
+	var policy *domain.ExecutionPolicy
+	if len(input.Policy) > 0 && !bytes.Equal(bytes.TrimSpace(input.Policy), []byte("null")) {
+		parsed, err := contract.ParseExecutionPolicy(input.Policy)
+		if err != nil {
+			writeError(w, requestID(r), 422, "invalid_policy", "invalid policy: "+err.Error())
+			return
+		}
+		policy = &parsed
 	}
 	id, err := newID()
 	if err != nil {
@@ -41,6 +53,12 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session.SetServiceMetadata(principal(r).ID, 0, "")
+	if policy != nil {
+		if err := session.SetPolicy(*policy); err != nil {
+			writeError(w, requestID(r), 422, "invalid_policy", "invalid policy: "+err.Error())
+			return
+		}
+	}
 	if err := s.sessions.Save(r.Context(), session); err != nil {
 		writeError(w, requestID(r), 500, "storage_error", "unable to save session")
 		return
@@ -81,7 +99,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 500, "storage_error", "unable to read events")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, "")})
+	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "policy": executionPolicy(session)})
 }
 
 func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {

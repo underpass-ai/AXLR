@@ -133,8 +133,11 @@ func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, 
 		}
 		tool, args, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), p.Call)
 		if known && resolveErr == nil {
-			verdict, reason := s.Mode().Judge(tool.Identity, args)
-			if verdict != domain.VerdictDeny {
+			// The execution's policy answers before the mode and before
+			// any card: a forbidden call is refused outside the model.
+			if refusal, forbidden := policyRefusal(*s, tool, args); forbidden {
+				resolveErr = refusal
+			} else if verdict, reason := s.Mode().Judge(tool.Identity, args); verdict != domain.VerdictDeny {
 				if resolveErr = compactRefusal(*s, p); resolveErr == nil {
 					// The missing why is named before the schema check, so
 					// the model reads what to send rather than a schema rule.
