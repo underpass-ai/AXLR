@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -25,7 +24,6 @@ import (
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
-	toolcatalog "github.com/underpass-ai/AXLR/tui/adapters/catalog"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	"github.com/underpass-ai/AXLR/tui/adapters/enginesetup"
@@ -33,12 +31,11 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 	catalog "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
-	toolregistry "github.com/underpass-ai/AXLR/tui/adapters/registry"
 	"github.com/underpass-ai/AXLR/tui/adapters/repairclone"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
-	"github.com/underpass-ai/AXLR/tui/adapters/tokens"
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/compose"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -89,6 +86,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
 	repairFlag := flags.String("repair", "", "start a repair of the configured repository in a fresh clone: a failure brief or #issue")
 	improveFlag := flags.String("improve", "", "start an improvement of the configured repository in a fresh clone: an improvement brief or #issue; the merge waits for you")
+	execFlag := flags.String("exec", "", "run one prompt without the console, print the answer and exit (needs --model, a model in settings.json or --session)")
+	approveFlag := flags.String("approve", "", "with --exec: what to approve without a person: none (settings' rules, the default), local (workspace reads, writes and commands) or all")
+	jsonFlag := flags.Bool("json", false, "with --exec: write the turn's events as JSON lines")
+	modeFlag := flags.String("mode", "", "with --exec: normal, review, writer or research")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
 	flags.Func("plugin-env-from", "ID:KEY=HOST_ENV_VAR; repeatable", func(v string) error { selections = append(selections, v); return nil })
@@ -118,6 +119,28 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		case *repairFlag != "" || *improveFlag != "":
 			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
 		}
+	}
+	if *execFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "") {
+		return fail(errors.New("--approve, --json and --mode go with --exec"))
+	}
+	execApproval := approveNone
+	var execWorkMode domain.WorkMode
+	if *execFlag != "" {
+		if *repairFlag != "" || *improveFlag != "" {
+			return fail(errors.New("--exec runs one prompt; it cannot be combined with --repair or --improve"))
+		}
+		switch *approveFlag {
+		case "", approveNone:
+		case approveLocal, approveAll:
+			execApproval = *approveFlag
+		default:
+			return fail(fmt.Errorf("--approve %s: use none, local or all", *approveFlag))
+		}
+		mode, err := execMode(*modeFlag)
+		if err != nil {
+			return fail(err)
+		}
+		execWorkMode = mode
 	}
 	// resuming is a launch that opens a saved session rather than a new one.
 	resuming := *sessionFlag != "" || continueFlag || *importFlag != ""
@@ -244,10 +267,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			appLog.AddSecrets(saved)
 		}
 	}
-	locals := newLocalModelSetup(settings, getenv)
-	localKeys = locals.secrets
+	locals := compose.NewLocalModels(settings, getenv)
+	localKeys = locals.Secrets
 	appLog.AddSecrets(localKeys...)
-	judge, err := jevJudge(settings.Jev, getenv)
+	judge, err := compose.JevJudge(settings.Jev, getenv)
 	if err != nil {
 		return fail(err)
 	}
@@ -341,7 +364,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			}
 			fmt.Fprintln(stderr, "axlr-tui: payload capture is on: request and response bodies, prompts and tool results included, are stored in", payloadDirectory)
 		}
-		transport = diagnostics.Transport{Next: transport, Trace: trace, Payloads: payloads, Endpoints: locals.endpoints}
+		transport = diagnostics.Transport{Next: transport, Trace: trace, Payloads: payloads, Endpoints: locals.Endpoints}
 	}
 	if *traceFlag == "" {
 		// Every launch adds a trace and a payload directory to the default
@@ -354,18 +377,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// key and without local models the launch says how to get either.
 	var remote localmodels.Client
 	var remoteCatalog application.ModelCatalogPort
-	if key == "" && len(locals.models) == 0 {
+	if key == "" && len(locals.Models) == 0 {
 		return fail(fmt.Errorf("no model provider: run axlr-tui setup, set OPENROUTER_API_KEY (create a key at https://openrouter.ai/keys), or configure local_models in %s for models that need no key", settingsPath))
 	}
 	if key != "" {
-		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP, Models: openRouterModelOptions(settings)})
+		client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: clientHTTP, Models: compose.OpenRouterModelOptions(settings)})
 		if err != nil {
 			return fail(err)
 		}
 		remote = client
 		remoteCatalog = catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}
 	}
-	routes, err := locals.connect(clientHTTP)
+	routes, err := locals.Connect(clientHTTP)
 	if err != nil {
 		return fail(err)
 	}
@@ -385,7 +408,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 	}
 	var refusedKey string
-	persisted, err := storage.LoadMCPConfiguration(configPath, locals.pluginGetenv(getenv, &refusedKey))
+	persisted, err := storage.LoadMCPConfiguration(configPath, locals.PluginGetenv(getenv, &refusedKey))
 	if err == nil && refusedKey != "" {
 		err = fmt.Errorf("model key %s cannot be passed to plugins", refusedKey)
 	}
@@ -408,7 +431,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 	}
-	registrations, err := pluginRegistrations(paths, selections, getenv, locals.keyEnvs)
+	registrations, err := pluginRegistrations(paths, selections, getenv, locals.KeyEnvs)
 	if err != nil {
 		return fail(err)
 	}
@@ -444,7 +467,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	configStore := storage.MCPConfigStore{Path: configPath}
 	pluginManager := axlr.NewPluginManager(manager, profiles, configStore.SaveApproval)
 	pluginManager.SetInstaller(configStore.AddManifest)
-	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, locals.pluginGetenv(getenv, nil))
+	pluginManager.SetEnvironmentInstaller(configStore.AddManifestWithEnvironment, locals.PluginGetenv(getenv, nil))
 	pluginManager.SetURLInstaller(configStore.AddURL)
 	pluginManager.SetRemover(configStore.RemoveManifestsUnder)
 	pluginManager.Diagnostics = trace
@@ -452,7 +475,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
-	sandbox, sandboxUnavailable, err := execSandbox(ctx, settings.ExecSandbox(), exec.LookPath, stderr)
+	sandbox, sandboxUnavailable, err := compose.ExecSandbox(ctx, "axlr-tui", settings.ExecSandbox(), exec.LookPath, stderr)
 	if err != nil {
 		return fail(err)
 	}
@@ -493,7 +516,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
-	locals.windows.Calibration = calibration
+	locals.Windows.Calibration = calibration
 	preferences := settingsStore.ModelPreference()
 	uiStore := settingsStore.UIPreference()
 	uiPreferences := settings.UIPreferences()
@@ -587,9 +610,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	validator := axlr.NewToolArgumentValidator()
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog)}
 	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}, LogFailure: failureLogger(appLog)}
-	ceremonies := ceremonyDriver(registrations, runner, sessionLabels, madeWorkIdentity(configPath, registrations))
+	ceremonies := compose.CeremonyDriver(registrations, runner, sessionLabels, madeWorkIdentity(configPath, registrations))
 	if ceremonies != nil {
-		ceremonies.Compact = compactProfile(settings.CeremonyProfile(), locals.windows)
+		ceremonies.Compact = compose.CompactProfile(settings.CeremonyProfile(), locals.Windows)
 		plans, err := storage.NewPlanRegistry(filepath.Join(stateBase, "axlr", "plans.json"))
 		if err != nil {
 			return fail(err)
@@ -635,7 +658,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		if judge != nil {
 			// Jev decides what each turn settled (decision D5).
-			settleWith(sessionCeremony, judge)
+			compose.SettleWith(sessionCeremony, judge)
 		}
 		for _, line := range []string{
 			ensureWorkGrant(ctx, &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}, filepath.Join(stateBase, "axlr", "made-grant"), madesetup.WorkGrantFor(madeWorkIdentity(configPath, registrations))),
@@ -689,7 +712,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		repairs = &application.SelfRepair{
 			Registry:  registry,
 			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: cloneProgress},
-			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog},
+			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.Windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog},
 			Store:     loggedStore,
 			Engine:    ceremonies.Engine,
 			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts, MaxActive: settings.JobsConfiguration().MaxActive, Watch: repairPolicy.WatchDeadline},
@@ -714,7 +737,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	var planRunner *application.PlanRunner
 	var planPanel terminal.PlanPanelPort
 	if ceremonies != nil && ceremonies.Plans != nil {
-		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog}}
+		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.Windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog}}
 		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(runToken[:]), Liveness: runLock, Lifetime: ctx}
 		if err := planRunner.Reconcile(ctx); err != nil {
 			fmt.Fprintln(stderr, "axlr-tui: plan registry:", err)
@@ -723,42 +746,18 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ceremonies.Starter = planRunner
 		planPanel = planRunner
 	}
-	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, TurnToolCalls: settings.TurnToolCalls, Language: string(locale)}
-	// Each session keeps its usage ledger beside its snapshot.
-	continuation.Usage, continuation.MaxSessionUSD = store, settings.MaxSessionUSD
-	// The context cap (decision D10): one tokenizer for every model, no
-	// cut and no checkpoint, a successor session past the cap.
-	if counter, err := tokens.New(); err != nil {
-		fmt.Fprintln(stderr, "axlr-tui: token counter unavailable, the byte budgets apply:", err)
-	} else {
-		continuation.Tokens, continuation.ContextCap, continuation.Scale = counter, locals.windows.ContextCap, &application.TokenScale{}
-		continuation.Successor = successorSessions{create: application.CreateSessionUseCase{Store: loggedStore, Labels: sessionLabels, About: kmp.bundleAbout()}, labels: sessionLabels, store: loggedStore}
-	}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, Language: string(locale)}
 	continuation.Logs = logReader(appLog)
-	var toolCatalog *toolcatalog.Client
-	var toolCatalogUseCase application.CatalogUseCase
-	if settings.ForgedToolsEnabled() {
-		// The model forges workspace tools and runs them in the same session.
-		forged, err := storage.NewForgedToolStore(filepath.Join(stateBase, "axlr", "forged-tools"))
-		if err != nil {
-			return fail(err)
-		}
-		continuation.Forge = forged
-		// The catalogs of pre-forged tools: axlr_catalog, axlr_install_tool
-		// and /tools read their signed indexes, cached under the state.
-		toolCatalog = &toolcatalog.Client{Dir: filepath.Join(stateBase, "axlr", "catalog"), Entries: settings.EffectiveCatalogs()}
-		continuation.Catalog = toolCatalog
-		// The registry's client identity: one key under the state, signed
-		// requests for /tools enroll and /tools publish.
-		toolCatalogUseCase = application.CatalogUseCase{Catalog: toolCatalog, Forge: forged, Keys: &toolregistry.KeyStore{Dir: filepath.Join(stateBase, "axlr", "registry")}, Registry: &toolregistry.Client{}, Files: forged}
-		// axlr_publish_tool takes the steps /tools publish takes, on a card.
-		continuation.Publisher = toolCatalogUseCase
-	}
-	if _, kmp := activeEngineCommands["kmp"]; kmp {
-		// axlr_remember writes the model's memories in one call;
-		// axlr_recall reads them in one.
-		continuation.Remember = ceremonyhost.Memory{Tools: runner}
-		continuation.Recall = ceremonyhost.Memory{Tools: runner}
+	// The usage ledger, the context cap and its successors, forged and
+	// catalog tools and the memory tools: what the service equips too.
+	_, hasMemoryTools := activeEngineCommands["kmp"]
+	toolCatalogUseCase, err := compose.Equip(&continuation, compose.Equipment{
+		Settings: settings, State: filepath.Join(stateBase, "axlr"), Store: loggedStore, Usage: store, Labels: sessionLabels, About: kmp.bundleAbout(),
+		Windows: locals.Windows, Tools: runner, Memory: hasMemoryTools,
+		Note: func(line string) { fmt.Fprintln(stderr, "axlr-tui:", line) },
+	})
+	if err != nil {
+		return fail(err)
 	}
 	var notices application.RepairNoticesPort
 	if repairs != nil {
@@ -779,7 +778,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ToolCatalog:             toolCatalogUseCase,
 		EngineUpdates:           &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands, Install: &enginesetup.Installer{Configuration: &configStore, Getenv: getenv, KMPApproval: "auto", MADEApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}).Prepare}},
 		OrchestratorPreparation: &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore},
-		Models:                  application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: locals.available, Remote: remoteCatalog}, Diagnostics: trace},
+		Models:                  application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: locals.Available, Remote: remoteCatalog}, Diagnostics: trace},
 		ModelPreference:         preferences,
 		SessionLabels:           sessionLabels,
 		ModelFavorites:          settingsStore.ModelFavorites(),
@@ -810,10 +809,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		MemoriesKnown:           kmp.Counted,
 		EngineFacts:             engineFacts(kmp, hasKMP, host, ceremonies != nil),
 		Jev:                     jevInfo(judge, settings.Jev),
-		LocalEndpoints:          locals.endpointsByModel(),
+		LocalEndpoints:          locals.EndpointsByModel(),
 		Usage:                   store,
 		MaxSessionUSD:           settings.MaxSessionUSD,
-		PromptCeiling:           locals.windows.PromptCeiling,
+		PromptCeiling:           locals.Windows.PromptCeiling,
 		GitState:                terminal.ReadGitState,
 		Notify:                  settings.NotifyMode(),
 		Sandbox:                 terminal.SandboxStatus{Mode: settings.ExecSandbox().Mode, Unavailable: sandboxUnavailable},
@@ -821,6 +820,33 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		SessionBundles:          storage.SessionBundles{},
 		Sessions:                store,
 		Hostname:                hostname,
+	}
+	if *execFlag != "" {
+		// One prompt without the console: the loop the repairs' workers run,
+		// under the approvals --approve allows.
+		if heldElsewhere != "" {
+			return fail(fmt.Errorf("session %s is open in another console", heldElsewhere))
+		}
+		if session == nil {
+			return fail(errors.New("--exec needs a model: pass --model, set model in settings.json, or name a --session"))
+		}
+		if session.Mode() != execWorkMode && (*modeFlag != "" || !resuming) {
+			if err := session.SetMode(execWorkMode); err != nil {
+				return fail(err)
+			}
+			if err := loggedStore.Save(ctx, *session); err != nil {
+				return fail(err)
+			}
+		}
+		policy := execPolicy{next: approvalSettings, level: execApproval}
+		start, agent := deps.Start, deps.Agent
+		start.Approval, agent.Approval = policy, policy
+		final, code := execTurn(ctx, start, agent, *session, *execFlag, *jsonFlag, execOutput, stderr)
+		if sessionCeremony != nil {
+			_ = sessionCeremony.Close(context.WithoutCancel(ctx), &final, "exit")
+		}
+		appLog.Logf(diagnostics.AppInfo, "exec finished: session %s, exit %d", final.ID(), code)
+		return code
 	}
 	if len(startupWarnings) > 0 {
 		deps.StartupNotice = startupWarnings[0] + " · axlr-tui logs --level WARN"
@@ -960,24 +986,6 @@ func repairPanelPort(repairs *application.SelfRepair) terminal.RepairPanelPort {
 	return repairs
 }
 
-// ceremonyDriver drives /debug, /delivery and /incident when MADE is connected. KMP is
-// optional: without it ceremonies run without memory.
-func ceremonyDriver(registrations []plugins.Registration, tools application.ToolExecutionPort, labels application.SessionLabelsPort, owner string) *application.CeremonyDriver {
-	connected := map[string]bool{}
-	for _, registration := range registrations {
-		connected[registration.Manifest.ID.String()] = true
-	}
-	if !connected["made"] {
-		return nil
-	}
-	engine := ceremonyhost.Engine{Tools: tools, Owner: owner}
-	driver := &application.CeremonyDriver{Engine: engine, Definitions: engine, Checks: ceremonyhost.Checks{Tools: tools}, Labels: labels}
-	if connected["kmp"] {
-		driver.Memory = ceremonyhost.Memory{Tools: tools}
-	}
-	return driver
-}
-
 // payloadSecrets lists the non-empty keys the payload recorder redacts.
 // payloadParent is where a launch's payload directory goes: beside the trace,
 // unless that is inside the workspace. Payloads hold whole requests, tool
@@ -1084,67 +1092,6 @@ func missingEngines(registrations []plugins.Registration) []string {
 		}
 	}
 	return missing
-}
-
-// successorSessions opens the session a capped prompt continues in: the
-// same workspace, model, mode and about, titled after the predecessor,
-// with the predecessor in its instance (decision D10).
-type successorSessions struct {
-	create application.CreateSessionUseCase
-	labels application.SessionLabelsPort
-	store  application.SessionStorePort
-}
-
-func (s successorSessions) Continue(ctx context.Context, predecessor domain.Session) (domain.Session, error) {
-	state := predecessor.Export()
-	session, err := s.create.ExecuteNew(ctx, state.Workspace, state.Model)
-	if err != nil {
-		return domain.Session{}, err
-	}
-	if predecessor.Mode() != domain.ModeNormal {
-		if err := session.SetMode(predecessor.Mode()); err != nil {
-			return domain.Session{}, err
-		}
-	}
-	if err := session.SetInstance(domain.SessionInstance{Predecessor: state.ID}); err != nil {
-		return domain.Session{}, err
-	}
-	if s.labels != nil {
-		if labels, err := s.labels.Load(ctx); err == nil {
-			previous := labels[state.ID]
-			title := previous.Title
-			if title != "" {
-				title = root.Text(successorTitle(string(title)))
-			}
-			_, _ = s.labels.Initialize(ctx, session.ID(), domain.SessionLabel{Title: title, TitleDerived: previous.TitleDerived, About: previous.About})
-		}
-	}
-	if err := s.store.Save(ctx, session); err != nil {
-		return domain.Session{}, err
-	}
-	return session, nil
-}
-
-// successorTitle numbers a continued session's title: "X" becomes "X (2)"
-// and "X (2)" becomes "X (3)", not "X (2) (2)".
-func successorTitle(title string) string {
-	if open := strings.LastIndex(title, " ("); open >= 0 && strings.HasSuffix(title, ")") {
-		if n, err := strconv.Atoi(title[open+2 : len(title)-1]); err == nil && n >= 2 {
-			return fmt.Sprintf("%s (%d)", bounded(title[:open], 100), n+1)
-		}
-	}
-	return bounded(title, 100) + " (2)"
-}
-
-func bounded(text string, limit int) string {
-	if len(text) <= limit {
-		return text
-	}
-	cut := limit
-	for cut > 0 && text[cut]&0xC0 == 0x80 {
-		cut--
-	}
-	return text[:cut]
 }
 
 // engineFacts are the lines /mcp shows under each engine (decision J1):

@@ -2,7 +2,7 @@
 
 `axlr-serve` is the service adapter in the `tui` Go module. It reuses the console's turn and tool-resolution use cases. The JSON worker remains a one-request process. The REST route and payload reference is [OpenAPI v1](../api/openapi/axlr-v1.yaml). See [service operations](runbooks/service.md) for probes, a direct-read smoke check and recovery.
 
-The same service capabilities are available through gRPC and an authenticated Streamable HTTP MCP server at `/mcp`. The [transport parity contract](transport-parity.md) lists all 18 verbs, shared schemas, approvals and event delivery; the OpenAPI document also describes `POST /v1/operations/{verb}` and `/mcp`. Set optional `grpc_listen` to a separate address such as `127.0.0.1:9443`; an omitted field leaves it disabled. Existing REST payloads and probe routes remain available.
+The same service capabilities are available through gRPC and an authenticated Streamable HTTP MCP server at `/mcp`. The [transport parity contract](transport-parity.md) lists all 19 verbs, shared schemas, approvals and event delivery; the OpenAPI document also describes `POST /v1/operations/{verb}` and `/mcp`. Set optional `grpc_listen` to a separate address such as `127.0.0.1:9443`; an omitted field leaves it disabled. Existing REST payloads and probe routes remain available.
 
 Build with `GOWORK=off go -C tui build -trimpath -o /tmp/axlr-serve ./cmd/axlr-serve`; run `/tmp/axlr-serve --config=/absolute/path/service.json`. `--version` prints the injected build version. The service configuration is strict JSON (at most 64 KiB) with absolute file paths and explicit listeners. This template names existing files/services; replace every placeholder before launch:
 
@@ -32,7 +32,7 @@ Build with `GOWORK=off go -C tui build -trimpath -o /tmp/axlr-serve ./cmd/axlr-s
 }
 ```
 
-Each engine TLS directory contains `ca.crt`, `tls.crt` and `tls.key`. The adapters run over stdio and connect to remote gRPC with mutual TLS. Both engines are mandatory configuration entries. The service does not load console `mcp.json`, `settings.json` or plugin packages, and has no work-mode API or wired console ceremony driver. `/v1/sessions` starts normal sessions. Install engine policies/definitions through their operator channels; AXLR's service config does not bootstrap them.
+Each engine TLS directory contains `ca.crt`, `tls.crt` and `tls.key`. The adapters run over stdio and connect to remote gRPC with mutual TLS. Both engines are mandatory configuration entries. The service does not load console `mcp.json` or plugin packages, reads a console `settings.json` only through `settings_file`, and has no work-mode API. `/v1/sessions` starts normal sessions. Install engine policies/definitions through their operator channels; AXLR's service config does not bootstrap them.
 
 The API listener requires TLS 1.3, a client certificate signed by the configured CA, and an entry in the private principals file. A certificate that chains to the CA but is not mapped is forbidden. The policy is JSON:
 
@@ -56,3 +56,20 @@ Typical flow:
 The state directory contains session snapshots, event journals, call arguments and audit records. On Windows, service startup replaces inherited ACLs on that directory and its existing contents with access for the current account, SYSTEM and Administrators; it refuses reparse points. Use a dedicated directory owned by the service account.
 
 `/livez` and `/readyz` are available only on the separate loopback probe listener. Readiness checks a configured nonempty model key and discovery through both KMP and MADE MCP adapters. It does not verify account credit, make a model completion or prove that an engine write/ceremony action is authorized. Missing or empty model credentials stop startup; engine transport failures can leave the API alive with failing readiness. `axlr-serve --probe=livez` and `--probe=readyz` always query loopback port 8081, matching the chart; query the configured endpoint directly if you use another probe port.
+
+## The console's loop in the service
+
+Since 23 October 2026 the service composes its turns with the console's loop (`tui/compose`): the context cap and its successor sessions, the session's MADE instance and KMP context, Jev, forged and catalog tools, the memory tools, the cost cap and the exec sandbox. A client such as a bot needs these facts:
+
+- **Approvals.** Every tool call a model makes in a service session stops at `approval.required`: the service's policy is manual for all tools. The turn waits until a principal with the `approver` role posts a decision. A bot that lets strangers prompt it must not approve on its own; give it a human approver or keep the session's tools to reads.
+- **Context cap.** Past the cap (`prompt_tokens`, 75,000 by default) the turn stops, the session's instance closes and the service opens a successor owned by the same principal. The capped session's journal gets `session.continued` with `successor_id` and `operation_id`; the successor's first turn starts by itself with the capped prompt. Follow the successor's events and read its revision before the next turn: it starts at revision 2, because the successor is saved once to create it and once to set its owner.
+- **CloseSession.** `POST /v1/sessions/{id}/close` with `expected_revision` (verb `CloseSession`, MCP `axlr_close_session`) ends the session's MADE instance and journals `session.closed`; the transcript stays and a later turn continues in the instance's successor. It refuses a running turn with `409 operation_in_progress`. The service closes every open instance when it stops and, at start, ends as abandoned those a crash left open.
+- **`settings_file`.** An optional absolute path to a console `settings.json`. The service honours `local_models`, `models`, `prompt_tokens`/`context_tokens`, `jev`, `forged_tools`, `catalogs`, `max_session_usd`, `turn_tool_calls`, `ceremony_profile`, `reviewer_model` and `exec_sandbox`. A file the configuration names must exist.
+- **Grok without OpenRouter.** A `local_models` entry reaches any OpenAI-compatible server over HTTPS with its key in an environment variable:
+
+  ```json
+  {"local_models":[{"id":"xai/grok","url":"https://api.x.ai/v1","model":"grok-4","api_key_env":"XAI_API_KEY","context_tokens":131072}]}
+  ```
+
+  Create sessions with `{"model":"xai/grok"}`. Through OpenRouter, an `x-ai/…` id works without settings. `model_api_key_file` is still required either way.
+- **MADE.** The session instance needs `axlr_session` published in MADE and the `axlr` actor granted to claim it; otherwise the service says so at start and sessions run without an instance.

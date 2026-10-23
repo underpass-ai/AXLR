@@ -9,6 +9,8 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -19,7 +21,10 @@ import (
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
+	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
+	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/compose"
 	"github.com/underpass-ai/AXLR/tui/service"
 )
 
@@ -81,30 +86,90 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	defer manager.Close()
-	executor, err := runtime.New(runtime.Config{Root: cfg.Workspace, Plugins: manager})
+	settings, err := serviceSettings(ctx, cfg.SettingsFile)
+	if err != nil {
+		fmt.Fprintln(stderr, "axlr-serve: settings unavailable:", err)
+		return 1
+	}
+	note := func(line string) { fmt.Fprintln(stderr, "axlr-serve:", line) }
+	// Local commands run in the console's exec sandbox when settings ask
+	// for it: a service takes prompts from its clients, not from the
+	// person at the keyboard.
+	sandbox, _, err := compose.ExecSandbox(ctx, "axlr-serve", settings.ExecSandbox(), exec.LookPath, stderr)
+	if err != nil {
+		fmt.Fprintln(stderr, "axlr-serve: exec sandbox:", err)
+		return 1
+	}
+	executor, err := runtime.New(runtime.Config{Root: cfg.Workspace, Plugins: manager, Sandbox: sandbox})
 	if err != nil {
 		fmt.Fprintln(stderr, "axlr-serve: workspace unavailable")
 		return 1
 	}
 	defer executor.Close()
-	client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: modelHTTPClient(60 * time.Second)})
+	httpClient := modelHTTPClient(60 * time.Second)
+	client, err := openrouter.New(openrouter.ClientConfig{APIKey: key, HTTPClient: httpClient, Models: compose.OpenRouterModelOptions(settings)})
 	if err != nil {
 		fmt.Fprintln(stderr, "axlr-serve: model provider unavailable")
 		return 1
 	}
+	// local_models routes a model to its own OpenAI-compatible server,
+	// local or remote over HTTPS with its api_key_env.
+	locals := compose.NewLocalModels(settings, os.Getenv)
+	routes, err := locals.Connect(httpClient)
+	if err != nil {
+		fmt.Fprintln(stderr, "axlr-serve:", err)
+		return 1
+	}
+	calibration, err := storage.NewTokenCalibration(filepath.Join(cfg.StateDir, "bytes-per-token.json"))
+	if err != nil {
+		fmt.Fprintln(stderr, "axlr-serve: state unavailable")
+		return 1
+	}
+	locals.Windows.Calibration = calibration
+	judge, err := compose.JevJudge(settings.Jev, os.Getenv)
+	if err != nil {
+		fmt.Fprintln(stderr, "axlr-serve:", err)
+		return 1
+	}
+	sessions, err := service.OpenSessions(cfg)
+	if err != nil {
+		fmt.Fprintln(stderr, "axlr-serve: state unavailable")
+		return 1
+	}
+	labels, err := storage.NewSessionLabelStore(filepath.Join(cfg.StateDir, "session-labels.json"))
+	if err != nil {
+		sessions.Close()
+		fmt.Fprintln(stderr, "axlr-serve: state unavailable")
+		return 1
+	}
 	pluginManager := axlr.NewPluginManager(manager, profiles, nil)
 	validator := axlr.NewToolArgumentValidator()
-	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: axlr.ModelStream{UseCase: rootApplication.StreamModelUseCase{Models: client}}}
 	runner := axlr.ToolRunner{Executor: executor}
-	catalog := axlr.ToolCatalog{Plugins: manager, Profiles: pluginManager.Profiles, Surfaces: ceremonyhost.Surface}
+	models := axlr.ModelStream{UseCase: rootApplication.StreamModelUseCase{Models: localmodels.Router{Default: client, Routes: routes}}}
+	lifecycle, ceremonies, err := sessionLifecycle(ctx, cfg, registrations, settings, runner, models, labels, sessions, locals.Windows, judge, note)
+	if err != nil {
+		sessions.Close()
+		fmt.Fprintln(stderr, "axlr-serve: state unavailable")
+		return 1
+	}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: sessions.Store(), Ceremonies: ceremonies, Session: lifecycle, Calibration: calibration, Language: "en"}
+	if _, err := compose.Equip(&continuation, compose.Equipment{Settings: settings, State: cfg.StateDir, Store: sessions.Store(), Usage: sessions.Usage(), Labels: labels, Windows: locals.Windows, Tools: runner, Memory: true, Note: note}); err != nil {
+		sessions.Close()
+		fmt.Fprintln(stderr, "axlr-serve: tools unavailable:", err)
+		return 1
+	}
+	catalog := axlr.ToolCatalog{Plugins: manager, Profiles: pluginManager.Profiles, RequireWhy: true, Surfaces: ceremonyhost.Surface}
 	deps := service.Dependencies{
 		Start:   application.StartTurnUseCase{Catalog: catalog, Continue: continuation, Tools: runner, Approval: pluginManager},
 		Resolve: application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: pluginManager, Continue: continuation},
 		Catalog: catalog, Tools: runner, Approval: pluginManager, Validation: validator,
-		Ready: service.EngineReadiness(manager, key),
+		Ready:     service.EngineReadiness(manager, key),
+		Sessions:  sessions,
+		Lifecycle: lifecycle,
 	}
 	server, err := service.NewServer(cfg, deps)
 	if err != nil {
+		sessions.Close()
 		fmt.Fprintln(stderr, "axlr-serve: unable to initialize service")
 		return 1
 	}

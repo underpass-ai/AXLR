@@ -187,6 +187,10 @@ func (s *Server) runTurn(ctx context.Context, id, op, actor, request string, pro
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
 	batch := newEventBatcher(s, id, op, actor, request)
 	err = errors.Join(s.deps.Start.Execute(ctx, &session, prompt, batch.Emit), batch.Flush())
+	if capped, ok := application.IsContextCap(err); ok {
+		s.continueCapped(capped, op, actor, request)
+		return
+	}
 	if err != nil {
 		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
 	}
