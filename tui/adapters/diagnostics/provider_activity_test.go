@@ -75,3 +75,46 @@ func TestReasoningProgressCountsBytesInSteps(t *testing.T) {
 		t.Fatalf("text %d bytes", text.Len())
 	}
 }
+
+// The Anthropic Messages and OpenAI Responses streams carry no choices; their
+// own events drive the same phases, reasoning progress and tool-call progress.
+func TestNativeStreamsDriveTheSamePhases(t *testing.T) {
+	for name, frames := range map[string][]string{
+		"anthropic": {
+			`{"type":"message_start","message":{"role":"assistant"}}`,
+			`{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}`,
+			`{"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"private thought"}}`,
+			`{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_1","name":"read","input":{}}}`,
+			`{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"path\":\"a\"}"}}`,
+			`{"type":"content_block_start","index":2,"content_block":{"type":"text","text":""}}`,
+			`{"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"visible"}}`,
+		},
+		"responses": {
+			`{"type":"response.output_item.added","output_index":0,"item":{"type":"reasoning","id":"rs_1"}}`,
+			`{"type":"response.reasoning_summary_text.delta","output_index":0,"delta":"private thought"}`,
+			`{"type":"response.output_item.added","output_index":1,"item":{"type":"function_call","name":"read","call_id":"call_1"}}`,
+			`{"type":"response.function_call_arguments.delta","output_index":1,"delta":"{\"path\":\"a\"}"}`,
+			`{"type":"response.output_text.delta","output_index":2,"delta":"visible"}`,
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			var phases []domain.ProviderPhase
+			var reasoning []string
+			var tool string
+			var toolBytes int
+			ctx := application.WithProviderActivity(context.Background(), func(phase domain.ProviderPhase) { phases = append(phases, phase) })
+			ctx = application.WithReasoningProgress(ctx, func(_ int, text string) { reasoning = append(reasoning, text) })
+			ctx = application.WithToolCallProgress(ctx, func(name string, bytes int) { tool, toolBytes = name, bytes })
+			body := &streamBody{ctx: ctx}
+			for _, frame := range frames {
+				body.observeFrame([]byte(frame))
+			}
+			if len(phases) != 3 || phases[0] != domain.ProviderReasoning || phases[1] != domain.ProviderToolCall || phases[2] != domain.ProviderContent {
+				t.Fatalf("phases %v", phases)
+			}
+			if strings.Join(reasoning, "") != "private thought" || tool != "read" || toolBytes != len(`{"path":"a"}`) {
+				t.Fatalf("reasoning %q tool %q bytes %d", reasoning, tool, toolBytes)
+			}
+		})
+	}
+}

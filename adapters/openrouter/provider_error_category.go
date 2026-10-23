@@ -1,11 +1,13 @@
 package openrouter
 
-type ProviderErrorCategory string
+import "github.com/underpass-ai/AXLR/adapters/provider"
+
+type ProviderErrorCategory = provider.ProviderErrorCategory
 
 const (
-	CategoryAuthentication      ProviderErrorCategory = "authentication"
-	CategoryInsufficientCredits ProviderErrorCategory = "insufficient_credits"
-	CategoryRateLimited         ProviderErrorCategory = "rate_limited"
-	CategoryInvalidRequest      ProviderErrorCategory = "invalid_request"
-	CategoryProviderFailure     ProviderErrorCategory = "provider_failure"
+	CategoryAuthentication      = provider.CategoryAuthentication
+	CategoryInsufficientCredits = provider.CategoryInsufficientCredits
+	CategoryRateLimited         = provider.CategoryRateLimited
+	CategoryInvalidRequest      = provider.CategoryInvalidRequest
+	CategoryProviderFailure     = provider.CategoryProviderFailure
 )

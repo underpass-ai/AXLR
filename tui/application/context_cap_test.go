@@ -207,3 +207,24 @@ func TestReasoningGoesBackForTheCurrentTurnAtItsSize(t *testing.T) {
 		t.Fatalf("reasoning counted as %d tokens", got)
 	}
 }
+
+// The native adapters' reasoning counts the same way: Anthropic's thinking
+// text as text and its signature at its measured size, OpenAI's summary
+// parts as text and its encrypted content at its measured size.
+func TestReasoningOfTheNativeAdaptersIsCounted(t *testing.T) {
+	opaque := strings.Repeat("A", 3_000)
+	anthropic, err := root.NewJSONValue([]byte(`[{"type":"thinking","thinking":"plan the page","signature":"` + opaque + `"},{"type":"redacted_thinking","data":"` + opaque + `"}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reasoningTokens(&byteCounter{}, anthropic); got != 4+1_000+1_000 {
+		t.Fatalf("Anthropic reasoning counted as %d tokens", got)
+	}
+	openai, err := root.NewJSONValue([]byte(`[{"type":"reasoning","id":"rs_1","summary":[{"type":"summary_text","text":"plan the page"},{"type":"summary_text","text":"plan the page"}],"encrypted_content":"` + opaque + `"}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reasoningTokens(&byteCounter{}, openai); got != 4+4+1_000 {
+		t.Fatalf("OpenAI reasoning counted as %d tokens", got)
+	}
+}

@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/underpass-ai/AXLR/adapters/provider"
 	"github.com/underpass-ai/AXLR/domain"
 )
 
 const endpoint = "https://openrouter.ai/api/v1/chat/completions"
-const maxResponseBytes = 8 * 1024 * 1024
 
 type Client struct {
 	apiKey                  string
@@ -91,7 +91,7 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	// A whole reply has no events to time, so the stream's maximum duration
 	// bounds the request and its body: a server that accepts the request and
 	// never answers does not hold the turn until the person cancels.
-	requestCtx, cancel := context.WithTimeoutCause(ctx, c.streamMaxDuration, &StreamTimeoutError{maximumDuration: true, provider: c.provider})
+	requestCtx, cancel := context.WithTimeoutCause(ctx, c.streamMaxDuration, NewStreamTimeoutError(c.provider, true))
 	defer cancel()
 	failure := func(err error) error {
 		if ctx.Err() != nil {
@@ -118,7 +118,7 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	stop := context.AfterFunc(requestCtx, closeBody)
 	defer func() { stop(); closeBody() }()
 	if httpResp.StatusCode < 200 || httpResp.StatusCode >= 300 {
-		return domain.CompletionResult{RequestBytes: len(body)}, c.providerError(httpResp.StatusCode, errorResponseMessage(httpResp.Body))
+		return domain.CompletionResult{RequestBytes: len(body)}, c.providerError(httpResp.StatusCode, provider.ErrorResponseMessage(httpResp.Body))
 	}
 	data, err := io.ReadAll(io.LimitReader(httpResp.Body, maxResponseBytes+1))
 	if err != nil {
@@ -131,7 +131,7 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	if err := json.Unmarshal(data, &reply); err != nil {
 		return domain.CompletionResult{RequestBytes: len(body)}, errors.New("malformed OpenRouter response")
 	}
-	if status, message, ok := errorBody(reply.Error); ok {
+	if status, message, ok := provider.ErrorBody(reply.Error); ok {
 		return domain.CompletionResult{RequestBytes: len(body)}, c.providerError(status, message)
 	}
 	result, err := mapResponse(reply)
@@ -170,7 +170,7 @@ func (c *Client) providerError(status int, message string) *ProviderError {
 	if c.provider != providerName {
 		err.Provider = c.provider
 	}
-	return err.withoutKey(c.apiKey)
+	return err.WithoutKey(c.apiKey)
 }
 
 // template asks the chat template to turn thinking off when configured.

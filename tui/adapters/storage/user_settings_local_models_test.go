@@ -164,3 +164,41 @@ func TestPromptTokensValidation(t *testing.T) {
 		}
 	}
 }
+
+// api chooses the protocol and the endpoint the console posts to; an
+// unknown value is refused.
+func TestLocalModelAPIChoosesTheProtocolAndEndpoint(t *testing.T) {
+	for _, tc := range []struct {
+		api, url, endpoint, protocol string
+	}{
+		{"", "http://127.0.0.1:8080/v1", "http://127.0.0.1:8080/v1/chat/completions", APIChat},
+		{"chat", "http://127.0.0.1:8080/v1/", "http://127.0.0.1:8080/v1/chat/completions", APIChat},
+		{"anthropic", "https://api.anthropic.com", "https://api.anthropic.com/v1/messages", APIAnthropic},
+		{"anthropic", "https://api.anthropic.com/v1/", "https://api.anthropic.com/v1/messages", APIAnthropic},
+		{"anthropic", "https://proxy.example.com/claude", "https://proxy.example.com/claude/v1/messages", APIAnthropic},
+		{"responses", "https://api.openai.com/v1", "https://api.openai.com/v1/responses", APIResponses},
+	} {
+		local := LocalModel{ID: "x", URL: tc.url, API: tc.api, ContextTokens: 8192}
+		if local.Protocol() != tc.protocol || local.EndpointURL() != tc.endpoint {
+			t.Fatalf("api %q url %q: protocol %q endpoint %q", tc.api, tc.url, local.Protocol(), local.EndpointURL())
+		}
+	}
+	path := filepath.Join(t.TempDir(), "settings.json")
+	data := `{"local_models":[
+	 {"id":"anthropic/sonnet","url":"https://api.anthropic.com","model":"claude-sonnet-5-5","api":"anthropic","api_key_env":"ANTHROPIC_API_KEY","context_tokens":200000},
+	 {"id":"openai/gpt","url":"https://api.openai.com/v1","model":"gpt-5","api":"responses","api_key_env":"OPENAI_API_KEY","context_tokens":400000}]}`
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := NewUserSettingsStore(path, DefaultUserSettings())
+	got, err := store.Load(context.Background())
+	if err != nil || len(got.LocalModels) != 2 || got.LocalModels[0].API != "anthropic" || got.LocalModels[1].EndpointURL() != "https://api.openai.com/v1/responses" {
+		t.Fatalf("settings = %+v, %v", got, err)
+	}
+	if err := os.WriteFile(path, []byte(`{"local_models":[{"id":"x","url":"http://127.0.0.1:8080/v1","api":"grpc","context_tokens":8192}]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(context.Background()); err == nil || !strings.Contains(err.Error(), "api must be chat, anthropic or responses") {
+		t.Fatalf("unknown api: %v", err)
+	}
+}

@@ -13,15 +13,16 @@ import (
 )
 
 // providerHintKind is what the person can do about a provider's error, as
-// the hint.* labels word it: the adapter's kind, with a refused key of a
-// local endpoint told apart from OpenRouter's. "" when there is nothing.
+// the hint.* labels word it: the adapter's kind, with a refused key or an
+// empty account of another endpoint told apart from OpenRouter's, whose
+// hints name OpenRouter's pages. "" when there is nothing.
 func providerHintKind(err error) string {
 	var provider *openrouter.ProviderError
 	if !errors.As(err, &provider) {
 		return ""
 	}
 	kind := string(provider.HintKind())
-	if kind == string(openrouter.HintCheckKey) && provider.Provider != "" {
+	if (kind == string(openrouter.HintCheckKey) || kind == string(openrouter.HintCredits)) && provider.Provider != "" {
 		kind += "_local"
 	}
 	return kind

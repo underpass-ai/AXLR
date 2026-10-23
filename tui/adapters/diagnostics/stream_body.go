@@ -193,10 +193,13 @@ func (b *streamBody) observeFrame(data []byte) {
 	if json.Unmarshal(data, &frame) != nil {
 		return
 	}
+	if len(frame.Choices) == 0 {
+		b.observeNativeFrame(data)
+		return
+	}
 	for _, choice := range frame.Choices {
 		if choice.Delta.Content != "" {
-			b.activity(domain.ProviderContent)
-			b.record(application.DiagnosticContent, len(choice.Delta.Content), 1)
+			b.observeContent(len(choice.Delta.Content))
 		}
 		text := choice.Delta.Reasoning + choice.Delta.ReasoningContent
 		// Providers may duplicate text and structured reasoning representations.
@@ -205,32 +208,129 @@ func (b *streamBody) observeFrame(data []byte) {
 				text += detail.Text + detail.Summary
 			}
 		}
-		size := len(text)
-		if size > 0 || len(choice.Delta.ReasoningDetails) > 0 {
-			b.activity(domain.ProviderReasoning)
-			b.record(application.DiagnosticReasoning, size, 1)
-			b.reasoningBytes += size
-			b.reasoningText = lastBytes(b.reasoningText+text, maxReasoningText)
-			if b.reasoningBytes-b.reasoningTold >= reasoningStep || b.reasoningTold == 0 && b.reasoningBytes > 0 {
-				b.reasoningTold = b.reasoningBytes
-				application.NotifyReasoningProgress(b.ctx, b.reasoningBytes, b.reasoningText)
-				b.reasoningText = ""
-			}
+		if len(text) > 0 || len(choice.Delta.ReasoningDetails) > 0 {
+			b.observeReasoning(text)
 		}
-		size = 0
+		size := 0
 		for _, call := range choice.Delta.ToolCalls {
 			size += len(call.Function.Name) + len(call.Function.Arguments)
-			if call.Function.Name != "" && call.Function.Name != b.toolName {
-				b.toolName, b.toolBytes = call.Function.Name, 0
-			}
+			b.observeToolName(call.Function.Name)
 			b.toolBytes += len(call.Function.Arguments)
 		}
 		if len(choice.Delta.ToolCalls) > 0 {
-			b.activity(domain.ProviderToolCall)
-			application.NotifyToolCallProgress(b.ctx, b.toolName, b.toolBytes)
-			b.record(application.DiagnosticToolDelta, size, len(choice.Delta.ToolCalls))
+			b.observeToolCall(size, len(choice.Delta.ToolCalls))
 		}
 	}
+}
+
+// observeNativeFrame reads the events of the Anthropic Messages API
+// (content_block_start, content_block_delta with text_delta, thinking_delta,
+// input_json_delta) and the OpenAI Responses API (response.output_text.delta,
+// response.reasoning_summary_text.delta, response.function_call_arguments.delta,
+// response.output_item.added), which carry no choices, for the same phases.
+func (b *streamBody) observeNativeFrame(data []byte) {
+	var event struct {
+		Type         string          `json:"type"`
+		Delta        json.RawMessage `json:"delta"`
+		ContentBlock struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		} `json:"content_block"`
+		Item struct {
+			Type string `json:"type"`
+			Name string `json:"name"`
+		} `json:"item"`
+	}
+	if json.Unmarshal(data, &event) != nil {
+		return
+	}
+	var text string
+	switch event.Type {
+	case "content_block_start":
+		switch event.ContentBlock.Type {
+		case "tool_use":
+			b.observeToolName(event.ContentBlock.Name)
+			b.observeToolCall(len(event.ContentBlock.Name), 1)
+		case "thinking", "redacted_thinking":
+			b.observeReasoning("")
+		}
+	case "content_block_delta":
+		var delta struct {
+			Type        string `json:"type"`
+			Text        string `json:"text"`
+			Thinking    string `json:"thinking"`
+			PartialJSON string `json:"partial_json"`
+		}
+		if json.Unmarshal(event.Delta, &delta) != nil {
+			return
+		}
+		switch delta.Type {
+		case "text_delta":
+			b.observeContent(len(delta.Text))
+		case "thinking_delta", "signature_delta":
+			b.observeReasoning(delta.Thinking)
+		case "input_json_delta":
+			b.toolBytes += len(delta.PartialJSON)
+			b.observeToolCall(len(delta.PartialJSON), 1)
+		}
+	case "response.output_item.added":
+		switch event.Item.Type {
+		case "function_call":
+			b.observeToolName(event.Item.Name)
+			b.observeToolCall(len(event.Item.Name), 1)
+		case "reasoning":
+			b.observeReasoning("")
+		}
+	case "response.output_text.delta", "response.reasoning_summary_text.delta", "response.reasoning_text.delta", "response.function_call_arguments.delta":
+		if json.Unmarshal(event.Delta, &text) != nil {
+			return
+		}
+		switch event.Type {
+		case "response.output_text.delta":
+			b.observeContent(len(text))
+		case "response.function_call_arguments.delta":
+			b.toolBytes += len(text)
+			b.observeToolCall(len(text), 1)
+		default:
+			b.observeReasoning(text)
+		}
+	}
+}
+
+// observeContent records streamed answer text.
+func (b *streamBody) observeContent(size int) {
+	b.activity(domain.ProviderContent)
+	b.record(application.DiagnosticContent, size, 1)
+}
+
+// observeReasoning records streamed reasoning and tells the console of it
+// every reasoningStep bytes; text may be empty for a structured frame.
+func (b *streamBody) observeReasoning(text string) {
+	size := len(text)
+	b.activity(domain.ProviderReasoning)
+	b.record(application.DiagnosticReasoning, size, 1)
+	b.reasoningBytes += size
+	b.reasoningText = lastBytes(b.reasoningText+text, maxReasoningText)
+	if b.reasoningBytes-b.reasoningTold >= reasoningStep || b.reasoningTold == 0 && b.reasoningBytes > 0 {
+		b.reasoningTold = b.reasoningBytes
+		application.NotifyReasoningProgress(b.ctx, b.reasoningBytes, b.reasoningText)
+		b.reasoningText = ""
+	}
+}
+
+// observeToolName starts counting a new call's arguments when a name arrives.
+func (b *streamBody) observeToolName(name string) {
+	if name != "" && name != b.toolName {
+		b.toolName, b.toolBytes = name, 0
+	}
+}
+
+// observeToolCall records a tool-call fragment and tells the console how far
+// the current call's arguments have come.
+func (b *streamBody) observeToolCall(size, count int) {
+	b.activity(domain.ProviderToolCall)
+	application.NotifyToolCallProgress(b.ctx, b.toolName, b.toolBytes)
+	b.record(application.DiagnosticToolDelta, size, count)
 }
 func (b *streamBody) Close() error {
 	b.closeOnce.Do(func() {

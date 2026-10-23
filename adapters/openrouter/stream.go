@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/underpass-ai/AXLR/adapters/provider"
 	"github.com/underpass-ai/AXLR/domain"
 )
 
@@ -41,11 +42,11 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	}
 	streamCtx, cancelStream := context.WithCancelCause(ctx)
 	defer cancelStream(nil)
-	timeout := &StreamTimeoutError{provider: c.provider}
+	timeout := NewStreamTimeoutError(c.provider, false)
 	idle := c.inactivityTimeout(wire.Model)
 	inactivityTimer := time.AfterFunc(idle, func() { cancelStream(timeout) })
 	defer inactivityTimer.Stop()
-	maximumDurationTimeout := &StreamTimeoutError{maximumDuration: true, provider: c.provider}
+	maximumDurationTimeout := NewStreamTimeoutError(c.provider, true)
 	maximumDurationTimer := time.AfterFunc(c.streamMaxDuration, func() { cancelStream(maximumDurationTimeout) })
 	defer maximumDurationTimer.Stop()
 	streamError := func() error {
@@ -87,7 +88,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 		return sent(), cause
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return sent(), c.providerError(response.StatusCode, errorResponseMessage(response.Body))
+		return sent(), c.providerError(response.StatusCode, provider.ErrorResponseMessage(response.Body))
 	}
 	decoder := newSSEDecoder(response.Body)
 	for {
@@ -130,7 +131,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 				if c.provider != providerName {
 					provider.Provider = c.provider
 				}
-				provider.withoutKey(c.apiKey)
+				provider.WithoutKey(c.apiKey)
 			}
 			return sent(), err
 		}
