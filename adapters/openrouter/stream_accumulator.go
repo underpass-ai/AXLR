@@ -6,6 +6,7 @@ import (
 	"sort"
 	"unicode/utf8"
 
+	"github.com/underpass-ai/AXLR/adapters/provider"
 	"github.com/underpass-ai/AXLR/domain"
 )
 
@@ -56,7 +57,7 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 	if err := json.Unmarshal(data, &chunk); err != nil {
 		return nil, errors.New("malformed OpenRouter stream chunk")
 	}
-	if status, message, ok := errorBody(chunk.Error); ok {
+	if status, message, ok := provider.ErrorBody(chunk.Error); ok {
 		err := classifyProviderError(status)
 		err.Message = message
 		return nil, err
