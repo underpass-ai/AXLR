@@ -27,6 +27,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"github.com/underpass-ai/AXLR/tui/dto"
 )
 
 type fixedModel struct{}
@@ -236,7 +237,50 @@ func TestMTLSRolesSessionsAndIdempotentTurn(t *testing.T) {
 	if response.StatusCode != 200 {
 		t.Fatalf("get: %d", response.StatusCode)
 	}
+	var got struct {
+		Status string               `json:"status"`
+		Result *dto.ExecutionResult `json:"result"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
 	response.Body.Close()
+	// The session and its turn.completed event carry the execution's
+	// result: a client reads it without reading the events before.
+	if got.Status != "complete" || got.Result == nil || got.Result.Schema != dto.ExecutionResultSchema || got.Result.Status != "completed" || got.Result.Answer != "hello" || got.Result.Session != created.ID || len(got.Result.Sessions) != 1 || len(got.Result.Calls) != 0 || got.Result.Usage.Requests != 0 {
+		t.Fatalf("session result: %+v %+v", got, got.Result)
+	}
+	events, _, err := s.events.Read(created.ID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := events[len(events)-1]
+	if completed.Type != "turn.completed" {
+		t.Fatalf("last event %+v", completed)
+	}
+	payload, _ := json.Marshal(completed.Payload)
+	var terminal struct {
+		Status string               `json:"status"`
+		Result *dto.ExecutionResult `json:"result"`
+	}
+	if err := json.Unmarshal(payload, &terminal); err != nil || terminal.Status != "complete" || terminal.Result == nil || terminal.Result.Status != "completed" || terminal.Result.Answer != "hello" {
+		t.Fatalf("turn.completed payload %s: %v", payload, err)
+	}
+	response = apiRequest(t, client, "POST", ts.URL+"/v1/sessions", `{"model":"test/model"}`, "")
+	var fresh struct {
+		ID string `json:"id"`
+	}
+	_ = json.NewDecoder(response.Body).Decode(&fresh)
+	response.Body.Close()
+	response = apiRequest(t, client, "GET", ts.URL+"/v1/sessions/"+fresh.ID, "", "")
+	var idle struct {
+		Result *dto.ExecutionResult `json:"result"`
+	}
+	_ = json.NewDecoder(response.Body).Decode(&idle)
+	response.Body.Close()
+	if idle.Result != nil {
+		t.Fatalf("a session that never ran has a result: %+v", idle.Result)
+	}
 }
 
 func TestProbeListenerHasNoDataAndUncertifiedClientFails(t *testing.T) {
@@ -457,6 +501,18 @@ func TestSessionApprovalAdvancesOnlyThePendingCall(t *testing.T) {
 			state := stored.Export()
 			if len(state.Activity) != 1 || state.Activity[0].Outcome == nil || state.Activity[0].Outcome.Content != "done" || state.Activity[0].Decision != domain.DecisionApprove {
 				t.Fatalf("wrong call resolved: %+v", state.Activity)
+			}
+			// The decided call is in the result the turn's last event carries.
+			history, _, err := s.events.Read(string(id), 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			payload, _ := json.Marshal(history[len(history)-1].Payload)
+			var terminal struct {
+				Result *dto.ExecutionResult `json:"result"`
+			}
+			if err := json.Unmarshal(payload, &terminal); err != nil || history[len(history)-1].Type != "turn.completed" || terminal.Result == nil || len(terminal.Result.Calls) != 1 || terminal.Result.Calls[0].ID != "read-once" || terminal.Result.Calls[0].Status != "completed" || terminal.Result.Calls[0].Decision != "approve" {
+				t.Fatalf("%s payload %s: %v", history[len(history)-1].Type, payload, err)
 			}
 			break
 		}

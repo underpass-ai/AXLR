@@ -81,7 +81,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 500, "storage_error", "unable to read events")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending()})
+	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, "")})
 }
 
 func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
@@ -185,18 +185,21 @@ func (s *Server) runTurn(ctx context.Context, id, op, actor, request string, pro
 		return
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
-	batch := newEventBatcher(s, id, op, actor, request)
+	batch := newEventBatcher(s, id, op, actor, request, &session)
 	err = errors.Join(s.deps.Start.Execute(ctx, &session, prompt, batch.Emit), batch.Flush())
 	if capped, ok := application.IsContextCap(err); ok {
 		s.continueCapped(capped, op, actor, request)
 		return
 	}
 	if err != nil {
-		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
+		_, _ = s.events.Append(id, op, "operation.failed", map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")})
 	}
 }
 
-func (s *Server) recordApplicationEvent(id, op, actor, request string, e application.Event) error {
+// recordApplicationEvent journals one event of the loop. The state event
+// that ends a turn (a decision due, the answer, an interruption) carries
+// the execution's result read from session, when the batcher has it.
+func (s *Server) recordApplicationEvent(id, op, actor, request string, e application.Event, session *domain.Session) error {
 	kind := ""
 	var payload any = map[string]any{}
 	switch e.Kind {
@@ -223,6 +226,11 @@ func (s *Server) recordApplicationEvent(id, op, actor, request string, e applica
 			kind = "turn.interrupted"
 		}
 		payload = map[string]any{"status": e.State}
+		if kind != "" && session != nil {
+			if result := s.executionResult(*session, ""); result != nil {
+				payload = map[string]any{"status": e.State, "result": result}
+			}
+		}
 	}
 	if kind == "" {
 		return nil
@@ -432,10 +440,10 @@ func (s *Server) runApproval(ctx context.Context, id, op, actor, request string,
 		}
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
-	batch := newEventBatcher(s, id, op, actor, request)
+	batch := newEventBatcher(s, id, op, actor, request, &session)
 	err = errors.Join(s.deps.Resolve.Execute(ctx, &session, call, decision, batch.Emit), batch.Flush())
 	if err != nil {
-		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
+		_, _ = s.events.Append(id, op, "operation.failed", map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")})
 	}
 }
 

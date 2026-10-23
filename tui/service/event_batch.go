@@ -6,6 +6,7 @@ import (
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 // eventBatcher bounds journal writes while preserving the order of model text
@@ -16,12 +17,15 @@ type eventBatcher struct {
 	operationID string
 	actor       string
 	requestID   string
+	// session is the session the use case drives, read when a state event
+	// ends the turn to put its result in the event; nil records none.
+	session     *domain.Session
 	text        strings.Builder
 	lastPersist time.Time
 }
 
-func newEventBatcher(server *Server, sessionID, operationID, actor, requestID string) *eventBatcher {
-	return &eventBatcher{server: server, sessionID: sessionID, operationID: operationID, actor: actor, requestID: requestID, lastPersist: time.Now()}
+func newEventBatcher(server *Server, sessionID, operationID, actor, requestID string, session *domain.Session) *eventBatcher {
+	return &eventBatcher{server: server, sessionID: sessionID, operationID: operationID, actor: actor, requestID: requestID, session: session, lastPersist: time.Now()}
 }
 
 func (b *eventBatcher) Emit(event application.Event) error {
@@ -29,7 +33,7 @@ func (b *eventBatcher) Emit(event application.Event) error {
 		if err := b.Flush(); err != nil {
 			return err
 		}
-		return b.server.recordApplicationEvent(b.sessionID, b.operationID, b.actor, b.requestID, event)
+		return b.server.recordApplicationEvent(b.sessionID, b.operationID, b.actor, b.requestID, event, b.session)
 	}
 	for _, char := range string(event.Text) {
 		if b.text.Len()+len(string(char)) > 4096 {
@@ -50,7 +54,7 @@ func (b *eventBatcher) Flush() error {
 		return nil
 	}
 	text := b.text.String()
-	if err := b.server.recordApplicationEvent(b.sessionID, b.operationID, b.actor, b.requestID, application.Event{Kind: application.EventTextDelta, Text: root.Text(text)}); err != nil {
+	if err := b.server.recordApplicationEvent(b.sessionID, b.operationID, b.actor, b.requestID, application.Event{Kind: application.EventTextDelta, Text: root.Text(text)}, nil); err != nil {
 		return err
 	}
 	b.text.Reset()
