@@ -42,6 +42,10 @@ func RequestTokens(counter TokenCounterPort, guidance root.Message, tools []root
 
 func messageTokens(counter TokenCounterPort, message root.Message) int {
 	total := messageTokenOverhead + counter.Count(string(message.Content))
+	if message.HasReasoning() {
+		// The reasoning goes back with its message (reasoning_details).
+		total += counter.Count(string(message.Reasoning.Bytes()))
+	}
 	for _, call := range message.ToolCalls {
 		total += messageTokenOverhead + counter.Count(string(call.Name)) + counter.Count(string(call.Arguments.Bytes()))
 	}

@@ -1,6 +1,7 @@
 package openrouter
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,13 @@ func mapResponse(wire responseDTO) (domain.CompletionResult, error) {
 		return domain.CompletionResult{}, errors.New("OpenRouter response is not an assistant message")
 	}
 	message := domain.Message{Role: domain.RoleAssistant}
+	if details := bytes.TrimSpace(choice.Message.ReasoningDetails); len(details) > 0 && !bytes.Equal(details, []byte("null")) {
+		reasoning, err := domain.NewJSONValue(details)
+		if err != nil {
+			return domain.CompletionResult{}, errors.New("malformed OpenRouter reasoning details")
+		}
+		message.Reasoning = reasoning
+	}
 	if choice.Message.Content != nil {
 		content, err := domain.NewText(*choice.Message.Content)
 		if err != nil {
