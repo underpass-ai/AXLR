@@ -13,6 +13,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"net"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -573,5 +575,126 @@ func TestCancelJournalsTheResult(t *testing.T) {
 	}
 	if err := json.Unmarshal(payload, &terminal); err != nil || terminal.Result == nil || terminal.Result.Status != "interrupted" || len(terminal.Result.Calls) != 1 || terminal.Result.Calls[0].ID != "read-once" {
 		t.Fatalf("payload %s: %v", payload, err)
+	}
+}
+
+// commandingModel asks for a command on its first request and answers on
+// the next, so a test sees what the service does with the call.
+type commandingModel struct{ requests atomic.Int32 }
+
+func (m *commandingModel) Stream(_ context.Context, req root.CompletionRequest, emit func(root.Text) error) (root.CompletionResult, error) {
+	if m.requests.Add(1) == 1 {
+		for _, tool := range req.Tools {
+			if tool.Name == "local_exec" {
+				return root.CompletionResult{}, errors.New("local_exec was offered under a policy of reads")
+			}
+		}
+		args, _ := root.NewJSONObject([]byte(`{"program":"touch","args":["made-by-service"],"why":"The person asked for it."}`))
+		return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "exec-1", Name: "local_exec", Arguments: args}}}}, nil
+	}
+	if err := emit("refused, as you said"); err != nil {
+		return root.CompletionResult{}, err
+	}
+	return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "refused, as you said"}}, nil
+}
+
+// A session created under a policy keeps it: GetSession shows it, and a
+// turn refuses the command the policy forbids outside the model, before
+// any approval, so the turn completes with the call "forbidden" and the
+// tool never ran. A policy the contract does not describe is refused with
+// the session.
+func TestSessionPolicyRefusesAForbiddenCall(t *testing.T) {
+	model := &commandingModel{}
+	tool := &countingTool{}
+	s, ts, client, _ := testServerWith(t, func(_ Config, deps *Dependencies) {
+		deps.Start.Continue.Models = model
+		deps.Start.Tools = tool
+		deps.Resolve.Continue.Models = model
+		deps.Resolve.Tools = tool
+		deps.Tools = tool
+	})
+	for name, body := range map[string]string{
+		"unknown level":        `{"model":"test/model","policy":{"level":"autonomous","tools":{}}}`,
+		"unknown policy key":   `{"model":"test/model","policy":{"level":"observe","tools":{},"budget":{}}}`,
+		"unknown body key":     `{"model":"test/model","policy":{"level":"observe","tools":{}},"budget":{}}`,
+		"policy not an object": `{"model":"test/model","policy":"observe"}`,
+	} {
+		response := apiRequest(t, client, "POST", ts.URL+"/v1/sessions", body, "")
+		if response.StatusCode != http.StatusUnprocessableEntity && response.StatusCode != http.StatusBadRequest {
+			t.Fatalf("%s: status %d", name, response.StatusCode)
+		}
+		response.Body.Close()
+	}
+	policy := `{"level":"observe","tools":{"allow":[{"name":"local_read","arguments":{"path":"logs/**"}},{"name":"local_search"}]}}`
+	response := apiRequest(t, client, "POST", ts.URL+"/v1/sessions", `{"model":"test/model","policy":`+policy+`}`, "")
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create status %d", response.StatusCode)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	response = apiRequest(t, client, "GET", ts.URL+"/v1/sessions/"+created.ID, "", "")
+	var shown struct {
+		Policy json.RawMessage `json:"policy"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&shown); err != nil || string(shown.Policy) != policy {
+		t.Fatalf("GetSession policy %s: %v", shown.Policy, err)
+	}
+	response.Body.Close()
+	response = apiRequest(t, client, "POST", ts.URL+"/v1/sessions/"+created.ID+"/turns", `{"prompt":"make the file","expected_revision":1}`, "turn-key-1234567890")
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("turn status %d", response.StatusCode)
+	}
+	response.Body.Close()
+	id := domain.SessionID(created.ID)
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		history, _, err := s.events.Read(created.ID, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last := ""
+		var kinds []string
+		if len(history) > 0 {
+			last = history[len(history)-1].Type
+		}
+		for _, event := range history {
+			kinds = append(kinds, event.Type)
+		}
+		if last == "turn.completed" {
+			if strings.Contains(strings.Join(kinds, " "), "approval.required") {
+				t.Fatalf("the forbidden call reached an approval: %v", kinds)
+			}
+			payload, _ := json.Marshal(history[len(history)-1].Payload)
+			var terminal struct {
+				Result *dto.ExecutionResult `json:"result"`
+			}
+			if err := json.Unmarshal(payload, &terminal); err != nil || terminal.Result == nil || terminal.Result.Status != "completed" || len(terminal.Result.Calls) != 1 || terminal.Result.Calls[0].Status != "forbidden" {
+				t.Fatalf("payload %s: %v", payload, err)
+			}
+			stored, err := s.sessions.Load(context.Background(), id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			state := stored.Export()
+			if stored.Status() != domain.StatusComplete || tool.calls.Load() != 0 || len(state.Activity) != 1 || state.Activity[0].Decision != domain.DecisionDeny || state.Activity[0].Outcome == nil || !strings.HasPrefix(string(state.Activity[0].Outcome.Content), "forbidden by the execution's policy: local_exec is not in the execution's allow list") {
+				t.Fatalf("status %s calls %d activity %+v", stored.Status(), tool.calls.Load(), state.Activity)
+			}
+			break
+		}
+		if last == "approval.required" || last == "operation.failed" {
+			t.Fatalf("the turn ended in %s: %v", last, kinds)
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the turn did not finish: %v", kinds)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := os.Stat(filepath.Join(s.Config.Workspace, "made-by-service")); err == nil {
+		t.Fatal("the forbidden command ran")
 	}
 }

@@ -32,6 +32,10 @@ func rejectUnknownCall(ctx context.Context, s *domain.Session, store SessionStor
 		if errors.As(invalid[0], &denial) {
 			reason = denial.Error()
 		}
+		var forbidden PolicyDenial
+		if errors.As(invalid[0], &forbidden) {
+			reason = forbidden.Error()
+		}
 		// The reason may quote non-ASCII argument text: cut on a rune
 		// boundary so the outcome stays valid UTF-8.
 		reason = utf8Prefix(reason, 1024)

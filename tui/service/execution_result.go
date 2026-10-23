@@ -30,3 +30,14 @@ func (s *Server) executionResult(session domain.Session, failure string) *dto.Ex
 	wire := contract.ExecutionResult(result)
 	return &wire
 }
+
+// executionPolicy is the session's policy as GetSession shows it, nil
+// for a session without one.
+func executionPolicy(session domain.Session) *dto.ExecutionPolicy {
+	policy, has := session.Policy()
+	if !has {
+		return nil
+	}
+	wire := contract.ExecutionPolicy(policy)
+	return &wire
+}

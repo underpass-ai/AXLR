@@ -57,6 +57,25 @@ func (p execPolicy) AlwaysAsk() []string {
 	return nil
 }
 
+// readExecPolicy reads the policy file of --policy: the contract's object,
+// bare or wrapped as {"policy": {...}}.
+func readExecPolicy(path string) (domain.ExecutionPolicy, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return domain.ExecutionPolicy{}, fmt.Errorf("--policy: %w", err)
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, contract.MaxExecutionPolicyBytes+1))
+	if err != nil {
+		return domain.ExecutionPolicy{}, fmt.Errorf("--policy: %w", err)
+	}
+	policy, err := contract.ParseExecutionPolicy(data)
+	if err != nil {
+		return domain.ExecutionPolicy{}, fmt.Errorf("--policy %s: %w", path, err)
+	}
+	return policy, nil
+}
+
 // execModes are the work modes a run may take: the ones that only tailor
 // tool policy. The ceremony modes need the console's cards.
 func execMode(raw string) (domain.WorkMode, error) {

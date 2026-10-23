@@ -4,8 +4,11 @@ package domain
 type ExecutionCallStatus string
 
 const (
-	ExecutionCallPending   ExecutionCallStatus = "pending"
-	ExecutionCallDenied    ExecutionCallStatus = "denied"
+	ExecutionCallPending ExecutionCallStatus = "pending"
+	ExecutionCallDenied  ExecutionCallStatus = "denied"
+	// ExecutionCallForbidden: the execution's policy refused the call
+	// outside the model, before any decision.
+	ExecutionCallForbidden ExecutionCallStatus = "forbidden"
 	ExecutionCallCompleted ExecutionCallStatus = "completed"
 	ExecutionCallFailed    ExecutionCallStatus = "failed"
 	// ExecutionCallUncertain: the call was interrupted after it may have

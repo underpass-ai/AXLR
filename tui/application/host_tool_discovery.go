@@ -235,7 +235,7 @@ func hostInteger(args map[string]json.RawMessage, key string, fallback int) (int
 // ceremony step leave in the function list, with the definitions sent there
 // (a compact step rewrites axlr_step_done's schema).
 func discoverySnapshot(s domain.Session) []domain.AvailableTool {
-	snapshot := s.ToolSnapshot()
+	snapshot := policyOffered(s, s.ToolSnapshot())
 	offered := make(map[root.ToolName]root.ToolDefinition)
 	for _, definition := range SessionTools(s, snapshot) {
 		offered[definition.Name] = definition

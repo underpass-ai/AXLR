@@ -84,7 +84,7 @@ func ModelTools(snapshot []domain.AvailableTool) []root.ToolDefinition {
 // axlr_request_repair and axlr_request_improvement never reach a repair or
 // improvement session, and plan and task sessions never see the latter.
 func SessionTools(s domain.Session, snapshot []domain.AvailableTool) []root.ToolDefinition {
-	tools := ModeTools(s.Mode(), snapshot)
+	tools := ModeTools(s.Mode(), policyOffered(s, snapshot))
 	if _, step, focused := focusedRun(s); focused {
 		return compactTools(tools, step)
 	}
