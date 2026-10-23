@@ -40,11 +40,68 @@ func RequestTokens(counter TokenCounterPort, guidance root.Message, tools []root
 	return total
 }
 
+// reasoningTokens estimates what a message's reasoning costs as input when
+// it goes back: its readable text and summaries counted as text, its
+// signatures and encrypted data at the three characters per token measured
+// on 23 October 2026 (claude-haiku-5.5: a 90,343-character signature for
+// 30,170 reasoning tokens, and the next request's prompt grew by as much).
+// Tokenized as text, that signature counted as 100,000 and stopped the turn.
+func reasoningTokens(counter TokenCounterPort, reasoning root.JSONValue) int {
+	var blocks []map[string]json.RawMessage
+	if json.Unmarshal(reasoning.Bytes(), &blocks) != nil {
+		return 0
+	}
+	total := 0
+	for _, block := range blocks {
+		for name, raw := range block {
+			var text string
+			if json.Unmarshal(raw, &text) != nil {
+				continue
+			}
+			switch name {
+			case "text", "summary":
+				total += counter.Count(text)
+			case "signature", "data":
+				total += len(text) / opaqueReasoningBytesPerToken
+			}
+		}
+	}
+	return total
+}
+
+const opaqueReasoningBytesPerToken = 3
+
+// currentTurnReasoning keeps the reasoning of the answers since the last
+// user message, the turn the model is continuing, and drops the older:
+// Anthropic ignores the reasoning of earlier turns, and each block sent back
+// is billed as input (a 30,000-token block made the next prompt 25,000
+// tokens larger).
+func currentTurnReasoning(messages []root.Message) []root.Message {
+	last := -1
+	for i, message := range messages {
+		if message.Role == root.RoleUser {
+			last = i
+		}
+	}
+	var out []root.Message
+	for i, message := range messages {
+		if i < last && message.HasReasoning() {
+			if out == nil {
+				out = append([]root.Message(nil), messages...)
+			}
+			out[i].Reasoning = root.JSONValue{}
+		}
+	}
+	if out == nil {
+		return messages
+	}
+	return out
+}
+
 func messageTokens(counter TokenCounterPort, message root.Message) int {
 	total := messageTokenOverhead + counter.Count(string(message.Content))
 	if message.HasReasoning() {
-		// The reasoning goes back with its message (reasoning_details).
-		total += counter.Count(string(message.Reasoning.Bytes()))
+		total += reasoningTokens(counter, message.Reasoning)
 	}
 	for _, call := range message.ToolCalls {
 		total += messageTokenOverhead + counter.Count(string(call.Name)) + counter.Count(string(call.Arguments.Bytes()))

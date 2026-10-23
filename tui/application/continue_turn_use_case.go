@@ -262,10 +262,10 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 			tools = withoutTool(withoutTool(withoutTool(withoutTool(tools, HostForgeToolName), HostRemoveToolName), HostInstallToolName), HostPublishToolName)
 		}
 	}
-	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
+	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, currentTurnReasoning(projection.Messages)...), Tools: tools}
 	counted := 0
 	if cap, capped := u.capsContext(*session); capped {
-		counted = RequestTokens(u.Tokens, guidance, tools, projection.Messages)
+		counted = RequestTokens(u.Tokens, guidance, tools, req.Messages[1:])
 		if estimated := u.Scale.Estimate(model, counted); estimated > cap {
 			contextSpan.End(DiagnosticErrorInvalidState)
 			// The turn ends interrupted either way: continued in the
