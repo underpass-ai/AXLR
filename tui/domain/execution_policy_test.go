@@ -225,7 +225,7 @@ func TestPolicyGlob(t *testing.T) {
 // A call the policy refused is "forbidden" in the result, apart from a
 // call the person or the model's deny reason denied.
 func TestExecutionResultReportsForbiddenCalls(t *testing.T) {
-	s, err := NewSession("0123456789abcdef0123456789abcdef", "/tmp/work", "test/model")
+	s, err := NewSession("0123456789abcdef0123456789abcdef", Workspace(t.TempDir()), "test/model")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestExecutionResultReportsForbiddenCalls(t *testing.T) {
 // The policy survives an export and a restore, and a restore refuses an
 // invalid one.
 func TestSessionKeepsItsPolicy(t *testing.T) {
-	s, err := NewSession("0123456789abcdef0123456789abcdef", "/tmp/work", "test/model")
+	s, err := NewSession("0123456789abcdef0123456789abcdef", Workspace(t.TempDir()), "test/model")
 	if err != nil {
 		t.Fatal(err)
 	}
