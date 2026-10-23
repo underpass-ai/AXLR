@@ -49,9 +49,7 @@ const (
 )
 
 // execChunk asks local_exec to create made-by-exec in the workspace with a
-// program every runner has: touch, or cmd's mkdir on Windows. (cmd keeps the
-// quotes Go puts around an argument with a space and a ">", and ran
-// "type nul > made-by-exec" as one program name.)
+// program every runner has: touch, or cmd's mkdir on Windows.
 var execChunk = func() string {
 	program, args := "touch", []string{"made-by-exec"}
 	if runtime.GOOS == "windows" {
@@ -77,6 +75,9 @@ func TestExecPrintsTheAnswer(t *testing.T) {
 // nothing, unless --approve local lets the run take it.
 func TestExecStopsAtADecisionUnlessAllowed(t *testing.T) {
 	env := cliEnv(t)
+	// The command runs with the console's PATH; without one the console
+	// falls back to Unix directories, where Windows has no cmd.
+	env["PATH"] = os.Getenv("PATH")
 	workspace := t.TempDir()
 	scriptedModel(t, execChunk, answerChunk)
 	code, _, stderr := execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file")
