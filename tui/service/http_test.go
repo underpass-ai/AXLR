@@ -503,9 +503,21 @@ func TestSessionApprovalAdvancesOnlyThePendingCall(t *testing.T) {
 				t.Fatalf("wrong call resolved: %+v", state.Activity)
 			}
 			// The decided call is in the result the turn's last event carries.
-			history, _, err := s.events.Read(string(id), 0)
-			if err != nil {
-				t.Fatal(err)
+			// The session is saved before the journal gets the event: wait
+			// for it.
+			var history []Event
+			for {
+				history, _, err = s.events.Read(string(id), 0)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(history) > 0 && history[len(history)-1].Type == "turn.completed" {
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatalf("turn.completed not journaled: %+v", history)
+				}
+				time.Sleep(10 * time.Millisecond)
 			}
 			payload, _ := json.Marshal(history[len(history)-1].Payload)
 			var terminal struct {
