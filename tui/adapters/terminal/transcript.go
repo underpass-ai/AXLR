@@ -282,6 +282,32 @@ func (t *Transcript) AppendQueued(prompt string) {
 	t.ApplyTheme(t.theme)
 }
 
+// AppendThinking shows, dim, the end of what the model is reasoning while
+// the request runs; it goes when the answer or a tool call starts.
+func (t *Transcript) AppendThinking(tail string) {
+	if tail == "" {
+		return
+	}
+	t.appendRow(transcriptRow{Label: t.theme.Icon("waiting") + " ", Text: t.theme.T("transcript.thinking") + tail, Kind: transcriptRowConsole, Indent: true})
+	t.renderRows()
+	t.ApplyTheme(t.theme)
+}
+
+// thinkingTail is the last lines of reasoning text, folded to one
+// paragraph and cut to what three lines of a console hold.
+func thinkingTail(text string) string {
+	text = strings.Join(strings.Fields(text), " ")
+	const limit = 320
+	if len(text) <= limit {
+		return text
+	}
+	cut := len(text) - limit
+	for cut < len(text) && text[cut]&0xC0 == 0x80 {
+		cut++
+	}
+	return "…" + text[cut:]
+}
+
 // appendRow separates conversation turns with a blank line but keeps
 // consecutive tool rows together.
 func (t *Transcript) appendRow(row transcriptRow) {

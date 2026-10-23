@@ -28,7 +28,11 @@ type Client struct {
 	streamMaxDuration       time.Duration
 }
 
-const defaultStreamInactivityTimeout = time.Minute
+// defaultStreamInactivityTimeout lets a stream send nothing for as long as
+// it may last: until 22 October 2026 it was one minute, and Claude Haiku
+// 5.5, silent for a minute before a large write, was cut on every attempt
+// (issue #167). A model's stream_idle_seconds lowers it.
+const defaultStreamInactivityTimeout = 5 * time.Minute
 const defaultStreamMaxDuration = 5 * time.Minute
 
 func New(config ClientConfig) (*Client, error) {

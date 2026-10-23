@@ -18,6 +18,8 @@ type streamAccumulator struct {
 	total   int
 	// provider is the upstream OpenRouter names in every chunk.
 	provider string
+	// reasoning joins the reasoning_details the model streams.
+	reasoning reasoningAccumulator
 }
 
 func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
@@ -33,9 +35,10 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 		Choices []struct {
 			Index int `json:"index"`
 			Delta struct {
-				Role      string  `json:"role"`
-				Content   *string `json:"content"`
-				ToolCalls []struct {
+				Role             string                       `json:"role"`
+				Content          *string                      `json:"content"`
+				ReasoningDetails []map[string]json.RawMessage `json:"reasoning_details"`
+				ToolCalls        []struct {
 					Index    *int   `json:"index"`
 					ID       string `json:"id"`
 					Type     string `json:"type"`
@@ -84,6 +87,9 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 				deltas = append(deltas, text)
 			}
 		}
+		if err := a.reasoning.Add(choice.Delta.ReasoningDetails); err != nil {
+			return nil, err
+		}
 		for _, fragment := range choice.Delta.ToolCalls {
 			if fragment.Index == nil || *fragment.Index < 0 {
 				return nil, errors.New("invalid OpenRouter tool call index")
@@ -127,7 +133,7 @@ func (a *streamAccumulator) Result() (domain.CompletionResult, error) {
 	if a.finish == "" {
 		return domain.CompletionResult{}, errors.New("OpenRouter stream ended without a finish reason")
 	}
-	message := messageDTO{Role: "assistant", Content: &a.content}
+	message := messageDTO{Role: "assistant", Content: &a.content, ReasoningDetails: a.reasoning.Result()}
 	indices := make([]int, 0, len(a.calls))
 	for index := range a.calls {
 		indices = append(indices, index)

@@ -17,6 +17,9 @@ type AgentTurnUseCase struct {
 }
 
 func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit func(Event) error) error {
+	if u.Approval != nil {
+		u.Continue.Approval = u.Approval
+	}
 	if s == nil || u.Continue.Store == nil {
 		return errors.New("agent turn requires session and store")
 	}
@@ -103,7 +106,7 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 }
 
 func (u ContinueTurnUseCase) admission() headAdmission {
-	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Forge, Publisher: u.Publisher, TurnLimit: u.turnLimit()}
+	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Forge, Publisher: u.Publisher, TurnLimit: u.turnLimit(), Approval: u.Approval}
 }
 
 func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, emit func(Event) error) error {
@@ -135,10 +138,11 @@ func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, 
 				if resolveErr = compactRefusal(*s, p); resolveErr == nil {
 					// The missing why is named before the schema check, so
 					// the model reads what to send rather than a schema rule.
-					if resolveErr = whyError(tool, args); resolveErr == nil {
-						if resolveErr = localArgumentError(admit.Validation, tool, args); resolveErr == nil {
-							if resolveErr = forgedArgumentError(ctx, admit.Forge, admit.Validation, *s, tool, args); resolveErr == nil {
-								if resolveErr = publishArgumentError(ctx, admit.Publisher, *s, tool, args); resolveErr == nil {
+					var checked domain.AvailableTool
+					if checked, resolveErr = admit.whyError(*s, tool, args); resolveErr == nil {
+						if resolveErr = localArgumentError(admit.Validation, checked, args); resolveErr == nil {
+							if resolveErr = forgedArgumentError(ctx, admit.Forge, admit.Validation, *s, checked, args); resolveErr == nil {
+								if resolveErr = publishArgumentError(ctx, admit.Publisher, *s, checked, args); resolveErr == nil {
 									return nil
 								}
 							}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"time"
 )
 
 // ModelOptions are request fields OpenRouter reads for one model, sent as
@@ -14,10 +15,13 @@ import (
 // it sent z-ai/glm-5.3-flash to OpenInference at $3.109 per million output
 // tokens and 19 tokens per second, when InferenceNet served it at $0.50
 // and 120 to 180. Embedded in requestDTO, they encode as its last fields.
+// StreamInactivityTimeout is never sent: it replaces the client's own for
+// the model's streams, zero keeping it.
 type ModelOptions struct {
-	Provider  json.RawMessage `json:"provider,omitempty"`
-	Reasoning json.RawMessage `json:"reasoning,omitempty"`
-	MaxTokens int             `json:"max_tokens,omitempty"`
+	Provider                json.RawMessage `json:"provider,omitempty"`
+	Reasoning               json.RawMessage `json:"reasoning,omitempty"`
+	MaxTokens               int             `json:"max_tokens,omitempty"`
+	StreamInactivityTimeout time.Duration   `json:"-"`
 }
 
 // copyModelOptions keeps the client's own copy, refusing what OpenRouter
@@ -34,7 +38,10 @@ func copyModelOptions(models map[string]ModelOptions) (map[string]ModelOptions, 
 		if options.MaxTokens < 0 {
 			return nil, errors.New("OpenRouter max_tokens option must not be negative")
 		}
-		copied[model] = ModelOptions{Provider: bytes.Clone(options.Provider), Reasoning: bytes.Clone(options.Reasoning), MaxTokens: options.MaxTokens}
+		if options.StreamInactivityTimeout < 0 {
+			return nil, errors.New("OpenRouter stream inactivity timeout must not be negative")
+		}
+		copied[model] = ModelOptions{Provider: bytes.Clone(options.Provider), Reasoning: bytes.Clone(options.Reasoning), MaxTokens: options.MaxTokens, StreamInactivityTimeout: options.StreamInactivityTimeout}
 	}
 	return copied, nil
 }

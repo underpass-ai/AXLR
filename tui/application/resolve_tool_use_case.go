@@ -49,6 +49,9 @@ func (u ResolveToolUseCase) Deny(ctx context.Context, s *domain.Session, id root
 }
 
 func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) error {
+	if u.Approval != nil {
+		u.Continue.Approval = u.Approval
+	}
 	if decision != domain.DecisionApprove && decision != domain.DecisionDeny {
 		return errors.New("invalid human tool decision")
 	}
@@ -114,11 +117,12 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	started := time.Now()
 
 	tool, toolArgs, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending[0].Call)
-	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Continue.Forge, Publisher: u.Continue.Publisher, TurnLimit: u.Continue.turnLimit()}
+	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Continue.Forge, Publisher: u.Continue.Publisher, TurnLimit: u.Continue.turnLimit(), Approval: u.Approval}
 	if !known || resolveErr != nil || s.HeadOverBudget(admit.turnLimit()) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
-	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyError(tool, toolArgs) != nil || localArgumentError(u.Validation, tool, toolArgs) != nil || (decision != domain.DecisionDeny && (forgedArgumentError(ctx, admit.Forge, u.Validation, *s, tool, toolArgs) != nil || publishArgumentError(ctx, admit.Publisher, *s, tool, toolArgs) != nil)) {
+	checked, whyErr := admit.whyError(*s, tool, toolArgs)
+	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyErr != nil || localArgumentError(u.Validation, checked, toolArgs) != nil || (decision != domain.DecisionDeny && (forgedArgumentError(ctx, admit.Forge, u.Validation, *s, checked, toolArgs) != nil || publishArgumentError(ctx, admit.Publisher, *s, checked, toolArgs) != nil)) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
 	if decision == domain.DecisionAutoApprove {
@@ -234,6 +238,9 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		}
 		if outcome.Uncertain && runErr == nil {
 			runErr = errors.New("tool effect is uncertain; turn paused")
+		}
+		if decision == domain.DecisionAutoApprove && RequiresWhy(tool) && CallWhy(toolArgs) == "" {
+			outcome.Content += root.Text("\n\n" + whyReminder)
 		}
 		outcome = citeCall(outcome, id)
 		next = *s

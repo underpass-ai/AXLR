@@ -1,6 +1,7 @@
 package openrouter
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -247,5 +248,44 @@ func TestStreamTimeoutErrorTellsItsKindAndProvider(t *testing.T) {
 	idle := NewStreamTimeoutError("llama", false)
 	if idle.MaximumDuration() || idle.Provider() != "llama" || idle.Error() != "llama stream inactivity timeout" {
 		t.Fatalf("%v %q %q", idle.MaximumDuration(), idle.Provider(), idle.Error())
+	}
+}
+
+// A model's own inactivity timeout replaces the client's on OpenRouter, and
+// is never sent (issue #167).
+func TestModelInactivityTimeoutReplacesTheClients(t *testing.T) {
+	var sent []byte
+	client, err := New(ClientConfig{
+		APIKey: "secret-token",
+		HTTPClient: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			sent, _ = io.ReadAll(req.Body)
+			<-req.Context().Done()
+			return nil, req.Context().Err()
+		})},
+		StreamInactivityTimeout: time.Hour,
+		Models:                  map[string]ModelOptions{"openai/gpt-4o": {StreamInactivityTimeout: testStreamInactivityTimeout}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := client.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil })
+		done <- err
+	}()
+	assertStreamTimedOut(t, awaitStreamError(t, done))
+	if bytes.Contains(sent, []byte("nactivity")) || bytes.Contains(sent, []byte("timeout")) {
+		t.Fatalf("the timeout reached the request: %s", sent)
+	}
+}
+
+// Until 22 October 2026 a stream was cut after one silent minute.
+func TestDefaultInactivityTimeoutIsTheStreamsLength(t *testing.T) {
+	client, err := New(ClientConfig{APIKey: "secret-token"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if client.inactivityTimeout("openai/gpt-4o") != 5*time.Minute || defaultStreamInactivityTimeout != defaultStreamMaxDuration {
+		t.Fatalf("default inactivity %v", client.inactivityTimeout("openai/gpt-4o"))
 	}
 }

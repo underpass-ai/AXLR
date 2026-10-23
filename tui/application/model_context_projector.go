@@ -261,6 +261,9 @@ func modelMessageBytes(message root.Message) int {
 	if message.ToolCallID != "" {
 		wire["tool_call_id"] = string(message.ToolCallID)
 	}
+	if message.HasReasoning() {
+		wire["reasoning_details"] = json.RawMessage(message.Reasoning.Bytes())
+	}
 	if len(message.ToolCalls) > 0 {
 		calls := make([]map[string]any, 0, len(message.ToolCalls))
 		for _, call := range message.ToolCalls {

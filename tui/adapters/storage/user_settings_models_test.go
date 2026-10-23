@@ -44,7 +44,7 @@ func sameJSON(t *testing.T, got json.RawMessage, want string) {
 func TestUserSettingsLoadModelOptionsAndKeepThemWhenSelectorsSave(t *testing.T) {
 	store, settings, err := loadSettingsText(t, `{"model":"z-ai/glm-5.3-flash","future":{"kept":true},"models":{
 	 "z-ai/glm-5.3-flash":{"provider":{"sort":"throughput","ignore":["openinference"],"max_price":{"completion":0.6},"allow_fallbacks":false},"reasoning":{"effort":"low","exclude":true},"max_tokens":8192},
-	 "anthropic/claude-haiku-5.5":{"reasoning":{"max_tokens":2048}},
+	 "anthropic/claude-haiku-5.5":{"reasoning":{"max_tokens":2048},"stream_idle_seconds":180},
 	 "openai/gpt-4o":{"provider":{"sort":{"by":"latency","partition":"none"},"data_collection":"deny","zdr":true,"quantizations":["fp8","bf16"],"preferred_min_throughput":50,"preferred_max_latency":2,"order":["openai","azure"],"only":["openai","azure"],"require_parameters":true}}}}`)
 	if err != nil {
 		t.Fatal(err)
@@ -63,7 +63,7 @@ func TestUserSettingsLoadModelOptionsAndKeepThemWhenSelectorsSave(t *testing.T) 
 		}
 		haiku := options["anthropic/claude-haiku-5.5"]
 		sameJSON(t, haiku.Reasoning, `{"max_tokens":2048}`)
-		if haiku.Provider != nil || haiku.MaxTokens != 0 {
+		if haiku.Provider != nil || haiku.MaxTokens != 0 || haiku.StreamIdleSeconds != 180 || glm.StreamIdleSeconds != 0 {
 			t.Fatalf("haiku = %+v", haiku)
 		}
 	}
@@ -138,6 +138,8 @@ func TestUserSettingsRejectInvalidModelOptions(t *testing.T) {
 		"max tokens zero":          {`{"z-ai/glm":{"max_tokens":0}}`, "settings models z-ai/glm max_tokens must be a whole number between 1 and 1000000"},
 		"max tokens too large":     {`{"z-ai/glm":{"max_tokens":1000001}}`, "max_tokens must be a whole number"},
 		"max tokens fraction":      {`{"z-ai/glm":{"max_tokens":1.5}}`, "max_tokens must be a whole number"},
+		"stream idle zero":         {`{"z-ai/glm":{"stream_idle_seconds":0}}`, "stream_idle_seconds must be a whole number between 1 and 300"},
+		"stream idle too long":     {`{"z-ai/glm":{"stream_idle_seconds":301}}`, "stream_idle_seconds must be a whole number between 1 and 300"},
 		"first error in id order":  {`{"b/model":{"max_tokens":0},"a/model":{"x":1}}`, `settings models a/model has unknown key "x"`},
 		"reasoning not an object":  {`{"z-ai/glm":{"reasoning":true}}`, "reasoning must be a JSON object"},
 		"max price not an object":  {`{"z-ai/glm":{"provider":{"max_price":1}}}`, "provider.max_price must be a JSON object"},

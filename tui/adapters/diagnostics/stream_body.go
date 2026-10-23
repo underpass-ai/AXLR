@@ -48,11 +48,31 @@ type streamBody struct {
 	// reasoningBytes is the reasoning streamed so far; reasoningTold what
 	// the console was last told of it.
 	reasoningBytes, reasoningTold int
+	// reasoningText is the readable reasoning streamed since the last
+	// report, bounded to what a console shows.
+	reasoningText string
 }
 
 // reasoningStep is how much more reasoning a stream reports progress
 // after: a frame carries a few bytes, and each report redraws the console.
 const reasoningStep = 512
+
+// maxReasoningText bounds the reasoning text one report carries: the
+// console shows a few lines of it.
+const maxReasoningText = 2048
+
+// lastBytes is the end of text, at most limit bytes, cut on a character
+// boundary.
+func lastBytes(text string, limit int) string {
+	if len(text) <= limit {
+		return text
+	}
+	cut := len(text) - limit
+	for cut < len(text) && text[cut]&0xC0 == 0x80 {
+		cut++
+	}
+	return text[cut:]
+}
 
 func (b *streamBody) record(stage application.DiagnosticStage, size, count int) {
 	if b.trace != nil {
@@ -178,20 +198,23 @@ func (b *streamBody) observeFrame(data []byte) {
 			b.activity(domain.ProviderContent)
 			b.record(application.DiagnosticContent, len(choice.Delta.Content), 1)
 		}
-		size := len(choice.Delta.Reasoning) + len(choice.Delta.ReasoningContent)
+		text := choice.Delta.Reasoning + choice.Delta.ReasoningContent
 		// Providers may duplicate text and structured reasoning representations.
-		if size == 0 {
+		if text == "" {
 			for _, detail := range choice.Delta.ReasoningDetails {
-				size += len(detail.Text) + len(detail.Summary)
+				text += detail.Text + detail.Summary
 			}
 		}
+		size := len(text)
 		if size > 0 || len(choice.Delta.ReasoningDetails) > 0 {
 			b.activity(domain.ProviderReasoning)
 			b.record(application.DiagnosticReasoning, size, 1)
 			b.reasoningBytes += size
+			b.reasoningText = lastBytes(b.reasoningText+text, maxReasoningText)
 			if b.reasoningBytes-b.reasoningTold >= reasoningStep || b.reasoningTold == 0 && b.reasoningBytes > 0 {
 				b.reasoningTold = b.reasoningBytes
-				application.NotifyReasoningProgress(b.ctx, b.reasoningBytes)
+				application.NotifyReasoningProgress(b.ctx, b.reasoningBytes, b.reasoningText)
+				b.reasoningText = ""
 			}
 		}
 		size = 0

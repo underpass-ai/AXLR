@@ -42,6 +42,9 @@ func snapshot(s domain.Session) (dto.SessionSnapshot, error) {
 	d := dto.SessionSnapshot{Version: snapshotVersion, ID: string(state.ID), Owner: state.Owner, Revision: state.Revision, OperationID: state.OperationID, Workspace: string(state.Workspace), Model: string(state.Model), Status: string(state.Status), Draft: string(state.Draft), TurnCallCount: state.TurnCallCount}
 	for _, m := range state.Messages {
 		record := dto.Message{Role: string(m.Role), Content: string(m.Content), ToolCallID: string(m.ToolCallID)}
+		if m.HasReasoning() {
+			record.Reasoning = m.Reasoning.Bytes()
+		}
 		for _, c := range m.ToolCalls {
 			record.ToolCalls = append(record.ToolCalls, encodeCall(c))
 		}
@@ -89,6 +92,13 @@ func restoreSnapshot(d dto.SessionSnapshot, preserveActive bool, times []time.Ti
 				return domain.Session{}, e
 			}
 			record.ToolCalls = append(record.ToolCalls, call)
+		}
+		if len(m.Reasoning) > 0 {
+			reasoning, e := root.NewJSONValue(m.Reasoning)
+			if e != nil {
+				return domain.Session{}, e
+			}
+			record.Reasoning = reasoning
 		}
 		s.Messages = append(s.Messages, record)
 	}

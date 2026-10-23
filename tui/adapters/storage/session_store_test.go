@@ -462,3 +462,31 @@ func TestSessionListLeavesConsoleNotesOutOfTitlesAndSearch(t *testing.T) {
 		t.Fatalf("summary %+v", list)
 	}
 }
+
+// An answer's reasoning is saved and restored byte for byte, so a resumed
+// session sends it back as the live one did; changing the model drops it.
+func TestSessionStoreKeepsReasoningUntilTheModelChanges(t *testing.T) {
+	store, _ := openStore(t)
+	s := fixture(t)
+	reasoning, err := root.NewJSONValue([]byte(`[{"format":"anthropic-claude-v1","index":0,"signature":"CAQS","text":"plan","type":"reasoning.text"}]`))
+	must(t, err)
+	must(t, s.BeginTurn("before", nil))
+	must(t, s.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "answer", Reasoning: reasoning}}))
+	must(t, store.Save(context.Background(), s))
+	got, err := store.Load(context.Background(), s.Export().ID)
+	must(t, err)
+	messages := got.Messages()
+	last := messages[len(messages)-1]
+	if string(last.Reasoning.Bytes()) != string(reasoning.Bytes()) {
+		t.Fatalf("restored reasoning %s", last.Reasoning.Bytes())
+	}
+	must(t, got.ChangeModel("next/model"))
+	for _, message := range got.Messages() {
+		if message.HasReasoning() {
+			t.Fatal("another model received this model's reasoning")
+		}
+	}
+	if !s.Messages()[len(s.Messages())-1].HasReasoning() {
+		t.Fatal("changing a copy's model changed the original")
+	}
+}

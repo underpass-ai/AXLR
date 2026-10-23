@@ -77,6 +77,15 @@ func (s *Session) ChangeModel(model axlr.ModelID) error {
 	if err := s.requireBetweenTurns("model"); err != nil {
 		return err
 	}
+	if model != s.state.Model {
+		// One model's reasoning means nothing to another, and a provider may
+		// refuse signatures it did not issue: the earlier answers go without.
+		messages := append([]axlr.Message(nil), s.state.Messages...)
+		for i := range messages {
+			messages[i].Reasoning = axlr.JSONValue{}
+		}
+		s.state.Messages = messages
+	}
 	s.state.Model = model
 	return nil
 }

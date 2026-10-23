@@ -16,8 +16,13 @@ type ContinueTurnUseCase struct {
 	// Windows sizes the default projection to the session model: its window
 	// when known, the prompt budget otherwise; nil uses the default prompt
 	// budget.
-	Windows        ModelContextWindowPort
-	Validation     ToolArgumentValidationPort
+	Windows    ModelContextWindowPort
+	Validation ToolArgumentValidationPort
+	// Approval is the policy of the use case driving this turn, set by
+	// StartTurnUseCase, ResolveToolUseCase and AgentTurnUseCase from their
+	// own: the head's admission lets a call it approves without a card run
+	// without a why. nil refuses every side effect without one.
+	Approval       ToolApprovalPolicyPort
 	Models         ModelStreamPort
 	Store          SessionStorePort
 	Diagnostics    DiagnosticPort
@@ -257,10 +262,10 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 			tools = withoutTool(withoutTool(withoutTool(withoutTool(tools, HostForgeToolName), HostRemoveToolName), HostInstallToolName), HostPublishToolName)
 		}
 	}
-	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, projection.Messages...), Tools: tools}
+	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, currentTurnReasoning(projection.Messages)...), Tools: tools}
 	counted := 0
 	if cap, capped := u.capsContext(*session); capped {
-		counted = RequestTokens(u.Tokens, guidance, tools, projection.Messages)
+		counted = RequestTokens(u.Tokens, guidance, tools, req.Messages[1:])
 		if estimated := u.Scale.Estimate(model, counted); estimated > cap {
 			contextSpan.End(DiagnosticErrorInvalidState)
 			// The turn ends interrupted either way: continued in the
@@ -291,8 +296,8 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	modelCtx = WithToolCallProgress(modelCtx, func(name string, bytes int) {
 		_ = emit(Event{Kind: EventToolCallProgress, ToolCallName: name, ToolCallBytes: bytes})
 	})
-	modelCtx = WithReasoningProgress(modelCtx, func(bytes int) {
-		_ = emit(Event{Kind: EventReasoningProgress, ReasoningBytes: bytes})
+	modelCtx = WithReasoningProgress(modelCtx, func(bytes int, text string) {
+		_ = emit(Event{Kind: EventReasoningProgress, ReasoningBytes: bytes, ReasoningText: text})
 	})
 	meter := &usageMeter{started: started}
 	modelCtx = meter.watch(modelCtx)

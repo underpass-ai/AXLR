@@ -75,7 +75,10 @@ type AppModel struct {
 	toolCallBytes int
 	// reasoningBytes is how much the model has reasoned in the request
 	// that streams, for the footer's "Model is reasoning · 3.1 KB".
-	reasoningBytes    int
+	reasoningBytes int
+	// reasoningTail is the end of the reasoning text the model streamed in
+	// the request, shown dim under the conversation while it thinks.
+	reasoningTail     string
 	updatingBatch     bool
 	operationID       uint64
 	operationMessages int
@@ -575,9 +578,17 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if v.Kind == application.EventReasoningProgress && m.Busy && m.streamPending {
 			m.reasoningBytes = v.ReasoningBytes
+			if v.ReasoningText != "" {
+				m.reasoningTail = thinkingTail(m.reasoningTail + v.ReasoningText)
+				m.refreshTranscript()
+			}
 		}
 		if v.Kind == application.EventStreamStart || v.Kind == application.EventTextDelta || v.Kind == application.EventToolExecutionStarted {
 			m.reasoningBytes = 0
+			if m.reasoningTail != "" {
+				m.reasoningTail = ""
+				m.refreshTranscript()
+			}
 		}
 		if v.Kind == application.EventToolCallProgress && m.Busy && m.streamPending {
 			m.toolCallName = singleLine(v.ToolCallName)
@@ -1474,6 +1485,9 @@ func (m *AppModel) refreshTranscript() {
 	m.Transcript.AppendFailures(m.failures)
 	if m.cancelledAt == len(m.Header.State.Messages)+1 && !m.Busy {
 		m.Transcript.AppendCancelled()
+	}
+	if m.Busy && m.streamPending && m.reasoningTail != "" {
+		m.Transcript.AppendThinking(m.reasoningTail)
 	}
 	m.Transcript.AppendQueued(m.steer.Peek())
 	m.refreshSearch()

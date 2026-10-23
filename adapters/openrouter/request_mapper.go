@@ -25,6 +25,9 @@ func mapRequest(req domain.CompletionRequest) (requestDTO, error) {
 			content := string(message.Content)
 			mapped.Content = &content
 		}
+		if message.Role == domain.RoleAssistant && message.HasReasoning() {
+			mapped.ReasoningDetails = message.Reasoning.Bytes()
+		}
 		for _, call := range message.ToolCalls {
 			mappedCall := toolCallDTO{ID: string(call.ID), Type: "function"}
 			mappedCall.Function.Name = string(call.Name)

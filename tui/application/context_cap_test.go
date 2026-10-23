@@ -183,3 +183,27 @@ func TestTokenScaleFollowsTheProvidersCount(t *testing.T) {
 		t.Fatal("empty observations and a nil scale")
 	}
 }
+
+// Only the current turn's reasoning goes back, and it is counted at its
+// measured size, not tokenized as text (23 October 2026).
+func TestReasoningGoesBackForTheCurrentTurnAtItsSize(t *testing.T) {
+	signature := strings.Repeat("A", 90_000)
+	reasoning, err := root.NewJSONValue([]byte(`[{"type":"reasoning.text","text":"plan the page","signature":"` + signature + `","index":0}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	messages := []root.Message{
+		{Role: root.RoleUser, Content: "first"},
+		{Role: root.RoleAssistant, Content: "done", Reasoning: reasoning},
+		{Role: root.RoleUser, Content: "second"},
+		{Role: root.RoleAssistant, Content: "reading", Reasoning: reasoning},
+	}
+	sent := currentTurnReasoning(messages)
+	if sent[1].HasReasoning() || !sent[3].HasReasoning() || !messages[1].HasReasoning() {
+		t.Fatal("the earlier turn's reasoning went back, the current one's did not, or the session's copy changed")
+	}
+	// "plan the page" is 13 bytes: 4 tokens at four bytes per token.
+	if got := reasoningTokens(&byteCounter{}, reasoning); got != 4+30_000 {
+		t.Fatalf("reasoning counted as %d tokens", got)
+	}
+}

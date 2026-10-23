@@ -15,7 +15,11 @@ import (
 
 // Per-model request options. models maps an exact model id to fields
 // OpenRouter reads for that model: provider (routing preferences),
-// reasoning and max_tokens. Without an entry a request carries none of
+// reasoning and max_tokens; stream_idle_seconds is the console's own, how
+// long a stream may send nothing before it is cut, at most the 300 seconds
+// a stream may last, which is also the default (issue #167: with 60,
+// Claude Haiku 5.5 sent nothing for a minute before a large write and
+// every attempt was cut). Without an entry a request carries none of
 // them. Seen on 8 October 2026: z-ai/glm-5.3-flash, with no provider
 // preference, was routed to OpenInference at $3.109 per million output
 // tokens, a 10-second first byte and 19 tokens per second, while
@@ -25,17 +29,22 @@ import (
 // launch instead of leaving the routing as it was.
 
 // ModelOptions is one validated entry of models. Provider and Reasoning
-// are JSON objects or empty; MaxTokens is zero when absent.
+// are JSON objects or empty; MaxTokens and StreamIdleSeconds are zero when
+// absent.
 type ModelOptions struct {
-	Provider  json.RawMessage
-	Reasoning json.RawMessage
-	MaxTokens int
+	Provider          json.RawMessage
+	Reasoning         json.RawMessage
+	MaxTokens         int
+	StreamIdleSeconds int
 }
 
 const (
 	maxModelOptions     = 64
 	maxCompletionTokens = 1_000_000
 	maxProviderSlugs    = 64
+	// maxStreamIdleSeconds is the five minutes an OpenRouter stream may
+	// last: a longer wait would never be reached.
+	maxStreamIdleSeconds = 300
 )
 
 var (
@@ -71,7 +80,7 @@ func (s UserSettings) validateModels(local map[string]struct{}) error {
 			return errors.New("settings models has an invalid model id")
 		}
 		if _, ok := local[id]; ok {
-			return fmt.Errorf("settings models %s is a local model; provider, reasoning and max_tokens are sent only to OpenRouter", id)
+			return fmt.Errorf("settings models %s is a local model; provider, reasoning, max_tokens and stream_idle_seconds apply only to OpenRouter; set stream_idle_seconds in its local_models entry", id)
 		}
 		if _, err := parseModelOptions(id, s.Models[id]); err != nil {
 			return err
@@ -82,7 +91,7 @@ func (s UserSettings) validateModels(local map[string]struct{}) error {
 
 func parseModelOptions(id string, raw json.RawMessage) (ModelOptions, error) {
 	at := optionPath{model: id}
-	fields, err := at.object(raw, "provider", "reasoning", "max_tokens")
+	fields, err := at.object(raw, "provider", "reasoning", "max_tokens", "stream_idle_seconds")
 	if err != nil {
 		return ModelOptions{}, err
 	}
@@ -102,6 +111,11 @@ func parseModelOptions(id string, raw json.RawMessage) (ModelOptions, error) {
 	if value, ok := fields["max_tokens"]; ok {
 		if options.MaxTokens, err = at.child("max_tokens").tokens(value); err != nil {
 			return ModelOptions{}, err
+		}
+	}
+	if value, ok := fields["stream_idle_seconds"]; ok {
+		if json.Unmarshal(value, &options.StreamIdleSeconds) != nil || options.StreamIdleSeconds < 1 || options.StreamIdleSeconds > maxStreamIdleSeconds {
+			return ModelOptions{}, fmt.Errorf("%s must be a whole number between 1 and %d", at.child("stream_idle_seconds"), maxStreamIdleSeconds)
 		}
 	}
 	return options, nil
