@@ -77,6 +77,13 @@ func certificate(t *testing.T, ca *x509.Certificate, caKey *ecdsa.PrivateKey, se
 
 func testServer(t *testing.T) (*Server, *httptest.Server, *http.Client, *http.Client) {
 	t.Helper()
+	return testServerWith(t, nil)
+}
+
+// testServerWith lets a test change the dependencies, or open the session
+// store the loop is composed with, before the server starts.
+func testServerWith(t *testing.T, adjust func(Config, *Dependencies)) (*Server, *httptest.Server, *http.Client, *http.Client) {
+	t.Helper()
 	dir := t.TempDir()
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -110,6 +117,9 @@ func testServer(t *testing.T) (*Server, *httptest.Server, *http.Client, *http.Cl
 	validator := axlr.NewToolArgumentValidator()
 	continuation := application.ContinueTurnUseCase{Models: fixedModel{}, Validation: validator}
 	deps := Dependencies{Catalog: axlr.ToolCatalog{}, Start: application.StartTurnUseCase{Catalog: axlr.ToolCatalog{}, Continue: continuation, Tools: fixedTool{}}, Resolve: application.ResolveToolUseCase{Continue: continuation, Tools: fixedTool{}}, Tools: fixedTool{}, Validation: validator, Ready: func(context.Context) error { return nil }}
+	if adjust != nil {
+		adjust(cfg, &deps)
+	}
 	s, err := NewServer(cfg, deps)
 	if err != nil {
 		t.Fatal(err)

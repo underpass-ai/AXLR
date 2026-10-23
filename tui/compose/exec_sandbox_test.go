@@ -1,4 +1,4 @@
-package main
+package compose
 
 import (
 	"bytes"
@@ -17,21 +17,21 @@ func noBwrap(string) (string, error) { return "", errors.New("not found") }
 func TestExecSandboxModes(t *testing.T) {
 	ctx := context.Background()
 	var out bytes.Buffer
-	if sandbox, why, err := execSandbox(ctx, storage.ExecSandboxSettings{Mode: "off"}, noBwrap, &out); sandbox != nil || why != "" || err != nil || out.Len() != 0 {
+	if sandbox, why, err := ExecSandbox(ctx, "axlr-tui", storage.ExecSandboxSettings{Mode: "off"}, noBwrap, &out); sandbox != nil || why != "" || err != nil || out.Len() != 0 {
 		t.Fatalf("off: %+v %v %q", sandbox, err, &out)
 	}
 	// auto without bwrap runs unsandboxed and says so once.
-	if sandbox, why, err := execSandbox(ctx, storage.ExecSandboxSettings{Mode: "auto"}, noBwrap, &out); sandbox != nil || why != "bwrap is not installed" || err != nil || !strings.Contains(out.String(), "exec sandbox unavailable (bwrap is not installed): local commands run unsandboxed") {
+	if sandbox, why, err := ExecSandbox(ctx, "axlr-tui", storage.ExecSandboxSettings{Mode: "auto"}, noBwrap, &out); sandbox != nil || why != "bwrap is not installed" || err != nil || !strings.Contains(out.String(), "exec sandbox unavailable (bwrap is not installed): local commands run unsandboxed") {
 		t.Fatalf("auto: %+v %v %q", sandbox, err, &out)
 	}
 	// required without bwrap refuses every command.
 	out.Reset()
-	sandbox, why, err := execSandbox(ctx, storage.ExecSandboxSettings{Mode: "required"}, noBwrap, &out)
+	sandbox, why, err := ExecSandbox(ctx, "axlr-tui", storage.ExecSandboxSettings{Mode: "required"}, noBwrap, &out)
 	if err != nil || why != "bwrap is not installed" || sandbox == nil || sandbox.Unavailable != "bwrap is not installed" || !strings.Contains(out.String(), "local commands are refused") {
 		t.Fatalf("required: %+v %v %q", sandbox, err, &out)
 	}
 	// A writable path that does not exist stops the launch.
-	if _, _, err := execSandbox(ctx, storage.ExecSandboxSettings{Mode: "auto", Writable: []string{"/no/such/cache"}}, noBwrap, &out); err == nil || !strings.Contains(err.Error(), "/no/such/cache") {
+	if _, _, err := ExecSandbox(ctx, "axlr-tui", storage.ExecSandboxSettings{Mode: "auto", Writable: []string{"/no/such/cache"}}, noBwrap, &out); err == nil || !strings.Contains(err.Error(), "/no/such/cache") {
 		t.Fatalf("missing writable: %v", err)
 	}
 }
@@ -43,7 +43,7 @@ func TestExecSandboxUsesBwrapWhenItCanConfine(t *testing.T) {
 	}
 	writable := t.TempDir()
 	var out bytes.Buffer
-	sandbox, why, err := execSandbox(context.Background(), storage.ExecSandboxSettings{Mode: "required", Writable: []string{writable}}, exec.LookPath, &out)
+	sandbox, why, err := ExecSandbox(context.Background(), "axlr-tui", storage.ExecSandboxSettings{Mode: "required", Writable: []string{writable}}, exec.LookPath, &out)
 	if err != nil || why != "" || sandbox == nil || sandbox.Program != program || !sandbox.Network || sandbox.Unavailable != "" {
 		t.Fatalf("%+v %v", sandbox, err)
 	}

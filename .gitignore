@@ -3,3 +3,5 @@ coverage.out
 *.test
 __pycache__/
 *.pyc
+/tui/axlr-tui
+/tui/axlr-serve

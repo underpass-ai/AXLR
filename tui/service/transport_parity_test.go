@@ -248,7 +248,7 @@ func TestEveryServiceVerbWorksAcrossHTTPGRPCAndMCP(t *testing.T) {
 				case "CreateSession":
 					expected = 201
 					input["model"] = "test/model"
-				case "GetSession", "StartTurn", "StreamEvents", "DecideSessionTool", "CancelSessionTurn":
+				case "GetSession", "StartTurn", "StreamEvents", "DecideSessionTool", "CancelSessionTurn", "CloseSession":
 					id := seedParitySession(t, c.s, op.Name == "DecideSessionTool" || op.Name == "CancelSessionTurn")
 					input["session_id"] = id
 					if op.Name == "StartTurn" {
@@ -257,6 +257,8 @@ func TestEveryServiceVerbWorksAcrossHTTPGRPCAndMCP(t *testing.T) {
 						input["call_id"], input["decision"], input["expected_revision"], expected = "pending-call", "deny", 1, 202
 					} else if op.Name == "CancelSessionTurn" {
 						input["expected_revision"], expected = 1, 202
+					} else if op.Name == "CloseSession" {
+						input["expected_revision"] = 1
 					} else if op.Name == "StreamEvents" {
 						_, _ = c.s.events.Append(id, "op", "text.delta", map[string]string{"text": "hello"})
 					}
@@ -425,7 +427,7 @@ func TestProtoAndMCPInventoriesHaveNoMissingOrExtraVerbs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rpcNames) != 18 || len(result.Tools) != 18 {
+	if len(rpcNames) != 19 || len(result.Tools) != 19 {
 		t.Fatalf("inventory drift: RPC=%d MCP=%d", len(rpcNames), len(result.Tools))
 	}
 	for _, op := range operations() {

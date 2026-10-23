@@ -9,13 +9,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
-	root "github.com/underpass-ai/AXLR/domain"
-	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
-	"github.com/underpass-ai/AXLR/tui/adapters/typesafe"
-	"github.com/underpass-ai/AXLR/tui/application"
-	"github.com/underpass-ai/AXLR/tui/domain"
+	"github.com/underpass-ai/AXLR/tui/compose"
 )
 
 func writeSettings(t *testing.T, env map[string]string, data string) {
@@ -82,18 +78,6 @@ func TestRunRefusesLocalModelSetupErrors(t *testing.T) {
 	}
 }
 
-func TestLocalModelsReachTheModelPickerWithoutOpenRouter(t *testing.T) {
-	no := false
-	setup := newLocalModelSetup(storage.UserSettings{ContextTokens: 32768, LocalModels: []storage.LocalModel{
-		{ID: "local/qwen", Name: "Qwen3.8-27B", URL: "http://127.0.0.1:8080/v1", ContextTokens: 262144},
-		{ID: "local/plain", URL: "http://127.0.0.1:8083/v1", ContextTokens: 8192, Tools: &no},
-	}}, func(string) string { return "" })
-	models, err := application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: setup.available}}.Execute(context.Background())
-	if err != nil || len(models) != 1 || models[0].ID != "local/qwen" || models[0].Name != "Qwen3.8-27B" || models[0].Context != 32768 {
-		t.Fatalf("picker models = %+v, %v", models, err)
-	}
-}
-
 func TestRunJevNeedsItsKeyOnlyWhenEnabled(t *testing.T) {
 	env := cliEnv(t)
 	writeSettings(t, env, `{"jev":{"tool":false,"final_check":false}}`)
@@ -113,54 +97,17 @@ func TestRunJevNeedsItsKeyOnlyWhenEnabled(t *testing.T) {
 	}
 }
 
-// jevJudge hands the policy to the final check and, through Decisions,
-// to the settlement; the default is legacy and an incoherent switch is
-// refused.
-func TestJevJudgeCarriesThePolicy(t *testing.T) {
-	getenv := func(name string) string {
-		if name == "TYPESAFE_API_KEY" {
-			return "typesafe-never-print"
-		}
-		return ""
-	}
-	judge, err := jevJudge(&storage.JevSettings{FinalCheck: true}, getenv)
-	if err != nil || judge.Decisions.Policy != application.JudgePolicyLegacy || judge.Decisions.Supersede || judge.Decisions.Model != typesafe.DefaultModel {
-		t.Fatalf("default: %+v %v", judge, err)
-	}
-	judge, err = jevJudge(&storage.JevSettings{FinalCheck: true, Model: "jev-1.13.0", JudgePolicy: "axlr-v2", V2Supersede: true}, getenv)
-	if err != nil || judge.Decisions != (application.JudgeDecisions{Policy: application.JudgePolicyAXLRv2, Supersede: true, Model: "jev-1.13.0"}) {
-		t.Fatalf("axlr-v2: %+v %v", judge, err)
-	}
-	var ceremony application.SessionCeremony
-	settleWith(&ceremony, judge)
-	if ceremony.Judge != judge.Port || ceremony.Decisions != judge.Decisions {
-		t.Fatalf("the settlement did not get the policy: %+v", ceremony.Decisions)
+// jevInfo tells /axlr-info the judge's policy.
+func TestJevInfoCarriesThePolicy(t *testing.T) {
+	judge, err := compose.JevJudge(&storage.JevSettings{FinalCheck: true, Model: "jev-1.13.0", JudgePolicy: "axlr-v2", V2Supersede: true}, func(string) string { return "typesafe-never-print" })
+	if err != nil {
+		t.Fatal(err)
 	}
 	info := jevInfo(judge, &storage.JevSettings{FinalCheck: true, Model: "jev-1.13.0"})
-	if info.Policy != "axlr-v2" || !info.Supersede {
+	if info.Policy != "axlr-v2" || !info.Supersede || info.Model != "jev-1.13.0" {
 		t.Fatalf("info %+v", info)
 	}
-	if judge, err := jevJudge(&storage.JevSettings{JudgePolicy: "axlr-v2"}, getenv); judge != nil || err != nil {
-		t.Fatalf("a policy turned Jev on: %+v %v", judge, err)
-	}
-	for _, settings := range []storage.JevSettings{{FinalCheck: true, JudgePolicy: "axlr-v5"}, {FinalCheck: true, V2Supersede: true}} {
-		if _, err := jevJudge(&settings, getenv); err == nil {
-			t.Fatalf("%+v accepted", settings)
-		}
-	}
-}
-
-func TestCompactProfileFollowsTheSettingAndTheWindow(t *testing.T) {
-	windows := localmodels.Windows{Local: map[root.ModelID]domain.ContextWindow{"local/small": 32768, "local/large": 262144}}
-	auto := compactProfile("auto", windows)
-	if !auto("local/small") || auto("local/large") || auto("openai/gpt-4o") {
-		t.Fatal("auto profile does not follow the window")
-	}
-	if compactProfile("standard", windows) != nil || !compactProfile("compact", windows)("openai/gpt-4o") {
-		t.Fatal("explicit profiles ignored")
-	}
-	capped := compactProfile("auto", localmodels.Windows{Local: windows.Local, Cap: 65536})
-	if !capped("local/large") {
-		t.Fatal("the global cap does not make a large model compact")
+	if jevInfo(nil, nil) != (terminal.JevInfo{}) {
+		t.Fatal("Jev off has info")
 	}
 }

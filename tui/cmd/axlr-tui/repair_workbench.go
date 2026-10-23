@@ -14,6 +14,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/diagnostics"
 	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 	"github.com/underpass-ai/AXLR/tui/application"
+	"github.com/underpass-ai/AXLR/tui/compose"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -66,7 +67,7 @@ func (w repairWorkbenches) Open(_ context.Context, clone string) (application.Re
 		return nil, err
 	}
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: w.trace, LogFailure: failureLogger(w.appLog)}
-	driver := ceremonyDriver(w.registrations, runner, w.labels, madeWorkIdentity(w.configPath, w.registrations))
+	driver := compose.CeremonyDriver(w.registrations, runner, w.labels, madeWorkIdentity(w.configPath, w.registrations))
 	if driver == nil {
 		_ = executor.Close()
 		return nil, errors.New("MADE is not connected")
