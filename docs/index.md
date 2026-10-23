@@ -29,7 +29,7 @@ AXLR is Underpass's default engine for agentic execution, supported by KMP memor
 
 ## Integration and deployment
 
-The [HTTP/gRPC/MCP parity ledger](transport-parity.md) maps all 18 service capabilities and their shared request, approval and event contracts.
+The [HTTP/gRPC/MCP parity ledger](transport-parity.md) maps all 19 service capabilities and their shared request, approval and event contracts.
 
 | Interface | Contract |
 |:--|:--|

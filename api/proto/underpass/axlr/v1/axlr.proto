@@ -20,6 +20,7 @@ service AxlrService {
   rpc StreamEvents(google.protobuf.BytesValue) returns (stream google.protobuf.BytesValue);
   rpc DecideSessionTool(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
   rpc CancelSessionTurn(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
+  rpc CloseSession(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
   rpc ListTools(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
   rpc CreateToolCall(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);
   rpc GetToolCall(google.protobuf.BytesValue) returns (google.protobuf.BytesValue);

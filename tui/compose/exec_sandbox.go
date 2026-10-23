@@ -1,4 +1,4 @@
-package main
+package compose
 
 import (
 	"context"
@@ -12,13 +12,14 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 )
 
-// execSandbox turns exec_sandbox into the runtime's sandbox, probed once at
+// ExecSandbox turns exec_sandbox into the runtime's sandbox, probed once at
 // launch: nil when off, or when auto finds this platform unable to confine
 // a command; a sandbox that refuses every command when required and
-// unable; bwrap otherwise. Each mode but off says on stderr what it got;
-// unavailable is why a configured sandbox cannot confine commands, for the
-// console to show once stderr is behind its screen.
-func execSandbox(ctx context.Context, settings storage.ExecSandboxSettings, lookPath func(string) (string, error), stderr io.Writer) (sandbox *local.Sandbox, unavailable string, err error) {
+// unable; bwrap otherwise. Each mode but off says on stderr, after the
+// binary's name, what it got; unavailable is why a configured sandbox
+// cannot confine commands, for the console to show once stderr is behind
+// its screen.
+func ExecSandbox(ctx context.Context, name string, settings storage.ExecSandboxSettings, lookPath func(string) (string, error), stderr io.Writer) (sandbox *local.Sandbox, unavailable string, err error) {
 	if settings.Mode == "off" {
 		return nil, "", nil
 	}
@@ -45,13 +46,13 @@ func execSandbox(ctx context.Context, settings storage.ExecSandboxSettings, look
 		if len(confined.Writable) > 0 {
 			writable += ", " + strings.Join(confined.Writable, ", ")
 		}
-		fmt.Fprintf(stderr, "axlr-tui: exec sandbox: local commands write only %s and a private /tmp; network %s\n", writable, network)
+		fmt.Fprintf(stderr, "%s: exec sandbox: local commands write only %s and a private /tmp; network %s\n", name, writable, network)
 		return &confined, "", nil
 	case settings.Mode == "required":
-		fmt.Fprintf(stderr, "axlr-tui: exec_sandbox is required but unavailable (%v): local commands are refused\n", err)
+		fmt.Fprintf(stderr, "%s: exec_sandbox is required but unavailable (%v): local commands are refused\n", name, err)
 		return &local.Sandbox{Unavailable: err.Error()}, err.Error(), nil
 	default:
-		fmt.Fprintf(stderr, "axlr-tui: exec sandbox unavailable (%v): local commands run unsandboxed\n", err)
+		fmt.Fprintf(stderr, "%s: exec sandbox unavailable (%v): local commands run unsandboxed\n", name, err)
 		return nil, err.Error(), nil
 	}
 }
