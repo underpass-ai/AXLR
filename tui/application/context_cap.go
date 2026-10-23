@@ -46,6 +46,9 @@ func RequestTokens(counter TokenCounterPort, guidance root.Message, tools []root
 // on 23 October 2026 (claude-haiku-5.5: a 90,343-character signature for
 // 30,170 reasoning tokens, and the next request's prompt grew by as much).
 // Tokenized as text, that signature counted as 100,000 and stopped the turn.
+// The blocks are OpenRouter's reasoning_details (text, summary, data,
+// signature), Anthropic's thinking blocks (thinking, signature, data) or
+// OpenAI's reasoning items (summary parts, encrypted_content).
 func reasoningTokens(counter TokenCounterPort, reasoning root.JSONValue) int {
 	var blocks []map[string]json.RawMessage
 	if json.Unmarshal(reasoning.Bytes(), &blocks) != nil {
@@ -56,12 +59,22 @@ func reasoningTokens(counter TokenCounterPort, reasoning root.JSONValue) int {
 		for name, raw := range block {
 			var text string
 			if json.Unmarshal(raw, &text) != nil {
+				if name == "summary" {
+					var parts []struct {
+						Text string `json:"text"`
+					}
+					if json.Unmarshal(raw, &parts) == nil {
+						for _, part := range parts {
+							total += counter.Count(part.Text)
+						}
+					}
+				}
 				continue
 			}
 			switch name {
-			case "text", "summary":
+			case "text", "summary", "thinking":
 				total += counter.Count(text)
-			case "signature", "data":
+			case "signature", "data", "encrypted_content":
 				total += len(text) / opaqueReasoningBytesPerToken
 			}
 		}

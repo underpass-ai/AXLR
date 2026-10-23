@@ -20,12 +20,17 @@ import (
 // APIKeyEnv names the environment variable holding the key, required unless
 // the URL is a loopback address; ContextTokens is the window the console
 // respects, which may be smaller than the server's; Tools false hides a model
-// whose server cannot return native tool calls, since AXLR needs them.
+// whose server cannot return native tool calls, since AXLR needs them. API
+// chooses the protocol: "chat" (default) is OpenAI's chat completions, which
+// every local server speaks, "anthropic" the Anthropic Messages API and
+// "responses" the OpenAI Responses API, spoken natively so reasoning, prompt
+// caching and usage no longer depend on OpenRouter's translation.
 type LocalModel struct {
 	ID                string `json:"id"`
 	Name              string `json:"name,omitempty"`
 	URL               string `json:"url"`
 	Model             string `json:"model,omitempty"`
+	API               string `json:"api,omitempty"`
 	APIKeyEnv         string `json:"api_key_env,omitempty"`
 	ContextTokens     int    `json:"context_tokens"`
 	Tools             *bool  `json:"tools,omitempty"`
@@ -62,9 +67,41 @@ func (m LocalModel) UpstreamModel() string {
 	return m.ID
 }
 
-// ChatCompletionsURL is the endpoint the console posts to.
+// The protocols a local_models entry may name.
+const (
+	APIChat      = "chat"
+	APIAnthropic = "anthropic"
+	APIResponses = "responses"
+)
+
+// Protocol is the API the entry speaks, APIChat when it names none.
+func (m LocalModel) Protocol() string {
+	if m.API == "" {
+		return APIChat
+	}
+	return m.API
+}
+
+// ChatCompletionsURL is the endpoint the console posts to for APIChat.
 func (m LocalModel) ChatCompletionsURL() string {
 	return strings.TrimRight(m.URL, "/") + "/chat/completions"
+}
+
+// EndpointURL is the endpoint the console posts to: <url>/chat/completions
+// for chat, <url>/v1/messages for anthropic (<url>/messages when the url
+// already ends in /v1) and <url>/responses for responses.
+func (m LocalModel) EndpointURL() string {
+	base := strings.TrimRight(m.URL, "/")
+	switch m.Protocol() {
+	case APIAnthropic:
+		if strings.HasSuffix(base, "/v1") {
+			return base + "/messages"
+		}
+		return base + "/v1/messages"
+	case APIResponses:
+		return base + "/responses"
+	}
+	return m.ChatCompletionsURL()
 }
 
 // StreamIdle and StreamMax are the stream limits with defaults applied.
@@ -97,6 +134,11 @@ func (m LocalModel) validate() error {
 		if _, err := root.NewModelID(m.Model); err != nil {
 			return fmt.Errorf("settings local_models %s has an invalid model", m.ID)
 		}
+	}
+	switch m.API {
+	case "", APIChat, APIAnthropic, APIResponses:
+	default:
+		return fmt.Errorf("settings local_models %s api must be chat, anthropic or responses", m.ID)
 	}
 	if m.APIKeyEnv != "" && !mcpEnvironmentName.MatchString(m.APIKeyEnv) {
 		return fmt.Errorf("settings local_models %s api_key_env must be an environment variable name", m.ID)

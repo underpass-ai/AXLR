@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/underpass-ai/AXLR/adapters/anthropic"
+	"github.com/underpass-ai/AXLR/adapters/openai"
 	"github.com/underpass-ai/AXLR/adapters/openrouter"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
@@ -53,20 +55,15 @@ func NewLocalModels(settings storage.UserSettings, getenv func(string) string) L
 	return setup
 }
 
-// Connect builds one chat client per local model over the binary's HTTP
-// client, so their requests pass through the same diagnostics transport.
+// Connect builds one client per local model over the binary's HTTP client,
+// so their requests pass through the same diagnostics transport: a chat
+// completions client, or the native Anthropic or OpenAI Responses client the
+// entry's api names.
 func (s LocalModels) Connect(httpClient *http.Client) (map[root.ModelID]localmodels.Route, error) {
 	routes := make(map[root.ModelID]localmodels.Route, len(s.Models))
 	for _, local := range s.Models {
 		id := root.ModelID(local.ID)
-		client, err := openrouter.New(openrouter.ClientConfig{
-			APIKey:                  s.Keys[id],
-			Endpoint:                local.ChatCompletionsURL(),
-			HTTPClient:              httpClient,
-			StreamInactivityTimeout: local.StreamIdle(),
-			StreamMaxDuration:       local.StreamMax(),
-			Thinking:                local.Thinking,
-		})
+		client, err := connect(local, s.Keys[id], httpClient)
 		if err != nil {
 			if local.APIKeyEnv != "" && s.Keys[id] == "" {
 				return nil, fmt.Errorf("local model %s: %w (set %s)", local.ID, err, local.APIKeyEnv)
@@ -76,6 +73,37 @@ func (s LocalModels) Connect(httpClient *http.Client) (map[root.ModelID]localmod
 		routes[id] = localmodels.Route{Client: client, Upstream: root.ModelID(local.UpstreamModel()), NoStream: !local.Streams()}
 	}
 	return routes, nil
+}
+
+func connect(local storage.LocalModel, key string, httpClient *http.Client) (localmodels.Client, error) {
+	switch local.Protocol() {
+	case storage.APIAnthropic:
+		return anthropic.New(anthropic.ClientConfig{
+			APIKey:                  key,
+			Endpoint:                local.EndpointURL(),
+			HTTPClient:              httpClient,
+			StreamInactivityTimeout: local.StreamIdle(),
+			StreamMaxDuration:       local.StreamMax(),
+			Thinking:                local.Thinking,
+		})
+	case storage.APIResponses:
+		return openai.New(openai.ClientConfig{
+			APIKey:                  key,
+			Endpoint:                local.EndpointURL(),
+			HTTPClient:              httpClient,
+			StreamInactivityTimeout: local.StreamIdle(),
+			StreamMaxDuration:       local.StreamMax(),
+			Thinking:                local.Thinking,
+		})
+	}
+	return openrouter.New(openrouter.ClientConfig{
+		APIKey:                  key,
+		Endpoint:                local.ChatCompletionsURL(),
+		HTTPClient:              httpClient,
+		StreamInactivityTimeout: local.StreamIdle(),
+		StreamMaxDuration:       local.StreamMax(),
+		Thinking:                local.Thinking,
+	})
 }
 
 // PluginGetenv resolves host variables for plugins and refuses the model
