@@ -95,3 +95,29 @@ func TestStripWhyAndCallWhy(t *testing.T) {
 		t.Fatal("arguments without why are returned as they are")
 	}
 }
+
+// A side effect without a why runs when the policy approves it without a
+// card, checked against its schema without the why requirement; with a
+// card due, or with a why that is too long, it is refused (22 October
+// 2026: each refusal made claude-haiku-5.5 send the whole file again).
+func TestAdmissionLetsAnUnwatchedCallRunWithoutAWhy(t *testing.T) {
+	write := RequireWhy([]domain.AvailableTool{whyTool(t, "local_write", `{"type":"object","properties":{"path":{"type":"string"},"content":{"type":"string"}},"required":["path","content"],"additionalProperties":false}`)})[0]
+	session := turnSession(t)
+	whyless := mustObject(t, `{"path":"a.html","content":"<p>hi</p>"}`)
+	unwatched := headAdmission{Approval: approvalFunc(func(id domain.ToolIdentity) bool { return id.Kind == domain.ToolKindLocal })}
+	checked, err := unwatched.whyError(session, write, whyless)
+	if err != nil || RequiresWhy(checked) || !RequiresWhy(write) {
+		t.Fatalf("an approved call without a why was refused or its schema still requires one: %v", err)
+	}
+	if _, err := (headAdmission{}).whyError(session, write, whyless); err == nil || !strings.Contains(err.Error(), MissingWhy) {
+		t.Fatalf("a call with a card due ran without a why: %v", err)
+	}
+	carded := headAdmission{Approval: approvalFunc(func(domain.ToolIdentity) bool { return false })}
+	if _, err := carded.whyError(session, write, whyless); err == nil {
+		t.Fatal("a call the policy does not approve ran without a why")
+	}
+	overlong := mustObject(t, `{"path":"a.html","content":"x","why":"`+strings.Repeat("x", WhyMaxRunes+1)+`"}`)
+	if _, err := unwatched.whyError(session, write, overlong); err == nil {
+		t.Fatal("an overlong why was let through")
+	}
+}

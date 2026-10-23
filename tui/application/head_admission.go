@@ -31,7 +31,7 @@ type headAdmission struct {
 // whyError refuses a side effect without a why, unless the policy approves
 // the call without a card: nobody reads that why, and the refusal made the
 // model send the whole call again. On 22 October 2026 claude-haiku-5.5,
-// running under --exec --approve local, forgot the why on five writes and
+// running headless with local calls approved, forgot the why on five writes and
 // edits and resent about 30,000 output tokens of HTML each time. The call
 // runs, and its result asks the model for a why next time (whyReminder).
 // checked is the tool the later schema checks use: without the why
