@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -45,8 +46,19 @@ func execRun(t *testing.T, env map[string]string, args ...string) (int, string, 
 
 const (
 	answerChunk = `{"choices":[{"index":0,"delta":{"content":"done"},"finish_reason":"stop"}]}`
-	execChunk   = `{"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"exec-1","type":"function","function":{"name":"local_exec","arguments":"{\"program\":\"touch\",\"args\":[\"made-by-exec\"],\"why\":\"The person asked for the file.\"}"}}]},"finish_reason":"tool_calls"}]}`
 )
+
+// execChunk asks local_exec to create made-by-exec in the workspace with a
+// program every runner has: touch, or cmd on Windows.
+var execChunk = func() string {
+	program, args := "touch", []string{"made-by-exec"}
+	if runtime.GOOS == "windows" {
+		program, args = "cmd", []string{"/c", "type nul > made-by-exec"}
+	}
+	arguments, _ := json.Marshal(map[string]any{"program": program, "args": args, "why": "The person asked for the file."})
+	call, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "exec-1", "type": "function", "function": map[string]any{"name": "local_exec", "arguments": string(arguments)}}}}, "finish_reason": "tool_calls"}}})
+	return string(call)
+}()
 
 // --exec runs one prompt without the console and prints the answer on
 // stdout; the session id goes to stderr for --session.
