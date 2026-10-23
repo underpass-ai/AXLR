@@ -49,11 +49,13 @@ const (
 )
 
 // execChunk asks local_exec to create made-by-exec in the workspace with a
-// program every runner has: touch, or cmd on Windows.
+// program every runner has: touch, or cmd's mkdir on Windows. (cmd keeps the
+// quotes Go puts around an argument with a space and a ">", and ran
+// "type nul > made-by-exec" as one program name.)
 var execChunk = func() string {
 	program, args := "touch", []string{"made-by-exec"}
 	if runtime.GOOS == "windows" {
-		program, args = "cmd", []string{"/c", "type nul > made-by-exec"}
+		program, args = "cmd", []string{"/c", "mkdir", "made-by-exec"}
 	}
 	arguments, _ := json.Marshal(map[string]any{"program": program, "args": args, "why": "The person asked for the file."})
 	call, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": "exec-1", "type": "function", "function": map[string]any{"name": "local_exec", "arguments": string(arguments)}}}}, "finish_reason": "tool_calls"}}})
