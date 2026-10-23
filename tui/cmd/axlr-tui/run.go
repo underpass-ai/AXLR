@@ -90,6 +90,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	approveFlag := flags.String("approve", "", "with --exec: what to approve without a person: none (settings' rules, the default), local (workspace reads, writes and commands) or all")
 	jsonFlag := flags.Bool("json", false, "with --exec: write the turn's events as JSON lines")
 	modeFlag := flags.String("mode", "", "with --exec: normal, review, writer or research")
+	decideFlag := flags.String("decide", "", "with --session: approve or deny the session's pending call without the console, run the turn to its end and exit as --exec does")
+	callFlag := flags.String("call", "", "with --decide: the id of the pending call, to make sure it is the one")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
 	flags.Func("plugin-env-from", "ID:KEY=HOST_ENV_VAR; repeatable", func(v string) error { selections = append(selections, v); return nil })
@@ -120,12 +122,29 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
 		}
 	}
-	if *execFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "") {
-		return fail(errors.New("--approve, --json and --mode go with --exec"))
+	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "") {
+		return fail(errors.New("--approve, --json and --mode go with --exec or --decide"))
+	}
+	if *callFlag != "" && *decideFlag == "" {
+		return fail(errors.New("--call goes with --decide"))
+	}
+	var execDecided domain.ToolDecision
+	switch *decideFlag {
+	case "":
+	case "approve", "deny":
+		if *sessionFlag == "" {
+			return fail(errors.New("--decide needs the --session whose pending call it decides"))
+		}
+		if *execFlag != "" {
+			return fail(errors.New("--decide continues the session's turn; it cannot be combined with --exec"))
+		}
+		execDecided = domain.ToolDecision(*decideFlag)
+	default:
+		return fail(fmt.Errorf("--decide %s: use approve or deny", *decideFlag))
 	}
 	execApproval := approveNone
 	var execWorkMode domain.WorkMode
-	if *execFlag != "" {
+	if *execFlag != "" || *decideFlag != "" {
 		if *repairFlag != "" || *improveFlag != "" {
 			return fail(errors.New("--exec runs one prompt; it cannot be combined with --repair or --improve"))
 		}
@@ -821,9 +840,10 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Sessions:                store,
 		Hostname:                hostname,
 	}
-	if *execFlag != "" {
+	if *execFlag != "" || *decideFlag != "" {
 		// One prompt without the console: the loop the repairs' workers run,
-		// under the approvals --approve allows.
+		// under the approvals --approve allows. --decide takes the session's
+		// pending call instead of a prompt.
 		if heldElsewhere != "" {
 			return fail(fmt.Errorf("session %s is open in another console", heldElsewhere))
 		}
@@ -839,9 +859,15 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			}
 		}
 		policy := execPolicy{next: approvalSettings, level: execApproval}
-		start, agent := deps.Start, deps.Agent
-		start.Approval, agent.Approval = policy, policy
-		final, code := execTurn(ctx, start, agent, *session, *execFlag, *jsonFlag, execOutput, stderr)
+		start, agent, resolve := deps.Start, deps.Agent, deps.Resolve
+		start.Approval, agent.Approval, resolve.Approval = policy, policy, policy
+		var final domain.Session
+		var code int
+		if *decideFlag != "" {
+			final, code = execDecision(ctx, resolve, start, agent, store, *session, *callFlag, execDecided, *jsonFlag, execOutput, stderr)
+		} else {
+			final, code = execTurn(ctx, start, agent, store, *session, *execFlag, *jsonFlag, execOutput, stderr)
+		}
 		if sessionCeremony != nil {
 			_ = sessionCeremony.Close(context.WithoutCancel(ctx), &final, "exit")
 		}
