@@ -146,6 +146,26 @@ func TestRequestWithoutThinkingSendsNoThinkingConfig(t *testing.T) {
 	}
 }
 
+// A schema without a type is sent as an object schema, which the API
+// requires; one that says its type is sent as it is.
+func TestRequestGivesAnUntypedSchemaItsObjectType(t *testing.T) {
+	untyped, _ := domain.NewJSONObject([]byte(`{"properties":{"path":{"type":"string"}},"required":["path"]}`))
+	typed, _ := domain.NewJSONObject([]byte(`{"type":"object","properties":{}}`))
+	req := simpleRequest()
+	req.Tools = []domain.ToolDefinition{{Name: "read", Parameters: untyped}, {Name: "list", Parameters: typed}}
+	wire, err := mapRequest(req, 0, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema map[string]any
+	if err := json.Unmarshal(wire.Tools[0].InputSchema, &schema); err != nil || schema["type"] != "object" || schema["required"] == nil {
+		t.Fatalf("untyped schema sent as %s (%v)", wire.Tools[0].InputSchema, err)
+	}
+	if string(wire.Tools[1].InputSchema) != `{"type":"object","properties":{}}` {
+		t.Fatalf("typed schema changed: %s", wire.Tools[1].InputSchema)
+	}
+}
+
 // A tool result needs the current tools, as the API requires.
 func TestRequestRefusesToolResultsWithoutTools(t *testing.T) {
 	arguments, _ := domain.NewJSONObject([]byte(`{}`))

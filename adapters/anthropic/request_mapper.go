@@ -80,7 +80,27 @@ func mapRequest(req domain.CompletionRequest, maxTokens int, thinking bool) (req
 		wire.System[len(wire.System)-1].CacheControl = &cacheControlDTO{Type: "ephemeral"}
 	}
 	for _, definition := range req.Tools {
-		wire.Tools = append(wire.Tools, toolDTO{Name: string(definition.Name), Description: string(definition.Description), InputSchema: definition.Parameters.Bytes()})
+		wire.Tools = append(wire.Tools, toolDTO{Name: string(definition.Name), Description: string(definition.Description), InputSchema: inputSchema(definition.Parameters.Bytes())})
 	}
 	return wire, nil
+}
+
+// inputSchema is a tool's parameters as the API reads them: an object
+// schema that says so. AXLR's own tools declare "type": "object"; an MCP
+// server's schema may leave it out, which the chat completions shape
+// tolerates and the Messages API refuses.
+func inputSchema(parameters []byte) json.RawMessage {
+	var schema map[string]json.RawMessage
+	if json.Unmarshal(parameters, &schema) != nil || schema == nil {
+		return parameters
+	}
+	if _, typed := schema["type"]; typed {
+		return parameters
+	}
+	schema["type"] = json.RawMessage(`"object"`)
+	encoded, err := json.Marshal(schema)
+	if err != nil {
+		return parameters
+	}
+	return encoded
 }
