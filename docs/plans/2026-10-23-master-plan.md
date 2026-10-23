@@ -1,6 +1,6 @@
 # AXLR master plan: from console to the runtime of Underpass Bots
 
-Status: proposed (23 Oct 2026). It follows the phases of the vision's roadmap (§13). The product vision this plan serves is Underpass Bots (vision and architecture note of 21 Oct 2026, kept outside this repository; § numbers below refer to it): persistent, governed bots that run as infrastructure, with a control plane that decides *when, where, as whom and under which permissions* a unit of work runs, and AXLR deciding *how* an agent reasons and uses tools (vision §6.1, §7.1). This plan is the bridge: what AXLR must grow, and in what order, to become that runtime. It does not restate the vision.
+Status: accepted (23 Oct 2026; work started the same day). It follows the phases of the vision's roadmap (§13). The product vision this plan serves is Underpass Bots (vision and architecture note of 21 Oct 2026, kept outside this repository; § numbers below refer to it): persistent, governed bots that run as infrastructure, with a control plane that decides *when, where, as whom and under which permissions* a unit of work runs, and AXLR deciding *how* an agent reasons and uses tools (vision §6.1, §7.1). This plan is the bridge: what AXLR must grow, and in what order, to become that runtime. It does not restate the vision.
 
 ## Boundary
 
@@ -91,7 +91,8 @@ The bot registry, triggers, schedulers, durable task queues, NATS, Kubernetes re
 
 Tracked from Phase 1, against the baselines above: cost per resolved task, time to first bot, recovery rate after induced failures, share of forbidden actions refused by policy, and requests per task.
 
-## Open questions
+## Decisions taken on 23 Oct 2026
 
-1. Are Phases 0 and 1 the scope of the NLnet proposal due 3 Nov 2026?
-2. Does the control plane start in Go next to AXLR, or in another stack (vision ADR 15.2 lists persistence and orchestration as open)?
+1. The NLnet proposal due 3 Nov 2026 covers Phases 0 and 1: the runtime contract and the Server Incident Bot on one server.
+2. The control plane starts in Go, in its own repository (`underpass-bots`) next to AXLR; it reaches AXLR only through the runtime contract. Persistence and orchestration (vision ADR 15.2) are decided there, not here.
+3. Work starts on three tracks at once: the runtime contract (Phase 0) in this repository, the native model adapters (parallel track) in this repository, and the stub control plane outside it.
