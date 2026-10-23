@@ -1,6 +1,6 @@
 # AXLR master plan: from console to the runtime of Underpass Bots
 
-Status: proposed (23 Oct 2026). The windows below are proposals. The product vision this plan serves is Underpass Bots (vision and architecture note of 21 Oct 2026, kept outside this repository; § numbers below refer to it): persistent, governed bots that run as infrastructure, with a control plane that decides *when, where, as whom and under which permissions* a unit of work runs, and AXLR deciding *how* an agent reasons and uses tools (vision §6.1, §7.1). This plan is the bridge: what AXLR must grow, and in what order, to become that runtime. It does not restate the vision.
+Status: proposed (23 Oct 2026). It follows the phases of the vision's roadmap (§13). The product vision this plan serves is Underpass Bots (vision and architecture note of 21 Oct 2026, kept outside this repository; § numbers below refer to it): persistent, governed bots that run as infrastructure, with a control plane that decides *when, where, as whom and under which permissions* a unit of work runs, and AXLR deciding *how* an agent reasons and uses tools (vision §6.1, §7.1). This plan is the bridge: what AXLR must grow, and in what order, to become that runtime. It does not restate the vision.
 
 ## Boundary
 
@@ -37,53 +37,55 @@ Baselines measured on 21–23 Oct 2026 (claude-haiku-5.5, the AXLR repository an
 
 The autonomy levels of vision §10.4 (Observe, Propose, Act with approval, Act within policy) map onto `--approve` and the work modes, but without a per-run allowlist there is no way to say "this run may only read logs and query metrics".
 
-## Phases
+## AXLR's part in each phase of the vision roadmap (§13)
 
-### Phase 1 — Runtime for bots (now → 3 Nov 2026)
+The phases are the vision's own. For each, what the control plane builds is out of scope here; the columns say what AXLR already has and what it must add.
 
-Goal: a control plane, or a bot like Grok Bot, can run AXLR unattended and get a bounded, auditable result.
+### Phase 0 — Contracts and technical proof
 
-- Release v0.14.0 with #168 and #170 and install it.
-- `--exec` resumes a session with a pending call and decides it (`--session ID --approve local` runs it if the policy allows, `--deny "reason"` refuses it). Measured gap: on 23 Oct the bot had to open the console to approve one command.
-- Per-run policy: `--allow-tools` (tool and argument patterns), deny by default for everything else; levels `observe`, `propose`, `act` as presets.
-- Per-run budgets: `--max-seconds`, `--max-requests`, `--max-tool-calls`, `--max-usd`, enforced outside the model.
-- A result schema for `--exec --json` and the service: final status, answer, artifacts, usage per request and in total.
-- `axlr_deliver`: the model marks a file as a deliverable; it appears as an `artifact` event.
-- Windows: a default PATH that exists on Windows (the console falls back to Unix directories).
+The vision's exit: show that the persistent bot and the AXLR execution are separate entities.
 
-Exit: Grok Bot runs the demo in one `--exec` call with an allowlist and a budget, and gets the table from the result instead of reading traces.
+| AXLR has | AXLR adds |
+|---|---|
+| `axlr-serve` sessions, turns, events and approvals over HTTP, gRPC and MCP; `axlr-tui --exec` with JSON events; the Grok Bot experiment of 21–23 Oct as an informal proof | The runtime contract written down: one execution = one session; inputs (prompt, model, policy, budget, workspace) and a result schema (status, answer, artifacts, usage per request); `--exec` resuming a session with a pending call and deciding it; release v0.14.0 |
 
-### Phase 2 — Governed execution (Nov → Dec 2026)
+Exit for AXLR: a stub control plane, outside this repository, runs one task through the contract and reads the result without reading traces.
 
-Goal: unattended runs whose permissions do not depend on the prompt (vision §10.1: the model proposes, it never grants).
+### Phase 1 — MVP on one server (Server Incident Bot)
 
-- Approvals that reach a person outside the console: the service's `approver` role gets a notification channel (webhook first) and approvals expire.
-- A deterministic policy engine per tool and arguments, beyond the destructive list; refusals logged with the rule.
-- Sandbox profiles per run (process, rootless container) with egress control.
-- Execution receipt: model, tools with argument and result hashes, usage and cost, signed; one link per run.
-- Correlation ids (bot, task, execution, trace) carried from the request through events, traces and MADE records.
-- Follow-up already owed: decouple the old ceremony driver from the engine names (lifecycle design).
+| AXLR has | AXLR adds |
+|---|---|
+| MCP tools with manual approval; read-only work modes (`review`, `research`); logs, diagnostics and the usage ledger; the service recovers its sessions after a restart | Static allow/deny per execution (tools and argument patterns, deny by default) with the §10.4 levels as presets; artifacts (`axlr_deliver`, `artifact` events); per-execution metrics in the result; a Windows default PATH |
 
-Exit: a forbidden tool call is refused by policy in a run the model was told to complete, and the receipt shows it.
+Exit for AXLR: the SRE bot's two observability MCP servers are the only tools an execution can reach, and a forbidden call is refused outside the model.
 
-### Phase 3 — Underpass Bots MVP (Q1 2027)
+### Phase 2 — Durability and governed autonomy
 
-Goal: the first real bot of vision §18, a read-only SRE bot on one Linux host.
+| AXLR has | AXLR adds |
+|---|---|
+| Idempotency keys and revision guards on the service; durable approval decisions (`approver` role); cancellation; KMP memory and MADE records per session; Jev | Approvals that reach a person (webhook) and expire; deadlines and budgets per execution (seconds, requests, tool calls, USD) enforced outside the model; an execution receipt (model, tools with hashes, usage, cost); correlation ids (bot, task, execution, trace) through events, traces and MADE |
 
-- New repository for the control plane: bot registry, triggers (alert, schedule, manual), durable tasks with idempotency keys, leases and recovery.
-- AXLR behind the runtime port: `axlr-serve` per host, one session per execution, the control plane holding identities and budgets.
-- Two read-only observability MCP servers as the bot's only tools.
+Exit for AXLR: a long execution survives a restart of `axlr-serve`, and its receipt shows every action and what it cost.
 
-Exit: the twelve acceptance criteria and ten failure tests of vision §14 pass on one host.
+### Phase 3 — Kubernetes and collaboration
+
+| AXLR has | AXLR adds |
+|---|---|
+| A Helm chart; the bwrap exec sandbox; the signed catalog and registry of forged tools | Sandbox profiles per execution (process, rootless container) with egress control; delegation limits (depth and budget) when a bot asks another; skills versioned in the catalog |
+
+### Phase 4 — Product and differentiation
+
+| AXLR has | AXLR adds |
+|---|---|
+| The console as an operator client; MADE ceremonies; Jev | Bot templates as catalog entries; skills with test harnesses (the registry's tests); cost and strategy comparison with Jev; MADE for multi-step workflows a bot starts |
 
 ### Parallel track — Model layer
 
-- Native adapters for the Anthropic Messages and OpenAI Responses APIs, so reasoning, prompt caching and routing stop depending on OpenRouter's translation. The reasoning bug fixed on 23 Oct belongs to this class; Pi already speaks each API natively.
-- A model router by cost and latency per task kind, fed by the usage ledger.
+Native adapters for the Anthropic Messages and OpenAI Responses APIs, so reasoning, prompt caching and routing stop depending on OpenRouter's translation (the reasoning bug fixed on 23 Oct belongs to this class; Pi already speaks each API natively), and a model router by cost and latency fed by the usage ledger (vision: Model Router).
 
-### Non-goals
+### Non-goals for AXLR
 
-A control plane inside AXLR, federation between hosts, Kubernetes resources, and a web UI.
+The bot registry, triggers, schedulers, durable task queues, NATS, Kubernetes resources and federation: they are the control plane's (vision §6.1, risk "coupling AXLR to the scheduler or Kubernetes" in §15.1).
 
 ## Metrics (vision §16)
 
@@ -91,6 +93,5 @@ Tracked from Phase 1, against the baselines above: cost per resolved task, time 
 
 ## Open questions
 
-1. Is Phase 1 the scope of the NLnet proposal due 3 Nov 2026?
-2. Is Q1 2027 the right window for the Bots MVP?
-3. Does the control plane start in Go next to AXLR, or in the stack the Underpass registry already uses (Rust on Lambda)?
+1. Are Phases 0 and 1 the scope of the NLnet proposal due 3 Nov 2026?
+2. Does the control plane start in Go next to AXLR, or in another stack (vision ADR 15.2 lists persistence and orchestration as open)?
