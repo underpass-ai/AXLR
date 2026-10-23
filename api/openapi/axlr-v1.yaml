@@ -353,6 +353,9 @@ components:
         last_sequence: {type: integer}
         messages: {type: array, items: {type: object}}
         pending: {type: array, items: {type: object}}
+        result:
+          description: The execution's result as the session stands (the runtime contract); null until a turn ends.
+          oneOf: [{$ref: '#/components/schemas/ExecutionResult'}, {type: 'null'}]
     Operation:
       type: object
       required: [operation_id, session_id, status]
@@ -370,7 +373,46 @@ components:
         sequence: {type: integer, minimum: 1}
         time: {type: string, format: date-time}
         type: {type: string, enum: [turn.started, text.delta, tool.requested, approval.required, tool.completed, turn.completed, turn.interrupted, operation.failed, approval.decision]}
-        payload: {type: object}
+        payload:
+          type: object
+          description: The event that ends a turn (approval.required, turn.completed, turn.interrupted, operation.failed) carries the execution's result in `result`.
+    ExecutionResult:
+      type: object
+      description: The runtime contract's result object (docs/runtime-contract.md); the same object `axlr-tui --exec --json` writes last.
+      required: [schema, status, session_id, sessions, answer, tool_calls, usage, artifacts]
+      properties:
+        schema: {type: string, const: axlr.execution-result/v1}
+        status: {type: string, enum: [completed, needs_decision, interrupted, failed]}
+        session_id: {type: string}
+        sessions: {type: array, items: {type: string}, description: Every session the execution spanned, first to last.}
+        answer: {type: string}
+        pending: {$ref: '#/components/schemas/ExecutionCall'}
+        error: {type: string}
+        tool_calls: {type: array, items: {$ref: '#/components/schemas/ExecutionCall'}}
+        usage: {$ref: '#/components/schemas/ExecutionUsage'}
+        artifacts: {type: array, items: {type: object}, description: Reserved; empty until artifacts ship.}
+    ExecutionCall:
+      type: object
+      required: [call_id, tool]
+      properties:
+        call_id: {type: string}
+        tool: {type: string}
+        decision: {type: string, enum: [approve, auto_approve, deny]}
+        status: {type: string, enum: [pending, denied, completed, failed, uncertain]}
+        arguments: {type: object, description: Only on the pending call.}
+    ExecutionUsage:
+      type: object
+      required: [requests, prompt_tokens, cached_tokens, cache_write_tokens, completion_tokens, reasoning_tokens, cost_usd, cost_requests, unmetered_requests]
+      properties:
+        requests: {type: integer}
+        prompt_tokens: {type: integer}
+        cached_tokens: {type: integer}
+        cache_write_tokens: {type: integer}
+        completion_tokens: {type: integer}
+        reasoning_tokens: {type: integer}
+        cost_usd: {type: number}
+        cost_requests: {type: integer, description: Requests that reported a cost; cost_usd sums them.}
+        unmetered_requests: {type: integer, description: Requests that reported no usage; billed by the provider but not counted.}
     Tool:
       type: object
       required: [name, origin, identity, schema, available]
