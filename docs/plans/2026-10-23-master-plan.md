@@ -94,5 +94,5 @@ Tracked from Phase 1, against the baselines above: cost per resolved task, time 
 ## Decisions taken on 23 Oct 2026
 
 1. The NLnet proposal due 3 Nov 2026 covers Phases 0 and 1: the runtime contract and the Server Incident Bot on one server.
-2. The control plane starts in Go, in its own repository (`underpass-bots`) next to AXLR; it reaches AXLR only through the runtime contract. Persistence and orchestration (vision ADR 15.2) are decided there, not here.
+2. The control plane starts in Go, in its own repository (`axlr-bots`, renamed from `underpass-bots` on 24 Oct 2026) next to AXLR; it reaches AXLR only through the runtime contract. Persistence and orchestration (vision ADR 15.2) are decided there, not here.
 3. Work starts on three tracks at once: the runtime contract (Phase 0) in this repository, the native model adapters (parallel track) in this repository, and the stub control plane outside it.
