@@ -40,5 +40,9 @@ func ExecutionResult(result domain.ExecutionResult) dto.ExecutionResult {
 	if result.Pending != nil {
 		out.Pending = &dto.ExecutionCall{ID: string(result.Pending.ID), Tool: string(result.Pending.Name), Arguments: json.RawMessage(result.Pending.Arguments.Bytes())}
 	}
+	if result.Correlation != nil {
+		correlation := ExecutionCorrelation(*result.Correlation)
+		out.Correlation = &correlation
+	}
 	return out
 }

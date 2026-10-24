@@ -19,13 +19,19 @@ type StartTurnUseCase struct {
 	Notices RepairNoticesPort
 }
 
-func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, prompt root.Text, emit func(Event) error) error {
+func (u StartTurnUseCase) Execute(ctx context.Context, session *domain.Session, prompt root.Text, emit func(Event) error) (returnErr error) {
 	if u.Approval != nil {
 		u.Continue.Approval = u.Approval
 	}
 	if session == nil || u.Catalog == nil || u.Store == nil {
 		return errors.New("start turn requires session, catalog and store")
 	}
+	// The execution's budget bounds the turn's time, and its correlation
+	// goes on the trace records (execution_budget.go).
+	ctx, cancel := executionDeadline(ctx, *session)
+	defer cancel()
+	defer func() { returnErr = settleBudget(ctx, u.Store, session, returnErr) }()
+	u.Continue.Diagnostics = sessionDiagnostics(u.Continue.Diagnostics, *session)
 	if err := ctx.Err(); err != nil {
 		return err
 	}

@@ -21,10 +21,13 @@ type ExecutionResult struct {
 	// Pending is the call that waits for a decision when Status is
 	// ExecutionNeedsDecision.
 	Pending *axlr.ToolCall
-	// Error says why the execution failed or was interrupted.
+	// Error says why the execution failed, was interrupted or exceeded its
+	// budget.
 	Error string
 	Calls []ExecutionCall
 	Usage ExecutionUsage
+	// Correlation repeats the execution's ids, nil without any.
+	Correlation *ExecutionCorrelation
 }
 
 // NewExecutionResult reads how an execution ended from the session the loop
@@ -42,8 +45,19 @@ func NewExecutionResult(s Session, err error) ExecutionResult {
 			break
 		}
 	}
+	if correlation, has := s.Correlation(); has {
+		result.Correlation = &correlation
+	}
 	pending := s.Pending()
 	switch {
+	case s.BudgetStop() != nil && state.Status != StatusComplete:
+		// The limit that ended the execution is read from the session, so
+		// the service's result says the same as the command's.
+		result.Status, result.Error = ExecutionBudgetExceeded, s.BudgetStop().Error()
+		if len(pending) > 0 {
+			call := pending[0].Call
+			result.Pending = &call
+		}
 	case err != nil && (errors.Is(err, context.Canceled) || state.Status == StatusInterrupted):
 		result.Status, result.Error = ExecutionInterrupted, err.Error()
 	case err != nil:

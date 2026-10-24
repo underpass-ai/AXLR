@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -636,7 +637,7 @@ func TestSessionPolicyRefusesAForbiddenCall(t *testing.T) {
 	for name, body := range map[string]string{
 		"unknown level":        `{"model":"test/model","policy":{"level":"autonomous","tools":{}}}`,
 		"unknown policy key":   `{"model":"test/model","policy":{"level":"observe","tools":{},"budget":{}}}`,
-		"unknown body key":     `{"model":"test/model","policy":{"level":"observe","tools":{}},"budget":{}}`,
+		"unknown body key":     `{"model":"test/model","policy":{"level":"observe","tools":{}},"deadline":{}}`,
 		"policy not an object": `{"model":"test/model","policy":"observe"}`,
 	} {
 		response := apiRequest(t, client, "POST", ts.URL+"/v1/sessions", body, "")
@@ -717,4 +718,172 @@ func TestSessionPolicyRefusesAForbiddenCall(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(s.Config.Workspace, "made-by-service")); err == nil {
 		t.Fatal("the forbidden command ran")
 	}
+}
+
+// A session created under a budget and a correlation keeps both: GetSession
+// shows them, every journal event carries the correlation, and the request
+// past the budget is refused outside the model: the turn ends in
+// turn.interrupted with the result budget_exceeded and no operation.failed
+// after it. An object the contract does not describe is refused with the
+// session.
+func TestSessionBudgetEndsTheTurnAndCorrelationReachesEveryEvent(t *testing.T) {
+	model := &budgetModel{}
+	tool := &countingTool{}
+	ledgers := &memoryLedgers{ledgers: map[domain.SessionID]domain.UsageLedger{}}
+	s, ts, client, _ := testServerWith(t, func(_ Config, deps *Dependencies) {
+		deps.Start.Continue.Models = model
+		deps.Start.Continue.Usage = ledgers
+		deps.Start.Tools = tool
+		deps.Start.Approval = approveEverything{}
+		deps.Resolve.Continue.Models = model
+		deps.Resolve.Continue.Usage = ledgers
+		deps.Resolve.Tools = tool
+		deps.Resolve.Approval = approveEverything{}
+		deps.Tools = tool
+	})
+	for name, tc := range map[string]struct {
+		body string
+		code string
+	}{
+		"budget unknown field":    {`{"model":"test/model","budget":{"minutes":1}}`, "invalid_budget"},
+		"budget negative":         {`{"model":"test/model","budget":{"requests":-1}}`, "invalid_budget"},
+		"budget not an object":    {`{"model":"test/model","budget":5}`, ""},
+		"correlation unsafe id":   {`{"model":"test/model","correlation":{"bot_id":"bot one"}}`, "invalid_correlation"},
+		"correlation unknown key": {`{"model":"test/model","correlation":{"span_id":"s"}}`, "invalid_correlation"},
+		"unknown body key":        {`{"model":"test/model","deadline":{}}`, ""},
+	} {
+		response := apiRequest(t, client, "POST", ts.URL+"/v1/sessions", tc.body, "")
+		var failure struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		_ = json.NewDecoder(response.Body).Decode(&failure)
+		response.Body.Close()
+		if response.StatusCode != http.StatusUnprocessableEntity && response.StatusCode != http.StatusBadRequest || tc.code != "" && failure.Error.Code != tc.code {
+			t.Fatalf("%s: status %d error %q", name, response.StatusCode, failure.Error.Code)
+		}
+	}
+	// The model sends local_exec on the first request and would answer on
+	// the second; under requests: 1 the second is never sent.
+	correlation := `{"bot_id":"server-incident-investigator","task_id":"task-789","execution_id":"exec-1","trace_id":"trace-abc"}`
+	response := apiRequest(t, client, "POST", ts.URL+"/v1/sessions", `{"model":"test/model","budget":{"requests":1},"correlation":`+correlation+`}`, "")
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create status %d", response.StatusCode)
+	}
+	var created struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&created); err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	response = apiRequest(t, client, "GET", ts.URL+"/v1/sessions/"+created.ID, "", "")
+	var shown struct {
+		Budget      json.RawMessage `json:"budget"`
+		Correlation json.RawMessage `json:"correlation"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&shown); err != nil || string(shown.Budget) != `{"requests":1}` || string(shown.Correlation) != correlation {
+		t.Fatalf("GetSession budget %s correlation %s: %v", shown.Budget, shown.Correlation, err)
+	}
+	response.Body.Close()
+	response = apiRequest(t, client, "POST", ts.URL+"/v1/sessions/"+created.ID+"/turns", `{"prompt":"make the file","expected_revision":1}`, "turn-key-1234567890")
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("turn status %d", response.StatusCode)
+	}
+	response.Body.Close()
+	deadline := time.Now().Add(2 * time.Second)
+	var history []Event
+	for {
+		var err error
+		history, _, err = s.events.Read(created.ID, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		last := ""
+		if len(history) > 0 {
+			last = history[len(history)-1].Type
+		}
+		// approval.required is journaled for the call before the run's
+		// policy approves it by itself: only the turn's end is terminal.
+		if last == "turn.interrupted" || last == "operation.failed" || last == "turn.completed" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the turn did not end: %+v", history)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	var kinds []string
+	for _, event := range history {
+		kinds = append(kinds, event.Type)
+		var payload struct {
+			Correlation json.RawMessage `json:"correlation"`
+		}
+		if err := json.Unmarshal(event.Payload, &payload); err != nil || string(payload.Correlation) != correlation {
+			t.Fatalf("event %s without the correlation: %s", event.Type, event.Payload)
+		}
+	}
+	terminal := history[len(history)-1]
+	var payload struct {
+		Result *dto.ExecutionResult `json:"result"`
+	}
+	if err := json.Unmarshal(terminal.Payload, &payload); err != nil || terminal.Type != "turn.interrupted" || payload.Result == nil || payload.Result.Status != "budget_exceeded" || payload.Result.Error != "budget: requests 1 reached" || payload.Result.Correlation == nil || payload.Result.Correlation.TraceID != "trace-abc" {
+		t.Fatalf("terminal %s %s: %v (events %v)", terminal.Type, terminal.Payload, err, kinds)
+	}
+	if model.requests.Load() != 1 || tool.calls.Load() != 1 {
+		stored, _ := s.sessions.Load(context.Background(), domain.SessionID(created.ID))
+		outcome := ""
+		if activity := stored.Export().Activity; len(activity) > 0 && activity[0].Outcome != nil {
+			outcome = string(activity[0].Outcome.Content)
+		}
+		t.Fatalf("requests %d calls %d: %v %+v %s", model.requests.Load(), tool.calls.Load(), kinds, payload.Result.Calls, outcome)
+	}
+	response = apiRequest(t, client, "GET", ts.URL+"/v1/sessions/"+created.ID, "", "")
+	var after struct {
+		Status string               `json:"status"`
+		Result *dto.ExecutionResult `json:"result"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&after); err != nil || after.Status != "interrupted" || after.Result == nil || after.Result.Status != "budget_exceeded" || after.Result.Error != "budget: requests 1 reached" {
+		t.Fatalf("GetSession %+v: %v", after, err)
+	}
+	response.Body.Close()
+}
+
+// budgetModel asks for a command on its first request and answers on the
+// next, whatever tools it is offered.
+type budgetModel struct{ requests atomic.Int32 }
+
+func (m *budgetModel) Stream(_ context.Context, _ root.CompletionRequest, emit func(root.Text) error) (root.CompletionResult, error) {
+	if m.requests.Add(1) == 1 {
+		// The service keeps the plain schemas: no why.
+		args, _ := root.NewJSONObject([]byte(`{"program":"touch","args":["made-by-service"]}`))
+		return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "exec-1", Name: "local_exec", Arguments: args}}}}, nil
+	}
+	if err := emit("done"); err != nil {
+		return root.CompletionResult{}, err
+	}
+	return root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, Content: "done"}}, nil
+}
+
+// memoryLedgers keeps each session's usage ledger in memory, as the
+// service's store does beside the snapshot.
+type memoryLedgers struct {
+	mu      sync.Mutex
+	ledgers map[domain.SessionID]domain.UsageLedger
+}
+
+func (m *memoryLedgers) LoadUsage(_ context.Context, id domain.SessionID) (domain.UsageLedger, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.ledgers[id], nil
+}
+
+func (m *memoryLedgers) UpdateUsage(_ context.Context, id domain.SessionID, update func(*domain.UsageLedger)) (domain.UsageLedger, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	ledger := m.ledgers[id]
+	update(&ledger)
+	m.ledgers[id] = ledger
+	return ledger, nil
 }
