@@ -144,6 +144,7 @@ func (s *Session) BeginTurn(prompt axlr.Text, tools []AvailableTool) error {
 		next.Ceremony.BudgetBase = 0
 	}
 	next.FinishedBudgetBase = 0
+	liftBudgetStop(&next)
 	s.state = next
 	return nil
 }
@@ -318,6 +319,7 @@ func (s *Session) ResumePending() error {
 	}
 	next := s.Export()
 	next.Status = StatusApproval
+	liftBudgetStop(&next)
 	s.state = next
 	return nil
 }
@@ -395,6 +397,7 @@ func (s *Session) ResumeTurn() error {
 	if len(s.Pending()) > 0 {
 		next.Status = StatusApproval
 	}
+	liftBudgetStop(&next)
 	s.state = next
 	s.RestartTurnBudget()
 	return nil

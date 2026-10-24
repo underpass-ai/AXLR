@@ -16,4 +16,8 @@ const (
 	ExecutionInterrupted ExecutionStatus = "interrupted"
 	// ExecutionFailed: the loop returned an error.
 	ExecutionFailed ExecutionStatus = "failed"
+	// ExecutionBudgetExceeded: a limit of the execution's budget ended it
+	// before the next request or call; the error names the limit and the
+	// session can be resumed, its pending state intact.
+	ExecutionBudgetExceeded ExecutionStatus = "budget_exceeded"
 )

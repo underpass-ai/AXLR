@@ -50,7 +50,7 @@ func recoverSessions(sessions *sessionStore, events *eventStore) error {
 			break
 		}
 		if !terminal {
-			if _, err := events.Append(string(state.ID), state.OperationID, "turn.interrupted", map[string]any{"status": "interrupted"}); err != nil {
+			if _, err := events.Append(string(state.ID), state.OperationID, "turn.interrupted", correlated(map[string]any{"status": "interrupted"}, &session)); err != nil {
 				return err
 			}
 		}

@@ -22,8 +22,10 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Model  string          `json:"model"`
-		Policy json.RawMessage `json:"policy"`
+		Model       string          `json:"model"`
+		Policy      json.RawMessage `json:"policy"`
+		Budget      json.RawMessage `json:"budget"`
+		Correlation json.RawMessage `json:"correlation"`
 	}
 	if !readJSON(w, r, &input) {
 		return
@@ -34,13 +36,31 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var policy *domain.ExecutionPolicy
-	if len(input.Policy) > 0 && !bytes.Equal(bytes.TrimSpace(input.Policy), []byte("null")) {
+	if given(input.Policy) {
 		parsed, err := contract.ParseExecutionPolicy(input.Policy)
 		if err != nil {
 			writeError(w, requestID(r), 422, "invalid_policy", "invalid policy: "+err.Error())
 			return
 		}
 		policy = &parsed
+	}
+	var budget *domain.ExecutionBudget
+	if given(input.Budget) {
+		parsed, err := contract.ParseExecutionBudget(input.Budget)
+		if err != nil {
+			writeError(w, requestID(r), 422, "invalid_budget", "invalid budget: "+err.Error())
+			return
+		}
+		budget = &parsed
+	}
+	var correlation *domain.ExecutionCorrelation
+	if given(input.Correlation) {
+		parsed, err := contract.ParseExecutionCorrelation(input.Correlation)
+		if err != nil {
+			writeError(w, requestID(r), 422, "invalid_correlation", "invalid correlation: "+err.Error())
+			return
+		}
+		correlation = &parsed
 	}
 	id, err := newID()
 	if err != nil {
@@ -56,6 +76,20 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	if policy != nil {
 		if err := session.SetPolicy(*policy); err != nil {
 			writeError(w, requestID(r), 422, "invalid_policy", "invalid policy: "+err.Error())
+			return
+		}
+	}
+	if budget != nil {
+		// The execution begins with its session: its seconds count from
+		// here, in this session and the successors a cap opens.
+		if err := session.SetBudget(*budget, time.Now(), domain.UsageLedger{}); err != nil {
+			writeError(w, requestID(r), 422, "invalid_budget", "invalid budget: "+err.Error())
+			return
+		}
+	}
+	if correlation != nil {
+		if err := session.SetCorrelation(*correlation); err != nil {
+			writeError(w, requestID(r), 422, "invalid_correlation", "invalid correlation: "+err.Error())
 			return
 		}
 	}
@@ -99,7 +133,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 500, "storage_error", "unable to read events")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "policy": executionPolicy(session)})
+	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "policy": executionPolicy(session), "budget": executionBudget(session), "correlation": executionCorrelation(session)})
 }
 
 func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
@@ -177,7 +211,7 @@ func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx, cancel := context.WithCancel(s.root)
-	if _, err := s.events.Append(id, resource, "operation.accepted", map[string]any{"status": "accepted"}); err != nil {
+	if _, err := s.events.Append(id, resource, "operation.accepted", correlated(map[string]any{"status": "accepted"}, &session)); err != nil {
 		cancel()
 		writeError(w, requestID(r), 500, "storage_error", "unable to save operation intent")
 		return
@@ -209,8 +243,8 @@ func (s *Server) runTurn(ctx context.Context, id, op, actor, request string, pro
 		s.continueCapped(capped, op, actor, request)
 		return
 	}
-	if err != nil {
-		_, _ = s.events.Append(id, op, "operation.failed", map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")})
+	if err != nil && !budgetStopped(err) {
+		_, _ = s.events.Append(id, op, "operation.failed", correlated(map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")}, &session))
 	}
 }
 
@@ -252,6 +286,9 @@ func (s *Server) recordApplicationEvent(id, op, actor, request string, e applica
 	}
 	if kind == "" {
 		return nil
+	}
+	if fields, ok := payload.(map[string]any); ok {
+		payload = correlated(fields, session)
 	}
 	if _, err := s.events.Append(id, op, kind, payload); err != nil {
 		return err
@@ -419,7 +456,7 @@ func (s *Server) handleApproval(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := context.WithCancel(s.root)
 	s.registerOperation(id, cancel)
-	if _, err := s.events.Append(id, resource, "approval.decision", map[string]any{"call_id": pending[0].Call.ID, "decision": input.Decision}); err != nil {
+	if _, err := s.events.Append(id, resource, "approval.decision", correlated(map[string]any{"call_id": pending[0].Call.ID, "decision": input.Decision}, &session)); err != nil {
 		cancel()
 		s.finishOperation(id)
 		writeError(w, requestID(r), 500, "storage_error", "unable to save decision event")
@@ -428,7 +465,7 @@ func (s *Server) handleApproval(w http.ResponseWriter, r *http.Request) {
 	if err := s.audit.Append(auditRecord{Principal: principal(r).ID, RequestID: requestID(r), Action: "approval.decision", Tool: string(pending[0].Call.Name), Decision: input.Decision, Status: "accepted", SessionID: id, CallID: string(pending[0].Call.ID), OperationID: resource}); err != nil {
 		cancel()
 		s.finishOperation(id)
-		_, _ = s.events.Append(id, resource, "operation.failed", map[string]string{"code": "audit_unavailable"})
+		_, _ = s.events.Append(id, resource, "operation.failed", correlated(map[string]any{"code": "audit_unavailable"}, &session))
 		writeError(w, requestID(r), 500, "storage_error", "unable to audit decision")
 		return
 	}
@@ -453,15 +490,15 @@ func (s *Server) runApproval(ctx context.Context, id, op, actor, request string,
 	}
 	if session.Status() == domain.StatusInterrupted && len(session.Pending()) > 0 {
 		if err := session.ResumePending(); err != nil {
-			_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
+			_, _ = s.events.Append(id, op, "operation.failed", correlated(map[string]any{"code": "operation_failed"}, &session))
 			return
 		}
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
 	batch := newEventBatcher(s, id, op, actor, request, &session)
 	err = errors.Join(s.deps.Resolve.Execute(ctx, &session, call, decision, batch.Emit), batch.Flush())
-	if err != nil {
-		_, _ = s.events.Append(id, op, "operation.failed", map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")})
+	if err != nil && !budgetStopped(err) {
+		_, _ = s.events.Append(id, op, "operation.failed", correlated(map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")}, &session))
 	}
 }
 
@@ -506,11 +543,16 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, requestID(r), 500, "storage_error", "unable to cancel turn")
 			return
 		}
-		payload := map[string]any{"status": "interrupted"}
+		payload := correlated(map[string]any{"status": "interrupted"}, &session)
 		if result := s.executionResult(session, ""); result != nil {
 			payload["result"] = result
 		}
 		_, _ = s.events.Append(id, session.Export().OperationID, "turn.interrupted", payload)
 	}
 	writeJSON(w, 202, map[string]any{"session_id": id, "status": "cancelling"})
+}
+
+// given reports a JSON field that was sent and is not null.
+func given(raw json.RawMessage) bool {
+	return len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null"))
 }

@@ -60,6 +60,9 @@ func (logger *FileLogger) Record(event application.DiagnosticEvent) error {
 	if event.Action != "" && !event.Action.Valid() {
 		return errors.New("invalid diagnostic action")
 	}
+	if event.Correlation != nil && !event.Correlation.Valid() {
+		return errors.New("invalid diagnostic correlation")
+	}
 	if (event.Stage == application.DiagnosticActionStart || event.Stage == application.DiagnosticActionEnd) && (!event.Action.Valid() || event.SpanID == 0) {
 		return errors.New("diagnostic action requires span and valid action")
 	}

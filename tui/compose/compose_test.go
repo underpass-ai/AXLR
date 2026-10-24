@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
@@ -163,5 +164,81 @@ func TestLocalModelsConnectByAPI(t *testing.T) {
 	}}, func(string) string { return "" })
 	if _, err := missing.Connect(&http.Client{}); err == nil || !strings.Contains(err.Error(), "set ANTHROPIC_API_KEY") {
 		t.Fatalf("missing key: %v", err)
+	}
+}
+
+type memoryUsage map[domain.SessionID]domain.UsageLedger
+
+func (m memoryUsage) LoadUsage(_ context.Context, id domain.SessionID) (domain.UsageLedger, error) {
+	return m[id], nil
+}
+func (m memoryUsage) UpdateUsage(_ context.Context, id domain.SessionID, update func(*domain.UsageLedger)) (domain.UsageLedger, error) {
+	ledger := m[id]
+	update(&ledger)
+	m[id] = ledger
+	return ledger, nil
+}
+
+// A successor is the same execution: it carries the predecessor's policy,
+// its correlation and its budget with what the execution spent so far,
+// so a limit counts across the sessions the execution spans.
+func TestSuccessorCarriesTheExecution(t *testing.T) {
+	store := memoryStore{}
+	predecessor, err := domain.NewSession("0123456789abcdef0123456789abcdef", domain.Workspace(t.TempDir()), "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, _ := domain.NewExecutionPolicy(domain.PolicyObserve, []domain.PolicyRule{{Name: "local_read"}}, nil)
+	if err := predecessor.SetPolicy(policy); err != nil {
+		t.Fatal(err)
+	}
+	correlation := domain.ExecutionCorrelation{BotID: "bot", TaskID: "task-1", ExecutionID: "exec-1", TraceID: "trace-1"}
+	if err := predecessor.SetCorrelation(correlation); err != nil {
+		t.Fatal(err)
+	}
+	budget, _ := domain.NewExecutionBudget(900, 20, 60, 0.5)
+	started := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
+	if err := predecessor.SetBudget(budget, started, domain.UsageLedger{Requests: 1, Cost: 0.01}); err != nil {
+		t.Fatal(err)
+	}
+	usage := memoryUsage{predecessor.ID(): {Requests: 5, Cost: 0.21}}
+	schema, _ := root.NewJSONObject([]byte(`{"type":"object"}`))
+	read, _ := domain.NewLocalToolIdentity("read")
+	tools := []domain.AvailableTool{{Definition: root.ToolDefinition{Name: "local_read", Parameters: schema}, Identity: read}}
+	if err := predecessor.BeginTurn("go", tools); err != nil {
+		t.Fatal(err)
+	}
+	args, _ := root.NewJSONObject([]byte(`{}`))
+	if err := predecessor.CompleteAssistant(root.CompletionResult{Message: root.Message{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "r1", Name: "local_read", Arguments: args}, {ID: "r2", Name: "local_read", Arguments: args}}}}); err != nil {
+		t.Fatal(err)
+	}
+	if err := predecessor.RecordToolOutcome("r1", domain.DecisionAutoApprove, domain.ToolOutcome{Content: "x"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := predecessor.RecordToolOutcome("r2", domain.DecisionDeny, domain.ToolOutcome{Content: "no", IsError: true}); err != nil {
+		t.Fatal(err)
+	}
+	successor, err := Successors{Create: application.CreateSessionUseCase{Store: store}, Store: store, Usage: usage}.Continue(context.Background(), predecessor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved := store[successor.ID()]
+	if kept, has := saved.Policy(); !has || kept.Level() != domain.PolicyObserve || len(kept.Allow()) != 1 {
+		t.Fatalf("policy %+v %v", kept, has)
+	}
+	if kept, has := saved.Correlation(); !has || kept != correlation {
+		t.Fatalf("correlation %+v %v", kept, has)
+	}
+	account, has := saved.Budget()
+	if !has || account.Budget != budget || !account.StartedAt.Equal(started) || account.Carried.Requests != 4 || account.Carried.ToolCalls != 1 || account.Carried.USD < 0.199 || account.Carried.USD > 0.201 || account.Base != (domain.ExecutionSpend{}) {
+		t.Fatalf("budget %+v %v", account, has)
+	}
+	// Without a ledger the successor still carries the predecessor's calls.
+	bare, err := Successors{Create: application.CreateSessionUseCase{Store: store}, Store: store}.Continue(context.Background(), predecessor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if account, has := store[bare.ID()].Budget(); !has || account.Carried.Requests != 0 || account.Carried.ToolCalls != 1 {
+		t.Fatalf("budget without a ledger %+v %v", account, has)
 	}
 }

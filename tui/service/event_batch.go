@@ -54,7 +54,9 @@ func (b *eventBatcher) Flush() error {
 		return nil
 	}
 	text := b.text.String()
-	if err := b.server.recordApplicationEvent(b.sessionID, b.operationID, b.actor, b.requestID, application.Event{Kind: application.EventTextDelta, Text: root.Text(text)}, nil); err != nil {
+	// The session goes along for its correlation alone: a text event
+	// carries no result.
+	if err := b.server.recordApplicationEvent(b.sessionID, b.operationID, b.actor, b.requestID, application.Event{Kind: application.EventTextDelta, Text: root.Text(text)}, b.session); err != nil {
 		return err
 	}
 	b.text.Reset()
