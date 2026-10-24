@@ -102,6 +102,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	var draft strings.Builder
 	interrupt := func(cause error) error {
 		next := *session
+		if stop := budgetCause(ctx, cause); stop != nil {
+			// The budget's deadline ended the request: the session says so,
+			// and the result reads budget_exceeded from it.
+			_ = next.StopAtBudget(stop.Limit)
+		}
 		if next.Status() == domain.StatusStreaming {
 			if err := next.InterruptDraft(root.Text(draft.String())); err != nil {
 				return joinCause(cause, err)
@@ -282,6 +287,14 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	contextSpan.End(DiagnosticErrorNone)
 	if err := u.budgetRefusal(ctx, *session); err != nil {
+		return interrupt(err)
+	}
+	// The execution's budget: no request past its seconds, requests or
+	// dollars (execution_budget.go).
+	if err := u.requestRefusal(ctx, *session); err != nil {
+		if stop := budgetCause(ctx, err); stop != nil {
+			return pauseAtBudget(ctx, u.Store, session, stop, emit)
+		}
 		return interrupt(err)
 	}
 	if err := emit(Event{Kind: EventStreamStart, MessageCount: len(session.Messages())}); err != nil {

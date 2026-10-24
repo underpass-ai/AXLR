@@ -54,7 +54,7 @@ func (s *Server) handleCloseSession(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	instance, _ := session.Instance()
-	_, _ = s.events.Append(id, session.Export().OperationID, "session.closed", map[string]any{"instance": instance.Instance, "closed": instance.Closed})
+	_, _ = s.events.Append(id, session.Export().OperationID, "session.closed", correlated(map[string]any{"instance": instance.Instance, "closed": instance.Closed}, &session))
 	current, err := s.sessions.Load(r.Context(), domain.SessionID(id))
 	if err != nil {
 		current = session
@@ -91,17 +91,20 @@ func (s *Server) closeInstances() {
 // session's journal names the successor and the operation to follow.
 func (s *Server) continueCapped(capped *application.ContextCapError, op, actor, request string) {
 	successor := string(capped.Successor.ID())
+	// The successor carries the execution's correlation, as the
+	// predecessor did.
+	session := capped.Successor
 	next, err := newID()
 	if err != nil {
-		_, _ = s.events.Append(string(capped.Predecessor), op, "operation.failed", map[string]string{"code": "operation_failed"})
+		_, _ = s.events.Append(string(capped.Predecessor), op, "operation.failed", correlated(map[string]any{"code": "operation_failed"}, &session))
 		return
 	}
-	_, _ = s.events.Append(string(capped.Predecessor), op, "session.continued", map[string]any{"successor_id": successor, "operation_id": next, "tokens": capped.Tokens, "cap": capped.Cap})
+	_, _ = s.events.Append(string(capped.Predecessor), op, "session.continued", correlated(map[string]any{"successor_id": successor, "operation_id": next, "tokens": capped.Tokens, "cap": capped.Cap}, &session))
 	prompt, err := root.NewText(capped.Prompt)
 	if err != nil || prompt == "" {
 		return
 	}
-	if _, err := s.events.Append(successor, next, "operation.accepted", map[string]any{"status": "accepted", "predecessor_id": capped.Predecessor}); err != nil {
+	if _, err := s.events.Append(successor, next, "operation.accepted", correlated(map[string]any{"status": "accepted", "predecessor_id": capped.Predecessor}, &session)); err != nil {
 		return
 	}
 	ctx, cancel := context.WithCancel(s.root)

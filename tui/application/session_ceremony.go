@@ -324,7 +324,7 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 	if c.Journal != nil && record.HasResults() {
 		state := s.Export()
 		entry := TurnEntry{About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:turn:%s:%d", state.ID, record.PromptIndex), Summary: record.Summary(), Evidence: record.Evidence(stepRef), OccurredAt: record.FinishedAt,
-			Labels: map[string][]string{"project": {record.About}, "ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {record.Mode}, "model": {record.Model}}}
+			Labels: labelCorrelation(map[string][]string{"project": {record.About}, "ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {record.Mode}, "model": {record.Model}}, *s)}
 		if entry.About == record.About {
 			delete(entry.Labels, "project")
 		}
@@ -502,7 +502,7 @@ func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, tr
 			// 2026): the entry is an observation labelled event=closed.
 			entry := TurnEntry{Kind: "observation", About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:%s:%s", trigger, instance.Instance), Summary: fmt.Sprintf("Session %s after %s (%s).", trigger, plural(instance.Turns, "turn"), reason),
 				Evidence: []string{fmt.Sprintf("ceremony %s %s", instance.Instance, trigger)}, OccurredAt: c.now(), ContextID: instance.MemoryContext,
-				Labels: map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {string(s.Mode())}, "event": {trigger}}}
+				Labels: labelCorrelation(map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {string(s.Mode())}, "event": {trigger}}, *s)}
 			instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
 		}
 	}

@@ -60,20 +60,57 @@ func (p execPolicy) AlwaysAsk() []string {
 // readExecPolicy reads the policy file of --policy: the contract's object,
 // bare or wrapped as {"policy": {...}}.
 func readExecPolicy(path string) (domain.ExecutionPolicy, error) {
-	file, err := os.Open(path)
+	data, err := readExecFile("--policy", path, contract.MaxExecutionPolicyBytes)
 	if err != nil {
-		return domain.ExecutionPolicy{}, fmt.Errorf("--policy: %w", err)
-	}
-	defer file.Close()
-	data, err := io.ReadAll(io.LimitReader(file, contract.MaxExecutionPolicyBytes+1))
-	if err != nil {
-		return domain.ExecutionPolicy{}, fmt.Errorf("--policy: %w", err)
+		return domain.ExecutionPolicy{}, err
 	}
 	policy, err := contract.ParseExecutionPolicy(data)
 	if err != nil {
 		return domain.ExecutionPolicy{}, fmt.Errorf("--policy %s: %w", path, err)
 	}
 	return policy, nil
+}
+
+// readExecBudget reads the budget file of --budget: the contract's object,
+// bare or wrapped as {"budget": {...}}.
+func readExecBudget(path string) (domain.ExecutionBudget, error) {
+	data, err := readExecFile("--budget", path, contract.MaxExecutionObjectBytes)
+	if err != nil {
+		return domain.ExecutionBudget{}, err
+	}
+	budget, err := contract.ParseExecutionBudget(data)
+	if err != nil {
+		return domain.ExecutionBudget{}, fmt.Errorf("--budget %s: %w", path, err)
+	}
+	return budget, nil
+}
+
+// readExecCorrelation reads the correlation file of --correlation: the
+// contract's object, bare or wrapped as {"correlation": {...}}.
+func readExecCorrelation(path string) (domain.ExecutionCorrelation, error) {
+	data, err := readExecFile("--correlation", path, contract.MaxExecutionObjectBytes)
+	if err != nil {
+		return domain.ExecutionCorrelation{}, err
+	}
+	correlation, err := contract.ParseExecutionCorrelation(data)
+	if err != nil {
+		return domain.ExecutionCorrelation{}, fmt.Errorf("--correlation %s: %w", path, err)
+	}
+	return correlation, nil
+}
+
+// readExecFile reads one of the run's JSON files, at most limit bytes.
+func readExecFile(flag, path string, limit int) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", flag, err)
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, int64(limit)+1))
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", flag, err)
+	}
+	return data, nil
 }
 
 // execModes are the work modes a run may take: the ones that only tailor
@@ -95,17 +132,29 @@ func execMode(raw string) (domain.WorkMode, error) {
 
 // execEvent is one line of --json: what the turn did, in order. The last
 // line, result, carries the execution's result (docs/runtime-contract.md):
-// a program reads it without reading the lines before.
+// a program reads it without reading the lines before. Every line carries
+// the execution's correlation when the run has one.
 type execEvent struct {
-	Type     string               `json:"type"`
-	Session  string               `json:"session,omitempty"`
-	Text     string               `json:"text,omitempty"`
-	Tool     string               `json:"tool,omitempty"`
-	Call     string               `json:"call_id,omitempty"`
-	Decision string               `json:"decision,omitempty"`
-	Status   string               `json:"status,omitempty"`
-	Error    string               `json:"error,omitempty"`
-	Result   *dto.ExecutionResult `json:"result,omitempty"`
+	Type        string                    `json:"type"`
+	Session     string                    `json:"session,omitempty"`
+	Text        string                    `json:"text,omitempty"`
+	Tool        string                    `json:"tool,omitempty"`
+	Call        string                    `json:"call_id,omitempty"`
+	Decision    string                    `json:"decision,omitempty"`
+	Status      string                    `json:"status,omitempty"`
+	Error       string                    `json:"error,omitempty"`
+	Result      *dto.ExecutionResult      `json:"result,omitempty"`
+	Correlation *dto.ExecutionCorrelation `json:"correlation,omitempty"`
+}
+
+// execCorrelationOf is the session's correlation on the wire, nil without.
+func execCorrelationOf(session domain.Session) *dto.ExecutionCorrelation {
+	correlation, has := session.Correlation()
+	if !has {
+		return nil
+	}
+	wire := contract.ExecutionCorrelation(correlation)
+	return &wire
 }
 
 // execStep is the first step of a run: the prompt's turn, or the decision
@@ -160,8 +209,10 @@ func execDecision(ctx context.Context, resolve application.ResolveToolUseCase, s
 // ended in and the exit code.
 func execLoop(ctx context.Context, first execStep, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage application.SessionUsagePort, session domain.Session, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
 	encoder := json.NewEncoder(out)
+	correlation := execCorrelationOf(session)
 	write := func(event execEvent) {
 		if asJSON {
+			event.Correlation = correlation
 			_ = encoder.Encode(event)
 		}
 	}
@@ -208,6 +259,7 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 		write(execEvent{Type: "session.continued", Session: string(capped.Successor.ID())})
 		predecessors = append(predecessors, session.ID())
 		session = capped.Successor
+		correlation = execCorrelationOf(session)
 		text, textErr := root.NewText(capped.Prompt)
 		if textErr != nil {
 			err = textErr
@@ -240,6 +292,11 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 		call := *result.Pending
 		fmt.Fprintf(stderr, "axlr-tui: %s waits for a decision on %s (%s); continue with --session %s in the console, decide it with --session %s --decide approve, or allow it with --approve\n", session.ID(), call.Name, call.ID, session.ID(), session.ID())
 		write(execEvent{Type: "decision.required", Session: string(session.ID()), Tool: string(call.Name), Call: string(call.ID), Status: string(session.Status())})
+	case domain.ExecutionBudgetExceeded:
+		// The budget ended the run outside the model: exit 1, the session
+		// kept as it stands for a run under a new budget.
+		fmt.Fprintf(stderr, "axlr-tui: %s: %s; continue with --session %s under a new --budget\n", session.ID(), result.Error, session.ID())
+		write(execEvent{Type: "failed", Session: string(session.ID()), Error: result.Error, Status: string(session.Status())})
 	default:
 		fmt.Fprintln(stderr, "axlr-tui:", result.Error)
 		write(execEvent{Type: "failed", Session: string(session.ID()), Error: result.Error})

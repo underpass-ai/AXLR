@@ -181,6 +181,9 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	if e = s.writePolicy(session.Export().ID, session.Export().Policy); e != nil {
 		return e
 	}
+	if e = s.writeExecution(session.Export().ID, session.Export().Budget, session.Export().Correlation); e != nil {
+		return e
+	}
 	dir, e := os.Open(s.dir)
 	if e != nil {
 		return e
@@ -248,12 +251,26 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	if e != nil {
 		return domain.Session{}, e
 	}
+	account, correlation, e := s.readExecution(id)
+	if e != nil {
+		return domain.Session{}, e
+	}
 	session, e := restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id), s.readCeremony(id), s.readInstance(id), s.readConsole(id))
 	if e != nil {
 		return domain.Session{}, e
 	}
 	if policy != nil {
 		if e = session.SetPolicy(*policy); e != nil {
+			return domain.Session{}, e
+		}
+	}
+	if account != nil {
+		if e = session.RestoreBudget(*account); e != nil {
+			return domain.Session{}, e
+		}
+	}
+	if correlation != nil {
+		if e = session.SetCorrelation(*correlation); e != nil {
 			return domain.Session{}, e
 		}
 	}

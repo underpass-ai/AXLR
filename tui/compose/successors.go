@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -14,11 +15,16 @@ import (
 // Successors opens the session a capped prompt continues in: the same
 // workspace, model, mode, about and owner, titled after the predecessor,
 // with the predecessor in its instance (decision D10). The owner is the
-// service principal of the predecessor; a console session has none.
+// service principal of the predecessor; a console session has none. The
+// execution's policy, budget and correlation continue in it too: the
+// successor is the same execution (docs/runtime-contract.md).
 type Successors struct {
 	Create application.CreateSessionUseCase
 	Labels application.SessionLabelsPort
 	Store  application.SessionStorePort
+	// Usage reads the predecessor's ledger, so the successor carries what
+	// the execution spent; nil carries its tool calls alone.
+	Usage application.SessionUsagePort
 }
 
 func (s Successors) Continue(ctx context.Context, predecessor domain.Session) (domain.Session, error) {
@@ -37,6 +43,27 @@ func (s Successors) Continue(ctx context.Context, predecessor domain.Session) (d
 	}
 	if err := session.SetInstance(domain.SessionInstance{Predecessor: state.ID}); err != nil {
 		return domain.Session{}, err
+	}
+	if policy, has := predecessor.Policy(); has {
+		if err := session.SetPolicy(policy); err != nil {
+			return domain.Session{}, err
+		}
+	}
+	if correlation, has := predecessor.Correlation(); has {
+		if err := session.SetCorrelation(correlation); err != nil {
+			return domain.Session{}, err
+		}
+	}
+	if account, has := predecessor.Budget(); has {
+		var ledger domain.UsageLedger
+		if s.Usage != nil {
+			if loaded, err := s.Usage.LoadUsage(ctx, state.ID); err == nil {
+				ledger = loaded
+			}
+		}
+		if err := session.InheritBudget(account, predecessor.BudgetSpend(ledger, time.Now())); err != nil {
+			return domain.Session{}, err
+		}
 	}
 	if s.Labels != nil {
 		if labels, err := s.Labels.Load(ctx); err == nil {

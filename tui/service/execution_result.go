@@ -31,6 +31,47 @@ func (s *Server) executionResult(session domain.Session, failure string) *dto.Ex
 	return &wire
 }
 
+// executionBudget is the session's budget as GetSession shows it: the
+// limits the execution was given, nil for a session without any.
+func executionBudget(session domain.Session) *dto.ExecutionBudget {
+	account, has := session.Budget()
+	if !has {
+		return nil
+	}
+	wire := contract.ExecutionBudget(account.Budget)
+	return &wire
+}
+
+// executionCorrelation is the session's correlation, nil without one.
+func executionCorrelation(session domain.Session) *dto.ExecutionCorrelation {
+	correlation, has := session.Correlation()
+	if !has {
+		return nil
+	}
+	wire := contract.ExecutionCorrelation(correlation)
+	return &wire
+}
+
+// correlated adds the session's correlation to a journal event's payload,
+// so every event of an execution carries its ids (the runtime contract).
+func correlated(payload map[string]any, session *domain.Session) map[string]any {
+	if session == nil {
+		return payload
+	}
+	if correlation := executionCorrelation(*session); correlation != nil {
+		payload["correlation"] = correlation
+	}
+	return payload
+}
+
+// budgetStopped reports an error that is the execution's budget ending
+// the turn: the loop journaled the turn's end with the result already,
+// so no operation.failed follows.
+func budgetStopped(err error) bool {
+	var stop *domain.BudgetExceededError
+	return errors.As(err, &stop)
+}
+
 // executionPolicy is the session's policy as GetSession shows it, nil
 // for a session without one.
 func executionPolicy(session domain.Session) *dto.ExecutionPolicy {
