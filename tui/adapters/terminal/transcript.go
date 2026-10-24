@@ -98,6 +98,12 @@ func (t Transcript) VisualLineCount() int {
 	}
 	return len(t.visualRows)
 }
+
+// wrapText wraps one logical line at word boundaries to a width. It is a
+// variable so TestTranscriptRendersLargeSingleLineQuickly can count the
+// wrapping a render does.
+var wrapText = ansi.Wrap
+
 func (t *Transcript) reflow() {
 	width := t.Viewport.Width()
 	t.wrapWidth = width
@@ -110,10 +116,10 @@ func (t *Transcript) reflow() {
 		}
 		wrapped := line
 		if lineWidth := ansi.StringWidth(line); width > 0 && lineWidth > width {
-			wrapped = ansi.Wrap(line, width, "")
+			wrapped = wrapText(line, width, "")
 			if indent := t.indents[index]; indent > 0 && indent < width {
 				pad := strings.Repeat(" ", indent)
-				body := ansi.Wrap(ansi.Cut(line, indent, lineWidth), width-indent, "")
+				body := wrapText(ansi.Cut(line, indent, lineWidth), width-indent, "")
 				wrapped = ansi.Cut(line, 0, indent) + strings.ReplaceAll(body, "\n", "\n"+pad)
 			}
 		}

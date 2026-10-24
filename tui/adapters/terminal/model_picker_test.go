@@ -6,7 +6,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -28,16 +27,16 @@ func pickerKey(p ModelPicker, z *zone.Manager, key tea.KeyPressMsg) (ModelPicker
 	return next, intent
 }
 
-func pickerZone(t *testing.T, z *zone.Manager, id string) *zone.ZoneInfo {
+// pickerZone renders p at 70x20 and returns zone id of that render; see
+// syncZones for why the render and the lookup go together.
+func pickerZone(t *testing.T, z *zone.Manager, p *ModelPicker, id string) *zone.ZoneInfo {
 	t.Helper()
-	for deadline := time.Now().Add(zoneWait); time.Now().Before(deadline); {
-		if hit := z.Get(id); hit != nil {
-			return hit
-		}
-		time.Sleep(time.Millisecond)
+	syncZones(t, z, "picker-", func() { z.Scan(p.View(z, "picker-", 70, 20)) })
+	hit := z.Get(id)
+	if hit == nil {
+		t.Fatalf("zone %s is not in the rendered picker", id)
 	}
-	t.Fatalf("missing zone %s", id)
-	return nil
+	return hit
 }
 
 func TestModelPickerSearchNameIDProvider(t *testing.T) {
@@ -76,8 +75,7 @@ func TestModelPickerKeyboardMouseSelectionAndClose(t *testing.T) {
 	}
 	p = NewModelPicker()
 	p.SetModels(pickerModels())
-	_ = z.Scan(p.View(z, "picker-", 70, 20))
-	row := pickerZone(t, z, "picker-model-1")
+	row := pickerZone(t, z, &p, "picker-model-1")
 	p, intent, _ = p.Update(tea.MouseClickMsg{X: row.StartX, Y: row.StartY, Button: tea.MouseLeft}, z, "picker-")
 	selected, _ = p.SelectedModel()
 	if intent != ModelSelectIntent || selected.ID != "anthropic/beta" {
@@ -87,8 +85,7 @@ func TestModelPickerKeyboardMouseSelectionAndClose(t *testing.T) {
 	if intent != ModelCloseIntent {
 		t.Fatalf("esc intent %q", intent)
 	}
-	_ = z.Scan(p.View(z, "picker-", 70, 20))
-	close := pickerZone(t, z, "picker-close")
+	close := pickerZone(t, z, &p, "picker-close")
 	_, intent, _ = p.Update(tea.MouseClickMsg{X: close.StartX, Y: close.StartY, Button: tea.MouseLeft}, z, "picker-")
 	if intent != ModelCloseIntent {
 		t.Fatalf("close click intent %q", intent)
@@ -115,8 +112,7 @@ func TestModelPickerLoadingEmptyErrorRetry(t *testing.T) {
 	if intent != ModelRetryIntent {
 		t.Fatalf("retry key intent %q", intent)
 	}
-	_ = z.Scan(p.View(z, "picker-", 70, 20))
-	retry := pickerZone(t, z, "picker-retry")
+	retry := pickerZone(t, z, &p, "picker-retry")
 	_, intent, _ = p.Update(tea.MouseClickMsg{X: retry.StartX, Y: retry.StartY, Button: tea.MouseLeft}, z, "picker-")
 	if intent != ModelRetryIntent {
 		t.Fatalf("retry click intent %q", intent)

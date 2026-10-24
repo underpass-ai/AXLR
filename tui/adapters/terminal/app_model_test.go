@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	root "github.com/underpass-ai/AXLR/domain"
@@ -207,15 +206,7 @@ func TestAppModelVisibleControlsKeyboardMouseParity(t *testing.T) {
 		t.Fatal("F1 did not open help")
 	}
 	m = update(m, ControlIntent("close"))
-	m.View()
-	z := m.zones.Get(m.prefix + "help")
-	for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
-		time.Sleep(time.Millisecond)
-		z = m.zones.Get(m.prefix + "help")
-	}
-	if z == nil {
-		t.Fatal("the help hint has no clickable zone")
-	}
+	z := renderedZone(t, m, "help")
 	m = update(m, tea.MouseClickMsg{X: z.StartX, Y: z.StartY, Button: tea.MouseLeft})
 	if m.overlay != "help" {
 		t.Fatal("clicking the help hint did not open help")
@@ -345,16 +336,8 @@ func TestAppModelMonochromeHasVisibleEditorCursor(t *testing.T) {
 func TestAppModelMouseSendAndCancel(t *testing.T) {
 	m := sized()
 	m.Composer.Input.SetValue("mouse prompt")
-	m.View()
 	for _, id := range []string{"send"} {
-		z := m.zones.Get(m.prefix + id)
-		for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
-			time.Sleep(time.Millisecond)
-			z = m.zones.Get(m.prefix + id)
-		}
-		if z == nil {
-			t.Fatalf("no %s control", id)
-		}
+		z := renderedZone(t, m, id)
 		n, cmd := m.Update(tea.MouseClickMsg{X: z.StartX, Y: z.StartY, Button: tea.MouseLeft})
 		m = n.(AppModel)
 		if id == "send" && (!m.Busy || cmd == nil || m.Composer.Input.Value() != "") {
@@ -367,15 +350,7 @@ func TestAppModelMouseSendAndCancel(t *testing.T) {
 		<-ctx.Done()
 		return ctx.Err()
 	})
-	m.View()
-	z := m.zones.Get(m.prefix + "cancel")
-	for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
-		time.Sleep(time.Millisecond)
-		z = m.zones.Get(m.prefix + "cancel")
-	}
-	if z == nil {
-		t.Fatal("no cancel control")
-	}
+	z := renderedZone(t, m, "cancel")
 	m = update(m, tea.MouseClickMsg{X: z.StartX, Y: z.StartY, Button: tea.MouseLeft})
 	m = update(m, cmd())
 	if m.Busy || !strings.Contains(m.View().Content, m.Theme.T("status.cancelled")) {
