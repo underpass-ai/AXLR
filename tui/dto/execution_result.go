@@ -19,6 +19,8 @@ type ExecutionResult struct {
 	Error    string          `json:"error,omitempty"`
 	Calls    []ExecutionCall `json:"tool_calls"`
 	Usage    ExecutionUsage  `json:"usage"`
+	// Correlation repeats the execution's ids; absent without any.
+	Correlation *ExecutionCorrelation `json:"correlation,omitempty"`
 	// Artifacts is reserved for the deliverables an execution hands over
 	// (Phase 1 of the master plan); empty until then.
 	Artifacts []json.RawMessage `json:"artifacts"`

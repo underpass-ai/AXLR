@@ -16,7 +16,7 @@ type AgentTurnUseCase struct {
 	Approval ToolApprovalPolicyPort
 }
 
-func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit func(Event) error) error {
+func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit func(Event) error) (returnErr error) {
 	if u.Approval != nil {
 		u.Continue.Approval = u.Approval
 	}
@@ -26,8 +26,17 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 	if emit == nil {
 		emit = func(Event) error { return nil }
 	}
+	// The execution's budget bounds the turn's time, and its correlation
+	// goes on the loop's trace records (execution_budget.go).
+	ctx, cancel := executionDeadline(ctx, *s)
+	defer cancel()
+	defer func() { returnErr = settleBudget(ctx, u.Continue.Store, s, returnErr) }()
+	u.Continue.Diagnostics = sessionDiagnostics(u.Continue.Diagnostics, *s)
 	for {
 		if err := ctx.Err(); err != nil {
+			if stop := budgetCause(ctx, err); stop != nil {
+				return pauseAtBudget(ctx, u.Continue.Store, s, stop, emit)
+			}
 			return err
 		}
 		if err := rejectUnknown(ctx, s, u.Continue.admission(), emit); err != nil {
@@ -41,6 +50,14 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 				approved, _ = approvesCall(ctx, u.Approval, u.Continue.Ceremonies, *s, tool.Identity, args)
 			}
 			if approved {
+				// The execution's budget: no call past its tool calls. The
+				// call stays pending, for a run under a new budget.
+				if err := u.Continue.toolCallRefusal(ctx, *s); err != nil {
+					if stop := budgetCause(ctx, err); stop != nil {
+						return pauseAtBudget(ctx, u.Continue.Store, s, stop, emit)
+					}
+					return err
+				}
 				resolver := ResolveToolUseCase{Tools: u.Tools, Store: u.Continue.Store, Diagnostics: u.Continue.Diagnostics, Approval: u.Approval, Validation: u.Continue.Validation, Continue: u.Continue}
 				run, live := s.Ceremony()
 				wasTask := live && run.Task != nil
@@ -57,17 +74,22 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 			}
 		}
 		if s.Status() != domain.StatusStreaming {
-			reminded, err := remindOpenStep(ctx, s, u.Continue.Store, emit)
-			if err != nil {
-				return err
+			// A console follow-up (a step reminder, Jev's check, the memory
+			// reminder) asks the model again: none when the execution's
+			// budget has no request left, so an answered prompt ends
+			// completed rather than at the budget.
+			followUps := u.Continue.requestsLeft(ctx, *s)
+			reminded, err := false, error(nil)
+			if followUps {
+				reminded, err = remindOpenStep(ctx, s, u.Continue.Store, emit)
 			}
-			if !reminded && err == nil {
+			if followUps && !reminded && err == nil {
 				reminded, err = cancelStalled(ctx, s, u.Continue, emit)
 			}
-			if !reminded && err == nil {
+			if followUps && !reminded && err == nil {
 				reminded, err = checkFinalAnswer(ctx, s, u.Continue, emit)
 			}
-			if !reminded && err == nil {
+			if followUps && !reminded && err == nil {
 				reminded, err = remindMemory(ctx, s, u.Continue, emit)
 			}
 			if err != nil {

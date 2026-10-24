@@ -92,6 +92,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	modeFlag := flags.String("mode", "", "with --exec: normal, review, writer or research")
 	decideFlag := flags.String("decide", "", "with --session: approve or deny the session's pending call without the console, run the turn to its end and exit as --exec does")
 	policyFlag := flags.String("policy", "", "with --exec or --decide: a JSON file with the execution's policy (docs/runtime-contract.md): its autonomy level and the tools it may use; the session keeps it")
+	budgetFlag := flags.String("budget", "", "with --exec or --decide: a JSON file with the execution's budget (docs/runtime-contract.md): seconds, requests, tool_calls and usd, each zero for no limit; the run ends budget_exceeded at the first limit reached and the session keeps the budget")
+	correlationFlag := flags.String("correlation", "", "with --exec or --decide: a JSON file with the execution's correlation (docs/runtime-contract.md): bot_id, task_id, execution_id and trace_id, carried into every event, trace record and session record")
 	callFlag := flags.String("call", "", "with --decide: the id of the pending call, to make sure it is the one")
 	var paths, selections []string
 	flags.Func("plugin", "absolute MCP manifest path; repeatable", func(v string) error { paths = append(paths, v); return nil })
@@ -123,8 +125,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
 		}
 	}
-	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "") {
-		return fail(errors.New("--approve, --json, --mode and --policy go with --exec or --decide"))
+	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *correlationFlag != "") {
+		return fail(errors.New("--approve, --json, --mode, --policy, --budget and --correlation go with --exec or --decide"))
 	}
 	if *callFlag != "" && *decideFlag == "" {
 		return fail(errors.New("--call goes with --decide"))
@@ -162,6 +164,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		execWorkMode = mode
 	}
+	// The execution's correlation is read before the trace opens, so every
+	// record of this run carries it, the adapters' included.
+	var execCorrelation *domain.ExecutionCorrelation
+	if *correlationFlag != "" {
+		correlation, err := readExecCorrelation(*correlationFlag)
+		if err != nil {
+			return fail(err)
+		}
+		execCorrelation = &correlation
+	}
 	// resuming is a launch that opens a saved session rather than a new one.
 	resuming := *sessionFlag != "" || continueFlag || *importFlag != ""
 	tracePath := *traceFlag
@@ -184,6 +196,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 	}()
 	trace = logger
+	if execCorrelation != nil {
+		trace = application.CorrelatedDiagnostics(trace, *execCorrelation)
+	}
 	appLog, openErr = openAppLog(getenv, key)
 	stderr = teeConsoleNotes(stderr, appLog)
 	if openErr != nil {
@@ -867,6 +882,33 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 				return fail(err)
 			}
 			if err := session.SetPolicy(executionPolicy); err != nil {
+				return fail(err)
+			}
+			if err := loggedStore.Save(ctx, *session); err != nil {
+				return fail(err)
+			}
+		}
+		if *budgetFlag != "" {
+			// The execution begins now: its seconds count from here, and a
+			// session with history of its own counts requests, calls and
+			// cost from here (docs/runtime-contract.md).
+			budget, err := readExecBudget(*budgetFlag)
+			if err != nil {
+				return fail(err)
+			}
+			ledger, err := store.LoadUsage(ctx, session.ID())
+			if err != nil {
+				return fail(fmt.Errorf("--budget: the session's usage cannot be read: %w", err))
+			}
+			if err := session.SetBudget(budget, time.Now(), ledger); err != nil {
+				return fail(err)
+			}
+			if err := loggedStore.Save(ctx, *session); err != nil {
+				return fail(err)
+			}
+		}
+		if execCorrelation != nil {
+			if err := session.SetCorrelation(*execCorrelation); err != nil {
 				return fail(err)
 			}
 			if err := loggedStore.Save(ctx, *session); err != nil {

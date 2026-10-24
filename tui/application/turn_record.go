@@ -18,25 +18,28 @@ import (
 // the decision with the person's reason, its outcome, and for a command
 // its exit code and the redacted tail of its output.
 type TurnRecord struct {
-	Turn        int            `json:"turn"`
-	Prompt      string         `json:"prompt"`
-	PromptIndex int            `json:"prompt_index"`
-	Answer      string         `json:"answer,omitempty"`
-	AnswerKind  string         `json:"answer_kind"`
-	Actions     []TurnAction   `json:"actions,omitempty"`
-	Memories    []TurnMemory   `json:"memories,omitempty"`
-	Reads       int            `json:"reads"`
-	Mode        string         `json:"mode"`
-	Model       string         `json:"model"`
-	About       string         `json:"about,omitempty"`
-	Ceremony    string         `json:"ceremony,omitempty"`
-	Cost        *TurnCost      `json:"cost,omitempty"`
-	Interrupted bool           `json:"interrupted,omitempty"`
-	Files       []string       `json:"files,omitempty"`
-	Commands    []string       `json:"commands,omitempty"`
-	StartedAt   time.Time      `json:"started_at,omitempty"`
-	FinishedAt  time.Time      `json:"finished_at,omitempty"`
-	Extra       map[string]any `json:"-"`
+	Turn        int          `json:"turn"`
+	Prompt      string       `json:"prompt"`
+	PromptIndex int          `json:"prompt_index"`
+	Answer      string       `json:"answer,omitempty"`
+	AnswerKind  string       `json:"answer_kind"`
+	Actions     []TurnAction `json:"actions,omitempty"`
+	Memories    []TurnMemory `json:"memories,omitempty"`
+	Reads       int          `json:"reads"`
+	Mode        string       `json:"mode"`
+	Model       string       `json:"model"`
+	About       string       `json:"about,omitempty"`
+	Ceremony    string       `json:"ceremony,omitempty"`
+	Cost        *TurnCost    `json:"cost,omitempty"`
+	Interrupted bool         `json:"interrupted,omitempty"`
+	Files       []string     `json:"files,omitempty"`
+	Commands    []string     `json:"commands,omitempty"`
+	StartedAt   time.Time    `json:"started_at,omitempty"`
+	FinishedAt  time.Time    `json:"finished_at,omitempty"`
+	// Correlation is the execution's ids (bot_id, task_id, execution_id,
+	// trace_id), carried unchanged from the control plane; absent without.
+	Correlation map[string]string `json:"correlation,omitempty"`
+	Extra       map[string]any    `json:"-"`
 }
 
 // Bounds of the record's texts.
@@ -84,7 +87,7 @@ func PersonTyped(content string) string {
 func BuildTurnRecord(s domain.Session, index, turn int, about string, cost *TurnCost) TurnRecord {
 	state := s.Export()
 	messages := state.Messages
-	record := TurnRecord{Turn: turn, PromptIndex: index, Mode: string(s.Mode()), Model: string(state.Model), About: about, Cost: cost, AnswerKind: "answered"}
+	record := TurnRecord{Turn: turn, PromptIndex: index, Mode: string(s.Mode()), Model: string(state.Model), About: about, Cost: cost, AnswerKind: "answered", Correlation: correlationLabels(s)}
 	if index < 0 || index >= len(messages) {
 		return record
 	}

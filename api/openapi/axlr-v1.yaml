@@ -25,6 +25,12 @@ paths:
                 policy:
                   description: The execution's policy (the runtime contract); the session keeps it and every turn and decision applies it.
                   $ref: '#/components/schemas/ExecutionPolicy'
+                budget:
+                  description: The execution's budget (the runtime contract), enforced outside the model; the session keeps it and its seconds count from the session's creation.
+                  $ref: '#/components/schemas/ExecutionBudget'
+                correlation:
+                  description: The execution's correlation ids (the runtime contract), carried unchanged into every event, the result and the session's records.
+                  $ref: '#/components/schemas/ExecutionCorrelation'
       responses:
         '201':
           description: Session created.
@@ -362,6 +368,12 @@ components:
         policy:
           description: The execution's policy the session runs under; null without one.
           oneOf: [{$ref: '#/components/schemas/ExecutionPolicy'}, {type: 'null'}]
+        budget:
+          description: The execution's budget the session runs under, its limits as given; null without one.
+          oneOf: [{$ref: '#/components/schemas/ExecutionBudget'}, {type: 'null'}]
+        correlation:
+          description: The execution's correlation ids; null without any.
+          oneOf: [{$ref: '#/components/schemas/ExecutionCorrelation'}, {type: 'null'}]
     Operation:
       type: object
       required: [operation_id, session_id, status]
@@ -381,14 +393,14 @@ components:
         type: {type: string, enum: [turn.started, text.delta, tool.requested, approval.required, tool.completed, turn.completed, turn.interrupted, operation.failed, approval.decision]}
         payload:
           type: object
-          description: The event that ends a turn (approval.required, turn.completed, turn.interrupted, operation.failed) carries the execution's result in `result`.
+          description: The event that ends a turn (approval.required, turn.completed, turn.interrupted, operation.failed) carries the execution's result in `result`. Every event of a session with a correlation carries it in `correlation`.
     ExecutionResult:
       type: object
       description: The runtime contract's result object (docs/runtime-contract.md); the same object `axlr-tui --exec --json` writes last.
       required: [schema, status, session_id, sessions, answer, tool_calls, usage, artifacts]
       properties:
         schema: {type: string, const: axlr.execution-result/v1}
-        status: {type: string, enum: [completed, needs_decision, interrupted, failed]}
+        status: {type: string, enum: [completed, needs_decision, interrupted, failed, budget_exceeded], description: budget_exceeded is a limit of the execution's budget reached before the next request or call; error names it.}
         session_id: {type: string}
         sessions: {type: array, items: {type: string}, description: Every session the execution spanned, first to last.}
         answer: {type: string}
@@ -397,6 +409,7 @@ components:
         tool_calls: {type: array, items: {$ref: '#/components/schemas/ExecutionCall'}}
         usage: {$ref: '#/components/schemas/ExecutionUsage'}
         artifacts: {type: array, items: {type: object}, description: Reserved; empty until artifacts ship.}
+        correlation: {$ref: '#/components/schemas/ExecutionCorrelation'}
     ExecutionCall:
       type: object
       required: [call_id, tool]
@@ -426,6 +439,24 @@ components:
       properties:
         name: {type: string, minLength: 1, maxLength: 128, description: "The tool's name as the model calls it, or an MCP tool's own name or <plugin>/<tool>; * ** and ? are globs."}
         arguments: {type: object, additionalProperties: {type: string, minLength: 1, maxLength: 256}, description: Patterns the call's arguments must match, over each value as text.}
+    ExecutionBudget:
+      type: object
+      description: The runtime contract's budget per execution (docs/runtime-contract.md), enforced outside the model; each limit zero or absent for no limit.
+      additionalProperties: false
+      properties:
+        seconds: {type: integer, minimum: 0, maximum: 2592000, description: Seconds since the execution began; a deadline on the turn.}
+        requests: {type: integer, minimum: 0, maximum: 1000000, description: Model requests the execution may make.}
+        tool_calls: {type: integer, minimum: 0, maximum: 1000000, description: Tool calls the execution may run.}
+        usd: {type: number, minimum: 0, maximum: 1000000, description: Dollars the execution's requests may report.}
+    ExecutionCorrelation:
+      type: object
+      description: The runtime contract's correlation per execution (docs/runtime-contract.md), carried unchanged; each id is letters, digits and -_.:/@+=, at most 128 characters.
+      additionalProperties: false
+      properties:
+        bot_id: {type: string, maxLength: 128}
+        task_id: {type: string, maxLength: 128}
+        execution_id: {type: string, maxLength: 128}
+        trace_id: {type: string, maxLength: 128}
     ExecutionUsage:
       type: object
       required: [requests, prompt_tokens, cached_tokens, cache_write_tokens, completion_tokens, reasoning_tokens, cost_usd, cost_requests, unmetered_requests]

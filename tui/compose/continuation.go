@@ -50,7 +50,7 @@ func Equip(c *application.ContinueTurnUseCase, e Equipment) (application.Catalog
 		}
 	} else {
 		c.Tokens, c.ContextCap, c.Scale = counter, e.Windows.ContextCap, &application.TokenScale{}
-		c.Successor = Successors{Create: application.CreateSessionUseCase{Store: e.Store, Labels: e.Labels, About: e.About}, Labels: e.Labels, Store: e.Store}
+		c.Successor = Successors{Create: application.CreateSessionUseCase{Store: e.Store, Labels: e.Labels, About: e.About}, Labels: e.Labels, Store: e.Store, Usage: e.Usage}
 	}
 	var tools application.CatalogUseCase
 	if e.Settings.ForgedToolsEnabled() {

@@ -60,6 +60,11 @@ type SessionState struct {
 	// Policy is the execution's policy the session runs under, nil for
 	// none; kept beside the snapshot like Mode.
 	Policy *ExecutionPolicy
+	// Budget is the execution's budget and what it spent, nil for none;
+	// Correlation names the execution for the control plane, nil for
+	// none. Both are kept beside the snapshot like Policy.
+	Budget      *ExecutionAccount
+	Correlation *ExecutionCorrelation
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -102,6 +107,16 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	}
 	if state.Policy != nil {
 		if err = state.Policy.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
+	if state.Budget != nil {
+		if err = state.Budget.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
+	if state.Correlation != nil {
+		if err = state.Correlation.Validate(); err != nil {
 			return Session{}, err
 		}
 	}
@@ -224,6 +239,14 @@ func cloneState(state SessionState) SessionState {
 	if state.Policy != nil {
 		policy := state.Policy.clone()
 		state.Policy = &policy
+	}
+	if state.Budget != nil {
+		account := *state.Budget
+		state.Budget = &account
+	}
+	if state.Correlation != nil {
+		correlation := *state.Correlation
+		state.Correlation = &correlation
 	}
 	if len(state.MessageTimes) > len(state.Messages) {
 		state.MessageTimes = state.MessageTimes[:len(state.Messages)]

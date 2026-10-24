@@ -48,7 +48,7 @@ func (u ResolveToolUseCase) Deny(ctx context.Context, s *domain.Session, id root
 	return u.Execute(ctx, s, id, domain.DecisionDeny, emit)
 }
 
-func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) error {
+func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id root.ToolCallID, decision domain.ToolDecision, emit func(Event) error) (returnErr error) {
 	if u.Approval != nil {
 		u.Continue.Approval = u.Approval
 	}
@@ -57,6 +57,26 @@ func (u ResolveToolUseCase) Execute(ctx context.Context, s *domain.Session, id r
 	}
 	if emit == nil {
 		emit = func(Event) error { return nil }
+	}
+	if s == nil {
+		return errors.New("resolve tool requires session")
+	}
+	// The execution's budget bounds the decision's turn, and its
+	// correlation goes on the trace records (execution_budget.go).
+	ctx, cancel := executionDeadline(ctx, *s)
+	defer cancel()
+	defer func() { returnErr = settleBudget(ctx, u.Store, s, returnErr) }()
+	u.Diagnostics = sessionDiagnostics(u.Diagnostics, *s)
+	u.Continue.Diagnostics = sessionDiagnostics(u.Continue.Diagnostics, *s)
+	if decision == domain.DecisionApprove {
+		// A decision taken under the budget cannot run a call past its
+		// tool calls: the call stays pending, for a run under a new budget.
+		if err := u.Continue.toolCallRefusal(ctx, *s); err != nil {
+			if stop := budgetCause(ctx, err); stop != nil {
+				return pauseAtBudget(ctx, u.Store, s, stop, emit)
+			}
+			return err
+		}
 	}
 	run, live := s.Ceremony()
 	wasTask := live && run.Task != nil
@@ -279,6 +299,11 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			}
 		}
 		if runErr != nil {
+			if stop := budgetCause(ctx, runErr); stop != nil {
+				// The budget's deadline ended the call: the session says
+				// so, and the result reads budget_exceeded from it.
+				_ = next.StopAtBudget(stop.Limit)
+			}
 			if ctx.Err() != nil {
 				if err := next.CancelPending(); err != nil {
 					return errors.Join(runErr, err)
