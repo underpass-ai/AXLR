@@ -3,7 +3,6 @@ package terminal
 import (
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -169,15 +168,7 @@ func TestChangeReviewScrollsAndMouseSelectsFiles(t *testing.T) {
 		t.Fatal("long diff lines cannot be inspected")
 	}
 	m = update(m, tea.WindowSizeMsg{Width: 100, Height: 30})
-	m.View()
-	z := m.zones.Get(m.prefix + "changes-change-1")
-	for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
-		time.Sleep(time.Millisecond)
-		z = m.zones.Get(m.prefix + "changes-change-1")
-	}
-	if z == nil {
-		t.Fatal("file row is not clickable")
-	}
+	z := renderedZone(t, m, "changes-change-1")
 	m = update(m, tea.MouseClickMsg{X: z.StartX, Y: z.StartY, Button: tea.MouseLeft})
 	if m.Changes.selected != 1 || m.Changes.Details.YOffset() != 0 {
 		t.Fatal("mouse selected wrong file or retained old scroll")

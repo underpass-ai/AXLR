@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
+	zone "github.com/lrstanley/bubblezone/v2"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
@@ -56,22 +57,83 @@ func drain(t *testing.T, m AppModel, cmd tea.Cmd) AppModel {
 	return m
 }
 
-// zoneWait is how long a test waits for bubblezone to scan a rendered
-// view. On 20 October 2026 a macos-15 runner took over a second and
-// TestNavigationMousePaletteSearchAndHelp failed with "missing zone help".
-const zoneWait = 5 * time.Second
+// syncZones runs render and returns once zones holds the zones of that
+// render and nothing else, so a Get after it reads the rendered view.
+//
+// bubblezone's Scan does not store zones itself. It queues each zone, then a
+// clear for every other render, through a FIFO channel to one worker
+// goroutine, and Get returns whatever the worker has applied so far. Until
+// 24 October 2026 click rendered, then polled Get for up to 5 s until the id
+// had a zone. A zone of the same id from an earlier render passes that check
+// with the earlier coordinates: in TestNavigationMousePaletteSearchAndHelp
+// the "close" lookup after the search opened returned the palette's close
+// button at (2,18) from the render before; by the time Update dispatched the
+// click the worker had reached the search footer, whose close is at (25,19);
+// the click hit nothing, search stayed open, and the search footer has no
+// help hint, so "missing zone help" followed after the full 5 s, on
+// windows-11-arm and macos-15 on 23–24 October 2026. Rendering again does
+// not help: the worker can still be behind. Only the manager's own order of
+// events tells a test when a render has been applied, through its public API:
+//
+//  1. Scan a probe zone and wait until Get sees it. The worker has applied
+//     every earlier render.
+//  2. Wait for the wall clock to move past the probe's scan. Scan tags its
+//     zones with time.Now().Nanosecond(); on Windows that clock advances in
+//     steps of up to 15.6 ms, two scans in one step share a tag, and the
+//     second one's clear would keep the probe.
+//  3. Render. Scan queues this render's zones, then a clear that removes the
+//     probe and anything older.
+//  4. Wait until the probe is gone. The worker has applied this render's
+//     zones and nothing newer exists.
+//
+// Each wait ends when the worker acts, however slow the machine; only a
+// worker that is not running (after Close) hits zoneWorkerGuard, and then
+// the test fails instead of hanging.
+func syncZones(t *testing.T, zones *zone.Manager, prefix string, render func()) {
+	t.Helper()
+	probe := prefix + "probe"
+	zones.Scan(zones.Mark(probe, "x"))
+	scanned := time.Now()
+	waitZone(t, zones, probe, true, "the probe zone was never registered")
+	for time.Now().UnixNano() <= scanned.UnixNano() {
+		time.Sleep(50 * time.Microsecond)
+	}
+	render()
+	waitZone(t, zones, probe, false, "the rendered view's zones were never applied")
+}
 
+// zoneWorkerGuard bounds a wait on bubblezone's worker. It is not a speed
+// budget: the waits in syncZones end as soon as the worker acts, and only a
+// worker that is not running at all can take this long.
+const zoneWorkerGuard = 30 * time.Second
+
+func waitZone(t *testing.T, zones *zone.Manager, id string, present bool, failure string) {
+	t.Helper()
+	deadline := time.Now().Add(zoneWorkerGuard)
+	for (zones.Get(id) != nil) != present {
+		if time.Now().After(deadline) {
+			t.Fatalf("%s within %s: the zone manager's worker is not running", failure, zoneWorkerGuard)
+		}
+		time.Sleep(50 * time.Microsecond)
+	}
+}
+
+// renderedZone renders m and returns zone id of that render. A nil zone after
+// syncZones means the rendered view has no such control, which fails at once.
+func renderedZone(t *testing.T, m AppModel, id string) *zone.ZoneInfo {
+	t.Helper()
+	syncZones(t, m.zones, m.prefix, func() { m.View() })
+	z := m.zones.Get(m.prefix + id)
+	if z == nil {
+		t.Fatalf("zone %s is not in the rendered view:\n%s", id, m.View().Content)
+	}
+	return z
+}
+
+// click clicks zone id in m's rendered view.
 func click(t *testing.T, m AppModel, id string) (tea.Model, tea.Cmd) {
 	t.Helper()
-	m.View()
-	z := m.zones.Get(m.prefix + id)
-	for deadline := time.Now().Add(zoneWait); z == nil && time.Now().Before(deadline); {
-		time.Sleep(time.Millisecond)
-		z = m.zones.Get(m.prefix + id)
-	}
-	if z == nil {
-		t.Fatalf("missing zone %s", id)
-	}
+	z := renderedZone(t, m, id)
 	return m.Update(tea.MouseClickMsg{X: z.StartX, Y: z.StartY, Button: tea.MouseLeft})
 }
 func TestNavigationPaletteHelpAndInfo(t *testing.T) {
