@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/adapters/contract"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -20,7 +22,8 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var input struct {
-		Model string `json:"model"`
+		Model  string          `json:"model"`
+		Policy json.RawMessage `json:"policy"`
 	}
 	if !readJSON(w, r, &input) {
 		return
@@ -29,6 +32,15 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, requestID(r), 422, "invalid_model", "invalid model")
 		return
+	}
+	var policy *domain.ExecutionPolicy
+	if len(input.Policy) > 0 && !bytes.Equal(bytes.TrimSpace(input.Policy), []byte("null")) {
+		parsed, err := contract.ParseExecutionPolicy(input.Policy)
+		if err != nil {
+			writeError(w, requestID(r), 422, "invalid_policy", "invalid policy: "+err.Error())
+			return
+		}
+		policy = &parsed
 	}
 	id, err := newID()
 	if err != nil {
@@ -41,6 +53,12 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	session.SetServiceMetadata(principal(r).ID, 0, "")
+	if policy != nil {
+		if err := session.SetPolicy(*policy); err != nil {
+			writeError(w, requestID(r), 422, "invalid_policy", "invalid policy: "+err.Error())
+			return
+		}
+	}
 	if err := s.sessions.Save(r.Context(), session); err != nil {
 		writeError(w, requestID(r), 500, "storage_error", "unable to save session")
 		return
@@ -81,7 +99,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 500, "storage_error", "unable to read events")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending()})
+	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "policy": executionPolicy(session)})
 }
 
 func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
@@ -185,18 +203,21 @@ func (s *Server) runTurn(ctx context.Context, id, op, actor, request string, pro
 		return
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
-	batch := newEventBatcher(s, id, op, actor, request)
+	batch := newEventBatcher(s, id, op, actor, request, &session)
 	err = errors.Join(s.deps.Start.Execute(ctx, &session, prompt, batch.Emit), batch.Flush())
 	if capped, ok := application.IsContextCap(err); ok {
 		s.continueCapped(capped, op, actor, request)
 		return
 	}
 	if err != nil {
-		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
+		_, _ = s.events.Append(id, op, "operation.failed", map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")})
 	}
 }
 
-func (s *Server) recordApplicationEvent(id, op, actor, request string, e application.Event) error {
+// recordApplicationEvent journals one event of the loop. The state event
+// that ends a turn (a decision due, the answer, an interruption) carries
+// the execution's result read from session, when the batcher has it.
+func (s *Server) recordApplicationEvent(id, op, actor, request string, e application.Event, session *domain.Session) error {
 	kind := ""
 	var payload any = map[string]any{}
 	switch e.Kind {
@@ -223,6 +244,11 @@ func (s *Server) recordApplicationEvent(id, op, actor, request string, e applica
 			kind = "turn.interrupted"
 		}
 		payload = map[string]any{"status": e.State}
+		if kind != "" && session != nil {
+			if result := s.executionResult(*session, ""); result != nil {
+				payload = map[string]any{"status": e.State, "result": result}
+			}
+		}
 	}
 	if kind == "" {
 		return nil
@@ -432,10 +458,10 @@ func (s *Server) runApproval(ctx context.Context, id, op, actor, request string,
 		}
 	}
 	session.SetServiceMetadata(session.Export().Owner, session.Export().Revision, op)
-	batch := newEventBatcher(s, id, op, actor, request)
+	batch := newEventBatcher(s, id, op, actor, request, &session)
 	err = errors.Join(s.deps.Resolve.Execute(ctx, &session, call, decision, batch.Emit), batch.Flush())
 	if err != nil {
-		_, _ = s.events.Append(id, op, "operation.failed", map[string]string{"code": "operation_failed"})
+		_, _ = s.events.Append(id, op, "operation.failed", map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")})
 	}
 }
 
@@ -480,7 +506,11 @@ func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
 			writeError(w, requestID(r), 500, "storage_error", "unable to cancel turn")
 			return
 		}
-		_, _ = s.events.Append(id, session.Export().OperationID, "turn.interrupted", map[string]any{"status": "interrupted"})
+		payload := map[string]any{"status": "interrupted"}
+		if result := s.executionResult(session, ""); result != nil {
+			payload["result"] = result
+		}
+		_, _ = s.events.Append(id, session.Export().OperationID, "turn.interrupted", payload)
 	}
 	writeJSON(w, 202, map[string]any{"session_id": id, "status": "cancelling"})
 }

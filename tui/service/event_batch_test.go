@@ -16,7 +16,7 @@ func TestEventBatcherFlushesTextBeforeState(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := &Server{events: store}
-	batch := newEventBatcher(server, "session", "operation", "actor", "request")
+	batch := newEventBatcher(server, "session", "operation", "actor", "request", nil)
 	for _, fragment := range []string{"hello", " ", "世界"} {
 		if err := batch.Emit(application.Event{Kind: application.EventTextDelta, Text: root.Text(fragment)}); err != nil {
 			t.Fatal(err)
@@ -46,7 +46,7 @@ func TestEventBatcherBoundsTextFrames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	batch := newEventBatcher(&Server{events: store}, "session", "operation", "actor", "request")
+	batch := newEventBatcher(&Server{events: store}, "session", "operation", "actor", "request", nil)
 	if err := batch.Emit(application.Event{Kind: application.EventTextDelta, Text: root.Text(strings.Repeat("x", 5000))}); err != nil {
 		t.Fatal(err)
 	}

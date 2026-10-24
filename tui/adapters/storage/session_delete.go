@@ -39,7 +39,7 @@ func (s *SessionStore) Delete(ctx context.Context, id domain.SessionID) error {
 	}
 	err := os.Remove(snapshot)
 	if err == nil {
-		for _, path := range []string{s.timesPath(id), s.modePath(id), s.ceremonyPath(id), s.instancePath(id), s.consolePath(id), s.usagePath(id)} {
+		for _, path := range []string{s.timesPath(id), s.modePath(id), s.ceremonyPath(id), s.instancePath(id), s.consolePath(id), s.policyPath(id), s.usagePath(id)} {
 			if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
 				err = errors.Join(err, removeErr)
 			}

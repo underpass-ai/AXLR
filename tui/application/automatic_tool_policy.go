@@ -58,6 +58,11 @@ func approvesInSession(policy ToolApprovalPolicyPort, s domain.Session, id domai
 	if DestructiveReason(policy, s, id, arguments) != "" {
 		return false // the destructive list keeps its card (decision K5a)
 	}
+	if policyAsks(s, id, arguments) {
+		// The execution's policy puts the call under a decision
+		// (act-with-approval), whatever the run or the person allowed.
+		return false
+	}
 	if calls, ok := policy.(CallApprovalPort); ok && calls.ApprovesCall(s.ID(), id, arguments) {
 		// The person allowed this exact call for the session, where the
 		// mode asks for each one too; a mode's denial still holds.

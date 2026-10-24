@@ -178,6 +178,9 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	if e = s.writeConsole(session.Export().ID, notesOf(session.Export())); e != nil {
 		return e
 	}
+	if e = s.writePolicy(session.Export().ID, session.Export().Policy); e != nil {
+		return e
+	}
 	dir, e := os.Open(s.dir)
 	if e != nil {
 		return e
@@ -241,7 +244,20 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	} else if record.ToolSnapshotRef != "" {
 		return domain.Session{}, errors.New("only a version 3 snapshot names a tool set")
 	}
-	return restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id), s.readCeremony(id), s.readInstance(id), s.readConsole(id))
+	policy, e := s.readPolicy(id)
+	if e != nil {
+		return domain.Session{}, e
+	}
+	session, e := restoreSnapshot(record, s.preserveActive, s.readTimes(id), s.readMode(id), s.readCeremony(id), s.readInstance(id), s.readConsole(id))
+	if e != nil {
+		return domain.Session{}, e
+	}
+	if policy != nil {
+		if e = session.SetPolicy(*policy); e != nil {
+			return domain.Session{}, e
+		}
+	}
+	return session, nil
 }
 
 // List is deterministic by session ID; malformed snapshots surface as errors.
@@ -359,6 +375,7 @@ func (s *SessionStore) releaseLock(id domain.SessionID, lock *sessionLock) error
 		_ = os.Remove(s.ceremonyPath(id))
 		_ = os.Remove(s.instancePath(id))
 		_ = os.Remove(s.consolePath(id))
+		_ = os.Remove(s.policyPath(id))
 		_ = os.Remove(s.usagePath(id))
 		_ = os.Remove(filepath.Join(s.dir, string(id)+".lock"))
 	}

@@ -22,6 +22,9 @@ paths:
               required: [model]
               properties:
                 model: {type: string, minLength: 1}
+                policy:
+                  description: The execution's policy (the runtime contract); the session keeps it and every turn and decision applies it.
+                  $ref: '#/components/schemas/ExecutionPolicy'
       responses:
         '201':
           description: Session created.
@@ -353,6 +356,12 @@ components:
         last_sequence: {type: integer}
         messages: {type: array, items: {type: object}}
         pending: {type: array, items: {type: object}}
+        result:
+          description: The execution's result as the session stands (the runtime contract); null until a turn ends.
+          oneOf: [{$ref: '#/components/schemas/ExecutionResult'}, {type: 'null'}]
+        policy:
+          description: The execution's policy the session runs under; null without one.
+          oneOf: [{$ref: '#/components/schemas/ExecutionPolicy'}, {type: 'null'}]
     Operation:
       type: object
       required: [operation_id, session_id, status]
@@ -370,7 +379,66 @@ components:
         sequence: {type: integer, minimum: 1}
         time: {type: string, format: date-time}
         type: {type: string, enum: [turn.started, text.delta, tool.requested, approval.required, tool.completed, turn.completed, turn.interrupted, operation.failed, approval.decision]}
-        payload: {type: object}
+        payload:
+          type: object
+          description: The event that ends a turn (approval.required, turn.completed, turn.interrupted, operation.failed) carries the execution's result in `result`.
+    ExecutionResult:
+      type: object
+      description: The runtime contract's result object (docs/runtime-contract.md); the same object `axlr-tui --exec --json` writes last.
+      required: [schema, status, session_id, sessions, answer, tool_calls, usage, artifacts]
+      properties:
+        schema: {type: string, const: axlr.execution-result/v1}
+        status: {type: string, enum: [completed, needs_decision, interrupted, failed]}
+        session_id: {type: string}
+        sessions: {type: array, items: {type: string}, description: Every session the execution spanned, first to last.}
+        answer: {type: string}
+        pending: {$ref: '#/components/schemas/ExecutionCall'}
+        error: {type: string}
+        tool_calls: {type: array, items: {$ref: '#/components/schemas/ExecutionCall'}}
+        usage: {$ref: '#/components/schemas/ExecutionUsage'}
+        artifacts: {type: array, items: {type: object}, description: Reserved; empty until artifacts ship.}
+    ExecutionCall:
+      type: object
+      required: [call_id, tool]
+      properties:
+        call_id: {type: string}
+        tool: {type: string}
+        decision: {type: string, enum: [approve, auto_approve, deny]}
+        status: {type: string, enum: [pending, forbidden, denied, completed, failed, uncertain], description: forbidden is a call the execution's policy refused outside the model.}
+        arguments: {type: object, description: Only on the pending call.}
+    ExecutionPolicy:
+      type: object
+      description: The runtime contract's policy per execution (docs/runtime-contract.md). With an allow list, every tool it does not name is forbidden; a deny rule wins over an allow rule; the policy only narrows what the approval level and the settings allow.
+      additionalProperties: false
+      required: [level, tools]
+      properties:
+        level: {type: string, enum: [observe, propose, act-with-approval, act-within-policy]}
+        tools:
+          type: object
+          additionalProperties: false
+          properties:
+            allow: {type: array, items: {$ref: '#/components/schemas/ExecutionPolicyRule'}}
+            deny: {type: array, items: {$ref: '#/components/schemas/ExecutionPolicyRule'}}
+    ExecutionPolicyRule:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 128, description: "The tool's name as the model calls it, or an MCP tool's own name or <plugin>/<tool>; * ** and ? are globs."}
+        arguments: {type: object, additionalProperties: {type: string, minLength: 1, maxLength: 256}, description: Patterns the call's arguments must match, over each value as text.}
+    ExecutionUsage:
+      type: object
+      required: [requests, prompt_tokens, cached_tokens, cache_write_tokens, completion_tokens, reasoning_tokens, cost_usd, cost_requests, unmetered_requests]
+      properties:
+        requests: {type: integer}
+        prompt_tokens: {type: integer}
+        cached_tokens: {type: integer}
+        cache_write_tokens: {type: integer}
+        completion_tokens: {type: integer}
+        reasoning_tokens: {type: integer}
+        cost_usd: {type: number}
+        cost_requests: {type: integer, description: Requests that reported a cost; cost_usd sums them.}
+        unmetered_requests: {type: integer, description: Requests that reported no usage; billed by the provider but not counted.}
     Tool:
       type: object
       required: [name, origin, identity, schema, available]

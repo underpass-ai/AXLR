@@ -57,6 +57,9 @@ type SessionState struct {
 	// ConsoleLines are lines shown to the person between messages and
 	// never sent to the model, such as a finished plan's outcome.
 	ConsoleLines []ConsoleLine
+	// Policy is the execution's policy the session runs under, nil for
+	// none; kept beside the snapshot like Mode.
+	Policy *ExecutionPolicy
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -94,6 +97,11 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	}
 	if state.Instance != nil {
 		if err = state.Instance.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
+	if state.Policy != nil {
+		if err = state.Policy.Validate(); err != nil {
 			return Session{}, err
 		}
 	}
@@ -212,6 +220,10 @@ func cloneState(state SessionState) SessionState {
 		instance := *state.Instance
 		instance.Pending = append([]string(nil), instance.Pending...)
 		state.Instance = &instance
+	}
+	if state.Policy != nil {
+		policy := state.Policy.clone()
+		state.Policy = &policy
 	}
 	if len(state.MessageTimes) > len(state.Messages) {
 		state.MessageTimes = state.MessageTimes[:len(state.Messages)]
