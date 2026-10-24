@@ -804,7 +804,9 @@ func TestSessionBudgetEndsTheTurnAndCorrelationReachesEveryEvent(t *testing.T) {
 		if len(history) > 0 {
 			last = history[len(history)-1].Type
 		}
-		if last == "turn.interrupted" || last == "operation.failed" || last == "turn.completed" || last == "approval.required" {
+		// approval.required is journaled for the call before the run's
+		// policy approves it by itself: only the turn's end is terminal.
+		if last == "turn.interrupted" || last == "operation.failed" || last == "turn.completed" {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -812,10 +814,6 @@ func TestSessionBudgetEndsTheTurnAndCorrelationReachesEveryEvent(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	// The journal may still be written after the session: give the loop
-	// a moment to add nothing more, then check the terminal event.
-	time.Sleep(50 * time.Millisecond)
-	history, _, _ = s.events.Read(created.ID, 0)
 	var kinds []string
 	for _, event := range history {
 		kinds = append(kinds, event.Type)
