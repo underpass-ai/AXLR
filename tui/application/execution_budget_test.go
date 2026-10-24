@@ -175,8 +175,10 @@ func TestBudgetDeadlineEndsTheTurn(t *testing.T) {
 		t.Fatalf("%+v", result)
 	}
 	// A request in flight at the deadline: the model waits for the
-	// context, as a provider's stream would, and the turn ends there.
-	s = executionSession(t, budget, time.Now().Add(-time.Second+100*time.Millisecond))
+	// context, as a provider's stream would, and the turn ends there. The
+	// deadline is far enough that the loop reaches the model first on a
+	// slow runner; the test waits for it rather than racing it.
+	s = executionSession(t, budget, time.Now().Add(-time.Second+800*time.Millisecond))
 	slow := streamFunc(func(ctx context.Context, _ root.CompletionRequest, emit func(root.Text) error) (root.CompletionResult, error) {
 		requests++
 		_ = emit("partial")

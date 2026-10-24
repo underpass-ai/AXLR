@@ -11,12 +11,13 @@ import (
 	"github.com/underpass-ai/AXLR/tui/dto"
 )
 
-// execCall asks local_exec, under call id, to create made-by-exec in the
-// workspace, as execChunk does.
+// execCall asks local_exec, under call id, to create made-by-exec-<id> in
+// the workspace, as execChunk does: one target per call, since mkdir on
+// Windows refuses a directory that exists.
 func execCall(id string) string {
-	program, args := "touch", []string{"made-by-exec"}
+	program, args := "touch", []string{"made-by-exec-" + id}
 	if runtime.GOOS == "windows" {
-		program, args = "cmd", []string{"/c", "mkdir", "made-by-exec"}
+		program, args = "cmd", []string{"/c", "mkdir", "made-by-exec-" + id}
 	}
 	arguments, _ := json.Marshal(map[string]any{"program": program, "args": args, "why": "The person asked for the file."})
 	call, _ := json.Marshal(map[string]any{"choices": []any{map[string]any{"index": 0, "delta": map[string]any{"tool_calls": []any{map[string]any{"index": 0, "id": id, "type": "function", "function": map[string]any{"name": "local_exec", "arguments": string(arguments)}}}}, "finish_reason": "tool_calls"}}})
