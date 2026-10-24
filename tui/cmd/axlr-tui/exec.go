@@ -9,8 +9,10 @@ import (
 	"os"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/adapters/contract"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
+	"github.com/underpass-ai/AXLR/tui/dto"
 )
 
 // Exit codes of --exec: the turn finished, or it waits for a decision the
@@ -55,6 +57,25 @@ func (p execPolicy) AlwaysAsk() []string {
 	return nil
 }
 
+// readExecPolicy reads the policy file of --policy: the contract's object,
+// bare or wrapped as {"policy": {...}}.
+func readExecPolicy(path string) (domain.ExecutionPolicy, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return domain.ExecutionPolicy{}, fmt.Errorf("--policy: %w", err)
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, contract.MaxExecutionPolicyBytes+1))
+	if err != nil {
+		return domain.ExecutionPolicy{}, fmt.Errorf("--policy: %w", err)
+	}
+	policy, err := contract.ParseExecutionPolicy(data)
+	if err != nil {
+		return domain.ExecutionPolicy{}, fmt.Errorf("--policy %s: %w", path, err)
+	}
+	return policy, nil
+}
+
 // execModes are the work modes a run may take: the ones that only tailor
 // tool policy. The ceremony modes need the console's cards.
 func execMode(raw string) (domain.WorkMode, error) {
@@ -72,23 +93,72 @@ func execMode(raw string) (domain.WorkMode, error) {
 	return "", fmt.Errorf("--mode %s needs the console; --exec takes normal, review, writer or research", mode)
 }
 
-// execEvent is one line of --json: what the turn did, in order.
+// execEvent is one line of --json: what the turn did, in order. The last
+// line, result, carries the execution's result (docs/runtime-contract.md):
+// a program reads it without reading the lines before.
 type execEvent struct {
-	Type     string `json:"type"`
-	Session  string `json:"session,omitempty"`
-	Text     string `json:"text,omitempty"`
-	Tool     string `json:"tool,omitempty"`
-	Call     string `json:"call_id,omitempty"`
-	Decision string `json:"decision,omitempty"`
-	Status   string `json:"status,omitempty"`
-	Error    string `json:"error,omitempty"`
+	Type     string               `json:"type"`
+	Session  string               `json:"session,omitempty"`
+	Text     string               `json:"text,omitempty"`
+	Tool     string               `json:"tool,omitempty"`
+	Call     string               `json:"call_id,omitempty"`
+	Decision string               `json:"decision,omitempty"`
+	Status   string               `json:"status,omitempty"`
+	Error    string               `json:"error,omitempty"`
+	Result   *dto.ExecutionResult `json:"result,omitempty"`
 }
+
+// execStep is the first step of a run: the prompt's turn, or the decision
+// on the session's pending call. Past the context cap, every later step is
+// the successor's turn with the capped prompt.
+type execStep func(context.Context, *domain.Session, func(application.Event) error) error
 
 // execTurn runs one prompt to its end without a person: the turn, the
 // approvals the policy allows, and past the context cap the successor's
 // turn, as the console continues it. It returns the session the turn ended
 // in and the exit code.
-func execTurn(ctx context.Context, start application.StartTurnUseCase, agent application.AgentTurnUseCase, session domain.Session, prompt string, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+func execTurn(ctx context.Context, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage application.SessionUsagePort, session domain.Session, prompt string, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+	text, err := root.NewText(prompt)
+	if err != nil || text == "" {
+		fmt.Fprintln(stderr, "axlr-tui: --exec needs a prompt")
+		return session, execFailed
+	}
+	first := func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+		return start.Execute(ctx, s, text, emit)
+	}
+	return execLoop(ctx, first, start, agent, usage, session, asJSON, out, stderr)
+}
+
+// execDecision decides the pending call a run left in a saved session, as
+// the console's card would, and runs the turn to its end. Only the first
+// pending call can be decided; --call names it to make sure it is the one.
+func execDecision(ctx context.Context, resolve application.ResolveToolUseCase, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage application.SessionUsagePort, session domain.Session, call string, decision domain.ToolDecision, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+	pending := session.Pending()
+	if len(pending) == 0 {
+		fmt.Fprintf(stderr, "axlr-tui: session %s has no pending call to decide\n", session.ID())
+		return session, execFailed
+	}
+	if call != "" && string(pending[0].Call.ID) != call {
+		fmt.Fprintf(stderr, "axlr-tui: the pending call of %s is %s (%s), not %s\n", session.ID(), pending[0].Call.Name, pending[0].Call.ID, call)
+		return session, execFailed
+	}
+	id := pending[0].Call.ID
+	first := func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+		if s.Status() == domain.StatusInterrupted {
+			if err := s.ResumePending(); err != nil {
+				return err
+			}
+		}
+		return resolve.Execute(ctx, s, id, decision, emit)
+	}
+	return execLoop(ctx, first, start, agent, usage, session, asJSON, out, stderr)
+}
+
+// execLoop drives one execution: its first step, then the agent's loop until
+// an answer or a decision, and past the context cap the successor's turn.
+// It ends by writing the result and returns the session the execution
+// ended in and the exit code.
+func execLoop(ctx context.Context, first execStep, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage application.SessionUsagePort, session domain.Session, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
 	encoder := json.NewEncoder(out)
 	write := func(event execEvent) {
 		if asJSON {
@@ -116,15 +186,13 @@ func execTurn(ctx context.Context, start application.StartTurnUseCase, agent app
 		}
 		return nil
 	}
-	text, err := root.NewText(prompt)
-	if err != nil || text == "" {
-		fmt.Fprintln(stderr, "axlr-tui: --exec needs a prompt")
-		return session, execFailed
-	}
+	var err error
+	var predecessors []domain.SessionID
+	step := first
 	for successors := 0; ; successors++ {
 		fmt.Fprintln(stderr, "axlr-tui: session", session.ID())
 		write(execEvent{Type: "session", Session: string(session.ID())})
-		err = start.Execute(ctx, &session, text, emit)
+		err = step(ctx, &session, emit)
 		if err == nil && (session.Status() == domain.StatusStreaming || session.Status() == domain.StatusApproval) {
 			err = agent.Execute(ctx, &session, emit)
 		}
@@ -138,25 +206,44 @@ func execTurn(ctx context.Context, start application.StartTurnUseCase, agent app
 		}
 		fmt.Fprintln(stderr, "axlr-tui:", capped.Error())
 		write(execEvent{Type: "session.continued", Session: string(capped.Successor.ID())})
+		predecessors = append(predecessors, session.ID())
 		session = capped.Successor
-		if text, err = root.NewText(capped.Prompt); err != nil {
+		text, textErr := root.NewText(capped.Prompt)
+		if textErr != nil {
+			err = textErr
 			break
+		}
+		step = func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
+			return start.Execute(ctx, s, text, emit)
 		}
 	}
 	if !asJSON {
 		_, _ = io.WriteString(out, "\n")
 	}
-	if err != nil {
-		fmt.Fprintln(stderr, "axlr-tui:", err)
-		write(execEvent{Type: "failed", Session: string(session.ID()), Error: err.Error()})
-		return session, execFailed
+	result := domain.NewExecutionResult(session, err)
+	result.Spanned(predecessors...)
+	if usage != nil {
+		for _, id := range result.Sessions {
+			if ledger, loadErr := usage.LoadUsage(context.WithoutCancel(ctx), id); loadErr == nil {
+				result.AddUsage(ledger)
+			}
+		}
 	}
-	if pending := session.Pending(); len(pending) > 0 {
-		call := pending[0].Call
-		fmt.Fprintf(stderr, "axlr-tui: %s waits for a decision on %s (%s); continue with --session %s in the console, or allow it with --approve\n", session.ID(), call.Name, call.ID, session.ID())
+	wire := contract.ExecutionResult(result)
+	code := execFailed
+	switch result.Status {
+	case domain.ExecutionCompleted:
+		code = execCompleted
+		write(execEvent{Type: "completed", Session: string(session.ID()), Status: string(session.Status())})
+	case domain.ExecutionNeedsDecision:
+		code = execNeedsDecision
+		call := *result.Pending
+		fmt.Fprintf(stderr, "axlr-tui: %s waits for a decision on %s (%s); continue with --session %s in the console, decide it with --session %s --decide approve, or allow it with --approve\n", session.ID(), call.Name, call.ID, session.ID(), session.ID())
 		write(execEvent{Type: "decision.required", Session: string(session.ID()), Tool: string(call.Name), Call: string(call.ID), Status: string(session.Status())})
-		return session, execNeedsDecision
+	default:
+		fmt.Fprintln(stderr, "axlr-tui:", result.Error)
+		write(execEvent{Type: "failed", Session: string(session.ID()), Error: result.Error})
 	}
-	write(execEvent{Type: "completed", Session: string(session.ID()), Status: string(session.Status())})
-	return session, execCompleted
+	write(execEvent{Type: "result", Session: string(session.ID()), Result: &wire})
+	return session, code
 }

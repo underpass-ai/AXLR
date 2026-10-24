@@ -33,6 +33,7 @@ The [HTTP/gRPC/MCP parity ledger](transport-parity.md) maps all 19 service capab
 
 | Interface | Contract |
 |:--|:--|
+| A program that runs one unit of work (a bot's control plane) | [Runtime contract](runtime-contract.md): `axlr-tui --exec`, `axlr-serve`, the result object |
 | HTTP service | [Service API](api.md), [OpenAPI v1](../api/openapi/axlr-v1.yaml) |
 | Kubernetes | [Helm deployment](helm.md) |
 | One-request process | [JSON worker](worker.md) |

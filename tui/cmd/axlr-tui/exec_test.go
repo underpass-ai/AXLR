@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/underpass-ai/AXLR/tui/dto"
 )
 
 // scriptedModel answers each request with the next chunk, over the default
@@ -103,8 +105,84 @@ func TestExecStopsAtADecisionUnlessAllowed(t *testing.T) {
 		}
 		types = append(types, event.Type)
 	}
-	if joined := strings.Join(types, " "); !strings.HasPrefix(joined, "session") || !strings.Contains(joined, "tool.completed") || !strings.HasSuffix(joined, "completed") {
+	if joined := strings.Join(types, " "); !strings.HasPrefix(joined, "session") || !strings.Contains(joined, "tool.completed") || !strings.HasSuffix(joined, "completed result") {
 		t.Fatalf("events %s", joined)
+	}
+}
+
+// execResult reads the result line a --json run ends with.
+func execResult(t *testing.T, stdout string) dto.ExecutionResult {
+	t.Helper()
+	lines := strings.Split(strings.TrimSpace(stdout), "\n")
+	var last execEvent
+	if err := json.Unmarshal([]byte(lines[len(lines)-1]), &last); err != nil || last.Type != "result" || last.Result == nil {
+		t.Fatalf("last line %q: %v", lines[len(lines)-1], err)
+	}
+	return *last.Result
+}
+
+// The run ends with the execution's result: the answer, the calls, the
+// usage of the run's requests. A program reads that line alone.
+func TestExecWritesTheResultLast(t *testing.T) {
+	env := cliEnv(t)
+	scriptedModel(t, `{"choices":[{"index":0,"delta":{"content":"done"},"finish_reason":"stop"}],"usage":{"prompt_tokens":12,"completion_tokens":3,"total_tokens":15,"cost":0.0004}}`)
+	code, stdout, stderr := execRun(t, env, "--root", t.TempDir(), "--model", "test/model", "--exec", "say done", "--json")
+	if code != execCompleted {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	result := execResult(t, stdout)
+	if result.Schema != dto.ExecutionResultSchema || result.Status != "completed" || result.Answer != "done" || result.Session == "" || len(result.Sessions) != 1 || result.Sessions[0] != result.Session || result.Pending != nil || len(result.Calls) != 0 || result.Artifacts == nil {
+		t.Fatalf("%+v", result)
+	}
+	if result.Usage.Requests != 1 || result.Usage.PromptTokens != 12 || result.Usage.CompletionTokens != 3 || result.Usage.CostUSD != 0.0004 || result.Usage.CostRequests != 1 {
+		t.Fatalf("usage %+v", result.Usage)
+	}
+}
+
+// A run that stopped at a decision is decided without the console: --decide
+// approve runs the call and the turn to its end in the same session, and
+// the result counts both runs' calls. --decide deny tells the model no.
+func TestExecDecidesThePendingCallOfASession(t *testing.T) {
+	env := cliEnv(t)
+	env["PATH"] = os.Getenv("PATH")
+	workspace := t.TempDir()
+	scriptedModel(t, execChunk, answerChunk)
+	code, stdout, _ := execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--json")
+	first := execResult(t, stdout)
+	if code != execNeedsDecision || first.Status != "needs_decision" || first.Pending == nil || first.Pending.Tool != "local_exec" || first.Pending.ID != "exec-1" || !strings.Contains(string(first.Pending.Arguments), "why") {
+		t.Fatalf("code=%d %+v", code, first)
+	}
+	code, _, stderr := execRun(t, env, "--root", workspace, "--session", first.Session, "--decide", "approve", "--call", "other")
+	if code != execFailed || !strings.Contains(stderr, "not other") {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	calls := scriptedModel(t, answerChunk)
+	code, stdout, stderr = execRun(t, env, "--root", workspace, "--session", first.Session, "--decide", "approve", "--call", "exec-1", "--json")
+	if code != execCompleted || *calls != 1 {
+		t.Fatalf("code=%d calls=%d stderr=%s", code, *calls, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err != nil {
+		t.Fatalf("the approved command did not run: %v", err)
+	}
+	second := execResult(t, stdout)
+	if second.Status != "completed" || second.Session != first.Session || second.Answer != "done" || len(second.Calls) != 1 || second.Calls[0].Status != "completed" || second.Calls[0].Decision != "approve" {
+		t.Fatalf("%+v", second)
+	}
+	code, _, stderr = execRun(t, env, "--root", workspace, "--session", first.Session, "--decide", "approve")
+	if code != execFailed || !strings.Contains(stderr, "no pending call") {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	scriptedModel(t, execChunk, answerChunk)
+	code, stdout, stderr = execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--json")
+	if code != execNeedsDecision {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	denied := execResult(t, stdout)
+	scriptedModel(t, answerChunk)
+	code, stdout, stderr = execRun(t, env, "--root", workspace, "--session", denied.Session, "--decide", "deny", "--json")
+	result := execResult(t, stdout)
+	if code != execCompleted || result.Status != "completed" || len(result.Calls) != 1 || result.Calls[0].Status != "denied" {
+		t.Fatalf("code=%d stderr=%s %+v", code, stderr, result)
 	}
 }
 
@@ -115,6 +193,11 @@ func TestExecRefusesItsFlagsAlone(t *testing.T) {
 		{"--exec", "x", "--approve", "maybe"},
 		{"--exec", "x", "--mode", "debug"},
 		{"--exec", "x", "--repair", "it breaks"},
+		{"--decide", "approve"},
+		{"--session", "0123456789abcdef0123456789abcdef", "--decide", "maybe"},
+		{"--session", "0123456789abcdef0123456789abcdef", "--decide", "approve", "--exec", "x"},
+		{"--call", "c1"},
+		{"--policy", "policy.json"},
 	} {
 		env := cliEnv(t)
 		code, _, stderr := execRun(t, env, append([]string{"--root", t.TempDir(), "--model", "test/model"}, args...)...)
@@ -174,5 +257,112 @@ func TestExecRunsAnUnapprovedWhylessWriteOnlyWithoutACard(t *testing.T) {
 				t.Fatal("why is not the first property of the schemas")
 			}
 		})
+	}
+}
+
+// writePolicy writes a policy file for --policy.
+func writePolicy(t *testing.T, policy string) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "policy.json")
+	if err := os.WriteFile(path, []byte(policy), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// Under an allow list of reads the model's command is refused outside the
+// model, before any card: the run ends completed, not needs_decision, the
+// call is "forbidden" in the result, the model read why, and local_exec
+// was not among the tools it was offered.
+func TestExecRefusesAForbiddenCallUnderThePolicy(t *testing.T) {
+	env := cliEnv(t)
+	env["PATH"] = os.Getenv("PATH")
+	workspace := t.TempDir()
+	previous := http.DefaultTransport
+	defer func() { http.DefaultTransport = previous }()
+	var bodies []string
+	http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		data, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(data))
+		chunk := answerChunk
+		if len(bodies) == 1 {
+			chunk = execChunk
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("data: " + chunk + "\n\ndata: [DONE]\n\n")), Header: make(http.Header)}, nil
+	})
+	policy := writePolicy(t, `{"policy": {"level": "observe", "tools": {"allow": [{"name": "local_read"}, {"name": "local_search"}, {"name": "local_list"}]}}}`)
+	code, stdout, stderr := execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--approve", "all", "--policy", policy, "--json")
+	if code != execCompleted {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err == nil {
+		t.Fatal("the forbidden command ran")
+	}
+	result := execResult(t, stdout)
+	if result.Status != "completed" || result.Pending != nil || len(result.Calls) != 1 || result.Calls[0].Tool != "local_exec" || result.Calls[0].Status != "forbidden" || result.Calls[0].Decision != "deny" {
+		t.Fatalf("%+v", result)
+	}
+	if len(bodies) != 2 || !strings.Contains(bodies[1], "forbidden by the execution's policy: local_exec is not in the execution's allow list") {
+		t.Fatalf("the model did not read the refusal: %d requests, %s", len(bodies), bodies[len(bodies)-1])
+	}
+	if strings.Contains(bodies[0], `"name":"local_exec"`) || strings.Contains(bodies[0], `"name":"local_write"`) || !strings.Contains(bodies[0], `"name":"local_read"`) {
+		t.Fatalf("the offered tools ignore the policy: %s", bodies[0])
+	}
+	// A decision cannot run what the policy forbids: a run without a
+	// policy stops at the command; --decide approve under the policy
+	// refuses it instead of running it.
+	scriptedModel(t, execChunk, answerChunk)
+	code, stdout, stderr = execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--json")
+	if code != execNeedsDecision {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	pending := execResult(t, stdout)
+	scriptedModel(t, answerChunk)
+	code, stdout, stderr = execRun(t, env, "--root", workspace, "--session", pending.Session, "--decide", "approve", "--policy", policy, "--json")
+	decided := execResult(t, stdout)
+	if code != execCompleted || decided.Status != "completed" || len(decided.Calls) != 1 || decided.Calls[0].Status != "forbidden" {
+		t.Fatalf("code=%d stderr=%s %+v", code, stderr, decided)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err == nil {
+		t.Fatal("the decision ran a forbidden command")
+	}
+}
+
+// A policy file the contract does not describe stops the run before any
+// request.
+func TestExecRefusesAnInvalidPolicyFile(t *testing.T) {
+	env := cliEnv(t)
+	calls := scriptedModel(t, answerChunk)
+	for name, policy := range map[string]string{
+		"unknown field": `{"level":"observe","tools":{},"budget":{}}`,
+		"unknown level": `{"level":"autonomous","tools":{}}`,
+		"not json":      `observe`,
+	} {
+		code, _, stderr := execRun(t, env, "--root", t.TempDir(), "--model", "test/model", "--exec", "say done", "--policy", writePolicy(t, policy))
+		if code != execFailed || !strings.Contains(stderr, "--policy") || *calls != 0 {
+			t.Fatalf("%s: code=%d calls=%d stderr=%s", name, code, *calls, stderr)
+		}
+	}
+	code, _, stderr := execRun(t, env, "--root", t.TempDir(), "--model", "test/model", "--exec", "say done", "--policy", filepath.Join(t.TempDir(), "missing.json"))
+	if code != execFailed || !strings.Contains(stderr, "--policy") {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+}
+
+// The policy only narrows: under act-within-policy with --approve none the
+// command still waits for the decision the settings do not take.
+func TestExecPolicyOnlyNarrowsTheApprovalLevel(t *testing.T) {
+	env := cliEnv(t)
+	env["PATH"] = os.Getenv("PATH")
+	workspace := t.TempDir()
+	scriptedModel(t, execChunk, answerChunk)
+	policy := writePolicy(t, `{"level": "act-within-policy", "tools": {"allow": [{"name": "local_*"}]}}`)
+	code, stdout, stderr := execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "make the file", "--policy", policy, "--json")
+	result := execResult(t, stdout)
+	if code != execNeedsDecision || result.Status != "needs_decision" || result.Pending == nil || result.Pending.Tool != "local_exec" {
+		t.Fatalf("code=%d stderr=%s %+v", code, stderr, result)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err == nil {
+		t.Fatal("the command ran without a decision")
 	}
 }
