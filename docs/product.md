@@ -2,7 +2,7 @@
 
 AXLR is Underpass's default execution engine for agentic work. Start a task in AXLR, recover relevant evidence from KMP, execute through local tools and connected MCP servers, and use MADE when the task needs a tracked procedure. AXLR brings the result, checks and remaining decisions back to the user.
 
-“Default” describes AXLR's role in the product stack: the entry point for doing the work. It does not mean every tool is automatically approved or every prompt starts a ceremony. A new console session starts in `normal` mode. The model provider currently implemented is OpenRouter.
+“Default” describes AXLR's role in the product stack: the entry point for doing the work. It does not mean every tool is automatically approved or every prompt starts a ceremony. A new console session starts in `normal` mode. Models come through OpenRouter, local OpenAI-compatible servers, or the Anthropic Messages and OpenAI Responses APIs spoken directly, chosen with `api` on a `local_models` entry (see [native APIs](configuration.md#native-apis)).
 
 ## Three responsibilities
 
@@ -35,7 +35,7 @@ The [agent workflow runbook](runbooks/agent-workflow.md) makes this path operati
 
 The service shares turn use cases with the console, but it does not wire the console's package catalogue, skill reader, mode controls or ceremony driver. Treat those as interface-specific capabilities, not service promises.
 
-The [transport parity contract](transport-parity.md) covers the 18 service/worker capabilities across HTTP operations, gRPC and MCP. Remote file, process and plugin operations retain the service's durable approval flow.
+The [transport parity contract](transport-parity.md) covers the 19 service/worker capabilities across HTTP operations, gRPC and MCP. Remote file, process and plugin operations retain the service's durable approval flow.
 
 ## Open extension model
 
