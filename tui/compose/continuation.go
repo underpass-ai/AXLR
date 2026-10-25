@@ -20,8 +20,10 @@ type Equipment struct {
 	// the registry key live under it.
 	State string
 	Store application.SessionStorePort
-	// Usage keeps each session's ledger beside its snapshot.
-	Usage application.SessionUsagePort
+	// Usage keeps each session's ledger beside its snapshot, Receipts its
+	// receipt journal; nil Receipts keeps no receipt.
+	Usage    application.SessionUsagePort
+	Receipts application.SessionReceiptPort
 	// Labels and About bind a successor to its predecessor's title and to
 	// the checkout's memory about; nil Labels binds nothing.
 	Labels  application.SessionLabelsPort
@@ -34,13 +36,13 @@ type Equipment struct {
 	Note func(string)
 }
 
-// Equip gives a continuation the usage ledger and cost cap, axlr_deliver, the context cap
+// Equip gives a continuation the usage ledger and cost cap, the receipt journal, axlr_deliver, the context cap
 // with its successor sessions (decision D10), forged and catalog tools when
 // settings enable them, and the memory tools with KMP. The catalog use case
 // it returns serves the console's /tools; it is the zero value with forged
 // tools off.
 func Equip(c *application.ContinueTurnUseCase, e Equipment) (application.CatalogUseCase, error) {
-	c.Usage, c.MaxSessionUSD = e.Usage, e.Settings.MaxSessionUSD
+	c.Usage, c.MaxSessionUSD, c.Receipts = e.Usage, e.Settings.MaxSessionUSD, e.Receipts
 	c.TurnToolCalls = e.Settings.TurnToolCalls
 	// axlr_deliver hands the execution's deliverables over in the workspace.
 	c.Deliverables = storage.Deliverables{}

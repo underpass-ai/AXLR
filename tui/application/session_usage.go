@@ -104,19 +104,14 @@ type bytesPerToken interface {
 	BytesPerToken(root.ModelID) (int, bool)
 }
 
-// recordUsage adds a request to the session's ledger, whether it finished,
-// failed or was cancelled, and tells the console the new totals, and once
-// that they passed 80 % of the budget. A request that ended without a usage
-// report is unmetered when the provider may have billed it: it streamed
-// something, or it was cancelled or timed out once sent. Its prompt tokens
-// are estimated from the body's size at the model's bytes per token, its
-// completion tokens from the bytes it streamed. A request the provider
-// refused before answering counts as a request and nothing more. A ledger
-// that cannot be saved loses one request's numbers, never the turn.
-func (u ContinueTurnUseCase) recordUsage(ctx context.Context, session domain.Session, model root.ModelID, result root.CompletionResult, streamErr error, meter *usageMeter, emit func(Event) error) {
-	if u.Usage == nil {
-		return
-	}
+// usageSample is what one request consumed, whether it finished, failed or
+// was cancelled. A request that ended without a usage report is unmetered
+// when the provider may have billed it: it streamed something, or it was
+// cancelled or timed out once sent. Its prompt tokens are estimated from
+// the body's size at the model's bytes per token, its completion tokens
+// from the bytes it streamed. A request the provider refused before
+// answering counts as a request and nothing more.
+func (u ContinueTurnUseCase) usageSample(model root.ModelID, result root.CompletionResult, streamErr error, meter *usageMeter) domain.UsageSample {
 	sample := domain.UsageSample{Provider: result.Provider, FirstByte: time.Duration(meter.first.Load()), Total: time.Since(meter.started)}
 	if sample.Provider == "" {
 		sample.Provider = string(model)
@@ -137,6 +132,28 @@ func (u ContinueTurnUseCase) recordUsage(ctx context.Context, session domain.Ses
 			sample.PromptTokens = domain.EstimatedTokens(result.RequestBytes, ratio)
 			sample.CompletionTokens = domain.EstimatedTokens(streamed, ratio)
 		}
+	}
+	return sample
+}
+
+// requestStatus is how a request ended for the receipt.
+func requestStatus(streamErr error) domain.ReceiptRequestStatus {
+	switch {
+	case streamErr == nil:
+		return domain.ReceiptRequestCompleted
+	case errors.Is(streamErr, context.Canceled) || errors.Is(streamErr, context.DeadlineExceeded):
+		return domain.ReceiptRequestCancelled
+	}
+	return domain.ReceiptRequestFailed
+}
+
+// recordUsage adds a request's sample to the session's ledger, whether it
+// finished, failed or was cancelled, and tells the console the new totals,
+// and once that they passed 80 % of the budget. A ledger that cannot be
+// saved loses one request's numbers, never the turn.
+func (u ContinueTurnUseCase) recordUsage(ctx context.Context, session domain.Session, sample domain.UsageSample, emit func(Event) error) {
+	if u.Usage == nil {
+		return
 	}
 	warned := false
 	ledger, err := u.Usage.UpdateUsage(context.WithoutCancel(ctx), session.Export().ID, func(l *domain.UsageLedger) { warned = l.Record(sample, u.MaxSessionUSD) })

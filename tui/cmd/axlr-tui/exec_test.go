@@ -105,7 +105,7 @@ func TestExecStopsAtADecisionUnlessAllowed(t *testing.T) {
 		}
 		types = append(types, event.Type)
 	}
-	if joined := strings.Join(types, " "); !strings.HasPrefix(joined, "session") || !strings.Contains(joined, "tool.completed") || !strings.HasSuffix(joined, "completed result") {
+	if joined := strings.Join(types, " "); !strings.HasPrefix(joined, "session") || !strings.Contains(joined, "tool.completed") || !strings.HasSuffix(joined, "completed receipt result") {
 		t.Fatalf("events %s", joined)
 	}
 }

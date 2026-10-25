@@ -213,6 +213,8 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			return err
 		}
 		*s = next
+		// The receipt keeps when the call ran, from here to its outcome.
+		u.Continue.recordReceipt(ctx, next, domain.ReceiptEntry{Kind: domain.ReceiptCallStarted, At: time.Now(), Call: id})
 		if err := emit(Event{Kind: EventToolExecutionStarted, Tool: domain.PendingTool{Call: pending[0].Call, Decision: decision}, Memory: tool.Identity.Kind == domain.ToolKindPlugin && tool.Surface.Role == domain.PluginRoleMemory}); err != nil {
 			return err
 		}
@@ -316,6 +318,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			return errors.Join(runErr, err)
 		}
 		*s = next
+		u.Continue.recordReceipt(ctx, next, domain.ReceiptEntry{Kind: domain.ReceiptCallEnded, At: time.Now(), Call: id})
 		if runErr != nil {
 			u.recordToolCompletion(ctx, started, DiagnosticErrorTool)
 			return joinCause(joinCause(runErr, emitTool(s, id, emit)), emit(Event{Kind: EventState, State: s.Status()}))

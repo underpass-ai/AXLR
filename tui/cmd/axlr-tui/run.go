@@ -787,7 +787,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// catalog tools and the memory tools: what the service equips too.
 	_, hasMemoryTools := activeEngineCommands["kmp"]
 	toolCatalogUseCase, err := compose.Equip(&continuation, compose.Equipment{
-		Settings: settings, State: filepath.Join(stateBase, "axlr"), Store: loggedStore, Usage: store, Labels: sessionLabels, About: kmp.bundleAbout(),
+		Settings: settings, State: filepath.Join(stateBase, "axlr"), Store: loggedStore, Usage: store, Receipts: store, Labels: sessionLabels, About: kmp.bundleAbout(),
 		Windows: locals.Windows, Tools: runner, Memory: hasMemoryTools,
 		Note: func(line string) { fmt.Fprintln(stderr, "axlr-tui:", line) },
 	})

@@ -365,6 +365,9 @@ components:
         result:
           description: The execution's result as the session stands (the runtime contract); null until a turn ends.
           oneOf: [{$ref: '#/components/schemas/ExecutionResult'}, {type: 'null'}]
+        receipt:
+          description: The execution's receipt as the session stands (the runtime contract), over this session's requests and calls; null until a turn ends.
+          oneOf: [{$ref: '#/components/schemas/ExecutionReceipt'}, {type: 'null'}]
         policy:
           description: The execution's policy the session runs under; null without one.
           oneOf: [{$ref: '#/components/schemas/ExecutionPolicy'}, {type: 'null'}]
@@ -410,6 +413,65 @@ components:
         usage: {$ref: '#/components/schemas/ExecutionUsage'}
         artifacts: {type: array, items: {$ref: '#/components/schemas/ExecutionArtifact'}, description: What the execution delivered with axlr_deliver, in every session it spanned, in delivery order; a later delivery of the same reference replaces the earlier one.}
         correlation: {$ref: '#/components/schemas/ExecutionCorrelation'}
+    ExecutionReceipt:
+      type: object
+      description: The runtime contract's receipt (docs/runtime-contract.md, Receipt), read from the session and its receipt journal, which survives a restart; the same object `axlr-tui --exec --json` writes just before the result.
+      required: [schema, status, session_id, sessions, started_at, ended_at, requests, tool_calls, total, complete]
+      properties:
+        schema: {type: string, const: axlr.execution-receipt/v1}
+        status: {type: string, enum: [completed, needs_decision, interrupted, failed, budget_exceeded]}
+        session_id: {type: string}
+        sessions: {type: array, items: {type: string}}
+        started_at: {type: string, format: date-time, description: The budget's start, else the first message or record.}
+        ended_at: {type: string, format: date-time, description: The last message or record.}
+        policy:
+          type: object
+          required: [level, sha256]
+          properties:
+            level: {type: string, enum: [observe, propose, act-with-approval, act-within-policy]}
+            sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the policy's compact JSON as the contract writes it.}
+        budget:
+          type: object
+          required: [sha256, limits]
+          properties:
+            sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the limits' compact JSON.}
+            limits: {$ref: '#/components/schemas/ExecutionBudget'}
+        correlation: {$ref: '#/components/schemas/ExecutionCorrelation'}
+        requests: {type: array, items: {$ref: '#/components/schemas/ReceiptRequest'}}
+        tool_calls: {type: array, items: {$ref: '#/components/schemas/ReceiptCall'}}
+        total: {$ref: '#/components/schemas/ExecutionUsage'}
+        complete: {type: boolean, description: Every request the ledgers counted and every call that ran is itemized.}
+    ReceiptRequest:
+      type: object
+      required: [session_id, index, started_at, status, model, prompt_tokens, cached_tokens, cache_write_tokens, completion_tokens, reasoning_tokens, cost_usd, unmetered]
+      properties:
+        session_id: {type: string}
+        index: {type: integer, minimum: 1, description: The request's place in its session, from 1.}
+        started_at: {type: string, format: date-time}
+        duration_ms: {type: integer, minimum: 0, description: Absent for an interrupted request.}
+        status: {type: string, enum: [completed, failed, cancelled, interrupted], description: interrupted is a request the process died during; its tokens and cost are unknown.}
+        model: {type: string, description: The model the request asked for.}
+        provider: {type: string, description: Who served it, when the endpoint says.}
+        prompt_tokens: {type: integer}
+        cached_tokens: {type: integer}
+        cache_write_tokens: {type: integer}
+        completion_tokens: {type: integer}
+        reasoning_tokens: {type: integer}
+        cost_usd: {type: [number, 'null'], description: Null when the request reported no cost.}
+        unmetered: {type: boolean, description: Its tokens are estimates.}
+    ReceiptCall:
+      type: object
+      required: [session_id, call_id, tool, arguments_sha256, status]
+      properties:
+        session_id: {type: string}
+        call_id: {type: string}
+        tool: {type: string}
+        arguments_sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the call's arguments as the session keeps them, compact JSON.}
+        outcome_sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the result's text; absent while pending.}
+        decision: {type: string, enum: [approve, auto_approve, deny]}
+        status: {type: string, enum: [pending, forbidden, denied, completed, failed, uncertain]}
+        started_at: {type: string, format: date-time, description: Absent for a call that did not run.}
+        duration_ms: {type: integer, minimum: 0, description: Absent for a call that did not run or never ended.}
     ExecutionArtifact:
       type: object
       description: One deliverable of an execution (docs/runtime-contract.md, Artifacts). The file is the workspace's; a file changed after its delivery no longer matches sha256.

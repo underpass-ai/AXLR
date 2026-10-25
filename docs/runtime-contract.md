@@ -220,12 +220,14 @@ The receipt is the execution's account for an audit: every model request with it
 | `schema` | `axlr.execution-receipt/v1`; check it before the fields |
 | `status`, `session_id`, `sessions`, `correlation` | As in the result |
 | `started_at`, `ended_at` | When the execution began (the budget's start, else the session's first message or record) and its last record, in UTC |
-| `policy` | The execution's policy: its `level` and the `sha256` of its JSON as `GetSession` shows it; absent without one |
-| `budget` | The execution's budget: its `limits` and the `sha256` of their JSON; absent without one |
+| `policy` | The execution's policy: its `level` and the `sha256` of its compact JSON as the contract writes it (`{"level":…,"tools":{…}}`, fields in the order above, argument patterns by name); absent without one |
+| `budget` | The execution's budget: its `limits` and the `sha256` of their compact JSON (`{"seconds":…,"requests":…,"tool_calls":…,"usd":…}`, zero limits left out); absent without one |
 | `requests` | Every model request of the spanned sessions, in order. `index` counts from 1 in each session; `model` is the one asked for and `provider` who served it, when the endpoint says. `status` is `completed`, `failed`, `cancelled` or `interrupted` (the process died during it: tokens and cost unknown). `cost_usd` is null when the request reported none; `unmetered` marks a request whose tokens are estimates |
 | `tool_calls` | Every call of the spanned sessions, in order, as the result's `tool_calls` with `arguments_sha256` (the call's arguments as the session keeps them, compact JSON), `outcome_sha256` (its result's text; absent while pending), and `started_at` and `duration_ms` for a call that ran (absent for one refused, or one that never ended) |
 | `total` | The requests above, summed as the result's `usage` is |
-| `complete` | True when every request the sessions' ledgers counted and every call that ran is itemized; false for a session that predates receipts or a journal past its bound (4 MiB a session) |
+| `complete` | True when every request the sessions' ledgers counted and every call that ran is itemized; false for a session that predates receipts, a journal line a crash cut or a journal past its bound (4 MiB a session) |
+
+The receipt covers the whole session, every turn of it, as the result's `tool_calls` do. A request the process died in is in no ledger: the receipt lists it `interrupted` and counts it in `total.requests` and `total.unmetered_requests`, so its `total` can exceed the result's `usage` by those requests.
 
 Where the receipt is:
 

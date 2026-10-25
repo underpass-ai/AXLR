@@ -86,6 +86,9 @@ type ContinueTurnUseCase struct {
 	// reaches it (zero, no limit); nil keeps no ledger (session_usage.go).
 	Usage         SessionUsagePort
 	MaxSessionUSD float64
+	// Receipts journals each request and call as it starts and ends for
+	// the execution's receipt; nil keeps no receipt (session_receipt_port.go).
+	Receipts SessionReceiptPort
 	// Language is the console's language code (en, es): the model writes
 	// what the console shows of its calls, the why, in it. Empty says
 	// nothing.
@@ -322,6 +325,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		_ = emit(Event{Kind: EventReasoningProgress, ReasoningBytes: bytes, ReasoningText: text})
 	})
 	meter := &usageMeter{started: started}
+	u.recordReceipt(ctx, *session, domain.ReceiptEntry{Kind: domain.ReceiptRequestStarted, At: started, Model: req.Model})
 	modelCtx = meter.watch(modelCtx)
 	if u.Diagnostics != nil {
 		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderStart, SpanID: CurrentDiagnosticSpan(modelCtx)})
@@ -366,7 +370,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	// The request was sent: it reaches the ledger whether it finished, failed
 	// or was cancelled, or a cancelled stream the provider billed would
 	// escape the cost and max_session_usd.
-	u.recordUsage(ctx, *session, req.Model, result, streamErr, meter, emit)
+	sample := u.usageSample(req.Model, result, streamErr, meter)
+	u.recordUsage(ctx, *session, sample, emit)
+	u.recordReceipt(ctx, *session, domain.ReceiptEntry{Kind: domain.ReceiptRequestEnded, At: time.Now(), Usage: sample, Status: requestStatus(streamErr)})
 	if err != nil {
 		return interrupt(err)
 	}

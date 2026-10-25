@@ -19,17 +19,7 @@ func ExecutionResult(result domain.ExecutionResult) dto.ExecutionResult {
 		Error:     result.Error,
 		Calls:     make([]dto.ExecutionCall, 0, len(result.Calls)),
 		Artifacts: make([]dto.ExecutionArtifact, 0, len(result.Artifacts)),
-		Usage: dto.ExecutionUsage{
-			Requests:         result.Usage.Requests,
-			PromptTokens:     result.Usage.PromptTokens,
-			CachedTokens:     result.Usage.CachedTokens,
-			CacheWriteTokens: result.Usage.CacheWriteTokens,
-			CompletionTokens: result.Usage.CompletionTokens,
-			ReasoningTokens:  result.Usage.ReasoningTokens,
-			CostUSD:          result.Usage.CostUSD,
-			CostRequests:     result.Usage.CostRequests,
-			Unmetered:        result.Usage.Unmetered,
-		},
+		Usage:     executionUsage(result.Usage),
 	}
 	for _, id := range result.Sessions {
 		out.Sessions = append(out.Sessions, string(id))
