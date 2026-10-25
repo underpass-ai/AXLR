@@ -787,7 +787,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// catalog tools and the memory tools: what the service equips too.
 	_, hasMemoryTools := activeEngineCommands["kmp"]
 	toolCatalogUseCase, err := compose.Equip(&continuation, compose.Equipment{
-		Settings: settings, State: filepath.Join(stateBase, "axlr"), Store: loggedStore, Usage: store, Labels: sessionLabels, About: kmp.bundleAbout(),
+		Settings: settings, State: filepath.Join(stateBase, "axlr"), Store: loggedStore, Usage: store, Receipts: store, Labels: sessionLabels, About: kmp.bundleAbout(),
 		Windows: locals.Windows, Tools: runner, Memory: hasMemoryTools,
 		Note: func(line string) { fmt.Fprintln(stderr, "axlr-tui:", line) },
 	})
@@ -1003,14 +1003,14 @@ func localRuntimeEnvironment(getenv func(string) string) []string {
 			seen[dir] = true
 		}
 	}
-	if len(paths) == 0 {
-		paths = []string{"/usr/local/bin", "/usr/bin", "/bin"}
-	}
+	// The system's own folders when the inherited PATH names none of them
+	// (run_path_unix.go, run_path_windows.go).
+	paths = systemPath(paths, getenv)
 	env := []string{"PATH=" + strings.Join(paths, string(os.PathListSeparator))}
 	if home := getenv("HOME"); filepath.IsAbs(home) {
 		env = append(env, "HOME="+home)
 	}
-	return env
+	return append(env, systemEnvironment(getenv)...)
 }
 
 func pluginRegistrations(paths, selections []string, getenv func(string) string, modelKeys map[string]bool) ([]plugins.Registration, error) {

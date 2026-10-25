@@ -71,6 +71,17 @@ func (m WorkMode) Judge(id ToolIdentity, arguments axlr.JSONValue) (ModeVerdict,
 		// local_exec.
 		return VerdictAsk, ""
 	}
+	if id.Kind == ToolKindHost && id.LocalOperation == HostOperationDeliver && DeliversInline(arguments) {
+		// Inline content writes the deliverables file: refused where a
+		// local_write of its name is. A file delivered by path is a read.
+		if m == ModeReview {
+			return VerdictDeny, "review mode does not change files; deliver an existing workspace file by path"
+		}
+		if !documentPath(deliveredName(arguments)) {
+			return VerdictDeny, string(m) + " mode writes only documents: deliver a .md, .mdx, .txt or .rst name inline, or another file by path"
+		}
+		return VerdictAllow, ""
+	}
 	if id.Kind != ToolKindLocal {
 		return VerdictAllow, ""
 	}

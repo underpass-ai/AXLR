@@ -19,6 +19,12 @@ func automaticallyApproves(policy ToolApprovalPolicyPort, id domain.ToolIdentity
 		// would be. An install writes the files the card showed.
 		return policy != nil && policy.AutoApproves(localIdentity("write"))
 	}
+	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationDeliver {
+		// A file delivered by path is a read; inline content is approved
+		// as the local_write of the deliverables file would be
+		// (approvesInMode tells them apart by the arguments).
+		return policy != nil && policy.AutoApproves(localIdentity("write"))
+	}
 	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationRunTool {
 		// It runs the tool's program: approved as local_exec would be.
 		return policy != nil && policy.AutoApproves(localIdentity("exec"))
@@ -94,6 +100,10 @@ func approvesCall(ctx context.Context, policy ToolApprovalPolicyPort, ceremonies
 func approvesInMode(policy ToolApprovalPolicyPort, mode domain.WorkMode, id domain.ToolIdentity, arguments root.JSONValue) bool {
 	if verdict, _ := mode.Judge(id, arguments); verdict != domain.VerdictAllow {
 		return false
+	}
+	if id.Kind == domain.ToolKindHost && id.LocalOperation == domain.HostOperationDeliver && !domain.DeliversInline(arguments) {
+		// Delivering a file by path reads it, as local_read does.
+		return true
 	}
 	return automaticallyApproves(policy, id)
 }

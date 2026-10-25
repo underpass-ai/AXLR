@@ -168,7 +168,9 @@ func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, 
 						if resolveErr = localArgumentError(admit.Validation, checked, args); resolveErr == nil {
 							if resolveErr = forgedArgumentError(ctx, admit.Forge, admit.Validation, *s, checked, args); resolveErr == nil {
 								if resolveErr = publishArgumentError(ctx, admit.Publisher, *s, checked, args); resolveErr == nil {
-									return nil
+									if resolveErr = deliverArgumentError(checked, args); resolveErr == nil {
+										return nil
+									}
 								}
 							}
 						}

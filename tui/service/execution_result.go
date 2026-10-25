@@ -31,6 +31,25 @@ func (s *Server) executionResult(session domain.Session, failure string) *dto.Ex
 	return &wire
 }
 
+// executionReceipt is the runtime contract's receipt of a session as it
+// stands, read from its journal and its ledger; nil, like the result,
+// until a turn ends.
+func (s *Server) executionReceipt(session domain.Session) *dto.ExecutionReceipt {
+	if status := session.Status(); status == domain.StatusIdle || status == domain.StatusStreaming {
+		return nil
+	}
+	read := domain.ReceiptSession{Session: session}
+	if s.base != nil {
+		if ledger, err := s.base.LoadUsage(context.Background(), session.ID()); err == nil {
+			read.Ledger = ledger
+		}
+		read.Entries, _ = s.base.LoadReceipt(context.Background(), session.ID())
+	}
+	result := domain.NewExecutionResult(session, nil)
+	wire := contract.ExecutionReceipt(domain.NewExecutionReceipt(result, []domain.ReceiptSession{read}))
+	return &wire
+}
+
 // executionBudget is the session's budget as GetSession shows it: the
 // limits the execution was given, nil for a session without any.
 func executionBudget(session domain.Session) *dto.ExecutionBudget {
