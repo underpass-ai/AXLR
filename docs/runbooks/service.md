@@ -17,6 +17,8 @@ These flags use `http://127.0.0.1:8081` regardless of the config file. With anot
 
 `livez` proves that the process responds. `readyz` checks a configured nonempty model key and tool discovery through both engine adapters; it does not send a paid model request, validate account credit, exercise memory writes or prove ceremony grants. Missing/empty credentials stop startup; engine connection failures can leave a live but unready process. A certificate that chains to the API CA also needs an authorized fingerprint/role mapping.
 
+Neither probe runs a command. A `local_exec` resolves programs only from the service process's own `PATH` (its absolute folders, else `/usr/local/bin:/usr/bin:/bin`), with `HOME` and no other variable ([local commands](../api.md#the-consoles-loop-in-the-service)). `program "…" not found in configured PATH` means the program is in none of those folders: install it there or set `PATH` in the unit or the container. The published image is distroless and has no shell.
+
 ## Verify one direct read without a model call
 
 Use a client certificate with `tool_operator` and `approver` roles for this controlled smoke check, or separate operator/approver clients. Set these shell variables to existing files and your API address:

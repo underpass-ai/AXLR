@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package compose
 
 import (
 	"strings"
@@ -10,7 +10,7 @@ import (
 // An empty PATH runs commands with the Windows system folders; a PATH that
 // lacks them keeps its own folders first and gains the missing ones, in any
 // case; SystemRoot and USERPROFILE go along.
-func TestLocalRuntimeEnvironmentDefaultsTheWindowsPath(t *testing.T) {
+func TestExecEnvironmentDefaultsTheWindowsPath(t *testing.T) {
 	system := `D:\Win\System32;D:\Win;D:\Win\System32\Wbem;D:\Win\System32\WindowsPowerShell\v1.0`
 	for raw, want := range map[string]string{
 		"":                                 "PATH=" + system,
@@ -18,7 +18,7 @@ func TestLocalRuntimeEnvironmentDefaultsTheWindowsPath(t *testing.T) {
 		`C:\Tools`:                         `PATH=C:\Tools;` + system,
 		`d:\win\system32\;C:\Tools;D:\Win`: `PATH=d:\win\system32\;C:\Tools;D:\Win;D:\Win\System32\Wbem;D:\Win\System32\WindowsPowerShell\v1.0`,
 	} {
-		env := localRuntimeEnvironment(func(name string) string {
+		env := ExecEnvironment(func(name string) string {
 			switch name {
 			case "PATH":
 				return raw
@@ -33,11 +33,11 @@ func TestLocalRuntimeEnvironmentDefaultsTheWindowsPath(t *testing.T) {
 			t.Fatalf("PATH %q: %v", raw, env)
 		}
 	}
-	env := localRuntimeEnvironment(func(name string) string { return "" })
+	env := ExecEnvironment(func(name string) string { return "" })
 	if !strings.HasPrefix(env[0], `PATH=C:\Windows\System32;C:\Windows;`) || env[1] != `SystemRoot=C:\Windows` || len(env) != 2 {
 		t.Fatalf("without SystemRoot: %v", env)
 	}
-	env = localRuntimeEnvironment(func(name string) string {
+	env = ExecEnvironment(func(name string) string {
 		if name == "windir" {
 			return `E:\Windows`
 		}

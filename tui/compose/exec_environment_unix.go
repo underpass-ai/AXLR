@@ -1,6 +1,6 @@
 //go:build !windows
 
-package main
+package compose
 
 // systemPath is the PATH a command runs with: the inherited absolute
 // folders, or the usual system folders when it names none.

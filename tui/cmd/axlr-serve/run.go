@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/underpass-ai/AXLR/adapters/local"
 	"github.com/underpass-ai/AXLR/adapters/openrouter"
 	rootApplication "github.com/underpass-ai/AXLR/application"
 	"github.com/underpass-ai/AXLR/buildinfo"
@@ -100,7 +101,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "axlr-serve: exec sandbox:", err)
 		return 1
 	}
-	executor, err := runtime.New(runtime.Config{Root: cfg.Workspace, Plugins: manager, Sandbox: sandbox})
+	executor, err := localExecutor(cfg.Workspace, manager, sandbox, os.Getenv)
 	if err != nil {
 		fmt.Fprintln(stderr, "axlr-serve: workspace unavailable")
 		return 1
@@ -179,6 +180,13 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	return 0
+}
+
+// localExecutor runs the workspace's tools. Its commands get the console's
+// environment: the service's absolute PATH folders, or the system's when it
+// names none, and HOME; never the model key or any other variable.
+func localExecutor(workspace string, manager *plugins.Manager, sandbox *local.Sandbox, getenv func(string) string) (*runtime.Executor, error) {
+	return runtime.New(runtime.Config{Root: workspace, Env: compose.ExecEnvironment(getenv), Plugins: manager, Sandbox: sandbox})
 }
 
 // modelHTTPClient bounds connecting and the wait for the provider's response

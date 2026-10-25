@@ -350,7 +350,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		if *sessionFlag != "" {
 			return fail(fmt.Errorf("%s starts a new session; it cannot be combined with --session", launchFlag))
 		}
-		clone, brief, err := prepareRepairClone(ctx, repairConfiguration, filepath.Join(dataBase, "axlr", "repairs"), launchKind, launchRequest, localRuntimeEnvironment(getenv), stderr)
+		clone, brief, err := prepareRepairClone(ctx, repairConfiguration, filepath.Join(dataBase, "axlr", "repairs"), launchKind, launchRequest, compose.ExecEnvironment(getenv), stderr)
 		if err != nil {
 			return fail(err)
 		}
@@ -514,7 +514,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
-	executor, err := runtime.New(runtime.Config{Root: workspacePath, Env: localRuntimeEnvironment(getenv), Plugins: manager, Sandbox: sandbox})
+	executor, err := runtime.New(runtime.Config{Root: workspacePath, Env: compose.ExecEnvironment(getenv), Plugins: manager, Sandbox: sandbox})
 	if err != nil {
 		return fail(err)
 	}
@@ -746,8 +746,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		repairs = &application.SelfRepair{
 			Registry:  registry,
-			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: localRuntimeEnvironment(getenv), Stderr: cloneProgress},
-			Workbench: repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.Windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog},
+			Clones:    repairclone.Preparer{Repairs: repairsDirectory, Env: compose.ExecEnvironment(getenv), Stderr: cloneProgress},
+			Workbench: repairWorkbenches{env: compose.ExecEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.Windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, autonomous: repairConfiguration.AutonomousLocal(), calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog},
 			Store:     loggedStore,
 			Engine:    ceremonies.Engine,
 			Settings:  application.RepairSettings{Repository: repairConfiguration.Repository, About: repairConfiguration.About, Directory: repairsDirectory, MaxAttempts: repairConfiguration.MaxAttempts, MaxActive: settings.JobsConfiguration().MaxActive, Watch: repairPolicy.WatchDeadline},
@@ -772,7 +772,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	var planRunner *application.PlanRunner
 	var planPanel terminal.PlanPanelPort
 	if ceremonies != nil && ceremonies.Plans != nil {
-		benches := planWorkbenches{repairWorkbenches{env: localRuntimeEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.Windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog}}
+		benches := planWorkbenches{repairWorkbenches{env: compose.ExecEnvironment(getenv), manager: manager, registrations: registrations, labels: sessionLabels, models: models, windows: locals.Windows, store: loggedStore, trace: trace, validator: validator, approval: approvalSettings, profiles: pluginManager.Profiles, catalog: axlrCatalog, configPath: configPath, getenv: getenv, reviewerModel: settings.ReviewerModel, policy: repairPolicy, plans: ceremonies.Plans, compact: ceremonies.Compact, calibration: calibration, turnToolCalls: settings.TurnToolCalls, sandbox: sandbox, usage: store, maxSessionUSD: settings.MaxSessionUSD, appLog: appLog}}
 		planRunner = &application.PlanRunner{Plans: ceremonies.Plans, Store: loggedStore, Workbench: benches, RunToken: hex.EncodeToString(runToken[:]), Liveness: runLock, Lifetime: ctx}
 		if err := planRunner.Reconcile(ctx); err != nil {
 			fmt.Fprintln(stderr, "axlr-tui: plan registry:", err)
@@ -990,27 +990,6 @@ func printResumeHint(stderr io.Writer, state domain.SessionState, usage applicat
 		}
 	}
 	fmt.Fprintf(stderr, "axlr-tui: resume with: axlr-tui --session %s%s\n", state.ID, cost)
-}
-
-// The local executor needs PATH to resolve commands, but receives no other
-// ambient variables (in particular no model provider credentials).
-func localRuntimeEnvironment(getenv func(string) string) []string {
-	paths := make([]string, 0)
-	seen := map[string]bool{}
-	for _, dir := range filepath.SplitList(getenv("PATH")) {
-		if filepath.IsAbs(dir) && !seen[dir] {
-			paths = append(paths, dir)
-			seen[dir] = true
-		}
-	}
-	// The system's own folders when the inherited PATH names none of them
-	// (run_path_unix.go, run_path_windows.go).
-	paths = systemPath(paths, getenv)
-	env := []string{"PATH=" + strings.Join(paths, string(os.PathListSeparator))}
-	if home := getenv("HOME"); filepath.IsAbs(home) {
-		env = append(env, "HOME="+home)
-	}
-	return append(env, systemEnvironment(getenv)...)
 }
 
 func pluginRegistrations(paths, selections []string, getenv func(string) string, modelKeys map[string]bool) ([]plugins.Registration, error) {

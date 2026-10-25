@@ -1,6 +1,6 @@
 //go:build windows
 
-package main
+package compose
 
 import (
 	"path/filepath"
@@ -9,9 +9,9 @@ import (
 
 // systemPath is the PATH a command runs with: the inherited absolute
 // folders, then the Windows system folders it lacks, so cmd, where,
-// PowerShell and the other system programs resolve whatever the console
-// inherited. An empty PATH, as a service or a scheduled task may give,
-// leaves the system folders alone.
+// PowerShell and the other system programs resolve whatever the console or
+// the service inherited. An empty PATH, as a Windows service or a
+// scheduled task may give, leaves the system folders alone.
 func systemPath(paths []string, getenv func(string) string) []string {
 	root := systemRoot(getenv)
 	for _, dir := range []string{filepath.Join(root, "System32"), root, filepath.Join(root, "System32", "Wbem"), filepath.Join(root, "System32", "WindowsPowerShell", "v1.0")} {
