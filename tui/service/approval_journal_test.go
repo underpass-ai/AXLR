@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -177,9 +178,7 @@ func TestCrashDuringAToolIsInterruptedAtRestart(t *testing.T) {
 	}
 	crashed := s.Config
 	crashed.StateDir = filepath.Join(t.TempDir(), "state")
-	if err := os.CopyFS(crashed.StateDir, os.DirFS(s.Config.StateDir)); err != nil {
-		t.Fatal(err)
-	}
+	copyCrashedState(t, crashed.StateDir, s.Config.StateDir)
 	restarted, err := NewServer(crashed, Dependencies{})
 	if err != nil {
 		t.Fatal(err)
@@ -196,5 +195,36 @@ func TestCrashDuringAToolIsInterruptedAtRestart(t *testing.T) {
 	recovered, err := restarted.sessions.Load(context.Background(), domain.SessionID(id))
 	if err != nil || recovered.Status() != domain.StatusInterrupted {
 		t.Fatalf("recovered status %s: %v", recovered.Status(), err)
+	}
+}
+
+// copyCrashedState copies a state directory as a crash leaves it: the
+// files, without the sessions' locks the dead process held. Windows
+// refuses to read a locked file, and the next server takes its own.
+func copyCrashedState(t *testing.T, dst, src string) {
+	t.Helper()
+	err := filepath.WalkDir(src, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0700)
+		}
+		if strings.HasSuffix(path, ".lock") {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0600)
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 }
