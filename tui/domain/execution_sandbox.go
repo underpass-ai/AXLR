@@ -3,7 +3,7 @@ package domain
 import (
 	"errors"
 	"fmt"
-	"path/filepath"
+	pathpkg "path"
 	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -58,7 +58,9 @@ func (s ExecutionSandbox) Validate() error {
 			return fmt.Errorf("a sandbox's %s list holds at most %d paths", name, MaxSandboxPaths)
 		}
 		for _, path := range paths {
-			if !filepath.IsAbs(path) || filepath.Clean(path) != path || path == "/" || len(path) > 4096 || strings.ContainsAny(path, ",\n\r\x00") {
+			// A path of the Linux host the sandbox runs on, whatever the
+			// platform that reads the object.
+			if !pathpkg.IsAbs(path) || pathpkg.Clean(path) != path || path == "/" || len(path) > 4096 || strings.ContainsAny(path, ",\n\r\x00") {
 				return fmt.Errorf("a sandbox's %s path %q must be a clean absolute path other than the root, without commas", name, path)
 			}
 		}

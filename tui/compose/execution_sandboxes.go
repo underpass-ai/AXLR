@@ -61,7 +61,7 @@ func (x ExecutionSandboxes) Confine(s domain.ExecutionSandbox) (*local.Sandbox, 
 	}
 	sandbox := &local.Sandbox{Isolate: true, Network: s.Egress == domain.SandboxEgressFull, Writable: s.Writable, Readable: s.Readable}
 	if s.Egress == domain.SandboxEgressAllowlist {
-		if !filepath.IsAbs(x.Relay) {
+		if x.Relay == "" {
 			return nil, errors.New("the egress relay is unavailable: the path of this binary is unknown")
 		}
 		rules := make([]root.EgressRule, 0, len(s.Allow))

@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/underpass-ai/AXLR/domain"
 )
 
 // Paths inside an isolated sandbox: the relay and the proxy's socket for an
@@ -27,6 +29,10 @@ const (
 // on cancellation and dies with the console (--die-with-parent); the
 // program's exit status is bwrap's.
 func (s *Sandbox) launch(root, cwd, program string, args []string) (launch, error) {
+	if (s.Isolate || s.Container != nil) && root == "/" {
+		// The workspace is bound writable over everything else.
+		return launch{}, domain.Reject("sandbox_unavailable", "an execution's sandbox cannot confine a workspace at /")
+	}
 	if s.Container != nil {
 		return s.Container.launch(s, root, cwd, program, args)
 	}
@@ -125,7 +131,12 @@ func ProbeSandbox(ctx context.Context, s Sandbox) error {
 	defer cancel()
 	probe := s
 	probe.Egress = nil
-	l, err := probe.launch("/", "/", "/bin/true", nil)
+	root, err := os.MkdirTemp("", "axlr-sandbox-probe-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(root)
+	l, err := probe.launch(root, root, "/bin/true", nil)
 	if err != nil {
 		return err
 	}

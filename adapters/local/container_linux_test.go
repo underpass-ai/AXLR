@@ -117,3 +117,15 @@ func TestTheContainerProbeNamesAMissingImage(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 }
+
+// A workspace at / would be bound writable over the whole sandbox.
+func TestAnExecutionsSandboxRefusesAWorkspaceAtTheRoot(t *testing.T) {
+	for name, sandbox := range map[string]Sandbox{
+		"process":   {Program: "/usr/bin/bwrap", Isolate: true},
+		"container": {Container: &Container{Runtime: "/usr/bin/docker", Kind: ContainerDocker, Image: "tools:1", User: "1000:1000"}},
+	} {
+		if _, err := sandbox.launch("/", "/", "/bin/true", nil); err == nil || !strings.Contains(err.Error(), "workspace at /") {
+			t.Fatalf("%s: %v", name, err)
+		}
+	}
+}
