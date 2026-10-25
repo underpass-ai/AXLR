@@ -92,6 +92,19 @@ func (e *Executor) Close() error { e.mu.Lock(); defer e.mu.Unlock(); return e.fi
 func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return e.execute(ctx, req, e.processes)
+}
+
+// ExecuteConfined is Execute with a command run under sandbox instead of
+// the configured one; nil runs it unconfined. One executor serves several
+// executions, each under its own sandbox.
+func (e *Executor) ExecuteConfined(ctx context.Context, req dto.Request, sandbox *local.Sandbox) dto.Response {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.execute(ctx, req, &local.ProcessAdapter{Root: e.config.Root, Env: e.config.Env, Sandbox: sandbox})
+}
+
+func (e *Executor) execute(ctx context.Context, req dto.Request, processes *local.ProcessAdapter) dto.Response {
 	start := time.Now()
 	r := dto.Response{ProtocolVersion: ProtocolVersion, RequestID: req.RequestID, Tool: req.Tool, StartedAt: start.UTC(), Status: "completed"}
 	mapper := RequestMapper{MaxReadBytes: e.config.MaxReadBytes, MaxFileBytes: e.config.MaxFileBytes, MaxOutputBytes: e.config.MaxOutputBytes, MaxTimeout: e.config.MaxTimeout, Roots: e.roots}
@@ -110,7 +123,7 @@ func (e *Executor) Execute(ctx context.Context, req dto.Request) dto.Response {
 			case domain.EditCommand:
 				result, err = (application.EditUseCase{Files: e.files, MaxFileBytes: e.config.MaxFileBytes}).Execute(c)
 			case domain.ExecCommand:
-				result, err = (application.ExecUseCase{Processes: e.processes}).Execute(ctx, c)
+				result, err = (application.ExecUseCase{Processes: processes}).Execute(ctx, c)
 			case domain.SearchCommand:
 				listingBytes = int(c.MaxBytes)
 				result, err = (application.SearchUseCase{Files: e.files}).Execute(ctx, c)
