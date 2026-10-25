@@ -38,16 +38,21 @@ func (a *ProcessAdapter) Run(ctx context.Context, c domain.ExecCommand) (domain.
 		return domain.ExecResult{}, err
 	}
 	args := []string(c.Args)
+	env := append([]string{}, a.Env...)
+	finish := done
 	if a.Sandbox != nil {
-		if program, args, err = a.Sandbox.wrap(a.Root, cwd, program, args); err != nil {
+		l, err := a.Sandbox.launch(a.Root, cwd, program, args)
+		if err != nil {
 			return domain.ExecResult{}, err
 		}
+		program, args, finish = l.program, l.args, l.finish
+		env = append(env, l.env...)
 	}
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(c.Timeout))
 	defer cancel()
 	cmd := exec.CommandContext(runCtx, program, args...)
 	cmd.Dir = cwd
-	cmd.Env = append([]string{}, a.Env...)
+	cmd.Env = env
 	cmd.Stdin = strings.NewReader(string(c.Stdin))
 	capture := &capture{budget: int(c.OutputLimit)}
 	cmd.Stdout = streamWriter{c: capture}
@@ -55,6 +60,7 @@ func (a *ProcessAdapter) Run(ctx context.Context, c domain.ExecCommand) (domain.
 	configureProcess(cmd)
 	cmd.WaitDelay = time.Second
 	if err := cmd.Start(); err != nil {
+		finish(false)
 		return domain.ExecResult{}, domain.Fail("start_failed", err.Error())
 	}
 	err = cmd.Wait()
@@ -65,6 +71,11 @@ func (a *ProcessAdapter) Run(ctx context.Context, c domain.ExecCommand) (domain.
 	if outputCut {
 		_ = killProcessTree(cmd)
 		err = nil
+	}
+	// What the sandbox has to say, such as the destinations its egress
+	// proxy refused, ends the command's stderr.
+	if note := finish(outputCut || runCtx.Err() != nil); note != "" {
+		_, _ = (streamWriter{c: capture, stderr: true}).Write([]byte(note))
 	}
 	if ctx.Err() != nil {
 		return domain.ExecResult{}, &domain.Fault{Status: "cancelled", Code: "cancelled", Message: "process cancelled; prior effects may remain"}
@@ -115,6 +126,10 @@ func (a *ProcessAdapter) resolveProgram(program, cwd string) (string, error) {
 	}
 	if strings.ContainsRune(program, filepath.Separator) {
 		return filepath.Join(cwd, program), nil
+	}
+	if a.Sandbox != nil && a.Sandbox.Container != nil {
+		// A bare name is the image's to find, on its own PATH.
+		return program, nil
 	}
 	pathValue := ""
 	for _, v := range a.Env {

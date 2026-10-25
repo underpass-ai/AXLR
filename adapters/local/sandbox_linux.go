@@ -8,42 +8,140 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/underpass-ai/AXLR/domain"
 )
 
-// wrap runs program under bubblewrap: the root filesystem bound read-only,
-// fresh /dev and /proc, a private /tmp, then the workspace and the writable
-// paths bound read-write over it. bwrap stays in the process group the
-// adapter kills on cancellation and dies with the console
-// (--die-with-parent); the program's exit status is bwrap's.
-func (s *Sandbox) wrap(root, cwd, program string, args []string) (string, []string, error) {
-	wrapped := []string{"--die-with-parent", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--bind", root, root}
+// Paths inside an isolated sandbox: the relay and the proxy's socket for an
+// allow list, on the private /run.
+const (
+	sandboxRelay  = "/run/axlr/relay"
+	sandboxSocket = "/run/axlr/egress.sock"
+)
+
+// launch starts program under the sandbox: in its container, or under
+// bubblewrap with the root filesystem bound read-only, fresh /dev and
+// /proc, a private /tmp, then the workspace and the writable paths bound
+// read-write over it. bwrap stays in the process group the adapter kills
+// on cancellation and dies with the console (--die-with-parent); the
+// program's exit status is bwrap's.
+func (s *Sandbox) launch(root, cwd, program string, args []string) (launch, error) {
+	if (s.Isolate || s.Container != nil) && root == "/" {
+		// The workspace is bound writable over everything else.
+		return launch{}, domain.Reject("sandbox_unavailable", "an execution's sandbox cannot confine a workspace at /")
+	}
+	if s.Container != nil {
+		return s.Container.launch(s, root, cwd, program, args)
+	}
+	if !s.Isolate {
+		wrapped := []string{"--die-with-parent", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp", "--bind", root, root}
+		for _, path := range s.Writable {
+			wrapped = append(wrapped, "--bind", path, path)
+		}
+		if !s.Network {
+			wrapped = append(wrapped, "--unshare-net")
+		}
+		wrapped = append(wrapped, "--chdir", cwd, "--", program)
+		return launch{program: s.Program, args: append(wrapped, args...), finish: done}, nil
+	}
+	wrapped := []string{"--die-with-parent", "--new-session", "--unshare-all", "--unshare-user", "--disable-userns"}
+	if s.Network {
+		wrapped = append(wrapped, "--share-net")
+	}
+	wrapped = append(wrapped, "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp")
+	for _, hidden := range hiddenPaths() {
+		wrapped = append(wrapped, "--tmpfs", hidden)
+	}
+	if s.Network {
+		// /run is hidden; the resolver's files there come back read-only.
+		if dir, ok := resolverDirectory(); ok {
+			wrapped = append(wrapped, "--ro-bind", dir, dir)
+		}
+	}
+	wrapped = append(wrapped, "--bind", root, root)
+	for _, path := range s.Readable {
+		wrapped = append(wrapped, "--ro-bind", path, path)
+	}
 	for _, path := range s.Writable {
 		wrapped = append(wrapped, "--bind", path, path)
 	}
-	if !s.Network {
-		wrapped = append(wrapped, "--unshare-net")
+	l := launch{program: s.Program, finish: done}
+	if s.Egress != nil && !s.Network {
+		proxy, err := startEgressProxy(s.Egress.Allow)
+		if err != nil {
+			return launch{}, fmt.Errorf("the egress proxy cannot start: %w", err)
+		}
+		wrapped = append(wrapped, "--ro-bind", s.Egress.Relay, sandboxRelay, "--bind", proxy.socket(), sandboxSocket)
+		program, args = sandboxRelay, append([]string{EgressRelayCommand, egressRelayAddress, sandboxSocket, "--", program}, args...)
+		l.env = egressProxyVariables()
+		l.finish = func(bool) string { return proxy.close() }
 	}
 	wrapped = append(wrapped, "--chdir", cwd, "--", program)
-	return s.Program, append(wrapped, args...), nil
+	l.args = append(wrapped, args...)
+	return l, nil
 }
 
-// ProbeSandbox runs a trivial command under bwrap with the sandbox's
-// options, so a kernel or security policy that refuses it (unprivileged
-// user namespaces disabled, an AppArmor rule) is found at launch rather
-// than on the model's first command.
+// hiddenPaths are the directories an isolated sandbox covers with an empty
+// filesystem: the home directories, the daemons' sockets and the mounted
+// volumes. $HOME comes last, so it exists, empty and writable, however
+// deep it is.
+func hiddenPaths() []string {
+	var hidden []string
+	for _, path := range []string{"/home", "/root", "/run", "/var/run", "/var/tmp", "/mnt", "/media", "/srv"} {
+		info, err := os.Lstat(path)
+		if err == nil && info.IsDir() {
+			hidden = append(hidden, path)
+		}
+	}
+	if home, err := os.UserHomeDir(); err == nil && filepath.IsAbs(home) && filepath.Clean(home) != "/" {
+		hidden = append(hidden, filepath.Clean(home))
+	}
+	return hidden
+}
+
+// resolverDirectory is the directory /etc/resolv.conf points into when it
+// is under /run, as systemd-resolved's stub is.
+func resolverDirectory() (string, bool) {
+	target, err := filepath.EvalSymlinks("/etc/resolv.conf")
+	if err != nil || !strings.HasPrefix(target, "/run/") {
+		return "", false
+	}
+	return filepath.Dir(target), true
+}
+
+// ProbeSandbox runs a trivial command under the sandbox's options, so a
+// kernel or security policy that refuses it (unprivileged user namespaces
+// disabled, an AppArmor rule, a bwrap too old for an option, a container
+// runtime or image missing) is found at launch rather than on the model's
+// first command.
 func ProbeSandbox(ctx context.Context, s Sandbox) error {
+	if s.Container != nil {
+		return probeContainer(ctx, s)
+	}
 	if s.Program == "" {
 		return errors.New("bwrap is not installed")
 	}
+	if s.Egress != nil && !s.Network && !filepath.IsAbs(s.Egress.Relay) {
+		return errors.New("the egress relay needs the absolute path of axlr-tui or axlr-serve")
+	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	program, args, err := s.wrap("/", "/", "/bin/true", nil)
+	probe := s
+	probe.Egress = nil
+	root, err := os.MkdirTemp("", "axlr-sandbox-probe-")
 	if err != nil {
 		return err
 	}
-	out, err := exec.CommandContext(ctx, program, args...).CombinedOutput()
+	defer os.RemoveAll(root)
+	l, err := probe.launch(root, root, "/bin/true", nil)
+	if err != nil {
+		return err
+	}
+	out, err := exec.CommandContext(ctx, l.program, l.args...).CombinedOutput()
+	l.finish(false)
 	if err != nil {
 		detail := strings.TrimSpace(string(out))
 		if len(detail) > 300 {

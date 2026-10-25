@@ -53,6 +53,14 @@ jobs:
           cache-dependency-path: |
             go.sum
             tui/go.sum
+      - name: Bubblewrap for the sandbox tests
+        # The process profile's tests run here, not skipped: Ubuntu's
+        # AppArmor refuses unprivileged user namespaces until told not to.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
+          bwrap --ro-bind / / --unshare-all --unshare-user --disable-userns --proc /proc --dev /dev true
       - name: Format and module boundaries
         run: |
           test -z "$(find . -maxdepth 1 -type f -name '*.go' -print)"
@@ -60,6 +68,8 @@ jobs:
           GOWORK=off go list -deps ./... > /tmp/root-deps
           ! grep -Eq '^(charm.land/|github.com/lrstanley/bubblezone)' /tmp/root-deps
       - name: Root vet, race tests and coverage
+        env:
+          AXLR_SANDBOX_TESTS: required
         run: |
           GOWORK=off go vet ./...
           GOWORK=off go test -race -count=1 -coverpkg=./... -coverprofile=coverage-root.out ./...
@@ -67,6 +77,8 @@ jobs:
           echo "Root aggregate coverage: ${coverage}%"
           awk -v value="$coverage" 'BEGIN { exit !(value > 80) }'
       - name: TUI vet, race tests and coverage
+        env:
+          AXLR_SANDBOX_TESTS: required
         run: |
           go -C tui vet ./...
           go -C tui test -race -count=1 -coverpkg=./... -coverprofile=coverage-tui.out ./...

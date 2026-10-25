@@ -26,6 +26,7 @@ An execution is a session of AXLR: its transcript, its tool calls with their dec
 | Decision on a pending call | `--session <id> --decide approve\|deny [--call <id>]` | `DecideSessionTool` |
 | Policy | `--policy <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`policy`) |
 | Budget | `--budget <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`budget`) |
+| Sandbox | `--sandbox <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`sandbox`) |
 | Correlation | `--correlation <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`correlation`) |
 
 The approval level is the run's own policy on top of `settings.json`: `none` approves nothing the settings do not, `local` the workspace's reads, writes and commands and the forged tools, `all` every tool. The destructive list (`approvals.always_ask`) asks either way, and a call it holds ends the execution in `needs_decision`. A policy decides outside the model: the model asks, the policy answers.
@@ -80,6 +81,64 @@ What the budget decides, and what it leaves as it is:
 - The budget counts across the successor sessions a context cap opens: they are the same execution, so the successor carries the budget, its start and what was spent before it. The session keeps the budget, so a later turn of the same session counts under it too; a new `--budget` replaces it and counts from that moment, with the session's earlier requests, calls and cost left out.
 - Once the execution has no request left, the console's own follow-up turns (the memory reminder, Jev's final check) are skipped, so a prompt that ended in an answer ends `completed`.
 - The session's own cost cap (`max_session_usd`) and the turn's call limit (`turn_tool_calls`) in `settings.json` stay as they are; the budget only narrows further.
+
+## Sandbox per execution
+
+A program chooses how an execution's commands are confined and what of the network they reach, and AXLR enforces it outside the model: `axlr-tui --exec --sandbox <file.json>` reads it (and `--decide --sandbox`), `CreateSession` takes it as `sandbox` and `GetSession` shows it. The file holds the object below, with or without the `sandbox` wrapper; an unknown field refuses it. It is a file of its own, as the policy and the budget are: there is no execution bundle.
+
+```json
+{"sandbox": {"profile": "process", "egress": "allowlist", "allow": ["api.github.com:443", "*.pypi.org"], "writable": ["/home/bot/.cache/go-build"], "readable": ["/home/bot/go/pkg/mod"]}}
+```
+
+```json
+{"sandbox": {"profile": "container", "egress": "none", "container": {"image": "registry.example/tools:1.4", "runtime": "podman", "memory_mb": 2048, "cpus": 2, "pids": 512}}}
+```
+
+| Field | Meaning |
+|---|---|
+| `profile` | `none`, `process` or `container` (required) |
+| `egress` | `none`, `allowlist` or `full`; absent is `none` for `process` and `container`, and `full`, the only one it takes, for `none` |
+| `allow` | With `allowlist`, which needs at least one, at most 64: `host`, `host:port`, `*.domain` (its subdomains, not the domain itself), an IPv4 address or an `[IPv6]` address; no port allows 443 and 80 |
+| `writable` | Absolute paths outside the workspace the commands may write, such as a build cache; at most 32, each existing, without commas |
+| `readable` | Absolute paths under a hidden directory the commands may read, such as a module cache under the home; at most 32 |
+| `container` | With `container`, which needs it: `image` (on the host already: AXLR never pulls), `runtime` (`podman` or `docker`; absent tries Podman, then Docker), and `memory_mb`, `cpus` and `pids`, each zero or absent for the runtime's default |
+
+What each profile enforces:
+
+| | `none` | `process` | `container` |
+|---|---|---|---|
+| Runs under | The console's own: unconfined, or the settings' [`exec_sandbox`](console.md#exec-sandbox) | bubblewrap | A rootless Podman, or Docker |
+| Filesystem | The person's rights, or `exec_sandbox`'s | The system read-only; the workspace and `writable` read-write; `/home`, `/root`, `/run`, `/var/tmp`, `/mnt`, `/media`, `/srv` hidden behind empty filesystems, `$HOME` empty and writable and discarded with the command, `readable` read-only over them; a private `/tmp` | The image read-only; the workspace, `writable` and `readable` at their own paths; a private `/tmp`; nothing else of the host |
+| Processes | The person's | PID, IPC, UTS, cgroup and user namespaces of their own, no nested user namespace, a session of their own, no new privileges, killed with the console | No capability, no new privileges, the console's uid and gid, the container removed when the command ends or is killed |
+| Limits | The command's timeout and output limit | The same | The same, and `memory_mb`, `cpus`, `pids` |
+
+What each egress enforces:
+
+| `egress` | `process` | `container` |
+|---|---|---|
+| `none` | A network namespace with only a loopback: no route out, no name resolution, no host service | `--network none` |
+| `allowlist` | The same, with one way out: AXLR's egress proxy | The same, through the same proxy |
+| `full` | The host's network, and its resolver | The runtime's default network |
+
+The allow list is enforced, not advisory. A command under `none` or `allowlist` has no network interface but its own loopback; under `allowlist` it starts through a relay, `axlr-tui` itself (or `axlr-serve`) bound read-only into the sandbox, which listens on `127.0.0.1:3128` inside it and passes each connection through a Unix socket to an HTTP proxy that AXLR runs outside it for that command. The command gets `HTTP_PROXY`, `HTTPS_PROXY` and `ALL_PROXY` (and their lower-case forms) pointing at the relay and an empty `NO_PROXY`, which curl, pip, npm, git and Go's HTTP clients read; a program that ignores them reaches nothing at all. The proxy tunnels `CONNECT host:port` and forwards plain `http://` requests, checking each destination, and each redirect, against the list; a refused one is answered `403`, and the command's stderr ends with `axlr sandbox: egress refused to <host:port> (not in the execution's allow list)`. What it cannot carry is refused by construction: UDP, name resolution from inside, and TCP from a client that cannot use an HTTP proxy (ssh, most database drivers). Its limits:
+
+- AXLR resolves the names, outside the sandbox, with the host's resolver: a listed name whose DNS points into the host's own network reaches it there. An IP address in the list matches that address only.
+- TLS goes end to end through the tunnel: the proxy sees the host and port, not the request, so a CDN that serves other sites behind a listed name is reachable through it.
+
+What the sandbox does not cover:
+
+- AXLR's own model requests (OpenRouter, a local model, a native API) are made by the AXLR process, outside the sandbox: the allow list neither governs them nor needs to name the model provider.
+- MCP servers are AXLR's children (stdio) or endpoints AXLR calls, outside the sandbox too. The allow list is for what a command reaches itself: name an MCP server's host only when a command must call it.
+- It confines `local_exec` and the forged tools, which `axlr_run_tool` runs through `local_exec`. The file tools (`local_read`, `local_write`, `local_edit`, search and list) are kept to the workspace by AXLR itself, sandbox or not.
+- The `process` profile sets no memory or CPU limit and installs no seccomp filter: the command's timeout and output limit apply as to any command.
+
+How it is chosen and refused:
+
+- A sandbox this host cannot give ends the execution before its first request, never with a weaker one. AXLR runs one trivial command under bwrap, or asks the container runtime for the image, and checks the `writable` and `readable` paths: `--exec` exits 1 with `the execution's sandbox is unavailable here: …` (bwrap missing, user namespaces refused, the runtime or the image missing, a path missing), and `CreateSession` answers `422` with `sandbox_unavailable`. A sandbox the host loses during the execution refuses each command (`sandbox_unavailable` in its result) instead of running it unconfined.
+- An execution's sandbox replaces the settings' `exec_sandbox` for its commands, with one floor: under `exec_sandbox.mode: required` its profile cannot be `none`, and under `exec_sandbox.network: false` its egress cannot be `full`.
+- The session keeps the sandbox: later turns and `--decide` run under it without the flag, a new `--sandbox` replaces it, and the successor sessions a context cap opens carry it. `--exec` says on stderr what it got: `sandbox process (bwrap): …; egress allowlist (api.github.com:443)`, or `sandbox container (rootless podman, image …)`.
+- A container on a rootful Docker daemon is confined as well, but the daemon runs as root: a flaw in it or in the kernel is a flaw as root. `--exec` says `rootful docker`; prefer a rootless Podman, or Docker in rootless mode.
+- The `process` and `container` profiles need Linux; on macOS and Windows they are refused. Inside a container the relay is the AXLR binary itself, which runs there because AXLR's releases are static.
 
 ## Correlation
 
@@ -203,6 +262,7 @@ The receipt is the execution's account for an audit: every model request with it
   "ended_at": "2026-10-25T09:14:31.904Z",
   "policy": {"level": "observe", "sha256": "41aa…"},
   "budget": {"sha256": "c3d0…", "limits": {"seconds": 900, "requests": 20, "tool_calls": 60, "usd": 0.5}},
+  "sandbox": {"sha256": "a1c4…", "profile": "process", "egress": "allowlist", "allow": ["api.github.com:443"]},
   "correlation": {"bot_id": "server-incident-investigator", "task_id": "task-789"},
   "requests": [
     {"session_id": "6c1f…", "index": 1, "started_at": "2026-10-25T09:14:02.301Z", "duration_ms": 2310, "status": "completed", "model": "anthropic/claude-haiku-5.5", "provider": "Anthropic", "prompt_tokens": 3120, "cached_tokens": 2048, "cache_write_tokens": 0, "completion_tokens": 96, "reasoning_tokens": 0, "cost_usd": 0.0021, "unmetered": false}
@@ -222,6 +282,7 @@ The receipt is the execution's account for an audit: every model request with it
 | `started_at`, `ended_at` | When the execution began (the budget's start, else the session's first message or record) and its last record, in UTC |
 | `policy` | The execution's policy: its `level` and the `sha256` of its compact JSON as the contract writes it (`{"level":…,"tools":{…}}`, fields in the order above, argument patterns by name); absent without one |
 | `budget` | The execution's budget: its `limits` and the `sha256` of their compact JSON (`{"seconds":…,"requests":…,"tool_calls":…,"usd":…}`, zero limits left out); absent without one |
+| `sandbox` | The execution's sandbox: its `profile`, `egress` and `allow`, and the `sha256` of its compact JSON as `GetSession` shows it (`{"profile":…,"egress":…,"allow":[…],"writable":[…],"readable":[…],"container":{…}}`, the egress spelled out, each destination as the contract reads it: lower case, no trailing dot, empty lists left out); absent without one |
 | `requests` | Every model request of the spanned sessions, in order. `index` counts from 1 in each session; `model` is the one asked for and `provider` who served it, when the endpoint says. `status` is `completed`, `failed`, `cancelled` or `interrupted` (the process died during it: tokens and cost unknown). `cost_usd` is null when the request reported none; `unmetered` marks a request whose tokens are estimates |
 | `tool_calls` | Every call of the spanned sessions, in order, as the result's `tool_calls` with `arguments_sha256` (the call's arguments as the session keeps them, compact JSON), `outcome_sha256` (its result's text; absent while pending), and `started_at` and `duration_ms` for a call that ran (absent for one refused, or one that never ended) |
 | `total` | The requests above, summed as the result's `usage` is |
@@ -261,4 +322,5 @@ Every line and every payload carries the execution's `correlation` when it has o
 - On the service, a turn, a decision and a direct call are idempotent on their key, revisions guard decisions and cancellation, and a session interrupted by a crash, in a model request or in a tool's run, is journaled `turn.interrupted` at the next start.
 - Past the context cap the execution continues in a successor; the result names every session, and their usage is summed. The successor is the same execution: it carries the policy, the budget with what was spent, and the correlation.
 - The budget is kept outside the model: a limit reached refuses the next request or call before it is made, whatever the model asked for, and the session stays resumable.
+- A command of an execution with a sandbox runs under that sandbox or not at all: a sandbox the host cannot give ends the execution before its first request, and the allow list is the only way out of a sandbox without the network.
 - The receipt is journaled as each request and call starts and ends, before the next step: a restart loses none of what ran, and a request or call cut by the restart is listed as interrupted or without its end.

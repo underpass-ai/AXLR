@@ -90,3 +90,51 @@ func TestSessionStoreKeepsTheBudgetAndCorrelation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// A session's sandbox is saved beside its snapshot and comes back with it;
+// one the store cannot read refuses the session, so a lost sandbox never
+// lets the next command run unconfined.
+func TestSessionStoreKeepsTheSandbox(t *testing.T) {
+	store, dir := openStore(t)
+	id := domain.SessionID("0123456789abcdef0123456789abcdef")
+	session, err := domain.NewSession(id, domain.Workspace(t.TempDir()), "test/model")
+	if err != nil {
+		t.Fatal(err)
+	}
+	sandbox := domain.ExecutionSandbox{Profile: domain.SandboxProfileContainer, Egress: domain.SandboxEgressAllowlist, Allow: []string{"api.github.com:443"}, Writable: []string{"/cache"}, Container: &domain.SandboxContainer{Image: "tools:1", MemoryMB: 512, CPUs: 1.5, PIDs: 64}}
+	if err := session.SetSandbox(sandbox); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := store.Save(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, has := loaded.Sandbox()
+	if !has || kept.Profile != sandbox.Profile || kept.Egress != sandbox.Egress || len(kept.Allow) != 1 || kept.Allow[0] != "api.github.com:443" || len(kept.Writable) != 1 || kept.Container == nil || *kept.Container != *sandbox.Container {
+		t.Fatalf("%+v %v", kept, has)
+	}
+	loaded.ClearSandbox()
+	if err := store.Save(ctx, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, string(id)+".execution")); !os.IsNotExist(err) {
+		t.Fatalf("the execution file stays after clearing: %v", err)
+	}
+	for name, raw := range map[string]string{
+		"unknown profile":  `{"version":1,"sandbox":{"profile":"vm","egress":"none"}}`,
+		"empty allowlist":  `{"version":1,"sandbox":{"profile":"process","egress":"allowlist"}}`,
+		"unknown field":    `{"version":1,"sandbox":{"profile":"process","egress":"none","network":true}}`,
+		"container absent": `{"version":1,"sandbox":{"profile":"container","egress":"none"}}`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, string(id)+".execution"), []byte(raw), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Load(ctx, id); err == nil {
+			t.Fatalf("%s: a session with an unreadable sandbox loaded", name)
+		}
+	}
+}

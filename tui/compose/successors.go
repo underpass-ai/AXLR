@@ -49,6 +49,11 @@ func (s Successors) Continue(ctx context.Context, predecessor domain.Session) (d
 			return domain.Session{}, err
 		}
 	}
+	if sandbox, has := predecessor.Sandbox(); has {
+		if err := session.SetSandbox(sandbox); err != nil {
+			return domain.Session{}, err
+		}
+	}
 	if correlation, has := predecessor.Correlation(); has {
 		if err := session.SetCorrelation(correlation); err != nil {
 			return domain.Session{}, err

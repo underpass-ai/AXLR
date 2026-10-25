@@ -18,6 +18,7 @@ type ExecutionReceipt struct {
 	EndedAt     time.Time             `json:"ended_at"`
 	Policy      *ReceiptPolicy        `json:"policy,omitempty"`
 	Budget      *ReceiptBudget        `json:"budget,omitempty"`
+	Sandbox     *ReceiptSandbox       `json:"sandbox,omitempty"`
 	Correlation *ExecutionCorrelation `json:"correlation,omitempty"`
 	Requests    []ReceiptRequest      `json:"requests"`
 	Calls       []ReceiptCall         `json:"tool_calls"`

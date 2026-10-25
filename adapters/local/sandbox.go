@@ -7,12 +7,13 @@ import "github.com/underpass-ai/AXLR/domain"
 // commands could write anywhere in $HOME, read keys and reach the network.
 // With it, the filesystem outside the workspace is read-only except the
 // Writable paths and a private /tmp, and Network false cuts the process off
-// the network. It runs under bubblewrap (Program) on Linux.
+// the network. It runs under bubblewrap (Program) on Linux, or in a
+// container (Container).
 type Sandbox struct {
 	// Program is the absolute path of bwrap.
 	Program string
 	// Network keeps the host's network; false gives the process a network
-	// namespace of its own, with nothing in it.
+	// namespace of its own, with nothing in it but Egress.
 	Network bool
 	// Writable are absolute paths outside the workspace the process may
 	// write, such as a build cache.
@@ -20,6 +21,32 @@ type Sandbox struct {
 	// Unavailable, when set, says why a required sandbox cannot run here;
 	// every process is then refused with it instead of running unconfined.
 	Unavailable string
+	// Isolate is the process profile of an execution: besides the above,
+	// the process gets namespaces of its own (PID, IPC, UTS, cgroup, user,
+	// with no nested user namespace), a session of its own, and the home
+	// directories, /run and the mounts under /mnt and /media hidden behind
+	// empty filesystems, so no key, agent or daemon socket (Docker's among
+	// them) is in reach. $HOME is an empty directory it may write.
+	Isolate bool
+	// Readable are absolute paths a hidden directory covers that the
+	// process may read, such as a module cache under $HOME.
+	Readable []string
+	// Egress, with Network false, lets the process reach the destinations
+	// it allows through a proxy AXLR runs, and nothing else.
+	Egress *Egress
+	// Container runs the process in a container instead of bubblewrap.
+	Container *Container
+}
+
+// Egress is the way out of a sandbox without a network: the only route is
+// an HTTP proxy outside the sandbox that AXLR runs for the command, reached
+// through a relay inside it, and the proxy connects only to what Allow
+// lists.
+type Egress struct {
+	Allow []domain.EgressRule
+	// Relay is the absolute path of a static program that runs the relay
+	// when called with EgressRelayCommand: axlr-tui or axlr-serve.
+	Relay string
 }
 
 // refusal is why no process may start: the sandbox is required but

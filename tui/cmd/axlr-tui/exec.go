@@ -85,6 +85,20 @@ func readExecBudget(path string) (domain.ExecutionBudget, error) {
 	return budget, nil
 }
 
+// readExecSandbox reads the sandbox file of --sandbox: the contract's
+// object, bare or wrapped as {"sandbox": {...}}.
+func readExecSandbox(path string) (domain.ExecutionSandbox, error) {
+	data, err := readExecFile("--sandbox", path, contract.MaxExecutionSandboxBytes)
+	if err != nil {
+		return domain.ExecutionSandbox{}, err
+	}
+	sandbox, err := contract.ParseExecutionSandbox(data)
+	if err != nil {
+		return domain.ExecutionSandbox{}, fmt.Errorf("--sandbox %s: %w", path, err)
+	}
+	return sandbox, nil
+}
+
 // readExecCorrelation reads the correlation file of --correlation: the
 // contract's object, bare or wrapped as {"correlation": {...}}.
 func readExecCorrelation(path string) (domain.ExecutionCorrelation, error) {

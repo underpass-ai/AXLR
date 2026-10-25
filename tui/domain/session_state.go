@@ -65,6 +65,9 @@ type SessionState struct {
 	// none. Both are kept beside the snapshot like Policy.
 	Budget      *ExecutionAccount
 	Correlation *ExecutionCorrelation
+	// Sandbox confines the execution's commands, nil for the console's
+	// own; kept beside the snapshot like Policy.
+	Sandbox *ExecutionSandbox
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -117,6 +120,11 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	}
 	if state.Correlation != nil {
 		if err = state.Correlation.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
+	if state.Sandbox != nil {
+		if err = state.Sandbox.Validate(); err != nil {
 			return Session{}, err
 		}
 	}
@@ -247,6 +255,10 @@ func cloneState(state SessionState) SessionState {
 	if state.Correlation != nil {
 		correlation := *state.Correlation
 		state.Correlation = &correlation
+	}
+	if state.Sandbox != nil {
+		sandbox := state.Sandbox.Clone()
+		state.Sandbox = &sandbox
 	}
 	if len(state.MessageTimes) > len(state.Messages) {
 		state.MessageTimes = state.MessageTimes[:len(state.Messages)]

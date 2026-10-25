@@ -46,7 +46,7 @@ are the same values returned by the REST API.
 | `Exec` | `axlr_exec` | `arguments`, `idempotency_key` | Create a durable `local_exec` intent |
 | `ListPlugins` | `axlr_list_plugins` | — | List registered external identities and schemas |
 | `CallPlugin` | `axlr_call_plugin` | `plugin_id`, `tool_name`, `arguments`, `idempotency_key` | Resolve an exact pair from a frozen catalogue; create its durable intent |
-| `CreateSession` | `axlr_create_session` | `model`, `policy`, `budget`, `correlation` (the last three optional: the runtime contract's policy, budget and correlation per execution) | Create a normal session, optionally under an execution's policy, budget and correlation |
+| `CreateSession` | `axlr_create_session` | `model`, `policy`, `budget`, `sandbox`, `correlation` (the last four optional: the runtime contract's policy, budget, sandbox and correlation per execution) | Create a normal session, optionally under an execution's policy, budget, sandbox and correlation |
 | `GetSession` | `axlr_get_session` | `session_id` | Read owned state, transcript, pending calls and the execution's result and receipt |
 | `StartTurn` | `axlr_start_turn` | `session_id`, `prompt`, `expected_revision`, `idempotency_key` | Start the existing model/tool loop |
 | `StreamEvents` | `axlr_stream_events` | `session_id` | Replay/follow the journal with a resume cursor |
