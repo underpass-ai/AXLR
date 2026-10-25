@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"time"
 
+	"github.com/underpass-ai/AXLR/adapters/local"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/dto"
 	"github.com/underpass-ai/AXLR/runtime"
@@ -24,6 +26,10 @@ type ToolRunner struct {
 	// plugin transport in the console's app log, whose reader axlr_logs the
 	// failure then names.
 	LogFailure func(string)
+	// Confine turns an execution's sandbox into the runtime's, for the
+	// commands of a session that has one; without it such a command is
+	// refused, never run unconfined.
+	Confine func(domain.ExecutionSandbox) (*local.Sandbox, error)
 }
 
 // logHint ends the message of a failure the app log recorded.
@@ -65,7 +71,7 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 		request.Arguments = encoded
 	}
 	change := r.prepareChange(ctx, id, args)
-	response := r.Executor.Execute(ctx, request)
+	response := r.execute(ctx, id, request)
 	if response.Status == "timed_out" {
 		responseClass = application.DiagnosticErrorTimeout
 	} else if response.Status == "cancelled" {
@@ -102,6 +108,26 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 	}
 	out.Content, err = root.NewText(r.namedGuideRoot(id, string(content)))
 	return out, err
+}
+
+// execute runs the request, a command of an execution with a sandbox under
+// that sandbox; a sandbox that cannot be had here refuses the command
+// before it starts.
+func (r ToolRunner) execute(ctx context.Context, id domain.ToolIdentity, request dto.Request) dto.Response {
+	sandbox, confined := application.ExecutionSandboxOf(ctx)
+	if !confined || id.Kind != domain.ToolKindLocal || id.LocalOperation != "exec" {
+		return r.Executor.Execute(ctx, request)
+	}
+	err := errors.New("this runtime cannot confine an execution's commands")
+	var runtimeSandbox *local.Sandbox
+	if r.Confine != nil {
+		runtimeSandbox, err = r.Confine(sandbox)
+	}
+	if err != nil {
+		now := time.Now().UTC()
+		return dto.Response{ProtocolVersion: runtime.ProtocolVersion, RequestID: request.RequestID, Tool: request.Tool, Status: "rejected", StartedAt: now, FinishedAt: now, Error: &dto.Failure{Code: "sandbox_unavailable", Message: "the execution's sandbox is unavailable, so the command did not run: " + err.Error()}}
+	}
+	return r.Executor.ExecuteConfined(ctx, request, runtimeSandbox)
 }
 
 // namedGuideRoot fills the plugin root into KMP's answer for a store

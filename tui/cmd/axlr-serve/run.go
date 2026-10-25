@@ -145,7 +145,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	}
 	pluginManager := axlr.NewPluginManager(manager, profiles, nil)
 	validator := axlr.NewToolArgumentValidator()
-	runner := axlr.ToolRunner{Executor: executor}
+	// Each session's commands run under its execution's sandbox, when it
+	// has one; the profile none under the settings' exec sandbox.
+	sandboxes := compose.NewExecutionSandboxes(settings.ExecSandbox(), sandbox, exec.LookPath)
+	runner := axlr.ToolRunner{Executor: executor, Confine: sandboxes.Confine}
 	models := axlr.ModelStream{UseCase: rootApplication.StreamModelUseCase{Models: localmodels.Router{Default: client, Routes: routes}}}
 	lifecycle, ceremonies, err := sessionLifecycle(ctx, cfg, registrations, settings, runner, models, labels, sessions, locals.Windows, judge, note)
 	if err != nil {
@@ -164,9 +167,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		Start:   application.StartTurnUseCase{Catalog: catalog, Continue: continuation, Tools: runner, Approval: pluginManager},
 		Resolve: application.ResolveToolUseCase{Validation: validator, Tools: runner, Approval: pluginManager, Continue: continuation},
 		Catalog: catalog, Tools: runner, Approval: pluginManager, Validation: validator,
-		Ready:     service.EngineReadiness(manager, key),
-		Sessions:  sessions,
-		Lifecycle: lifecycle,
+		Ready:        service.EngineReadiness(manager, key),
+		ProbeSandbox: sandboxes.Probe,
+		Sessions:     sessions,
+		Lifecycle:    lifecycle,
 	}
 	server, err := service.NewServer(cfg, deps)
 	if err != nil {

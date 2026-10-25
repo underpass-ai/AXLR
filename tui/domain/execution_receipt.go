@@ -11,7 +11,7 @@ import (
 // ExecutionReceipt is an execution's account for an audit (the runtime
 // contract's receipt): every model request with its model, provider, usage
 // and cost, every tool call with digests of its arguments and outcome, and
-// the policy, budget and correlation it ran under. It is read from the
+// the policy, budget, sandbox and correlation it ran under. It is read from the
 // sessions and their receipt journals, so it survives a restart.
 type ExecutionReceipt struct {
 	Status   ExecutionStatus
@@ -21,10 +21,11 @@ type ExecutionReceipt struct {
 	// first message or entry of its first session; EndedAt its last
 	// message or entry.
 	StartedAt, EndedAt time.Time
-	// Policy, Budget and Correlation are the ones the execution ran under,
-	// as the last session carries them; nil without.
+	// Policy, Budget, Sandbox and Correlation are the ones the execution
+	// ran under, as the last session carries them; nil without.
 	Policy      *ExecutionPolicy
 	Budget      *ExecutionBudget
+	Sandbox     *ExecutionSandbox
 	Correlation *ExecutionCorrelation
 	Requests    []ReceiptRequest
 	Calls       []ReceiptCall
@@ -69,6 +70,9 @@ func NewExecutionReceipt(result ExecutionResult, sessions []ReceiptSession) Exec
 			if !account.StartedAt.IsZero() {
 				receipt.StartedAt = account.StartedAt
 			}
+		}
+		if sandbox, has := last.Sandbox(); has {
+			receipt.Sandbox = &sandbox
 		}
 		if correlation, has := last.Correlation(); has {
 			receipt.Correlation = &correlation

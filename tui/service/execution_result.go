@@ -62,6 +62,16 @@ func executionBudget(session domain.Session) *dto.ExecutionBudget {
 }
 
 // executionCorrelation is the session's correlation, nil without one.
+// executionSandbox is the session's sandbox on the wire, null without.
+func executionSandbox(session domain.Session) *dto.ExecutionSandbox {
+	sandbox, has := session.Sandbox()
+	if !has {
+		return nil
+	}
+	wire := contract.ExecutionSandbox(sandbox)
+	return &wire
+}
+
 func executionCorrelation(session domain.Session) *dto.ExecutionCorrelation {
 	correlation, has := session.Correlation()
 	if !has {

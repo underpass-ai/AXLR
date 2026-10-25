@@ -93,6 +93,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	decideFlag := flags.String("decide", "", "with --session: approve or deny the session's pending call without the console, run the turn to its end and exit as --exec does")
 	policyFlag := flags.String("policy", "", "with --exec or --decide: a JSON file with the execution's policy (docs/runtime-contract.md): its autonomy level and the tools it may use; the session keeps it")
 	budgetFlag := flags.String("budget", "", "with --exec or --decide: a JSON file with the execution's budget (docs/runtime-contract.md): seconds, requests, tool_calls and usd, each zero for no limit; the run ends budget_exceeded at the first limit reached and the session keeps the budget")
+	sandboxFlag := flags.String("sandbox", "", "with --exec or --decide: a JSON file with the execution's sandbox (docs/runtime-contract.md): profile none, process or container, egress none, allowlist (with its allow list) or full; local commands and forged tools run under it, a sandbox this host cannot give ends the run before it starts, and the session keeps it")
 	correlationFlag := flags.String("correlation", "", "with --exec or --decide: a JSON file with the execution's correlation (docs/runtime-contract.md): bot_id, task_id, execution_id and trace_id, carried into every event, trace record and session record")
 	callFlag := flags.String("call", "", "with --decide: the id of the pending call, to make sure it is the one")
 	var paths, selections []string
@@ -125,8 +126,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
 		}
 	}
-	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *correlationFlag != "") {
-		return fail(errors.New("--approve, --json, --mode, --policy, --budget and --correlation go with --exec or --decide"))
+	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *sandboxFlag != "" || *correlationFlag != "") {
+		return fail(errors.New("--approve, --json, --mode, --policy, --budget, --sandbox and --correlation go with --exec or --decide"))
 	}
 	if *callFlag != "" && *decideFlag == "" {
 		return fail(errors.New("--call goes with --decide"))
@@ -173,6 +174,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 		execCorrelation = &correlation
+	}
+	var execSandbox *domain.ExecutionSandbox
+	if *sandboxFlag != "" {
+		sandbox, err := readExecSandbox(*sandboxFlag)
+		if err != nil {
+			return fail(err)
+		}
+		execSandbox = &sandbox
 	}
 	// resuming is a launch that opens a saved session rather than a new one.
 	resuming := *sessionFlag != "" || continueFlag || *importFlag != ""
@@ -643,7 +652,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
 	validator := axlr.NewToolArgumentValidator()
-	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog)}
+	sandboxes := compose.NewExecutionSandboxes(settings.ExecSandbox(), sandbox, exec.LookPath)
+	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog), Confine: sandboxes.Confine}
 	models := axlr.ModelStream{UseCase: rootApp.StreamModelUseCase{Models: router}, LogFailure: failureLogger(appLog)}
 	ceremonies := compose.CeremonyDriver(registrations, runner, sessionLabels, madeWorkIdentity(configPath, registrations))
 	if ceremonies != nil {
@@ -914,6 +924,25 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			if err := loggedStore.Save(ctx, *session); err != nil {
 				return fail(err)
 			}
+		}
+		if execSandbox != nil {
+			// The execution's sandbox is the session's from now on: this
+			// run's commands and every later turn's or decision's.
+			if err := session.SetSandbox(*execSandbox); err != nil {
+				return fail(err)
+			}
+			if err := loggedStore.Save(ctx, *session); err != nil {
+				return fail(err)
+			}
+		}
+		if sandbox, confined := session.Sandbox(); confined {
+			// A sandbox this host cannot give ends the run here, before
+			// its first request: never a weaker one.
+			how, err := sandboxes.Probe(ctx, sandbox)
+			if err != nil {
+				return fail(fmt.Errorf("the execution's sandbox is unavailable here: %w", err))
+			}
+			fmt.Fprintln(stderr, "axlr-tui:", how)
 		}
 		policy := execPolicy{next: approvalSettings, level: execApproval}
 		start, agent, resolve := deps.Start, deps.Agent, deps.Resolve

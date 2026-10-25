@@ -10,8 +10,8 @@ import (
 )
 
 // ExecutionReceipt is the wire form of a receipt. Its arrays are never
-// null; the policy's and the budget's sha256 digest their compact JSON as
-// the contract writes them.
+// null; the policy's, the budget's and the sandbox's sha256 digest their
+// compact JSON as the contract writes them.
 func ExecutionReceipt(receipt domain.ExecutionReceipt) dto.ExecutionReceipt {
 	out := dto.ExecutionReceipt{
 		Schema:    dto.ExecutionReceiptSchema,
@@ -35,6 +35,10 @@ func ExecutionReceipt(receipt domain.ExecutionReceipt) dto.ExecutionReceipt {
 	if receipt.Budget != nil {
 		wire := ExecutionBudget(*receipt.Budget)
 		out.Budget = &dto.ReceiptBudget{SHA256: jsonDigest(wire), Limits: wire}
+	}
+	if receipt.Sandbox != nil {
+		wire := ExecutionSandbox(*receipt.Sandbox)
+		out.Sandbox = &dto.ReceiptSandbox{SHA256: jsonDigest(wire), Profile: wire.Profile, Egress: wire.Egress, Allow: wire.Allow}
 	}
 	if receipt.Correlation != nil {
 		correlation := ExecutionCorrelation(*receipt.Correlation)

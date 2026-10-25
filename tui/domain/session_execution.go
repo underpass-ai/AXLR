@@ -185,3 +185,25 @@ func (s *Session) SetCorrelation(correlation ExecutionCorrelation) error {
 
 // ClearCorrelation forgets the execution's correlation.
 func (s *Session) ClearCorrelation() { s.state.Correlation = nil }
+
+// Sandbox is the execution's sandbox, if the session has one.
+func (s Session) Sandbox() (ExecutionSandbox, bool) {
+	if s.state.Sandbox == nil {
+		return ExecutionSandbox{}, false
+	}
+	return s.state.Sandbox.Clone(), true
+}
+
+// SetSandbox confines the session's commands from now on: this execution's
+// and every later turn's or decision's.
+func (s *Session) SetSandbox(sandbox ExecutionSandbox) error {
+	if err := sandbox.Validate(); err != nil {
+		return err
+	}
+	clone := sandbox.Clone()
+	s.state.Sandbox = &clone
+	return nil
+}
+
+// ClearSandbox lifts the execution's sandbox.
+func (s *Session) ClearSandbox() { s.state.Sandbox = nil }

@@ -218,8 +218,9 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		if err := emit(Event{Kind: EventToolExecutionStarted, Tool: domain.PendingTool{Call: pending[0].Call, Decision: decision}, Memory: tool.Identity.Kind == domain.ToolKindPlugin && tool.Surface.Role == domain.PluginRoleMemory}); err != nil {
 			return err
 		}
-		// The runtime names the call in its result for the model to cite.
-		ctx := WithToolCall(ctx, id)
+		// The runtime names the call in its result for the model to cite,
+		// and confines its commands under the execution's sandbox.
+		ctx := WithSessionSandbox(WithToolCall(ctx, id), *s)
 		var outcome domain.ToolOutcome
 		var runErr error
 		var step *StepResult
