@@ -293,6 +293,14 @@ func (s *Server) recordApplicationEvent(id, op, actor, request string, e applica
 	if _, err := s.events.Append(id, op, kind, payload); err != nil {
 		return err
 	}
+	if kind == "tool.completed" {
+		// A delivery is journaled as an artifact after its call's outcome.
+		if artifact, delivered := domain.ArtifactOf(domain.SessionID(id), e.Tool); delivered {
+			if _, err := s.events.Append(id, op, "artifact", correlated(map[string]any{"call_id": e.Tool.Call.ID, "artifact": contract.ExecutionArtifact(artifact)}, session)); err != nil {
+				return err
+			}
+		}
+	}
 	if kind == "tool.requested" || kind == "tool.completed" {
 		return s.audit.Append(auditRecord{Principal: actor, RequestID: request, Action: kind, Tool: string(e.Tool.Call.Name), Decision: string(e.Tool.Decision), Status: kind, SessionID: id, CallID: string(e.Tool.Call.ID), OperationID: op})
 	}

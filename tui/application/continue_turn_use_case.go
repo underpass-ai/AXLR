@@ -75,6 +75,9 @@ type ContinueTurnUseCase struct {
 	// Logs reads the console's app log for axlr_logs; nil offers no
 	// axlr_logs.
 	Logs AppLogPort
+	// Deliverables reads and writes the workspace's deliverables for
+	// axlr_deliver; nil offers no axlr_deliver.
+	Deliverables DeliverablesPort
 	// TurnToolCalls is the turn's tool-call budget (settings'
 	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
 	TurnToolCalls int
@@ -180,6 +183,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if u.Logs != nil {
 		hostTools = append(hostTools, LogsTool())
 	}
+	if u.Deliverables != nil {
+		hostTools = append(hostTools, DeliverTool())
+	}
 	if err := session.EnsureHostTools(hostTools); err != nil {
 		contextSpan.End(DiagnosticErrorInvalidState)
 		return interrupt(err)
@@ -250,6 +256,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if u.Logs == nil {
 		tools = withoutTool(tools, HostLogsName)
+	}
+	if u.Deliverables == nil {
+		tools = withoutTool(tools, HostDeliverName)
 	}
 	if !u.offersForge(*session) {
 		tools = withoutTool(withoutTool(withoutTool(tools, HostForgeToolName), HostRunToolName), HostRemoveToolName)

@@ -18,7 +18,7 @@ func ExecutionResult(result domain.ExecutionResult) dto.ExecutionResult {
 		Answer:    string(result.Answer),
 		Error:     result.Error,
 		Calls:     make([]dto.ExecutionCall, 0, len(result.Calls)),
-		Artifacts: []json.RawMessage{},
+		Artifacts: make([]dto.ExecutionArtifact, 0, len(result.Artifacts)),
 		Usage: dto.ExecutionUsage{
 			Requests:         result.Usage.Requests,
 			PromptTokens:     result.Usage.PromptTokens,
@@ -36,6 +36,9 @@ func ExecutionResult(result domain.ExecutionResult) dto.ExecutionResult {
 	}
 	for _, call := range result.Calls {
 		out.Calls = append(out.Calls, dto.ExecutionCall{ID: string(call.ID), Tool: string(call.Tool), Decision: string(call.Decision), Status: string(call.Status)})
+	}
+	for _, artifact := range result.Artifacts {
+		out.Artifacts = append(out.Artifacts, ExecutionArtifact(artifact))
 	}
 	if result.Pending != nil {
 		out.Pending = &dto.ExecutionCall{ID: string(result.Pending.ID), Tool: string(result.Pending.Name), Arguments: json.RawMessage(result.Pending.Arguments.Bytes())}

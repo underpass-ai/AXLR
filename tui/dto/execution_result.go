@@ -1,7 +1,5 @@
 package dto
 
-import "encoding/json"
-
 // ExecutionResultSchema names the wire form of an execution's result; a
 // reader checks it before the fields.
 const ExecutionResultSchema = "axlr.execution-result/v1"
@@ -21,7 +19,6 @@ type ExecutionResult struct {
 	Usage    ExecutionUsage  `json:"usage"`
 	// Correlation repeats the execution's ids; absent without any.
 	Correlation *ExecutionCorrelation `json:"correlation,omitempty"`
-	// Artifacts is reserved for the deliverables an execution hands over
-	// (Phase 1 of the master plan); empty until then.
-	Artifacts []json.RawMessage `json:"artifacts"`
+	// Artifacts are what the execution delivered with axlr_deliver.
+	Artifacts []ExecutionArtifact `json:"artifacts"`
 }

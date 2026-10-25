@@ -34,7 +34,7 @@ type Equipment struct {
 	Note func(string)
 }
 
-// Equip gives a continuation the usage ledger and cost cap, the context cap
+// Equip gives a continuation the usage ledger and cost cap, axlr_deliver, the context cap
 // with its successor sessions (decision D10), forged and catalog tools when
 // settings enable them, and the memory tools with KMP. The catalog use case
 // it returns serves the console's /tools; it is the zero value with forged
@@ -42,6 +42,8 @@ type Equipment struct {
 func Equip(c *application.ContinueTurnUseCase, e Equipment) (application.CatalogUseCase, error) {
 	c.Usage, c.MaxSessionUSD = e.Usage, e.Settings.MaxSessionUSD
 	c.TurnToolCalls = e.Settings.TurnToolCalls
+	// axlr_deliver hands the execution's deliverables over in the workspace.
+	c.Deliverables = storage.Deliverables{}
 	// The context cap: one tokenizer for every model, no cut and no
 	// checkpoint, a successor session past the cap.
 	if counter, err := tokens.New(); err != nil {

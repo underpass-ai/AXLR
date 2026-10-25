@@ -26,6 +26,9 @@ type ExecutionResult struct {
 	Error string
 	Calls []ExecutionCall
 	Usage ExecutionUsage
+	// Artifacts are what the execution delivered with axlr_deliver, in the
+	// sessions it spanned, in delivery order.
+	Artifacts []ExecutionArtifact
 	// Correlation repeats the execution's ids, nil without any.
 	Correlation *ExecutionCorrelation
 }
@@ -39,6 +42,7 @@ func NewExecutionResult(s Session, err error) ExecutionResult {
 	for _, record := range state.Activity {
 		result.Calls = append(result.Calls, executionCallOf(record))
 	}
+	result.Artifacts = SessionArtifacts(s)
 	for i := len(state.Messages) - 1; i >= 0; i-- {
 		if state.Messages[i].Role == axlr.RoleAssistant {
 			result.Answer = state.Messages[i].Content
@@ -84,4 +88,20 @@ func (r *ExecutionResult) Spanned(ids ...SessionID) {
 		return
 	}
 	r.Sessions = append(append([]SessionID(nil), ids...), r.Session)
+}
+
+// Delivered adds the artifacts of the sessions the execution went through
+// before the one it ended in, first to last, ahead of its own: a later
+// delivery of the same reference still replaces the earlier one.
+func (r *ExecutionResult) Delivered(predecessors ...Session) {
+	var artifacts []ExecutionArtifact
+	for _, predecessor := range predecessors {
+		for _, artifact := range SessionArtifacts(predecessor) {
+			artifacts = withArtifact(artifacts, artifact)
+		}
+	}
+	for _, artifact := range r.Artifacts {
+		artifacts = withArtifact(artifacts, artifact)
+	}
+	r.Artifacts = artifacts
 }

@@ -143,6 +143,7 @@ type execEvent struct {
 	Decision    string                    `json:"decision,omitempty"`
 	Status      string                    `json:"status,omitempty"`
 	Error       string                    `json:"error,omitempty"`
+	Artifact    *dto.ExecutionArtifact    `json:"artifact,omitempty"`
 	Result      *dto.ExecutionResult      `json:"result,omitempty"`
 	Correlation *dto.ExecutionCorrelation `json:"correlation,omitempty"`
 }
@@ -234,11 +235,16 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 				kind = "tool.completed"
 			}
 			write(execEvent{Type: kind, Tool: string(e.Tool.Call.Name), Call: string(e.Tool.Call.ID), Decision: string(e.Tool.Decision)})
+			if artifact, delivered := domain.ArtifactOf(session.ID(), e.Tool); delivered {
+				wire := contract.ExecutionArtifact(artifact)
+				write(execEvent{Type: "artifact", Session: string(session.ID()), Call: string(e.Tool.Call.ID), Artifact: &wire})
+			}
 		}
 		return nil
 	}
 	var err error
 	var predecessors []domain.SessionID
+	var spanned []domain.Session
 	step := first
 	for successors := 0; ; successors++ {
 		fmt.Fprintln(stderr, "axlr-tui: session", session.ID())
@@ -258,6 +264,7 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 		fmt.Fprintln(stderr, "axlr-tui:", capped.Error())
 		write(execEvent{Type: "session.continued", Session: string(capped.Successor.ID())})
 		predecessors = append(predecessors, session.ID())
+		spanned = append(spanned, session)
 		session = capped.Successor
 		correlation = execCorrelationOf(session)
 		text, textErr := root.NewText(capped.Prompt)
@@ -274,6 +281,7 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 	}
 	result := domain.NewExecutionResult(session, err)
 	result.Spanned(predecessors...)
+	result.Delivered(spanned...)
 	if usage != nil {
 		for _, id := range result.Sessions {
 			if ledger, loadErr := usage.LoadUsage(context.WithoutCancel(ctx), id); loadErr == nil {

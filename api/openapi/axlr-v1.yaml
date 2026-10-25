@@ -390,10 +390,10 @@ components:
         operation_id: {type: string}
         sequence: {type: integer, minimum: 1}
         time: {type: string, format: date-time}
-        type: {type: string, enum: [turn.started, text.delta, tool.requested, approval.required, tool.completed, turn.completed, turn.interrupted, operation.failed, approval.decision]}
+        type: {type: string, enum: [turn.started, text.delta, tool.requested, approval.required, tool.completed, artifact, turn.completed, turn.interrupted, operation.failed, approval.decision]}
         payload:
           type: object
-          description: The event that ends a turn (approval.required, turn.completed, turn.interrupted, operation.failed) carries the execution's result in `result`. Every event of a session with a correlation carries it in `correlation`.
+          description: The event that ends a turn (approval.required, turn.completed, turn.interrupted, operation.failed) carries the execution's result in `result`. An artifact event, after the tool.completed of the axlr_deliver call that delivered it, carries `call_id` and `artifact` (ExecutionArtifact). Every event of a session with a correlation carries it in `correlation`.
     ExecutionResult:
       type: object
       description: The runtime contract's result object (docs/runtime-contract.md); the same object `axlr-tui --exec --json` writes last.
@@ -408,8 +408,22 @@ components:
         error: {type: string}
         tool_calls: {type: array, items: {$ref: '#/components/schemas/ExecutionCall'}}
         usage: {$ref: '#/components/schemas/ExecutionUsage'}
-        artifacts: {type: array, items: {type: object}, description: Reserved; empty until artifacts ship.}
+        artifacts: {type: array, items: {$ref: '#/components/schemas/ExecutionArtifact'}, description: What the execution delivered with axlr_deliver, in every session it spanned, in delivery order; a later delivery of the same reference replaces the earlier one.}
         correlation: {$ref: '#/components/schemas/ExecutionCorrelation'}
+    ExecutionArtifact:
+      type: object
+      description: One deliverable of an execution (docs/runtime-contract.md, Artifacts). The file is the workspace's; a file changed after its delivery no longer matches sha256.
+      required: [name, media_type, size, sha256, reference, description, source, session_id, call_id]
+      properties:
+        name: {type: string, maxLength: 128, description: "The deliverable's file name: letters, digits, '.', '_' and '-'."}
+        media_type: {type: string, description: A lower-case type/subtype without parameters.}
+        size: {type: integer, minimum: 0, description: Bytes delivered.}
+        sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Hex digest of the bytes delivered, taken when the call ran.}
+        reference: {type: string, description: "The file's path relative to the workspace, with / separators; inline content is at .axlr/deliverables/<session_id>/<name>."}
+        description: {type: string, maxLength: 300}
+        source: {type: string, enum: [file, inline], description: file is a workspace file delivered as it is; inline is content the call carried.}
+        session_id: {type: string}
+        call_id: {type: string}
     ExecutionCall:
       type: object
       required: [call_id, tool]
