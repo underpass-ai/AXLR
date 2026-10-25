@@ -250,13 +250,15 @@ Where the receipt is:
 | `receipt` | (in `GetSession`) | The execution ended: its receipt, before the result |
 | `result` | (in the payload above) | The execution ended |
 
+A call the console approves by itself, such as a read of the workspace, goes from `tool.requested` to `tool.completed` with nothing between: `decision.required` and `approval.required` appear only when the execution stops for a decision, once, as the event that ends it.
+
 Every line and every payload carries the execution's `correlation` when it has one. The service's events are durable and resumable (`StreamEvents` with a cursor); the command's lines are written once. The [transport parity ledger](transport-parity.md) lists the service's verbs on HTTP, gRPC and MCP.
 
 ## Guarantees
 
 - A tool call never runs on the model's say-so: the execution's policy, the run's approval level, the settings' rules, the work mode and the destructive list decide. A call the policy forbids is refused outside the model, and a call none of them approves ends the execution in `needs_decision`.
 - The result is written once, after the session is saved, so a reader that sees it can continue the session.
-- On the service, a turn, a decision and a direct call are idempotent on their key, revisions guard decisions and cancellation, and a session interrupted by a crash is journaled `turn.interrupted` at the next start.
+- On the service, a turn, a decision and a direct call are idempotent on their key, revisions guard decisions and cancellation, and a session interrupted by a crash, in a model request or in a tool's run, is journaled `turn.interrupted` at the next start.
 - Past the context cap the execution continues in a successor; the result names every session, and their usage is summed. The successor is the same execution: it carries the policy, the budget with what was spent, and the correlation.
 - The budget is kept outside the model: a limit reached refuses the next request or call before it is made, whatever the model asked for, and the session stays resumable.
 - The receipt is journaled as each request and call starts and ends, before the next step: a restart loses none of what ran, and a request or call cut by the restart is listed as interrupted or without its end.

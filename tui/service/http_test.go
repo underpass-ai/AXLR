@@ -804,9 +804,7 @@ func TestSessionBudgetEndsTheTurnAndCorrelationReachesEveryEvent(t *testing.T) {
 		if len(history) > 0 {
 			last = history[len(history)-1].Type
 		}
-		// approval.required is journaled for the call before the run's
-		// policy approves it by itself: only the turn's end is terminal.
-		if last == "turn.interrupted" || last == "operation.failed" || last == "turn.completed" {
+		if last == "turn.interrupted" || last == "operation.failed" || last == "turn.completed" || last == "approval.required" {
 			break
 		}
 		if time.Now().After(deadline) {
