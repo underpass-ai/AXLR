@@ -245,12 +245,31 @@ func (s *Server) runTurn(ctx context.Context, id, op, actor, request string, pro
 	}
 	if err != nil && !budgetStopped(err) {
 		_, _ = s.events.Append(id, op, "operation.failed", correlated(map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")}, &session))
+		return
 	}
+	s.journalDecision(id, op, session)
+}
+
+// journalDecision journals approval.required when the operation ended
+// with a call waiting for a decision. The loop's approval state comes
+// before its policy approves a call by itself, so only the operation's
+// end tells a call that waits from one that runs.
+func (s *Server) journalDecision(id, op string, session domain.Session) {
+	if session.Status() != domain.StatusApproval || len(session.Pending()) == 0 {
+		return
+	}
+	payload := map[string]any{"status": domain.StatusApproval}
+	if result := s.executionResult(session, ""); result != nil {
+		payload["result"] = result
+	}
+	_, _ = s.events.Append(id, op, "approval.required", correlated(payload, &session))
 }
 
 // recordApplicationEvent journals one event of the loop. The state event
-// that ends a turn (a decision due, the answer, an interruption) carries
-// the execution's result read from session, when the batcher has it.
+// that ends a turn (the answer, an interruption) carries the execution's
+// result read from session, when the batcher has it. The approval state
+// journals nothing: journalDecision writes approval.required once the
+// operation has ended at a decision.
 func (s *Server) recordApplicationEvent(id, op, actor, request string, e application.Event, session *domain.Session) error {
 	kind := ""
 	var payload any = map[string]any{}
@@ -270,8 +289,6 @@ func (s *Server) recordApplicationEvent(id, op, actor, request string, e applica
 		payload = map[string]any{"call_id": e.Tool.Call.ID, "tool": e.Tool.Call.Name, "decision": e.Tool.Decision, "outcome": e.Tool.Outcome}
 	case application.EventState:
 		switch e.State {
-		case domain.StatusApproval:
-			kind = "approval.required"
 		case domain.StatusComplete:
 			kind = "turn.completed"
 		case domain.StatusInterrupted:
@@ -499,7 +516,9 @@ func (s *Server) runApproval(ctx context.Context, id, op, actor, request string,
 	err = errors.Join(s.deps.Resolve.Execute(ctx, &session, call, decision, batch.Emit), batch.Flush())
 	if err != nil && !budgetStopped(err) {
 		_, _ = s.events.Append(id, op, "operation.failed", correlated(map[string]any{"code": "operation_failed", "result": s.executionResult(session, "operation_failed")}, &session))
+		return
 	}
+	s.journalDecision(id, op, session)
 }
 
 func (s *Server) handleCancel(w http.ResponseWriter, r *http.Request) {
