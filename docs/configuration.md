@@ -570,7 +570,7 @@ Command-line flags and environment variables win over `settings.json` for one la
 | `NO_COLOR` (non-empty), `TERM=dumb` | Monochrome output; `TERM=dumb` also leaves the terminal title alone. No settings equivalent |
 | `XDG_CONFIG_HOME`, `XDG_STATE_HOME`, `XDG_DATA_HOME`, `XDG_RUNTIME_DIR`, `HOME` | [Where the files live](#where-the-files-live) |
 
-Local commands (`local_exec`, checks, forged tools) receive only an absolute `PATH` and `HOME`, whatever the shell exports. MCP servers receive only what [`env` and `env_from`](#env-and-env_from) give them.
+Local commands (`local_exec`, checks, forged tools) receive only an absolute `PATH` and `HOME`, whatever the shell exports: the absolute folders of the inherited `PATH`, or `/usr/local/bin:/usr/bin:/bin` when it names none. On Windows the system folders the `PATH` lacks are added, and `SystemRoot` and `USERPROFILE` go along. The HTTP service gives its commands the same environment ([service configuration](api.md#the-consoles-loop-in-the-service)). MCP servers receive only what [`env` and `env_from`](#env-and-env_from) give them.
 
 ## credentials.json
 

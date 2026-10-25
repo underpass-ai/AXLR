@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/underpass-ai/AXLR/tui/adapters/repairbuild"
+	"github.com/underpass-ai/AXLR/tui/compose"
 )
 
 // goVariables are the host's Go settings a repair build keeps, so it uses
@@ -13,7 +14,7 @@ var goVariables = []string{"GOPATH", "GOCACHE", "GOMODCACHE", "GOPROXY", "GOPRIV
 // repairBuilder builds repaired consoles with the console's restricted
 // environment plus the host's Go settings; never a model or plugin key.
 func repairBuilder(getenv func(string) string) repairbuild.Builder {
-	env := localRuntimeEnvironment(getenv)
+	env := compose.ExecEnvironment(getenv)
 	for _, name := range goVariables {
 		if value := getenv(name); value != "" {
 			env = append(env, name+"="+value)
