@@ -98,6 +98,9 @@ func (p ExecutionPolicy) Judge(tool AvailableTool, arguments axlr.JSONValue) (Po
 			return PolicyForbid, label + " is not in the execution's allow list (" + policyRuleNames(p.allow) + ")"
 		}
 	}
+	if isHost(tool, HostOperationDeliver) {
+		return p.judgeDelivery(label, arguments)
+	}
 	if ReadsOnly(tool.Identity) {
 		return PolicyAllow, ""
 	}
@@ -113,6 +116,27 @@ func (p ExecutionPolicy) Judge(tool AvailableTool, arguments axlr.JSONValue) (Po
 			return PolicyAllow, ""
 		}
 		return PolicyForbid, "the execution's policy proposes: " + label + " may only write a plan or a diff (.md, .mdx, .txt, .rst, a file under docs/, .diff or .patch)"
+	case PolicyActWithApproval:
+		return PolicyAsk, ""
+	}
+	return PolicyAllow, ""
+}
+
+// judgeDelivery judges axlr_deliver as what it does: a file delivered by
+// path is a read, allowed at every level; inline content writes the
+// deliverables file, judged as a local_write of its name.
+func (p ExecutionPolicy) judgeDelivery(label string, arguments axlr.JSONValue) (PolicyVerdict, string) {
+	if !DeliversInline(arguments) {
+		return PolicyAllow, ""
+	}
+	switch p.level {
+	case PolicyObserve:
+		return PolicyForbid, "the execution's policy observes: " + label + " may deliver a workspace file by path, not write content"
+	case PolicyPropose:
+		if proposalTarget(deliveredName(arguments)) {
+			return PolicyAllow, ""
+		}
+		return PolicyForbid, "the execution's policy proposes: " + label + " may write only a plan or a diff inline (a .md, .mdx, .txt, .rst, .diff or .patch name); deliver other files by path"
 	case PolicyActWithApproval:
 		return PolicyAsk, ""
 	}
@@ -180,7 +204,8 @@ func (p ExecutionPolicy) offers(tool AvailableTool) bool {
 			return false
 		}
 	}
-	if ReadsOnly(tool.Identity) {
+	if ReadsOnly(tool.Identity) || isHost(tool, HostOperationDeliver) {
+		// axlr_deliver delivers a file by path at every level.
 		return true
 	}
 	plugin := tool.Identity.Kind == ToolKindPlugin
@@ -212,7 +237,11 @@ func isLocal(tool AvailableTool, operations ...string) bool {
 // proposalPath reports a write a proposing execution may make: a document
 // (as the writer modes allow) or a .diff or .patch file in the workspace.
 func proposalPath(arguments axlr.JSONValue) bool {
-	target := policyArguments(arguments)["path"]
+	return proposalTarget(policyArguments(arguments)["path"])
+}
+
+// proposalTarget reports a workspace path a proposing execution may write.
+func proposalTarget(target string) bool {
 	if documentPath(target) {
 		return true
 	}

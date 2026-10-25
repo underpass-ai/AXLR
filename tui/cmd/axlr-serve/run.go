@@ -153,7 +153,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: sessions.Store(), Ceremonies: ceremonies, Session: lifecycle, Calibration: calibration, Language: "en"}
-	if _, err := compose.Equip(&continuation, compose.Equipment{Settings: settings, State: cfg.StateDir, Store: sessions.Store(), Usage: sessions.Usage(), Labels: labels, Windows: locals.Windows, Tools: runner, Memory: true, Note: note}); err != nil {
+	if _, err := compose.Equip(&continuation, compose.Equipment{Settings: settings, State: cfg.StateDir, Store: sessions.Store(), Usage: sessions.Usage(), Receipts: sessions.Receipts(), Labels: labels, Windows: locals.Windows, Tools: runner, Memory: true, Note: note}); err != nil {
 		sessions.Close()
 		fmt.Fprintln(stderr, "axlr-serve: tools unavailable:", err)
 		return 1

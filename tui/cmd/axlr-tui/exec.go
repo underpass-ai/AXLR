@@ -143,6 +143,8 @@ type execEvent struct {
 	Decision    string                    `json:"decision,omitempty"`
 	Status      string                    `json:"status,omitempty"`
 	Error       string                    `json:"error,omitempty"`
+	Artifact    *dto.ExecutionArtifact    `json:"artifact,omitempty"`
+	Receipt     *dto.ExecutionReceipt     `json:"receipt,omitempty"`
 	Result      *dto.ExecutionResult      `json:"result,omitempty"`
 	Correlation *dto.ExecutionCorrelation `json:"correlation,omitempty"`
 }
@@ -157,6 +159,13 @@ func execCorrelationOf(session domain.Session) *dto.ExecutionCorrelation {
 	return &wire
 }
 
+// execLedgers reads the sessions' ledgers and receipt journals for the
+// result and the receipt: the session store.
+type execLedgers interface {
+	application.SessionUsagePort
+	application.SessionReceiptPort
+}
+
 // execStep is the first step of a run: the prompt's turn, or the decision
 // on the session's pending call. Past the context cap, every later step is
 // the successor's turn with the capped prompt.
@@ -166,7 +175,7 @@ type execStep func(context.Context, *domain.Session, func(application.Event) err
 // approvals the policy allows, and past the context cap the successor's
 // turn, as the console continues it. It returns the session the turn ended
 // in and the exit code.
-func execTurn(ctx context.Context, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage application.SessionUsagePort, session domain.Session, prompt string, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+func execTurn(ctx context.Context, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, prompt string, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
 	text, err := root.NewText(prompt)
 	if err != nil || text == "" {
 		fmt.Fprintln(stderr, "axlr-tui: --exec needs a prompt")
@@ -181,7 +190,7 @@ func execTurn(ctx context.Context, start application.StartTurnUseCase, agent app
 // execDecision decides the pending call a run left in a saved session, as
 // the console's card would, and runs the turn to its end. Only the first
 // pending call can be decided; --call names it to make sure it is the one.
-func execDecision(ctx context.Context, resolve application.ResolveToolUseCase, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage application.SessionUsagePort, session domain.Session, call string, decision domain.ToolDecision, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+func execDecision(ctx context.Context, resolve application.ResolveToolUseCase, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, call string, decision domain.ToolDecision, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
 	pending := session.Pending()
 	if len(pending) == 0 {
 		fmt.Fprintf(stderr, "axlr-tui: session %s has no pending call to decide\n", session.ID())
@@ -207,7 +216,7 @@ func execDecision(ctx context.Context, resolve application.ResolveToolUseCase, s
 // an answer or a decision, and past the context cap the successor's turn.
 // It ends by writing the result and returns the session the execution
 // ended in and the exit code.
-func execLoop(ctx context.Context, first execStep, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage application.SessionUsagePort, session domain.Session, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+func execLoop(ctx context.Context, first execStep, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
 	encoder := json.NewEncoder(out)
 	correlation := execCorrelationOf(session)
 	write := func(event execEvent) {
@@ -234,11 +243,16 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 				kind = "tool.completed"
 			}
 			write(execEvent{Type: kind, Tool: string(e.Tool.Call.Name), Call: string(e.Tool.Call.ID), Decision: string(e.Tool.Decision)})
+			if artifact, delivered := domain.ArtifactOf(session.ID(), e.Tool); delivered {
+				wire := contract.ExecutionArtifact(artifact)
+				write(execEvent{Type: "artifact", Session: string(session.ID()), Call: string(e.Tool.Call.ID), Artifact: &wire})
+			}
 		}
 		return nil
 	}
 	var err error
 	var predecessors []domain.SessionID
+	var spanned []domain.Session
 	step := first
 	for successors := 0; ; successors++ {
 		fmt.Fprintln(stderr, "axlr-tui: session", session.ID())
@@ -258,6 +272,7 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 		fmt.Fprintln(stderr, "axlr-tui:", capped.Error())
 		write(execEvent{Type: "session.continued", Session: string(capped.Successor.ID())})
 		predecessors = append(predecessors, session.ID())
+		spanned = append(spanned, session)
 		session = capped.Successor
 		correlation = execCorrelationOf(session)
 		text, textErr := root.NewText(capped.Prompt)
@@ -274,14 +289,21 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 	}
 	result := domain.NewExecutionResult(session, err)
 	result.Spanned(predecessors...)
-	if usage != nil {
-		for _, id := range result.Sessions {
-			if ledger, loadErr := usage.LoadUsage(context.WithoutCancel(ctx), id); loadErr == nil {
+	result.Delivered(spanned...)
+	read := make([]domain.ReceiptSession, 0, len(spanned)+1)
+	for _, each := range append(spanned, session) {
+		entry := domain.ReceiptSession{Session: each}
+		if usage != nil {
+			if ledger, loadErr := usage.LoadUsage(context.WithoutCancel(ctx), each.ID()); loadErr == nil {
 				result.AddUsage(ledger)
+				entry.Ledger = ledger
 			}
+			entry.Entries, _ = usage.LoadReceipt(context.WithoutCancel(ctx), each.ID())
 		}
+		read = append(read, entry)
 	}
 	wire := contract.ExecutionResult(result)
+	receipt := contract.ExecutionReceipt(domain.NewExecutionReceipt(result, read))
 	code := execFailed
 	switch result.Status {
 	case domain.ExecutionCompleted:
@@ -301,6 +323,7 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 		fmt.Fprintln(stderr, "axlr-tui:", result.Error)
 		write(execEvent{Type: "failed", Session: string(session.ID()), Error: result.Error})
 	}
+	write(execEvent{Type: "receipt", Session: string(session.ID()), Receipt: &receipt})
 	write(execEvent{Type: "result", Session: string(session.ID()), Result: &wire})
 	return session, code
 }

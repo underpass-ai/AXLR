@@ -64,6 +64,11 @@ const (
 	// catalog's registry, signed with the console's client key; it always
 	// waits for the person's card, autonomy included.
 	HostOperationPublishTool = "publish_tool"
+	// HostOperationDeliver hands a deliverable to the control plane: a
+	// workspace file as it is (a read) or inline content written under the
+	// deliverables folder (a write); policy, mode and approval judge it as
+	// the one or the other.
+	HostOperationDeliver = "deliver"
 )
 
 func NewLocalToolIdentity(operation string) (ToolIdentity, error) {
@@ -85,7 +90,7 @@ func (id ToolIdentity) Validate() error {
 			return errors.New("host identity cannot include plugin")
 		}
 		switch id.LocalOperation {
-		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember, HostOperationRecall, HostOperationForgeTool, HostOperationRunTool, HostOperationRemoveTool, HostOperationLogs, HostOperationCatalog, HostOperationInstallTool, HostOperationPublishTool:
+		case HostOperationTools, HostOperationCallTool, HostOperationHistory, HostOperationSkill, HostOperationSession, HostOperationStepDone, HostOperationRequestRepair, HostOperationRepairStatus, HostOperationRequestImprovement, HostOperationJudge, HostOperationRemember, HostOperationRecall, HostOperationForgeTool, HostOperationRunTool, HostOperationRemoveTool, HostOperationLogs, HostOperationCatalog, HostOperationInstallTool, HostOperationPublishTool, HostOperationDeliver:
 			return nil
 		}
 	case ToolKindLocal:

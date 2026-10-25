@@ -29,3 +29,22 @@ func (u *ExecutionUsage) Add(ledger UsageLedger) {
 	u.CostRequests += ledger.CostRequests
 	u.Unmetered += ledger.Unmetered
 }
+
+// addRequest sums one request of a receipt: its cost when it reported one,
+// an unmetered request when its tokens are estimates or it never ended.
+func (u *ExecutionUsage) addRequest(request ReceiptRequest) {
+	sample := request.Usage
+	u.Requests++
+	u.PromptTokens += sample.PromptTokens
+	u.CachedTokens += sample.CachedTokens
+	u.CacheWriteTokens += sample.CacheWriteTokens
+	u.CompletionTokens += sample.CompletionTokens
+	u.ReasoningTokens += sample.ReasoningTokens
+	if sample.CostKnown && sample.Cost >= 0 {
+		u.CostUSD += sample.Cost
+		u.CostRequests++
+	}
+	if sample.Unmetered {
+		u.Unmetered++
+	}
+}

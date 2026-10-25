@@ -133,7 +133,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 500, "storage_error", "unable to read events")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "policy": executionPolicy(session), "budget": executionBudget(session), "correlation": executionCorrelation(session)})
+	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "receipt": s.executionReceipt(session), "policy": executionPolicy(session), "budget": executionBudget(session), "correlation": executionCorrelation(session)})
 }
 
 func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
@@ -309,6 +309,14 @@ func (s *Server) recordApplicationEvent(id, op, actor, request string, e applica
 	}
 	if _, err := s.events.Append(id, op, kind, payload); err != nil {
 		return err
+	}
+	if kind == "tool.completed" {
+		// A delivery is journaled as an artifact after its call's outcome.
+		if artifact, delivered := domain.ArtifactOf(domain.SessionID(id), e.Tool); delivered {
+			if _, err := s.events.Append(id, op, "artifact", correlated(map[string]any{"call_id": e.Tool.Call.ID, "artifact": contract.ExecutionArtifact(artifact)}, session)); err != nil {
+				return err
+			}
+		}
 	}
 	if kind == "tool.requested" || kind == "tool.completed" {
 		return s.audit.Append(auditRecord{Principal: actor, RequestID: request, Action: kind, Tool: string(e.Tool.Call.Name), Decision: string(e.Tool.Decision), Status: kind, SessionID: id, CallID: string(e.Tool.Call.ID), OperationID: op})

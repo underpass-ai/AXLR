@@ -33,6 +33,9 @@ func (s *Sessions) Store() application.SessionStorePort { return s.wrapped }
 // Usage keeps each session's ledger beside its snapshot.
 func (s *Sessions) Usage() application.SessionUsagePort { return s.base }
 
+// Receipts keeps each session's receipt journal beside its snapshot.
+func (s *Sessions) Receipts() application.SessionReceiptPort { return s.base }
+
 // Lister lists and loads the snapshots for the startup sweep.
 func (s *Sessions) Lister() application.SessionLister { return s.base }
 

@@ -146,7 +146,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		// A decision taken under the policy cannot run what it forbids.
 		return rejectUnknown(ctx, s, admit, emit)
 	}
-	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyErr != nil || localArgumentError(u.Validation, checked, toolArgs) != nil || (decision != domain.DecisionDeny && (forgedArgumentError(ctx, admit.Forge, u.Validation, *s, checked, toolArgs) != nil || publishArgumentError(ctx, admit.Publisher, *s, checked, toolArgs) != nil)) {
+	if verdict, _ := s.Mode().Judge(tool.Identity, toolArgs); verdict == domain.VerdictDeny || compactRefusal(*s, pending[0]) != nil || whyErr != nil || localArgumentError(u.Validation, checked, toolArgs) != nil || (decision != domain.DecisionDeny && (forgedArgumentError(ctx, admit.Forge, u.Validation, *s, checked, toolArgs) != nil || publishArgumentError(ctx, admit.Publisher, *s, checked, toolArgs) != nil || deliverArgumentError(checked, toolArgs) != nil)) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
 	if decision == domain.DecisionAutoApprove {
@@ -213,6 +213,8 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			return err
 		}
 		*s = next
+		// The receipt keeps when the call ran, from here to its outcome.
+		u.Continue.recordReceipt(ctx, next, domain.ReceiptEntry{Kind: domain.ReceiptCallStarted, At: time.Now(), Call: id})
 		if err := emit(Event{Kind: EventToolExecutionStarted, Tool: domain.PendingTool{Call: pending[0].Call, Decision: decision}, Memory: tool.Identity.Kind == domain.ToolKindPlugin && tool.Surface.Role == domain.PluginRoleMemory}); err != nil {
 			return err
 		}
@@ -231,7 +233,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			outcome, step = result.Outcome, &result
 		} else if tool.Identity.Kind == domain.ToolKindHost {
 			hostCtx, hostSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolExecution, DiagnosticEvent{Bytes: len(toolArgs.Bytes())})
-			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills, Labels: u.Continue.SessionLabels, Repairs: u.Continue.SelfRepair, Judge: u.Continue.Judge.toolPort(), Windows: u.Continue.Windows, Memory: u.Continue.Remember, Recall: u.Continue.Recall, Forge: u.Continue.Forge, Catalog: u.Continue.Catalog, Publisher: u.Continue.Publisher, Tools: u.Tools, Validation: u.Validation, Logs: u.Continue.Logs}).Execute(hostCtx, *s, tool.Identity, toolArgs)
+			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills, Labels: u.Continue.SessionLabels, Repairs: u.Continue.SelfRepair, Judge: u.Continue.Judge.toolPort(), Windows: u.Continue.Windows, Memory: u.Continue.Remember, Recall: u.Continue.Recall, Forge: u.Continue.Forge, Catalog: u.Continue.Catalog, Publisher: u.Continue.Publisher, Tools: u.Tools, Validation: u.Validation, Logs: u.Continue.Logs, Deliverables: u.Continue.Deliverables}).Execute(hostCtx, *s, tool.Identity, toolArgs)
 			class := DiagnosticErrorNone
 			if runErr != nil || outcome.IsError {
 				class = DiagnosticErrorTool
@@ -316,6 +318,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			return errors.Join(runErr, err)
 		}
 		*s = next
+		u.Continue.recordReceipt(ctx, next, domain.ReceiptEntry{Kind: domain.ReceiptCallEnded, At: time.Now(), Call: id})
 		if runErr != nil {
 			u.recordToolCompletion(ctx, started, DiagnosticErrorTool)
 			return joinCause(joinCause(runErr, emitTool(s, id, emit)), emit(Event{Kind: EventState, State: s.Status()}))

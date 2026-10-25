@@ -57,8 +57,11 @@ func TestExecEndsAtTheBudgetAndResumesUnderANewOne(t *testing.T) {
 	if result.Status != "budget_exceeded" || result.Error != "budget: requests 1 reached" || result.Pending != nil || len(result.Calls) != 1 || result.Calls[0].Status != "completed" || result.Usage.Requests != 1 {
 		t.Fatalf("%+v", result)
 	}
-	if failed := lines[len(lines)-2]; failed.Type != "failed" || failed.Error != "budget: requests 1 reached" {
+	if failed := lines[len(lines)-3]; failed.Type != "failed" || failed.Error != "budget: requests 1 reached" {
 		t.Fatalf("%+v", failed)
+	}
+	if receipt := lines[len(lines)-2]; receipt.Type != "receipt" || receipt.Receipt == nil || receipt.Receipt.Status != "budget_exceeded" || receipt.Receipt.Budget == nil || receipt.Receipt.Budget.Limits.Requests != 1 || len(receipt.Receipt.Requests) != 1 {
+		t.Fatalf("%+v", receipt)
 	}
 	if _, err := os.Stat(filepath.Join(workspace, "made-by-exec")); err != nil {
 		t.Fatalf("the call within the budget did not run: %v", err)
