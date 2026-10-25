@@ -196,6 +196,9 @@ func TestSuccessorCarriesTheExecution(t *testing.T) {
 	if err := predecessor.SetCorrelation(correlation); err != nil {
 		t.Fatal(err)
 	}
+	if err := predecessor.SetSandbox(domain.ExecutionSandbox{Profile: domain.SandboxProfileProcess, Egress: domain.SandboxEgressAllowlist, Allow: []string{"api.github.com:443"}}); err != nil {
+		t.Fatal(err)
+	}
 	budget, _ := domain.NewExecutionBudget(900, 20, 60, 0.5)
 	started := time.Date(2026, 10, 24, 10, 0, 0, 0, time.UTC)
 	if err := predecessor.SetBudget(budget, started, domain.UsageLedger{Requests: 1, Cost: 0.01}); err != nil {
@@ -228,6 +231,9 @@ func TestSuccessorCarriesTheExecution(t *testing.T) {
 	}
 	if kept, has := saved.Correlation(); !has || kept != correlation {
 		t.Fatalf("correlation %+v %v", kept, has)
+	}
+	if kept, has := saved.Sandbox(); !has || kept.Profile != domain.SandboxProfileProcess || len(kept.Allow) != 1 {
+		t.Fatalf("sandbox %+v %v", kept, has)
 	}
 	account, has := saved.Budget()
 	if !has || account.Budget != budget || !account.StartedAt.Equal(started) || account.Carried.Requests != 4 || account.Carried.ToolCalls != 1 || account.Carried.USD < 0.199 || account.Carried.USD > 0.201 || account.Base != (domain.ExecutionSpend{}) {
