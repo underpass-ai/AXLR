@@ -1003,14 +1003,14 @@ func localRuntimeEnvironment(getenv func(string) string) []string {
 			seen[dir] = true
 		}
 	}
-	if len(paths) == 0 {
-		paths = []string{"/usr/local/bin", "/usr/bin", "/bin"}
-	}
+	// The system's own folders when the inherited PATH names none of them
+	// (run_path_unix.go, run_path_windows.go).
+	paths = systemPath(paths, getenv)
 	env := []string{"PATH=" + strings.Join(paths, string(os.PathListSeparator))}
 	if home := getenv("HOME"); filepath.IsAbs(home) {
 		env = append(env, "HOME="+home)
 	}
-	return env
+	return append(env, systemEnvironment(getenv)...)
 }
 
 func pluginRegistrations(paths, selections []string, getenv func(string) string, modelKeys map[string]bool) ([]plugins.Registration, error) {
