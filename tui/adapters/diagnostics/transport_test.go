@@ -306,6 +306,13 @@ func (b *blockingResponseBody) Read([]byte) (int, error) { <-b.closed; return 0,
 func (b *blockingResponseBody) Close() error             { b.once.Do(func() { close(b.closed) }); return nil }
 
 func TestUnreadErrorDrainIsBoundedAndCancelledWithoutChangingReadBytes(t *testing.T) {
+	// The drain's own bound, short here: the test checks that the drain
+	// ends and how, not how fast a runner is. A wall-clock budget of three
+	// bounds was at risk on a loaded macOS runner under -race (audit of
+	// 25 Oct 2026).
+	previous := errorDrainTimeout
+	errorDrainTimeout = 50 * time.Millisecond
+	t.Cleanup(func() { errorDrainTimeout = previous })
 	for _, cancelled := range []bool{false, true} {
 		trace := &traceEvents{}
 		recorder, _ := NewPayloadRecorder(filepath.Join(t.TempDir(), "payloads"))
@@ -317,12 +324,17 @@ func TestUnreadErrorDrainIsBoundedAndCancelledWithoutChangingReadBytes(t *testin
 		if cancelled {
 			cancel()
 		}
-		started := time.Now()
-		_ = resp.Body.Close()
-		cancel()
-		if time.Since(started) > 1500*time.Millisecond {
-			t.Fatal("error drain exceeded time budget")
+		closed := make(chan struct{})
+		go func() {
+			_ = resp.Body.Close()
+			close(closed)
+		}()
+		select {
+		case <-closed:
+		case <-time.After(30 * time.Second):
+			t.Fatal("the error drain never ended: the body blocks it")
 		}
+		cancel()
 		// The drain ends the wire and the HTTP exchange with its class; the
 		// empty capture of what arrived is still written, so it is saved.
 		failed, ended, wireDone := 0, 0, 0
