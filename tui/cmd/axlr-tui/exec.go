@@ -100,6 +100,39 @@ func readExecSandbox(path string) (domain.ExecutionSandbox, error) {
 	return sandbox, nil
 }
 
+// readExecRouting reads the routing file of --routing: the contract's
+// object, bare or wrapped as {"routing": {...}}.
+func readExecRouting(path string) (domain.ExecutionRouting, error) {
+	data, err := readExecFile("--routing", path, contract.MaxExecutionObjectBytes)
+	if err != nil {
+		return domain.ExecutionRouting{}, err
+	}
+	routing, err := contract.ParseExecutionRouting(data)
+	if err != nil {
+		return domain.ExecutionRouting{}, fmt.Errorf("--routing %s: %w", path, err)
+	}
+	return routing, nil
+}
+
+// execRoutingLine says on stderr how the run routes its requests.
+func execRoutingLine(routing domain.ExecutionRouting) string {
+	candidates := make([]string, 0, len(routing.Candidates()))
+	for _, candidate := range routing.Candidates() {
+		candidates = append(candidates, string(candidate))
+	}
+	line := fmt.Sprintf("routing %s among %s", routing.Objective(), strings.Join(candidates, ", "))
+	if !routing.AllowsRemote() {
+		line += "; remote providers not allowed"
+	}
+	if tokens := routing.MaxContextTokens(); tokens > 0 {
+		line += fmt.Sprintf("; max_context_tokens %d", tokens)
+	}
+	if usd := routing.MaxRequestUSD(); usd > 0 {
+		line += fmt.Sprintf("; max_request_usd %g", usd)
+	}
+	return line
+}
+
 // readExecSkills reads the skills file of --skills: the contract's list
 // of pins, bare or wrapped as {"skills": [...]}.
 func readExecSkills(path string) ([]application.SkillRequest, error) {
@@ -206,6 +239,9 @@ type execEvent struct {
 	Decision    string                    `json:"decision,omitempty"`
 	Status      string                    `json:"status,omitempty"`
 	Error       string                    `json:"error,omitempty"`
+	Model       string                    `json:"model,omitempty"`
+	Route       string                    `json:"route,omitempty"`
+	From        string                    `json:"from,omitempty"`
 	Artifact    *dto.ExecutionArtifact    `json:"artifact,omitempty"`
 	Receipt     *dto.ExecutionReceipt     `json:"receipt,omitempty"`
 	Result      *dto.ExecutionResult      `json:"result,omitempty"`
@@ -296,6 +332,13 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 			} else {
 				_, _ = io.WriteString(out, string(e.Text))
 			}
+		case application.EventModelRouted:
+			// The routing chose the request's model: the one it ranked
+			// first, or the next after the first failed.
+			if e.Route == domain.RouteFallback {
+				fmt.Fprintf(stderr, "axlr-tui: %s failed (%s); the request goes to %s\n", e.RouteFrom, e.RouteError, e.Model)
+			}
+			write(execEvent{Type: "model.routed", Session: string(session.ID()), Model: string(e.Model), Route: string(e.Route), From: string(e.RouteFrom), Error: e.RouteError})
 		case application.EventReasoningProgress:
 			if e.ReasoningText != "" {
 				write(execEvent{Type: "reasoning", Text: e.ReasoningText})

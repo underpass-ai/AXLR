@@ -32,11 +32,17 @@ type Equipment struct {
 	Tools   application.ToolExecutionPort
 	// Memory is true with KMP connected: axlr_remember and axlr_recall.
 	Memory bool
+	// Routing is what the console knows of an execution's candidate
+	// models (model_routing.go); nil refuses the requests of a session
+	// with a routing.
+	Routing application.ModelRoutingPort
 	// Note says what could not be equipped; nil says nothing.
 	Note func(string)
 }
 
-// Equip gives a continuation the usage ledger and cost cap, the receipt journal, axlr_deliver, the context cap
+// Equip gives a continuation the usage ledger and cost cap, the receipt
+// journal, the model router with each model's stats under the state,
+// axlr_deliver, the context cap
 // with its successor sessions (decision D10), forged and catalog tools when
 // settings enable them, and the memory tools with KMP. The catalog use case
 // it returns serves the console's /tools; it is the zero value with forged
@@ -44,6 +50,13 @@ type Equipment struct {
 func Equip(c *application.ContinueTurnUseCase, e Equipment) (application.CatalogUseCase, error) {
 	c.Usage, c.MaxSessionUSD, c.Receipts = e.Usage, e.Settings.MaxSessionUSD, e.Receipts
 	c.TurnToolCalls = e.Settings.TurnToolCalls
+	// What each model's requests said, across sessions and launches,
+	// ranks an execution's candidates.
+	stats, err := storage.NewModelStatsStore(filepath.Join(e.State, "model-stats.json"))
+	if err != nil {
+		return application.CatalogUseCase{}, err
+	}
+	c.ModelStats, c.Routing = stats, e.Routing
 	// axlr_deliver hands the execution's deliverables over in the workspace.
 	c.Deliverables = storage.Deliverables{}
 	// The context cap: one tokenizer for every model, no cut and no

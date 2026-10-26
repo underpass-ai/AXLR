@@ -94,6 +94,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	policyFlag := flags.String("policy", "", "with --exec or --decide: a JSON file with the execution's policy (docs/runtime-contract.md): its autonomy level and the tools it may use; the session keeps it")
 	budgetFlag := flags.String("budget", "", "with --exec or --decide: a JSON file with the execution's budget (docs/runtime-contract.md): seconds, requests, tool_calls and usd, each zero for no limit; the run ends budget_exceeded at the first limit reached and the session keeps the budget")
 	sandboxFlag := flags.String("sandbox", "", "with --exec or --decide: a JSON file with the execution's sandbox (docs/runtime-contract.md): profile none, process or container, egress none, allowlist (with its allow list) or full; local commands and forged tools run under it, a sandbox this host cannot give ends the run before it starts, and the session keeps it")
+	routingFlag := flags.String("routing", "", "with --exec or --decide: a JSON file with the execution's routing (docs/runtime-contract.md): candidate models, objective cost, latency or quality-first, allow_remote_providers, max_context_tokens and max_request_usd; each request goes to the best candidate the constraints allow, a provider failure is taken once by the next, and the session keeps the routing")
 	skillsFlag := flags.String("skills", "", "with --exec or --decide: a JSON file with the execution's catalog skills (docs/runtime-contract.md): a list of {name, version, catalog}; the execution reads exactly those installed versions, a pin not installed ends the run before it starts, and the session keeps them")
 	correlationFlag := flags.String("correlation", "", "with --exec or --decide: a JSON file with the execution's correlation (docs/runtime-contract.md): bot_id, task_id, execution_id and trace_id, carried into every event, trace record and session record")
 	callFlag := flags.String("call", "", "with --decide: the id of the pending call, to make sure it is the one")
@@ -127,8 +128,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
 		}
 	}
-	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *sandboxFlag != "" || *skillsFlag != "" || *correlationFlag != "") {
-		return fail(errors.New("--approve, --json, --mode, --policy, --budget, --sandbox, --skills and --correlation go with --exec or --decide"))
+	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *sandboxFlag != "" || *skillsFlag != "" || *routingFlag != "" || *correlationFlag != "") {
+		return fail(errors.New("--approve, --json, --mode, --policy, --budget, --sandbox, --routing, --skills and --correlation go with --exec or --decide"))
 	}
 	if *callFlag != "" && *decideFlag == "" {
 		return fail(errors.New("--call goes with --decide"))
@@ -175,6 +176,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 		execCorrelation = &correlation
+	}
+	var execRouting *domain.ExecutionRouting
+	// execRoutingDefault marks the settings' routing, which a session
+	// with a routing of its own keeps.
+	execRoutingDefault := false
+	if *routingFlag != "" {
+		routing, err := readExecRouting(*routingFlag)
+		if err != nil {
+			return fail(err)
+		}
+		execRouting = &routing
 	}
 	var execSandbox *domain.ExecutionSandbox
 	if *sandboxFlag != "" {
@@ -576,6 +588,20 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if *modelFlag == "" && !resuming {
 		model = root.ModelID(settings.Model)
 	}
+	// An execution's routing: --routing, else the settings' default for a
+	// run that brings none. A new session without a model takes its first
+	// candidate as its own.
+	if *execFlag != "" || *decideFlag != "" {
+		if execRouting == nil {
+			if execRouting, err = settings.ExecutionRouting(); err != nil {
+				return fail(err)
+			}
+			execRoutingDefault = execRouting != nil
+		}
+		if model == "" && !resuming && execRouting != nil {
+			model = execRouting.Candidates()[0]
+		}
+	}
 	store, err := storage.New(filepath.Join(stateBase, "axlr", "sessions"))
 	if err != nil {
 		return fail(err)
@@ -813,7 +839,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	_, hasMemoryTools := activeEngineCommands["kmp"]
 	toolCatalogUseCase, err := compose.Equip(&continuation, compose.Equipment{
 		Settings: settings, State: filepath.Join(stateBase, "axlr"), Store: loggedStore, Usage: store, Receipts: store, Labels: sessionLabels, About: kmp.bundleAbout(),
-		Windows: locals.Windows, Tools: runner, Memory: hasMemoryTools,
+		Windows: locals.Windows, Tools: runner, Memory: hasMemoryTools, Routing: compose.NewModelRouting(locals, key != "", remoteCatalog),
 		Note: func(line string) { fmt.Fprintln(stderr, "axlr-tui:", line) },
 	})
 	if err != nil {
@@ -973,6 +999,19 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 				return fail(err)
 			}
 			fmt.Fprintln(stderr, "axlr-tui:", how)
+		}
+		if _, routed := session.Routing(); execRouting != nil && (!execRoutingDefault || !routed) {
+			// The execution's routing is the session's from now on: this
+			// run's requests and every later turn's or decision's.
+			if err := session.SetRouting(*execRouting); err != nil {
+				return fail(err)
+			}
+			if err := loggedStore.Save(ctx, *session); err != nil {
+				return fail(err)
+			}
+		}
+		if routing, routed := session.Routing(); routed {
+			fmt.Fprintln(stderr, "axlr-tui:", execRoutingLine(routing))
 		}
 		if sandbox, confined := session.Sandbox(); confined {
 			// A sandbox this host cannot give ends the run here, before

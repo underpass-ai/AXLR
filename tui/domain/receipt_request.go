@@ -16,5 +16,7 @@ type ReceiptRequest struct {
 	Duration time.Duration
 	Status   ReceiptRequestStatus
 	Model    axlr.ModelID
-	Usage    UsageSample
+	// Route is why the request went to Model, empty without a routing.
+	Route RouteReason
+	Usage UsageSample
 }

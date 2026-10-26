@@ -41,6 +41,7 @@ Files in `<state>` and `<data>` are AXLR's own records, not configuration, but t
 | `<state>/logs/` | Diagnostics traces (`trace-<pid>-<n>.jsonl`), payload captures (`*.jsonl.payloads-<n>/`) and the app log `axlr.log`; see [diagnostics and privacy](console.md#diagnostics-and-privacy) |
 | `<state>/session-labels.json` | Session titles, abouts and archive marks |
 | `<state>/bytes-per-token.json` | Measured bytes per prompt token per remote model, shared by every console |
+| `<state>/model-stats.json` | Each model's last requests (tokens, cost, latency, failures), by provider, shared by every console and service of the install: what an [execution's routing](runtime-contract.md#routing-per-execution) ranks its candidates by. At most 32 requests per model and provider, 8 providers, 64 models; requests older than seven days are not counted. Deleting it forgets what the models did |
 | `<state>/plans.json`, `<state>/repairs.json` | The plan and the repair/improvement registries |
 | `<state>/runs/` | One lock per running console, so registries can tell a stopped console from a live one |
 | `<state>/forged-tools/` | The registry of [forged tools](console.md#forged-tools), one per workspace |
@@ -128,6 +129,7 @@ Wherever a key takes a model id (`model`, `reviewer_model`, `favorite_models`, `
 | `turn_tool_calls` | integer | `0` (32) | [turn_tool_calls](#turn_tool_calls) |
 | `max_session_usd` | number | `0` (no limit) | [max_session_usd](#max_session_usd) |
 | `local_models` | array of objects | `[]` | [local_models](#local_models) |
+| `routing` | object | absent (each execution asks its session's model) | [routing](#routing) |
 | `models` | object | `{}` | [models](#models-per-model-openrouter-options) |
 | `exec_sandbox` | object | absent (`mode: off`) | [exec_sandbox](#exec_sandbox) |
 | `forged_tools` | boolean | `true` | [forged_tools](#forged_tools) |
@@ -342,6 +344,24 @@ An entry with `api: "anthropic"` or `api: "responses"` reaches the provider dire
 | Errors | HTTP status and the error type (`overloaded_error` is HTTP 529, retried later like a rate limit); a bare `model: <id>` message is an unknown model | HTTP status and the string code: `insufficient_quota` under HTTP 429 is reported as no credits, not as a rate limit |
 
 The provider reports no cost, so the [usage ledger](console.md#usage) counts these requests as unknown cost, never $0, as it does for every local server. A mid-conversation system message, which Anthropic alternation forbids, is sent as user text. The adapters' unit tests replay recorded streams; the shapes above were checked against the providers' documentation of October 2026 and not yet against the live services.
+
+### routing
+
+Object; absent means none. The routing an execution takes when it brings none: an `axlr-tui --exec` or `--decide` run without `--routing`, and a service session created without `routing`. A session that already has a routing keeps its own. The console applies no default routing to the sessions it creates; a session that took a routing from `--exec` or `CreateSession` keeps routing its requests when the console opens it. The object is the runtime contract's [routing per execution](runtime-contract.md#routing-per-execution), read as strictly: an unknown field, an unknown `objective`, no candidate or one named twice refuse the file (`settings routing: …`). Source: [user_settings_routing.go](../tui/adapters/storage/user_settings_routing.go).
+
+| Field | Type | Default | Meaning |
+|:--|:--|:--|:--|
+| `candidates` | array of strings | required, 1 to 8 | The models an execution may ask: `local_models` ids or OpenRouter ids |
+| `objective` | `"cost"` \| `"latency"` \| `"quality-first"` | required | How the candidates are ranked for each request |
+| `allow_remote_providers` | boolean | `true` | `false` keeps every request on this machine: only `local_models` entries whose `url` names a loopback address (`localhost`, `127.0.0.1`, `::1`) may be asked. A server elsewhere on the network, such as another node of a cluster, and a native API entry count as remote |
+| `max_context_tokens` | integer | `0` (none) | A cap on every request's context on top of each model's own; past every candidate's cap the turn continues in a successor session |
+| `max_request_usd` | number | `0` (none) | A ceiling on one request's expected cost; a candidate over it, or whose cost cannot be told yet, is not asked |
+
+```json
+"routing": {"candidates": ["qwen3.8-flash-next", "anthropic/claude-haiku-5.5"], "objective": "cost", "allow_remote_providers": true}
+```
+
+The ranking learns from `<state>/model-stats.json`, which every request of every console and service of the install feeds, routed or not.
 
 ### models (per-model OpenRouter options)
 

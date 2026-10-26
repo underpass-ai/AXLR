@@ -83,6 +83,10 @@ type UserSettings struct {
 	// Catalogs are the catalogs of pre-forged tools beside the built-in
 	// official one (catalog_settings.go).
 	Catalogs []CatalogSetting `json:"catalogs,omitempty"`
+	// Routing is the routing an execution takes when its request brings
+	// none (user_settings_routing.go): --exec and the service's
+	// CreateSession; absent, an execution asks its session's model.
+	Routing json.RawMessage `json:"routing,omitempty"`
 	// Notify is how the console calls for attention when a long turn ends
 	// or a card waits: "bell" (the default), "osc" (a desktop notification
 	// and the bell) or "off".
@@ -267,6 +271,9 @@ func (s UserSettings) Validate() error {
 		return fmt.Errorf("settings trace_retention_days must be between 0 and %d", maxTraceRetentionDays)
 	}
 	if err := s.validateSessionBudget(); err != nil {
+		return err
+	}
+	if _, err := s.ExecutionRouting(); err != nil {
 		return err
 	}
 	if err := s.validateCatalogs(); err != nil {

@@ -182,7 +182,7 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 		return e
 	}
 	exported := session.Export()
-	if e = s.writeExecution(exported.ID, executionParts{account: exported.Budget, correlation: exported.Correlation, sandbox: exported.Sandbox, skills: exported.Skills}); e != nil {
+	if e = s.writeExecution(exported.ID, executionParts{account: exported.Budget, correlation: exported.Correlation, sandbox: exported.Sandbox, skills: exported.Skills, routing: exported.Routing}); e != nil {
 		return e
 	}
 	dir, e := os.Open(s.dir)
@@ -283,6 +283,11 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	}
 	if parts.skills != nil {
 		if e = session.SetSkills(*parts.skills); e != nil {
+			return domain.Session{}, e
+		}
+	}
+	if parts.routing != nil {
+		if e = session.SetRouting(*parts.routing); e != nil {
 			return domain.Session{}, e
 		}
 	}

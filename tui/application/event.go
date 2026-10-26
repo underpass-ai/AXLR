@@ -27,4 +27,10 @@ type Event struct {
 	// BudgetWarning marks the request that took it past 80 % of its budget.
 	SessionUsage  *domain.UsageLedger
 	BudgetWarning bool
+	// Model is the model the routing sent a request to, Route why: ranked
+	// first, or the fallback of RouteFrom, which failed with RouteError.
+	Model      root.ModelID
+	Route      domain.RouteReason
+	RouteFrom  root.ModelID
+	RouteError string
 }

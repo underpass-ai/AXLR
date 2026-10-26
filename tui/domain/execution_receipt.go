@@ -21,11 +21,12 @@ type ExecutionReceipt struct {
 	// first message or entry of its first session; EndedAt its last
 	// message or entry.
 	StartedAt, EndedAt time.Time
-	// Policy, Budget, Sandbox and Correlation are the ones the execution
-	// ran under, as the last session carries them; nil without.
+	// Policy, Budget, Sandbox, Routing and Correlation are the ones the
+	// execution ran under, as the last session carries them; nil without.
 	Policy      *ExecutionPolicy
 	Budget      *ExecutionBudget
 	Sandbox     *ExecutionSandbox
+	Routing     *ExecutionRouting
 	Skills      *ExecutionSkills
 	Correlation *ExecutionCorrelation
 	Requests    []ReceiptRequest
@@ -78,6 +79,9 @@ func NewExecutionReceipt(result ExecutionResult, sessions []ReceiptSession) Exec
 		if skills, has := last.Skills(); has {
 			receipt.Skills = &skills
 		}
+		if routing, has := last.Routing(); has {
+			receipt.Routing = &routing
+		}
 		if correlation, has := last.Correlation(); has {
 			receipt.Correlation = &correlation
 		}
@@ -118,7 +122,7 @@ func receiptRequests(session SessionID, entries []ReceiptEntry) ([]ReceiptReques
 		switch entry.Kind {
 		case ReceiptRequestStarted:
 			closeOpen()
-			open = &ReceiptRequest{Session: session, Index: len(requests) + 1, StartedAt: entry.At, Model: entry.Model}
+			open = &ReceiptRequest{Session: session, Index: len(requests) + 1, StartedAt: entry.At, Model: entry.Model, Route: entry.Route}
 		case ReceiptRequestEnded:
 			ended++
 			request := ReceiptRequest{Session: session, Index: len(requests) + 1, StartedAt: entry.At.Add(-entry.Usage.Total)}

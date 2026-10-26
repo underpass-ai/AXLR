@@ -35,6 +35,7 @@ type sessionReceiptLine struct {
 	Kind             string   `json:"kind"`
 	At               string   `json:"at"`
 	Model            string   `json:"model,omitempty"`
+	Route            string   `json:"route,omitempty"`
 	Status           string   `json:"status,omitempty"`
 	Provider         string   `json:"provider,omitempty"`
 	PromptTokens     int      `json:"prompt_tokens,omitempty"`
@@ -143,7 +144,7 @@ func (s *SessionStore) LoadReceipt(ctx context.Context, id domain.SessionID) ([]
 }
 
 func receiptLine(entry domain.ReceiptEntry) sessionReceiptLine {
-	line := sessionReceiptLine{Version: sessionReceiptVersion, Kind: string(entry.Kind), At: entry.At.UTC().Format(time.RFC3339Nano), Model: string(entry.Model), Call: string(entry.Call)}
+	line := sessionReceiptLine{Version: sessionReceiptVersion, Kind: string(entry.Kind), At: entry.At.UTC().Format(time.RFC3339Nano), Model: string(entry.Model), Route: string(entry.Route), Call: string(entry.Call)}
 	if entry.Kind == domain.ReceiptRequestEnded {
 		usage := entry.Usage
 		line.Status, line.Provider = string(entry.Status), usage.Provider
@@ -163,7 +164,7 @@ func (l sessionReceiptLine) entry() (domain.ReceiptEntry, error) {
 	if err != nil {
 		return domain.ReceiptEntry{}, err
 	}
-	entry := domain.ReceiptEntry{Kind: domain.ReceiptEntryKind(l.Kind), At: at, Model: root.ModelID(l.Model), Status: domain.ReceiptRequestStatus(l.Status), Call: root.ToolCallID(l.Call)}
+	entry := domain.ReceiptEntry{Kind: domain.ReceiptEntryKind(l.Kind), At: at, Model: root.ModelID(l.Model), Route: domain.RouteReason(l.Route), Status: domain.ReceiptRequestStatus(l.Status), Call: root.ToolCallID(l.Call)}
 	entry.Usage = domain.UsageSample{Provider: l.Provider, PromptTokens: l.PromptTokens, CachedTokens: l.CachedTokens, CacheWriteTokens: l.CacheWriteTokens, CompletionTokens: l.CompletionTokens, ReasoningTokens: l.ReasoningTokens, FirstByte: time.Duration(l.FirstByteMS) * time.Millisecond, Total: time.Duration(l.TotalMS) * time.Millisecond, Unmetered: l.Unmetered}
 	if l.CostUSD != nil {
 		entry.Usage.Cost, entry.Usage.CostKnown = *l.CostUSD, true

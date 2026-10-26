@@ -72,6 +72,15 @@ func executionSandbox(session domain.Session) *dto.ExecutionSandbox {
 	return &wire
 }
 
+func executionRouting(session domain.Session) *dto.ExecutionRouting {
+	routing, has := session.Routing()
+	if !has {
+		return nil
+	}
+	wire := contract.ExecutionRouting(routing)
+	return &wire
+}
+
 // executionSkills is the session's pinned skills on the wire, null
 // without pins and an empty list for an execution with no catalog skill.
 func executionSkills(session domain.Session) []dto.ExecutionSkillPin {

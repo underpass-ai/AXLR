@@ -18,7 +18,7 @@ An execution is a session of AXLR: its transcript, its tool calls with their dec
 | Input | `axlr-tui` | `axlr-serve` |
 |---|---|---|
 | Prompt | `--exec "<prompt>"` | `StartTurn` (`prompt`) |
-| Model | `--model`, or `settings.json`, or the session's | `CreateSession` (`model`) |
+| Model | `--model`, or `settings.json`, or the session's; with a routing, its first candidate when none is given | `CreateSession` (`model`, which a routing may leave out) |
 | Workspace | `--root` (the current directory by default) | The service's `workspace` |
 | Work mode | `--mode normal\|review\|writer\|research` | None: normal |
 | Approval level | `--approve none\|local\|all` | None: every call waits for an `approver` |
@@ -27,6 +27,7 @@ An execution is a session of AXLR: its transcript, its tool calls with their dec
 | Policy | `--policy <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`policy`) |
 | Budget | `--budget <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`budget`) |
 | Sandbox | `--sandbox <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`sandbox`) |
+| Routing | `--routing <file.json>` (with `--exec` or `--decide`), else `settings.json`'s `routing` | `CreateSession` (`routing`), else the service's `settings.json` `routing` |
 | Skills | `--skills <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`skills`) |
 | Correlation | `--correlation <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`correlation`) |
 
@@ -160,6 +161,52 @@ What it decides:
 - A pin that is not installed ends the execution before its first request: `--exec` exits 1 with `the execution's skills are unavailable here: incident_triage 1.0.0 is not installed (installed: 1.1.0)`, and `CreateSession` answers `422 skills_unavailable`. A pinned version removed, or reinstalled from another bundle, since the session took it ends a later `--exec` or `--decide` the same way; on the service, `axlr_skill` refuses it with the reason.
 - The session keeps the pins, resolved: `GetSession` shows each with its `catalog` and the `bundle_sha256` of the bundle installed when the execution began. Later turns and decisions read the same versions, a new `--skills` replaces them, and the successor sessions a context cap opens carry them. `--exec` says on stderr what it got: `skills pinned: axlr/incident_triage@1.0.0`.
 
+## Routing per execution
+
+A program lets AXLR choose the model of each request of an execution among candidates, by an objective and under constraints it keeps outside the model: `axlr-tui --exec --routing <file.json>` reads it (and `--decide --routing`), `CreateSession` takes it as `routing` and `GetSession` shows it. The file holds the object below, with or without the `routing` wrapper; an unknown field refuses it. A run or a session created without one takes `routing` from `settings.json`, when it has one, and a session that already has a routing keeps it.
+
+```json
+{"routing": {"candidates": ["qwen3.8-flash-next", "anthropic/claude-haiku-5.5"], "objective": "cost", "allow_remote_providers": false, "max_context_tokens": 32000, "max_request_usd": 0.05}}
+```
+
+| Field | Meaning |
+|---|---|
+| `candidates` | The models the execution may ask, 1 to 8, each once: `local_models` ids or OpenRouter ids. With `quality-first`, best first |
+| `objective` | `cost`, `latency` or `quality-first` (required): how the candidates the constraints allow are ranked |
+| `allow_remote_providers` | `false` keeps every request on this host; absent or `true` allows remote providers |
+| `max_context_tokens` | A cap on the request's context for every candidate, on top of each model's own cap; absent or `0`, the models' caps alone |
+| `max_request_usd` | A ceiling on what one request is expected to cost; absent or `0`, none |
+
+The session's model stays what it was (the first candidate when the run or `CreateSession` names none); only each request goes elsewhere. A ceremony that asks a model of its own, such as the planner, keeps it.
+
+What the constraints exclude, before any ranking, for each request:
+
+| Constraint | A candidate is excluded when |
+|---|---|
+| Reach | No client can send to it: not a `local_models` entry, and no OpenRouter key |
+| `allow_remote_providers: false` | It runs off this host. A model is on this host only when it is a `local_models` entry whose `url` names a loopback address: `localhost`, a name under `.localhost`, `127.0.0.0/8` or `::1`. A server elsewhere on the network, a native Anthropic or OpenAI entry and every OpenRouter model are remote |
+| The window | The request, as AXLR counts it for that model, exceeds the model's context cap (three quarters of a local model's `context_tokens`, a remote model's `prompt_tokens`), narrowed by `max_context_tokens` |
+| `max_request_usd` | The request is expected to cost more than the ceiling, or its cost cannot be told: a remote model never seen to report a cost and absent from OpenRouter's catalog |
+
+How the objective ranks the rest:
+
+| `objective` | First is |
+|---|---|
+| `cost` | The candidate whose request is expected to cost least: a model on this host costs no dollars; a remote one its observed cost per token, else its OpenRouter catalog price, times the request's tokens and an answer's; a cost no one can tell ranks after every known one; ties go to the faster |
+| `latency` | The candidate expected to finish the request soonest: its observed time per request, smoothed towards 10 seconds, and a tenth of its time to the first byte; ties go to the cheaper |
+| `quality-first` | The first candidate the constraints allow, in the order given |
+
+Under `cost` and `latency` the expected cost or time is per successful request: a model whose recent requests failed (one in twenty is assumed before any) ranks lower. Under every objective a model whose last three requests failed, the latest less than five minutes ago, ranks after every other until those minutes pass, then is tried again.
+
+What the routing learns from: every model request AXLR makes, routed or not, adds what it consumed, its cost, how long it took and whether the provider failed it to a store shared by every console and service of the install (`<state>/model-stats.json`): the last 32 requests per model and provider, 8 providers per model, 64 models, none older than seven days. A request the caller cancelled says nothing of the model and is not kept. OpenRouter's catalog is read once per process, and only when a remote candidate's cost ranks it or meets a ceiling and none of its requests reported one; a routing without remote providers never reads it.
+
+When the model fails:
+
+- A request the provider fails or times out before showing anything (no text, no reasoning, no tool call) is sent again, once, to the next candidate in the ranking. The failed request stays in the ledger and the receipt as `failed`, the second is another request the budget counts, and both are in the events. A request that failed after its answer began, or that the caller or the budget stopped, is not sent again.
+- A request no candidate may take (each excluded, or the only one failed) ends the execution `interrupted` with `error` `no candidate model of the execution's routing can take this request: <why>`; it is never sent to the session's model instead. When the only obstacle is the window, the turn continues in a successor session, as past a single model's cap, at the largest cap among the excluded candidates.
+
+The session keeps the routing: later turns and `--decide` route under it without the flag, a new `--routing` replaces it, and the successor sessions a context cap opens carry it. `--exec` says on stderr what it got (`routing cost among qwen3.8-flash-next, anthropic/claude-haiku-5.5; remote providers not allowed`) and, after a fallback, why (`qwen-8080 failed (…); the request goes to anthropic/claude-haiku-5.5`).
+
 ## Correlation
 
 A program names the execution for its own records, and AXLR carries the ids unchanged: `axlr-tui --exec --correlation <file.json>` reads them (and `--decide --correlation`), `CreateSession` takes them as `correlation` and `GetSession` shows them. The file holds the object below, with or without the `correlation` wrapper; an unknown field refuses it. Each id is letters, digits and `-_.:/@+=`, at most 128 characters, and any may be left out.
@@ -283,15 +330,17 @@ The receipt is the execution's account for an audit: every model request with it
   "policy": {"level": "observe", "sha256": "41aa…"},
   "budget": {"sha256": "c3d0…", "limits": {"seconds": 900, "requests": 20, "tool_calls": 60, "usd": 0.5}},
   "sandbox": {"sha256": "a1c4…", "profile": "process", "egress": "allowlist", "allow": ["api.github.com:443"]},
+  "routing": {"sha256": "79e7…", "objective": "cost", "candidates": ["qwen-8080", "anthropic/claude-haiku-5.5"], "allow_remote_providers": true},
   "skills": {"sha256": "7d02…", "pins": [{"name": "incident_triage", "version": "1.0.0", "catalog": "axlr", "bundle_sha256": "b81f…"}]},
   "correlation": {"bot_id": "server-incident-investigator", "task_id": "task-789"},
   "requests": [
-    {"session_id": "6c1f…", "index": 1, "started_at": "2026-10-25T09:14:02.301Z", "duration_ms": 2310, "status": "completed", "model": "anthropic/claude-haiku-5.5", "provider": "Anthropic", "prompt_tokens": 3120, "cached_tokens": 2048, "cache_write_tokens": 0, "completion_tokens": 96, "reasoning_tokens": 0, "cost_usd": 0.0021, "unmetered": false}
+    {"session_id": "6c1f…", "index": 1, "started_at": "2026-10-25T09:14:02.296Z", "duration_ms": 3, "status": "failed", "model": "qwen-8080", "route": "ranked", "provider": "qwen-8080", "prompt_tokens": 0, "cached_tokens": 0, "cache_write_tokens": 0, "completion_tokens": 0, "reasoning_tokens": 0, "cost_usd": null, "unmetered": false},
+    {"session_id": "6c1f…", "index": 2, "started_at": "2026-10-25T09:14:02.301Z", "duration_ms": 2310, "status": "completed", "model": "anthropic/claude-haiku-5.5", "route": "fallback", "provider": "Anthropic", "prompt_tokens": 3120, "cached_tokens": 2048, "cache_write_tokens": 0, "completion_tokens": 96, "reasoning_tokens": 0, "cost_usd": 0.0021, "unmetered": false}
   ],
   "tool_calls": [
     {"session_id": "6c1f…", "call_id": "read-1", "tool": "local_read", "arguments_sha256": "0b6e…", "outcome_sha256": "e3b4…", "decision": "auto_approve", "status": "completed", "started_at": "2026-10-25T09:14:04.650Z", "duration_ms": 3}
   ],
-  "total": {"requests": 1, "prompt_tokens": 3120, "cached_tokens": 2048, "cache_write_tokens": 0, "completion_tokens": 96, "reasoning_tokens": 0, "cost_usd": 0.0021, "cost_requests": 1, "unmetered_requests": 0},
+  "total": {"requests": 2, "prompt_tokens": 3120, "cached_tokens": 2048, "cache_write_tokens": 0, "completion_tokens": 96, "reasoning_tokens": 0, "cost_usd": 0.0021, "cost_requests": 1, "unmetered_requests": 0},
   "complete": true
 }
 ```
@@ -303,9 +352,10 @@ The receipt is the execution's account for an audit: every model request with it
 | `started_at`, `ended_at` | When the execution began (the budget's start, else the session's first message or record) and its last record, in UTC |
 | `policy` | The execution's policy: its `level` and the `sha256` of its compact JSON as the contract writes it (`{"level":…,"tools":{…}}`, fields in the order above, argument patterns by name); absent without one |
 | `budget` | The execution's budget: its `limits` and the `sha256` of their compact JSON (`{"seconds":…,"requests":…,"tool_calls":…,"usd":…}`, zero limits left out); absent without one |
+| `routing` | The execution's routing: its `objective`, `candidates` and `allow_remote_providers`, and the `sha256` of its compact JSON as `GetSession` shows it (`{"candidates":[…],"objective":…,"allow_remote_providers":…,"max_context_tokens":…,"max_request_usd":…}`, zero constraints left out); absent without one |
 | `sandbox` | The execution's sandbox: its `profile`, `egress` and `allow`, and the `sha256` of its compact JSON as `GetSession` shows it (`{"profile":…,"egress":…,"allow":[…],"writable":[…],"readable":[…],"container":{…}}`, the egress spelled out, each destination as the contract reads it: lower case, no trailing dot, empty lists left out); absent without one |
 | `skills` | The execution's pinned catalog skills: each `name`, `version`, `catalog` and `bundle_sha256`, and the `sha256` of the pins' compact JSON as `GetSession` shows them; absent without pins. Which version an `axlr_skill` call read is in its result, whose digest is the call's `outcome_sha256` |
-| `requests` | Every model request of the spanned sessions, in order. `index` counts from 1 in each session; `model` is the one asked for and `provider` who served it, when the endpoint says. `status` is `completed`, `failed`, `cancelled` or `interrupted` (the process died during it: tokens and cost unknown). `cost_usd` is null when the request reported none; `unmetered` marks a request whose tokens are estimates |
+| `requests` | Every model request of the spanned sessions, in order. `index` counts from 1 in each session; `model` is the one asked for, the one the routing chose when the execution has one, and `provider` who served it, when the endpoint says; `route` is `ranked` (the routing ranked it first) or `fallback` (the one ranked first failed and this one took the request again), absent without a routing. `status` is `completed`, `failed`, `cancelled` or `interrupted` (the process died during it: tokens and cost unknown). `cost_usd` is null when the request reported none; `unmetered` marks a request whose tokens are estimates |
 | `tool_calls` | Every call of the spanned sessions, in order, as the result's `tool_calls` with `arguments_sha256` (the call's arguments as the session keeps them, compact JSON), `outcome_sha256` (its result's text; absent while pending), and `started_at` and `duration_ms` for a call that ran (absent for one refused, or one that never ended) |
 | `total` | The requests above, summed as the result's `usage` is |
 | `complete` | True when every request the sessions' ledgers counted and every call that ran is itemized; false for a session that predates receipts, a journal line a crash cut or a journal past its bound (4 MiB a session) |
@@ -322,6 +372,7 @@ Where the receipt is:
 | `axlr-tui --json` line | `axlr-serve` journal | When |
 |---|---|---|
 | `session` | `turn.started` | The turn starts (again in each successor) |
+| `model.routed` | `model.routed` | The routing sent a request to `model`: `route` `ranked`, or `fallback` with `from` (the model that failed) and its `error` |
 | `reasoning` | — | Readable reasoning as it streams |
 | `text` | `text.delta` | Answer text |
 | `tool.requested`, `tool.completed` | `tool.requested`, `tool.completed` | A call is made, and its outcome recorded |
@@ -342,7 +393,8 @@ Every line and every payload carries the execution's `correlation` when it has o
 - A tool call never runs on the model's say-so: the execution's policy, the run's approval level, the settings' rules, the work mode and the destructive list decide. A call the policy forbids is refused outside the model, and a call none of them approves ends the execution in `needs_decision`.
 - The result is written once, after the session is saved, so a reader that sees it can continue the session.
 - On the service, a turn, a decision and a direct call are idempotent on their key, revisions guard decisions and cancellation, and a session interrupted by a crash, in a model request or in a tool's run, is journaled `turn.interrupted` at the next start.
-- Past the context cap the execution continues in a successor; the result names every session, and their usage is summed. The successor is the same execution: it carries the policy, the budget with what was spent, the sandbox, the pinned skills and the correlation.
+- Past the context cap the execution continues in a successor; the result names every session, and their usage is summed. The successor is the same execution: it carries the policy, the budget with what was spent, the sandbox, the pinned skills, the routing and the correlation.
+- A routing is kept outside the model: no request goes to a candidate its constraints exclude, a routing without remote providers sends nothing off the host, and a request no candidate may take is refused, never sent to another model.
 - The budget is kept outside the model: a limit reached refuses the next request or call before it is made, whatever the model asked for, and the session stays resumable.
 - An execution with pinned skills reads those versions or does not start: a pin this host has not installed ends it before its first request, and a newer version installed meanwhile changes nothing for it.
 - A command of an execution with a sandbox runs under that sandbox or not at all: a sandbox the host cannot give ends the execution before its first request, and the allow list is the only way out of a sandbox without the network.

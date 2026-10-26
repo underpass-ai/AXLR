@@ -68,6 +68,9 @@ type SessionState struct {
 	// Sandbox confines the execution's commands, nil for the console's
 	// own; kept beside the snapshot like Policy.
 	Sandbox *ExecutionSandbox
+	// Routing chooses the model of each request, nil for the session's
+	// own model; kept beside the snapshot like Policy.
+	Routing *ExecutionRouting
 	// Skills pins the execution's catalog skills, nil for the newest
 	// installed; kept beside the snapshot like Policy.
 	Skills *ExecutionSkills
@@ -133,6 +136,11 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	}
 	if state.Skills != nil {
 		if err = state.Skills.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
+	if state.Routing != nil {
+		if err = state.Routing.Validate(); err != nil {
 			return Session{}, err
 		}
 	}
@@ -271,6 +279,10 @@ func cloneState(state SessionState) SessionState {
 	if state.Skills != nil {
 		skills := state.Skills.Clone()
 		state.Skills = &skills
+	}
+	if state.Routing != nil {
+		routing := state.Routing.Clone()
+		state.Routing = &routing
 	}
 	if len(state.MessageTimes) > len(state.Messages) {
 		state.MessageTimes = state.MessageTimes[:len(state.Messages)]

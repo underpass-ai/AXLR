@@ -11,6 +11,7 @@ type ReceiptRequest struct {
 	DurationMS       *int64    `json:"duration_ms,omitempty"`
 	Status           string    `json:"status"`
 	Model            string    `json:"model"`
+	Route            string    `json:"route,omitempty"`
 	Provider         string    `json:"provider,omitempty"`
 	PromptTokens     int       `json:"prompt_tokens"`
 	CachedTokens     int       `json:"cached_tokens"`

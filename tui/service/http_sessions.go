@@ -26,11 +26,26 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		Policy      json.RawMessage `json:"policy"`
 		Budget      json.RawMessage `json:"budget"`
 		Sandbox     json.RawMessage `json:"sandbox"`
+		Routing     json.RawMessage `json:"routing"`
 		Skills      json.RawMessage `json:"skills"`
 		Correlation json.RawMessage `json:"correlation"`
 	}
 	if !readJSON(w, r, &input) {
 		return
+	}
+	routing := s.deps.Routing
+	if given(input.Routing) {
+		parsed, err := contract.ParseExecutionRouting(input.Routing)
+		if err != nil {
+			writeError(w, requestID(r), 422, "invalid_routing", "invalid routing: "+err.Error())
+			return
+		}
+		routing = &parsed
+	}
+	if input.Model == "" && routing != nil {
+		// A session under a routing may leave its model out: its first
+		// candidate is the session's own.
+		input.Model = string(routing.Candidates()[0])
 	}
 	model, err := root.NewModelID(input.Model)
 	if err != nil {
@@ -150,6 +165,12 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if routing != nil {
+		if err := session.SetRouting(*routing); err != nil {
+			writeError(w, requestID(r), 422, "invalid_routing", "invalid routing: "+err.Error())
+			return
+		}
+	}
 	if err := s.sessions.Save(r.Context(), session); err != nil {
 		writeError(w, requestID(r), 500, "storage_error", "unable to save session")
 		return
@@ -190,7 +211,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 500, "storage_error", "unable to read events")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "receipt": s.executionReceipt(session), "policy": executionPolicy(session), "budget": executionBudget(session), "sandbox": executionSandbox(session), "skills": executionSkills(session), "correlation": executionCorrelation(session)})
+	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "receipt": s.executionReceipt(session), "policy": executionPolicy(session), "budget": executionBudget(session), "sandbox": executionSandbox(session), "skills": executionSkills(session), "routing": executionRouting(session), "correlation": executionCorrelation(session)})
 }
 
 func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
@@ -344,6 +365,13 @@ func (s *Server) recordApplicationEvent(id, op, actor, request string, e applica
 			kind = "tool.completed"
 		}
 		payload = map[string]any{"call_id": e.Tool.Call.ID, "tool": e.Tool.Call.Name, "decision": e.Tool.Decision, "outcome": e.Tool.Outcome}
+	case application.EventModelRouted:
+		kind = "model.routed"
+		fields := map[string]any{"model": e.Model, "route": e.Route}
+		if e.RouteFrom != "" {
+			fields["from"], fields["error"] = e.RouteFrom, e.RouteError
+		}
+		payload = fields
 	case application.EventState:
 		switch e.State {
 		case domain.StatusComplete:

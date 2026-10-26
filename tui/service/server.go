@@ -30,6 +30,9 @@ type Dependencies struct {
 	// command on this host; CreateSession refuses a sandbox it fails, and
 	// every sandbox when it is nil.
 	ProbeSandbox func(context.Context, domain.ExecutionSandbox) (string, error)
+	// Routing is the settings' default routing, which a session created
+	// without one takes; nil leaves such a session on its model.
+	Routing *domain.ExecutionRouting
 	// Skills are the installed catalog skills CreateSession resolves an
 	// execution's pins against; nil refuses every pin.
 	Skills application.InstalledSkillsPort

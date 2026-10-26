@@ -16,8 +16,8 @@ import (
 // workspace, model, mode, about and owner, titled after the predecessor,
 // with the predecessor in its instance (decision D10). The owner is the
 // service principal of the predecessor; a console session has none. The
-// execution's policy, budget and correlation continue in it too: the
-// successor is the same execution (docs/runtime-contract.md).
+// execution's policy, budget, sandbox, routing and correlation continue in
+// it too: the successor is the same execution (docs/runtime-contract.md).
 type Successors struct {
 	Create application.CreateSessionUseCase
 	Labels application.SessionLabelsPort
@@ -56,6 +56,11 @@ func (s Successors) Continue(ctx context.Context, predecessor domain.Session) (d
 	}
 	if skills, has := predecessor.Skills(); has {
 		if err := session.SetSkills(skills); err != nil {
+			return domain.Session{}, err
+		}
+	}
+	if routing, has := predecessor.Routing(); has {
+		if err := session.SetRouting(routing); err != nil {
 			return domain.Session{}, err
 		}
 	}

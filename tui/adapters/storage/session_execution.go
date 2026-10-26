@@ -21,7 +21,7 @@ const (
 
 // sessionExecution is kept in <id>.execution beside the snapshot, like
 // <id>.policy: the execution's budget with its account, its correlation,
-// its sandbox and its pinned skills. Like the policy, a file that cannot be read refuses the
+// its sandbox, its pinned skills and its routing. Like the policy, a file that cannot be read refuses the
 // session: a lost budget must not widen what the execution may spend, nor
 // a lost sandbox what its commands may reach.
 type sessionExecution struct {
@@ -29,6 +29,7 @@ type sessionExecution struct {
 	Budget      *sessionBudget            `json:"budget,omitempty"`
 	Correlation *dto.ExecutionCorrelation `json:"correlation,omitempty"`
 	Sandbox     *dto.ExecutionSandbox     `json:"sandbox,omitempty"`
+	Routing     *dto.ExecutionRouting     `json:"routing,omitempty"`
 	// Skills is a pointer so that no pin at all (an execution with no
 	// catalog skill) is kept apart from no pins (the newest installed).
 	Skills *[]dto.ExecutionSkillPin `json:"skills,omitempty"`
@@ -41,6 +42,7 @@ type executionParts struct {
 	correlation *domain.ExecutionCorrelation
 	sandbox     *domain.ExecutionSandbox
 	skills      *domain.ExecutionSkills
+	routing     *domain.ExecutionRouting
 }
 
 func (s *SessionStore) executionPath(id domain.SessionID) string {
@@ -106,12 +108,20 @@ func (s *SessionStore) readExecution(id domain.SessionID) (executionParts, error
 		}
 		skills = &parsed
 	}
-	return executionParts{account: account, correlation: correlation, sandbox: sandbox, skills: skills}, nil
+	var routing *domain.ExecutionRouting
+	if record.Routing != nil {
+		parsed, err := contract.DomainExecutionRouting(*record.Routing)
+		if err != nil {
+			return executionParts{}, fmt.Errorf("the session's routing is invalid: %w", err)
+		}
+		routing = &parsed
+	}
+	return executionParts{account: account, correlation: correlation, sandbox: sandbox, skills: skills, routing: routing}, nil
 }
 
 func (s *SessionStore) writeExecution(id domain.SessionID, parts executionParts) error {
 	account, correlation, sandbox := parts.account, parts.correlation, parts.sandbox
-	if account == nil && correlation == nil && sandbox == nil && parts.skills == nil {
+	if account == nil && correlation == nil && sandbox == nil && parts.skills == nil && parts.routing == nil {
 		if err := os.Remove(s.executionPath(id)); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
 		}
@@ -132,6 +142,10 @@ func (s *SessionStore) writeExecution(id domain.SessionID, parts executionParts)
 	if parts.skills != nil {
 		wire := contract.ExecutionSkills(*parts.skills)
 		record.Skills = &wire
+	}
+	if parts.routing != nil {
+		wire := contract.ExecutionRouting(*parts.routing)
+		record.Routing = &wire
 	}
 	data, err := json.Marshal(record)
 	if err != nil {

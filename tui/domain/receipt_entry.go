@@ -15,8 +15,11 @@ var errReceiptEntryKind = errors.New("unknown receipt entry kind")
 type ReceiptEntry struct {
 	Kind ReceiptEntryKind
 	At   time.Time
-	// Model is the model a request asked for (request.started).
+	// Model is the model a request asked for (request.started), and
+	// Route why it went there when the execution routes its requests:
+	// ranked first, or the fallback of a failed request.
 	Model axlr.ModelID
+	Route RouteReason
 	// Usage and Status are what an ended request consumed, as its ledger
 	// sample says, and how it ended (request.ended).
 	Usage  UsageSample
@@ -37,6 +40,11 @@ func (e ReceiptEntry) Validate() error {
 	case ReceiptRequestStarted:
 		if _, err := axlr.NewModelID(string(e.Model)); err != nil {
 			return err
+		}
+		switch e.Route {
+		case "", RouteRanked, RouteFallback:
+		default:
+			return errors.New("a request's route is ranked or fallback")
 		}
 	case ReceiptRequestEnded:
 		switch e.Status {
