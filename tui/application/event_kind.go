@@ -13,4 +13,6 @@ const (
 	EventState                EventKind = "state"
 	EventToolActivity         EventKind = "tool_activity"
 	EventUsage                EventKind = "usage"
+	// EventModelRouted: the execution's routing sent a request to Model.
+	EventModelRouted EventKind = "model_routed"
 )

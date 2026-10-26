@@ -111,7 +111,8 @@ func routeExclusion(routing ExecutionRouting, candidate RouteCandidate) (RouteEx
 	case !candidate.Local && !routing.AllowsRemote():
 		exclusion.Kind, exclusion.Reason = RouteRemote, "it runs off this host and the routing does not allow remote providers"
 	case candidate.Cap > 0 && candidate.Tokens > candidate.Cap:
-		exclusion.Kind, exclusion.Reason, exclusion.Cap = RouteWindow, fmt.Sprintf("the request's %d tokens exceed its cap of %d", candidate.Tokens, candidate.Cap), candidate.Cap
+		exclusion.Kind, exclusion.Reason = RouteWindow, fmt.Sprintf("the request's %d tokens exceed its cap of %d", candidate.Tokens, candidate.Cap)
+		exclusion.Tokens, exclusion.Cap = candidate.Tokens, candidate.Cap
 	case routing.MaxRequestUSD() > 0:
 		cost, known := expectedCost(candidate)
 		switch {
@@ -169,19 +170,20 @@ func (r RouteRanking) Summary() string {
 
 // SuccessorCap reports a ranking that left no candidate while some only
 // because the request exceeds their caps: a shorter context, a successor
-// session's, would fit. It returns the largest of those caps.
-func (r RouteRanking) SuccessorCap() (int, bool) {
+// session's, would fit. It returns the request's tokens and the cap of
+// the candidate with the largest cap among those.
+func (r RouteRanking) SuccessorCap() (int, int, bool) {
 	if len(r.Ranked) > 0 {
-		return 0, false
+		return 0, 0, false
 	}
-	largest, windows := 0, false
+	tokens, largest, windows := 0, 0, false
 	for _, exclusion := range r.Excluded {
-		if exclusion.Kind == RouteWindow {
+		if exclusion.Kind == RouteWindow && (!windows || exclusion.Cap > largest) {
 			windows = true
-			largest = max(largest, exclusion.Cap)
+			tokens, largest = exclusion.Tokens, exclusion.Cap
 		}
 	}
-	return largest, windows
+	return tokens, largest, windows
 }
 
 // usd writes dollars with the precision a small request needs.

@@ -120,7 +120,7 @@ func TestRemoteForbiddenNeverRanksARemoteModel(t *testing.T) {
 	if len(ranking.Ranked) != 0 || !strings.Contains(ranking.Summary(), "does not allow remote providers") {
 		t.Fatalf("ranking = %+v, %q", ranking.Ranked, ranking.Summary())
 	}
-	if _, successor := ranking.SuccessorCap(); successor {
+	if _, _, successor := ranking.SuccessorCap(); successor {
 		t.Fatal("a remote exclusion is no window a successor could fix")
 	}
 }
@@ -142,8 +142,8 @@ func TestAWindowTooSmallExcludesTheModel(t *testing.T) {
 	// context fits the local window.
 	strict := routingOf(t, RoutingCost, false, 0, 0, "local", "remote")
 	ranking = RankRoutes(strict, candidates, rankNow)
-	if cap, successor := ranking.SuccessorCap(); !successor || cap != 24000 {
-		t.Fatalf("successor cap = %d, %v", cap, successor)
+	if tokens, cap, successor := ranking.SuccessorCap(); !successor || cap != 24000 || tokens != 30000 {
+		t.Fatalf("successor cap = %d (%d tokens), %v", cap, tokens, successor)
 	}
 }
 

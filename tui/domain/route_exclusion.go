@@ -7,6 +7,8 @@ type RouteExclusion struct {
 	Model  root.ModelID
 	Kind   RouteExclusionKind
 	Reason string
-	// Cap is the model's cap, for a window exclusion.
-	Cap int
+	// Tokens and Cap are the request's size and the model's cap, for a
+	// window exclusion.
+	Tokens int
+	Cap    int
 }

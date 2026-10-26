@@ -89,6 +89,13 @@ type ContinueTurnUseCase struct {
 	// Receipts journals each request and call as it starts and ends for
 	// the execution's receipt; nil keeps no receipt (session_receipt_port.go).
 	Receipts SessionReceiptPort
+	// Routing tells the router what the console knows of each candidate
+	// of a session's routing; a session with a routing and nil Routing
+	// has its requests refused. ModelStats keeps what each model's
+	// requests said, across sessions, and feeds the ranking; nil observes
+	// nothing and ranks on priors (model_routing.go).
+	Routing    ModelRoutingPort
+	ModelStats ModelStatsPort
 	// Language is the console's language code (en, es): the model writes
 	// what the console shows of its calls, the why, in it. Empty says
 	// nothing.
@@ -281,7 +288,31 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, currentTurnReasoning(projection.Messages)...), Tools: tools}
 	counted := 0
-	if cap, capped := u.capsContext(*session); capped {
+	// An execution's routing chooses the model of each request among its
+	// candidates; past every candidate's cap the turn continues in a
+	// successor, as past the session model's (model_routing.go).
+	var ranked []domain.RouteCandidate
+	if routing, routed := routingOf(*session); routed {
+		counted = RequestTokens(u.Tokens, guidance, tools, req.Messages[1:])
+		size := counted
+		if u.Tokens == nil {
+			size = estimatedRequestTokens(guidance, tools, req.Messages[1:])
+		}
+		ranking, err := u.rankRoutes(ctx, routing, size)
+		if err != nil {
+			contextSpan.End(DiagnosticErrorInvalidState)
+			return interrupt(err)
+		}
+		if len(ranking.Ranked) == 0 {
+			contextSpan.End(DiagnosticErrorInvalidState)
+			_, _, compact := compactRun(*session)
+			if tokens, cap, successor := ranking.SuccessorCap(); successor && u.Tokens != nil && !compact {
+				return interrupt(u.continueInSuccessor(ctx, session, tokens, cap))
+			}
+			return interrupt(&RouteUnavailableError{Summary: ranking.Summary()})
+		}
+		ranked, req.Model = ranking.Ranked, ranking.Ranked[0].Model
+	} else if cap, capped := u.capsContext(*session); capped {
 		counted = RequestTokens(u.Tokens, guidance, tools, req.Messages[1:])
 		if estimated := u.Scale.Estimate(model, counted); estimated > cap {
 			contextSpan.End(DiagnosticErrorInvalidState)
@@ -315,64 +346,102 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if err := emit(Event{Kind: EventState, State: domain.StatusStreaming}); err != nil {
 		return interrupt(err)
 	}
-	started := time.Now()
-	modelCtx, modelSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionModel, DiagnosticEvent{Messages: len(req.Messages), Tools: len(req.Tools)})
-	modelCtx = WithProviderActivity(modelCtx, func(phase domain.ProviderPhase) { _ = emit(Event{Kind: EventProviderActivity, ProviderPhase: phase}) })
-	modelCtx = WithToolCallProgress(modelCtx, func(name string, bytes int) {
-		_ = emit(Event{Kind: EventToolCallProgress, ToolCallName: name, ToolCallBytes: bytes})
-	})
-	modelCtx = WithReasoningProgress(modelCtx, func(bytes int, text string) {
-		_ = emit(Event{Kind: EventReasoningProgress, ReasoningBytes: bytes, ReasoningText: text})
-	})
-	meter := &usageMeter{started: started}
-	u.recordReceipt(ctx, *session, domain.ReceiptEntry{Kind: domain.ReceiptRequestStarted, At: started, Model: req.Model})
-	modelCtx = meter.watch(modelCtx)
-	if u.Diagnostics != nil {
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderStart, SpanID: CurrentDiagnosticSpan(modelCtx)})
-	}
-	chunks, bytes := 0, 0
-	result, err := u.Models.Stream(modelCtx, req, func(delta root.Text) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if _, err := root.NewText(string(delta)); err != nil {
-			return err
-		}
-		meter.mark()
-		meter.addText(len(delta))
-		draft.WriteString(string(delta))
-		chunks++
-		bytes += len(delta)
+	// ask sends the request once, to req.Model, and records it in the
+	// ledger, the receipt and the model's stats whether it finished,
+	// failed or was cancelled.
+	ask := func(req root.CompletionRequest, route domain.RouteReason) (root.CompletionResult, *usageMeter, error) {
+		started := time.Now()
+		modelCtx, modelSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionModel, DiagnosticEvent{Messages: len(req.Messages), Tools: len(req.Tools)})
+		modelCtx = WithProviderActivity(modelCtx, func(phase domain.ProviderPhase) { _ = emit(Event{Kind: EventProviderActivity, ProviderPhase: phase}) })
+		modelCtx = WithToolCallProgress(modelCtx, func(name string, bytes int) {
+			_ = emit(Event{Kind: EventToolCallProgress, ToolCallName: name, ToolCallBytes: bytes})
+		})
+		modelCtx = WithReasoningProgress(modelCtx, func(bytes int, text string) {
+			_ = emit(Event{Kind: EventReasoningProgress, ReasoningBytes: bytes, ReasoningText: text})
+		})
+		meter := &usageMeter{started: started}
+		u.recordReceipt(ctx, *session, domain.ReceiptEntry{Kind: domain.ReceiptRequestStarted, At: started, Model: req.Model, Route: route})
+		modelCtx = meter.watch(modelCtx)
 		if u.Diagnostics != nil {
-			_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderProgress, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds()})
+			_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderStart, SpanID: CurrentDiagnosticSpan(modelCtx)})
 		}
-		return emit(Event{Kind: EventTextDelta, Text: delta})
-	})
-	class := DiagnosticErrorNone
-	streamErr := errors.Join(err, ctx.Err())
-	if streamErr != nil {
-		class = DiagnosticErrorProvider
-		if errors.Is(streamErr, context.DeadlineExceeded) {
-			class = DiagnosticErrorTimeout
-		} else if errors.Is(streamErr, context.Canceled) {
-			class = DiagnosticErrorCancelled
+		chunks, bytes := 0, 0
+		result, err := u.Models.Stream(modelCtx, req, func(delta root.Text) error {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if _, err := root.NewText(string(delta)); err != nil {
+				return err
+			}
+			meter.mark()
+			meter.addText(len(delta))
+			draft.WriteString(string(delta))
+			chunks++
+			bytes += len(delta)
+			if u.Diagnostics != nil {
+				_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticProviderProgress, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds()})
+			}
+			return emit(Event{Kind: EventTextDelta, Text: delta})
+		})
+		class := DiagnosticErrorNone
+		streamErr := errors.Join(err, ctx.Err())
+		if streamErr != nil {
+			class = DiagnosticErrorProvider
+			if errors.Is(streamErr, context.DeadlineExceeded) {
+				class = DiagnosticErrorTimeout
+			} else if errors.Is(streamErr, context.Canceled) {
+				class = DiagnosticErrorCancelled
+			}
 		}
+		modelSpan.End(class)
+		if u.Diagnostics != nil {
+			done := DiagnosticEvent{Stage: DiagnosticProviderDone, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class}
+			if usage := result.Usage; usage != nil {
+				done.PromptTokens, done.CompletionTokens, done.CachedTokens, done.CacheWriteTokens = usage.PromptTokens, usage.CompletionTokens, usage.CachedTokens, usage.CacheWriteTokens
+				done.ReasoningTokens, done.CostUSD = usage.ReasoningTokens, usage.Cost
+			}
+			_ = u.Diagnostics.Record(done)
+		}
+		// The request was sent: it reaches the ledger whether it finished, failed
+		// or was cancelled, or a cancelled stream the provider billed would
+		// escape the cost and max_session_usd.
+		sample := u.usageSample(req.Model, result, streamErr, meter)
+		u.recordUsage(ctx, *session, sample, emit)
+		u.recordReceipt(ctx, *session, domain.ReceiptEntry{Kind: domain.ReceiptRequestEnded, At: time.Now(), Usage: sample, Status: requestStatus(streamErr)})
+		u.observeModel(ctx, req.Model, sample, streamErr)
+		if streamErr == nil && len(result.Message.ToolCalls) > 0 && u.Diagnostics != nil {
+			_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolRequested, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: len(result.Message.ToolCalls)})
+		}
+		return result, meter, err
 	}
-	modelSpan.End(class)
-	if u.Diagnostics != nil {
-		done := DiagnosticEvent{Stage: DiagnosticProviderDone, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: chunks, Bytes: bytes, ElapsedMilliseconds: time.Since(started).Milliseconds(), ErrorClass: class}
-		if usage := result.Usage; usage != nil {
-			done.PromptTokens, done.CompletionTokens, done.CachedTokens, done.CacheWriteTokens = usage.PromptTokens, usage.CompletionTokens, usage.CachedTokens, usage.CacheWriteTokens
-			done.ReasoningTokens, done.CostUSD = usage.ReasoningTokens, usage.Cost
-		}
-		_ = u.Diagnostics.Record(done)
+	route := domain.RouteReason("")
+	if ranked != nil {
+		route = domain.RouteRanked
+		_ = emit(Event{Kind: EventModelRouted, Model: req.Model, Route: route})
 	}
-	// The request was sent: it reaches the ledger whether it finished, failed
-	// or was cancelled, or a cancelled stream the provider billed would
-	// escape the cost and max_session_usd.
-	sample := u.usageSample(req.Model, result, streamErr, meter)
-	u.recordUsage(ctx, *session, sample, emit)
-	u.recordReceipt(ctx, *session, domain.ReceiptEntry{Kind: domain.ReceiptRequestEnded, At: time.Now(), Usage: sample, Status: requestStatus(streamErr)})
+	result, meter, err := ask(req, route)
+	switch {
+	case ranked == nil || !fallsBack(ctx, err, meter, draft.Len()):
+	case len(ranked) == 1:
+		err = errors.Join(err, &RouteUnavailableError{Summary: string(req.Model) + " failed and the routing has no other candidate for it"})
+	default:
+		// The provider failed the request before showing anything: the
+		// next candidate takes it, once, as another request the budget
+		// counts.
+		failed := req.Model
+		if refusal := u.budgetRefusal(ctx, *session); refusal != nil {
+			return interrupt(errors.Join(err, refusal))
+		}
+		if refusal := u.requestRefusal(ctx, *session); refusal != nil {
+			if stop := budgetCause(ctx, refusal); stop != nil {
+				return pauseAtBudget(ctx, u.Store, session, stop, emit)
+			}
+			return interrupt(errors.Join(err, refusal))
+		}
+		req.Model = ranked[1].Model
+		_ = emit(Event{Kind: EventModelRouted, Model: req.Model, Route: domain.RouteFallback, RouteFrom: failed, RouteError: err.Error()})
+		result, _, err = ask(req, domain.RouteFallback)
+	}
 	if err != nil {
 		return interrupt(err)
 	}
@@ -380,14 +449,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	if u.Scale != nil && result.Usage != nil && counted > 0 {
-		u.Scale.Observe(model, counted, result.Usage.PromptTokens)
+		u.Scale.Observe(req.Model, counted, result.Usage.PromptTokens)
 	}
 	if u.Calibration != nil && result.Usage != nil && result.RequestBytes > 0 {
 		// A measurement that cannot be saved is only one sample lost.
 		_ = u.Calibration.Observe(context.WithoutCancel(ctx), req.Model, result.RequestBytes, result.Usage.PromptTokens)
-	}
-	if len(result.Message.ToolCalls) > 0 && u.Diagnostics != nil {
-		_ = u.Diagnostics.Record(DiagnosticEvent{Stage: DiagnosticToolRequested, SpanID: CurrentDiagnosticSpan(modelCtx), Chunks: len(result.Message.ToolCalls)})
 	}
 	next := *session
 	if err := next.CompleteAssistantWithin(result, u.turnLimit()); err != nil {
