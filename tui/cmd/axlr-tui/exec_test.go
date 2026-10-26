@@ -282,7 +282,10 @@ func TestExecRefusesAForbiddenCallUnderThePolicy(t *testing.T) {
 	env["PATH"] = os.Getenv("PATH")
 	workspace := t.TempDir()
 	previous := http.DefaultTransport
-	defer func() { http.DefaultTransport = previous }()
+	// A cleanup, not a defer: the scriptedModel calls below restore this
+	// test's transport in their own cleanups, which run after any defer and
+	// would otherwise leave it in place for every later test.
+	t.Cleanup(func() { http.DefaultTransport = previous })
 	var bodies []string
 	http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		data, _ := io.ReadAll(r.Body)
