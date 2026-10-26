@@ -274,7 +274,7 @@ type execStep func(context.Context, *domain.Session, func(application.Event) err
 // approvals the policy allows, and past the context cap the successor's
 // turn, as the console continues it. It returns the session the turn ended
 // in and the exit code.
-func execTurn(ctx context.Context, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, prompt string, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+func execTurn(ctx context.Context, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, prompt string, steer *execSteerFile, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
 	text, err := root.NewText(prompt)
 	if err != nil || text == "" {
 		fmt.Fprintln(stderr, "axlr-tui: --exec needs a prompt")
@@ -283,13 +283,13 @@ func execTurn(ctx context.Context, start application.StartTurnUseCase, agent app
 	first := func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 		return start.Execute(ctx, s, text, emit)
 	}
-	return execLoop(ctx, first, start, agent, usage, session, asJSON, out, stderr)
+	return execLoop(ctx, first, start, agent, usage, session, steer, asJSON, out, stderr)
 }
 
 // execDecision decides the pending call a run left in a saved session, as
 // the console's card would, and runs the turn to its end. Only the first
 // pending call can be decided; --call names it to make sure it is the one.
-func execDecision(ctx context.Context, resolve application.ResolveToolUseCase, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, call string, decision domain.ToolDecision, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+func execDecision(ctx context.Context, resolve application.ResolveToolUseCase, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, call string, decision domain.ToolDecision, steer *execSteerFile, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
 	pending := session.Pending()
 	if len(pending) == 0 {
 		fmt.Fprintf(stderr, "axlr-tui: session %s has no pending call to decide\n", session.ID())
@@ -308,14 +308,16 @@ func execDecision(ctx context.Context, resolve application.ResolveToolUseCase, s
 		}
 		return resolve.Execute(ctx, s, id, decision, emit)
 	}
-	return execLoop(ctx, first, start, agent, usage, session, asJSON, out, stderr)
+	return execLoop(ctx, first, start, agent, usage, session, steer, asJSON, out, stderr)
 }
 
 // execLoop drives one execution: its first step, then the agent's loop until
 // an answer or a decision, and past the context cap the successor's turn.
-// It ends by writing the result and returns the session the execution
-// ended in and the exit code.
-func execLoop(ctx context.Context, first execStep, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
+// What a person writes to --steer-file while it works goes to the model
+// between steps; written after the last step, it gets one more turn. It
+// ends by writing the result and returns the session the execution ended
+// in and the exit code.
+func execLoop(ctx context.Context, first execStep, start application.StartTurnUseCase, agent application.AgentTurnUseCase, usage execLedgers, session domain.Session, steer *execSteerFile, asJSON bool, out, stderr io.Writer) (domain.Session, int) {
 	encoder := json.NewEncoder(out)
 	correlation := execCorrelationOf(session)
 	write := func(event execEvent) {
@@ -356,6 +358,12 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 		}
 		return nil
 	}
+	if steer != nil {
+		steer.taken = func(text root.Text) {
+			write(execEvent{Type: "steered", Session: string(session.ID()), Text: string(text)})
+		}
+		ctx = application.WithSteer(ctx, steer)
+	}
 	var err error
 	var predecessors []domain.SessionID
 	var spanned []domain.Session
@@ -388,6 +396,18 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 		}
 		step = func(ctx context.Context, s *domain.Session, emit func(application.Event) error) error {
 			return start.Execute(ctx, s, text, emit)
+		}
+	}
+	// A message that came after the last step: the run answers it before
+	// it ends.
+	for err == nil && domain.NewExecutionResult(session, nil).Status == domain.ExecutionCompleted {
+		text, ok := steer.Take()
+		if !ok {
+			break
+		}
+		err = start.Execute(ctx, &session, text, emit)
+		if err == nil && (session.Status() == domain.StatusStreaming || session.Status() == domain.StatusApproval) {
+			err = agent.Execute(ctx, &session, emit)
 		}
 	}
 	if !asJSON {

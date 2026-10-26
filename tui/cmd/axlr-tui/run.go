@@ -96,6 +96,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	sandboxFlag := flags.String("sandbox", "", "with --exec or --decide: a JSON file with the execution's sandbox (docs/runtime-contract.md): profile none, process or container, egress none, allowlist (with its allow list) or full; local commands and forged tools run under it, a sandbox this host cannot give ends the run before it starts, and the session keeps it")
 	routingFlag := flags.String("routing", "", "with --exec or --decide: a JSON file with the execution's routing (docs/runtime-contract.md): candidate models, objective cost, latency or quality-first, allow_remote_providers, max_context_tokens and max_request_usd; each request goes to the best candidate the constraints allow, a provider failure is taken once by the next, and the session keeps the routing")
 	skillsFlag := flags.String("skills", "", "with --exec or --decide: a JSON file with the execution's catalog skills (docs/runtime-contract.md): a list of {name, version, catalog}; the execution reads exactly those installed versions, a pin not installed ends the run before it starts, and the session keeps them")
+	steerFlag := flags.String("steer-file", "", "with --exec or --decide: a file the run reads between model steps for what a person writes to it while it works, one message per line (plain text or {\"text\": ...}); a message written after the last step gets one more turn")
 	correlationFlag := flags.String("correlation", "", "with --exec or --decide: a JSON file with the execution's correlation (docs/runtime-contract.md): bot_id, task_id, execution_id and trace_id, carried into every event, trace record and session record")
 	callFlag := flags.String("call", "", "with --decide: the id of the pending call, to make sure it is the one")
 	var paths, selections []string
@@ -128,8 +129,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
 		}
 	}
-	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *sandboxFlag != "" || *skillsFlag != "" || *routingFlag != "" || *correlationFlag != "") {
-		return fail(errors.New("--approve, --json, --mode, --policy, --budget, --sandbox, --routing, --skills and --correlation go with --exec or --decide"))
+	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *sandboxFlag != "" || *skillsFlag != "" || *routingFlag != "" || *correlationFlag != "" || *steerFlag != "") {
+		return fail(errors.New("--approve, --json, --mode, --policy, --budget, --sandbox, --routing, --skills, --correlation and --steer-file go with --exec or --decide"))
 	}
 	if *callFlag != "" && *decideFlag == "" {
 		return fail(errors.New("--call goes with --decide"))
@@ -1027,10 +1028,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		start.Approval, agent.Approval, resolve.Approval = policy, policy, policy
 		var final domain.Session
 		var code int
+		var steer *execSteerFile
+		if *steerFlag != "" {
+			steer = newExecSteerFile(*steerFlag)
+		}
 		if *decideFlag != "" {
-			final, code = execDecision(ctx, resolve, start, agent, store, *session, *callFlag, execDecided, *jsonFlag, execOutput, stderr)
+			final, code = execDecision(ctx, resolve, start, agent, store, *session, *callFlag, execDecided, steer, *jsonFlag, execOutput, stderr)
 		} else {
-			final, code = execTurn(ctx, start, agent, store, *session, *execFlag, *jsonFlag, execOutput, stderr)
+			final, code = execTurn(ctx, start, agent, store, *session, *execFlag, steer, *jsonFlag, execOutput, stderr)
 		}
 		if sessionCeremony != nil {
 			_ = sessionCeremony.Close(context.WithoutCancel(ctx), &final, "exit")
