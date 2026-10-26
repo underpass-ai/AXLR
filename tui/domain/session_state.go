@@ -68,6 +68,9 @@ type SessionState struct {
 	// Sandbox confines the execution's commands, nil for the console's
 	// own; kept beside the snapshot like Policy.
 	Sandbox *ExecutionSandbox
+	// Skills pins the execution's catalog skills, nil for the newest
+	// installed; kept beside the snapshot like Policy.
+	Skills *ExecutionSkills
 }
 
 // RestoreSession validates transcript and activity together without executing work.
@@ -125,6 +128,11 @@ func restoreSession(state SessionState, interruptActive bool) (Session, error) {
 	}
 	if state.Sandbox != nil {
 		if err = state.Sandbox.Validate(); err != nil {
+			return Session{}, err
+		}
+	}
+	if state.Skills != nil {
+		if err = state.Skills.Validate(); err != nil {
 			return Session{}, err
 		}
 	}
@@ -259,6 +267,10 @@ func cloneState(state SessionState) SessionState {
 	if state.Sandbox != nil {
 		sandbox := state.Sandbox.Clone()
 		state.Sandbox = &sandbox
+	}
+	if state.Skills != nil {
+		skills := state.Skills.Clone()
+		state.Skills = &skills
 	}
 	if len(state.MessageTimes) > len(state.Messages) {
 		state.MessageTimes = state.MessageTimes[:len(state.Messages)]

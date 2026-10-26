@@ -4,7 +4,10 @@ import "context"
 
 // SkillPage is a bounded page of a text resource in an installed AXLR plugin.
 type SkillPage struct {
-	Plugin          string `json:"plugin"`
+	Plugin string `json:"plugin,omitempty"`
+	// Catalog and Version name a catalog skill's page instead of Plugin.
+	Catalog         string `json:"catalog,omitempty"`
+	Version         string `json:"version,omitempty"`
 	Skill           string `json:"skill"`
 	Path            string `json:"path"`
 	OffsetBytes     int    `json:"offset_bytes"`
@@ -16,4 +19,10 @@ type SkillPage struct {
 
 type PluginSkillPort interface {
 	ReadSkill(context.Context, string, string, string, int, int) (SkillPage, error)
+}
+
+// CatalogSkillPagePort serves pages of the session's catalog skills: the
+// pinned version, or the newest installed.
+type CatalogSkillPagePort interface {
+	ReadCatalogSkill(ctx context.Context, catalog, skill, path string, offset, limit int) (SkillPage, error)
 }

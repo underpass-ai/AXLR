@@ -26,6 +26,7 @@ type ExecutionReceipt struct {
 	Policy      *ExecutionPolicy
 	Budget      *ExecutionBudget
 	Sandbox     *ExecutionSandbox
+	Skills      *ExecutionSkills
 	Correlation *ExecutionCorrelation
 	Requests    []ReceiptRequest
 	Calls       []ReceiptCall
@@ -73,6 +74,9 @@ func NewExecutionReceipt(result ExecutionResult, sessions []ReceiptSession) Exec
 		}
 		if sandbox, has := last.Sandbox(); has {
 			receipt.Sandbox = &sandbox
+		}
+		if skills, has := last.Skills(); has {
+			receipt.Skills = &skills
 		}
 		if correlation, has := last.Correlation(); has {
 			receipt.Correlation = &correlation

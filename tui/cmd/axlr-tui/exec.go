@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/contract"
@@ -97,6 +98,54 @@ func readExecSandbox(path string) (domain.ExecutionSandbox, error) {
 		return domain.ExecutionSandbox{}, fmt.Errorf("--sandbox %s: %w", path, err)
 	}
 	return sandbox, nil
+}
+
+// readExecSkills reads the skills file of --skills: the contract's list
+// of pins, bare or wrapped as {"skills": [...]}.
+func readExecSkills(path string) ([]application.SkillRequest, error) {
+	data, err := readExecFile("--skills", path, contract.MaxExecutionSkillsBytes)
+	if err != nil {
+		return nil, err
+	}
+	wire, err := contract.ParseExecutionSkills(data)
+	if err != nil {
+		return nil, fmt.Errorf("--skills %s: %w", path, err)
+	}
+	requests := make([]application.SkillRequest, 0, len(wire))
+	for _, pin := range wire {
+		requests = append(requests, application.SkillRequest{Catalog: pin.Catalog, Name: pin.Name, Version: pin.Version})
+	}
+	return requests, nil
+}
+
+// checkPinnedSkills says which catalog skills the execution reads, or why
+// a pin cannot be served: its version removed, or reinstalled from another
+// bundle.
+func checkPinnedSkills(ctx context.Context, installed application.InstalledSkillsPort, skills domain.ExecutionSkills) (string, error) {
+	have, err := installed.List(ctx)
+	if err != nil {
+		return "", err
+	}
+	names := make([]string, 0, len(skills.Pins))
+	for _, pin := range skills.Pins {
+		found := false
+		for _, skill := range have {
+			if skill.Catalog == pin.Catalog && skill.Name == pin.Name && skill.Version == pin.Version {
+				if skill.BundleSHA256 != pin.BundleSHA256 {
+					return "", fmt.Errorf("%w: %s %s of catalog %s was reinstalled from another bundle", domain.ErrSkillsUnavailable, pin.Name, pin.Version, pin.Catalog)
+				}
+				found = true
+			}
+		}
+		if !found {
+			return "", fmt.Errorf("%w: %s %s of catalog %s is no longer installed", domain.ErrSkillsUnavailable, pin.Name, pin.Version, pin.Catalog)
+		}
+		names = append(names, pin.Catalog+"/"+pin.Name+"@"+pin.Version)
+	}
+	if len(names) == 0 {
+		return "skills pinned: none (no catalog skill)", nil
+	}
+	return "skills pinned: " + strings.Join(names, ", "), nil
 }
 
 // readExecCorrelation reads the correlation file of --correlation: the

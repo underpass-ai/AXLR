@@ -518,3 +518,110 @@ func allowedURL(address string) error {
 		return fmt.Errorf("catalog URL %s must use https", address)
 	}
 }
+
+// maxSkillFileBytes bounds one file of a skill, as the registry does.
+const maxSkillFileBytes = application.MaxSkillFileBytes
+
+var _ application.SkillStagePort = (*Client)(nil)
+
+// StageSkill implements application.SkillStagePort: the skill's manifest
+// and files, each checked against the digests the cached signed index
+// carries.
+func (c *Client) StageSkill(ctx context.Context, catalog, name, version string) (application.StagedSkill, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var entry Catalog
+	found := false
+	for _, candidate := range c.Entries {
+		if candidate.Name == catalog {
+			entry, found = candidate, true
+		}
+	}
+	if !found {
+		return application.StagedSkill{}, fmt.Errorf("no catalog is named %s", catalog)
+	}
+	key, err := c.key(entry)
+	if err != nil {
+		return application.StagedSkill{}, err
+	}
+	cached, err := c.readCache(entry, key)
+	if err != nil {
+		if cached, err = c.fetchIndex(ctx, entry, key, ""); err != nil {
+			return application.StagedSkill{}, err
+		}
+	}
+	var skill application.CatalogSkillEntry
+	found = false
+	for _, candidate := range cached.index.Skills {
+		if candidate.Name == name && candidate.Version == version {
+			skill, found = candidate, true
+		}
+	}
+	if !found {
+		return application.StagedSkill{}, fmt.Errorf("catalog %s has no skill %s %s", catalog, name, version)
+	}
+	base, err := indexBase(entry.URL)
+	if err != nil {
+		return application.StagedSkill{}, err
+	}
+	if err := safeRelative(skill.Manifest); err != nil {
+		return application.StagedSkill{}, fmt.Errorf("catalog %s: manifest path of skill %s %s: %v", catalog, name, version, err)
+	}
+	manifestBytes, err := c.fetch(ctx, base+skill.Manifest, maxManifestBytes)
+	if err != nil {
+		return application.StagedSkill{}, fmt.Errorf("catalog %s: manifest of skill %s %s: %v", catalog, name, version, err)
+	}
+	if sum := sha256.Sum256(manifestBytes); hex.EncodeToString(sum[:]) != strings.ToLower(skill.ManifestSHA256) {
+		return application.StagedSkill{}, fmt.Errorf("catalog %s: the manifest of skill %s %s does not match the digest the signed index carries; the install is refused", catalog, name, version)
+	}
+	var manifest struct {
+		Kind        string   `json:"kind"`
+		Name        string   `json:"name"`
+		Description string   `json:"description"`
+		Files       []string `json:"files"`
+		Tools       []string `json:"tools"`
+		Catalog     struct {
+			Version string `json:"version"`
+		} `json:"catalog"`
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return application.StagedSkill{}, fmt.Errorf("catalog %s: the manifest of skill %s %s is not JSON: %v", catalog, name, version, err)
+	}
+	if manifest.Kind != "skill" {
+		return application.StagedSkill{}, fmt.Errorf("catalog %s: the manifest at %s is not a skill's", catalog, skill.Manifest)
+	}
+	if manifest.Name != name || manifest.Catalog.Version != version {
+		return application.StagedSkill{}, fmt.Errorf("catalog %s: the manifest at %s is %s %s, not %s %s", catalog, skill.Manifest, manifest.Name, manifest.Catalog.Version, name, version)
+	}
+	if len(manifest.Files) == 0 || len(manifest.Files) != len(skill.Files) {
+		return application.StagedSkill{}, fmt.Errorf("catalog %s: the manifest of skill %s %s lists %d files and the index %d", catalog, name, version, len(manifest.Files), len(skill.Files))
+	}
+	dir := path.Dir(skill.Manifest)
+	files := make([]application.SkillFile, 0, len(manifest.Files))
+	for _, file := range manifest.Files {
+		if err := safeRelative(file); err != nil || strings.Contains(file, "/") {
+			return application.StagedSkill{}, fmt.Errorf("catalog %s: file %q of skill %s %s is not a flat name", catalog, file, name, version)
+		}
+		want, listed := skill.Files[file]
+		if !listed {
+			return application.StagedSkill{}, fmt.Errorf("catalog %s: file %s of skill %s %s is not in the signed index; the install is refused", catalog, file, name, version)
+		}
+		content, err := c.fetch(ctx, base+path.Join(dir, file), maxSkillFileBytes)
+		if err != nil {
+			return application.StagedSkill{}, fmt.Errorf("catalog %s: file %s of skill %s %s: %v", catalog, file, name, version, err)
+		}
+		if sum := sha256.Sum256(content); hex.EncodeToString(sum[:]) != strings.ToLower(want) {
+			return application.StagedSkill{}, fmt.Errorf("catalog %s: file %s of skill %s %s does not match the digest the signed index carries; the install is refused", catalog, file, name, version)
+		}
+		files = append(files, application.SkillFile{Path: file, Content: content})
+	}
+	return application.StagedSkill{
+		Catalog:          catalog,
+		Entry:            skill,
+		IndexGeneratedAt: cached.index.GeneratedAt,
+		Description:      strings.TrimSpace(manifest.Description),
+		Tools:            append([]string{}, manifest.Tools...),
+		Files:            files,
+		Warnings:         append([]string(nil), skill.Warnings...),
+	}, nil
+}

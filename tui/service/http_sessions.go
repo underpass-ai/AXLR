@@ -26,6 +26,7 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		Policy      json.RawMessage `json:"policy"`
 		Budget      json.RawMessage `json:"budget"`
 		Sandbox     json.RawMessage `json:"sandbox"`
+		Skills      json.RawMessage `json:"skills"`
 		Correlation json.RawMessage `json:"correlation"`
 	}
 	if !readJSON(w, r, &input) {
@@ -73,6 +74,26 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		}
 		sandbox = &parsed
 	}
+	var skills *domain.ExecutionSkills
+	if given(input.Skills) {
+		wire, err := contract.ParseExecutionSkills(input.Skills)
+		if err != nil {
+			writeError(w, requestID(r), 422, "invalid_skills", "invalid skills: "+err.Error())
+			return
+		}
+		requests := make([]application.SkillRequest, 0, len(wire))
+		for _, pin := range wire {
+			requests = append(requests, application.SkillRequest{Catalog: pin.Catalog, Name: pin.Name, Version: pin.Version})
+		}
+		// A pin this service has not installed is refused with the
+		// session: an execution never installs.
+		pins, err := application.ResolveSkillPins(r.Context(), s.deps.Skills, requests)
+		if err != nil {
+			writeError(w, requestID(r), 422, "skills_unavailable", err.Error())
+			return
+		}
+		skills = &pins
+	}
 	var correlation *domain.ExecutionCorrelation
 	if given(input.Correlation) {
 		parsed, err := contract.ParseExecutionCorrelation(input.Correlation)
@@ -110,6 +131,12 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	if correlation != nil {
 		if err := session.SetCorrelation(*correlation); err != nil {
 			writeError(w, requestID(r), 422, "invalid_correlation", "invalid correlation: "+err.Error())
+			return
+		}
+	}
+	if skills != nil {
+		if err := session.SetSkills(*skills); err != nil {
+			writeError(w, requestID(r), 422, "invalid_skills", "invalid skills: "+err.Error())
 			return
 		}
 	}
@@ -159,7 +186,7 @@ func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {
 		writeError(w, requestID(r), 500, "storage_error", "unable to read events")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "receipt": s.executionReceipt(session), "policy": executionPolicy(session), "budget": executionBudget(session), "sandbox": executionSandbox(session), "correlation": executionCorrelation(session)})
+	writeJSON(w, 200, map[string]any{"id": state.ID, "model": state.Model, "status": state.Status, "revision": state.Revision, "operation_id": state.OperationID, "last_sequence": len(last), "messages": state.Messages, "pending": session.Pending(), "result": s.executionResult(session, ""), "receipt": s.executionReceipt(session), "policy": executionPolicy(session), "budget": executionBudget(session), "sandbox": executionSandbox(session), "skills": executionSkills(session), "correlation": executionCorrelation(session)})
 }
 
 func (s *Server) handleStartTurn(w http.ResponseWriter, r *http.Request) {
