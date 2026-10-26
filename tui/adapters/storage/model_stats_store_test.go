@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -29,7 +30,7 @@ func TestModelStatsStoreKeepsWhatRequestsSaidAcrossInstances(t *testing.T) {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("the stats file is not private: %v %v", info, err)
 	}
 	other, _ := NewModelStatsStore(path)

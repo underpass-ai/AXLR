@@ -19,9 +19,9 @@ paths:
             schema:
               type: object
               additionalProperties: false
-              required: [model]
+              description: Needs a model, or a routing whose first candidate becomes the session's model; without either, 422 invalid_model.
               properties:
-                model: {type: string, minLength: 1}
+                model: {type: string, minLength: 1, description: The session's model; with a routing, absent takes its first candidate.}
                 policy:
                   description: The execution's policy (the runtime contract); the session keeps it and every turn and decision applies it.
                   $ref: '#/components/schemas/ExecutionPolicy'
@@ -31,6 +31,9 @@ paths:
                 sandbox:
                   description: The execution's sandbox (the runtime contract), which confines the session's local_exec and forged tools; a sandbox this host cannot give is refused with 422 sandbox_unavailable, never replaced by a weaker one. The session keeps it.
                   $ref: '#/components/schemas/ExecutionSandbox'
+                routing:
+                  description: The execution's routing (the runtime contract), which chooses the model of each request among its candidates by its objective, never one its constraints exclude; absent, the service's settings routing if any. An invalid routing is 422 invalid_routing. The session keeps it.
+                  $ref: '#/components/schemas/ExecutionRouting'
                 correlation:
                   description: The execution's correlation ids (the runtime contract), carried unchanged into every event, the result and the session's records.
                   $ref: '#/components/schemas/ExecutionCorrelation'
@@ -380,6 +383,9 @@ components:
         sandbox:
           description: The execution's sandbox the session's commands run under, its egress spelled out and its destinations normalised; null without one.
           oneOf: [{$ref: '#/components/schemas/ExecutionSandbox'}, {type: 'null'}]
+        routing:
+          description: The execution's routing the session's requests go by, allow_remote_providers spelled out; null without one.
+          oneOf: [{$ref: '#/components/schemas/ExecutionRouting'}, {type: 'null'}]
         correlation:
           description: The execution's correlation ids; null without any.
           oneOf: [{$ref: '#/components/schemas/ExecutionCorrelation'}, {type: 'null'}]
@@ -399,10 +405,10 @@ components:
         operation_id: {type: string}
         sequence: {type: integer, minimum: 1}
         time: {type: string, format: date-time}
-        type: {type: string, enum: [turn.started, text.delta, tool.requested, approval.required, tool.completed, artifact, turn.completed, turn.interrupted, operation.failed, approval.decision]}
+        type: {type: string, enum: [turn.started, model.routed, text.delta, tool.requested, approval.required, tool.completed, artifact, turn.completed, turn.interrupted, operation.failed, approval.decision]}
         payload:
           type: object
-          description: The event that ends a turn (approval.required, turn.completed, turn.interrupted, operation.failed) carries the execution's result in `result`. An artifact event, after the tool.completed of the axlr_deliver call that delivered it, carries `call_id` and `artifact` (ExecutionArtifact). Every event of a session with a correlation carries it in `correlation`.
+          description: The event that ends a turn (approval.required, turn.completed, turn.interrupted, operation.failed) carries the execution's result in `result`. A model.routed event, before each request of a session with a routing, carries `model` and `route` (ranked, or fallback with `from`, the model that failed, and its `error`). An artifact event, after the tool.completed of the axlr_deliver call that delivered it, carries `call_id` and `artifact` (ExecutionArtifact). Every event of a session with a correlation carries it in `correlation`.
     ExecutionResult:
       type: object
       description: The runtime contract's result object (docs/runtime-contract.md); the same object `axlr-tui --exec --json` writes last.
@@ -450,6 +456,14 @@ components:
             profile: {type: string, enum: [none, process, container]}
             egress: {type: string, enum: [none, allowlist, full]}
             allow: {type: array, items: {type: string}, description: The allowlist egress's destinations.}
+        routing:
+          type: object
+          required: [sha256, objective, candidates, allow_remote_providers]
+          properties:
+            sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the routing's compact JSON as GetSession shows it.}
+            objective: {type: string, enum: [cost, latency, quality-first]}
+            candidates: {type: array, items: {type: string}}
+            allow_remote_providers: {type: boolean}
         correlation: {$ref: '#/components/schemas/ExecutionCorrelation'}
         requests: {type: array, items: {$ref: '#/components/schemas/ReceiptRequest'}}
         tool_calls: {type: array, items: {$ref: '#/components/schemas/ReceiptCall'}}
@@ -464,7 +478,8 @@ components:
         started_at: {type: string, format: date-time}
         duration_ms: {type: integer, minimum: 0, description: Absent for an interrupted request.}
         status: {type: string, enum: [completed, failed, cancelled, interrupted], description: interrupted is a request the process died during; its tokens and cost are unknown.}
-        model: {type: string, description: The model the request asked for.}
+        model: {type: string, description: The model the request asked for; with a routing, the one it chose.}
+        route: {type: string, enum: [ranked, fallback], description: "Why the request went to model under a routing: ranked first, or the fallback of the request before it, which failed; absent without a routing."}
         provider: {type: string, description: Who served it, when the endpoint says.}
         prompt_tokens: {type: integer}
         cached_tokens: {type: integer}
@@ -538,6 +553,17 @@ components:
         requests: {type: integer, minimum: 0, maximum: 1000000, description: Model requests the execution may make.}
         tool_calls: {type: integer, minimum: 0, maximum: 1000000, description: Tool calls the execution may run.}
         usd: {type: number, minimum: 0, maximum: 1000000, description: Dollars the execution's requests may report.}
+    ExecutionRouting:
+      type: object
+      description: The runtime contract's routing per execution (docs/runtime-contract.md), which chooses the model of each request among the candidates; a request goes only to a candidate its constraints allow, a provider failure before any output is taken once by the next candidate, and a request no candidate may take is refused.
+      additionalProperties: false
+      required: [candidates, objective]
+      properties:
+        candidates: {type: array, minItems: 1, maxItems: 8, uniqueItems: true, items: {type: string, minLength: 1}, description: "local_models ids or OpenRouter ids; with quality-first, best first."}
+        objective: {type: string, enum: [cost, latency, quality-first], description: "cost: the lowest expected dollars per request (a model on this host costs none); latency: the shortest expected time per request; quality-first: the order given."}
+        allow_remote_providers: {type: boolean, description: "false keeps every request on this host: only local_models entries whose url names a loopback address; absent allows remote providers."}
+        max_context_tokens: {type: integer, minimum: 0, maximum: 16777216, description: A cap on every request's context on top of each model's own; 0 or absent for none.}
+        max_request_usd: {type: number, minimum: 0, maximum: 1000, description: "A ceiling on one request's expected cost; a candidate over it, or whose cost cannot be told, is excluded. 0 or absent for none."}
     ExecutionSandbox:
       type: object
       description: The runtime contract's sandbox per execution (docs/runtime-contract.md), which confines local_exec and the forged tools; AXLR's own model requests and MCP servers run outside it.
