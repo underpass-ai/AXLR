@@ -164,7 +164,7 @@ A tool is accepted with at least three test cases, a README that names the metho
 - No execution on the server, no "run this tool in the browser".
 - No ranking, stars or download counts in the first version.
 - No automatic installation when the model finds a matching tool: the model proposes, the person approves.
-- No skills: the retired `axlr-ceremonies` skill catalogue (5 Oct 2026) showed that a protocol the model must follow by reading costs more than real models can pay; a downloaded ceremony is driven by the console.
+- No skills: the retired `axlr-ceremonies` skill catalogue (5 Oct 2026) showed that a protocol the model must follow by reading costs more than real models can pay; a downloaded ceremony is driven by the console. Update, 26 Oct 2026: skills joined the catalog as guidance the model opens on demand, not a protocol it must follow ([catalog skills](2026-10-26-catalog-skills-design.md)).
 
 ## Open mechanisms
 

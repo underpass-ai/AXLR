@@ -20,7 +20,8 @@ import (
 // and for the control plane, which gives a bot its skills without a screen.
 const skillsCommand = "skills"
 
-const skillsUsage = `usage: axlr-tui skills <command>
+const skillsUsage = `usage: axlr-tui skills [--state <dir>] <command>
+  --state <dir>                                     AXLR's state directory (an axlr-serve state_dir); default $XDG_STATE_HOME/axlr
   list [--refresh]                                  installed catalog skills, the catalogs' skills and newer versions
   search <terms...>                                 catalog skills by name, tags, category and summary
   install <name>[@version] [--from <catalog>] [--yes]  stage, verify and show a skill; --yes installs it
@@ -48,7 +49,15 @@ func runSkillsCommand(ctx context.Context, args []string, getenv func(string) st
 		}
 		return 0
 	}
-	env, err := openSkillsEnvironment(ctx, getenv)
+	state := ""
+	if args[0] == "--state" {
+		if len(args) < 3 || !filepath.IsAbs(args[1]) {
+			fmt.Fprintln(stderr, "axlr-tui skills: --state takes an absolute directory and is followed by a command")
+			return 2
+		}
+		state, args = args[1], args[2:]
+	}
+	env, err := openSkillsEnvironment(ctx, getenv, state)
 	if err != nil {
 		fmt.Fprintln(stderr, "axlr-tui skills:", err)
 		return 1
@@ -56,7 +65,7 @@ func runSkillsCommand(ctx context.Context, args []string, getenv func(string) st
 	return env.run(ctx, args, stdout, stderr)
 }
 
-func openSkillsEnvironment(ctx context.Context, getenv func(string) string) (skillsEnvironment, error) {
+func openSkillsEnvironment(ctx context.Context, getenv func(string) string, stateDir string) (skillsEnvironment, error) {
 	configBase, stateBase := getenv("XDG_CONFIG_HOME"), getenv("XDG_STATE_HOME")
 	home := getenv("HOME")
 	if !filepath.IsAbs(configBase) || !filepath.IsAbs(stateBase) {
@@ -79,6 +88,9 @@ func openSkillsEnvironment(ctx context.Context, getenv func(string) string) (ski
 		return skillsEnvironment{}, err
 	}
 	state := filepath.Join(stateBase, "axlr")
+	if stateDir != "" {
+		state = stateDir
+	}
 	skills, err := compose.NewCatalogSkills(settings, state)
 	if err != nil {
 		return skillsEnvironment{}, err

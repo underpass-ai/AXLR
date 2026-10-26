@@ -27,6 +27,7 @@ An execution is a session of AXLR: its transcript, its tool calls with their dec
 | Policy | `--policy <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`policy`) |
 | Budget | `--budget <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`budget`) |
 | Sandbox | `--sandbox <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`sandbox`) |
+| Skills | `--skills <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`skills`) |
 | Correlation | `--correlation <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`correlation`) |
 
 The approval level is the run's own policy on top of `settings.json`: `none` approves nothing the settings do not, `local` the workspace's reads, writes and commands and the forged tools, `all` every tool. The destructive list (`approvals.always_ask`) asks either way, and a call it holds ends the execution in `needs_decision`. A policy decides outside the model: the model asks, the policy answers.
@@ -139,6 +140,25 @@ How it is chosen and refused:
 - The session keeps the sandbox: later turns and `--decide` run under it without the flag, a new `--sandbox` replaces it, and the successor sessions a context cap opens carry it. `--exec` says on stderr what it got: `sandbox process (bwrap): …; egress allowlist (api.github.com:443)`, or `sandbox container (rootless podman, image …)`.
 - A container on a rootful Docker daemon is confined as well, but the daemon runs as root: a flaw in it or in the kernel is a flaw as root. `--exec` says `rootful docker`; prefer a rootless Podman, or Docker in rootless mode.
 - The `process` and `container` profiles need Linux; on macOS and Windows they are refused. Inside a container the relay is the AXLR binary itself, which runs there because AXLR's releases are static.
+
+## Skills per execution
+
+A program pins the catalog skills an execution reads, so a bot follows the procedure version it was given while a newer one is installed beside it: `axlr-tui --exec --skills <file.json>` reads them (and `--decide --skills`), `CreateSession` takes them as `skills` and `GetSession` shows them. The file holds the list below, with or without the `skills` wrapper; an unknown field refuses it. Catalog skills are installed beforehand, by a person (`/skills install`) or a program (`axlr-tui skills install … --yes`): an execution never installs ([catalog skills](console.md#catalog-skills)).
+
+```json
+{"skills": [{"name": "incident_triage", "version": "1.0.0", "catalog": "axlr"}]}
+```
+
+| Field | Meaning |
+|---|---|
+| `name`, `version` | The skill and the exact version (`major.minor.patch`) the execution reads |
+| `catalog` | The catalog it was installed from; may be left out when one catalog's install has the name |
+
+What it decides:
+
+- With `skills`, the execution's catalog skills are exactly those, at those versions: the skill index of its system prompt lists them and `axlr_skill` serves them, and a catalog skill it does not pin is refused (`this execution's skills do not include …`). An empty list is an execution with no catalog skill. Without `skills`, an execution reads every installed catalog skill at its newest installed version, read when the model asks. The console's own and the plugins' skills are not catalog-versioned and stay as they are.
+- A pin that is not installed ends the execution before its first request: `--exec` exits 1 with `the execution's skills are unavailable here: incident_triage 1.0.0 is not installed (installed: 1.1.0)`, and `CreateSession` answers `422 skills_unavailable`. A pinned version removed, or reinstalled from another bundle, since the session took it ends a later `--exec` or `--decide` the same way; on the service, `axlr_skill` refuses it with the reason.
+- The session keeps the pins, resolved: `GetSession` shows each with its `catalog` and the `bundle_sha256` of the bundle installed when the execution began. Later turns and decisions read the same versions, a new `--skills` replaces them, and the successor sessions a context cap opens carry them. `--exec` says on stderr what it got: `skills pinned: axlr/incident_triage@1.0.0`.
 
 ## Correlation
 
@@ -263,6 +283,7 @@ The receipt is the execution's account for an audit: every model request with it
   "policy": {"level": "observe", "sha256": "41aa…"},
   "budget": {"sha256": "c3d0…", "limits": {"seconds": 900, "requests": 20, "tool_calls": 60, "usd": 0.5}},
   "sandbox": {"sha256": "a1c4…", "profile": "process", "egress": "allowlist", "allow": ["api.github.com:443"]},
+  "skills": {"sha256": "7d02…", "pins": [{"name": "incident_triage", "version": "1.0.0", "catalog": "axlr", "bundle_sha256": "b81f…"}]},
   "correlation": {"bot_id": "server-incident-investigator", "task_id": "task-789"},
   "requests": [
     {"session_id": "6c1f…", "index": 1, "started_at": "2026-10-25T09:14:02.301Z", "duration_ms": 2310, "status": "completed", "model": "anthropic/claude-haiku-5.5", "provider": "Anthropic", "prompt_tokens": 3120, "cached_tokens": 2048, "cache_write_tokens": 0, "completion_tokens": 96, "reasoning_tokens": 0, "cost_usd": 0.0021, "unmetered": false}
@@ -283,6 +304,7 @@ The receipt is the execution's account for an audit: every model request with it
 | `policy` | The execution's policy: its `level` and the `sha256` of its compact JSON as the contract writes it (`{"level":…,"tools":{…}}`, fields in the order above, argument patterns by name); absent without one |
 | `budget` | The execution's budget: its `limits` and the `sha256` of their compact JSON (`{"seconds":…,"requests":…,"tool_calls":…,"usd":…}`, zero limits left out); absent without one |
 | `sandbox` | The execution's sandbox: its `profile`, `egress` and `allow`, and the `sha256` of its compact JSON as `GetSession` shows it (`{"profile":…,"egress":…,"allow":[…],"writable":[…],"readable":[…],"container":{…}}`, the egress spelled out, each destination as the contract reads it: lower case, no trailing dot, empty lists left out); absent without one |
+| `skills` | The execution's pinned catalog skills: each `name`, `version`, `catalog` and `bundle_sha256`, and the `sha256` of the pins' compact JSON as `GetSession` shows them; absent without pins. Which version an `axlr_skill` call read is in its result, whose digest is the call's `outcome_sha256` |
 | `requests` | Every model request of the spanned sessions, in order. `index` counts from 1 in each session; `model` is the one asked for and `provider` who served it, when the endpoint says. `status` is `completed`, `failed`, `cancelled` or `interrupted` (the process died during it: tokens and cost unknown). `cost_usd` is null when the request reported none; `unmetered` marks a request whose tokens are estimates |
 | `tool_calls` | Every call of the spanned sessions, in order, as the result's `tool_calls` with `arguments_sha256` (the call's arguments as the session keeps them, compact JSON), `outcome_sha256` (its result's text; absent while pending), and `started_at` and `duration_ms` for a call that ran (absent for one refused, or one that never ended) |
 | `total` | The requests above, summed as the result's `usage` is |
@@ -320,7 +342,8 @@ Every line and every payload carries the execution's `correlation` when it has o
 - A tool call never runs on the model's say-so: the execution's policy, the run's approval level, the settings' rules, the work mode and the destructive list decide. A call the policy forbids is refused outside the model, and a call none of them approves ends the execution in `needs_decision`.
 - The result is written once, after the session is saved, so a reader that sees it can continue the session.
 - On the service, a turn, a decision and a direct call are idempotent on their key, revisions guard decisions and cancellation, and a session interrupted by a crash, in a model request or in a tool's run, is journaled `turn.interrupted` at the next start.
-- Past the context cap the execution continues in a successor; the result names every session, and their usage is summed. The successor is the same execution: it carries the policy, the budget with what was spent, and the correlation.
+- Past the context cap the execution continues in a successor; the result names every session, and their usage is summed. The successor is the same execution: it carries the policy, the budget with what was spent, the sandbox, the pinned skills and the correlation.
 - The budget is kept outside the model: a limit reached refuses the next request or call before it is made, whatever the model asked for, and the session stays resumable.
+- An execution with pinned skills reads those versions or does not start: a pin this host has not installed ends it before its first request, and a newer version installed meanwhile changes nothing for it.
 - A command of an execution with a sandbox runs under that sandbox or not at all: a sandbox the host cannot give ends the execution before its first request, and the allow list is the only way out of a sandbox without the network.
 - The receipt is journaled as each request and call starts and ends, before the next step: a restart loses none of what ran, and a request or call cut by the restart is listed as interrupted or without its end.
