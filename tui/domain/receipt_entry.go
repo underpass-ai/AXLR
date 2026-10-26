@@ -41,6 +41,11 @@ func (e ReceiptEntry) Validate() error {
 		if _, err := axlr.NewModelID(string(e.Model)); err != nil {
 			return err
 		}
+		switch e.Route {
+		case "", RouteRanked, RouteFallback:
+		default:
+			return errors.New("a request's route is ranked or fallback")
+		}
 	case ReceiptRequestEnded:
 		switch e.Status {
 		case ReceiptRequestCompleted, ReceiptRequestFailed, ReceiptRequestCancelled:

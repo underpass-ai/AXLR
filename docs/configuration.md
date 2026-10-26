@@ -347,7 +347,7 @@ The provider reports no cost, so the [usage ledger](console.md#usage) counts the
 
 ### routing
 
-Object; absent means none. The routing an execution takes when it brings none: an `axlr-tui --exec` or `--decide` run without `--routing`, and a service session created without `routing`. A session that already has a routing keeps its own, and the console's own sessions are not routed. The object is the runtime contract's [routing per execution](runtime-contract.md#routing-per-execution), read as strictly: an unknown field, an unknown `objective`, no candidate or one named twice refuse the file (`settings routing: …`). Source: [user_settings_routing.go](../tui/adapters/storage/user_settings_routing.go).
+Object; absent means none. The routing an execution takes when it brings none: an `axlr-tui --exec` or `--decide` run without `--routing`, and a service session created without `routing`. A session that already has a routing keeps its own. The console applies no default routing to the sessions it creates; a session that took a routing from `--exec` or `CreateSession` keeps routing its requests when the console opens it. The object is the runtime contract's [routing per execution](runtime-contract.md#routing-per-execution), read as strictly: an unknown field, an unknown `objective`, no candidate or one named twice refuse the file (`settings routing: …`). Source: [user_settings_routing.go](../tui/adapters/storage/user_settings_routing.go).
 
 | Field | Type | Default | Meaning |
 |:--|:--|:--|:--|
