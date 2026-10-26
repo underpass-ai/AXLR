@@ -219,8 +219,9 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			return err
 		}
 		// The runtime names the call in its result for the model to cite,
-		// and confines its commands under the execution's sandbox.
-		ctx := WithSessionSandbox(WithToolCall(ctx, id), *s)
+		// and confines its commands under the execution's sandbox;
+		// axlr_skill reads the execution's pinned skills.
+		ctx := WithSessionSkills(WithSessionSandbox(WithToolCall(ctx, id), *s), *s)
 		var outcome domain.ToolOutcome
 		var runErr error
 		var step *StepResult

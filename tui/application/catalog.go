@@ -55,14 +55,16 @@ type CatalogState struct {
 	Warning string
 }
 
-// CatalogIndex is index.json (decision D2 of the design); ceremonies are
-// kept as they come for the ceremony install that is not built yet.
+// CatalogIndex is index.json (decision D2 of the design) with the skills
+// of the catalog skills design; ceremonies are kept as they come for the
+// ceremony install that is not built yet.
 type CatalogIndex struct {
-	SchemaVersion int             `json:"schema_version"`
-	Catalog       string          `json:"catalog"`
-	GeneratedAt   string          `json:"generated_at"`
-	Tools         []CatalogEntry  `json:"tools"`
-	Ceremonies    json.RawMessage `json:"ceremonies,omitempty"`
+	SchemaVersion int                 `json:"schema_version"`
+	Catalog       string              `json:"catalog"`
+	GeneratedAt   string              `json:"generated_at"`
+	Tools         []CatalogEntry      `json:"tools"`
+	Skills        []CatalogSkillEntry `json:"skills,omitempty"`
+	Ceremonies    json.RawMessage     `json:"ceremonies,omitempty"`
 }
 
 // CatalogEntry is one tool of an index.

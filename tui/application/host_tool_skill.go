@@ -15,12 +15,21 @@ func (u HostToolUseCase) readSkill(ctx context.Context, arguments root.JSONValue
 	if u.Skills == nil {
 		return nil, errors.New("installed plugin skills are unavailable")
 	}
-	args, err := decodeHostArguments(arguments, "plugin", "skill", "path", "offset_bytes", "limit_bytes")
+	args, err := decodeHostArguments(arguments, "plugin", "catalog", "skill", "path", "offset_bytes", "limit_bytes")
 	if err != nil {
 		return nil, err
 	}
-	var plugin, skill string
-	if err := json.Unmarshal(args["plugin"], &plugin); err != nil || !skillSelector.MatchString(plugin) {
+	_, hasPlugin := args["plugin"]
+	_, hasCatalog := args["catalog"]
+	if hasPlugin == hasCatalog {
+		return nil, errors.New("name either plugin, for a plugin's or the console's skill, or catalog, for a catalog skill")
+	}
+	var plugin, catalog, skill string
+	if hasCatalog {
+		if err := json.Unmarshal(args["catalog"], &catalog); err != nil || !catalogName.MatchString(catalog) {
+			return nil, errors.New("catalog must be the catalog of an installed skill")
+		}
+	} else if err := json.Unmarshal(args["plugin"], &plugin); err != nil || !skillSelector.MatchString(plugin) {
 		return nil, errors.New("plugin must be an installed plugin name")
 	}
 	if err := json.Unmarshal(args["skill"], &skill); err != nil || !skillSelector.MatchString(skill) {
@@ -39,6 +48,13 @@ func (u HostToolUseCase) readSkill(ctx context.Context, arguments root.JSONValue
 	limit, err := hostInteger(args, "limit_bytes", 4096)
 	if err != nil || limit < 1 || limit > 4096 {
 		return nil, errors.New("limit_bytes must be between 1 and 4096")
+	}
+	if hasCatalog {
+		reader, ok := u.Skills.(CatalogSkillPagePort)
+		if !ok {
+			return nil, errors.New("catalog skills are unavailable in this console")
+		}
+		return reader.ReadCatalogSkill(ctx, catalog, skill, path, offset, limit)
 	}
 	return u.Skills.ReadSkill(ctx, plugin, skill, path, offset, limit)
 }

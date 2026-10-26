@@ -20,6 +20,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == logsCommand {
 		os.Exit(runLogs(os.Args[2:], os.Getenv, os.Stdout, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == skillsCommand {
+		os.Exit(runSkillsCommand(ctx, os.Args[2:], os.Getenv, os.Stdout, os.Stderr))
+	}
 	if len(os.Args) > 1 && os.Args[1] == setupCommand {
 		os.Exit(runSetupCommand(ctx, os.Args[2:], os.Getenv, os.Stdin, os.Stderr))
 	}

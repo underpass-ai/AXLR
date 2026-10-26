@@ -28,8 +28,9 @@ type operationComplete struct {
 	MemoryForgotten *application.ForgetReceipt
 	// UndoMemories is what /undo did with the memories its turn recorded.
 	UndoMemories *undoMemories
-	// Tools is a /tools operation's outcome.
+	// Tools is a /tools operation's outcome, Skills a /skills one's.
 	Tools    *toolsOutcome
+	Skills   *skillsOutcome
 	Session  domain.Session
 	Err      error
 	Sessions *[]domain.SessionSummary

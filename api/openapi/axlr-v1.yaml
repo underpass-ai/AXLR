@@ -31,6 +31,11 @@ paths:
                 sandbox:
                   description: The execution's sandbox (the runtime contract), which confines the session's local_exec and forged tools; a sandbox this host cannot give is refused with 422 sandbox_unavailable, never replaced by a weaker one. The session keeps it.
                   $ref: '#/components/schemas/ExecutionSandbox'
+                skills:
+                  description: The execution's pinned catalog skills (the runtime contract), resolved against the skills installed under the service's state; the session reads exactly these versions. A pin not installed is refused with 422 skills_unavailable. The session keeps them.
+                  type: array
+                  maxItems: 32
+                  items: {$ref: '#/components/schemas/ExecutionSkillPin'}
                 correlation:
                   description: The execution's correlation ids (the runtime contract), carried unchanged into every event, the result and the session's records.
                   $ref: '#/components/schemas/ExecutionCorrelation'
@@ -380,6 +385,9 @@ components:
         sandbox:
           description: The execution's sandbox the session's commands run under, its egress spelled out and its destinations normalised; null without one.
           oneOf: [{$ref: '#/components/schemas/ExecutionSandbox'}, {type: 'null'}]
+        skills:
+          description: The execution's pinned catalog skills with their catalog and installed bundle digest; null without pins, an empty list for an execution with no catalog skill.
+          oneOf: [{type: array, items: {$ref: '#/components/schemas/ExecutionSkillPin'}}, {type: 'null'}]
         correlation:
           description: The execution's correlation ids; null without any.
           oneOf: [{$ref: '#/components/schemas/ExecutionCorrelation'}, {type: 'null'}]
@@ -450,6 +458,12 @@ components:
             profile: {type: string, enum: [none, process, container]}
             egress: {type: string, enum: [none, allowlist, full]}
             allow: {type: array, items: {type: string}, description: The allowlist egress's destinations.}
+        skills:
+          type: object
+          required: [sha256, pins]
+          properties:
+            sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the pins' compact JSON as GetSession shows them.}
+            pins: {type: array, items: {$ref: '#/components/schemas/ExecutionSkillPin'}}
         correlation: {$ref: '#/components/schemas/ExecutionCorrelation'}
         requests: {type: array, items: {$ref: '#/components/schemas/ReceiptRequest'}}
         tool_calls: {type: array, items: {$ref: '#/components/schemas/ReceiptCall'}}
@@ -538,6 +552,16 @@ components:
         requests: {type: integer, minimum: 0, maximum: 1000000, description: Model requests the execution may make.}
         tool_calls: {type: integer, minimum: 0, maximum: 1000000, description: Tool calls the execution may run.}
         usd: {type: number, minimum: 0, maximum: 1000000, description: Dollars the execution's requests may report.}
+    ExecutionSkillPin:
+      type: object
+      description: One catalog skill of an execution (docs/runtime-contract.md, Skills per execution). A request names name, version and optionally catalog; GetSession and the receipt show it resolved, with its catalog and bundle_sha256.
+      additionalProperties: false
+      required: [name, version]
+      properties:
+        name: {type: string, pattern: '^[a-z][a-z0-9_]{1,47}$'}
+        version: {type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'}
+        catalog: {type: string, pattern: '^[a-z][a-z0-9_-]{0,31}$'}
+        bundle_sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the installed bundle; never sent in a request.}
     ExecutionSandbox:
       type: object
       description: The runtime contract's sandbox per execution (docs/runtime-contract.md), which confines local_exec and the forged tools; AXLR's own model requests and MCP servers run outside it.

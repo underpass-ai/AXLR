@@ -40,6 +40,10 @@ func ExecutionReceipt(receipt domain.ExecutionReceipt) dto.ExecutionReceipt {
 		wire := ExecutionSandbox(*receipt.Sandbox)
 		out.Sandbox = &dto.ReceiptSandbox{SHA256: jsonDigest(wire), Profile: wire.Profile, Egress: wire.Egress, Allow: wire.Allow}
 	}
+	if receipt.Skills != nil {
+		wire := ExecutionSkills(*receipt.Skills)
+		out.Skills = &dto.ReceiptSkills{SHA256: jsonDigest(wire), Pins: wire}
+	}
 	if receipt.Correlation != nil {
 		correlation := ExecutionCorrelation(*receipt.Correlation)
 		out.Correlation = &correlation

@@ -16,7 +16,9 @@ type Dependencies struct {
 	EngineUpdates    application.EngineUpdatePort
 	// ToolCatalog serves /tools and stages the model's axlr_install_tool
 	// call for its card; its zero value offers neither.
-	ToolCatalog             application.CatalogUseCase
+	ToolCatalog application.CatalogUseCase
+	// SkillCatalog serves /skills.
+	SkillCatalog            application.SkillCatalogUseCase
 	OrchestratorPreparation application.OrchestratorPreparationPort
 	Models                  application.ListModelsUseCase
 	ModelPreference         application.ModelPreferencePort

@@ -21,6 +21,7 @@ import (
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/runtime"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
+	"github.com/underpass-ai/AXLR/tui/adapters/axlrplugin"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
@@ -156,7 +157,17 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "axlr-serve: state unavailable")
 		return 1
 	}
-	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: sessions.Store(), Ceremonies: ceremonies, Session: lifecycle, Calibration: calibration, Language: "en"}
+	// The service lists the console's own skills and the catalog skills
+	// installed under its state, at each session's pinned versions or the
+	// newest; it installs no plugin package.
+	catalogSkills, err := compose.NewCatalogSkills(settings, cfg.StateDir)
+	if err != nil {
+		sessions.Close()
+		fmt.Fprintln(stderr, "axlr-serve: state unavailable")
+		return 1
+	}
+	skillIndex := &axlrplugin.Catalog{Root: cfg.StateDir, CatalogSkills: catalogSkills.Reader}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: sessions.Store(), Ceremonies: ceremonies, Session: lifecycle, Calibration: calibration, Language: "en", PluginGuidance: skillIndex.Guidance, PluginSkills: skillIndex}
 	if _, err := compose.Equip(&continuation, compose.Equipment{Settings: settings, State: cfg.StateDir, Store: sessions.Store(), Usage: sessions.Usage(), Receipts: sessions.Receipts(), Labels: labels, Windows: locals.Windows, Tools: runner, Memory: true, Note: note}); err != nil {
 		sessions.Close()
 		fmt.Fprintln(stderr, "axlr-serve: tools unavailable:", err)
@@ -169,6 +180,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		Catalog: catalog, Tools: runner, Approval: pluginManager, Validation: validator,
 		Ready:        service.EngineReadiness(manager, key),
 		ProbeSandbox: sandboxes.Probe,
+		Skills:       catalogSkills.Store,
 		Sessions:     sessions,
 		Lifecycle:    lifecycle,
 	}

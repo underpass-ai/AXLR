@@ -181,7 +181,8 @@ func (s *SessionStore) Save(ctx context.Context, session domain.Session) error {
 	if e = s.writePolicy(session.Export().ID, session.Export().Policy); e != nil {
 		return e
 	}
-	if e = s.writeExecution(session.Export().ID, session.Export().Budget, session.Export().Correlation, session.Export().Sandbox); e != nil {
+	exported := session.Export()
+	if e = s.writeExecution(exported.ID, executionParts{account: exported.Budget, correlation: exported.Correlation, sandbox: exported.Sandbox, skills: exported.Skills}); e != nil {
 		return e
 	}
 	dir, e := os.Open(s.dir)
@@ -251,7 +252,8 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	if e != nil {
 		return domain.Session{}, e
 	}
-	account, correlation, sandbox, e := s.readExecution(id)
+	parts, e := s.readExecution(id)
+	account, correlation, sandbox := parts.account, parts.correlation, parts.sandbox
 	if e != nil {
 		return domain.Session{}, e
 	}
@@ -276,6 +278,11 @@ func (s *SessionStore) read(id domain.SessionID) (domain.Session, error) {
 	}
 	if sandbox != nil {
 		if e = session.SetSandbox(*sandbox); e != nil {
+			return domain.Session{}, e
+		}
+	}
+	if parts.skills != nil {
+		if e = session.SetSkills(*parts.skills); e != nil {
 			return domain.Session{}, e
 		}
 	}
