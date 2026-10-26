@@ -60,7 +60,7 @@ func TestExecutionRoutingCapNarrowsTheModelsCap(t *testing.T) {
 }
 
 func TestSessionKeepsItsRoutingThroughRestore(t *testing.T) {
-	session, err := NewSession("0123456789abcdef0123456789abcdef", "/tmp/w", "local")
+	session, err := NewSession("0123456789abcdef0123456789abcdef", Workspace(t.TempDir()), "local")
 	if err != nil {
 		t.Fatal(err)
 	}
