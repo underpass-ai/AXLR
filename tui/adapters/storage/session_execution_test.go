@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -135,6 +136,46 @@ func TestSessionStoreKeepsTheSandbox(t *testing.T) {
 		}
 		if _, err := store.Load(ctx, id); err == nil {
 			t.Fatalf("%s: a session with an unreadable sandbox loaded", name)
+		}
+	}
+}
+
+func TestSessionStoreKeepsTheRouting(t *testing.T) {
+	store, dir := openStore(t)
+	id := domain.SessionID("0123456789abcdef0123456789abcdef")
+	session, err := domain.NewSession(id, domain.Workspace(t.TempDir()), "qwen-local")
+	if err != nil {
+		t.Fatal(err)
+	}
+	routing, err := domain.NewExecutionRouting([]root.ModelID{"qwen-local", "anthropic/claude-haiku-5.5"}, domain.RoutingCost, false, 32000, 0.05)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := session.SetRouting(routing); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := store.Save(ctx, session); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := store.Load(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kept, has := loaded.Routing()
+	if !has || kept.Objective() != domain.RoutingCost || kept.AllowsRemote() || kept.MaxContextTokens() != 32000 || kept.MaxRequestUSD() != 0.05 || len(kept.Candidates()) != 2 {
+		t.Fatalf("%+v %v", kept, has)
+	}
+	for name, raw := range map[string]string{
+		"no candidate":  `{"version":1,"routing":{"candidates":[],"objective":"cost"}}`,
+		"objective":     `{"version":1,"routing":{"candidates":["a"],"objective":"cheap"}}`,
+		"unknown field": `{"version":1,"routing":{"candidates":["a"],"objective":"cost","fallback":true}}`,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, string(id)+".execution"), []byte(raw), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Load(ctx, id); err == nil {
+			t.Fatalf("%s: a session with an unreadable routing loaded", name)
 		}
 	}
 }

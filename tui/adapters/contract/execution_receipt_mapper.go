@@ -10,7 +10,7 @@ import (
 )
 
 // ExecutionReceipt is the wire form of a receipt. Its arrays are never
-// null; the policy's, the budget's and the sandbox's sha256 digest their
+// null; the policy's, the budget's, the sandbox's and the routing's sha256 digest their
 // compact JSON as the contract writes them.
 func ExecutionReceipt(receipt domain.ExecutionReceipt) dto.ExecutionReceipt {
 	out := dto.ExecutionReceipt{
@@ -40,13 +40,17 @@ func ExecutionReceipt(receipt domain.ExecutionReceipt) dto.ExecutionReceipt {
 		wire := ExecutionSandbox(*receipt.Sandbox)
 		out.Sandbox = &dto.ReceiptSandbox{SHA256: jsonDigest(wire), Profile: wire.Profile, Egress: wire.Egress, Allow: wire.Allow}
 	}
+	if receipt.Routing != nil {
+		wire := ExecutionRouting(*receipt.Routing)
+		out.Routing = &dto.ReceiptRouting{SHA256: jsonDigest(wire), Objective: wire.Objective, Candidates: wire.Candidates, AllowRemoteProviders: *wire.AllowRemoteProviders}
+	}
 	if receipt.Correlation != nil {
 		correlation := ExecutionCorrelation(*receipt.Correlation)
 		out.Correlation = &correlation
 	}
 	for _, request := range receipt.Requests {
 		usage := request.Usage
-		wire := dto.ReceiptRequest{Session: string(request.Session), Index: request.Index, StartedAt: request.StartedAt.UTC(), Status: string(request.Status), Model: string(request.Model), Provider: usage.Provider, PromptTokens: usage.PromptTokens, CachedTokens: usage.CachedTokens, CacheWriteTokens: usage.CacheWriteTokens, CompletionTokens: usage.CompletionTokens, ReasoningTokens: usage.ReasoningTokens, Unmetered: usage.Unmetered}
+		wire := dto.ReceiptRequest{Session: string(request.Session), Index: request.Index, StartedAt: request.StartedAt.UTC(), Status: string(request.Status), Model: string(request.Model), Route: string(request.Route), Provider: usage.Provider, PromptTokens: usage.PromptTokens, CachedTokens: usage.CachedTokens, CacheWriteTokens: usage.CacheWriteTokens, CompletionTokens: usage.CompletionTokens, ReasoningTokens: usage.ReasoningTokens, Unmetered: usage.Unmetered}
 		if request.Status != domain.ReceiptRequestInterrupted {
 			duration := request.Duration.Milliseconds()
 			wire.DurationMS = &duration
