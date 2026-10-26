@@ -175,6 +175,10 @@ type AppModel struct {
 	toolsStaged *application.StagedTool
 	toolsAsking bool
 	toolsQueue  []string
+	// skillsStaged is the catalog skill /skills staged, waiting for the y
+	// skillsAsking asks for.
+	skillsStaged *application.StagedSkill
+	skillsAsking bool
 	// Tools is the /tools browser, shown in place of m.Info while
 	// toolsBrowsing; toolsReturn brings it back after an install it began.
 	Tools         ToolsBrowser
@@ -370,6 +374,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if k, ok := msg.(tea.KeyPressMsg); ok && m.toolsAsking {
 		return m.answerTools(k)
+	}
+	if k, ok := msg.(tea.KeyPressMsg); ok && m.skillsAsking {
+		return m.answerSkills(k)
 	}
 	if k, ok := msg.(tea.KeyPressMsg); ok && m.publishAsking != "" {
 		if next, cmd, handled := m.publishFieldKey(k); handled {
@@ -748,6 +755,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m, next = m.completeTools(*v.Tools, v.Err)
 			followUp = tea.Batch(followUp, next)
 		}
+		if v.Skills != nil {
+			m = m.completeSkills(*v.Skills, v.Err)
+		}
 		if v.Ceremonies != nil && v.CeremonyArm == nil && m.overlay == "ceremonies" {
 			m.Info.SetContent(ceremoniesContent(*v.Ceremonies, v.Err, m.Theme))
 			m.Info.Viewport.GotoTop()
@@ -1102,6 +1112,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if command == "/tools" {
 				return m.toolsCommand("")
+			}
+			if command == "/skills" {
+				return m.skillsCommand("")
 			}
 			if command == "/changes" || command == "/diff" {
 				m.Composer.Input.Reset()
@@ -1584,6 +1597,8 @@ func (m AppModel) slashWithText(command, text string) (tea.Model, tea.Cmd) {
 		return m.memoryCommand(text)
 	case command == "/tools":
 		return m.toolsCommand(text)
+	case command == "/skills":
+		return m.skillsCommand(text)
 	case command == "/session":
 		fields := strings.Fields(text)
 		if strings.EqualFold(fields[0], "export") {

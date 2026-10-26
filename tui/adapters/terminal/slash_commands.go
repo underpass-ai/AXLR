@@ -43,6 +43,7 @@ var slashCommands = []slashCommand{
 	{"/ceremony", "slash.ceremony"},
 	{"/stop-ceremony", "slash.stopCeremony"},
 	{"/tools", "slash.tools"},
+	{"/skills", "slash.skills"},
 	{"/copy", "slash.copy"},
 	{"/clean-screen", "slash.cleanScreen"},
 	{"/export", "slash.export"},
@@ -64,7 +65,7 @@ var slashCommands = []slashCommand{
 var slashVerbs = map[string]bool{"/memory": true, "/session": true}
 
 // slashAliases run the same command under another name.
-var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo", "/clean_screen": "/clean-screen", "/cls": "/clean-screen", "/limpiar": "/clean-screen", "/natural_writing": "/natural-writing", "/escritura-natural": "/natural-writing", "/herramientas": "/tools", "/ayuda": "/help"}
+var slashAliases = map[string]string{"/quit": "/exit", "/diff": "/changes", "/plugins": "/plugin", "/revisar": "/review", "/escritor": "/writer", "/investigar": "/research", "/depurar": "/debug", "/entrega": "/delivery", "/incidente": "/incident", "/reparar": "/repair", "/mejorar": "/improve", "/planificar": "/plan", "/parar": "/stop-ceremony", "/copiar": "/copy", "/uso": "/usage", "/sesion": "/session", "/sesión": "/session", "/memoria": "/memory", "/trabajos": "/jobs", "/nueva": "/new", "/clear": "/new", "/exportar": "/export", "/deshacer": "/undo", "/clean_screen": "/clean-screen", "/cls": "/clean-screen", "/limpiar": "/clean-screen", "/natural_writing": "/natural-writing", "/escritura-natural": "/natural-writing", "/herramientas": "/tools", "/habilidades": "/skills", "/ayuda": "/help"}
 
 // slashSuggestionMax is how many suggestions the menu shows at once on a
 // screen tall enough; the selection scrolls the rest into view. On 12
@@ -255,7 +256,7 @@ var slashPromptModes = map[string]bool{"/normal": true, "/review": true, "/write
 
 // slashUsages are how the commands that take text are written; any other
 // command takes none.
-var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]", "/ceremony": "/ceremony [<definition> [version] [brief]] · /ceremony publish <file.yaml>", "/memory": "/memory save · /memory compare <about>… · /memory forget <ref> [why]", "/session": "/session [export [id]]", "/plan": "/plan [goal]", "/tools": "/tools · /tools search <terms> · /tools install <name>[@version] [--from <catalog>] · /tools update [name] · /tools remove <name> · /tools identity · /tools keygen · /tools enroll <publisher> <namespace>… --contact <address> [--to <catalog>] · /tools publish <name>[@version] [--to <catalog>]"}
+var slashUsages = map[string]string{"/model": "/model [filter]", "/autonomy": "/autonomy [on|off]", "/export": "/export [path]", "/copy": "/copy [code|N]", "/ceremony": "/ceremony [<definition> [version] [brief]] · /ceremony publish <file.yaml>", "/memory": "/memory save · /memory compare <about>… · /memory forget <ref> [why]", "/session": "/session [export [id]]", "/plan": "/plan [goal]", "/skills": "/skills · /skills search <terms> · /skills install <name>[@version] [--from <catalog>] · /skills update [name] · /skills remove <name>[@version] · /skills publish <name>[@version] [--to <catalog>]", "/tools": "/tools · /tools search <terms> · /tools install <name>[@version] [--from <catalog>] · /tools update [name] · /tools remove <name> · /tools identity · /tools keygen · /tools enroll <publisher> <namespace>… --contact <address> [--to <catalog>] · /tools publish <name>[@version] [--to <catalog>]"}
 
 func slashUsage(command string) string {
 	if usage, ok := slashUsages[command]; ok {

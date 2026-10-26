@@ -54,6 +54,11 @@ func (s Successors) Continue(ctx context.Context, predecessor domain.Session) (d
 			return domain.Session{}, err
 		}
 	}
+	if skills, has := predecessor.Skills(); has {
+		if err := session.SetSkills(skills); err != nil {
+			return domain.Session{}, err
+		}
+	}
 	if routing, has := predecessor.Routing(); has {
 		if err := session.SetRouting(routing); err != nil {
 			return domain.Session{}, err

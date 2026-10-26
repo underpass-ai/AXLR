@@ -28,7 +28,7 @@ func TestSlashSuggestionsListMatchingCommands(t *testing.T) {
 		return strings.Join(out, ",")
 	}
 	for draft, want := range map[string]string{
-		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/undo,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/ceremony,/stop-ceremony,/tools,/copy,/clean-screen,/export,/usage,/axlr-info,/natural-writing,/session,/memory,/help,/exit",
+		"/":          "/new,/model,/theme,/mcp,/plugin,/changes,/undo,/approvals,/autonomy on,/autonomy off,/update,/normal,/review,/writer,/research,/debug,/delivery,/incident,/repair,/improve,/plan,/jobs,/ceremony,/stop-ceremony,/tools,/skills,/copy,/clean-screen,/export,/usage,/axlr-info,/natural-writing,/session,/memory,/help,/exit",
 		"/m":         "/model,/mcp,/memory,/improve,/theme,/autonomy on,/autonomy off,/normal,/ceremony,/stop-ceremony,/tools,/clean-screen",
 		"/trab":      "/jobs",
 		"/cl":        "/clean-screen,/new",

@@ -34,6 +34,11 @@ paths:
                 routing:
                   description: The execution's routing (the runtime contract), which chooses the model of each request among its candidates by its objective, never one its constraints exclude; absent, the service's settings routing if any. An invalid routing is 422 invalid_routing. The session keeps it.
                   $ref: '#/components/schemas/ExecutionRouting'
+                skills:
+                  description: The execution's pinned catalog skills (the runtime contract), resolved against the skills installed under the service's state; the session reads exactly these versions. A pin not installed is refused with 422 skills_unavailable. The session keeps them.
+                  type: array
+                  maxItems: 32
+                  items: {$ref: '#/components/schemas/ExecutionSkillPin'}
                 correlation:
                   description: The execution's correlation ids (the runtime contract), carried unchanged into every event, the result and the session's records.
                   $ref: '#/components/schemas/ExecutionCorrelation'
@@ -386,6 +391,9 @@ components:
         routing:
           description: The execution's routing the session's requests go by, allow_remote_providers spelled out; null without one.
           oneOf: [{$ref: '#/components/schemas/ExecutionRouting'}, {type: 'null'}]
+        skills:
+          description: The execution's pinned catalog skills with their catalog and installed bundle digest; null without pins, an empty list for an execution with no catalog skill.
+          oneOf: [{type: array, items: {$ref: '#/components/schemas/ExecutionSkillPin'}}, {type: 'null'}]
         correlation:
           description: The execution's correlation ids; null without any.
           oneOf: [{$ref: '#/components/schemas/ExecutionCorrelation'}, {type: 'null'}]
@@ -464,6 +472,12 @@ components:
             objective: {type: string, enum: [cost, latency, quality-first]}
             candidates: {type: array, items: {type: string}}
             allow_remote_providers: {type: boolean}
+        skills:
+          type: object
+          required: [sha256, pins]
+          properties:
+            sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the pins' compact JSON as GetSession shows them.}
+            pins: {type: array, items: {$ref: '#/components/schemas/ExecutionSkillPin'}}
         correlation: {$ref: '#/components/schemas/ExecutionCorrelation'}
         requests: {type: array, items: {$ref: '#/components/schemas/ReceiptRequest'}}
         tool_calls: {type: array, items: {$ref: '#/components/schemas/ReceiptCall'}}
@@ -564,6 +578,16 @@ components:
         allow_remote_providers: {type: boolean, description: "false keeps every request on this host: only local_models entries whose url names a loopback address; absent allows remote providers."}
         max_context_tokens: {type: integer, minimum: 0, maximum: 16777216, description: A cap on every request's context on top of each model's own; 0 or absent for none.}
         max_request_usd: {type: number, minimum: 0, maximum: 1000, description: "A ceiling on one request's expected cost; a candidate over it, or whose cost cannot be told, is excluded. 0 or absent for none."}
+    ExecutionSkillPin:
+      type: object
+      description: One catalog skill of an execution (docs/runtime-contract.md, Skills per execution). A request names name, version and optionally catalog; GetSession and the receipt show it resolved, with its catalog and bundle_sha256.
+      additionalProperties: false
+      required: [name, version]
+      properties:
+        name: {type: string, pattern: '^[a-z][a-z0-9_]{1,47}$'}
+        version: {type: string, pattern: '^[0-9]+\.[0-9]+\.[0-9]+$'}
+        catalog: {type: string, pattern: '^[a-z][a-z0-9_-]{0,31}$'}
+        bundle_sha256: {type: string, pattern: '^[0-9a-f]{64}$', description: Digest of the installed bundle; never sent in a request.}
     ExecutionSandbox:
       type: object
       description: The runtime contract's sandbox per execution (docs/runtime-contract.md), which confines local_exec and the forged tools; AXLR's own model requests and MCP servers run outside it.

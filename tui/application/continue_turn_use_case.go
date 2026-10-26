@@ -245,7 +245,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		guidance.Content += root.Text(text)
 	}
 	if u.PluginGuidance != nil && !focused {
-		pluginText, err := u.PluginGuidance(ctx)
+		// The skill index lists the session's pinned catalog skills, or
+		// the newest installed.
+		pluginText, err := u.PluginGuidance(WithSessionSkills(ctx, *session))
 		if err != nil {
 			contextSpan.End(DiagnosticErrorInvalidState)
 			return interrupt(err)

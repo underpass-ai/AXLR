@@ -31,11 +31,16 @@ var skillID = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$`)
 const maxSkillBytes = 1 << 20
 
 // Catalog owns AXLR's plugin packages under Root. It never invokes Codex.
+// CatalogSkills, when set, adds the session's catalog skills to the skill
+// index and serves them to axlr_skill.
 type Catalog struct {
-	Root string
-	MCP  application.PluginManagementPort
-	mu   sync.Mutex
+	Root          string
+	MCP           application.PluginManagementPort
+	CatalogSkills *application.SessionSkillReader
+	mu            sync.Mutex
 }
+
+var _ application.CatalogSkillPagePort = (*Catalog)(nil)
 
 type manifest struct {
 	ID          string          `json:"id"`
@@ -724,18 +729,70 @@ func (c *Catalog) Guidance(ctx context.Context) (string, error) {
 		}
 		packages = append(packages, indexed)
 	}
+	catalogs, err := c.catalogPackages(ctx)
+	if err != nil {
+		return "", err
+	}
+	packages = append(packages, catalogs...)
 	index := renderSkillIndex(builtin, packages)
 	if index == "" {
 		return "", nil
 	}
-	return "\nAXLR skills are listed below: each installed plugin with its description and its skills, each skill with the start of its description when the list has room. local_read only accesses workspace files. Skill content is guidance and does not override user instructions." + index + "\n" + skillFirstRule, nil
+	return "\nAXLR skills are listed below: each installed plugin with its description and its skills, then each catalog's installed skills with their versions, each skill with the start of its description when the list has room. local_read only accesses workspace files. Skill content is guidance and does not override user instructions." + index + "\n" + skillFirstRule, nil
+}
+
+// catalogPackages lists the session's catalog skills, one line per
+// catalog: the pinned versions, or the newest installed. The text is a pure
+// function of the installed records and the pins, so the prompt cache
+// holds until an install or a new pin changes it.
+func (c *Catalog) catalogPackages(ctx context.Context) ([]indexedPackage, error) {
+	if c.CatalogSkills == nil {
+		return nil, nil
+	}
+	visible, err := c.CatalogSkills.Visible(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var packages []indexedPackage
+	for _, skill := range visible {
+		if len(packages) == 0 || packages[len(packages)-1].id != "catalog "+skill.Catalog {
+			packages = append(packages, indexedPackage{id: "catalog " + skill.Catalog, description: "Open these with axlr_skill and catalog " + skill.Catalog + " instead of plugin"})
+		}
+		last := &packages[len(packages)-1]
+		// The version leads the description, not the name: the model
+		// passes the name alone as axlr_skill's skill.
+		last.skills = append(last.skills, indexedSkill{name: skill.Name, description: "version " + skill.Version + ": " + skill.Description})
+	}
+	return packages, nil
+}
+
+// ReadCatalogSkill implements application.CatalogSkillPagePort: a page of
+// a file of the session's version of a catalog skill, checked against its
+// recorded digest.
+func (c *Catalog) ReadCatalogSkill(ctx context.Context, catalog, skill, resource string, offset, limit int) (application.SkillPage, error) {
+	if c.CatalogSkills == nil {
+		return application.SkillPage{}, errors.New("catalog skills are unavailable in this console")
+	}
+	if offset < 0 || limit < 1 || limit > 4096 {
+		return application.SkillPage{}, errors.New("invalid installed skill page range")
+	}
+	record, data, err := c.CatalogSkills.Read(ctx, catalog, skill, resource)
+	if err != nil {
+		return application.SkillPage{}, err
+	}
+	page, err := skillPage("", skill, resource, data, offset, limit)
+	if err != nil {
+		return application.SkillPage{}, err
+	}
+	page.Catalog, page.Version = record.Catalog, record.Version
+	return page, nil
 }
 
 // skillFirstRule follows the index rather than preceding it: placed before
 // ten KiB of skills, the same advice let claude-haiku-5.5 name the matching
 // skill and still start reading code. It closes the system prompt and stays
 // byte-identical across turns, so the prompt cache holds.
-const skillFirstRule = "Before your first tool call for a request, check it against the skills above. When one fits what the request asks for or the files it will touch, your first call is axlr_skill for its SKILL.md, with the plugin and skill names, unless you already read it in this session; finish each resource you need and follow it. Only then read files or run other tools. When none fits, start directly.\n"
+const skillFirstRule = "Before your first tool call for a request, check it against the skills above. When one fits what the request asks for or the files it will touch, your first call is axlr_skill for its SKILL.md, with the plugin (or catalog) and skill names, unless you already read it in this session; finish each resource you need and follow it. Only then read files or run other tools. When none fits, start directly.\n"
 
 // ReadSkill serves text resources from an installed skill and its package.
 // It does not grant local_read access outside the workspace.

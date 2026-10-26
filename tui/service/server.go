@@ -33,6 +33,9 @@ type Dependencies struct {
 	// Routing is the settings' default routing, which a session created
 	// without one takes; nil leaves such a session on its model.
 	Routing *domain.ExecutionRouting
+	// Skills are the installed catalog skills CreateSession resolves an
+	// execution's pins against; nil refuses every pin.
+	Skills application.InstalledSkillsPort
 	// Sessions is the store the loop was composed with (OpenSessions); nil
 	// opens one under the state directory.
 	Sessions *Sessions

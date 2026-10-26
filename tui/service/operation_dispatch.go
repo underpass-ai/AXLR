@@ -55,6 +55,11 @@ func decodeOperation(op operation, data []byte) (map[string]json.RawMessage, boo
 			if _, err := root.NewJSONObject(value); err != nil {
 				return nil, false
 			}
+		case "array":
+			var items []json.RawMessage
+			if json.Unmarshal(value, &items) != nil {
+				return nil, false
+			}
 		}
 	}
 	return fields, true

@@ -95,6 +95,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	budgetFlag := flags.String("budget", "", "with --exec or --decide: a JSON file with the execution's budget (docs/runtime-contract.md): seconds, requests, tool_calls and usd, each zero for no limit; the run ends budget_exceeded at the first limit reached and the session keeps the budget")
 	sandboxFlag := flags.String("sandbox", "", "with --exec or --decide: a JSON file with the execution's sandbox (docs/runtime-contract.md): profile none, process or container, egress none, allowlist (with its allow list) or full; local commands and forged tools run under it, a sandbox this host cannot give ends the run before it starts, and the session keeps it")
 	routingFlag := flags.String("routing", "", "with --exec or --decide: a JSON file with the execution's routing (docs/runtime-contract.md): candidate models, objective cost, latency or quality-first, allow_remote_providers, max_context_tokens and max_request_usd; each request goes to the best candidate the constraints allow, a provider failure is taken once by the next, and the session keeps the routing")
+	skillsFlag := flags.String("skills", "", "with --exec or --decide: a JSON file with the execution's catalog skills (docs/runtime-contract.md): a list of {name, version, catalog}; the execution reads exactly those installed versions, a pin not installed ends the run before it starts, and the session keeps them")
 	correlationFlag := flags.String("correlation", "", "with --exec or --decide: a JSON file with the execution's correlation (docs/runtime-contract.md): bot_id, task_id, execution_id and trace_id, carried into every event, trace record and session record")
 	callFlag := flags.String("call", "", "with --decide: the id of the pending call, to make sure it is the one")
 	var paths, selections []string
@@ -127,8 +128,8 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(errors.New("--continue resumes a session; it cannot be combined with --repair or --improve"))
 		}
 	}
-	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *sandboxFlag != "" || *routingFlag != "" || *correlationFlag != "") {
-		return fail(errors.New("--approve, --json, --mode, --policy, --budget, --sandbox, --routing and --correlation go with --exec or --decide"))
+	if *execFlag == "" && *decideFlag == "" && (*approveFlag != "" || *jsonFlag || *modeFlag != "" || *policyFlag != "" || *budgetFlag != "" || *sandboxFlag != "" || *skillsFlag != "" || *routingFlag != "" || *correlationFlag != "") {
+		return fail(errors.New("--approve, --json, --mode, --policy, --budget, --sandbox, --routing, --skills and --correlation go with --exec or --decide"))
 	}
 	if *callFlag != "" && *decideFlag == "" {
 		return fail(errors.New("--call goes with --decide"))
@@ -194,6 +195,14 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 		execSandbox = &sandbox
+	}
+	var execSkills []application.SkillRequest
+	if *skillsFlag != "" {
+		requests, err := readExecSkills(*skillsFlag)
+		if err != nil {
+			return fail(err)
+		}
+		execSkills = requests
 	}
 	// resuming is a launch that opens a saved session rather than a new one.
 	resuming := *sessionFlag != "" || continueFlag || *importFlag != ""
@@ -676,7 +685,13 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			return fail(err)
 		}
 	}
-	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager}
+	// Catalog skills are listed in the skill index and read by axlr_skill
+	// at the session's pinned versions, or the newest installed.
+	catalogSkills, err := compose.NewCatalogSkills(settings, filepath.Join(stateBase, "axlr"))
+	if err != nil {
+		return fail(err)
+	}
+	axlrCatalog := &axlrplugin.Catalog{Root: filepath.Join(dataBase, "axlr"), MCP: pluginManager, CatalogSkills: catalogSkills.Reader}
 	validator := axlr.NewToolArgumentValidator()
 	sandboxes := compose.NewExecutionSandboxes(settings.ExecSandbox(), sandbox, exec.LookPath)
 	runner := axlr.ToolRunner{Executor: executor, Diagnostics: trace, KMPGuideRoot: kmpGuideRoot(registrations), LogFailure: failureLogger(appLog), Confine: sandboxes.Confine}
@@ -847,6 +862,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		Plugins:                 pluginManager,
 		InstalledPlugins:        axlrCatalog,
 		ToolCatalog:             toolCatalogUseCase,
+		SkillCatalog:            catalogSkillsUseCase(catalogSkills, workspace),
 		EngineUpdates:           &engineupdate.Updater{Configuration: &configStore, Root: filepath.Join(dataBase, "axlr", "engines"), ActiveCommands: activeEngineCommands, Install: &enginesetup.Installer{Configuration: &configStore, Getenv: getenv, KMPApproval: "auto", MADEApproval: "auto", PrepareMADE: (&madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore}).Prepare}},
 		OrchestratorPreparation: &madesetup.Preparer{ConfigPath: configPath, Getenv: getenv, Store: &configStore},
 		Models:                  application.ListModelsUseCase{Catalog: localmodels.Catalog{Local: locals.Available, Remote: remoteCatalog}, Diagnostics: trace},
@@ -960,6 +976,29 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 			if err := loggedStore.Save(ctx, *session); err != nil {
 				return fail(err)
 			}
+		}
+		if execSkills != nil {
+			// The execution's skills are the session's from now on,
+			// resolved against what is installed: an execution never
+			// installs.
+			pins, err := application.ResolveSkillPins(ctx, catalogSkills.Store, execSkills)
+			if err != nil {
+				return fail(err)
+			}
+			if err := session.SetSkills(pins); err != nil {
+				return fail(err)
+			}
+			if err := loggedStore.Save(ctx, *session); err != nil {
+				return fail(err)
+			}
+		}
+		if skills, pinned := session.Skills(); pinned {
+			// A pinned version removed since ends the run here too.
+			how, err := checkPinnedSkills(ctx, catalogSkills.Store, skills)
+			if err != nil {
+				return fail(err)
+			}
+			fmt.Fprintln(stderr, "axlr-tui:", how)
 		}
 		if _, routed := session.Routing(); execRouting != nil && (!execRoutingDefault || !routed) {
 			// The execution's routing is the session's from now on: this

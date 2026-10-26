@@ -20,6 +20,7 @@ type ExecutionReceipt struct {
 	Budget      *ReceiptBudget        `json:"budget,omitempty"`
 	Sandbox     *ReceiptSandbox       `json:"sandbox,omitempty"`
 	Routing     *ReceiptRouting       `json:"routing,omitempty"`
+	Skills      *ReceiptSkills        `json:"skills,omitempty"`
 	Correlation *ExecutionCorrelation `json:"correlation,omitempty"`
 	Requests    []ReceiptRequest      `json:"requests"`
 	Calls       []ReceiptCall         `json:"tool_calls"`

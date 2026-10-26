@@ -81,6 +81,16 @@ func executionRouting(session domain.Session) *dto.ExecutionRouting {
 	return &wire
 }
 
+// executionSkills is the session's pinned skills on the wire, null
+// without pins and an empty list for an execution with no catalog skill.
+func executionSkills(session domain.Session) []dto.ExecutionSkillPin {
+	skills, has := session.Skills()
+	if !has {
+		return nil
+	}
+	return contract.ExecutionSkills(skills)
+}
+
 func executionCorrelation(session domain.Session) *dto.ExecutionCorrelation {
 	correlation, has := session.Correlation()
 	if !has {
