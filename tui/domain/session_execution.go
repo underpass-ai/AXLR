@@ -207,3 +207,26 @@ func (s *Session) SetSandbox(sandbox ExecutionSandbox) error {
 
 // ClearSandbox lifts the execution's sandbox.
 func (s *Session) ClearSandbox() { s.state.Sandbox = nil }
+
+// Routing is the execution's routing, if the session has one.
+func (s Session) Routing() (ExecutionRouting, bool) {
+	if s.state.Routing == nil {
+		return ExecutionRouting{}, false
+	}
+	return s.state.Routing.Clone(), true
+}
+
+// SetRouting chooses the model of each request of the session from now
+// on, among the routing's candidates: this execution's and every later
+// turn's or decision's.
+func (s *Session) SetRouting(routing ExecutionRouting) error {
+	if err := routing.Validate(); err != nil {
+		return err
+	}
+	clone := routing.Clone()
+	s.state.Routing = &clone
+	return nil
+}
+
+// ClearRouting sends the session's requests to its own model again.
+func (s *Session) ClearRouting() { s.state.Routing = nil }
