@@ -80,6 +80,12 @@ func TestPrepareSkillReadsTheWorkspacesSkill(t *testing.T) {
 	if err != nil || strings.Join(draft.Tools, ",") != "local_read,log_summarise" || draft.Description != "Triage an incident." || draft.Tests != nil {
 		t.Fatalf("%+v %v", draft, err)
 	}
+	// A folded description and an unindented block list, as Agent Skills
+	// front matter is often written.
+	skill["SKILL.md"] = []byte("---\nname: incident_triage\ndescription: >-\n  Triage an incident\n  from its logs.\ntools:\n- local_read\n- local_search\n---\n# Triage\n")
+	if draft, err := use.PrepareSkill(ctx, "/ws", PublishRequest{Name: "incident_triage"}); err != nil || draft.Description != "Triage an incident from its logs." || strings.Join(draft.Tools, ",") != "local_read,local_search" {
+		t.Fatalf("%q %v %v", draft.Description, draft.Tools, err)
+	}
 	// No tools at all is a skill that expects none.
 	skill["SKILL.md"] = []byte("---\ndescription: Triage an incident.\n---\n# Triage\n")
 	if draft, err := use.PrepareSkill(ctx, "/ws", PublishRequest{Name: "incident_triage"}); err != nil || len(draft.Tools) != 0 {

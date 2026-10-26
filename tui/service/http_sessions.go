@@ -88,8 +88,12 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		// A pin this service has not installed is refused with the
 		// session: an execution never installs.
 		pins, err := application.ResolveSkillPins(r.Context(), s.deps.Skills, requests)
-		if err != nil {
+		if errors.Is(err, domain.ErrSkillsUnavailable) {
 			writeError(w, requestID(r), 422, "skills_unavailable", err.Error())
+			return
+		}
+		if err != nil {
+			writeError(w, requestID(r), 422, "invalid_skills", "invalid skills: "+err.Error())
 			return
 		}
 		skills = &pins

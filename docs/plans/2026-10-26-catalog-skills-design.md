@@ -45,7 +45,7 @@ The registry's runner has no network and no model, so it cannot run them. What i
 - Storage: the same DynamoDB items and quarantine prefixes; published files under `published/skills/<name>/<version>/`.
 - Index: `skills[]` beside `tools[]`, each entry the tool entry's provenance fields (`publisher`, `publisher_key_id`, `bundle_sha256`, `signature`, `reviewed_at`, `reviewer`, `warnings`) plus `tools`, without `program`, `requires` and `network`; `manifest` is `skills/<name>/<version>/manifest.json`. Yanks go to the shared `revocations` (a name is unique across kinds). Consoles before this change ignore `skills`.
 - Routes: no new one. Publishers submit with `POST /v1/versions` and read their version with `GET /v1/versions/{name}/{version}` (which now says `kind`); reviewers list, show, approve, reject and yank as for tools; the console reads the static `index.json`, its signature, and `skills/<name>/<version>/…`.
-- A local harness, `axlr-registry-local`, serves both APIs and the published files from memory on the loopback, runs the tests inline and signs each index with a key it generates, for end-to-end runs without AWS.
+- A local harness, `axlr-registry-local`, serves the publish API and the published files from memory on the loopback, runs the checks and tests inline, approves as a local reviewer (or waits for `POST /local/approve/{name}/{version}`) and signs each index with a key it generates, for end-to-end runs without AWS. It does not serve the admin API.
 
 ## Console side (AXLR)
 

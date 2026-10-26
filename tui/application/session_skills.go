@@ -61,6 +61,8 @@ func ResolveSkillPins(ctx context.Context, installed InstalledSkillsPort, reques
 		skill := matches[0]
 		skills.Pins = append(skills.Pins, domain.SkillPin{Catalog: skill.Catalog, Name: skill.Name, Version: skill.Version, BundleSHA256: skill.BundleSHA256})
 	}
+	// A skill pinned twice is an invalid request, not an unavailable
+	// skill: the error does not wrap domain.ErrSkillsUnavailable.
 	if err := skills.Validate(); err != nil {
 		return domain.ExecutionSkills{}, err
 	}
@@ -74,7 +76,7 @@ func installedVersions(have []InstalledSkill, request SkillRequest) string {
 			versions = append(versions, skill.Version)
 		}
 	}
-	sort.Strings(versions)
+	sort.Slice(versions, func(i, j int) bool { return newerVersion(versions[j], versions[i]) })
 	return strings.Join(versions, ", ")
 }
 

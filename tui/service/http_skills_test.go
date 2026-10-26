@@ -68,7 +68,7 @@ func TestCreateSessionPinsInstalledSkills(t *testing.T) {
 		"unknown field":     {`{"model":"test/model","skills":[{"name":"incident_triage","version":"1.0.0","latest":true}]}`, "invalid_skills", "no other field"},
 		"not a list":        {`{"model":"test/model","skills":"incident_triage"}`, "invalid_skills", ""},
 		"bad version":       {`{"model":"test/model","skills":[{"name":"incident_triage","version":"latest"}]}`, "invalid_skills", "version"},
-		"pinned twice":      {`{"model":"test/model","skills":[{"name":"incident_triage","version":"1.0.0"},{"name":"incident_triage","version":"1.1.0"}]}`, "", "pinned twice"},
+		"pinned twice":      {`{"model":"test/model","skills":[{"name":"incident_triage","version":"1.0.0"},{"name":"incident_triage","version":"1.1.0"}]}`, "invalid_skills", "pinned twice"},
 		"wrapped list form": {`{"model":"test/model","skills":{"skills":[{"name":"runbook","version":"1.0.0"}]}}`, "skills_unavailable", "runbook"},
 	} {
 		status, code, message := refused(tc.body)

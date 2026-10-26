@@ -287,30 +287,45 @@ func strictJSON(data []byte, target any) error {
 	return nil
 }
 
-// skillFrontMatter reads the plain scalars of a SKILL.md front matter, and
-// a block list as its items joined by newlines; text without front matter
-// has none.
+// skillFrontMatter reads the plain scalars of a SKILL.md front matter, a
+// folded or literal block (`key: >-` and its indented lines) as one line,
+// and a block list (`- item`, indented or not) as its items joined by
+// newlines; text without front matter has none.
 func skillFrontMatter(text string) map[string]string {
 	fields := map[string]string{}
 	lines := strings.Split(strings.ReplaceAll(strings.TrimPrefix(text, "\ufeff"), "\r\n", "\n"), "\n")
 	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
 		return fields
 	}
-	current := ""
+	current, block := "", false
 	for _, line := range lines[1:] {
-		if strings.TrimSpace(line) == "---" {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "---" {
 			break
 		}
-		if item, ok := strings.CutPrefix(strings.TrimSpace(line), "- "); ok && current != "" && strings.HasPrefix(line, " ") {
+		indented := strings.HasPrefix(line, " ") || strings.HasPrefix(line, "\t")
+		if block && (indented || trimmed == "") {
+			if trimmed != "" {
+				fields[current] = strings.TrimSpace(fields[current] + " " + trimmed)
+			}
+			continue
+		}
+		block = false
+		if item, ok := strings.CutPrefix(trimmed, "- "); ok && current != "" {
 			fields[current] += "\n" + unquote(strings.TrimSpace(item))
 			continue
 		}
 		key, value, ok := strings.Cut(line, ":")
-		if !ok || strings.HasPrefix(line, " ") {
+		if !ok || indented {
 			continue
 		}
-		current = strings.TrimSpace(key)
-		fields[current] = unquote(strings.TrimSpace(value))
+		current, value = strings.TrimSpace(key), strings.TrimSpace(value)
+		switch value {
+		case ">", ">-", ">+", "|", "|-", "|+":
+			fields[current], block = "", true
+		default:
+			fields[current] = unquote(value)
+		}
 	}
 	return fields
 }
