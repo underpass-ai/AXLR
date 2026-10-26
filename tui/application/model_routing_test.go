@@ -15,7 +15,14 @@ import (
 type routeFacts map[root.ModelID]domain.RouteCandidate
 
 func (f routeFacts) RouteFacts(_ context.Context, model root.ModelID) domain.RouteCandidate {
-	return f[model]
+	facts := f[model]
+	facts.PromptRate, facts.CompletionRate, facts.RatesKnown = 0, 0, false
+	return facts
+}
+
+func (f routeFacts) CatalogPrice(_ context.Context, model root.ModelID) (float64, float64, bool) {
+	facts := f[model]
+	return facts.PromptRate, facts.CompletionRate, facts.RatesKnown
 }
 
 // memoryModelStats keeps each model's observations in memory.

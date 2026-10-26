@@ -19,6 +19,19 @@ func NewModelRate(perToken string) (ModelRate, error) {
 	return ModelRate{decimal: perToken}, nil
 }
 
+// PerToken is the price in dollars per token, false when unknown.
+func (r ModelRate) PerToken() (float64, bool) {
+	if r.decimal == "" {
+		return 0, false
+	}
+	price, ok := new(big.Rat).SetString(r.decimal)
+	if !ok {
+		return 0, false
+	}
+	value, _ := price.Float64()
+	return value, true
+}
+
 // Display returns the price in USD per million tokens, or empty when unknown.
 func (r ModelRate) Display() string {
 	if r.decimal == "" {

@@ -46,9 +46,27 @@ func (u ContinueTurnUseCase) rankRoutes(ctx context.Context, routing domain.Exec
 		candidate.Cap = routing.Cap(candidate.Cap)
 		candidate.Tokens = u.Scale.Estimate(model, counted)
 		candidate.Stats = stats[model]
+		if catalogPriced(routing, candidate) {
+			candidate.PromptRate, candidate.CompletionRate, candidate.RatesKnown = u.Routing.CatalogPrice(ctx, model)
+		}
 		candidates = append(candidates, candidate)
 	}
 	return domain.RankRoutes(routing, candidates, now), nil
+}
+
+// catalogPriced reports whether a candidate's catalog price is worth
+// asking: a remote model the routing may ask, whose cost ranks it or meets
+// a ceiling, and whose requests never reported a cost. A routing without
+// remote providers never reads the catalog.
+func catalogPriced(routing domain.ExecutionRouting, candidate domain.RouteCandidate) bool {
+	if candidate.Local || !candidate.Reachable || candidate.RatesKnown || !routing.AllowsRemote() {
+		return false
+	}
+	if routing.Objective() != domain.RoutingCost && routing.MaxRequestUSD() <= 0 {
+		return false
+	}
+	_, observed := candidate.Stats.CostPerToken()
+	return !observed
 }
 
 // estimatedRequestTokens sizes a request for routing without a token

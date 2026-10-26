@@ -23,6 +23,7 @@ import (
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
+	catalogModels "github.com/underpass-ai/AXLR/tui/adapters/openrouter"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/compose"
@@ -157,7 +158,15 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: sessions.Store(), Ceremonies: ceremonies, Session: lifecycle, Calibration: calibration, Language: "en"}
-	if _, err := compose.Equip(&continuation, compose.Equipment{Settings: settings, State: cfg.StateDir, Store: sessions.Store(), Usage: sessions.Usage(), Receipts: sessions.Receipts(), Labels: labels, Windows: locals.Windows, Tools: runner, Memory: true, Note: note}); err != nil {
+	routing := compose.NewModelRouting(locals, key != "", catalogModels.ModelCatalog{APIKey: key, HTTPClient: httpClient})
+	// The settings' routing is the default of a session created without one.
+	defaultRouting, err := settings.ExecutionRouting()
+	if err != nil {
+		sessions.Close()
+		fmt.Fprintln(stderr, "axlr-serve:", err)
+		return 1
+	}
+	if _, err := compose.Equip(&continuation, compose.Equipment{Settings: settings, State: cfg.StateDir, Store: sessions.Store(), Usage: sessions.Usage(), Receipts: sessions.Receipts(), Labels: labels, Windows: locals.Windows, Tools: runner, Memory: true, Routing: routing, Note: note}); err != nil {
 		sessions.Close()
 		fmt.Fprintln(stderr, "axlr-serve: tools unavailable:", err)
 		return 1
@@ -169,6 +178,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		Catalog: catalog, Tools: runner, Approval: pluginManager, Validation: validator,
 		Ready:        service.EngineReadiness(manager, key),
 		ProbeSandbox: sandboxes.Probe,
+		Routing:      defaultRouting,
 		Sessions:     sessions,
 		Lifecycle:    lifecycle,
 	}

@@ -72,6 +72,15 @@ func executionSandbox(session domain.Session) *dto.ExecutionSandbox {
 	return &wire
 }
 
+func executionRouting(session domain.Session) *dto.ExecutionRouting {
+	routing, has := session.Routing()
+	if !has {
+		return nil
+	}
+	wire := contract.ExecutionRouting(routing)
+	return &wire
+}
+
 func executionCorrelation(session domain.Session) *dto.ExecutionCorrelation {
 	correlation, has := session.Correlation()
 	if !has {
