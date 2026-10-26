@@ -30,8 +30,13 @@ An execution is a session of AXLR: its transcript, its tool calls with their dec
 | Routing | `--routing <file.json>` (with `--exec` or `--decide`), else `settings.json`'s `routing` | `CreateSession` (`routing`), else the service's `settings.json` `routing` |
 | Skills | `--skills <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`skills`) |
 | Correlation | `--correlation <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`correlation`) |
+| Messages while it works | `--steer-file <file>` (with `--exec` or `--decide`) | — |
 
 The approval level is the run's own policy on top of `settings.json`: `none` approves nothing the settings do not, `local` the workspace's reads, writes and commands and the forged tools, `all` every tool. The destructive list (`approvals.always_ask`) asks either way, and a call it holds ends the execution in `needs_decision`. A policy decides outside the model: the model asks, the policy answers.
+
+## Messages while it works
+
+A person can write to an execution while it runs, as the console's queued prompt: `axlr-tui --exec --steer-file <file>` (and `--decide --steer-file`) reads the file between model steps and gives the model what is new, with a note that the person wrote it while the run worked. One message per line, plain text or `{"text": "..."}`; a line counts once it ends in a newline, so a writer appends it in pieces, and the file need not exist when the run starts. A message written after the run's last step gets one more turn before the execution ends; one written after the result line is not read. Each message taken writes a `steered` line, and the model's words come as `text` lines as before. A line longer than 64 KiB is skipped.
 
 ## Policy per execution
 
@@ -375,6 +380,7 @@ Where the receipt is:
 | `model.routed` | `model.routed` | The routing sent a request to `model`: `route` `ranked`, or `fallback` with `from` (the model that failed) and its `error` |
 | `reasoning` | — | Readable reasoning as it streams |
 | `text` | `text.delta` | Answer text |
+| `steered` | — | A message from `--steer-file` went to the model: its `text` |
 | `tool.requested`, `tool.completed` | `tool.requested`, `tool.completed` | A call is made, and its outcome recorded |
 | `artifact` | `artifact` | `axlr_deliver` delivered an artifact: the line's (or payload's) `artifact`, after its `tool.completed` |
 | `session.continued` | `session.continued` | The context cap opened a successor |

@@ -86,7 +86,7 @@ func TestExecRefusesSkillsItCannotServe(t *testing.T) {
 		t.Fatalf("missing file: code=%d stderr=%s", code, stderr)
 	}
 	code, _, stderr = execRun(t, env, "--root", t.TempDir(), "--model", "test/model", "--skills", writePolicy(t, `[]`))
-	if code == 0 || *calls != 0 || !strings.Contains(stderr, "--skills and --correlation go with --exec or --decide") {
+	if code == 0 || *calls != 0 || !strings.Contains(stderr, "--correlation and --steer-file go with --exec or --decide") {
 		t.Fatalf("--skills without --exec: code=%d stderr=%s", code, stderr)
 	}
 }
