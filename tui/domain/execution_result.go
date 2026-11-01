@@ -16,7 +16,8 @@ type ExecutionResult struct {
 	// session it spanned, first to last.
 	Session  SessionID
 	Sessions []SessionID
-	// Answer is the last assistant message; empty when the turn gave none.
+	// Answer is the last assistant message, a console follow-up's reply
+	// left out (executionAnswer); empty when the turn gave none.
 	Answer axlr.Text
 	// Pending is the call that waits for a decision when Status is
 	// ExecutionNeedsDecision.
@@ -43,12 +44,7 @@ func NewExecutionResult(s Session, err error) ExecutionResult {
 		result.Calls = append(result.Calls, executionCallOf(record))
 	}
 	result.Artifacts = SessionArtifacts(s)
-	for i := len(state.Messages) - 1; i >= 0; i-- {
-		if state.Messages[i].Role == axlr.RoleAssistant {
-			result.Answer = state.Messages[i].Content
-			break
-		}
-	}
+	result.Answer = executionAnswer(state.Messages)
 	if correlation, has := s.Correlation(); has {
 		result.Correlation = &correlation
 	}
@@ -104,4 +100,45 @@ func (r *ExecutionResult) Delivered(predecessors ...Session) {
 		artifacts = withArtifact(artifacts, artifact)
 	}
 	r.Artifacts = artifacts
+}
+
+// executionAnswer is the execution's answer: the last assistant message,
+// unless it replies to a console follow-up that did no work. A reply to
+// the memory reminder is never the answer, and a reply to a Jev
+// follow-up is only when the follow-up called a tool; otherwise the
+// answer is the one before the console's note. On 1 November 2026 an SRE
+// bot's report was replaced three times by its one-sentence reply to
+// those notes ("The answer is complete"), and the control plane recorded
+// that sentence as the incident's diagnosis.
+func executionAnswer(messages []axlr.Message) axlr.Text {
+	end := len(messages)
+	for end > 0 {
+		at := end - 1
+		for at >= 0 && messages[at].Role != axlr.RoleUser {
+			at--
+		}
+		var answer axlr.Text
+		found, worked := false, false
+		for i := end - 1; i > at; i-- {
+			if messages[i].Role != axlr.RoleAssistant {
+				continue
+			}
+			if !found {
+				answer, found = messages[i].Content, true
+			}
+			if len(messages[i].ToolCalls) > 0 {
+				worked = true
+			}
+		}
+		if at < 0 || !(MemoryNote(messages[at].Content) || JevNote(messages[at].Content) && !worked) {
+			if found {
+				return answer
+			}
+			if at < 0 {
+				return ""
+			}
+		}
+		end = at
+	}
+	return ""
 }

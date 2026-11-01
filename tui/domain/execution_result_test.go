@@ -48,6 +48,51 @@ func TestExecutionResultReadsAFinishedSession(t *testing.T) {
 	}
 }
 
+// A console follow-up that only talks does not replace the answer: the
+// reply to the memory reminder never does, and the reply to a Jev
+// follow-up does only when the follow-up called a tool.
+func TestExecutionResultKeepsTheAnswerOverConsoleFollowUps(t *testing.T) {
+	say := func(text string) axlr.CompletionResult {
+		return axlr.CompletionResult{Message: axlr.Message{Role: axlr.RoleAssistant, Content: axlr.Text(text)}, FinishReason: "stop"}
+	}
+	s := session(t)
+	must(t, s.BeginTurn("diagnose the alert", catalog(t)))
+	must(t, s.CompleteAssistant(completion(t, "one")))
+	must(t, s.RecordToolOutcome("one", DecisionAutoApprove, ToolOutcome{Content: "pods"}))
+	must(t, s.CompleteAssistant(say("CAUSE: the report")))
+	must(t, s.BeginTurn(JevNotePrefix+" the check doubts it", catalog(t)))
+	must(t, s.CompleteAssistant(say("The answer is complete.")))
+	must(t, s.BeginTurn(MemoryReminderPrefix+" record it", catalog(t)))
+	must(t, s.CompleteAssistant(say("Nothing to record.")))
+	if got := NewExecutionResult(s, nil).Answer; got != "CAUSE: the report" {
+		t.Fatalf("answer %q", got)
+	}
+
+	worked := session(t)
+	must(t, worked.BeginTurn("diagnose the alert", catalog(t)))
+	must(t, worked.CompleteAssistant(say("a first answer")))
+	must(t, worked.BeginTurn(JevNotePrefix+" something is missing", catalog(t)))
+	must(t, worked.CompleteAssistant(completion(t, "two")))
+	must(t, worked.RecordToolOutcome("two", DecisionAutoApprove, ToolOutcome{Content: "events"}))
+	must(t, worked.CompleteAssistant(say("the complete answer")))
+	must(t, worked.BeginTurn(MemoryReminderPrefix+" record it", catalog(t)))
+	must(t, worked.CompleteAssistant(completion(t, "three")))
+	must(t, worked.RecordToolOutcome("three", DecisionAutoApprove, ToolOutcome{Content: "recorded"}))
+	must(t, worked.CompleteAssistant(say("I recorded the fix.")))
+	if got := NewExecutionResult(worked, nil).Answer; got != "the complete answer" {
+		t.Fatalf("answer %q", got)
+	}
+
+	person := session(t)
+	must(t, person.BeginTurn("first request", catalog(t)))
+	must(t, person.CompleteAssistant(say("first answer")))
+	must(t, person.BeginTurn("second request", catalog(t)))
+	must(t, person.CompleteAssistant(say("second answer")))
+	if got := NewExecutionResult(person, nil).Answer; got != "second answer" {
+		t.Fatalf("answer %q", got)
+	}
+}
+
 // A pending call makes the result wait for a decision; a completed call
 // with no outcome yet stays pending in the calls.
 func TestExecutionResultWaitsForADecision(t *testing.T) {

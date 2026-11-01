@@ -16,7 +16,7 @@ import (
 // so the reminder costs at most one extra model turn per request. The
 // reminder is a user message the console wrote, not the person: the
 // transcript shows messages with this prefix as a console line.
-const MemoryReminderPrefix = "[AXLR · memory]"
+const MemoryReminderPrefix = domain.MemoryReminderPrefix
 
 // memoryReminder is the console's message; it leaves the judgement to the
 // model and says how to decline.
