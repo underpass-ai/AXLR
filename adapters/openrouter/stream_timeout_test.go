@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -154,11 +155,52 @@ func TestStreamCancellationPrecedesInactivityTimeout(t *testing.T) {
 	}
 }
 
+// manualTimer is a streamTimer that fires only when the test calls fire.
+type manualTimer struct {
+	duration time.Duration
+	fire     func()
+	resets   atomic.Int32
+	reset    chan struct{}
+}
+
+func (m *manualTimer) Stop() bool { return true }
+
+func (m *manualTimer) Reset(time.Duration) bool {
+	m.resets.Add(1)
+	select {
+	case m.reset <- struct{}{}:
+	default:
+	}
+	return true
+}
+
+// manualClock hands out manualTimers in the order a stream starts them and
+// signals each Reset on reset.
+type manualClock struct {
+	mu     sync.Mutex
+	timers []*manualTimer
+	reset  chan struct{}
+}
+
+func (c *manualClock) afterFunc(d time.Duration, f func()) streamTimer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	timer := &manualTimer{duration: d, fire: f, reset: c.reset}
+	c.timers = append(c.timers, timer)
+	return timer
+}
+
+func (c *manualClock) timer(i int) *manualTimer {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.timers[i]
+}
+
+// Frames that carry no text still reset the inactivity timer, and never the
+// maximum duration, which cuts the stream while they keep arriving.
 func TestStreamMaximumDurationBoundsNonTextFrames(t *testing.T) {
 	reader, writer := io.Pipe()
 	defer writer.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	client, err := New(ClientConfig{
 		APIKey: "secret-token",
 		HTTPClient: &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
@@ -170,26 +212,36 @@ func TestStreamMaximumDurationBoundsNonTextFrames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	clock := &manualClock{reset: make(chan struct{}, 1)}
+	client.afterFunc = clock.afterFunc
 	done := make(chan error, 1)
 	go func() {
-		_, err := client.Stream(ctx, simpleCompletionRequest(), func(domain.Text) error { return nil })
+		_, err := client.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil })
 		done <- err
 	}()
-	var frames atomic.Int32
 	go func() {
-		ticker := time.NewTicker(10 * time.Millisecond)
-		defer ticker.Stop()
-		for range ticker.C {
+		for {
 			if _, err := io.WriteString(writer, streamEvents(`{"choices":[{"index":0,"delta":{},"finish_reason":null}]}`)); err != nil {
 				return
 			}
-			frames.Add(1)
 		}
 	}()
+	for resets := int32(0); resets < 3; resets = clock.timer(0).resets.Load() {
+		select {
+		case <-clock.reset:
+		case <-time.After(time.Second):
+			t.Fatal("non-text frames did not reset the inactivity timer")
+		}
+	}
+	inactivity, maximum := clock.timer(0), clock.timer(1)
+	if inactivity.duration != 80*time.Millisecond || maximum.duration != 120*time.Millisecond {
+		t.Fatalf("timers = %v, %v", inactivity.duration, maximum.duration)
+	}
+	maximum.fire()
 	err = awaitStreamError(t, done)
 	assertStreamTimedOut(t, err)
-	if !strings.Contains(err.Error(), "maximum duration") || frames.Load() < 3 {
-		t.Fatalf("err=%v, frames=%d; expected duration cap after continued frames", err, frames.Load())
+	if !strings.Contains(err.Error(), "maximum duration") || maximum.resets.Load() != 0 {
+		t.Fatalf("err=%v, maximum duration resets=%d; expected an unextended duration cap", err, maximum.resets.Load())
 	}
 }
 
