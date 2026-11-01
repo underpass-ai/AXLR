@@ -133,6 +133,16 @@ func JevNote(content axlr.Text) bool {
 	return strings.HasPrefix(string(content), JevNotePrefix)
 }
 
+// MemoryReminderPrefix opens the console's reminder to record what a
+// request settled in memory; the turn it starts is the console's, not the
+// person's.
+const MemoryReminderPrefix = "[AXLR · memory]"
+
+// MemoryNote reports whether a message is the console's memory reminder.
+func MemoryNote(content axlr.Text) bool {
+	return strings.HasPrefix(string(content), MemoryReminderPrefix)
+}
+
 // RequestCallsUsed is how many tool calls the person's last request has
 // made so far, console turns included, the calls refused over budget left
 // out.

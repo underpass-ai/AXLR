@@ -299,7 +299,7 @@ The result lists every artifact of the sessions the execution spanned, in delive
 | `schema` | `axlr.execution-result/v1`; check it before the fields |
 | `status` | `completed`, `needs_decision`, `interrupted`, `failed` or `budget_exceeded` (below) |
 | `session_id`, `sessions` | The session the execution ended in, and every session it spanned, first to last |
-| `answer` | The last assistant message; empty when the turn gave none |
+| `answer` | The last assistant message; empty when the turn gave none. A reply to a console follow-up that did no work is left out: the reply to the memory reminder never counts, and the reply to a Jev follow-up counts only when that follow-up called a tool, so a one-sentence "the answer is complete" does not replace the answer |
 | `pending` | With `needs_decision`, or with `budget_exceeded` when the `tool_calls` limit refused a call: the call that waits, with its arguments |
 | `error` | With `failed`, `interrupted` or `budget_exceeded`: why; a budget's error names the limit, `budget: requests 20 reached` |
 | `tool_calls` | Every call of the session: `decision` is `approve`, `auto_approve` or `deny`; `status` is `pending`, `forbidden` (the execution's policy refused it outside the model), `denied`, `completed`, `failed` or `uncertain` (interrupted after it may have run) |
