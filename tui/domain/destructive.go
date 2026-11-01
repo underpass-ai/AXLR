@@ -62,7 +62,7 @@ var networkWriters = map[string][]string{
 	"cargo":     {"publish", "yank"},
 	"twine":     {"upload"},
 	"docker":    {"push"},
-	"kubectl":   {"apply", "delete", "rollout", "scale"},
+	"kubectl":   {"apply", "delete", "scale"},
 	"helm":      {"install", "upgrade", "uninstall", "rollback"},
 	"terraform": {"apply", "destroy"},
 	"flyctl":    {"deploy"},
@@ -257,6 +257,10 @@ func networkWrite(base string, args []string, words string) bool {
 				return true
 			}
 		}
+	case "kubectl":
+		if kubectlRolloutWrite(args) {
+			return true
+		}
 	case "wget":
 		for _, arg := range args {
 			if strings.HasPrefix(arg, "--post-") || strings.HasPrefix(arg, "--method=") && !strings.HasSuffix(strings.ToUpper(arg), "=GET") || arg == "--method" {
@@ -267,6 +271,25 @@ func networkWrite(base string, args []string, words string) bool {
 	for _, pattern := range networkWriters[base] {
 		if strings.Contains(" "+words+" ", " "+pattern+" ") || strings.HasPrefix(words, base+" "+pattern) {
 			return true
+		}
+	}
+	return false
+}
+
+// kubectlRolloutReads are the rollout subcommands that only read: on
+// 31 October 2026 a read-only SRE bot's `kubectl rollout history` waited
+// for a decision nobody gave, although its rules allowed the call, and
+// expired at its deadline.
+var kubectlRolloutReads = map[string]bool{"status": true, "history": true}
+
+// kubectlRolloutWrite reports a `kubectl rollout` that changes the
+// cluster (undo, restart, pause, resume). Only a read subcommand written
+// right after rollout is a read; anything else, flags between them
+// included, counts as a write.
+func kubectlRolloutWrite(args []string) bool {
+	for i, arg := range args {
+		if arg == "rollout" {
+			return i+1 >= len(args) || !kubectlRolloutReads[args[i+1]]
 		}
 	}
 	return false
