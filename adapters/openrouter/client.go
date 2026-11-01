@@ -26,6 +26,7 @@ type Client struct {
 	http                    http.Client
 	streamInactivityTimeout time.Duration
 	streamMaxDuration       time.Duration
+	afterFunc               afterFunc
 }
 
 // defaultStreamInactivityTimeout lets a stream send nothing for as long as
@@ -72,7 +73,7 @@ func New(config ClientConfig) (*Client, error) {
 		client = *config.HTTPClient
 	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
-	return &Client{apiKey: strings.TrimSpace(config.APIKey), endpoint: target, provider: provider, thinking: config.Thinking, models: models, http: client, streamInactivityTimeout: streamInactivityTimeout, streamMaxDuration: streamMaxDuration}, nil
+	return &Client{apiKey: strings.TrimSpace(config.APIKey), endpoint: target, provider: provider, thinking: config.Thinking, models: models, http: client, streamInactivityTimeout: streamInactivityTimeout, streamMaxDuration: streamMaxDuration, afterFunc: realAfterFunc}, nil
 }
 
 func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (domain.CompletionResult, error) {

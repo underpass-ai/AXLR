@@ -44,10 +44,10 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	defer cancelStream(nil)
 	timeout := NewStreamTimeoutError(c.provider, false)
 	idle := c.inactivityTimeout(wire.Model)
-	inactivityTimer := time.AfterFunc(idle, func() { cancelStream(timeout) })
+	inactivityTimer := c.afterFunc(idle, func() { cancelStream(timeout) })
 	defer inactivityTimer.Stop()
 	maximumDurationTimeout := NewStreamTimeoutError(c.provider, true)
-	maximumDurationTimer := time.AfterFunc(c.streamMaxDuration, func() { cancelStream(maximumDurationTimeout) })
+	maximumDurationTimer := c.afterFunc(c.streamMaxDuration, func() { cancelStream(maximumDurationTimeout) })
 	defer maximumDurationTimer.Stop()
 	streamError := func() error {
 		if err := ctx.Err(); err != nil {
