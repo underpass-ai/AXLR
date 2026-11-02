@@ -292,9 +292,12 @@ No API key, URL or Copilot token is stored in AXLR settings. Organization model
 policies and subscription allowances still apply. The provider starts an
 isolated Copilot SDK session per model request, with built-ins disabled, tool
 execution denied and tool requests returned to AXLR for its own policy checks.
+The session streams: the answer reaches the console, and an `--exec` run's
+`text` lines, as Copilot generates it, and its reasoning shows in the console's
+reasoning line, never in the answer.
 Tool history is represented as JSON text for the SDK; verify model behavior for
-your workflow. Copilot usage is in subscription credits, not USD: `max_session_usd` does not
-limit Copilot requests, and the footer and `/usage` count them as not metered
+your workflow. Copilot usage is in subscription credits, not USD:
+`max_session_usd` does not limit Copilot requests, and the footer and `/usage` count them as not metered
 in USD (`2 Copilot, not in USD`) instead of showing them as free. The request
 and tool-call budgets (`turn_tool_calls`, an execution's `requests` and
 `tool_calls`) are what bound them in AXLR; use GitHub's organization spending

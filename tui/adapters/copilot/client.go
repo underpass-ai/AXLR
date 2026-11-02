@@ -15,7 +15,6 @@ import (
 	sdk "github.com/github/copilot-sdk/go"
 	"github.com/github/copilot-sdk/go/rpc"
 	root "github.com/underpass-ai/AXLR/domain"
-	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 type Client struct{ CLI string }
@@ -76,76 +75,19 @@ func (c *Client) Stream(ctx context.Context, req root.CompletionRequest, onText 
 	if _, err = session.SendPrompt(ctx, prompt); err != nil {
 		return root.CompletionResult{}, fmt.Errorf("Copilot request failed: %w", err)
 	}
-	var result root.CompletionResult
-	// Its usage is subscription credits: the ledger counts the request
-	// under this name as not metered in USD.
-	result.Provider = domain.CopilotProvider
-	var content strings.Builder
-	for {
-		select {
-		case <-ctx.Done():
-			return root.CompletionResult{}, ctx.Err()
-		case event := <-events:
-			if event.AgentID != nil && *event.AgentID != "" {
-				return root.CompletionResult{}, errors.New("Copilot returned a subagent event")
-			}
-			switch data := event.Data.(type) {
-			case *rpc.AssistantMessageData:
-				content.WriteString(data.Content)
-				if len(data.ToolRequests) > 0 {
-					calls, err := mapCalls(data.ToolRequests, req.Tools)
-					if err != nil {
-						return root.CompletionResult{}, err
-					}
-					// Stop the SDK loop before it can retry denied tool calls.
-					stop, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-					_ = session.Abort(stop)
-					cancel()
-					result.Message = root.Message{Role: root.RoleAssistant, Content: root.Text(content.String()), ToolCalls: calls}
-					result.FinishReason = "tool_calls"
-					if result.Message.Content != "" {
-						if err = onText(result.Message.Content); err != nil {
-							return root.CompletionResult{}, err
-						}
-					}
-					return result, nil
-				}
-			case *rpc.AssistantUsageData:
-				usage := &root.TokenUsage{}
-				if data.InputTokens != nil {
-					usage.PromptTokens = int(*data.InputTokens)
-				}
-				if data.OutputTokens != nil {
-					usage.CompletionTokens = int(*data.OutputTokens)
-				}
-				if data.CacheReadTokens != nil {
-					usage.CachedTokens = int(*data.CacheReadTokens)
-				}
-				usage.TotalTokens = usage.PromptTokens + usage.CompletionTokens
-				result.Usage = usage
-			case *rpc.SessionErrorData:
-				return root.CompletionResult{}, fmt.Errorf("Copilot request failed (%s)", data.ErrorType)
-			case *rpc.SessionIdleData:
-				if content.Len() == 0 {
-					return root.CompletionResult{}, errors.New("Copilot returned no assistant response")
-				}
-				text, err := root.NewText(content.String())
-				if err != nil {
-					return root.CompletionResult{}, err
-				}
-				result.Message = root.Message{Role: root.RoleAssistant, Content: text}
-				result.FinishReason = "stop"
-				if err = onText(text); err != nil {
-					return root.CompletionResult{}, err
-				}
-				return result, nil
-			}
-		}
-	}
+	return readResponse(ctx, events, func() {
+		// Stop the SDK loop before it can retry denied tool calls.
+		stop, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		_ = session.Abort(stop)
+		cancel()
+	}, req.Tools, onText)
 }
 
+// sessionConfig streams the answer, so AXLR shows it as it is generated,
+// and leaves the SDK nothing to run: no built-in tool, hook, skill or
+// MCP server, and every tool use or permission denied.
 func sessionConfig(model, system string, tools []sdk.Tool, allowed []string) *sdk.SessionConfig {
-	return &sdk.SessionConfig{Model: model, Tools: tools, AvailableTools: allowed, SystemMessage: &sdk.SystemMessageConfig{Mode: "replace", Content: system}, Streaming: sdk.Bool(false), EnableConfigDiscovery: sdk.Bool(false), EnableFileHooks: sdk.Bool(false), EnableSkills: sdk.Bool(false), EnableSessionStore: sdk.Bool(false), EnableHostGitOperations: sdk.Bool(false), EnableOnDemandInstructionDiscovery: sdk.Bool(false), MCPServers: map[string]sdk.MCPServerConfig{}, Hooks: &sdk.SessionHooks{OnPreToolUse: func(sdk.PreToolUseHookInput, sdk.HookInvocation) (*sdk.PreToolUseHookOutput, error) {
+	return &sdk.SessionConfig{Model: model, Tools: tools, AvailableTools: allowed, SystemMessage: &sdk.SystemMessageConfig{Mode: "replace", Content: system}, Streaming: sdk.Bool(true), EnableConfigDiscovery: sdk.Bool(false), EnableFileHooks: sdk.Bool(false), EnableSkills: sdk.Bool(false), EnableSessionStore: sdk.Bool(false), EnableHostGitOperations: sdk.Bool(false), EnableOnDemandInstructionDiscovery: sdk.Bool(false), MCPServers: map[string]sdk.MCPServerConfig{}, Hooks: &sdk.SessionHooks{OnPreToolUse: func(sdk.PreToolUseHookInput, sdk.HookInvocation) (*sdk.PreToolUseHookOutput, error) {
 		return &sdk.PreToolUseHookOutput{PermissionDecision: "deny", PermissionDecisionReason: "AXLR executes tools"}, nil
 	}}, OnPermissionRequest: func(sdk.PermissionRequest, sdk.PermissionInvocation) (rpc.PermissionDecision, error) {
 		return &rpc.PermissionDecisionReject{}, nil
