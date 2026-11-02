@@ -255,7 +255,7 @@ Integer. Absent or `0`: 32. Otherwise from 8 to 256 (`settings turn_tool_calls m
 
 #### max_session_usd
 
-Number, in dollars. Absent or `0`: no limit. Otherwise up to 10,000 (`settings max_session_usd must be between 0 and 10000 dollars`; a larger value is almost certainly a typo). Once a session's known cost reaches it, the console sends no further request. Each session has its own account, worker sessions included. `+` in `/usage` grants one more `max_session_usd` to the current session only, without touching the file. See [cost and budget](console.md#cost-and-budget).
+Number, in dollars. Absent or `0`: no limit. Otherwise up to 10,000 (`settings max_session_usd must be between 0 and 10000 dollars`; a larger value is almost certainly a typo). Once a session's known cost reaches it, the console sends no further request. Each session has its own account, worker sessions included. It does not limit requests to a [Copilot model](#copilot-headless-authentication): they are paid in subscription credits and report no USD cost, so the footer and `/usage` count them as not metered in USD rather than as $0, and what limits them is the request and tool-call budgets: `turn_tool_calls` per turn, and an execution's `requests` and `tool_calls` (`--budget`). `+` in `/usage` grants one more `max_session_usd` to the current session only, without touching the file. See [cost and budget](console.md#cost-and-budget).
 
 ```json
 "max_session_usd": 5
@@ -293,9 +293,12 @@ policies and subscription allowances still apply. The provider starts an
 isolated Copilot SDK session per model request, with built-ins disabled, tool
 execution denied and tool requests returned to AXLR for its own policy checks.
 Tool history is represented as JSON text for the SDK; verify model behavior for
-your workflow. Copilot usage is in subscription credits, not USD: the USD
-session cap cannot enforce that credit budget, and an unknown cost must not be
-treated as a free request. Use GitHub's organization spending controls.
+your workflow. Copilot usage is in subscription credits, not USD: `max_session_usd` does not
+limit Copilot requests, and the footer and `/usage` count them as not metered
+in USD (`2 Copilot, not in USD`) instead of showing them as free. The request
+and tool-call budgets (`turn_tool_calls`, an execution's `requests` and
+`tool_calls`) are what bound them in AXLR; use GitHub's organization spending
+controls for the credits.
 
 ### local_models
 

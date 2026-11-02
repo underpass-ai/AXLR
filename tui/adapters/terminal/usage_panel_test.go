@@ -241,3 +241,30 @@ func TestACancelledRequestsUsageKeepsTheCancelledFooter(t *testing.T) {
 		t.Fatalf("footer %q, notice %q", got, m.Status.Notice)
 	}
 }
+
+// Requests to a Copilot model are paid in subscription credits: the footer
+// and /usage count them as not metered in USD, never as $0, and say the
+// USD cap does not limit them.
+func TestCopilotRequestsAreNotShownAsFree(t *testing.T) {
+	m := sized()
+	defer m.zones.Close()
+	ledger := domain.UsageLedger{}
+	ledger.Record(domain.UsageSample{Provider: domain.CopilotProvider, PromptTokens: 900, CompletionTokens: 40}, 1)
+	ledger.Record(domain.UsageSample{Provider: domain.CopilotProvider, PromptTokens: 950, CompletionTokens: 60}, 1)
+	m.cost = costView{ledger: ledger}
+	if got := footerText(m); !strings.HasSuffix(got, "idle · 2 Copilot, not in USD") || strings.Contains(got, "$") {
+		t.Fatalf("footer: %q", got)
+	}
+	got := usageContent(ledger, 1, Theme{Locale: English})
+	if !strings.Contains(got, "Copilot: 2 requests paid in subscription credits, not metered in USD; max_session_usd does not limit them") || !strings.Contains(got, "GitHub Copilot · 2 requests · credits, not USD") || strings.Contains(got, "$0.00 ·") {
+		t.Fatalf("/usage:\n%s", got)
+	}
+	ledger.Record(domain.UsageSample{Provider: "Relace", Cost: 0.01, CostKnown: true}, 1)
+	m.cost = costView{ledger: ledger}
+	if got := footerText(m); !strings.HasSuffix(got, "$0.01 session · 2 Copilot, not in USD") {
+		t.Fatalf("mixed footer: %q", got)
+	}
+	if got := usageContent(domain.UsageLedger{Requests: 1, Providers: map[string]domain.ProviderUsage{domain.CopilotProvider: {Requests: 1}}}, 0, Theme{Locale: Spanish}); !strings.Contains(got, "Copilot: 1 petición pagada con créditos de la suscripción, sin coste en USD") {
+		t.Fatalf("spanish /usage:\n%s", got)
+	}
+}

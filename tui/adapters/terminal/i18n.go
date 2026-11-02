@@ -975,6 +975,10 @@ var enMessages = map[string]string{
 
 	// qa3 qol view
 	"footer.unmetered":            "+%d unmetered",
+	"footer.copilot":              "%d Copilot, not in USD",
+	"usage.copilot":               "Copilot: %d requests paid in subscription credits, not metered in USD; max_session_usd does not limit them",
+	"usage.copilotOne":            "Copilot: %d request paid in subscription credits, not metered in USD; max_session_usd does not limit it",
+	"usage.copilotCost":           "credits, not USD",
 	"usage.unmetered":             "Unmetered: %d cancelled or failed requests without a usage report; their cost is not in the total",
 	"usage.unmeteredOne":          "Unmetered: %d cancelled or failed request without a usage report; its cost is not in the total",
 	"hint.choose_model":           "choose a model the provider serves with /model",
@@ -1961,6 +1965,10 @@ var esMessages = map[string]string{
 
 	// qa3 qol view
 	"footer.unmetered":            "+%d sin medir",
+	"footer.copilot":              "%d Copilot, sin coste en USD",
+	"usage.copilot":               "Copilot: %d peticiones pagadas con créditos de la suscripción, sin coste en USD; max_session_usd no las limita",
+	"usage.copilotOne":            "Copilot: %d petición pagada con créditos de la suscripción, sin coste en USD; max_session_usd no la limita",
+	"usage.copilotCost":           "créditos, no USD",
 	"usage.unmetered":             "Sin medir: %d peticiones canceladas o fallidas sin informe de uso; su coste no está en el total",
 	"usage.unmeteredOne":          "Sin medir: %d petición cancelada o fallida sin informe de uso; su coste no está en el total",
 	"hint.choose_model":           "elige con /model un modelo que sirva el proveedor",

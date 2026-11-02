@@ -55,8 +55,9 @@ func (m AppModel) observeUsage(ledger domain.UsageLedger, warn bool) AppModel {
 }
 
 // costParts is the footer's turn and session cost, absent while no request
-// reported one, and the session's unmetered requests, whose cost the total
-// leaves out; withTurn false leaves the turn's cost out.
+// reported one, the session's unmetered requests, whose cost the total
+// leaves out, and its requests to a Copilot model, which no USD cost
+// covers rather than costing $0; withTurn false leaves the turn's cost out.
 func (m AppModel) costParts(withTurn bool) []string {
 	var parts []string
 	ledger := m.cost.ledger
@@ -68,6 +69,9 @@ func (m AppModel) costParts(withTurn bool) []string {
 	}
 	if ledger.Unmetered > 0 {
 		parts = append(parts, m.Theme.Tf("footer.unmetered", ledger.Unmetered))
+	}
+	if copilot := ledger.CopilotRequests(); copilot > 0 {
+		parts = append(parts, m.Theme.Tf("footer.copilot", copilot))
 	}
 	return parts
 }
@@ -183,6 +187,10 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme, turn
 		// cost below leaves them out.
 		lines = append(lines, theme.Tn("usage.unmetered", l.Unmetered, l.Unmetered))
 	}
+	if copilot := l.CopilotRequests(); copilot > 0 {
+		// Subscription credits: neither free nor in the cost below.
+		lines = append(lines, theme.Tn("usage.copilot", copilot, copilot))
+	}
 	lines = append(lines,
 		theme.Tf("usage.prompt", formatTokens(l.PromptTokens), formatTokens(l.CachedTokens), formatTokens(l.CacheWriteTokens)),
 		theme.Tf("usage.completion", formatTokens(l.CompletionTokens), formatTokens(l.ReasoningTokens)),
@@ -215,6 +223,8 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme, turn
 		cost := "—"
 		if p.CostRequests > 0 {
 			cost = FormatUSD(p.Cost)
+		} else if name == domain.CopilotProvider {
+			cost = theme.T("usage.copilotCost")
 		}
 		row := theme.Tf("usage.provider", singleLine(name), p.Requests, cost)
 		if p.Requests == 1 {

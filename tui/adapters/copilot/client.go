@@ -15,6 +15,7 @@ import (
 	sdk "github.com/github/copilot-sdk/go"
 	"github.com/github/copilot-sdk/go/rpc"
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
 type Client struct{ CLI string }
@@ -76,7 +77,9 @@ func (c *Client) Stream(ctx context.Context, req root.CompletionRequest, onText 
 		return root.CompletionResult{}, fmt.Errorf("Copilot request failed: %w", err)
 	}
 	var result root.CompletionResult
-	result.Provider = "GitHub Copilot"
+	// Its usage is subscription credits: the ledger counts the request
+	// under this name as not metered in USD.
+	result.Provider = domain.CopilotProvider
 	var content strings.Builder
 	for {
 		select {
