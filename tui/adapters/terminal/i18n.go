@@ -975,8 +975,13 @@ var enMessages = map[string]string{
 
 	// qa3 qol view
 	"footer.unmetered":            "+%d unmetered",
-	"usage.unmetered":             "Unmetered: %d cancelled or failed requests without a usage report; their cost is not in the total",
-	"usage.unmeteredOne":          "Unmetered: %d cancelled or failed request without a usage report; its cost is not in the total",
+	"footer.unmeteredEstimated":   "+%d unmetered ≈%s",
+	"usage.unmetered":             "Unmetered: %d cancelled or failed requests without a usage report or a known rate; their cost is in neither the total nor the budget",
+	"usage.unmeteredOne":          "Unmetered: %d cancelled or failed request without a usage report or a known rate; its cost is in neither the total nor the budget",
+	"usage.unmeteredEstimated":    "Unmetered: %d cancelled or failed requests without a usage report, counted in the budget at an estimated %s until their exact cost is known",
+	"usage.unmeteredEstimatedOne": "Unmetered: %d cancelled or failed request without a usage report, counted in the budget at an estimated %s until its exact cost is known",
+	"usage.unmeteredNoRate":       " · %d of them have no known rate and count nothing",
+	"usage.unmeteredNoRateOne":    " · %d of them has no known rate and counts nothing",
 	"hint.choose_model":           "choose a model the provider serves with /model",
 	"hint.check_key":              "check OPENROUTER_API_KEY (keys at https://openrouter.ai/keys)",
 	"hint.check_key_local":        "check this server's key (api_key_env in local_models)",
@@ -1961,8 +1966,13 @@ var esMessages = map[string]string{
 
 	// qa3 qol view
 	"footer.unmetered":            "+%d sin medir",
-	"usage.unmetered":             "Sin medir: %d peticiones canceladas o fallidas sin informe de uso; su coste no está en el total",
-	"usage.unmeteredOne":          "Sin medir: %d petición cancelada o fallida sin informe de uso; su coste no está en el total",
+	"footer.unmeteredEstimated":   "+%d sin medir ≈%s",
+	"usage.unmetered":             "Sin medir: %d peticiones canceladas o fallidas sin informe de uso ni tarifa conocida; su coste no está ni en el total ni en el presupuesto",
+	"usage.unmeteredOne":          "Sin medir: %d petición cancelada o fallida sin informe de uso ni tarifa conocida; su coste no está ni en el total ni en el presupuesto",
+	"usage.unmeteredEstimated":    "Sin medir: %d peticiones canceladas o fallidas sin informe de uso, que cuentan en el presupuesto por un coste estimado de %s hasta conocer el exacto",
+	"usage.unmeteredEstimatedOne": "Sin medir: %d petición cancelada o fallida sin informe de uso, que cuenta en el presupuesto por un coste estimado de %s hasta conocer el exacto",
+	"usage.unmeteredNoRate":       " · %d de ellas no tienen tarifa conocida y no cuentan",
+	"usage.unmeteredNoRateOne":    " · %d de ellas no tiene tarifa conocida y no cuenta",
 	"hint.choose_model":           "elige con /model un modelo que sirva el proveedor",
 	"hint.check_key":              "revisa OPENROUTER_API_KEY (claves en https://openrouter.ai/keys)",
 	"hint.check_key_local":        "revisa la clave de este servidor (api_key_env en local_models)",

@@ -216,7 +216,7 @@ func TestUnmeteredRequestsAreShown(t *testing.T) {
 		t.Fatalf("only unmetered: %q", got)
 	}
 	got := usageContent(domain.UsageLedger{Requests: 3, CostRequests: 2, Cost: 0.01, Unmetered: 1}, 0, Theme{Locale: English})
-	if !strings.Contains(got, "Requests: 3, 2 with a reported cost\nUnmetered: 1 cancelled or failed request without a usage report; its cost is not in the total\nPrompt tokens") {
+	if !strings.Contains(got, "Requests: 3, 2 with a reported cost\nUnmetered: 1 cancelled or failed request without a usage report or a known rate; its cost is in neither the total nor the budget\nPrompt tokens") {
 		t.Fatalf("/usage:\n%s", got)
 	}
 	if got := usageContent(domain.UsageLedger{Requests: 4, Unmetered: 2}, 0, Theme{Locale: Spanish}); !strings.Contains(got, "Sin medir: 2 peticiones canceladas o fallidas") {
@@ -224,6 +224,20 @@ func TestUnmeteredRequestsAreShown(t *testing.T) {
 	}
 	if got := usageContent(domain.UsageLedger{Requests: 4}, 0, Theme{Locale: English}); strings.Contains(got, "Unmetered") {
 		t.Fatalf("unmetered line without any:\n%s", got)
+	}
+	// Requests with a known rate count in the budget at an estimate: the
+	// footer and /usage say how much, and what is left of the budget.
+	m.cost = costView{ledger: domain.UsageLedger{Requests: 3, Cost: 0.2, CostRequests: 1, Unmetered: 2, Estimated: 1, EstimatedCost: 0.3}}
+	if got := footerText(m); !strings.HasSuffix(got, "$0.20 session · +2 unmetered ≈$0.30") {
+		t.Fatalf("estimated footer: %q", got)
+	}
+	got = usageContent(m.cost.ledger, 1, Theme{Locale: English})
+	if !strings.Contains(got, "Unmetered: 2 cancelled or failed requests without a usage report, counted in the budget at an estimated $0.30 until their exact cost is known · 1 of them has no known rate and counts nothing") || !strings.Contains(got, "Budget: $1.00 · $0.50 left") {
+		t.Fatalf("estimated /usage:\n%s", got)
+	}
+	got = usageContent(domain.UsageLedger{Requests: 1, Unmetered: 1, Estimated: 1, EstimatedCost: 0.01}, 0, Theme{Locale: Spanish})
+	if !strings.Contains(got, "Sin medir: 1 petición cancelada o fallida sin informe de uso, que cuenta en el presupuesto por un coste estimado de $0.01") {
+		t.Fatalf("spanish estimated /usage:\n%s", got)
 	}
 }
 

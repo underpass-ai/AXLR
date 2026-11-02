@@ -145,3 +145,24 @@ func TestUsageLedgerSettlesAnUnmeteredRequest(t *testing.T) {
 		t.Fatalf("pending not bounded: %d", len(l.Pending))
 	}
 }
+
+// An unmetered request with a known rate counts at its estimate towards
+// the limit and the warning, apart from the known cost; settling it swaps
+// the estimate for the exact cost. Without a rate, or with a negative
+// estimate, it counts nothing.
+func TestUsageLedgerCountsAnEstimateTowardsTheLimit(t *testing.T) {
+	var l UsageLedger
+	if l.Record(UsageSample{Unmetered: true, EstimatedCost: 0.5}, 1) || l.Record(UsageSample{Unmetered: true, EstimatedCost: -1, EstimateKnown: true}, 1) || l.Counted() != 0 || l.Estimated != 0 {
+		t.Fatalf("an unknown or negative estimate counted: %+v", l)
+	}
+	if !l.Record(UsageSample{Unmetered: true, GenerationID: "gen-1", EstimatedCost: 0.85, EstimateKnown: true}, 1) || l.Cost != 0 || l.Counted() != 0.85 || l.Estimated != 1 || !l.Pending[0].Estimated {
+		t.Fatalf("estimate not counted: %+v", l)
+	}
+	l.Record(UsageSample{Cost: 0.2, CostKnown: true}, 1)
+	if !l.Exhausted(1) {
+		t.Fatalf("not exhausted at %v", l.Counted())
+	}
+	if settled, _ := l.Settle("gen-1", GenerationCost{Cost: 0.3}, 1); !settled || l.EstimatedCost != 0 || l.Estimated != 0 || l.Cost != 0.5 || l.Exhausted(1) {
+		t.Fatalf("settled %+v", l)
+	}
+}

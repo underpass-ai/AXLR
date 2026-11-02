@@ -348,6 +348,11 @@ func TestRunLaunchFailureWaitsForCancelledStreamAndPersistsInterruption(t *testi
 	previous := http.DefaultTransport
 	defer func() { http.DefaultTransport = previous }()
 	http.DefaultTransport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.HasSuffix(r.URL.Path, "/models") {
+			// The cancelled request's estimate asks the catalog for the
+			// model's rates; it lists none.
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"data":[]}`)), Header: make(http.Header)}, nil
+		}
 		close(started)
 		<-r.Context().Done()
 		close(stopped)

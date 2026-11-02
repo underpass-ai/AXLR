@@ -255,7 +255,7 @@ Integer. Absent or `0`: 32. Otherwise from 8 to 256 (`settings turn_tool_calls m
 
 #### max_session_usd
 
-Number, in dollars. Absent or `0`: no limit. Otherwise up to 10,000 (`settings max_session_usd must be between 0 and 10000 dollars`; a larger value is almost certainly a typo). Once a session's known cost reaches it, the console sends no further request. Each session has its own account, worker sessions included. `+` in `/usage` grants one more `max_session_usd` to the current session only, without touching the file. See [cost and budget](console.md#cost-and-budget).
+Number, in dollars. Absent or `0`: no limit. Otherwise up to 10,000 (`settings max_session_usd must be between 0 and 10000 dollars`; a larger value is almost certainly a typo). Once a session's cost reaches it, the console sends no further request. That cost is what its requests reported plus an estimate for each request cancelled or failed without a usage report: its estimated tokens at the model's rates in OpenRouter's catalog. The estimate counts until OpenRouter reports the request's exact cost, which then takes its place, so cancelling streams cannot pass the limit unseen. A cancelled request to a model without a known rate (a local model, or one the catalog does not price) counts nothing, and `/usage` says how many there are. Each session has its own account, worker sessions included. `+` in `/usage` grants one more `max_session_usd` to the current session only, without touching the file. See [cost and budget](console.md#cost-and-budget).
 
 ```json
 "max_session_usd": 5

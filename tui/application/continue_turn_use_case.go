@@ -82,8 +82,9 @@ type ContinueTurnUseCase struct {
 	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
 	TurnToolCalls int
 	// Usage keeps each session's ledger of tokens, cost and latency, and
-	// MaxSessionUSD refuses a session's requests once its known cost
-	// reaches it (zero, no limit); nil keeps no ledger (session_usage.go).
+	// MaxSessionUSD refuses a session's requests once their known cost,
+	// and the estimate of the cancelled ones, reaches it (zero, no limit);
+	// nil keeps no ledger (session_usage.go).
 	Usage         SessionUsagePort
 	MaxSessionUSD float64
 	// Generations looks up the exact cost of an OpenRouter request that
@@ -413,7 +414,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		// The request was sent: it reaches the ledger whether it finished, failed
 		// or was cancelled, or a cancelled stream the provider billed would
 		// escape the cost and max_session_usd.
-		sample := u.usageSample(req.Model, result, streamErr, meter)
+		sample := u.usageSample(ctx, req.Model, result, streamErr, meter)
 		u.recordUsage(ctx, *session, sample, emit)
 		u.recordReceipt(ctx, *session, domain.ReceiptEntry{Kind: domain.ReceiptRequestEnded, At: time.Now(), Usage: sample, Status: requestStatus(streamErr)})
 		u.observeModel(ctx, req.Model, sample, streamErr)

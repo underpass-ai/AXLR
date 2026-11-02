@@ -4,8 +4,8 @@ import "time"
 
 // PendingGeneration is an unmetered request whose exact cost OpenRouter
 // may still report: its generation id, the provider subtotal it was
-// counted in and the tokens estimated for it, which the exact numbers
-// replace. Cancelling a stream does not stop every provider: some keep
+// counted in and the tokens and cost estimated for it, which the exact
+// numbers replace. Cancelling a stream does not stop every provider: some keep
 // generating and bill the whole answer, and the request's stats are final
 // only once they finish, so the lookup is retried at later requests
 // rather than once after the turn.
@@ -14,6 +14,10 @@ type PendingGeneration struct {
 	Provider         string
 	PromptTokens     int
 	CompletionTokens int
+	// EstimatedCost is what the request counts in the ledger's
+	// EstimatedCost until it is settled, when Estimated.
+	EstimatedCost float64
+	Estimated     bool
 	// Ended is when the request ended; Tried, when its cost was last asked
 	// for, zero before the first lookup, and Lookups how many times.
 	Ended   time.Time

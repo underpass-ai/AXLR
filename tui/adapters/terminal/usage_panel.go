@@ -47,7 +47,7 @@ func (m AppModel) loadUsage() AppModel {
 func (m AppModel) observeUsage(ledger domain.UsageLedger, warn bool) AppModel {
 	m.cost.ledger = ledger
 	if warn {
-		m.Status.Notice = m.Theme.Tf("notice.budgetWarning", FormatUSD(ledger.Cost), formatBudget(ledger.Limit(m.deps.MaxSessionUSD)))
+		m.Status.Notice = m.Theme.Tf("notice.budgetWarning", FormatUSD(ledger.Counted()), formatBudget(ledger.Limit(m.deps.MaxSessionUSD)))
 		// Said once: it stays until a key, not for a notice's while.
 		m.lastingNotice = m.Status.Notice
 	}
@@ -56,7 +56,8 @@ func (m AppModel) observeUsage(ledger domain.UsageLedger, warn bool) AppModel {
 
 // costParts is the footer's turn and session cost, absent while no request
 // reported one, and the session's unmetered requests, whose cost the total
-// leaves out; withTurn false leaves the turn's cost out.
+// leaves out, with the estimate the budget counts for them when there is
+// one; withTurn false leaves the turn's cost out.
 func (m AppModel) costParts(withTurn bool) []string {
 	var parts []string
 	ledger := m.cost.ledger
@@ -66,7 +67,10 @@ func (m AppModel) costParts(withTurn bool) []string {
 	if ledger.CostRequests > 0 {
 		parts = append(parts, m.Theme.Tf("footer.costSession", FormatUSD(ledger.Cost)))
 	}
-	if ledger.Unmetered > 0 {
+	switch {
+	case ledger.Unmetered > 0 && ledger.Estimated > 0:
+		parts = append(parts, m.Theme.Tf("footer.unmeteredEstimated", ledger.Unmetered, FormatUSD(ledger.EstimatedCost)))
+	case ledger.Unmetered > 0:
 		parts = append(parts, m.Theme.Tf("footer.unmetered", ledger.Unmetered))
 	}
 	return parts
@@ -188,8 +192,17 @@ func usageContent(l domain.UsageLedger, maxSessionUSD float64, theme Theme, turn
 	lines := []string{theme.Tf("usage.requests", l.Requests, l.CostRequests)}
 	if l.Unmetered > 0 {
 		// Cancelled or failed requests the provider may have billed: the
-		// cost below leaves them out.
-		lines = append(lines, theme.Tn("usage.unmetered", l.Unmetered, l.Unmetered))
+		// cost below leaves them out, and the budget counts the estimate of
+		// those whose model has a known rate until their exact cost is in.
+		if l.Estimated > 0 {
+			line := theme.Tn("usage.unmeteredEstimated", l.Unmetered, l.Unmetered, FormatUSD(l.EstimatedCost))
+			if unrated := l.Unmetered - l.Estimated; unrated > 0 {
+				line += theme.Tn("usage.unmeteredNoRate", unrated, unrated)
+			}
+			lines = append(lines, line)
+		} else {
+			lines = append(lines, theme.Tn("usage.unmetered", l.Unmetered, l.Unmetered))
+		}
 	}
 	lines = append(lines,
 		theme.Tf("usage.prompt", formatTokens(l.PromptTokens), formatTokens(l.CachedTokens), formatTokens(l.CacheWriteTokens)),
@@ -246,7 +259,7 @@ func budgetLines(l domain.UsageLedger, maxSessionUSD float64, theme Theme) strin
 	if limit <= 0 {
 		return theme.T("usage.noBudget")
 	}
-	left := formatBudget(max(0, limit-l.Cost))
+	left := formatBudget(max(0, limit-l.Counted()))
 	line := theme.Tf("usage.budget", formatBudget(limit), left)
 	if l.Raised > 0 {
 		line = theme.Tf("usage.budgetRaised", formatBudget(limit), formatBudget(l.Raised), left)

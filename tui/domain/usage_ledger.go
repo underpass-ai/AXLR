@@ -33,6 +33,11 @@ type UsageSample struct {
 	// exact cost can be looked up later; Ended is when it ended.
 	GenerationID string
 	Ended        time.Time
+	// EstimatedCost is an unmetered request's cost at the model's catalog
+	// rates for its estimated tokens, counted only when EstimateKnown:
+	// without a rate it is unknown, not free.
+	EstimatedCost float64
+	EstimateKnown bool
 }
 
 // EstimatedTokens is how many tokens bytes hold at hundredths of a byte per
@@ -69,6 +74,13 @@ type UsageLedger struct {
 	// essay cancelled after ten seconds of streaming left the session's
 	// cost where it was.
 	Unmetered int
+	// EstimatedCost sums the estimated cost of the Estimated unmetered
+	// requests whose model has a known rate: kept apart from Cost, it
+	// counts towards the limit until each one's exact cost replaces it, so
+	// cancelling streams cannot pass max_session_usd unseen. An unmetered
+	// request without a rate counts nothing.
+	EstimatedCost float64
+	Estimated     int
 	// Pending are the unmetered OpenRouter requests whose exact cost may
 	// still be looked up (Settle), at most MaxPendingGenerations.
 	Pending   []PendingGeneration
@@ -134,21 +146,28 @@ func (l UsageLedger) Limit(maxSessionUSD float64) float64 {
 	return maxSessionUSD + l.Raised
 }
 
-// Exhausted reports whether the known cost reached the limit.
+// Counted is what the limit is checked against: the known cost and the
+// estimate of the unmetered requests with a known rate.
+func (l UsageLedger) Counted() float64 {
+	return l.Cost + l.EstimatedCost
+}
+
+// Exhausted reports whether the counted cost reached the limit.
 func (l UsageLedger) Exhausted(maxSessionUSD float64) bool {
 	limit := l.Limit(maxSessionUSD)
-	return limit > 0 && l.Cost >= limit
+	return limit > 0 && l.Counted() >= limit
 }
 
-// Near reports whether the known cost passed 80 % of the limit.
+// Near reports whether the counted cost passed 80 % of the limit.
 func (l UsageLedger) Near(maxSessionUSD float64) bool {
 	limit := l.Limit(maxSessionUSD)
-	return limit > 0 && l.Cost >= BudgetWarningShare*limit
+	return limit > 0 && l.Counted() >= BudgetWarningShare*limit
 }
 
-// Record adds one request. It reports whether this request took the known
-// cost past 80 % of the limit while the session had not been warned; a
-// request without a cost never counts towards the limit nor warns.
+// Record adds one request. It reports whether this request took the
+// counted cost past 80 % of the limit while the session had not been
+// warned; a request without a cost or an estimate never counts towards the
+// limit nor warns.
 func (l *UsageLedger) Record(s UsageSample, maxSessionUSD float64) bool {
 	l.Requests++
 	l.PromptTokens += s.PromptTokens
@@ -158,8 +177,16 @@ func (l *UsageLedger) Record(s UsageSample, maxSessionUSD float64) bool {
 	l.ReasoningTokens += s.ReasoningTokens
 	l.FirstByte.add(s.FirstByte)
 	l.Total.add(s.Total)
+	// A negative estimate is no estimate.
+	estimated := s.Unmetered && s.EstimateKnown && s.EstimatedCost >= 0
 	if s.Unmetered {
 		l.Unmetered++
+	}
+	if estimated {
+		l.EstimatedCost += s.EstimatedCost
+		l.Estimated++
+	} else {
+		s.EstimatedCost = 0
 	}
 	if l.Providers == nil {
 		l.Providers = map[string]ProviderUsage{}
@@ -169,7 +196,7 @@ func (l *UsageLedger) Record(s UsageSample, maxSessionUSD float64) bool {
 		name = OtherProvider
 	}
 	if s.Unmetered && s.GenerationID != "" && len(l.Pending) < MaxPendingGenerations {
-		l.Pending = append(l.Pending, PendingGeneration{ID: s.GenerationID, Provider: name, PromptTokens: s.PromptTokens, CompletionTokens: s.CompletionTokens, Ended: s.Ended})
+		l.Pending = append(l.Pending, PendingGeneration{ID: s.GenerationID, Provider: name, PromptTokens: s.PromptTokens, CompletionTokens: s.CompletionTokens, EstimatedCost: s.EstimatedCost, Estimated: estimated, Ended: s.Ended})
 	}
 	provider := l.Providers[name]
 	provider.Requests++
@@ -185,7 +212,7 @@ func (l *UsageLedger) Record(s UsageSample, maxSessionUSD float64) bool {
 		l.CostRequests++
 	}
 	l.Providers[name] = provider
-	return s.CostKnown && l.warn(maxSessionUSD)
+	return (s.CostKnown || estimated) && l.warn(maxSessionUSD)
 }
 
 // warn arms the warning at 80 % of the limit once: it reports whether the
@@ -200,8 +227,8 @@ func (l *UsageLedger) warn(maxSessionUSD float64) bool {
 
 // Settle replaces the estimate of the pending request id with what
 // OpenRouter reported of it: its tokens, when reported, take the
-// estimated ones' place, its cost joins the known cost and it is no
-// longer unmetered. It reports whether the request was pending, and
+// estimated ones' place, its exact cost joins the known cost in place of
+// its estimated one, and it is no longer unmetered. It reports whether the request was pending, and
 // whether its cost took the session past 80 % of the limit as Record
 // does; an unknown id changes nothing.
 func (l *UsageLedger) Settle(id string, exact GenerationCost, maxSessionUSD float64) (settled, warned bool) {
@@ -212,6 +239,10 @@ func (l *UsageLedger) Settle(id string, exact GenerationCost, maxSessionUSD floa
 	pending := l.Pending[index]
 	l.Pending = append(l.Pending[:index:index], l.Pending[index+1:]...)
 	l.Unmetered = max(0, l.Unmetered-1)
+	if pending.Estimated {
+		l.EstimatedCost = max(0, l.EstimatedCost-pending.EstimatedCost)
+		l.Estimated = max(0, l.Estimated-1)
+	}
 	prompt, completion := pending.PromptTokens, pending.CompletionTokens
 	if exact.TokensKnown {
 		prompt, completion = max(0, exact.PromptTokens), max(0, exact.CompletionTokens)
@@ -272,9 +303,10 @@ func (l *UsageLedger) Raise(maxSessionUSD float64) {
 	}
 }
 
-// SessionBudgetError refuses a model request once the session's known cost
-// reached its limit (max_session_usd plus what was raised). Raise is what
-// the person may allow again from /usage: another max_session_usd.
+// SessionBudgetError refuses a model request once the session's counted
+// cost, known and estimated, reached its limit (max_session_usd plus what
+// was raised). Raise is what the person may allow again from /usage:
+// another max_session_usd.
 type SessionBudgetError struct {
 	Limit, Spent, Raise float64
 }

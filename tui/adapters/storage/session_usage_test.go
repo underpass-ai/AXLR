@@ -24,7 +24,7 @@ func TestSessionUsageIsKeptBesideTheSnapshot(t *testing.T) {
 	saved, err := store.UpdateUsage(ctx, id, func(l *domain.UsageLedger) {
 		l.Record(domain.UsageSample{Provider: "Relace", PromptTokens: 7448, CachedTokens: 1, CacheWriteTokens: 2, CompletionTokens: 2567, ReasoningTokens: 2590, Cost: 0.00158142, CostKnown: true, FirstByte: 1500 * time.Millisecond, Total: 9 * time.Second}, 1)
 		l.Record(domain.UsageSample{Provider: "local/qwen", PromptTokens: 10, Total: time.Second}, 1)
-		l.Record(domain.UsageSample{Provider: "Anthropic", PromptTokens: 4000, CompletionTokens: 300, Total: 10 * time.Second, Unmetered: true, GenerationID: "gen-1", Ended: time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)}, 1)
+		l.Record(domain.UsageSample{Provider: "Anthropic", PromptTokens: 4000, CompletionTokens: 300, Total: 10 * time.Second, Unmetered: true, GenerationID: "gen-1", Ended: time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC), EstimatedCost: 0.02, EstimateKnown: true}, 1)
 		l.Missed("gen-1", time.Date(2026, 11, 2, 10, 0, 5, 0, time.UTC))
 		l.Raise(1)
 		l.Warned = true
@@ -45,7 +45,7 @@ func TestSessionUsageIsKeptBesideTheSnapshot(t *testing.T) {
 	}
 	defer reopened.Close()
 	loaded, err := reopened.LoadUsage(ctx, id)
-	if err != nil || !reflect.DeepEqual(loaded, saved) || loaded.Providers["Relace"].Cost != 0.00158142 || loaded.FirstByte.Max != 1500*time.Millisecond || loaded.Raised != 1 || loaded.Unmetered != 1 || len(loaded.Pending) != 1 || loaded.Pending[0].Lookups != 1 {
+	if err != nil || !reflect.DeepEqual(loaded, saved) || loaded.Providers["Relace"].Cost != 0.00158142 || loaded.FirstByte.Max != 1500*time.Millisecond || loaded.Raised != 1 || loaded.Unmetered != 1 || len(loaded.Pending) != 1 || loaded.Pending[0].Lookups != 1 || loaded.EstimatedCost != 0.02 || loaded.Estimated != 1 || loaded.Pending[0].EstimatedCost != 0.02 {
 		t.Fatalf("loaded %+v\nsaved %+v\n%v", loaded, saved, err)
 	}
 	if _, err := reopened.LoadUsage(ctx, "../escape"); err == nil {

@@ -19,8 +19,8 @@ type SessionUsagePort interface {
 	UpdateUsage(ctx context.Context, id domain.SessionID, update func(*domain.UsageLedger)) (domain.UsageLedger, error)
 }
 
-// budgetRefusal refuses the next request of a session whose known cost
-// reached its limit. Each session keeps its own ledger and limit: a repair
+// budgetRefusal refuses the next request of a session whose counted cost,
+// known and estimated, reached its limit. Each session keeps its own ledger and limit: a repair
 // or plan worker session counts its own requests, not its parent's. A
 // ledger that cannot be read refuses too, since the limit cannot be kept.
 func (u ContinueTurnUseCase) budgetRefusal(ctx context.Context, session domain.Session) error {
@@ -32,7 +32,7 @@ func (u ContinueTurnUseCase) budgetRefusal(ctx context.Context, session domain.S
 		return err
 	}
 	if ledger.Exhausted(u.MaxSessionUSD) {
-		return &domain.SessionBudgetError{Limit: ledger.Limit(u.MaxSessionUSD), Spent: ledger.Cost, Raise: u.MaxSessionUSD}
+		return &domain.SessionBudgetError{Limit: ledger.Limit(u.MaxSessionUSD), Spent: ledger.Counted(), Raise: u.MaxSessionUSD}
 	}
 	return nil
 }
@@ -112,8 +112,10 @@ type bytesPerToken interface {
 // from the bytes it streamed, and its generation id, when OpenRouter named
 // one, lets its exact cost replace the estimate later
 // (usage_settlement.go). A request the provider refused before answering
-// counts as a request and nothing more.
-func (u ContinueTurnUseCase) usageSample(model root.ModelID, result root.CompletionResult, streamErr error, meter *usageMeter) domain.UsageSample {
+// counts as a request and nothing more. An unmetered request's cost is
+// estimated at the model's catalog rates when they are known, and counts
+// towards max_session_usd until the exact cost replaces it.
+func (u ContinueTurnUseCase) usageSample(ctx context.Context, model root.ModelID, result root.CompletionResult, streamErr error, meter *usageMeter) domain.UsageSample {
 	sample := domain.UsageSample{Provider: result.Provider, FirstByte: time.Duration(meter.first.Load()), Total: time.Since(meter.started)}
 	if sample.Provider == "" {
 		sample.Provider = string(model)
@@ -133,6 +135,14 @@ func (u ContinueTurnUseCase) usageSample(model root.ModelID, result root.Complet
 			sample.Unmetered, sample.GenerationID, sample.Ended = true, result.GenerationID, time.Now()
 			sample.PromptTokens = domain.EstimatedTokens(result.RequestBytes, ratio)
 			sample.CompletionTokens = domain.EstimatedTokens(streamed, ratio)
+			if u.Routing != nil {
+				// The catalog is read once per process, the first time a
+				// price is asked; a local model has no rate.
+				if prompt, completion, known := u.Routing.CatalogPrice(context.WithoutCancel(ctx), model); known {
+					sample.EstimatedCost = prompt*float64(sample.PromptTokens) + completion*float64(sample.CompletionTokens)
+					sample.EstimateKnown = true
+				}
+			}
 		}
 	}
 	return sample

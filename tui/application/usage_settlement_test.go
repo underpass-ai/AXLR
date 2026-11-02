@@ -3,6 +3,8 @@ package application
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -148,5 +150,74 @@ func TestSettlementGivesUpAndKeepsToItsWindow(t *testing.T) {
 	// Nothing to look up without the port.
 	if _, changed := (ContinueTurnUseCase{Usage: ledgers}).SettleUsage(context.Background(), id); changed {
 		t.Fatal("settled without a port")
+	}
+}
+
+// A cancelled request counts towards max_session_usd at its estimate, the
+// catalog's rates for its estimated tokens, so cancelling streams cannot
+// pass the limit unseen; once settled, its exact cost counts instead. A
+// model without a known rate keeps today's behaviour: nothing counted.
+func TestACancelledRequestCountsTowardsTheBudgetAtAnEstimate(t *testing.T) {
+	s := turnSession(t)
+	id := s.Export().ID
+	store, ledgers := &memoryStore{}, usageLedgers{}
+	sent := 0
+	cancelled := streamFunc(func(ctx context.Context, _ root.CompletionRequest, onText func(root.Text) error) (root.CompletionResult, error) {
+		sent++
+		_ = onText(root.Text(strings.Repeat("x", 4100)))
+		time.Sleep(2 * time.Millisecond)
+		return root.CompletionResult{RequestBytes: 41000, Provider: "Anthropic", GenerationID: fmt.Sprintf("gen-%d", sent)}, errors.New("OpenRouter stream ended without [DONE]")
+	})
+	// $1 per million prompt tokens and $5 per million completion tokens:
+	// 10,000 and 1,000 estimated tokens are $0.015.
+	routing := routeFacts{"test/model": {PromptRate: 1e-6, CompletionRate: 5e-6, RatesKnown: true}}
+	costs := &generationCosts{}
+	u := StartTurnUseCase{Catalog: &catalogStub{}, Store: store, Continue: ContinueTurnUseCase{Models: cancelled, Store: store, Usage: ledgers, Calibration: pinnedRatio{410}, Routing: routing, Generations: costs, MaxSessionUSD: 0.016}}
+	var warned bool
+	emit := func(e Event) error {
+		warned = warned || e.BudgetWarning
+		return nil
+	}
+	if err := u.Execute(context.Background(), &s, "write", emit); err == nil {
+		t.Fatal("a failed request succeeded")
+	}
+	l := ledgers[id]
+	if l.Cost != 0 || l.Estimated != 1 || !sameCost(l.EstimatedCost, 0.015) || !sameCost(l.Counted(), 0.015) || !warned || !l.Near(0.016) || l.Exhausted(0.016) {
+		t.Fatalf("estimated: %+v, warned %v", l, warned)
+	}
+	// A second cancelled request passes the limit: the next one is refused
+	// although no request reported a cost.
+	if err := u.Execute(context.Background(), &s, "write", ignoreEvent); err == nil {
+		t.Fatal("a failed request succeeded")
+	}
+	var budget *domain.SessionBudgetError
+	if err := u.Execute(context.Background(), &s, "write", ignoreEvent); !errors.As(err, &budget) || !sameCost(budget.Spent, 0.03) {
+		t.Fatalf("over the budget at an estimate: %v", err)
+	}
+	// The later requests asked for them in vain; the exact cost of the
+	// first, once known, replaces its estimate.
+	costs.costs = map[string]domain.GenerationCost{"gen-1": {Cost: 0.001, TokensKnown: false}}
+	l = ledgers[id]
+	if len(l.Pending) != 2 || l.Pending[0].Lookups != 1 || l.Pending[1].Lookups != 1 {
+		t.Fatalf("pending %+v", l.Pending)
+	}
+	l.Pending = []domain.PendingGeneration{l.Pending[0]}
+	l.Pending[0].Tried = time.Time{}
+	ledgers[id] = l
+	if _, changed := u.Continue.SettleUsage(context.Background(), id); !changed {
+		t.Fatal("nothing settled")
+	}
+	if l = ledgers[id]; l.Estimated != 1 || !sameCost(l.EstimatedCost, 0.015) || !sameCost(l.Cost, 0.001) || l.CompletionTokens != 2000 || !sameCost(l.Counted(), 0.016) {
+		t.Fatalf("settled: %+v", l)
+	}
+	// Without a known rate the request counts nothing.
+	s = turnSession(t)
+	delete(ledgers, s.Export().ID)
+	u.Continue.Routing = routeFacts{}
+	if err := u.Execute(context.Background(), &s, "write", ignoreEvent); err == nil {
+		t.Fatal("a failed request succeeded")
+	}
+	if l = ledgers[s.Export().ID]; l.Unmetered != 1 || l.Estimated != 0 || l.EstimatedCost != 0 {
+		t.Fatalf("no rate: %+v", l)
 	}
 }

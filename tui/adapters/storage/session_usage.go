@@ -36,6 +36,8 @@ type sessionUsage struct {
 	FirstByte        latencyEntry                  `json:"first_byte"`
 	Total            latencyEntry                  `json:"total"`
 	Unmetered        int                           `json:"unmetered,omitempty"`
+	EstimatedUSD     float64                       `json:"estimated_usd,omitempty"`
+	Estimated        int                           `json:"estimated,omitempty"`
 	Pending          []pendingGenerationEntry      `json:"pending_generations,omitempty"`
 	RaisedUSD        float64                       `json:"raised_usd,omitempty"`
 	Warned           bool                          `json:"warned,omitempty"`
@@ -56,6 +58,8 @@ type pendingGenerationEntry struct {
 	Provider         string    `json:"provider"`
 	PromptTokens     int       `json:"prompt_tokens"`
 	CompletionTokens int       `json:"completion_tokens"`
+	EstimatedUSD     float64   `json:"estimated_usd,omitempty"`
+	Estimated        bool      `json:"estimated,omitempty"`
 	Ended            time.Time `json:"ended"`
 	Tried            time.Time `json:"tried,omitzero"`
 	Lookups          int       `json:"lookups,omitempty"`
@@ -133,6 +137,7 @@ func (s *SessionStore) readUsage(id domain.SessionID) (domain.UsageLedger, error
 		Requests: record.Requests, PromptTokens: record.PromptTokens, CachedTokens: record.CachedTokens, CacheWriteTokens: record.CacheWriteTokens,
 		CompletionTokens: record.CompletionTokens, ReasoningTokens: record.ReasoningTokens, Cost: record.CostUSD, CostRequests: record.CostRequests,
 		FirstByte: record.FirstByte.stats(), Total: record.Total.stats(), Raised: record.RaisedUSD, Warned: record.Warned, Unmetered: record.Unmetered,
+		EstimatedCost: max(0, record.EstimatedUSD), Estimated: record.Estimated,
 	}
 	if len(record.Providers) > 0 {
 		ledger.Providers = make(map[string]domain.ProviderUsage, len(record.Providers))
@@ -142,7 +147,7 @@ func (s *SessionStore) readUsage(id domain.SessionID) (domain.UsageLedger, error
 	}
 	for _, p := range record.Pending {
 		if p.ID != "" && len(ledger.Pending) < domain.MaxPendingGenerations {
-			ledger.Pending = append(ledger.Pending, domain.PendingGeneration{ID: p.ID, Provider: p.Provider, PromptTokens: p.PromptTokens, CompletionTokens: p.CompletionTokens, Ended: p.Ended, Tried: p.Tried, Lookups: p.Lookups})
+			ledger.Pending = append(ledger.Pending, domain.PendingGeneration{ID: p.ID, Provider: p.Provider, PromptTokens: p.PromptTokens, CompletionTokens: p.CompletionTokens, EstimatedCost: p.EstimatedUSD, Estimated: p.Estimated, Ended: p.Ended, Tried: p.Tried, Lookups: p.Lookups})
 		}
 	}
 	return ledger, nil
@@ -153,6 +158,7 @@ func usageRecord(ledger domain.UsageLedger) sessionUsage {
 		Version: sessionUsageVersion, Requests: ledger.Requests, PromptTokens: ledger.PromptTokens, CachedTokens: ledger.CachedTokens, CacheWriteTokens: ledger.CacheWriteTokens,
 		CompletionTokens: ledger.CompletionTokens, ReasoningTokens: ledger.ReasoningTokens, CostUSD: ledger.Cost, CostRequests: ledger.CostRequests,
 		FirstByte: latency(ledger.FirstByte), Total: latency(ledger.Total), RaisedUSD: ledger.Raised, Warned: ledger.Warned, Unmetered: ledger.Unmetered,
+		EstimatedUSD: ledger.EstimatedCost, Estimated: ledger.Estimated,
 	}
 	if len(ledger.Providers) > 0 {
 		record.Providers = make(map[string]providerUsageEntry, len(ledger.Providers))
@@ -161,7 +167,7 @@ func usageRecord(ledger domain.UsageLedger) sessionUsage {
 		}
 	}
 	for _, p := range ledger.Pending {
-		record.Pending = append(record.Pending, pendingGenerationEntry{ID: p.ID, Provider: p.Provider, PromptTokens: p.PromptTokens, CompletionTokens: p.CompletionTokens, Ended: p.Ended.UTC(), Tried: p.Tried.UTC(), Lookups: p.Lookups})
+		record.Pending = append(record.Pending, pendingGenerationEntry{ID: p.ID, Provider: p.Provider, PromptTokens: p.PromptTokens, CompletionTokens: p.CompletionTokens, EstimatedUSD: p.EstimatedCost, Estimated: p.Estimated, Ended: p.Ended.UTC(), Tried: p.Tried.UTC(), Lookups: p.Lookups})
 	}
 	return record
 }
