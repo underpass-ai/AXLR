@@ -19,6 +19,8 @@ type streamAccumulator struct {
 	total   int
 	// provider is the upstream OpenRouter names in every chunk.
 	provider string
+	// id is the generation id every chunk repeats; the first one is kept.
+	id string
 	// reasoning joins the reasoning_details the model streams.
 	reasoning reasoningAccumulator
 }
@@ -53,6 +55,7 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 		} `json:"choices"`
 		Usage    *usageDTO `json:"usage"`
 		Provider string    `json:"provider"`
+		ID       string    `json:"id"`
 	}
 	if err := json.Unmarshal(data, &chunk); err != nil {
 		return nil, errors.New("malformed OpenRouter stream chunk")
@@ -126,6 +129,9 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 	}
 	if chunk.Provider != "" {
 		a.provider = chunk.Provider
+	}
+	if a.id == "" && chunk.ID != "" && utf8.ValidString(chunk.ID) {
+		a.id = chunk.ID
 	}
 	return deltas, nil
 }

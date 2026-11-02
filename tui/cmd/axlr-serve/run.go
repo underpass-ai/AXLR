@@ -177,7 +177,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stderr, "axlr-serve:", err)
 		return 1
 	}
-	if _, err := compose.Equip(&continuation, compose.Equipment{Settings: settings, State: cfg.StateDir, Store: sessions.Store(), Usage: sessions.Usage(), Receipts: sessions.Receipts(), Labels: labels, Windows: locals.Windows, Tools: runner, Memory: true, Routing: routing, Note: note}); err != nil {
+	if _, err := compose.Equip(&continuation, compose.Equipment{Settings: settings, State: cfg.StateDir, Store: sessions.Store(), Usage: sessions.Usage(), Receipts: sessions.Receipts(), Generations: catalogModels.GenerationCosts{APIKey: key, HTTPClient: httpClient}, Labels: labels, Windows: locals.Windows, Tools: runner, Memory: true, Routing: routing, Note: note}); err != nil {
 		sessions.Close()
 		fmt.Fprintln(stderr, "axlr-serve: tools unavailable:", err)
 		return 1

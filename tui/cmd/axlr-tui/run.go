@@ -443,6 +443,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// key and without local models the launch says how to get either.
 	var remote localmodels.Client
 	var remoteCatalog application.ModelCatalogPort
+	var generations application.GenerationCostPort
 	if key == "" && len(locals.Models) == 0 {
 		return fail(fmt.Errorf("no model provider: run axlr-tui setup, set OPENROUTER_API_KEY (create a key at https://openrouter.ai/keys), or configure local_models in %s for models that need no key", settingsPath))
 	}
@@ -453,6 +454,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		}
 		remote = client
 		remoteCatalog = catalog.ModelCatalog{APIKey: key, HTTPClient: clientHTTP}
+		generations = catalog.GenerationCosts{APIKey: key, HTTPClient: clientHTTP}
 	}
 	routes, err := locals.Connect(clientHTTP)
 	if err != nil {
@@ -839,7 +841,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// catalog tools and the memory tools: what the service equips too.
 	_, hasMemoryTools := activeEngineCommands["kmp"]
 	toolCatalogUseCase, err := compose.Equip(&continuation, compose.Equipment{
-		Settings: settings, State: filepath.Join(stateBase, "axlr"), Store: loggedStore, Usage: store, Receipts: store, Labels: sessionLabels, About: kmp.bundleAbout(),
+		Settings: settings, State: filepath.Join(stateBase, "axlr"), Store: loggedStore, Usage: store, Receipts: store, Generations: generations, Labels: sessionLabels, About: kmp.bundleAbout(),
 		Windows: locals.Windows, Tools: runner, Memory: hasMemoryTools, Routing: compose.NewModelRouting(locals, key != "", remoteCatalog),
 		Note: func(line string) { fmt.Fprintln(stderr, "axlr-tui:", line) },
 	})

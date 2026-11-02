@@ -118,6 +118,14 @@ func (m AppModel) canRaise() bool {
 }
 
 func (m AppModel) openUsagePanel() AppModel {
+	// The saved ledger, not the one the last request told: a cancelled
+	// request's exact cost may have replaced its estimate since. The turn's
+	// starting point stays.
+	if m.deps.Usage != nil && m.Header.State.ID != "" {
+		if ledger, err := m.deps.Usage.LoadUsage(m.lifetime.ctx, m.Header.State.ID); err == nil {
+			m.cost.ledger = ledger
+		}
+	}
 	m.Info = m.themedTranscript()
 	w, h := OverlayBodySize(m.Layout.Width, m.Layout.Height-1)
 	m.Info.SetWidth(w)

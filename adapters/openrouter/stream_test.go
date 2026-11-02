@@ -259,25 +259,43 @@ func TestStreamCancellation(t *testing.T) {
 	}
 }
 
-// A request that fails once sent reports the size of its body and who
-// served it, so the console can account for a request the provider may
-// bill although no usage arrived; one never sent reports nothing.
+// A request that fails once sent reports the size of its body, who
+// served it and its generation id, so the console can account for a
+// request the provider may bill although no usage arrived; one never sent
+// reports nothing.
 func TestStreamFailureReportsTheSentRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	chunk := `{"provider":"Anthropic","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}`
+	chunk := `{"id":"gen-77","provider":"Anthropic","choices":[{"index":0,"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}`
 	c, _ := streamClient(t, io.NopCloser(strings.NewReader(streamEvents(chunk, chunk))), 200)
 	result, err := c.Stream(ctx, simpleCompletionRequest(), func(domain.Text) error { cancel(); return nil })
-	if !errors.Is(err, context.Canceled) || result.RequestBytes == 0 || result.Provider != "Anthropic" || result.Usage != nil || result.Message.Content != "" {
+	if !errors.Is(err, context.Canceled) || result.RequestBytes == 0 || result.Provider != "Anthropic" || result.GenerationID != "gen-77" || result.Usage != nil || result.Message.Content != "" {
 		t.Fatalf("cancelled: %+v %v", result, err)
 	}
 	c, _ = streamClient(t, io.NopCloser(strings.NewReader("{}")), 400)
-	if result, err := c.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil }); err == nil || result.RequestBytes == 0 {
+	if result, err := c.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil }); err == nil || result.RequestBytes == 0 || result.GenerationID != "" {
 		t.Fatalf("refused: %+v %v", result, err)
 	}
 	cancelled, stop := context.WithCancel(context.Background())
 	stop()
 	if result, err := c.Stream(cancelled, simpleCompletionRequest(), func(domain.Text) error { return nil }); err == nil || result.RequestBytes != 0 {
 		t.Fatalf("never sent: %+v %v", result, err)
+	}
+}
+
+// Only OpenRouter's ids name a generation whose cost can be looked up: an
+// OpenAI-compatible server's chatcmpl-… id is not reported.
+func TestStreamReportsNoGenerationIDForAnotherEndpoint(t *testing.T) {
+	wire := streamEvents(`{"id":"chatcmpl-9","choices":[{"index":0,"delta":{"role":"assistant","content":"hi"},"finish_reason":"stop"}]}`, "[DONE]")
+	c, err := New(ClientConfig{Endpoint: "http://127.0.0.1:8080/v1/chat/completions", HTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(wire)), Header: make(http.Header)}, nil
+	})}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.Stream(context.Background(), simpleCompletionRequest(), func(domain.Text) error { return nil })
+	if err != nil || got.GenerationID != "" || got.Message.Content != "hi" {
+		t.Fatalf("result %+v, %v", got, err)
 	}
 }

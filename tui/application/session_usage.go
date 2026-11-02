@@ -109,8 +109,10 @@ type bytesPerToken interface {
 // when the provider may have billed it: it streamed something, or it was
 // cancelled or timed out once sent. Its prompt tokens are estimated from
 // the body's size at the model's bytes per token, its completion tokens
-// from the bytes it streamed. A request the provider refused before
-// answering counts as a request and nothing more.
+// from the bytes it streamed, and its generation id, when OpenRouter named
+// one, lets its exact cost replace the estimate later
+// (usage_settlement.go). A request the provider refused before answering
+// counts as a request and nothing more.
 func (u ContinueTurnUseCase) usageSample(model root.ModelID, result root.CompletionResult, streamErr error, meter *usageMeter) domain.UsageSample {
 	sample := domain.UsageSample{Provider: result.Provider, FirstByte: time.Duration(meter.first.Load()), Total: time.Since(meter.started)}
 	if sample.Provider == "" {
@@ -128,7 +130,7 @@ func (u ContinueTurnUseCase) usageSample(model root.ModelID, result root.Complet
 			if calibration, ok := u.Calibration.(bytesPerToken); ok {
 				ratio, _ = calibration.BytesPerToken(model)
 			}
-			sample.Unmetered = true
+			sample.Unmetered, sample.GenerationID, sample.Ended = true, result.GenerationID, time.Now()
 			sample.PromptTokens = domain.EstimatedTokens(result.RequestBytes, ratio)
 			sample.CompletionTokens = domain.EstimatedTokens(streamed, ratio)
 		}

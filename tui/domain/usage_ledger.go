@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"slices"
 	"time"
 )
 
@@ -28,6 +29,10 @@ type UsageSample struct {
 	// provider may have started billing it, and reported no usage: its
 	// tokens are estimates (EstimatedTokens) and its cost is unknown.
 	Unmetered bool
+	// GenerationID is OpenRouter's id of an unmetered request, by which its
+	// exact cost can be looked up later; Ended is when it ended.
+	GenerationID string
+	Ended        time.Time
 }
 
 // EstimatedTokens is how many tokens bytes hold at hundredths of a byte per
@@ -44,8 +49,9 @@ func EstimatedTokens(bytes, hundredths int) int {
 }
 
 // UsageLedger is a session's running account of its model requests:
-// totals, subtotals by provider and latency aggregates, never a list of
-// requests, so its size does not grow with the session. A 198-request
+// totals, subtotals by provider and latency aggregates, so its size does
+// not grow with the session. The one list it keeps, Pending, is bounded
+// and empties as each request in it is settled or given up. A 198-request
 // Claude Haiku session cost $14.13 on 8 October 2026 before anyone noticed.
 type UsageLedger struct {
 	Requests         int
@@ -63,6 +69,9 @@ type UsageLedger struct {
 	// essay cancelled after ten seconds of streaming left the session's
 	// cost where it was.
 	Unmetered int
+	// Pending are the unmetered OpenRouter requests whose exact cost may
+	// still be looked up (Settle), at most MaxPendingGenerations.
+	Pending   []PendingGeneration
 	Providers map[string]ProviderUsage
 	FirstByte LatencyStats
 	Total     LatencyStats
@@ -159,6 +168,9 @@ func (l *UsageLedger) Record(s UsageSample, maxSessionUSD float64) bool {
 	if _, seen := l.Providers[name]; !seen && len(l.Providers) >= MaxLedgerProviders {
 		name = OtherProvider
 	}
+	if s.Unmetered && s.GenerationID != "" && len(l.Pending) < MaxPendingGenerations {
+		l.Pending = append(l.Pending, PendingGeneration{ID: s.GenerationID, Provider: name, PromptTokens: s.PromptTokens, CompletionTokens: s.CompletionTokens, Ended: s.Ended})
+	}
 	provider := l.Providers[name]
 	provider.Requests++
 	provider.PromptTokens += s.PromptTokens
@@ -173,11 +185,83 @@ func (l *UsageLedger) Record(s UsageSample, maxSessionUSD float64) bool {
 		l.CostRequests++
 	}
 	l.Providers[name] = provider
-	if !s.CostKnown || l.Warned || !l.Near(maxSessionUSD) {
+	return s.CostKnown && l.warn(maxSessionUSD)
+}
+
+// warn arms the warning at 80 % of the limit once: it reports whether the
+// cost passed it while the session had not been warned.
+func (l *UsageLedger) warn(maxSessionUSD float64) bool {
+	if l.Warned || !l.Near(maxSessionUSD) {
 		return false
 	}
 	l.Warned = true
 	return true
+}
+
+// Settle replaces the estimate of the pending request id with what
+// OpenRouter reported of it: its tokens, when reported, take the
+// estimated ones' place, its cost joins the known cost and it is no
+// longer unmetered. It reports whether the request was pending, and
+// whether its cost took the session past 80 % of the limit as Record
+// does; an unknown id changes nothing.
+func (l *UsageLedger) Settle(id string, exact GenerationCost, maxSessionUSD float64) (settled, warned bool) {
+	index := l.pendingIndex(id)
+	if index < 0 || exact.Cost < 0 {
+		return false, false
+	}
+	pending := l.Pending[index]
+	l.Pending = append(l.Pending[:index:index], l.Pending[index+1:]...)
+	l.Unmetered = max(0, l.Unmetered-1)
+	prompt, completion := pending.PromptTokens, pending.CompletionTokens
+	if exact.TokensKnown {
+		prompt, completion = max(0, exact.PromptTokens), max(0, exact.CompletionTokens)
+	}
+	l.PromptTokens = max(0, l.PromptTokens-pending.PromptTokens+prompt)
+	l.CompletionTokens = max(0, l.CompletionTokens-pending.CompletionTokens+completion)
+	l.Cost += exact.Cost
+	l.CostRequests++
+	if provider, ok := l.Providers[pending.Provider]; ok {
+		provider.PromptTokens = max(0, provider.PromptTokens-pending.PromptTokens+prompt)
+		provider.CompletionTokens = max(0, provider.CompletionTokens-pending.CompletionTokens+completion)
+		provider.Cost += exact.Cost
+		provider.CostRequests++
+		l.Providers[pending.Provider] = provider
+	}
+	return true, l.warn(maxSessionUSD)
+}
+
+// Missed counts a lookup of the pending request id that brought no cost,
+// at now. A request asked for MaxGenerationLookups times, or pending for
+// MaxGenerationWait, is given up: it keeps its estimate and stays
+// unmetered.
+func (l *UsageLedger) Missed(id string, now time.Time) {
+	if index := l.pendingIndex(id); index >= 0 {
+		// A copy of the ledger, one told to the console, keeps its list.
+		l.Pending = slices.Clone(l.Pending)
+		l.Pending[index].Lookups++
+		l.Pending[index].Tried = now
+	}
+	l.Expire(now)
+}
+
+// Expire gives up the pending requests past their lookups or their wait.
+func (l *UsageLedger) Expire(now time.Time) {
+	var kept []PendingGeneration
+	for _, pending := range l.Pending {
+		if !pending.Expired(now) {
+			kept = append(kept, pending)
+		}
+	}
+	l.Pending = kept
+}
+
+func (l UsageLedger) pendingIndex(id string) int {
+	for index, pending := range l.Pending {
+		if pending.ID == id {
+			return index
+		}
+	}
+	return -1
 }
 
 // Raise allows another maxSessionUSD for this session.

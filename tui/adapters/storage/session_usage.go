@@ -36,6 +36,7 @@ type sessionUsage struct {
 	FirstByte        latencyEntry                  `json:"first_byte"`
 	Total            latencyEntry                  `json:"total"`
 	Unmetered        int                           `json:"unmetered,omitempty"`
+	Pending          []pendingGenerationEntry      `json:"pending_generations,omitempty"`
 	RaisedUSD        float64                       `json:"raised_usd,omitempty"`
 	Warned           bool                          `json:"warned,omitempty"`
 }
@@ -46,6 +47,18 @@ type providerUsageEntry struct {
 	CompletionTokens int     `json:"completion_tokens"`
 	CostUSD          float64 `json:"cost_usd"`
 	CostRequests     int     `json:"cost_requests"`
+}
+
+// pendingGenerationEntry is an unmetered request whose exact cost may still
+// be looked up. Older consoles ignore the list: the version stays 1.
+type pendingGenerationEntry struct {
+	ID               string    `json:"id"`
+	Provider         string    `json:"provider"`
+	PromptTokens     int       `json:"prompt_tokens"`
+	CompletionTokens int       `json:"completion_tokens"`
+	Ended            time.Time `json:"ended"`
+	Tried            time.Time `json:"tried,omitzero"`
+	Lookups          int       `json:"lookups,omitempty"`
 }
 
 type latencyEntry struct {
@@ -127,6 +140,11 @@ func (s *SessionStore) readUsage(id domain.SessionID) (domain.UsageLedger, error
 			ledger.Providers[name] = domain.ProviderUsage{Requests: p.Requests, PromptTokens: p.PromptTokens, CompletionTokens: p.CompletionTokens, Cost: p.CostUSD, CostRequests: p.CostRequests}
 		}
 	}
+	for _, p := range record.Pending {
+		if p.ID != "" && len(ledger.Pending) < domain.MaxPendingGenerations {
+			ledger.Pending = append(ledger.Pending, domain.PendingGeneration{ID: p.ID, Provider: p.Provider, PromptTokens: p.PromptTokens, CompletionTokens: p.CompletionTokens, Ended: p.Ended, Tried: p.Tried, Lookups: p.Lookups})
+		}
+	}
 	return ledger, nil
 }
 
@@ -141,6 +159,9 @@ func usageRecord(ledger domain.UsageLedger) sessionUsage {
 		for name, p := range ledger.Providers {
 			record.Providers[name] = providerUsageEntry{Requests: p.Requests, PromptTokens: p.PromptTokens, CompletionTokens: p.CompletionTokens, CostUSD: p.Cost, CostRequests: p.CostRequests}
 		}
+	}
+	for _, p := range ledger.Pending {
+		record.Pending = append(record.Pending, pendingGenerationEntry{ID: p.ID, Provider: p.Provider, PromptTokens: p.PromptTokens, CompletionTokens: p.CompletionTokens, Ended: p.Ended.UTC(), Tried: p.Tried.UTC(), Lookups: p.Lookups})
 	}
 	return record
 }

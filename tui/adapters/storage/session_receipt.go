@@ -47,6 +47,7 @@ type sessionReceiptLine struct {
 	FirstByteMS      int64    `json:"first_byte_ms,omitempty"`
 	TotalMS          int64    `json:"total_ms,omitempty"`
 	Unmetered        bool     `json:"unmetered,omitempty"`
+	Generation       string   `json:"generation,omitempty"`
 	Call             string   `json:"call_id,omitempty"`
 }
 
@@ -145,8 +146,9 @@ func (s *SessionStore) LoadReceipt(ctx context.Context, id domain.SessionID) ([]
 
 func receiptLine(entry domain.ReceiptEntry) sessionReceiptLine {
 	line := sessionReceiptLine{Version: sessionReceiptVersion, Kind: string(entry.Kind), At: entry.At.UTC().Format(time.RFC3339Nano), Model: string(entry.Model), Route: string(entry.Route), Call: string(entry.Call)}
-	if entry.Kind == domain.ReceiptRequestEnded {
+	if entry.Kind == domain.ReceiptRequestEnded || entry.Kind == domain.ReceiptRequestSettled {
 		usage := entry.Usage
+		line.Generation = usage.GenerationID
 		line.Status, line.Provider = string(entry.Status), usage.Provider
 		line.PromptTokens, line.CachedTokens, line.CacheWriteTokens = usage.PromptTokens, usage.CachedTokens, usage.CacheWriteTokens
 		line.CompletionTokens, line.ReasoningTokens = usage.CompletionTokens, usage.ReasoningTokens
@@ -165,7 +167,7 @@ func (l sessionReceiptLine) entry() (domain.ReceiptEntry, error) {
 		return domain.ReceiptEntry{}, err
 	}
 	entry := domain.ReceiptEntry{Kind: domain.ReceiptEntryKind(l.Kind), At: at, Model: root.ModelID(l.Model), Route: domain.RouteReason(l.Route), Status: domain.ReceiptRequestStatus(l.Status), Call: root.ToolCallID(l.Call)}
-	entry.Usage = domain.UsageSample{Provider: l.Provider, PromptTokens: l.PromptTokens, CachedTokens: l.CachedTokens, CacheWriteTokens: l.CacheWriteTokens, CompletionTokens: l.CompletionTokens, ReasoningTokens: l.ReasoningTokens, FirstByte: time.Duration(l.FirstByteMS) * time.Millisecond, Total: time.Duration(l.TotalMS) * time.Millisecond, Unmetered: l.Unmetered}
+	entry.Usage = domain.UsageSample{Provider: l.Provider, PromptTokens: l.PromptTokens, CachedTokens: l.CachedTokens, CacheWriteTokens: l.CacheWriteTokens, CompletionTokens: l.CompletionTokens, ReasoningTokens: l.ReasoningTokens, FirstByte: time.Duration(l.FirstByteMS) * time.Millisecond, Total: time.Duration(l.TotalMS) * time.Millisecond, Unmetered: l.Unmetered, GenerationID: l.Generation}
 	if l.CostUSD != nil {
 		entry.Usage.Cost, entry.Usage.CostKnown = *l.CostUSD, true
 	}

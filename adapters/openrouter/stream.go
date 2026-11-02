@@ -17,7 +17,8 @@ import (
 // Stream emits validated text deltas and returns only a completed assistant message.
 // A callback error terminates the stream immediately and is returned unchanged.
 // A request that fails once sent returns its RequestBytes, and its Provider
-// when the stream named one, beside the error; never a message.
+// and GenerationID when the stream named them, beside the error; never a
+// message.
 func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onText func(domain.Text) error) (domain.CompletionResult, error) {
 	if err := ctx.Err(); err != nil {
 		return domain.CompletionResult{}, err
@@ -68,10 +69,11 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	httpReq.Header.Set("Accept", "text/event-stream")
 	var accumulator streamAccumulator
 	// sent is what a request that failed once it was sent reports: the size
-	// of its body and who served it, so the console can account for a
-	// request the provider may bill although no usage arrived.
+	// of its body, who served it and its generation id, so the console can
+	// account for a request the provider may bill although no usage
+	// arrived, and ask OpenRouter for its exact cost later.
 	sent := func() domain.CompletionResult {
-		return domain.CompletionResult{RequestBytes: len(body), Provider: accumulator.provider}
+		return domain.CompletionResult{RequestBytes: len(body), Provider: accumulator.provider, GenerationID: c.generationID(accumulator.id)}
 	}
 	response, err := c.http.Do(httpReq)
 	if err != nil {
@@ -121,7 +123,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 					return sent(), err
 				}
 			}
-			result.RequestBytes = len(body)
+			result.RequestBytes, result.GenerationID = len(body), c.generationID(accumulator.id)
 			return result, nil
 		}
 		deltas, err := accumulator.Add(data)
@@ -156,4 +158,14 @@ func (c *Client) inactivityTimeout(model string) time.Duration {
 		}
 	}
 	return c.streamInactivityTimeout
+}
+
+// generationID is the stream's id when OpenRouter served it: only its
+// generation endpoint knows the id's cost, and the chatcmpl-… id an
+// OpenAI-compatible server sends names nothing to look up.
+func (c *Client) generationID(id string) string {
+	if c.endpoint != endpoint {
+		return ""
+	}
+	return id
 }

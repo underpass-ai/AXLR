@@ -28,7 +28,8 @@ func TestSessionReceiptIsJournaledBesideTheSnapshot(t *testing.T) {
 		{Kind: domain.ReceiptRequestEnded, At: at.Add(time.Second), Status: domain.ReceiptRequestCompleted, Usage: domain.UsageSample{Provider: "Anthropic", PromptTokens: 3120, CachedTokens: 2048, CacheWriteTokens: 5, CompletionTokens: 96, ReasoningTokens: 40, Cost: 0.0021, CostKnown: true, FirstByte: 300 * time.Millisecond, Total: time.Second}},
 		{Kind: domain.ReceiptCallStarted, At: at.Add(2 * time.Second), Call: "read-1"},
 		{Kind: domain.ReceiptCallEnded, At: at.Add(3 * time.Second), Call: "read-1"},
-		{Kind: domain.ReceiptRequestEnded, At: at.Add(4 * time.Second), Status: domain.ReceiptRequestCancelled, Usage: domain.UsageSample{PromptTokens: 10, Unmetered: true}},
+		{Kind: domain.ReceiptRequestEnded, At: at.Add(4 * time.Second), Status: domain.ReceiptRequestCancelled, Usage: domain.UsageSample{PromptTokens: 10, Unmetered: true, GenerationID: "gen-1"}},
+		{Kind: domain.ReceiptRequestSettled, At: at.Add(9 * time.Second), Usage: domain.UsageSample{GenerationID: "gen-1", PromptTokens: 12, CompletionTokens: 30, Cost: 0.004, CostKnown: true}},
 	}
 	for _, entry := range want {
 		if err := store.AppendReceipt(ctx, id, entry); err != nil {
@@ -37,6 +38,9 @@ func TestSessionReceiptIsJournaledBesideTheSnapshot(t *testing.T) {
 	}
 	if err := store.AppendReceipt(ctx, id, domain.ReceiptEntry{Kind: "request.paused", At: at}); err == nil {
 		t.Fatal("an unknown entry was journaled")
+	}
+	if err := store.AppendReceipt(ctx, id, domain.ReceiptEntry{Kind: domain.ReceiptRequestSettled, At: at, Usage: domain.UsageSample{Cost: 1, CostKnown: true}}); err == nil {
+		t.Fatal("a settlement without its generation was journaled")
 	}
 	path := filepath.Join(dir, string(id)+".receipt.jsonl")
 	info, err := os.Stat(path)

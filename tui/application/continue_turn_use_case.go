@@ -86,6 +86,11 @@ type ContinueTurnUseCase struct {
 	// reaches it (zero, no limit); nil keeps no ledger (session_usage.go).
 	Usage         SessionUsagePort
 	MaxSessionUSD float64
+	// Generations looks up the exact cost of an OpenRouter request that
+	// ended without a usage report, by its generation id, and replaces its
+	// estimate in the ledger before a later request; nil keeps the estimate
+	// (usage_settlement.go).
+	Generations GenerationCostPort
 	// Receipts journals each request and call as it starts and ends for
 	// the execution's receipt; nil keeps no receipt (session_receipt_port.go).
 	Receipts SessionReceiptPort
@@ -331,6 +336,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	contextSpan.End(DiagnosticErrorNone)
+	u.settleUsage(ctx, *session, emit)
 	if err := u.budgetRefusal(ctx, *session); err != nil {
 		return interrupt(err)
 	}

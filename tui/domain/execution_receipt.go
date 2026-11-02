@@ -133,6 +133,18 @@ func receiptRequests(session SessionID, entries []ReceiptEntry) ([]ReceiptReques
 			request.Status, request.Usage = entry.Status, entry.Usage
 			request.Duration = entry.At.Sub(request.StartedAt)
 			requests = append(requests, request)
+		case ReceiptRequestSettled:
+			// The exact cost of an unmetered request that ended earlier
+			// replaces its estimate, as it did in the ledger.
+			for index := range requests {
+				usage := &requests[index].Usage
+				if usage.Unmetered && usage.GenerationID == entry.Usage.GenerationID {
+					usage.Unmetered = false
+					usage.PromptTokens, usage.CompletionTokens = entry.Usage.PromptTokens, entry.Usage.CompletionTokens
+					usage.Cost, usage.CostKnown = entry.Usage.Cost, true
+					break
+				}
+			}
 		}
 	}
 	closeOpen()

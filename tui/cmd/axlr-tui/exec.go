@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/contract"
@@ -416,6 +417,11 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 	result := domain.NewExecutionResult(session, err)
 	result.Spanned(predecessors...)
 	result.Delivered(spanned...)
+	ids := make([]domain.SessionID, 0, len(spanned)+1)
+	for _, each := range append(spanned, session) {
+		ids = append(ids, each.ID())
+	}
+	settleExecUsage(ctx, start.Continue, ids)
 	read := make([]domain.ReceiptSession, 0, len(spanned)+1)
 	for _, each := range append(spanned, session) {
 		entry := domain.ReceiptSession{Session: each}
@@ -452,4 +458,32 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 	write(execEvent{Type: "receipt", Session: string(session.ID()), Receipt: &receipt})
 	write(execEvent{Type: "result", Session: string(session.ID()), Result: &wire})
 	return session, code
+}
+
+// execSettlementRounds is how many times a run asks for the exact cost of
+// its requests that ended without a usage report before it reports.
+const execSettlementRounds = 3
+
+// settleExecUsage asks OpenRouter for the exact cost of the run's requests
+// that ended without a usage report before the result reads the ledgers,
+// since the process ends with the run: a few rounds, GenerationLookupSpacing
+// apart, while any is pending; one round when the run was cancelled. A
+// request still unknown keeps its estimate and stays unmetered.
+func settleExecUsage(ctx context.Context, continuation application.ContinueTurnUseCase, sessions []domain.SessionID) {
+	rounds := execSettlementRounds
+	if ctx.Err() != nil {
+		rounds = 1
+	}
+	settleCtx := context.WithoutCancel(ctx)
+	for round := range rounds {
+		pending := false
+		for _, each := range sessions {
+			ledger, _ := continuation.SettleUsage(settleCtx, each)
+			pending = pending || len(ledger.Pending) > 0
+		}
+		if !pending || round == rounds-1 {
+			return
+		}
+		time.Sleep(domain.GenerationLookupSpacing)
+	}
 }

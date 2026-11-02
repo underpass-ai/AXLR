@@ -38,8 +38,8 @@ func TestStreamReadsCostReasoningTokensAndProvider(t *testing.T) {
 	if usage == nil || !usage.CostKnown || !sameDollars(usage.Cost, 0.00158142) || usage.ReasoningTokens != 2590 || usage.PromptTokens != 7448 || usage.CompletionTokens != 2567 || usage.CachedTokens != 0 {
 		t.Fatalf("usage = %+v", usage)
 	}
-	if got.Provider != "Relace" || got.Message.Content != "héllo" {
-		t.Fatalf("provider %q, content %q", got.Provider, got.Message.Content)
+	if got.Provider != "Relace" || got.Message.Content != "héllo" || got.GenerationID != "gen-1" {
+		t.Fatalf("provider %q, content %q, generation %q", got.Provider, got.Message.Content, got.GenerationID)
 	}
 }
 

@@ -70,6 +70,27 @@ func TestExecutionReceiptReadsTheJournal(t *testing.T) {
 	}
 }
 
+// A request settled after it ended reads with its exact cost and tokens,
+// as the ledger has it; a settlement of no unmetered request changes
+// nothing.
+func TestExecutionReceiptReadsASettledRequest(t *testing.T) {
+	s := session(t)
+	at := time.Now().UTC()
+	entries := []ReceiptEntry{
+		{Kind: ReceiptRequestStarted, At: at, Model: "test/model"},
+		{Kind: ReceiptRequestEnded, At: at.Add(time.Second), Status: ReceiptRequestCancelled, Usage: UsageSample{PromptTokens: 1000, CompletionTokens: 50, Unmetered: true, GenerationID: "gen-1"}},
+		{Kind: ReceiptRequestSettled, At: at.Add(5 * time.Second), Usage: UsageSample{GenerationID: "gen-1", PromptTokens: 980, CompletionTokens: 700, Cost: 0.03, CostKnown: true}},
+		{Kind: ReceiptRequestSettled, At: at.Add(6 * time.Second), Usage: UsageSample{GenerationID: "gen-9", Cost: 5, CostKnown: true}},
+	}
+	receipt := NewExecutionReceipt(NewExecutionResult(s, nil), []ReceiptSession{{Session: s, Entries: entries, Ledger: UsageLedger{Requests: 1}}})
+	if len(receipt.Requests) != 1 || !receipt.Complete || receipt.Total != (ExecutionUsage{Requests: 1, PromptTokens: 980, CompletionTokens: 700, CostUSD: 0.03, CostRequests: 1}) {
+		t.Fatalf("receipt %+v, total %+v", receipt.Requests, receipt.Total)
+	}
+	if err := (ReceiptEntry{Kind: ReceiptRequestSettled, At: at, Usage: UsageSample{GenerationID: "gen-1"}}).Validate(); err == nil {
+		t.Fatal("a settlement without a cost is valid")
+	}
+}
+
 // The receipt names the policy, the budget and the correlation the last
 // session carries, and starts when the budget's execution began.
 func TestExecutionReceiptNamesWhatTheExecutionRanUnder(t *testing.T) {

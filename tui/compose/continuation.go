@@ -24,6 +24,10 @@ type Equipment struct {
 	// receipt journal; nil Receipts keeps no receipt.
 	Usage    application.SessionUsagePort
 	Receipts application.SessionReceiptPort
+	// Generations looks up the exact cost of an OpenRouter request that
+	// ended without a usage report; nil, without an OpenRouter key, keeps
+	// its estimate.
+	Generations application.GenerationCostPort
 	// Labels and About bind a successor to its predecessor's title and to
 	// the checkout's memory about; nil Labels binds nothing.
 	Labels  application.SessionLabelsPort
@@ -40,15 +44,15 @@ type Equipment struct {
 	Note func(string)
 }
 
-// Equip gives a continuation the usage ledger and cost cap, the receipt
-// journal, the model router with each model's stats under the state,
+// Equip gives a continuation the usage ledger and cost cap, the lookup of
+// an unmetered request's exact cost, the receipt journal, the model router with each model's stats under the state,
 // axlr_deliver, the context cap
 // with its successor sessions (decision D10), forged and catalog tools when
 // settings enable them, and the memory tools with KMP. The catalog use case
 // it returns serves the console's /tools; it is the zero value with forged
 // tools off.
 func Equip(c *application.ContinueTurnUseCase, e Equipment) (application.CatalogUseCase, error) {
-	c.Usage, c.MaxSessionUSD, c.Receipts = e.Usage, e.Settings.MaxSessionUSD, e.Receipts
+	c.Usage, c.MaxSessionUSD, c.Receipts, c.Generations = e.Usage, e.Settings.MaxSessionUSD, e.Receipts, e.Generations
 	c.TurnToolCalls = e.Settings.TurnToolCalls
 	// What each model's requests said, across sessions and launches,
 	// ranks an execution's candidates.

@@ -84,3 +84,64 @@ func TestUsageLedgerCountsUnmeteredRequests(t *testing.T) {
 		t.Fatal("estimates do not round up")
 	}
 }
+
+// An unmetered OpenRouter request waits in Pending until its exact cost
+// replaces the estimate: its tokens take the estimated ones' place, its
+// cost joins the known cost and the warning, and it is no longer
+// unmetered. One never settled is given up after its lookups or its wait,
+// keeping its estimate.
+func TestUsageLedgerSettlesAnUnmeteredRequest(t *testing.T) {
+	ended := time.Date(2026, 11, 2, 10, 0, 0, 0, time.UTC)
+	var l UsageLedger
+	l.Record(UsageSample{Provider: "Anthropic", PromptTokens: 10000, CompletionTokens: 159, Unmetered: true, GenerationID: "gen-1", Ended: ended}, 1)
+	l.Record(UsageSample{Provider: "Anthropic", PromptTokens: 500, CompletionTokens: 0, Unmetered: true, GenerationID: "gen-2", Ended: ended}, 1)
+	l.Record(UsageSample{Provider: "Relace", PromptTokens: 100, Unmetered: true}, 1)
+	if l.Unmetered != 3 || len(l.Pending) != 2 || l.Pending[0].Provider != "Anthropic" || l.Pending[0].PromptTokens != 10000 {
+		t.Fatalf("pending %+v", l)
+	}
+	shown := l
+	if settled, warned := l.Settle("gen-1", GenerationCost{Cost: 0.85, PromptTokens: 9800, CompletionTokens: 900, TokensKnown: true}, 1); !settled || !warned {
+		t.Fatalf("settled %v, warned %v", settled, warned)
+	}
+	if l.Unmetered != 2 || l.Cost != 0.85 || l.CostRequests != 1 || l.PromptTokens != 10400 || l.CompletionTokens != 900 || len(l.Pending) != 1 || l.Pending[0].ID != "gen-2" {
+		t.Fatalf("after settling %+v", l)
+	}
+	if p := l.Providers["Anthropic"]; p.Cost != 0.85 || p.CostRequests != 1 || p.PromptTokens != 10300 || p.CompletionTokens != 900 || p.Requests != 2 {
+		t.Fatalf("provider %+v", p)
+	}
+	if len(shown.Pending) != 2 || shown.Pending[0].ID != "gen-1" {
+		t.Fatalf("a copy of the ledger changed: %+v", shown.Pending)
+	}
+	if settled, _ := l.Settle("gen-1", GenerationCost{Cost: 1}, 1); settled {
+		t.Fatal("a request was settled twice")
+	}
+	if settled, _ := l.Settle("gen-2", GenerationCost{Cost: -1}, 1); settled {
+		t.Fatal("a negative cost settled a request")
+	}
+	now := ended.Add(time.Minute)
+	if !l.Pending[0].Due(now) {
+		t.Fatal("a request never asked for is not due")
+	}
+	for range MaxGenerationLookups - 1 {
+		l.Missed("gen-2", now)
+		if l.Pending[0].Due(now) || !l.Pending[0].Due(now.Add(GenerationLookupSpacing)) {
+			t.Fatalf("spacing %+v", l.Pending[0])
+		}
+		now = now.Add(GenerationLookupSpacing)
+	}
+	l.Missed("gen-2", now)
+	if len(l.Pending) != 0 || l.Unmetered != 2 || l.PromptTokens != 10400 {
+		t.Fatalf("given up %+v", l)
+	}
+	l.Record(UsageSample{Provider: "Anthropic", Unmetered: true, GenerationID: "gen-3", Ended: ended}, 1)
+	l.Expire(ended.Add(MaxGenerationWait))
+	if len(l.Pending) != 0 {
+		t.Fatalf("an old request stayed pending: %+v", l.Pending)
+	}
+	for i := range MaxPendingGenerations + 2 {
+		l.Record(UsageSample{Unmetered: true, GenerationID: fmt.Sprintf("gen-x%d", i), Ended: ended}, 0)
+	}
+	if len(l.Pending) != MaxPendingGenerations {
+		t.Fatalf("pending not bounded: %d", len(l.Pending))
+	}
+}
