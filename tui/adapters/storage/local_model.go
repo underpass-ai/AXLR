@@ -72,6 +72,7 @@ const (
 	APIChat      = "chat"
 	APIAnthropic = "anthropic"
 	APIResponses = "responses"
+	APICopilot   = "copilot"
 )
 
 // Protocol is the API the entry speaks, APIChat when it names none.
@@ -126,9 +127,15 @@ func (m LocalModel) validate() error {
 	if !utf8.ValidString(m.Name) || len(m.Name) > 200 || strings.ContainsAny(m.Name, "\r\n") {
 		return fmt.Errorf("settings local_models %s has an invalid name", m.ID)
 	}
-	parsed, err := url.Parse(m.URL)
-	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("settings local_models %s url must be an absolute http(s) URL without credentials, query or fragment", m.ID)
+	if m.API == APICopilot {
+		if m.URL != "" || m.APIKeyEnv != "" || m.Model == "" {
+			return fmt.Errorf("settings local_models %s copilot needs model and no url or api_key_env", m.ID)
+		}
+	} else {
+		parsed, err := url.Parse(m.URL)
+		if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return fmt.Errorf("settings local_models %s url must be an absolute http(s) URL without credentials, query or fragment", m.ID)
+		}
 	}
 	if m.Model != "" {
 		if _, err := root.NewModelID(m.Model); err != nil {
@@ -136,9 +143,9 @@ func (m LocalModel) validate() error {
 		}
 	}
 	switch m.API {
-	case "", APIChat, APIAnthropic, APIResponses:
+	case "", APIChat, APIAnthropic, APIResponses, APICopilot:
 	default:
-		return fmt.Errorf("settings local_models %s api must be chat, anthropic or responses", m.ID)
+		return fmt.Errorf("settings local_models %s api must be chat, anthropic, responses or copilot", m.ID)
 	}
 	if m.APIKeyEnv != "" && !mcpEnvironmentName.MatchString(m.APIKeyEnv) {
 		return fmt.Errorf("settings local_models %s api_key_env must be an environment variable name", m.ID)

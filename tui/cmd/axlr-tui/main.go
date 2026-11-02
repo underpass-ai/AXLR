@@ -26,6 +26,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == setupCommand {
 		os.Exit(runSetupCommand(ctx, os.Args[2:], os.Getenv, os.Stdin, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "copilot" {
+		os.Exit(runCopilotCommand(ctx, os.Args[2:], os.Getenv, os.Stdin, os.Stdout, os.Stderr))
+	}
 	code := run(ctx, os.Args[1:], os.Getenv, func(model tea.Model) error { _, err := tea.NewProgram(model, tea.WithContext(ctx)).Run(); return err }, os.Stderr)
 	stop()
 	os.Exit(code)

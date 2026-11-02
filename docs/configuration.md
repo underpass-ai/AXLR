@@ -261,17 +261,53 @@ Number, in dollars. Absent or `0`: no limit. Otherwise up to 10,000 (`settings m
 "max_session_usd": 5
 ```
 
+### Copilot headless authentication
+
+`axlr-tui copilot login` runs the official `copilot login --device-code`: open
+the URL and enter the one-time code to authorize your own account. The CLI
+stores credentials using its own mechanisms; AXLR does not read or store them.
+Install the official Copilot CLI on `PATH` or set `AXLR_COPILOT_CLI` to its
+executable; `--cli PATH` overrides it. For GitHub Enterprise Cloud with data
+residency use `--host https://example.ghe.com`.
+
+`axlr-tui copilot status` uses the Copilot SDK to check the signed-in identity.
+An authenticated identity does not prove model access or an enterprise policy.
+Both commands omit unrelated environment secrets and token/BYOK overrides;
+the login uses the CLI's OAuth credential store or the SDK's `gh` fallback.
+These commands do not change existing bots.
+
+To let AXLR run its own agent loop using a Copilot subscription, register the
+model in `local_models`; the `model` is the exact ID available to your account:
+
+```json
+"local_models": [
+  {"id": "copilot/auto", "api": "copilot", "model": "auto", "context_tokens": 64000}
+]
+```
+
+Select `copilot/auto` in AXLR or as an AXLR Bots bot's model. Set
+`AXLR_COPILOT_CLI` in the node's environment when the executable is not on its
+`PATH`; the node needs access to the signed-in user's `gh` or Copilot login.
+No API key, URL or Copilot token is stored in AXLR settings. Organization model
+policies and subscription allowances still apply. The provider starts an
+isolated Copilot SDK session per model request, with built-ins disabled, tool
+execution denied and tool requests returned to AXLR for its own policy checks.
+Tool history is represented as JSON text for the SDK; verify model behavior for
+your workflow. Copilot usage is in subscription credits, not USD: the USD
+session cap cannot enforce that credit budget, and an unknown cost must not be
+treated as a free request. Use GitHub's organization spending controls.
+
 ### local_models
 
-Array of at most 16 objects (`settings.json lists too many local models`): model servers that `/model` lists beside OpenRouter's catalog. By default an entry is an OpenAI-compatible chat completions server (llama.cpp, vLLM, Ollama, LM Studio); with `api` it is instead the Anthropic Messages API or the OpenAI Responses API, spoken natively since 23 October 2026, so reasoning across tool calls, prompt caching and usage no longer depend on OpenRouter's translation. With at least one entry `OPENROUTER_API_KEY` is optional. Written by the setup assistant, which adds or replaces the entry with the same `id`.
+Array of at most 16 objects (`settings.json lists too many local models`): model servers that `/model` lists beside OpenRouter's catalog. By default an entry is an OpenAI-compatible chat completions server (llama.cpp, vLLM, Ollama, LM Studio); `api` can instead select the Anthropic Messages API, OpenAI Responses API, or GitHub Copilot. With at least one entry `OPENROUTER_API_KEY` is optional. Written by the setup assistant, which adds or replaces the entry with the same `id`.
 
 | Key | Type | Default | Limits and meaning |
 |:--|:--|:--|:--|
 | `id` | string | required | A [model id](#model-identifiers), unique in the list (`settings local_models lists <id> twice`). What the session saves and `/model` shows; the `local/` prefix is a convention that keeps it apart from OpenRouter ids. Must not also be a key of [`models`](#models-per-model-openrouter-options) |
 | `name` | string | the `id` | Display name: valid UTF-8, at most 200 bytes, no line breaks |
-| `url` | string | required | The server's base URL, such as `http://127.0.0.1:8080/v1`. Absolute `http` or `https`, with a host, without user info, query or fragment. Trailing slashes are dropped and the endpoint of the `api` appended: `/chat/completions` for `chat`, `/v1/messages` for `anthropic` (`/messages` when the url already ends in `/v1`), `/responses` for `responses` |
-| `model` | string | the `id` | A [model id](#model-identifiers): the name sent to the server. vLLM needs its `--served-model-name`; llama.cpp ignores it; Anthropic and OpenAI need their own ids (`claude-sonnet-5-5`, `gpt-5`) |
-| `api` | string | `"chat"` | The protocol: `chat` (OpenAI chat completions, what every local server speaks), `anthropic` (the Anthropic Messages API) or `responses` (the OpenAI Responses API). Anything else: `settings local_models <id> api must be chat, anthropic or responses`. See [native APIs](#native-apis) |
+| `url` | string | required except `copilot` | The server's base URL, such as `http://127.0.0.1:8080/v1`. Absolute `http` or `https`, with a host, without user info, query or fragment. Trailing slashes are dropped and the endpoint of the `api` appended: `/chat/completions` for `chat`, `/v1/messages` for `anthropic` (`/messages` when the url already ends in `/v1`), `/responses` for `responses` |
+| `model` | string | the `id`; required for Copilot | A [model id](#model-identifiers): the name sent to the provider. vLLM needs its `--served-model-name`; llama.cpp ignores it; Anthropic, OpenAI and Copilot need their own ids (`claude-sonnet-5-5`, `gpt-5`, `auto`) |
+| `api` | string | `"chat"` | The protocol: `chat`, `anthropic`, `responses`, or `copilot` (GitHub Copilot SDK). Copilot requires `model` and forbids `url` and `api_key_env`. See [native APIs](#native-apis) |
 | `api_key_env` | string | none | Name of the environment variable holding the server's key (`^[A-Za-z_][A-Za-z0-9_]*$`). When the variable is set the key is sent as a bearer token, or as `x-api-key` for `anthropic` |
 | `context_tokens` | integer | required | From 4,096 to 16,777,216: the window the console respects for this model, which may be smaller than the server's own. The top-level `context_tokens` lowers it further |
 | `tools` | boolean | `true` | `false` hides the model from `/model`: AXLR needs native tool calls and does not degrade without them |
@@ -282,7 +318,7 @@ Array of at most 16 objects (`settings.json lists too many local models`): model
 
 The long stream defaults are deliberate: a cold prefill of a long prompt on a local GPU takes minutes before the first token, and decoding runs at a few tokens per second.
 
-Refusals while reading the file: `settings local_models entry has an invalid id`, `settings local_models <id> has an invalid name`, `… url must be an absolute http(s) URL without credentials, query or fragment`, `… has an invalid model`, `… api must be chat, anthropic or responses`, `… api_key_env must be an environment variable name`, `… context_tokens must be between 4096 and 16777216` (also when it is missing), `… stream_idle_seconds must be between 1 and 3600`, `… stream_max_minutes must be between 1 and 720`.
+Refusals while reading the file: `settings local_models entry has an invalid id`, `settings local_models <id> has an invalid name`, `… url must be an absolute http(s) URL without credentials, query or fragment`, `… has an invalid model`, `… api must be chat, anthropic, responses or copilot`, `… copilot needs model and no url or api_key_env`, `… api_key_env must be an environment variable name`, `… context_tokens must be between 4096 and 16777216` (also when it is missing), `… stream_idle_seconds must be between 1 and 3600`, `… stream_max_minutes must be between 1 and 720`.
 
 Two more rules are checked when the launch connects to the server, and stop it:
 

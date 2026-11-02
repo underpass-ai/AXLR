@@ -198,7 +198,7 @@ func TestLocalModelAPIChoosesTheProtocolAndEndpoint(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"local_models":[{"id":"x","url":"http://127.0.0.1:8080/v1","api":"grpc","context_tokens":8192}]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Load(context.Background()); err == nil || !strings.Contains(err.Error(), "api must be chat, anthropic or responses") {
+	if _, err := store.Load(context.Background()); err == nil || !strings.Contains(err.Error(), "api must be chat, anthropic, responses or copilot") {
 		t.Fatalf("unknown api: %v", err)
 	}
 }
