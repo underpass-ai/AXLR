@@ -237,6 +237,7 @@ type execEvent struct {
 	Tool        string                    `json:"tool,omitempty"`
 	Call        string                    `json:"call_id,omitempty"`
 	Arguments   json.RawMessage           `json:"arguments,omitempty"`
+	PluginTool  string                    `json:"plugin_tool,omitempty"`
 	Decision    string                    `json:"decision,omitempty"`
 	Status      string                    `json:"status,omitempty"`
 	Error       string                    `json:"error,omitempty"`
@@ -347,7 +348,7 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 				write(execEvent{Type: "reasoning", Text: e.ReasoningText})
 			}
 		case application.EventToolActivity:
-			write(execToolEvent(e.Tool))
+			write(execToolEvent(e.Tool, session.ToolSnapshot()))
 			if artifact, delivered := domain.ArtifactOf(session.ID(), e.Tool); delivered {
 				wire := contract.ExecutionArtifact(artifact)
 				write(execEvent{Type: "artifact", Session: string(session.ID()), Call: string(e.Tool.Call.ID), Artifact: &wire})
