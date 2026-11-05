@@ -2,6 +2,7 @@ package diagnostics
 
 import (
 	"context"
+	"io"
 	"reflect"
 	"strings"
 	"testing"
@@ -73,6 +74,42 @@ func TestReasoningProgressCountsBytesInSteps(t *testing.T) {
 	// Reported text is the reasoning up to the last report, in order.
 	if text.Len() != 1040 || !strings.HasPrefix(text.String(), "0123456789abcdef0123") {
 		t.Fatalf("text %d bytes", text.Len())
+	}
+	// The answer starts: the rest of the reasoning is told before it.
+	body.observeFrame([]byte(`{"choices":[{"delta":{"content":"Done."}}]}`))
+	body.observeFrame([]byte(`{"choices":[{"delta":{"content":" Really."}}]}`))
+	if !reflect.DeepEqual(told, []int{16, 528, 1040, 1120}) || text.Len() != 1120 {
+		t.Fatalf("progress %v, text %d bytes", told, text.Len())
+	}
+}
+
+// A reply that ends while the model still reasons, or that starts a call,
+// tells what reasoning is left: none of it is lost to the step.
+func TestTheRestOfTheReasoningIsToldWhenItStops(t *testing.T) {
+	var text strings.Builder
+	ctx := application.WithReasoningProgress(context.Background(), func(_ int, delta string) { text.WriteString(delta) })
+	body := &streamBody{ctx: ctx}
+	body.observeFrame([]byte(`{"choices":[{"delta":{"reasoning":"First, "}}]}`))
+	body.observeFrame([]byte(`{"choices":[{"delta":{"reasoning":"the log."}}]}`))
+	body.observeFrame([]byte(`{"choices":[{"delta":{"tool_calls":[{"function":{"name":"read","arguments":"{}"}}]}}]}`))
+	if text.String() != "First, the log." {
+		t.Fatalf("before the call: %q", text.String())
+	}
+	ended := &streamBody{ctx: ctx, next: io.NopCloser(strings.NewReader(""))}
+	text.Reset()
+	ended.observeFrame([]byte(`{"choices":[{"delta":{"reasoning":"Hm, "}}]}`))
+	ended.observeFrame([]byte(`{"choices":[{"delta":{"reasoning":"nothing to say."}}]}`))
+	ended.observeRead(nil, io.EOF)
+	if text.String() != "Hm, nothing to say." {
+		t.Fatalf("at the end: %q", text.String())
+	}
+	closed := &streamBody{ctx: ctx, next: io.NopCloser(strings.NewReader(""))}
+	text.Reset()
+	closed.observeFrame([]byte(`{"choices":[{"delta":{"reasoning":"A, "}}]}`))
+	closed.observeFrame([]byte(`{"choices":[{"delta":{"reasoning":"B."}}]}`))
+	_ = closed.Close()
+	if text.String() != "A, B." {
+		t.Fatalf("on close: %q", text.String())
 	}
 }
 
