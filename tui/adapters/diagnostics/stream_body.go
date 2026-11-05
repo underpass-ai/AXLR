@@ -106,6 +106,11 @@ func (b *streamBody) observeRead(p []byte, err error) {
 	if err != nil && err != io.EOF {
 		b.readErr = err
 	}
+	if err != nil {
+		// The reply ends: what reasoning is left reaches the console and
+		// the --exec lines below.
+		defer b.flushReasoning()
+	}
 	n := len(p)
 	if n == 0 {
 		return
@@ -299,6 +304,7 @@ func (b *streamBody) observeNativeFrame(data []byte) {
 
 // observeContent records streamed answer text.
 func (b *streamBody) observeContent(size int) {
+	b.flushReasoning()
 	b.activity(domain.ProviderContent)
 	b.record(application.DiagnosticContent, size, 1)
 }
@@ -318,6 +324,19 @@ func (b *streamBody) observeReasoning(text string) {
 	}
 }
 
+// flushReasoning tells the reasoning streamed since the last report, when
+// the model stops reasoning: it writes its answer or a call, or the reply
+// ends. Without it the last few hundred bytes of each reply's reasoning
+// never reach the console or an --exec run's reasoning lines.
+func (b *streamBody) flushReasoning() {
+	if b.reasoningText == "" {
+		return
+	}
+	b.reasoningTold = b.reasoningBytes
+	application.NotifyReasoningProgress(b.ctx, b.reasoningBytes, b.reasoningText)
+	b.reasoningText = ""
+}
+
 // observeToolName starts counting a new call's arguments when a name arrives.
 func (b *streamBody) observeToolName(name string) {
 	if name != "" && name != b.toolName {
@@ -328,6 +347,7 @@ func (b *streamBody) observeToolName(name string) {
 // observeToolCall records a tool-call fragment and tells the console how far
 // the current call's arguments have come.
 func (b *streamBody) observeToolCall(size, count int) {
+	b.flushReasoning()
 	b.activity(domain.ProviderToolCall)
 	application.NotifyToolCallProgress(b.ctx, b.toolName, b.toolBytes)
 	b.record(application.DiagnosticToolDelta, size, count)
@@ -341,6 +361,9 @@ func (b *streamBody) Close() error {
 		b.closeErr = b.underlyingErr
 		b.mu.Lock()
 		defer b.mu.Unlock()
+		if !b.closed {
+			b.flushReasoning()
+		}
 		b.closed = true
 		class := application.DiagnosticErrorNone
 		if b.errorResponse || b.readErr != nil || b.drainErr != nil || b.closeErr != nil {
