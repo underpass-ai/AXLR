@@ -121,7 +121,7 @@ func (c *SessionCeremony) settle(ctx context.Context, s domain.Session, instance
 	}
 	stateOf := s.Export()
 	about := c.about(ctx, stateOf)
-	if (kind.Choice == "preference" || kind.Choice == "feedback") && c.Identity != nil && c.Identity.UserAbout != "" {
+	if (kind.Choice == "preference" || kind.Choice == "feedback") && c.Identity != nil && c.Identity.UserAbout != "" && !memoryBound(s) {
 		about = c.Identity.UserAbout
 	}
 	entry := SettledEntry{About: about, Kind: kind.Choice, Text: text, SummaryEN: settledSummaryEN(kind.Choice, record),

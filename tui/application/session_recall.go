@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode"
@@ -58,7 +59,9 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 	}
 	state := s.Export()
 	abouts := []string{c.about(ctx, state)}
-	if c.Identity.UserAbout != "" {
+	bound := memoryBound(*s)
+	if c.Identity.UserAbout != "" && !bound {
+		// A bot's prompt never carries the person's memory.
 		abouts = append(abouts, c.Identity.UserAbout)
 	}
 	if resumed {
@@ -67,6 +70,15 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 	if instance.Predecessor != "" && instance.Recalled == "" {
 		// A successor's first recall wakes what the predecessor settled.
 		abouts = append(abouts, sessionAbout(instance.Predecessor))
+	} else if bound && instance.Recalled == "" && !resumed {
+		// A bot's new task wakes what its previous task recorded: each
+		// execution is a new session, which nothing resumed, so the ws:
+		// abouts of 1 093 bot sessions were never read (8 November 2026).
+		if previous, err := previousSession(ctx, c.Store, state); err == nil {
+			abouts = append(abouts, sessionAbout(previous))
+		} else if !errors.Is(err, errNoPreviousSession) {
+			c.log("previous session of %s: %v", state.Workspace, err)
+		}
 	}
 	var sections []string
 	remaining := limit

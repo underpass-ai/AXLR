@@ -101,7 +101,12 @@ func (p ExecutionPolicy) Judge(tool AvailableTool, arguments axlr.JSONValue) (Po
 	if isHost(tool, HostOperationDeliver) {
 		return p.judgeDelivery(label, arguments)
 	}
-	if ReadsOnly(tool.Identity) {
+	if ReadsOnly(tool.Identity) || isHost(tool, HostOperationRemember) {
+		// axlr_remember writes the execution's own memory, not the system
+		// it observes: an observing bot that may not change a file or run
+		// a command still keeps what it learned for its next task (8
+		// November 2026: no observe bot had recorded anything). Where the
+		// policy binds memory, the about is the bot's own.
 		return PolicyAllow, ""
 	}
 	plugin := tool.Identity.Kind == ToolKindPlugin
@@ -204,8 +209,9 @@ func (p ExecutionPolicy) offers(tool AvailableTool) bool {
 			return false
 		}
 	}
-	if ReadsOnly(tool.Identity) || isHost(tool, HostOperationDeliver) {
-		// axlr_deliver delivers a file by path at every level.
+	if ReadsOnly(tool.Identity) || isHost(tool, HostOperationDeliver) || isHost(tool, HostOperationRemember) {
+		// axlr_deliver delivers a file by path at every level;
+		// axlr_remember writes the execution's own memory.
 		return true
 	}
 	plugin := tool.Identity.Kind == ToolKindPlugin
