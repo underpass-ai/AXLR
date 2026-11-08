@@ -107,9 +107,9 @@ func instanceID(id domain.SessionID, successor int) string {
 }
 
 // about is the session's memory about: the selected one, else the
-// workspace's.
+// workspace's; the workspace's alone for a bound session.
 func (c *SessionCeremony) about(ctx context.Context, state domain.SessionState) string {
-	about, _, err := memoryAbout(ctx, c.Labels, state)
+	about, err := sessionMemoryAbout(ctx, c.Labels, state)
 	if err != nil || about == "" {
 		return defaultAbout(state)
 	}

@@ -50,6 +50,7 @@ func TestExecutionPolicyLevels(t *testing.T) {
 	query := policyTool(t, "mcp_0a1b", ToolKindPlugin, "observability/query_logs")
 	plan := policyArgs(t, `{"path":"docs/plan.md","content":"x"}`)
 	code := policyArgs(t, `{"path":"main.go","content":"x"}`)
+	remember := policyTool(t, "axlr_remember", ToolKindHost, HostOperationRemember)
 	allowAll := []PolicyRule{{Name: "local_*"}, {Name: "observability/*"}}
 	for name, tc := range map[string]struct {
 		level    PolicyLevel
@@ -59,11 +60,18 @@ func TestExecutionPolicyLevels(t *testing.T) {
 		verdict  PolicyVerdict
 		contains string
 	}{
-		"observe reads":                       {PolicyObserve, nil, read, plan, PolicyAllow, ""},
-		"observe refuses a write":             {PolicyObserve, nil, write, plan, PolicyForbid, "observes: local_write is not a read"},
-		"observe refuses a command":           {PolicyObserve, allowAll, command, plan, PolicyForbid, "not a read"},
-		"observe refuses an unlisted mcp":     {PolicyObserve, nil, query, plan, PolicyForbid, "not a read"},
-		"observe runs a listed mcp":           {PolicyObserve, allowAll, query, plan, PolicyAllow, ""},
+		"observe reads":                   {PolicyObserve, nil, read, plan, PolicyAllow, ""},
+		"observe refuses a write":         {PolicyObserve, nil, write, plan, PolicyForbid, "observes: local_write is not a read"},
+		"observe refuses a command":       {PolicyObserve, allowAll, command, plan, PolicyForbid, "not a read"},
+		"observe refuses an unlisted mcp": {PolicyObserve, nil, query, plan, PolicyForbid, "not a read"},
+		"observe runs a listed mcp":       {PolicyObserve, allowAll, query, plan, PolicyAllow, ""},
+		// axlr_remember writes the execution's own memory, not the
+		// observed system: allowed at every level, under the allow list.
+		"observe remembers":                   {PolicyObserve, nil, remember, plan, PolicyAllow, ""},
+		"observe remembers when listed":       {PolicyObserve, []PolicyRule{{Name: "local_read"}, {Name: "axlr_remember"}}, remember, plan, PolicyAllow, ""},
+		"observe allow list omits remember":   {PolicyObserve, []PolicyRule{{Name: "local_read"}}, remember, plan, PolicyForbid, "not in the execution's allow list"},
+		"propose remembers":                   {PolicyPropose, nil, remember, plan, PolicyAllow, ""},
+		"act-with-approval remembers freely":  {PolicyActWithApproval, nil, remember, plan, PolicyAllow, ""},
 		"propose writes a plan":               {PolicyPropose, nil, write, plan, PolicyAllow, ""},
 		"propose refuses code":                {PolicyPropose, allowAll, write, code, PolicyForbid, "proposes: local_write may only write a plan or a diff"},
 		"propose writes a diff":               {PolicyPropose, nil, write, policyArgs(t, `{"path":"fix.patch","content":"x"}`), PolicyAllow, ""},
@@ -138,6 +146,7 @@ func TestExecutionPolicyOffersTools(t *testing.T) {
 		policyTool(t, "axlr_forge_tool", ToolKindHost, HostOperationForgeTool),
 		policyTool(t, "query_logs", ToolKindPlugin, "observability/query_logs"),
 		policyTool(t, "kmp_write_memory", ToolKindPlugin, "kmp/kmp_write_memory"),
+		policyTool(t, "axlr_remember", ToolKindHost, HostOperationRemember),
 	}
 	names := func(tools []AvailableTool) string {
 		out := make([]string, 0, len(tools))
@@ -151,13 +160,14 @@ func TestExecutionPolicyOffersTools(t *testing.T) {
 		allow, deny []PolicyRule
 		want        string
 	}{
-		"observe without lists":           {PolicyObserve, nil, nil, "local_read axlr_tools"},
+		"observe without lists":           {PolicyObserve, nil, nil, "local_read axlr_tools axlr_remember"},
 		"observe with the sre allow list": {PolicyObserve, []PolicyRule{{Name: "observability/*"}}, nil, "axlr_tools axlr_call_tool query_logs"},
-		"propose":                         {PolicyPropose, nil, nil, "local_read local_write axlr_tools"},
-		"act-with-approval":               {PolicyActWithApproval, nil, nil, "local_read local_write local_exec axlr_tools axlr_call_tool axlr_forge_tool query_logs kmp_write_memory"},
-		"act-within-policy denying one":   {PolicyActWithinPolicy, nil, []PolicyRule{{Name: "kmp/*"}, {Name: "local_exec", Arguments: map[string]string{"program": "rm"}}}, "local_read local_write local_exec axlr_tools axlr_call_tool axlr_forge_tool query_logs"},
+		"observe with memory":             {PolicyObserve, []PolicyRule{{Name: "local_read"}, {Name: "axlr_remember"}}, nil, "local_read axlr_tools axlr_remember"},
+		"propose":                         {PolicyPropose, nil, nil, "local_read local_write axlr_tools axlr_remember"},
+		"act-with-approval":               {PolicyActWithApproval, nil, nil, "local_read local_write local_exec axlr_tools axlr_call_tool axlr_forge_tool query_logs kmp_write_memory axlr_remember"},
+		"act-within-policy denying one":   {PolicyActWithinPolicy, nil, []PolicyRule{{Name: "kmp/*"}, {Name: "local_exec", Arguments: map[string]string{"program": "rm"}}}, "local_read local_write local_exec axlr_tools axlr_call_tool axlr_forge_tool query_logs axlr_remember"},
 		"allow list of reads":             {PolicyActWithinPolicy, []PolicyRule{{Name: "local_read"}, {Name: "local_search"}}, nil, "local_read axlr_tools"},
-		"bridge denied by name":           {PolicyActWithinPolicy, nil, []PolicyRule{{Name: "axlr_call_tool"}, {Name: "axlr_tools"}}, "local_read local_write local_exec axlr_forge_tool query_logs kmp_write_memory"},
+		"bridge denied by name":           {PolicyActWithinPolicy, nil, []PolicyRule{{Name: "axlr_call_tool"}, {Name: "axlr_tools"}}, "local_read local_write local_exec axlr_forge_tool query_logs kmp_write_memory axlr_remember"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := names(mustPolicy(t, tc.level, tc.allow, tc.deny).OfferedTools(snapshot)); got != tc.want {
