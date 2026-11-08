@@ -73,6 +73,16 @@ func TestBoundSessionKeepsRememberAndRecallToItsOwnAbouts(t *testing.T) {
 	if len(recorder.requests) != 2 || len(recall.requests) != 2 {
 		t.Fatalf("KMP was called for another's about: %d writes, %d reads", len(recorder.requests), len(recall.requests))
 	}
+	// An about selected with axlr_session (a read the policy allows) does
+	// not move the boundary: a write without an about still lands in the
+	// workspace's project about, and the selected one is another's.
+	u.Labels = &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{state.ID: {About: "project:other-bot"}}}
+	if outcome, err := u.Execute(context.Background(), s, rememberIdentity(t), mustObject(t, `{"kind":"observation","text":"y","evidence":"e"}`)); err != nil || outcome.IsError || recorder.requests[len(recorder.requests)-1].About != project {
+		t.Fatalf("selected about moved the boundary: %+v %v %+v", outcome, err, recorder.requests[len(recorder.requests)-1])
+	}
+	if outcome := remember("project:other-bot"); !outcome.IsError {
+		t.Fatalf("selected about accepted: %+v", outcome)
+	}
 	// A session that is nobody's bot names what it likes, as before.
 	free := rememberSession(t, domain.ModeNormal)
 	if outcome, _ := u.Execute(context.Background(), free, rememberIdentity(t), mustObject(t, `{"kind":"observation","text":"x","evidence":"e","about":"project:other-bot"}`)); outcome.IsError {

@@ -25,31 +25,40 @@ func memoryBound(s domain.Session) bool {
 	return has
 }
 
+// memoryBoundState is memoryBound on an exported state.
+func memoryBoundState(state domain.SessionState) bool { return state.Policy != nil }
+
 // boundAbouts are the abouts a bound session may read and write: the
-// session's memory about (the selected one, by default the workspace's
-// project about) and its own ws: about.
-func boundAbouts(ctx context.Context, labels SessionLabelsPort, state domain.SessionState) ([]string, error) {
-	about, _, err := memoryAbout(ctx, labels, state)
-	if err != nil {
-		return nil, err
-	}
-	own := sessionAbout(state.ID)
+// workspace's project about and its own ws: about. The selected about
+// (axlr_session) is not consulted: axlr_session is a read the policy
+// allows, and a bot that selected another's about would have moved its
+// boundary itself.
+func boundAbouts(state domain.SessionState) []string {
+	about, own := defaultAbout(state), sessionAbout(state.ID)
 	if about == own {
-		return []string{own}, nil
+		return []string{own}
 	}
-	return []string{about, own}, nil
+	return []string{about, own}
+}
+
+// sessionMemoryAbout is where a session's memory goes when no about is
+// named: the workspace's project about for a bound session, else the
+// selected about or the project's (memoryAbout).
+func sessionMemoryAbout(ctx context.Context, labels SessionLabelsPort, state domain.SessionState) (string, error) {
+	if memoryBoundState(state) {
+		return defaultAbout(state), nil
+	}
+	about, _, err := memoryAbout(ctx, labels, state)
+	return about, err
 }
 
 // checkBoundAbout refuses an about outside a bound session's own, with the
 // ones it may name.
-func checkBoundAbout(ctx context.Context, labels SessionLabelsPort, session domain.Session, about string) error {
+func checkBoundAbout(session domain.Session, about string) error {
 	if about == "" || !memoryBound(session) {
 		return nil
 	}
-	allowed, err := boundAbouts(ctx, labels, session.Export())
-	if err != nil {
-		return err
-	}
+	allowed := boundAbouts(session.Export())
 	for _, own := range allowed {
 		if about == own {
 			return nil

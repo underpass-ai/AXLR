@@ -102,10 +102,10 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	about := args.About
 	if about == "" {
 		var err error
-		if about, _, err = memoryAbout(ctx, u.Labels, state); err != nil {
+		if about, err = sessionMemoryAbout(ctx, u.Labels, state); err != nil {
 			return nil, err
 		}
-	} else if err := checkBoundAbout(ctx, u.Labels, session, about); err != nil {
+	} else if err := checkBoundAbout(session, about); err != nil {
 		return nil, err
 	}
 	request := RememberRequest{About: about, Kind: args.Kind, Text: args.Text, SummaryEN: strings.TrimSpace(args.SummaryEN), Evidence: evidence,
