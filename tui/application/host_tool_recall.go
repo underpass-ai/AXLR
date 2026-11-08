@@ -83,6 +83,8 @@ func (u HostToolUseCase) hostRecall(ctx context.Context, session domain.Session,
 		if about, _, err = memoryAbout(ctx, u.Labels, state); err != nil {
 			return nil, err
 		}
+	} else if err := checkBoundAbout(ctx, u.Labels, session, about); err != nil {
+		return nil, err
 	}
 	request := RecallRequest{Mode: mode, About: about, Intent: question, Since: since, Entries: recallHistoryEntries}
 	if instance, ok := session.Instance(); ok {

@@ -67,7 +67,7 @@ func (c *SessionCeremony) settleV2(ctx context.Context, s domain.Session, instan
 	stateOf := s.Export()
 	project := c.about(ctx, stateOf)
 	about := project
-	if (kind.Choice == "preference" || kind.Choice == "feedback") && c.Identity != nil && c.Identity.UserAbout != "" {
+	if (kind.Choice == "preference" || kind.Choice == "feedback") && c.Identity != nil && c.Identity.UserAbout != "" && !memoryBound(s) {
 		about = c.Identity.UserAbout
 	}
 	// The sentence was read whole for Jev; what the store keeps is
