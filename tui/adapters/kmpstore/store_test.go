@@ -321,3 +321,16 @@ func TestExportedEventsReadsTheLastJSONLine(t *testing.T) {
 		t.Fatalf("no top level: %v", err)
 	}
 }
+
+func TestGivenWinsOverThePinAndTheCheckout(t *testing.T) {
+	_, workspace := checkout(t)
+	given := filepath.Join(t.TempDir(), "node", "kmp", "triage") + string(filepath.Separator)
+	got := Given(given)
+	if got.Reason != ReasonProgram || got.Path != filepath.Clean(given) || got.TopLevel != "" || got.Replaced != "" {
+		t.Fatalf("given: %+v", got)
+	}
+	// What Resolve would have chosen for the same workspace is not it.
+	if other := Resolve(workspace, []string{DataDirVariable + "=" + UserDefault(filepath.Join(t.TempDir(), "share"))}, filepath.Join(t.TempDir(), "share")); other.Path == got.Path {
+		t.Fatalf("resolve agrees with given: %+v", other)
+	}
+}

@@ -31,6 +31,9 @@ An execution is a session of AXLR: its transcript, its tool calls with their dec
 | Skills | `--skills <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`skills`) |
 | Correlation | `--correlation <file.json>` (with `--exec` or `--decide`) | `CreateSession` (`correlation`) |
 | Messages while it works | `--steer-file <file>` (with `--exec` or `--decide`) | — |
+| Memory store | `--kmp-store <dir>`: the KMP store the session opens, an absolute directory, over `mcp.json`'s pin and the workspace's checkout | — |
+
+The memory store is the program's to give. Without `--kmp-store` the console resolves it as for a person (the checkout's `.kernel`, else the operator's pin or the per-user default), and every bot a node runs on one host would share the operator's own store: on 8 November 2026, 1 093 bot sessions had landed in it. A program that runs executions for many bots gives each one its own directory, `--kmp-store <state>/kmp/<bot>`, on every `--exec` and every `--decide` of that bot, so the decision's turn opens the store the execution wrote; the startup line says `KMP store <dir> (given by --kmp-store)`. The store is created when missing, as the console prepares any store it chooses.
 
 The approval level is the run's own policy on top of `settings.json`: `none` approves nothing the settings do not, `local` the workspace's reads, writes and commands and the forged tools, `all` every tool. The destructive list (`approvals.always_ask`) asks either way, and a call it holds ends the execution in `needs_decision`. A policy decides outside the model: the model asks, the policy answers.
 

@@ -84,6 +84,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	flags.BoolVar(&continueFlag, "c", false, "continue the workspace's most recent session (same as --continue)")
 	flags.BoolVar(&continueFlag, "continue", false, "continue the workspace's most recent session, not archived and not a plan task")
 	mcpConfigFlag := flags.String("mcp-config", "", "absolute MCP configuration path (default $XDG_CONFIG_HOME/axlr/mcp.json)")
+	kmpStoreFlag := flags.String("kmp-store", "", "absolute directory of the KMP store this launch opens, over mcp.json's pin and the workspace's checkout; a program that runs executions gives each bot its own (docs/runtime-contract.md)")
 	repairFlag := flags.String("repair", "", "start a repair of the configured repository in a fresh clone: a failure brief or #issue")
 	improveFlag := flags.String("improve", "", "start an improvement of the configured repository in a fresh clone: an improvement brief or #issue; the merge waits for you")
 	execFlag := flags.String("exec", "", "run one prompt without the console, print the answer and exit (needs --model, a model in settings.json or --session)")
@@ -134,6 +135,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	if *callFlag != "" && *decideFlag == "" {
 		return fail(errors.New("--call goes with --decide"))
+	}
+	if *kmpStoreFlag != "" && !filepath.IsAbs(*kmpStoreFlag) {
+		return fail(errors.New("--kmp-store needs an absolute directory"))
 	}
 	var execDecided domain.ToolDecision
 	switch *decideFlag {
@@ -508,7 +512,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	registrations = append(persisted.Registrations, registrations...)
 	// The memory of this launch: the checkout's own store, prepared and
 	// pinned before anything reads the registrations.
-	kmp, hasKMP, kmpErr := prepareKMPStore(ctx, registrations, workspacePath, dataBase)
+	kmp, hasKMP, kmpErr := prepareKMPStore(ctx, registrations, workspacePath, dataBase, *kmpStoreFlag)
 	if hasKMP {
 		line := kmp.line(dataBase) + kmp.memoriesLine()
 		if kmpErr != nil {

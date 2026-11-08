@@ -10,4 +10,8 @@ const (
 	ReasonProject Reason = "project"
 	// ReasonUser is the per-user default outside a checkout.
 	ReasonUser Reason = "user"
+	// ReasonProgram is the store the program that runs this execution
+	// gave with --kmp-store: a node gives each bot its own, so a bot's
+	// memory never lands in the operator's per-user store.
+	ReasonProgram Reason = "program"
 )

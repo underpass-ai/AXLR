@@ -9,6 +9,15 @@ import (
 // UserDefault is KMP's per-user default store under the data directory.
 func UserDefault(dataBase string) string { return filepath.Join(dataBase, "kmp", "default") }
 
+// Given is the store a program named with --kmp-store: it wins over the
+// registration's pin and over the workspace, so a node that runs many bots
+// on one host keeps each one's memory apart from the others' and from the
+// operator's (on 8 November 2026, 1 093 bot sessions had landed in the
+// operator's per-user store because every run resolved to it).
+func Given(path string) Selection {
+	return Selection{Path: filepath.Clean(path), Reason: ReasonProgram}
+}
+
 // Resolve chooses the store for a workspace from the registration's
 // environment: a pinned directory other than the per-user default is the
 // operator's and wins; the installer's pin of the per-user default (what it
