@@ -201,6 +201,7 @@ func TestExecRefusesItsFlagsAlone(t *testing.T) {
 		{"--budget", "budget.json"},
 		{"--correlation", "correlation.json"},
 		{"--sandbox", "sandbox.json"},
+		{"--exec", "x", "--kmp-store", "relative/store"},
 	} {
 		env := cliEnv(t)
 		code, _, stderr := execRun(t, env, append([]string{"--root", t.TempDir(), "--model", "test/model"}, args...)...)

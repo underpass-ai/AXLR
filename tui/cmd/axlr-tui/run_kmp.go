@@ -63,10 +63,11 @@ type kmpStore struct {
 // workspace, prepares it and pins it in the registration's child environment
 // before the plugin manager, the shared engine and the repair workbenches
 // read that list, so every console path opens the same store (decision D1
-// of the lifecycle integration design). Without a stdio kmp registration
-// it does nothing. A preparation that fails (an import, the guide) leaves
+// of the lifecycle integration design). given is the store --kmp-store
+// named, which wins over the pin and the workspace; "" resolves as usual.
+// Without a stdio kmp registration it does nothing. A preparation that fails (an import, the guide) leaves
 // the store pinned and is reported; the console still starts.
-func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, workspace, dataBase string) (store kmpStore, found bool, err error) {
+func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, workspace, dataBase, given string) (store kmpStore, found bool, err error) {
 	index := -1
 	for i, r := range registrations {
 		if r.Manifest.ID == "kmp" && r.Manifest.Command != "" {
@@ -78,7 +79,11 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 		return kmpStore{}, false, nil
 	}
 	r := registrations[index]
-	store.Selection = kmpstore.Resolve(workspace, r.Env, dataBase)
+	if given != "" {
+		store.Selection = kmpstore.Given(given)
+	} else {
+		store.Selection = kmpstore.Resolve(workspace, r.Env, dataBase)
+	}
 	registrations[index].Env = kmpstore.WithStore(r.Env, store.Selection.Path)
 	store.About = application.ProjectAbout(domain.Workspace(workspace))
 	if top := store.Selection.TopLevel; top != "" {
@@ -181,6 +186,8 @@ func (s kmpStore) line(dataBase string) string {
 		}
 	case kmpstore.ReasonOperator:
 		b.WriteString("pinned in mcp.json")
+	case kmpstore.ReasonProgram:
+		b.WriteString("given by --kmp-store")
 	default:
 		b.WriteString("the per-user default, outside a checkout")
 	}

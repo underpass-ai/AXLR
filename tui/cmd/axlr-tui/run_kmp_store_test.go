@@ -44,7 +44,7 @@ func TestPrepareKMPStorePinsTheCheckoutsStoreIntoTheRegistration(t *testing.T) {
 		t.Fatal(err)
 	}
 	registrations := []plugins.Registration{other, registration}
-	store, found, err := prepareKMPStore(context.Background(), registrations, workspace, data)
+	store, found, err := prepareKMPStore(context.Background(), registrations, workspace, data, "")
 	if !found || err != nil || !strings.Contains(store.Report.ImportFailed, "not executable") {
 		t.Fatalf("found %v err %v report %+v", found, err, store.Report)
 	}
@@ -83,7 +83,7 @@ func TestPrepareKMPStoreOutsideACheckoutUsesTheUserDefaultAndTheDirectoryAbout(t
 		t.Fatal(err)
 	}
 	registrations := []plugins.Registration{registration}
-	store, found, err := prepareKMPStore(context.Background(), registrations, workspace, data)
+	store, found, err := prepareKMPStore(context.Background(), registrations, workspace, data, "")
 	if !found || err != nil {
 		t.Fatalf("found %v err %v", found, err)
 	}
@@ -93,7 +93,7 @@ func TestPrepareKMPStoreOutsideACheckoutUsesTheUserDefaultAndTheDirectoryAbout(t
 	if !strings.Contains(store.line(data), "the per-user default, outside a checkout") || !strings.Contains(store.line(data), "about project:My-Notes") {
 		t.Fatalf("line %q", store.line(data))
 	}
-	if _, found, _ := prepareKMPStore(context.Background(), nil, workspace, data); found {
+	if _, found, _ := prepareKMPStore(context.Background(), nil, workspace, data, ""); found {
 		t.Fatal("no kmp registration, nothing to prepare")
 	}
 }
@@ -148,7 +148,7 @@ func TestPrepareKMPStoreInsideACheckoutUsesTheCheckoutsName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, found, err := prepareKMPStore(context.Background(), []plugins.Registration{registration}, workspace, filepath.Join(t.TempDir(), "share"))
+	store, found, err := prepareKMPStore(context.Background(), []plugins.Registration{registration}, workspace, filepath.Join(t.TempDir(), "share"), "")
 	if !found || err != nil {
 		t.Fatalf("found %v err %v", found, err)
 	}
@@ -173,5 +173,48 @@ func TestStartupLineSaysHowMuchTheStoreHolds(t *testing.T) {
 	store.Memories = 12
 	if store.memoriesLine() != "; 12 memories for project:X" {
 		t.Fatal(store.memoriesLine())
+	}
+}
+
+// --kmp-store names the store whatever mcp.json pins and wherever the
+// workspace is: a node gives each bot its own under its state, so a bot's
+// memory never reaches the operator's per-user store (8 November 2026).
+func TestPrepareKMPStoreOpensTheStoreGivenOverThePinAndTheCheckout(t *testing.T) {
+	top := filepath.Join(t.TempDir(), "Repo")
+	workspace := filepath.Join(top, "workspaces", "triage")
+	for _, dir := range []string{filepath.Join(top, ".git"), workspace} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data := filepath.Join(t.TempDir(), "share")
+	user := kmpstore.UserDefault(data)
+	registration, err := plugins.NewRegistration(plugins.Manifest{ID: "kmp", Command: filepath.Join(t.TempDir(), "scripts", kmpstore.Launcher), AllowAll: true}, []string{"HOME=/h", kmpstore.DataDirVariable + "=" + user})
+	if err != nil {
+		t.Fatal(err)
+	}
+	registrations := []plugins.Registration{registration}
+	given := filepath.Join(t.TempDir(), "node", "kmp", "triage")
+	store, found, err := prepareKMPStore(context.Background(), registrations, workspace, data, given)
+	if !found || err != nil {
+		t.Fatalf("found %v err %v", found, err)
+	}
+	if store.Selection != (kmpstore.Selection{Path: given, Reason: kmpstore.ReasonProgram}) {
+		t.Fatalf("selection %+v", store.Selection)
+	}
+	if got := kmpstore.Value(registrations[0].Env, kmpstore.DataDirVariable); got != given {
+		t.Fatalf("pinned %q, want %q", got, given)
+	}
+	if store.About != "project:triage" || store.FromRoot || store.FromBundle {
+		t.Fatalf("about %+v", store)
+	}
+	if info, err := os.Stat(given); err != nil || !info.IsDir() || !store.Report.Created {
+		t.Fatalf("store not created: %v %+v", err, store.Report)
+	}
+	line := store.line(data)
+	for _, part := range []string{"KMP store " + given, "given by --kmp-store", "about project:triage", "new store"} {
+		if !strings.Contains(line, part) {
+			t.Fatalf("line %q lacks %q", line, part)
+		}
 	}
 }
