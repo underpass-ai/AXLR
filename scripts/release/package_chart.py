@@ -13,10 +13,10 @@ from pathlib import Path
 def package(chart: Path, version: str, output: Path) -> Path:
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="axlr-chart-") as temp:
-        subprocess.run(("helm", "package", str(chart), "--destination", temp), check=True, capture_output=True, text=True)
+        subprocess.run(("helm", "package", str(chart), "--version", version, "--app-version", version, "--destination", temp), check=True, capture_output=True, text=True)
         original = Path(temp) / f"axlr-{version}.tgz"
         if not original.is_file():
-            raise ValueError("chart version does not match release version")
+            raise ValueError("helm did not write the chart for the release version")
         with tarfile.open(original, "r:gz") as source:
             files = {entry.name: source.extractfile(entry).read() for entry in source if entry.isfile()}
         if not files or any(not name.startswith("axlr/") or ".." in Path(name).parts for name in files):

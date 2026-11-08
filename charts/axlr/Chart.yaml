@@ -2,5 +2,6 @@ apiVersion: v2
 name: axlr
 description: AXLR agent service connected to external KMP and MADE engines
 type: application
-version: 0.16.0
-appVersion: "0.16.0"
+# Placeholders: the release tag sets both when the chart is packaged.
+version: 0.0.0
+appVersion: "0.0.0"
