@@ -74,7 +74,7 @@ func TestHostDiscoveryListsStableSummariesAndExactSchema(t *testing.T) {
 
 func TestHostDiscoveryRejectsInvalidRangesAndSchemaWithoutTruncation(t *testing.T) {
 	s := hostSession(t, "reply", hostPlugin(t, "memory", "kmp", "kmp_wake"))
-	for _, args := range []string{`{"name":"unknown"}`, `{"name":null}`, `{"name":"memory","query":"wake"}`, `{"query":3}`, `{"query":null}`, `{"limit":0}`, `{"limit":21}`, `{"limit":1.5}`, `{"limit":null}`, `{"query":"x","query":"y"}`, `{"extra":true}`, `{"offset":-1}`, `{"offset":null}`, `{"offset":1.5}`, `{"offset":99}`, `{"name":"memory","offset":0}`} {
+	for _, args := range []string{`{"name":"unknown"}`, `{"name":null}`, `{"query":3}`, `{"query":null}`, `{"limit":0}`, `{"limit":21}`, `{"limit":1.5}`, `{"limit":null}`, `{"query":"x","query":"y"}`, `{"extra":true}`, `{"offset":-1}`, `{"offset":null}`, `{"offset":1.5}`, `{"offset":99}`, `{"name":"memory","offset":1}`} {
 		if out := hostExecute(t, s, domain.HostOperationTools, args); !out.IsError {
 			t.Fatalf("accepted %s: %s", args, out.Content)
 		}

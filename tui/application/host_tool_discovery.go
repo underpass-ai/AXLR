@@ -11,6 +11,23 @@ import (
 	"strings"
 )
 
+// dropUnmeantDiscoveryFields reads a call as it was meant when the model
+// filled every field of the schema, as Codex models do: "" and an offset
+// of 0 are fields it did not mean, and a name beats the query beside it.
+func dropUnmeantDiscoveryFields(args map[string]json.RawMessage) {
+	for _, field := range []string{"query", "name", "path"} {
+		if string(args[field]) == `""` {
+			delete(args, field)
+		}
+	}
+	if string(args["offset"]) == "0" {
+		delete(args, "offset")
+	}
+	if _, named := args["name"]; named {
+		delete(args, "query")
+	}
+}
+
 func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, arguments root.JSONValue) (any, error) {
 	args, err := decodeHostArguments(arguments, "query", "name", "path", "limit", "offset")
 	if err != nil {
@@ -19,6 +36,7 @@ func hostDiscover(snapshot []domain.AvailableTool, forged []ForgedTool, argument
 	if _, _, err := hostFindTool(snapshot, ""); err != nil {
 		return nil, err
 	}
+	dropUnmeantDiscoveryFields(args)
 	limit, err := hostInteger(args, "limit", 8)
 	if err != nil || limit < 1 || limit > 20 {
 		return nil, errors.New("limit must be an integer between 1 and 20")
