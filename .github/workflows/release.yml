@@ -132,9 +132,11 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - name: Build multiarch image without publishing
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           mkdir -p dist
-          docker buildx build --platform linux/amd64,linux/arm64 --file distribution/Dockerfile --build-arg VERSION='${{ needs.preflight.outputs.version }}' --output type=oci,dest=dist/image.oci .
+          docker buildx build --platform linux/amd64,linux/arm64 --file distribution/Dockerfile --build-arg VERSION='${{ needs.preflight.outputs.version }}' --secret id=github_token,env=GITHUB_TOKEN --output type=oci,dest=dist/image.oci .
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-image
@@ -155,8 +157,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Build and smoke native image
         shell: bash
+        env:
+          # The engines are downloaded from GitHub releases over the
+          # authenticated path: the anonymous one times out at times.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          docker build --platform "linux/${{ matrix.arch }}" --file distribution/Dockerfile --build-arg TARGETARCH='${{ matrix.arch }}' --build-arg VERSION='${{ needs.preflight.outputs.version }}' --tag axlr-smoke:local .
+          docker build --platform "linux/${{ matrix.arch }}" --file distribution/Dockerfile --build-arg TARGETARCH='${{ matrix.arch }}' --build-arg VERSION='${{ needs.preflight.outputs.version }}' --secret id=github_token,env=GITHUB_TOKEN --tag axlr-smoke:local .
           bash scripts/release/smoke_image.sh axlr-smoke:local
 
   publish:
