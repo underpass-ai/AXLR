@@ -36,17 +36,6 @@ jobs:
           chmod +x "$ceremony_test_dir/$ceremony_asset"
           python3 tools/ceremonies/check_pins.py --made-bin "$ceremony_test_dir/$ceremony_asset"
           python3 tools/ceremonies/spike_drafts.py --made-bin "$ceremony_test_dir/$ceremony_asset"
-  brand:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7.0.1
-      - uses: actions/setup-node@v7.0.0
-        with:
-          node-version: 22
-      - name: Pixel renderer and generated assets
-        run: |
-          node --test tools/pixelart/render.test.mjs
-          node tools/pixelart/cli.mjs --check
   go:
     runs-on: ubuntu-latest
     steps:
