@@ -144,6 +144,11 @@ jobs:
           if-no-files-found: error
 
   image-smoke:
+    # Not on pull requests: the job downloads the engines from GitHub
+    # releases, and on 8 November 2026 a GitHub incident kept every PR's
+    # smoke red for hours. It still runs on main and on tags, where the
+    # release depends on it.
+    if: github.event_name != 'pull_request'
     needs: preflight
     timeout-minutes: 30
     strategy:
