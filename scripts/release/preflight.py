@@ -16,16 +16,7 @@ def run(*args: str) -> str:
     return subprocess.check_output(args, text=True).strip()
 
 
-def chart_version(path: Path) -> tuple[str, str]:
-    fields = {}
-    for line in path.read_text().splitlines():
-        if ":" in line:
-            key, value = line.split(":", 1)
-            fields[key] = value.strip().strip('"')
-    return fields["version"], fields["appVersion"]
-
-
-def version_for(ref: str, sha: str, chart: tuple[str, str], lock: dict) -> str:
+def version_for(ref: str, sha: str, lock: dict) -> str:
     if lock.get("version") != 1 or not isinstance(lock.get("engines"), dict):
         raise ValueError("engine lock is incomplete")
     for name in ("kmp", "made"):
@@ -44,10 +35,7 @@ def version_for(ref: str, sha: str, chart: tuple[str, str], lock: dict) -> str:
         prerelease = tag.split("-", 1)[1] if "-" in tag else ""
         if any(part.isdigit() and len(part) > 1 and part.startswith("0") for part in prerelease.split(".")):
             raise ValueError("numeric prerelease identifiers cannot have leading zeros")
-        version = tag[1:]
-        if chart != (version, version):
-            raise ValueError("chart version and appVersion must match tag")
-        return version
+        return tag[1:]
     if not re.fullmatch(r"[0-9a-f]{7,40}", sha):
         raise ValueError("invalid commit SHA")
     return f"0.0.0-dev+{sha[:12]}"
@@ -81,7 +69,7 @@ def main() -> None:
             raise SystemExit("tag does not match checkout")
         subprocess.run(("git", "-C", str(args.repo), "merge-base", "--is-ancestor", args.sha, "origin/main"), check=True)
     lock = json.loads((args.repo / "distribution/engines.lock.json").read_text())
-    version = version_for(args.ref, args.sha, chart_version(args.repo / "charts/axlr/Chart.yaml"), lock)
+    version = version_for(args.ref, args.sha, lock)
     data = {"version": version, "commit": args.sha, "assets": inventory(version)}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")

@@ -273,5 +273,5 @@ jobs:
           else
             extra=()
             if [[ "$VERSION" == *-* ]]; then extra+=(--prerelease); fi
-            gh release create "v${VERSION}" dist/assets/* --repo "$GITHUB_REPOSITORY" --title "AXLR v${VERSION}" "${extra[@]}"
+            gh release create "v${VERSION}" dist/assets/* --repo "$GITHUB_REPOSITORY" --title "AXLR v${VERSION}" --generate-notes "${extra[@]}"
           fi

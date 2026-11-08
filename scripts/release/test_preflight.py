@@ -11,16 +11,14 @@ class PreflightTests(unittest.TestCase):
     def setUp(self):
         self.lock = {"version": 1, "engines": {name: {"version": "v0.1.0", **{target: {"url": f"https://github.com/underpass-ai/{name}/releases/download/v0.1.0/{name}-{target.split('/')[1]}", "sha256": "a" * 64} for target in ("linux/amd64", "linux/arm64")}} for name in ("kmp", "made")}}
 
-    def test_release_version_requires_chart_identity(self):
-        self.assertEqual(preflight.version_for("refs/tags/v1.2.3-rc.1", "a" * 40, ("1.2.3-rc.1", "1.2.3-rc.1"), self.lock), "1.2.3-rc.1")
+    def test_release_version_comes_from_the_tag(self):
+        self.assertEqual(preflight.version_for("refs/tags/v1.2.3-rc.1", "a" * 40, self.lock), "1.2.3-rc.1")
         for ref in ("refs/tags/1.2.3", "refs/tags/v01.2.3", "refs/tags/v1.2", "refs/tags/v1.2.3+metadata", "refs/tags/v1.2.3-rc.01"):
             with self.subTest(ref=ref), self.assertRaises(ValueError):
-                preflight.version_for(ref, "a" * 40, ("1.2.3", "1.2.3"), self.lock)
-        with self.assertRaises(ValueError):
-            preflight.version_for("refs/tags/v1.2.3", "a" * 40, ("1.2.2", "1.2.3"), self.lock)
+                preflight.version_for(ref, "a" * 40, self.lock)
 
     def test_development_version_and_inventory(self):
-        version = preflight.version_for("refs/heads/main", "abcdef0123456789", ("0.1.0", "0.1.0"), self.lock)
+        version = preflight.version_for("refs/heads/main", "abcdef0123456789", self.lock)
         self.assertEqual(version, "0.0.0-dev+abcdef012345")
         assets = preflight.inventory("1.2.3")
         self.assertEqual(len(assets), 15)
@@ -30,7 +28,7 @@ class PreflightTests(unittest.TestCase):
 
     def test_missing_engine_lock_fails(self):
         with self.assertRaises(ValueError):
-            preflight.version_for("refs/heads/main", "abcdef0", ("0.1.0", "0.1.0"), {"engines": {"kmp": {}}})
+            preflight.version_for("refs/heads/main", "abcdef0", {"engines": {"kmp": {}}})
 
 
 if __name__ == "__main__":
