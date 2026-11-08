@@ -10,7 +10,8 @@ FROM --platform=$BUILDPLATFORM python:3.13-slim AS engines
 WORKDIR /src
 COPY distribution/engines.lock.json distribution/fetch_engines.py ./distribution/
 ARG TARGETARCH
-RUN python distribution/fetch_engines.py --lock distribution/engines.lock.json --arch "$TARGETARCH" --out /out
+# The github_token secret, when the build gives one, takes GitHub's authenticated download path (fetch_engines.py).
+RUN --mount=type=secret,id=github_token python distribution/fetch_engines.py --lock distribution/engines.lock.json --arch "$TARGETARCH" --out /out
 
 FROM gcr.io/distroless/cc-debian13:nonroot
 COPY --from=build /out/axlr-serve /usr/local/bin/axlr-serve
