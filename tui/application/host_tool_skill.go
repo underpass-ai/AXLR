@@ -19,6 +19,7 @@ func (u HostToolUseCase) readSkill(ctx context.Context, arguments root.JSONValue
 	if err != nil {
 		return nil, err
 	}
+	reconcileSkillOrigin(args)
 	_, hasPlugin := args["plugin"]
 	_, hasCatalog := args["catalog"]
 	if hasPlugin == hasCatalog {
@@ -57,4 +58,21 @@ func (u HostToolUseCase) readSkill(ctx context.Context, arguments root.JSONValue
 		return reader.ReadCatalogSkill(ctx, catalog, skill, path, offset, limit)
 	}
 	return u.Skills.ReadSkill(ctx, plugin, skill, path, offset, limit)
+}
+
+// reconcileSkillOrigin reads a model that fills every field of the tool, as
+// the Responses models behind a strict schema do: an empty or null origin is
+// no origin, and the same name in plugin and catalog is the catalog's, whose
+// version the session pins. Two different names stay a mistake.
+func reconcileSkillOrigin(args map[string]json.RawMessage) {
+	for _, key := range []string{"plugin", "catalog"} {
+		var name *string
+		if raw, ok := args[key]; ok && json.Unmarshal(raw, &name) == nil && (name == nil || *name == "") {
+			delete(args, key)
+		}
+	}
+	var plugin, catalog string
+	if json.Unmarshal(args["plugin"], &plugin) == nil && json.Unmarshal(args["catalog"], &catalog) == nil && plugin == catalog {
+		delete(args, "plugin")
+	}
 }
