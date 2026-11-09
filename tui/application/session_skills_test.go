@@ -161,6 +161,41 @@ func (p *catalogSkillPages) ReadCatalogSkill(_ context.Context, catalog, skill, 
 	return SkillPage{Catalog: catalog, Version: "1.0.0", Skill: skill, Path: path, Text: "# Catalog page"}, nil
 }
 
+// A model that fills every field of axlr_skill still reaches the skill: an
+// empty or null origin counts as absent, and one name given twice is the
+// catalog's. Two different names are refused.
+func TestHostSkillReadsAModelThatFillsEveryField(t *testing.T) {
+	ctx := context.Background()
+	id, err := domain.NewHostToolIdentity("skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, arguments string
+		wantCatalog     int
+		wantPlugin      int
+		wantError       bool
+	}{
+		{name: "same name in both", arguments: `{"plugin":"sre","catalog":"sre","skill":"oom","path":"SKILL.md","offset_bytes":0,"limit_bytes":4096}`, wantCatalog: 1},
+		{name: "empty plugin", arguments: `{"plugin":"","catalog":"sre","skill":"oom"}`, wantCatalog: 1},
+		{name: "null plugin", arguments: `{"plugin":null,"catalog":"sre","skill":"oom"}`, wantCatalog: 1},
+		{name: "empty catalog", arguments: `{"plugin":"sre","catalog":"","skill":"oom"}`, wantPlugin: 1},
+		{name: "two different names", arguments: `{"plugin":"a","catalog":"sre","skill":"oom"}`, wantError: true},
+		{name: "both empty", arguments: `{"plugin":"","catalog":"","skill":"oom"}`, wantError: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			pages := &catalogSkillPages{}
+			out, err := HostToolUseCase{Skills: pages}.Execute(ctx, domain.Session{}, id, hostJSON(t, tc.arguments))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out.IsError != tc.wantError || len(pages.catalog) != tc.wantCatalog || len(pages.plugin) != tc.wantPlugin {
+				t.Fatalf("%+v catalog=%v plugin=%v", out, pages.catalog, pages.plugin)
+			}
+		})
+	}
+}
+
 // axlr_skill names either plugin or catalog: catalog reads the catalog
 // skill's page through the catalog page port, plugin the plugin's, and a
 // console without catalog skills says so.
