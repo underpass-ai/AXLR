@@ -251,8 +251,13 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			if tool.Identity.Kind == domain.ToolKindLocal && tool.Identity.LocalOperation == "exec" && tolerantSession(*s) {
 				toolArgs, _ = normalizeExec(toolArgs)
 			}
-			// The model's KMP calls run in the session's context (decision D3).
-			outcome, runErr = u.Tools.Execute(ctx, tool.Identity, withSessionContext(*s, tool, toolArgs))
+			if err := checkMemoryWrite(*s, tool, toolArgs); err != nil {
+				// A team's member writes its own about and the team's.
+				outcome = domain.ToolOutcome{Content: root.Text(err.Error()), IsError: true}
+			} else {
+				// The model's KMP calls run in the session's context (decision D3).
+				outcome, runErr = u.Tools.Execute(ctx, tool.Identity, withSessionContext(*s, tool, toolArgs))
+			}
 		}
 		if outcome.IsError || outcome.Uncertain {
 			spanClass = DiagnosticErrorTool

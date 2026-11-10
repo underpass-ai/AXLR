@@ -92,7 +92,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	jsonFlag := flags.Bool("json", false, "with --exec: write the turn's events as JSON lines")
 	modeFlag := flags.String("mode", "", "with --exec: normal, review, writer or research")
 	decideFlag := flags.String("decide", "", "with --session: approve or deny the session's pending call without the console, run the turn to its end and exit as --exec does")
-	policyFlag := flags.String("policy", "", "with --exec or --decide: a JSON file with the execution's policy (docs/runtime-contract.md): its autonomy level and the tools it may use; the session keeps it")
+	policyFlag := flags.String("policy", "", "with --exec or --decide: a JSON file with the execution's policy (docs/runtime-contract.md): its autonomy level, the tools it may use and, as memory.team, the team it shares its memory with; the session keeps it")
 	budgetFlag := flags.String("budget", "", "with --exec or --decide: a JSON file with the execution's budget (docs/runtime-contract.md): seconds, requests, tool_calls and usd, each zero for no limit; the run ends budget_exceeded at the first limit reached and the session keeps the budget")
 	sandboxFlag := flags.String("sandbox", "", "with --exec or --decide: a JSON file with the execution's sandbox (docs/runtime-contract.md): profile none, process or container, egress none, allowlist (with its allow list) or full; local commands and forged tools run under it, a sandbox this host cannot give ends the run before it starts, and the session keeps it")
 	routingFlag := flags.String("routing", "", "with --exec or --decide: a JSON file with the execution's routing (docs/runtime-contract.md): candidate models, objective cost, latency or quality-first, allow_remote_providers, max_context_tokens and max_request_usd; each request goes to the best candidate the constraints allow, a provider failure is taken once by the next, and the session keeps the routing")
@@ -513,6 +513,17 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	// The memory of this launch: the checkout's own store, prepared and
 	// pinned before anything reads the registrations.
 	kmp, hasKMP, kmpErr := prepareKMPStore(ctx, registrations, workspacePath, dataBase, *kmpStoreFlag)
+	if hasKMP && *policyFlag != "" {
+		// A policy that shares the run's memory with a team makes the
+		// store the team's: the run's about is its member's in it. The
+		// policy is read again, and refused if it must be, where the
+		// session takes it.
+		if policy, err := readExecPolicy(*policyFlag); err == nil {
+			if team, shared := policy.MemoryTeam(); shared {
+				kmp.asMemberOf(ctx, team, workspacePath)
+			}
+		}
+	}
 	if hasKMP {
 		line := kmp.line(dataBase) + kmp.memoriesLine()
 		if kmpErr != nil {

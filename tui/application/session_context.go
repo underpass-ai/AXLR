@@ -15,6 +15,9 @@ type sessionContext struct {
 	// AboutIsDefault marks.
 	About          string `json:"about"`
 	AboutIsDefault bool   `json:"about_is_default,omitempty"`
+	// TeamAbout is what the session's memory team holds in common, when
+	// its policy shares its memory with one.
+	TeamAbout string `json:"team_about,omitempty"`
 	// TitleDeferred says why a proposed title was not stored while the about
 	// sent with it was.
 	TitleDeferred string `json:"title_deferred,omitempty"`
