@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -41,6 +42,10 @@ type LocalModel struct {
 	// Thinking false turns the model's thinking off through the chat
 	// template (enable_thinking); workers want short replies.
 	Thinking *bool `json:"thinking,omitempty"`
+	// Effort is the reasoning effort a "responses" entry asks for, such as
+	// "high"; empty leaves the server's default. Two entries may name one
+	// model with different efforts.
+	Effort string `json:"effort,omitempty"`
 }
 
 // Streams reports whether requests to this server are streamed (default).
@@ -145,6 +150,17 @@ func (m LocalModel) validate() error {
 	}
 	if m.ContextTokens < domain.MinimumContextWindow || m.ContextTokens > maxContextTokens {
 		return fmt.Errorf("settings local_models %s context_tokens must be between %d and %d", m.ID, domain.MinimumContextWindow, maxContextTokens)
+	}
+	if m.Effort != "" {
+		if m.Protocol() != APIResponses {
+			return fmt.Errorf("settings local_models %s effort needs api responses", m.ID)
+		}
+		if !slices.Contains(reasoningEfforts, m.Effort) {
+			return fmt.Errorf("settings local_models %s effort must be one of %s", m.ID, strings.Join(reasoningEfforts, ", "))
+		}
+		if m.Thinking != nil && !*m.Thinking {
+			return fmt.Errorf("settings local_models %s sets effort with thinking false", m.ID)
+		}
 	}
 	if m.StreamIdleSeconds < 0 || m.StreamIdleSeconds > 3600 {
 		return fmt.Errorf("settings local_models %s stream_idle_seconds must be between 1 and 3600", m.ID)

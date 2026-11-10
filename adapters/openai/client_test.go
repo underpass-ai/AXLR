@@ -183,6 +183,29 @@ func TestRequestWithoutReasoning(t *testing.T) {
 	}
 }
 
+// An effort goes in the reasoning parameter beside the summary, and not at
+// all when thinking is off.
+func TestRequestNamesTheReasoningEffort(t *testing.T) {
+	off := false
+	for name, tc := range map[string]struct {
+		config ClientConfig
+		want   any
+	}{
+		"effort":       {ClientConfig{Effort: " high "}, map[string]any{"summary": "auto", "effort": "high"}},
+		"default":      {ClientConfig{}, map[string]any{"summary": "auto"}},
+		"thinking off": {ClientConfig{Effort: "high", Thinking: &off}, nil},
+	} {
+		var sent []byte
+		c, _ := testClient(t, tc.config, 200, &trackedStreamBody{Reader: strings.NewReader(sse(toolStream...))}, func(_ *http.Request, raw []byte) { sent = raw })
+		if _, err := c.Stream(context.Background(), simpleRequest(), func(domain.Text) error { return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if got := decode(t, sent)["reasoning"]; !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s: reasoning %v, want %v", name, got, tc.want)
+		}
+	}
+}
+
 func TestStreamTextReasoningAndParallelFunctionCalls(t *testing.T) {
 	body := &trackedStreamBody{Reader: strings.NewReader(sse(toolStream...))}
 	c, calls := testClient(t, ClientConfig{}, 200, body, nil)
