@@ -29,6 +29,7 @@ type Client struct {
 	provider                string
 	host                    string
 	reasoning               bool
+	effort                  string
 	http                    http.Client
 	streamInactivityTimeout time.Duration
 	streamMaxDuration       time.Duration
@@ -70,6 +71,7 @@ func New(config ClientConfig) (*Client, error) {
 		provider:                name,
 		host:                    provider.EndpointHost(target),
 		reasoning:               config.Thinking == nil || *config.Thinking,
+		effort:                  strings.TrimSpace(config.Effort),
 		http:                    client,
 		streamInactivityTimeout: inactivity,
 		streamMaxDuration:       maximum,
@@ -81,7 +83,7 @@ func (c *Client) Complete(ctx context.Context, req domain.CompletionRequest) (do
 	if err := ctx.Err(); err != nil {
 		return domain.CompletionResult{}, err
 	}
-	wire, err := mapRequest(req, c.reasoning)
+	wire, err := mapRequest(req, c.reasoning, c.effort)
 	if err != nil {
 		return domain.CompletionResult{}, err
 	}

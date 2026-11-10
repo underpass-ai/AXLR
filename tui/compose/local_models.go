@@ -94,6 +94,7 @@ func connect(local storage.LocalModel, key string, httpClient *http.Client) (loc
 			StreamInactivityTimeout: local.StreamIdle(),
 			StreamMaxDuration:       local.StreamMax(),
 			Thinking:                local.Thinking,
+			Effort:                  local.Effort,
 		})
 	}
 	return openrouter.New(openrouter.ClientConfig{

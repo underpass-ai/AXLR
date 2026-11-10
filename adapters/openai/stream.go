@@ -23,7 +23,7 @@ func (c *Client) Stream(ctx context.Context, req domain.CompletionRequest, onTex
 	if onText == nil {
 		return domain.CompletionResult{}, errors.New(c.provider + " stream requires a text callback")
 	}
-	wire, err := mapRequest(req, c.reasoning)
+	wire, err := mapRequest(req, c.reasoning, c.effort)
 	if err != nil {
 		return domain.CompletionResult{}, err
 	}

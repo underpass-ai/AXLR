@@ -16,6 +16,9 @@ type ClientConfig struct {
 	// reasoning, for a model without reasoning, which refuses the reasoning
 	// parameter; nil or true keeps the model's reasoning across tool calls.
 	Thinking *bool
+	// Effort is the reasoning effort to ask for, such as "high"; empty
+	// leaves the model's default. Ignored when Thinking is false.
+	Effort string
 	// StreamInactivityTimeout limits the wait for headers or the next SSE
 	// event. Zero uses the five-minute default.
 	StreamInactivityTimeout time.Duration

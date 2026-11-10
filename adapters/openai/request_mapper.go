@@ -10,14 +10,15 @@ import (
 // mapRequest turns the domain request into the Responses API shape: every
 // message an input item, a tool result a function_call_output, and an
 // assistant turn its reasoning items first, replayed as they came, then its
-// text, then its function calls. The request keeps no server state.
-func mapRequest(req domain.CompletionRequest, reasoning bool) (requestDTO, error) {
+// text, then its function calls. The request keeps no server state. effort,
+// when not empty, is the reasoning effort asked for.
+func mapRequest(req domain.CompletionRequest, reasoning bool, effort string) (requestDTO, error) {
 	if err := req.Validate(); err != nil {
 		return requestDTO{}, err
 	}
 	wire := requestDTO{Model: string(req.Model), Input: make([]any, 0, len(req.Messages))}
 	if reasoning {
-		wire.Reasoning = reasoningConfig
+		wire.Reasoning = reasoningConfig(effort)
 		wire.Include = encryptedReasoning
 	}
 	for _, message := range req.Messages {

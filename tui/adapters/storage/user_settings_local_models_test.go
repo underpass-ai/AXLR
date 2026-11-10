@@ -58,6 +58,9 @@ func TestUserSettingsRejectInvalidLocalModels(t *testing.T) {
 		"bad key env":     `{"id":"local/a","url":"http://127.0.0.1:8080/v1","context_tokens":8192,"api_key_env":"MY-KEY"}`,
 		"empty id":        `{"id":"","url":"http://127.0.0.1:8080/v1","context_tokens":8192}`,
 		"idle too long":   `{"id":"local/a","url":"http://127.0.0.1:8080/v1","context_tokens":8192,"stream_idle_seconds":4000}`,
+		"unknown effort":  `{"id":"local/a","url":"http://127.0.0.1:8080/v1","api":"responses","context_tokens":8192,"effort":"huge"}`,
+		"effort on chat":  `{"id":"local/a","url":"http://127.0.0.1:8080/v1","context_tokens":8192,"effort":"high"}`,
+		"effort, no mind": `{"id":"local/a","url":"http://127.0.0.1:8080/v1","api":"responses","context_tokens":8192,"effort":"high","thinking":false}`,
 		"duplicate":       `{"id":"local/a","url":"http://127.0.0.1:8080/v1","context_tokens":8192},{"id":"local/a","url":"http://127.0.0.1:8081/v1","context_tokens":8192}`,
 	} {
 		path := filepath.Join(t.TempDir(), "settings.json")
@@ -200,5 +203,34 @@ func TestLocalModelAPIChoosesTheProtocolAndEndpoint(t *testing.T) {
 	}
 	if _, err := store.Load(context.Background()); err == nil || !strings.Contains(err.Error(), "api must be chat, anthropic or responses") {
 		t.Fatalf("unknown api: %v", err)
+	}
+}
+
+// effort is kept for a responses entry, so two entries can name one model
+// with different efforts.
+func TestLocalModelEffort(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "settings.json")
+	raw := `{"local_models":[
+	 {"id":"codex/sol","url":"http://127.0.0.1:8790/v1","model":"gpt-6.1-sol","api":"responses","context_tokens":272000},
+	 {"id":"codex/sol-high","url":"http://127.0.0.1:8790/v1","model":"gpt-6.1-sol","api":"responses","context_tokens":272000,"effort":"high"}]}`
+	if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	store, _ := NewUserSettingsStore(path, DefaultUserSettings())
+	got, err := store.Load(context.Background())
+	if err != nil || len(got.LocalModels) != 2 || got.LocalModels[0].Effort != "" || got.LocalModels[1].Effort != "high" {
+		t.Fatalf("settings %+v, %v", got.LocalModels, err)
+	}
+	for name, local := range map[string]string{
+		"unknown":      `"api":"responses","effort":"huge"`,
+		"chat":         `"effort":"high"`,
+		"thinking off": `"api":"responses","effort":"high","thinking":false`,
+	} {
+		if err := os.WriteFile(path, []byte(`{"local_models":[{"id":"x","url":"http://127.0.0.1:8080/v1","context_tokens":8192,`+local+`}]}`), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := store.Load(context.Background()); err == nil || !strings.Contains(err.Error(), "effort") {
+			t.Errorf("%s: %v", name, err)
+		}
 	}
 }
