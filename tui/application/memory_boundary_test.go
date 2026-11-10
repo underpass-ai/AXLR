@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -173,5 +174,164 @@ func TestBoundSessionSettlesAPreferenceInItsOwnAbout(t *testing.T) {
 	project := "project:" + filepath.Base(string(s.Export().Workspace))
 	if len(journal.settled) != 1 || journal.settled[0].About != project || journal.settled[0].Kind != "preference" {
 		t.Fatalf("%+v", journal.settled)
+	}
+}
+
+// teamSession is a bot's session whose policy shares its memory with the
+// team qa.
+func teamSession(t *testing.T, begun bool) domain.Session {
+	t.Helper()
+	s := boundSession(t, begun)
+	policy, _ := s.Policy()
+	shared, err := policy.WithMemoryTeam("qa")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetPolicy(shared); err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// A team's member reads every about of the team's store and writes its
+// own, the team's and its ws: only: on 10 November 2026 each QA bot had a
+// store to itself, and qa-jefe's weekly plan never saw the charters
+// qa-explorador recorded.
+func TestTeamMemberReadsItsTeamAndWritesItsOwnAndTheTeams(t *testing.T) {
+	s := teamSession(t, true)
+	state := s.Export()
+	member := "project:qa." + filepath.Base(string(state.Workspace))
+	own := "ws:" + string(state.ID)
+	recorder := &rememberRecorder{answer: map[string]any{"accepted": true}}
+	recall := &recallStub{texts: map[string]string{"project:qa.qa-explorador": "- charter kmp/3 ran"}}
+	u := HostToolUseCase{Memory: recorder, Recall: recall, Labels: &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{}}}
+	remember := func(about string) domain.ToolOutcome {
+		arguments := `{"kind":"observation","text":"x","evidence":"e"}`
+		if about != "" {
+			arguments = `{"kind":"observation","text":"x","evidence":"e","about":"` + about + `"}`
+		}
+		outcome, err := u.Execute(context.Background(), s, rememberIdentity(t), mustObject(t, arguments))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return outcome
+	}
+	for _, about := range []string{member, "project:qa", own} {
+		if outcome := remember(about); outcome.IsError {
+			t.Fatalf("write to %s refused: %s", about, outcome.Content)
+		}
+	}
+	// A write that names no about lands in the member's own.
+	if outcome := remember(""); outcome.IsError || recorder.requests[len(recorder.requests)-1].About != member {
+		t.Fatalf("default about: %+v %+v", outcome, recorder.requests[len(recorder.requests)-1])
+	}
+	writes := len(recorder.requests)
+	for _, about := range []string{"project:qa.qa-explorador", "project:dev", "project:" + filepath.Base(string(state.Workspace)), "user:gx10a"} {
+		outcome := remember(about)
+		if !outcome.IsError || !strings.Contains(string(outcome.Content), "its own abouts and its team's ("+member+", project:qa, "+own+")") || !strings.Contains(string(outcome.Content), about+" is a teammate's or another's") {
+			t.Fatalf("write to %s: %+v", about, outcome)
+		}
+	}
+	if len(recorder.requests) != writes {
+		t.Fatalf("KMP took a write to another's about: %d", len(recorder.requests)-writes)
+	}
+	// A teammate's about is read as any in the store.
+	outcome, err := u.Execute(context.Background(), s, recallIdentity(t), mustObject(t, `{"about":"project:qa.qa-explorador","mode":"wake"}`))
+	if err != nil || outcome.IsError || !strings.Contains(string(outcome.Content), "charter kmp/3 ran") {
+		t.Fatalf("read of a teammate's about: %+v %v", outcome, err)
+	}
+	// The model is told the team's about beside its own.
+	value := sessionContextValue(s, domain.SessionLabel{})
+	if value.About != member || value.TeamAbout != "project:qa" {
+		t.Fatalf("session context %+v", value)
+	}
+	if plain := sessionContextValue(boundSession(t, true), domain.SessionLabel{}); plain.TeamAbout != "" {
+		t.Fatalf("a bot with no team is told of one: %+v", plain)
+	}
+}
+
+// The engine's own write, called by the model, is held to the same
+// abouts in a team's store; in a store the bot has to itself it goes as
+// it came.
+func TestTeamMemberCannotWriteATeammatesAboutThroughTheEngine(t *testing.T) {
+	s := teamSession(t, true)
+	state := s.Export()
+	member := "project:qa." + filepath.Base(string(state.Workspace))
+	tool := func(name string) domain.AvailableTool {
+		ref := root.PluginRef{PluginID: "kmp", ToolName: root.PluginToolName(name)}
+		identity, _ := domain.NewPluginToolIdentity(ref)
+		return domain.AvailableTool{Identity: identity, Surface: engineSurface(ref)}
+	}
+	write := tool("kmp_write_memory")
+	for _, arguments := range []string{
+		`{"about":"` + member + `","memories":[]}`,
+		`{"about":"project:qa","memories":[]}`,
+		`{"about":"ws:` + string(state.ID) + `","memories":[]}`,
+		`{"continuation":"c_1"}`,
+	} {
+		if err := checkMemoryWrite(s, write, mustObject(t, arguments)); err != nil {
+			t.Fatalf("%s refused: %v", arguments, err)
+		}
+	}
+	for arguments, want := range map[string]string{
+		`{"about":"project:qa.qa-explorador","memories":[]}`: "project:qa.qa-explorador is a teammate's or another's",
+		`{"about":"project:dev","memories":[]}`:              "project:dev is a teammate's or another's",
+		`{"memories":[]}`:                                    "name one of them as about",
+		`{"about":7}`:                                        "not an object with a text about",
+	} {
+		if err := checkMemoryWrite(s, write, mustObject(t, arguments)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("%s: %v", arguments, err)
+		}
+	}
+	// Reads and other tools are not the write.
+	if err := checkMemoryWrite(s, tool("kmp_ask"), mustObject(t, `{"about":"project:qa.qa-explorador"}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := checkMemoryWrite(s, turnTools()[0], mustObject(t, `{"about":"project:dev"}`)); err != nil {
+		t.Fatal(err)
+	}
+	// Without a team the store is the bot's alone.
+	if err := checkMemoryWrite(boundSession(t, true), write, mustObject(t, `{"about":"project:anything","memories":[]}`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A member's first prompt wakes its own about and the team's, and each
+// member registers its own agent in the team's store, so the store says
+// which bot wrote a memory.
+func TestTeamMemberWakesTheTeamAndRegistersItsOwnAgent(t *testing.T) {
+	s := teamSession(t, false)
+	state := s.Export()
+	name := filepath.Base(string(state.Workspace))
+	recall := &recallStub{texts: map[string]string{"project:qa": "- the weekly plan covers kmp and made"}}
+	c := recallCeremony(t, recall)
+	guide, agents := &guideStub{}, &agentsStub{agents: map[string]string{}}
+	c.Identity = identityFor(guide, agents)
+	c.Identity.Recall = recall
+	c.Store = &listingStore{}
+	note := c.Recall(context.Background(), &s, "plan the week")
+	var abouts []string
+	for _, request := range recall.requests {
+		abouts = append(abouts, request.About)
+	}
+	if got := strings.Join(abouts, " "); got != "project:qa."+name+" project:qa" {
+		t.Fatalf("woke %q", got)
+	}
+	if !strings.Contains(note, "Memory of project:qa:\n- the weekly plan covers kmp and made") {
+		t.Fatalf("note %q", note)
+	}
+	key := "axlr:install-1:" + name
+	if guide.calls[0] != "register "+key || agents.agents["/repo/.kernel#"+name] != "agent_"+key {
+		t.Fatalf("calls %v agents %v", guide.calls, agents.agents)
+	}
+	if instance, _ := s.Instance(); instance.MemoryAgent != domain.MemoryAgentID("agent_"+key) {
+		t.Fatalf("instance %+v", instance)
+	}
+	// A bot with no team keeps the store's one agent.
+	alone := boundSession(t, false)
+	guide.calls = nil
+	c.Recall(context.Background(), &alone, "plan the week")
+	if guide.calls[0] != "register axlr:install-1" || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" {
+		t.Fatalf("calls %v agents %v", guide.calls, agents.agents)
 	}
 }

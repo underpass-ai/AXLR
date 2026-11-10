@@ -36,7 +36,8 @@ const recalledIntentBytes = 600
 // topic last woken. It opens the session's KMP context first, so the wake
 // runs in it. The note is bounded as a ceremony's recall is (2 KiB; 1 KiB
 // under the compact profile), shared by the abouts in order: the project's,
-// the person's, and the session's own when the session is resumed.
+// the team's for a member of one, the person's, and the session's own when
+// the session is resumed.
 func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt string) string {
 	if !c.drives(*s) || c.Identity == nil || c.Identity.Recall == nil {
 		return ""
@@ -60,6 +61,10 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 	state := s.Export()
 	abouts := []string{c.about(ctx, state)}
 	bound := memoryBound(*s)
+	if team, shared := memoryTeam(state); shared {
+		// A team's member starts from what the team holds in common too.
+		abouts = append(abouts, teamAbout(team))
+	}
 	if c.Identity.UserAbout != "" && !bound {
 		// A bot's prompt never carries the person's memory.
 		abouts = append(abouts, c.Identity.UserAbout)
