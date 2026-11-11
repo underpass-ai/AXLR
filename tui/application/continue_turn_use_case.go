@@ -244,9 +244,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 		guidance.Content += root.Text(text)
 	}
-	if u.PluginGuidance != nil && !focused {
+	tools := SessionTools(*session, snapshot)
+	if u.PluginGuidance != nil && !focused && hasTool(tools, HostSkillName) {
 		// The skill index lists the session's pinned catalog skills, or
-		// the newest installed.
+		// the newest installed, and tells the model to open them with
+		// axlr_skill: a session not offered that tool does not get it.
 		pluginText, err := u.PluginGuidance(WithSessionSkills(ctx, *session))
 		if err != nil {
 			contextSpan.End(DiagnosticErrorInvalidState)
@@ -254,7 +256,6 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 		guidance.Content = root.Text(string(guidance.Content) + pluginText)
 	}
-	tools := SessionTools(*session, snapshot)
 	if !u.Judge.offersTool() {
 		// A session that once had Jev keeps axlr_judge in its snapshot; it is
 		// absent from the request while Jev is off.
