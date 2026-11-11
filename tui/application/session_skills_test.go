@@ -146,6 +146,8 @@ func TestSessionSkillReaderServesThePinnedVersions(t *testing.T) {
 // recording each request.
 type catalogSkillPages struct {
 	plugin, catalog []string
+	// noCatalog makes every catalog read fail, as for a plugin's skill.
+	noCatalog bool
 }
 
 func (p *catalogSkillPages) ReadSkill(_ context.Context, plugin, skill, path string, offset, limit int) (SkillPage, error) {
@@ -155,6 +157,9 @@ func (p *catalogSkillPages) ReadSkill(_ context.Context, plugin, skill, path str
 
 func (p *catalogSkillPages) ReadCatalogSkill(_ context.Context, catalog, skill, path string, offset, limit int) (SkillPage, error) {
 	p.catalog = append(p.catalog, catalog+"/"+skill+"/"+path)
+	if p.noCatalog {
+		return SkillPage{}, errors.New("this execution's skills do not include " + skill + " of catalog " + catalog)
+	}
 	if offset != 0 || limit != 4096 && limit != 100 {
 		return SkillPage{}, errors.New("unexpected range")
 	}
@@ -162,8 +167,9 @@ func (p *catalogSkillPages) ReadCatalogSkill(_ context.Context, catalog, skill, 
 }
 
 // A model that fills every field of axlr_skill still reaches the skill: an
-// empty or null origin counts as absent, and one name given twice is the
-// catalog's. Two different names are refused.
+// empty or null origin counts as absent; with both named, the catalog's skill
+// is read when there is one, else the plugin's (the console's own skills, such
+// as axlr/axlr-publish-tool, are plugin skills).
 func TestHostSkillReadsAModelThatFillsEveryField(t *testing.T) {
 	ctx := context.Background()
 	id, err := domain.NewHostToolIdentity("skill")
@@ -172,6 +178,7 @@ func TestHostSkillReadsAModelThatFillsEveryField(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name, arguments string
+		noCatalog       bool
 		wantCatalog     int
 		wantPlugin      int
 		wantError       bool
@@ -180,11 +187,15 @@ func TestHostSkillReadsAModelThatFillsEveryField(t *testing.T) {
 		{name: "empty plugin", arguments: `{"plugin":"","catalog":"sre","skill":"oom"}`, wantCatalog: 1},
 		{name: "null plugin", arguments: `{"plugin":null,"catalog":"sre","skill":"oom"}`, wantCatalog: 1},
 		{name: "empty catalog", arguments: `{"plugin":"sre","catalog":"","skill":"oom"}`, wantPlugin: 1},
-		{name: "two different names", arguments: `{"plugin":"a","catalog":"sre","skill":"oom"}`, wantError: true},
+		{name: "two different names, the catalog has it", arguments: `{"plugin":"a","catalog":"sre","skill":"oom"}`, wantCatalog: 1},
 		{name: "both empty", arguments: `{"plugin":"","catalog":"","skill":"oom"}`, wantError: true},
+		// seen on 11 Nov 2026 with gpt-6.1-sol: the console's skill, named twice
+		{name: "same name, a plugin skill", arguments: `{"plugin":"axlr","catalog":"axlr","skill":"axlr-publish-tool","path":"SKILL.md","offset_bytes":0,"limit_bytes":4096}`, noCatalog: true, wantCatalog: 1, wantPlugin: 1},
+		{name: "placeholder catalog", arguments: `{"plugin":"axlr","catalog":"_","skill":"axlr-publish-tool"}`, noCatalog: true, wantPlugin: 1},
+		{name: "invented catalog", arguments: `{"plugin":"axlr","catalog":"execution","skill":"axlr-publish-tool"}`, noCatalog: true, wantCatalog: 1, wantPlugin: 1},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			pages := &catalogSkillPages{}
+			pages := &catalogSkillPages{noCatalog: tc.noCatalog}
 			out, err := HostToolUseCase{Skills: pages}.Execute(ctx, domain.Session{}, id, hostJSON(t, tc.arguments))
 			if err != nil {
 				t.Fatal(err)
@@ -229,7 +240,6 @@ func TestHostSkillRoutesCatalogSkills(t *testing.T) {
 	}
 	for _, args := range []string{
 		`{"skill":"incident_triage"}`,
-		`{"plugin":"visualization","catalog":"axlr","skill":"incident_triage"}`,
 		`{"catalog":"ACME","skill":"incident_triage"}`,
 		`{"catalog":"../axlr","skill":"incident_triage"}`,
 		`{"catalog":7,"skill":"incident_triage"}`,
