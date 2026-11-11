@@ -23,6 +23,9 @@ func TestSessionStoreKeepsThePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if policy, err = policy.WithMemoryTeam("qa"); err != nil {
+		t.Fatal(err)
+	}
 	if err := session.SetPolicy(policy); err != nil {
 		t.Fatal(err)
 	}
@@ -40,6 +43,9 @@ func TestSessionStoreKeepsThePolicy(t *testing.T) {
 	kept, has := loaded.Policy()
 	if !has || kept.Level() != domain.PolicyObserve || len(kept.Allow()) != 1 || kept.Allow()[0].Arguments["path"] != "logs/**" || len(kept.Deny()) != 1 {
 		t.Fatalf("%+v", kept)
+	}
+	if team, shared := kept.MemoryTeam(); !shared || team != "qa" {
+		t.Fatalf("the memory team was not kept: %+v", kept)
 	}
 	loaded.ClearPolicy()
 	if err := store.Save(ctx, loaded); err != nil {

@@ -126,6 +126,26 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 	return store, true, nil
 }
 
+// asMemberOf makes the launch's about the member's own in its team's
+// store (application.MemberAbout) and counts what the store holds under
+// it, so the startup line names the about the run writes.
+func (s *kmpStore) asMemberOf(ctx context.Context, team domain.MemoryTeam, workspace string) {
+	about := application.MemberAbout(team, domain.Workspace(workspace))
+	if about == "" {
+		return
+	}
+	s.About, s.FromBundle, s.FromRoot = about, false, false
+	s.Memories, s.Counted = 0, false
+	if s.Count == nil {
+		return
+	}
+	if count, known, err := s.Count(ctx, about); err == nil && known {
+		s.Memories, s.Counted = count, true
+	} else if err == nil {
+		s.Counted = true // listed, nothing under the about yet
+	}
+}
+
 // memoriesLine is the startup line's tail: how much the store holds
 // under the about, or that the project is new (decision J2).
 func (s kmpStore) memoriesLine() string {

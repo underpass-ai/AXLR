@@ -12,4 +12,8 @@ type sessionGuidance struct {
 	ID        domain.SessionID `json:"session_id"`
 	Workspace domain.Workspace `json:"workspace"`
 	About     string           `json:"about"`
+	// TeamAbout is what the session's memory team holds in common, for a
+	// session whose policy shares its memory with one: it may write it,
+	// and read its teammates' abouts beside it.
+	TeamAbout string `json:"team_about,omitempty"`
 }

@@ -78,8 +78,16 @@ func memoryAbout(ctx context.Context, labels SessionLabelsPort, state domain.Ses
 }
 
 // defaultAbout is ProjectAbout, or the session's own about where the
-// workspace gives none.
+// workspace gives none. A session whose policy shares its memory with a
+// team has its member's about in the team's store instead
+// (memory_boundary.go).
 func defaultAbout(state domain.SessionState) string {
+	if team, shared := memoryTeam(state); shared {
+		if about := MemberAbout(team, state.Workspace); about != "" {
+			return about
+		}
+		return sessionAbout(state.ID)
+	}
 	if about := ProjectAbout(state.Workspace); about != "" {
 		return about
 	}

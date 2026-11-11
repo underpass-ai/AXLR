@@ -13,7 +13,9 @@ import (
 // lifecycle integration design): one agent per store, registered with the
 // install's key, and one context per session, opened at its first prompt
 // and passed by the console on every memory call the session makes. The
-// model never registers, never sees an id and never opens a context.
+// model never registers, never sees an id and never opens a context. In a
+// team's store each member has its own agent, so the store says which
+// bot wrote a memory: the member's name follows the install's key.
 
 // contextKey names the session's context; the same key reopens the same
 // context when the sidecar was lost.
@@ -33,7 +35,11 @@ func (c *SessionCeremony) openContext(ctx context.Context, s *domain.Session) {
 		return
 	}
 	id := s.ID()
-	agent, known := c.Identity.Agents.Agent(ctx, c.Identity.Store)
+	store, registrationKey := c.Identity.Store, c.Identity.RegistrationKey
+	if member := teamMember(s.Export()); member != "" {
+		store, registrationKey = store+"#"+member, registrationKey+":"+member
+	}
+	agent, known := c.Identity.Agents.Agent(ctx, store)
 	var result GuideResult
 	var err error
 	if known {
@@ -44,16 +50,16 @@ func (c *SessionCeremony) openContext(ctx context.Context, s *domain.Session) {
 		}
 	}
 	if !known {
-		result, err = c.Identity.Guide.Guide(ctx, c.Identity.RegistrationKey, "", "")
+		result, err = c.Identity.Guide.Guide(ctx, registrationKey, "", "")
 		if err != nil {
 			c.log("memory agent registration: %v", err)
 			return
 		}
 		agent = result.AgentID
-		if err := c.Identity.Agents.Remember(ctx, c.Identity.Store, agent, c.Identity.RegistrationKey); err != nil {
+		if err := c.Identity.Agents.Remember(ctx, store, agent, registrationKey); err != nil {
 			c.log("memory agent registry: %v", err)
 		}
-		c.log("memory agent %s registered in %s", agent, c.Identity.Store)
+		c.log("memory agent %s registered in %s", agent, store)
 		// The registration's context is the agent's, not this session's.
 		result, err = c.Identity.Guide.Guide(ctx, "", agent, contextKey(id))
 		if err != nil {

@@ -551,6 +551,13 @@ components:
           properties:
             allow: {type: array, items: {$ref: '#/components/schemas/ExecutionPolicyRule'}}
             deny: {type: array, items: {$ref: '#/components/schemas/ExecutionPolicyRule'}}
+        memory:
+          type: object
+          description: Whom the execution shares its memory with; absent when its memory is its own alone.
+          additionalProperties: false
+          required: [team]
+          properties:
+            team: {type: string, minLength: 1, maxLength: 64, description: "The team whose memory store the execution opens: it reads every about in it and writes project:<team>.<workspace name>, project:<team> and its ws: about. No whitespace, control character, '.', ':', '/' or '\\'."}
     ExecutionPolicyRule:
       type: object
       additionalProperties: false
