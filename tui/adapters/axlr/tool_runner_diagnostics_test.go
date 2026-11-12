@@ -18,7 +18,7 @@ func TestToolRunnerRecordsBalancedExecutionWithDefiniteFailureAndCancellation(t 
 		name   string
 		cancel bool
 		class  application.DiagnosticErrorClass
-	}{{"definite-error", false, application.DiagnosticErrorTool}, {"cancelled", true, application.DiagnosticErrorCancelled}} {
+	}{{"definite-error", false, application.DiagnosticErrorToolResult}, {"cancelled", true, application.DiagnosticErrorCancelled}} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := t.TempDir()
 			exe, err := runtime.New(runtime.Config{Root: dir})

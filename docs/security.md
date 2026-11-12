@@ -27,7 +27,7 @@ AXLR has no product telemetry: no usage statistics, crash reports or analytics a
 | Sessions (the full transcript) | `$XDG_STATE_HOME/axlr/sessions` (fallback `~/.local/state/axlr/sessions`) | Until you delete the session (`Ctrl+O`, `Ctrl+Del`) |
 | Timing traces (no prompts, responses, tool arguments or credentials) | `$XDG_STATE_HOME/axlr/logs` | Deleted after `trace_retention_days` (default 30) |
 | Request and response payloads | Beside the trace, only with `--trace-payloads` or `trace_payloads: true` | Off by default; redacted and deleted with the traces |
-| App log (errors and plugin events, secrets redacted) | `logs/axlr.log` | Rotated at 4 MiB, one previous file kept |
+| App log (errors, plugin events and a line per tool call with a failed call's answer; no arguments, prompts or model output; secrets redacted) | `logs/axlr.log` | Rotated at 4 MiB, one previous file kept |
 | Service journal, audit records and execution receipts (`axlr-serve`) | The service's state directory | Kept until the operator removes them |
 
 Every file is owner-only (`0600`) in owner-only directories (`0700`). [Diagnostics and privacy](console.md#diagnostics-and-privacy) has the exact rules.

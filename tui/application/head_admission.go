@@ -26,6 +26,8 @@ type headAdmission struct {
 	// effect it approves without a card runs without a why (whyError).
 	// nil refuses every call without one.
 	Approval ToolApprovalPolicyPort
+	// ToolCalls hears of every call the head refuses; nil records none.
+	ToolCalls ToolCallLogPort
 }
 
 // whyError refuses a side effect without a why, unless the policy approves

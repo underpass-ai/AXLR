@@ -108,14 +108,53 @@ func TestToolResolutionLifecycleIncludesDefiniteToolError(t *testing.T) {
 	if err := u.resolveOne(context.Background(), &s, "a", domain.DecisionApprove, nil); err != nil {
 		t.Fatal(err)
 	}
-	start, _ := lifecyclePair(t, trace, DiagnosticActionToolResolve, 0, DiagnosticErrorTool)
+	// A call that answered with a failure is a tool result, not the
+	// machinery's failure.
+	start, _ := lifecyclePair(t, trace, DiagnosticActionToolResolve, 0, DiagnosticErrorToolResult)
 	if start.SpanID != resolveID {
 		t.Fatal("tool port lost resolution span")
 	}
 	for _, e := range trace.events {
-		if e.Stage == DiagnosticToolCompleted && (e.SpanID != resolveID || e.ErrorClass != DiagnosticErrorTool) {
+		if e.Stage == DiagnosticToolCompleted && (e.SpanID != resolveID || e.ErrorClass != DiagnosticErrorToolResult) {
 			t.Fatal("definite MCP error mislabeled", e)
 		}
+	}
+}
+
+// A call the machinery failed (an error from the port, an uncertain
+// effect) stays "tool", apart from a failed result.
+func TestToolCompletionKeepsMachineryFailuresApartFromFailedResults(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		outcome domain.ToolOutcome
+		err     error
+		class   DiagnosticErrorClass
+	}{
+		{"ok", domain.ToolOutcome{Content: "fine"}, nil, DiagnosticErrorNone},
+		{"failed result", domain.ToolOutcome{Content: "refused", IsError: true}, nil, DiagnosticErrorToolResult},
+		{"uncertain", domain.ToolOutcome{Content: "lost reply", IsError: true, Uncertain: true}, nil, DiagnosticErrorTool},
+		{"port error", domain.ToolOutcome{}, errors.New("transport closed"), DiagnosticErrorTool},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			trace := &diagnosticCollector{}
+			s := queued(t, call("a", "read"))
+			u := ResolveToolUseCase{Diagnostics: trace, Store: &memoryStore{}, Tools: executionFunc(func(context.Context, domain.ToolIdentity, root.JSONValue) (domain.ToolOutcome, error) {
+				return tc.outcome, tc.err
+			})}
+			_ = u.resolveOne(context.Background(), &s, "a", domain.DecisionApprove, nil)
+			completed := 0
+			for _, e := range trace.events {
+				if e.Stage == DiagnosticToolCompleted {
+					completed++
+					if e.ErrorClass != tc.class {
+						t.Fatalf("tool_completed class %q, want %q", e.ErrorClass, tc.class)
+					}
+				}
+			}
+			if completed != 1 {
+				t.Fatalf("%d tool_completed records", completed)
+			}
+		})
 	}
 }
 

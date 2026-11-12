@@ -40,8 +40,12 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 	responseClass := application.DiagnosticErrorNone
 	defer func() {
 		class := responseClass
-		if class == application.DiagnosticErrorNone && (returnErr != nil || out.IsError || out.Uncertain) {
+		if class == application.DiagnosticErrorNone && (returnErr != nil || out.Uncertain) {
 			class = application.DiagnosticErrorTool
+		} else if class == application.DiagnosticErrorNone && out.IsError {
+			// The call answered with a failure (a refusal, an MCP
+			// is_error, a non-zero exit): not the machinery's.
+			class = application.DiagnosticErrorToolResult
 		}
 		if errors.Is(ctx.Err(), context.Canceled) {
 			class = application.DiagnosticErrorCancelled
@@ -76,6 +80,8 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 		responseClass = application.DiagnosticErrorTimeout
 	} else if response.Status == "cancelled" {
 		responseClass = application.DiagnosticErrorCancelled
+	} else if response.Error != nil && response.Error.Code == "internal_error" {
+		responseClass = application.DiagnosticErrorTool
 	}
 	out = domain.ToolOutcome{IsError: response.Status != "completed", Uncertain: response.Status == "timed_out" || response.Status == "cancelled"}
 	out.Change = completedChange(change, response)

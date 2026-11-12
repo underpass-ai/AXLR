@@ -75,6 +75,9 @@ type ContinueTurnUseCase struct {
 	// Logs reads the console's app log for axlr_logs; nil offers no
 	// axlr_logs.
 	Logs AppLogPort
+	// ToolCalls hears of every finished tool call, for the app log; nil
+	// records none.
+	ToolCalls ToolCallLogPort
 	// Deliverables reads and writes the workspace's deliverables for
 	// axlr_deliver; nil offers no axlr_deliver.
 	Deliverables DeliverablesPort

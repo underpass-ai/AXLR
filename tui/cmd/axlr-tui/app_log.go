@@ -184,8 +184,15 @@ func logReader(log *diagnostics.AppLog) application.AppLogPort {
 	return appLogReader{log: log}
 }
 
-// failureLogger records the tool calls that failed inside AXLR, nil
-// without an app log.
+// toolCallLog records every finished tool call, nil without an app log
+// (never a non-nil port around a nil log).
+func toolCallLog(log *diagnostics.AppLog) application.ToolCallLogPort {
+	if log == nil {
+		return nil
+	}
+	return diagnostics.ToolCallLog{Log: log}
+}
+
 // ceremonyTrouble marks a session-lifecycle line that reports a failure:
 // on 14 October 2026 MADE refusals and unavailable instances were logged
 // at INFO, so `axlr-tui logs --level WARN` hid them.
@@ -206,6 +213,8 @@ func leveledLogger(log *diagnostics.AppLog) func(string) {
 	}
 }
 
+// failureLogger records the tool calls that failed inside AXLR, nil
+// without an app log.
 func failureLogger(log *diagnostics.AppLog) func(string) {
 	if log == nil {
 		return nil

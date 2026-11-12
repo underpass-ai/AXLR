@@ -850,6 +850,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, Language: string(locale)}
 	continuation.Logs = logReader(appLog)
+	continuation.ToolCalls = toolCallLog(appLog)
 	// The usage ledger, the context cap and its successors, forged and
 	// catalog tools and the memory tools: what the service equips too.
 	_, hasMemoryTools := activeEngineCommands["kmp"]
