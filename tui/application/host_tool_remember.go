@@ -82,7 +82,13 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	if err := json.Unmarshal(arguments.Bytes(), &args); err != nil {
 		return nil, errors.New("axlr_remember arguments must match its schema")
 	}
-	if args.Continuation != "" {
+	// A write with no links never comes back needs_review, so it never has
+	// a continuation to send: a strict-schema model (Codex, 12 November 2026)
+	// fills every field and sent {"kind":…,"text":…,"links":[],
+	// "continuation":"write"}, refused each time. Such a write is new, and
+	// the filled continuation is left out.
+	fresh := args.Kind != "" && strings.TrimSpace(args.Text) != "" && len(args.Links) == 0
+	if args.Continuation != "" && !fresh {
 		if args.Kind != "" || args.Text != "" || (len(args.Evidence) != 0 && string(args.Evidence) != "null") || len(args.Links) != 0 || args.About != "" {
 			return nil, errors.New("send the continuation alone to commit a reviewed write")
 		}

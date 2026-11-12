@@ -127,7 +127,16 @@ func TestHostRememberBuildsTheRequestFromTheSession(t *testing.T) {
 	if _, err := run(`{"continuation":"read_1"}`); err != nil || recorder.requests[3].Continuation != "read_1" || recorder.requests[3].About != "" {
 		t.Fatalf("continuation %+v %v", recorder.requests[3], err)
 	}
-	for _, refused := range []string{`{"continuation":"read_1","text":"x"}`, `{"kind":"decision","text":"no evidence"}`} {
+	// A strict-schema model fills every field: a new write with no links
+	// carries a continuation it made up, which is left out (12 November
+	// 2026, gpt-6.1 through the Responses API).
+	if outcome, err := run(`{"kind":"observation","text":"Smoke 10/10.","summary_en":"Smoke 10/10.","evidence":"qa-smoke ok","links":[],"about":"","continuation":"write"}`); err != nil || outcome.IsError {
+		t.Fatalf("filled continuation: %+v %v", outcome, err)
+	}
+	if filled := recorder.requests[4]; filled.Continuation != "" || filled.Kind != "observation" || filled.About != "project:AXLR" {
+		t.Fatalf("filled continuation sent as %+v", filled)
+	}
+	for _, refused := range []string{`{"continuation":"read_1","text":"x"}`, `{"kind":"decision","text":"no evidence"}`, `{"kind":"decision","text":"t","evidence":"e","links":[{"ref":"r","rel":"supports","why":"w"}],"continuation":"read_1"}`} {
 		if outcome, _ := run(refused); !outcome.IsError {
 			t.Fatalf("accepted %s", refused)
 		}
