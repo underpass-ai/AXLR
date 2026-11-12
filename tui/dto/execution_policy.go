@@ -6,6 +6,8 @@ package dto
 type ExecutionPolicy struct {
 	Level string               `json:"level"`
 	Tools ExecutionPolicyTools `json:"tools"`
+	// Memory is absent when the execution's memory is its own alone.
+	Memory *ExecutionPolicyMemory `json:"memory,omitempty"`
 }
 
 // ExecutionPolicyTools lists the rules of a policy; an absent allow list

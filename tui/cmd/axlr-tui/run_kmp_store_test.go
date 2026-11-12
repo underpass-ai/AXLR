@@ -218,3 +218,34 @@ func TestPrepareKMPStoreOpensTheStoreGivenOverThePinAndTheCheckout(t *testing.T)
 		}
 	}
 }
+
+// A run whose policy shares its memory with a team writes its member's
+// about in the team's store, and the startup line names that one: on 10
+// November 2026 the line of qa-jefe's run in the store of team qa said
+// "about project:qa-jefe", the about of a store it no longer opens.
+func TestALaunchUnderATeamsPolicyNamesItsMembersAbout(t *testing.T) {
+	asked := ""
+	store := kmpStore{About: "project:qa-jefe", FromRoot: true, Memories: 9, Counted: true, Count: func(_ context.Context, about string) (int, bool, error) {
+		asked = about
+		return 2, true, nil
+	}}
+	store.asMemberOf(context.Background(), "qa", "/state/workspaces/qa-jefe")
+	if store.About != "project:qa.qa-jefe" || asked != "project:qa.qa-jefe" || store.Memories != 2 || !store.Counted || store.FromRoot {
+		t.Fatalf("%+v (asked %q)", store, asked)
+	}
+	if line := store.memoriesLine(); line != "; 2 memories for project:qa.qa-jefe" {
+		t.Fatalf("line %q", line)
+	}
+	// Nothing under the about yet is a new project, not the old count.
+	store.Count = func(context.Context, string) (int, bool, error) { return 0, false, nil }
+	store.asMemberOf(context.Background(), "qa", "/state/workspaces/qa-jefe")
+	if store.Memories != 0 || !store.Counted {
+		t.Fatalf("%+v", store)
+	}
+	// A workspace with no usable name keeps the about it had.
+	rootless := kmpStore{About: "project:x"}
+	rootless.asMemberOf(context.Background(), "qa", "/")
+	if rootless.About != "project:x" {
+		t.Fatalf("%+v", rootless)
+	}
+}

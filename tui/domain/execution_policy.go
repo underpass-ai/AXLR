@@ -19,6 +19,9 @@ type ExecutionPolicy struct {
 	level PolicyLevel
 	allow []PolicyRule
 	deny  []PolicyRule
+	// memoryTeam is the team the execution shares its memory with; empty
+	// when its memory is its own alone.
+	memoryTeam MemoryTeam
 }
 
 func NewExecutionPolicy(level PolicyLevel, allow, deny []PolicyRule) (ExecutionPolicy, error) {
@@ -41,7 +44,27 @@ func (p ExecutionPolicy) Validate() error {
 			return err
 		}
 	}
+	if p.memoryTeam != "" {
+		return p.memoryTeam.Validate()
+	}
 	return nil
+}
+
+// WithMemoryTeam is the policy with the execution's memory shared with a
+// team: the store the program gave is the team's, the execution reads all
+// of it and writes its own about and the team's.
+func (p ExecutionPolicy) WithMemoryTeam(team MemoryTeam) (ExecutionPolicy, error) {
+	if err := team.Validate(); err != nil {
+		return ExecutionPolicy{}, err
+	}
+	shared := p.clone()
+	shared.memoryTeam = team
+	return shared, nil
+}
+
+// MemoryTeam is the team the execution shares its memory with, if any.
+func (p ExecutionPolicy) MemoryTeam() (MemoryTeam, bool) {
+	return p.memoryTeam, p.memoryTeam != ""
 }
 
 func (p ExecutionPolicy) Level() PolicyLevel { return p.level }
@@ -51,7 +74,7 @@ func (p ExecutionPolicy) Allow() []PolicyRule { return cloneRules(p.allow) }
 func (p ExecutionPolicy) Deny() []PolicyRule  { return cloneRules(p.deny) }
 
 func (p ExecutionPolicy) clone() ExecutionPolicy {
-	return ExecutionPolicy{level: p.level, allow: cloneRules(p.allow), deny: cloneRules(p.deny)}
+	return ExecutionPolicy{level: p.level, allow: cloneRules(p.allow), deny: cloneRules(p.deny), memoryTeam: p.memoryTeam}
 }
 
 func cloneRules(rules []PolicyRule) []PolicyRule {

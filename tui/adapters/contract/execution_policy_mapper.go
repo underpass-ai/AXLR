@@ -30,7 +30,7 @@ func ParseExecutionPolicy(raw []byte) (domain.ExecutionPolicy, error) {
 	var wire dto.ExecutionPolicy
 	decoder := strictDecoder(raw)
 	if err := decoder.Decode(&wire); err != nil {
-		return domain.ExecutionPolicy{}, errors.New("the policy must be the contract's object: level and tools.allow/tools.deny, with no other field")
+		return domain.ExecutionPolicy{}, errors.New("the policy must be the contract's object: level, tools.allow/tools.deny and memory.team, with no other field")
 	}
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return domain.ExecutionPolicy{}, errors.New("trailing data after the policy")
@@ -69,7 +69,15 @@ func DomainExecutionPolicy(wire dto.ExecutionPolicy) (domain.ExecutionPolicy, er
 	if err != nil {
 		return domain.ExecutionPolicy{}, err
 	}
-	return domain.NewExecutionPolicy(level, allow, deny)
+	policy, err := domain.NewExecutionPolicy(level, allow, deny)
+	if err != nil || wire.Memory == nil {
+		return policy, err
+	}
+	team, err := domain.NewMemoryTeam(wire.Memory.Team)
+	if err != nil {
+		return domain.ExecutionPolicy{}, err
+	}
+	return policy.WithMemoryTeam(team)
 }
 
 // ExecutionPolicy is the wire form of a policy, as GetSession shows it.
@@ -84,5 +92,9 @@ func ExecutionPolicy(policy domain.ExecutionPolicy) dto.ExecutionPolicy {
 		}
 		return out
 	}
-	return dto.ExecutionPolicy{Level: string(policy.Level()), Tools: dto.ExecutionPolicyTools{Allow: rules(policy.Allow()), Deny: rules(policy.Deny())}}
+	wire := dto.ExecutionPolicy{Level: string(policy.Level()), Tools: dto.ExecutionPolicyTools{Allow: rules(policy.Allow()), Deny: rules(policy.Deny())}}
+	if team, shared := policy.MemoryTeam(); shared {
+		wire.Memory = &dto.ExecutionPolicyMemory{Team: string(team)}
+	}
+	return wire
 }

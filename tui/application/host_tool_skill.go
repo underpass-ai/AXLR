@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"regexp"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -22,16 +23,25 @@ func (u HostToolUseCase) readSkill(ctx context.Context, arguments root.JSONValue
 	reconcileSkillOrigin(args)
 	_, hasPlugin := args["plugin"]
 	_, hasCatalog := args["catalog"]
-	if hasPlugin == hasCatalog {
-		return nil, errors.New("name either plugin, for a plugin's or the console's skill, or catalog, for a catalog skill")
+	if !hasPlugin && !hasCatalog {
+		return nil, errors.New("name either plugin, for a plugin's or the console's skill, or catalog, for a catalog skill; give the other one as an empty string")
 	}
 	var plugin, catalog, skill string
 	if hasCatalog {
 		if err := json.Unmarshal(args["catalog"], &catalog); err != nil || !catalogName.MatchString(catalog) {
-			return nil, errors.New("catalog must be the catalog of an installed skill")
+			if !hasPlugin {
+				return nil, errors.New("catalog must be the catalog of an installed skill")
+			}
+			hasCatalog = false
 		}
-	} else if err := json.Unmarshal(args["plugin"], &plugin); err != nil || !skillSelector.MatchString(plugin) {
-		return nil, errors.New("plugin must be an installed plugin name")
+	}
+	if hasPlugin {
+		if err := json.Unmarshal(args["plugin"], &plugin); err != nil || !skillSelector.MatchString(plugin) {
+			if !hasCatalog {
+				return nil, errors.New("plugin must be an installed plugin name")
+			}
+			hasPlugin = false
+		}
 	}
 	if err := json.Unmarshal(args["skill"], &skill); err != nil || !skillSelector.MatchString(skill) {
 		return nil, errors.New("skill must be an installed skill name")
@@ -50,29 +60,39 @@ func (u HostToolUseCase) readSkill(ctx context.Context, arguments root.JSONValue
 	if err != nil || limit < 1 || limit > 4096 {
 		return nil, errors.New("limit_bytes must be between 1 and 4096")
 	}
-	if hasCatalog {
-		reader, ok := u.Skills.(CatalogSkillPagePort)
-		if !ok {
-			return nil, errors.New("catalog skills are unavailable in this console")
-		}
-		return reader.ReadCatalogSkill(ctx, catalog, skill, path, offset, limit)
+	if !hasCatalog {
+		return u.Skills.ReadSkill(ctx, plugin, skill, path, offset, limit)
 	}
-	return u.Skills.ReadSkill(ctx, plugin, skill, path, offset, limit)
+	var catalogErr error
+	if reader, ok := u.Skills.(CatalogSkillPagePort); ok {
+		page, err := reader.ReadCatalogSkill(ctx, catalog, skill, path, offset, limit)
+		if err == nil || !hasPlugin {
+			return page, err
+		}
+		catalogErr = err
+	} else if !hasPlugin {
+		return nil, errors.New("catalog skills are unavailable in this console")
+	} else {
+		catalogErr = errors.New("catalog skills are unavailable in this console")
+	}
+	// Both named, as a model behind a strict schema must: the catalog's skill
+	// is not there, so it is the plugin's or the console's skill.
+	page, err := u.Skills.ReadSkill(ctx, plugin, skill, path, offset, limit)
+	if err != nil {
+		return nil, fmt.Errorf("%s is neither a skill of catalog %s (%v) nor of plugin %s (%v); for a plugin's or the console's skill give catalog as an empty string", skill, catalog, catalogErr, plugin, err)
+	}
+	return page, nil
 }
 
 // reconcileSkillOrigin reads a model that fills every field of the tool, as
 // the Responses models behind a strict schema do: an empty or null origin is
-// no origin, and the same name in plugin and catalog is the catalog's, whose
-// version the session pins. Two different names stay a mistake.
+// no origin. When both are still named, readSkill tries the catalog's skill,
+// whose version the session pins, and then the plugin's or the console's.
 func reconcileSkillOrigin(args map[string]json.RawMessage) {
 	for _, key := range []string{"plugin", "catalog"} {
 		var name *string
 		if raw, ok := args[key]; ok && json.Unmarshal(raw, &name) == nil && (name == nil || *name == "") {
 			delete(args, key)
 		}
-	}
-	var plugin, catalog string
-	if json.Unmarshal(args["plugin"], &plugin) == nil && json.Unmarshal(args["catalog"], &catalog) == nil && plugin == catalog {
-		delete(args, "plugin")
 	}
 }

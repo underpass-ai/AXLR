@@ -32,6 +32,9 @@ func sessionContextValue(s domain.Session, label domain.SessionLabel) sessionCon
 	if value.About == "" {
 		value.About, value.AboutIsDefault = defaultAbout(state), true
 	}
+	if team, shared := memoryTeam(state); shared {
+		value.TeamAbout = teamAbout(team)
+	}
 	return value
 }
 
@@ -96,6 +99,9 @@ func sessionContextGuidance(ctx context.Context, s domain.Session, store Session
 		about = defaultAbout(state)
 	}
 	value := sessionGuidance{ID: state.ID, Workspace: state.Workspace, About: about}
+	if team, shared := memoryTeam(state); shared {
+		value.TeamAbout = teamAbout(team)
+	}
 	data, err := json.Marshal(value)
 	if err != nil {
 		return "", err

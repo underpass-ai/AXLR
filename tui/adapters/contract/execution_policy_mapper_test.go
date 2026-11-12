@@ -28,7 +28,21 @@ func TestParseExecutionPolicyReadsTheContract(t *testing.T) {
 			}
 		})
 	}
+	// The team an execution shares its memory with rides the policy.
+	team, err := ParseExecutionPolicy([]byte(`{"policy": {"level": "observe", "tools": {}, "memory": {"team": "qa"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name, shared := team.MemoryTeam(); !shared || name != "qa" {
+		t.Fatalf("%+v", team)
+	}
+	if wire, _ := json.Marshal(ExecutionPolicy(team)); string(wire) != `{"level":"observe","tools":{},"memory":{"team":"qa"}}` {
+		t.Fatalf("%s", wire)
+	}
 	for name, raw := range map[string]string{
+		"empty team":         `{"level":"observe","tools":{},"memory":{"team":""}}`,
+		"team with a dot":    `{"level":"observe","tools":{},"memory":{"team":"qa.dev"}}`,
+		"unknown memory key": `{"level":"observe","tools":{},"memory":{"team":"qa","store":"/x"}}`,
 		"unknown field":      `{"level":"observe","tools":{},"budget":{}}`,
 		"unknown rule field": `{"level":"observe","tools":{"allow":[{"name":"local_read","args":{}}]}}`,
 		"unknown level":      `{"level":"autonomous","tools":{}}`,

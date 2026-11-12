@@ -295,7 +295,7 @@ func requestHasTool(r root.CompletionRequest, name root.ToolName) bool {
 
 func TestContinueTurnIncludesInstalledAXLRSkillIndex(t *testing.T) {
 	s := turnSession(t)
-	if err := s.BeginTurn("use the package", turnTools()); err != nil {
+	if err := s.BeginTurn("use the package", append(turnTools(), HostTools()...)); err != nil {
 		t.Fatal(err)
 	}
 	u := ContinueTurnUseCase{Store: &memoryStore{}, PluginGuidance: func(context.Context) (string, error) { return "\nInstalled AXLR plugin skill: sample/example\n", nil }, Models: streamFunc(func(_ context.Context, request root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
@@ -306,5 +306,43 @@ func TestContinueTurnIncludesInstalledAXLRSkillIndex(t *testing.T) {
 	})}
 	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// The skill index ends by telling the model to call axlr_skill first, so it
+// goes only to an execution that is offered axlr_skill.
+func TestContinueTurnSendsTheSkillIndexOnlyWithAXLRSkillOffered(t *testing.T) {
+	for name, tc := range map[string]struct {
+		allow []domain.PolicyRule
+		want  bool
+	}{
+		"allow list with axlr_skill":    {[]domain.PolicyRule{{Name: string(HostSkillName)}}, true},
+		"allow list without axlr_skill": {[]domain.PolicyRule{{Name: "local_read"}}, false},
+	} {
+		t.Run(name, func(t *testing.T) {
+			policy, err := domain.NewExecutionPolicy(domain.PolicyObserve, tc.allow, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s := turnSession(t)
+			if err := s.SetPolicy(policy); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.BeginTurn("use the package", append(turnTools(), HostTools()...)); err != nil {
+				t.Fatal(err)
+			}
+			u := ContinueTurnUseCase{Store: &memoryStore{}, PluginGuidance: func(context.Context) (string, error) { return "\nInstalled AXLR plugin skill: sample/example\n", nil }, Models: streamFunc(func(_ context.Context, request root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+				if got := strings.Contains(string(request.Messages[0].Content), "sample/example"); got != tc.want {
+					t.Fatalf("skill index sent = %v, want %v", got, tc.want)
+				}
+				if got := requestHasTool(request, HostSkillName); got != tc.want {
+					t.Fatalf("axlr_skill offered = %v, want %v", got, tc.want)
+				}
+				return assistant("done"), nil
+			})}
+			if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }

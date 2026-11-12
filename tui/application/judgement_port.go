@@ -93,6 +93,15 @@ func (j *Judge) toolPort() JudgementPort {
 	return j.Port
 }
 
+func hasTool(tools []root.ToolDefinition, name root.ToolName) bool {
+	for _, tool := range tools {
+		if tool.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
 func withoutTool(tools []root.ToolDefinition, name root.ToolName) []root.ToolDefinition {
 	out := tools[:0:0]
 	for _, tool := range tools {
