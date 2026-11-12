@@ -7,7 +7,7 @@ import (
 )
 
 // stopFailureStreak ends the turn, before its next request, when its last
-// limit tool calls failed alike (domain.Session.ToolFailureStreak): the
+// limit answers failed alike (domain.Session.ToolFailureStreak): the
 // turn is interrupted and saved as it stands, the state told, and a
 // domain.ToolFailureStreakError goes back to end the execution failed. A
 // limit of zero never stops: the console's person sees each failure.

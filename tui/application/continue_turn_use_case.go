@@ -85,8 +85,7 @@ type ContinueTurnUseCase struct {
 	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
 	TurnToolCalls int
 	// ToolFailureStreak ends the turn, and the execution failed, once the
-	// model's last calls of one tool failed alike that many times in a
-	// row (stopFailureStreak, in the agent's loop); zero never stops. A
+	// model's last answers, that many in a row, each failed alike (stopFailureStreak, in the agent's loop); zero never stops. A
 	// run without a person sets it, the console leaves it zero.
 	ToolFailureStreak int
 	// Usage keeps each session's ledger of tokens, cost and latency, and

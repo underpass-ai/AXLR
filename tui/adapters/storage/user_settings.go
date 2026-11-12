@@ -53,8 +53,8 @@ type UserSettings struct {
 	// TurnToolCalls is a turn's tool-call budget; zero means
 	// domain.MaxTurnToolCalls (32).
 	TurnToolCalls int `json:"turn_tool_calls,omitempty"`
-	// ToolFailureStreak is how many alike failures of one tool in a row
-	// end an --exec run (user_settings_tool_failure_streak.go); zero means
+	// ToolFailureStreak is how many answers in a row, failed alike, end
+	// an --exec run (user_settings_tool_failure_streak.go); zero means
 	// domain.DefaultToolFailureStreak (3).
 	ToolFailureStreak int `json:"tool_failure_streak,omitempty"`
 	// MaxSessionUSD stops a session's model requests once their known cost

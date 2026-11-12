@@ -13,8 +13,8 @@ const (
 	maxToolFailureStreak = 32
 )
 
-// ExecToolFailureStreak is how many alike failures of one tool in a row
-// end an --exec run: tool_failure_streak, else
+// ExecToolFailureStreak is how many answers in a row, failed alike, end
+// an --exec run: tool_failure_streak, else
 // domain.DefaultToolFailureStreak.
 func (s UserSettings) ExecToolFailureStreak() int {
 	if s.ToolFailureStreak == 0 {

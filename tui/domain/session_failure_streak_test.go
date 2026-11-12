@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -86,5 +87,60 @@ func TestToolFailureStreakErrorFailsTheExecution(t *testing.T) {
 	}
 	if receipt := NewExecutionReceipt(result, []ReceiptSession{{Session: s}}); receipt.Status != ExecutionFailed || receipt.Error != result.Error {
 		t.Fatalf("%+v", receipt)
+	}
+}
+
+// answerOf answers with calls of read, one per argument object, and
+// records each with outcome as its failure.
+func answerOf(t *testing.T, s *Session, outcome func(id string) string, arguments ...string) {
+	t.Helper()
+	message := axlr.Message{Role: axlr.RoleAssistant}
+	for i, raw := range arguments {
+		args, err := axlr.NewJSONObject([]byte(raw))
+		must(t, err)
+		message.ToolCalls = append(message.ToolCalls, axlr.ToolCall{ID: axlr.ToolCallID(fmt.Sprintf("%s-%d", s.ID()[:4], len(s.Export().Activity)+i)), Name: "read", Arguments: args})
+	}
+	must(t, s.CompleteAssistant(axlr.CompletionResult{Message: message, FinishReason: "tool_calls"}))
+	for _, call := range message.ToolCalls {
+		must(t, s.RecordToolOutcome(call.ID, DecisionAutoApprove, ToolOutcome{Content: axlr.Text(outcome(string(call.ID))), IsError: true}))
+	}
+}
+
+// What is not a model repeating a failure it read: several failing calls
+// of one answer count once, calls over the turn's budget count none, and
+// different commands that fail the same silent way are different
+// failures, while the same command again is the same.
+func TestToolFailureStreakCountsAnswersTheModelSentAgain(t *testing.T) {
+	s := session(t)
+	must(t, s.BeginTurn("hello", catalog(t)))
+	refused := func(id string) string { return `{"call_id":"` + id + `","error":"KMP is unreachable"}` }
+	answerOf(t, &s, refused, `{"about":"a"}`, `{"about":"b"}`, `{"about":"c"}`)
+	if streak := s.ToolFailureStreak(); streak.Count != 1 {
+		t.Fatalf("one answer of three refusals: %+v", streak)
+	}
+	overBudget := func(string) string { return OverBudgetOutcomePrefix + " of 32 calls: 0 of this answer's 3 calls ran" }
+	answerOf(t, &s, overBudget, `{"about":"a"}`, `{"about":"b"}`, `{"about":"c"}`)
+	if streak := s.ToolFailureStreak(); streak.Count != 0 {
+		t.Fatalf("calls over budget: %+v", streak)
+	}
+	silent := func(id string) string {
+		return `{"protocol_version":1,"request_id":"` + id + `","output":{"exit_code":1,"stdout":""},"error":null}`
+	}
+	answerOf(t, &s, silent, `{"program":"grep","args":["-q","a","f"],"why":"look"}`)
+	answerOf(t, &s, silent, `{"program":"grep","args":["-q","b","f"],"why":"look"}`)
+	answerOf(t, &s, silent, `{"program":"test","args":["-f","x"],"why":"look"}`)
+	if streak := s.ToolFailureStreak(); streak.Count != 1 {
+		t.Fatalf("different silent commands: %+v", streak)
+	}
+	answerOf(t, &s, silent, `{"program":"test","args":["-f","x"],"why":"again"}`)
+	if streak := s.ToolFailureStreak(); streak.Count != 2 {
+		t.Fatalf("the same command again: %+v", streak)
+	}
+	// An answer whose calls failed differently ends it.
+	failures := []string{"disk full", "permission denied"}
+	differently := func(string) string { failure := failures[0]; failures = failures[1:]; return failure }
+	answerOf(t, &s, differently, `{"p":"one"}`, `{"p":"two"}`)
+	if streak := s.ToolFailureStreak(); streak.Count != 0 {
+		t.Fatalf("an answer of different failures: %+v", streak)
 	}
 }

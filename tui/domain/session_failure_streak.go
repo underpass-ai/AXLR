@@ -9,14 +9,16 @@ import (
 )
 
 // toolFailureValueRunes is the shortest argument value taken out of a
-// failure before failures are compared: a shorter one (a kind, a number)
+// refusal before refusals are compared: a shorter one (a kind, a number)
 // would erase words of the message itself.
 const toolFailureValueRunes = 3
 
-// ToolFailureStreak reads how the running turn's last tool calls ended:
-// from its newest tool result back, the calls that failed alike, until a
-// call that succeeded, another tool's, another failure or the turn's
-// start. A budget or restore note does not end it; the person's word does.
+// ToolFailureStreak reads how the running turn's last answers ended: from
+// the newest back, the answers whose every call failed alike, one count
+// per answer, so the count is how many times the model sent the failure,
+// having read it every time but the first. An answer with a call that
+// worked, another failure, a call over the turn's budget or no call ends
+// it, and so does the person's word; a budget or restore note does not.
 func (s Session) ToolFailureStreak() ToolFailureStreak {
 	state := s.Export()
 	calls := make(map[axlr.ToolCallID]PendingTool, len(state.Activity))
@@ -27,53 +29,87 @@ func (s Session) ToolFailureStreak() ToolFailureStreak {
 	key := ""
 	for i := len(state.Messages) - 1; i >= 0; i-- {
 		message := state.Messages[i]
-		if message.Role == axlr.RoleUser {
+		switch message.Role {
+		case axlr.RoleUser:
 			if JoinsRunningTurn(message.Content) {
 				continue
 			}
-			break
+			return streak
+		case axlr.RoleAssistant:
+			alike, failure, ok := answerFailure(message, calls)
+			if !ok || (streak.Count > 0 && alike != key) {
+				return streak
+			}
+			if streak.Count == 0 {
+				streak, key = ToolFailureStreak{Tool: message.ToolCalls[0].Name, Failure: failure}, alike
+			}
+			streak.Count++
 		}
-		if message.Role != axlr.RoleTool {
-			continue
-		}
-		record, known := calls[message.ToolCallID]
-		if !known || record.Outcome == nil || !record.Outcome.IsError {
-			break
-		}
-		failure := toolFailureText(record.Outcome.Content)
-		alike := string(record.Call.Name) + "\x00" + withoutCallValues(failure, record.Call)
-		if streak.Count == 0 {
-			streak, key = ToolFailureStreak{Tool: record.Call.Name, Failure: failure}, alike
-		} else if alike != key {
-			break
-		}
-		streak.Count++
 	}
 	return streak
 }
 
-// toolFailureText is a failed result's error: the error field of the
-// console's refusal ({"call_id":…,"error":…}); a runtime envelope without
-// its request id and times, which differ on every run of the same failing
-// command; else the text itself.
-func toolFailureText(content axlr.Text) string {
+// answerFailure is the failure every call of an answer ended in, with the
+// key that tells it from another; ok is false when the answer has no call
+// or one that did not fail that way.
+func answerFailure(answer axlr.Message, calls map[axlr.ToolCallID]PendingTool) (alike, failure string, ok bool) {
+	if len(answer.ToolCalls) == 0 {
+		return "", "", false
+	}
+	for i, call := range answer.ToolCalls {
+		record, known := calls[call.ID]
+		if !known || record.Outcome == nil || !record.Outcome.IsError || strings.HasPrefix(string(record.Outcome.Content), OverBudgetOutcomePrefix) {
+			return "", "", false
+		}
+		text, key := callFailure(record)
+		if i > 0 && key != alike {
+			return "", "", false
+		}
+		alike, failure = key, text
+	}
+	return alike, failure, true
+}
+
+// callFailure is a failed call's error as the model read it, and the key
+// two failures share when they are the same. A runtime result (the call
+// ran: a command that exited non-zero) is the same failure only for the
+// same arguments, its why aside, and the same envelope without its request
+// id and times: different commands that both exit 1 silently are not a
+// loop. A refusal (the console's {"call_id":…,"error":…}, a plugin's
+// text) is the same failure when its text is, once the call's id and the
+// values of its own arguments are taken out: on 12 November 2026 a bot
+// sent axlr_remember again and again with another invented about.
+func callFailure(record PendingTool) (failure, key string) {
+	content := record.Outcome.Content
+	tool := string(record.Call.Name) + "\x00"
 	var fields map[string]json.RawMessage
 	if json.Unmarshal([]byte(content), &fields) != nil {
-		return strings.TrimSpace(string(content))
-	}
-	var refusal string
-	if json.Unmarshal(fields["error"], &refusal) == nil && refusal != "" {
-		return refusal
+		failure = strings.TrimSpace(string(content))
+		return failure, tool + withoutCallValues(failure, record.Call)
 	}
 	if _, envelope := fields["protocol_version"]; envelope {
-		for _, key := range []string{"request_id", "started_at", "finished_at", "duration_ms"} {
-			delete(fields, key)
+		for _, field := range []string{"request_id", "started_at", "finished_at", "duration_ms"} {
+			delete(fields, field)
 		}
-		if data, err := json.Marshal(fields); err == nil {
-			return string(data)
-		}
+		data, _ := json.Marshal(fields)
+		return string(data), tool + string(data) + "\x00" + argumentsWithoutWhy(record.Call)
 	}
-	return strings.TrimSpace(string(content))
+	if json.Unmarshal(fields["error"], &failure) != nil || failure == "" {
+		failure = strings.TrimSpace(string(content))
+	}
+	return failure, tool + withoutCallValues(failure, record.Call)
+}
+
+// argumentsWithoutWhy is the call's arguments as compact JSON, keys in
+// order, without the why a model words anew for the same call.
+func argumentsWithoutWhy(call axlr.ToolCall) string {
+	var arguments map[string]any
+	if json.Unmarshal(call.Arguments.Bytes(), &arguments) != nil {
+		return string(call.Arguments.Bytes())
+	}
+	delete(arguments, "why")
+	data, _ := json.Marshal(arguments)
+	return string(data)
 }
 
 // withoutCallValues takes the call's id and the string values of its

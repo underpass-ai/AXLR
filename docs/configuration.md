@@ -256,7 +256,7 @@ Integer. Absent or `0`: 32. Otherwise from 8 to 256 (`settings turn_tool_calls m
 
 #### tool_failure_streak
 
-Integer. Absent or `0`: 3. Otherwise from 2 to 32 (`settings tool_failure_streak must be between 2 and 32`): one failure is a mistake a model can correct, and past 32 the turn's default allowance goes to one loop. How many calls of one tool in a row, all failed alike, end an `axlr-tui --exec` run: it ends `failed` with `tool loop: …` as its error and a `WARN` line in the app log, instead of spending the turn's allowance. The console, where you read each failure, never stops on it. See [the runtime contract](runtime-contract.md#budget-per-execution).
+Integer. Absent or `0`: 3. Otherwise from 2 to 32 (`settings tool_failure_streak must be between 2 and 32`): one failure is a mistake a model can correct, and past 32 the turn's default allowance goes to one loop. How many answers in a row whose calls of one tool all failed alike end an `axlr-tui --exec` run: it ends `failed` with `tool loop: …` as its error and a `WARN` line in the app log, instead of spending the turn's allowance. The console, where you read each failure, never stops on it. See [the runtime contract](runtime-contract.md#budget-per-execution).
 
 #### max_session_usd
 
