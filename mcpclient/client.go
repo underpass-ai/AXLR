@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"runtime"
 	"sync"
@@ -234,7 +235,7 @@ func (c *Client) Close() error {
 }
 
 func closeError(name ServerName, err error) error {
-	if err == nil {
+	if err == nil || errors.Is(err, os.ErrProcessDone) {
 		return nil
 	}
 	var exit *exec.ExitError
