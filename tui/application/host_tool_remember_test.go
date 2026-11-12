@@ -136,6 +136,15 @@ func TestHostRememberBuildsTheRequestFromTheSession(t *testing.T) {
 	if filled := recorder.requests[4]; filled.Continuation != "" || filled.Kind != "observation" || filled.About != "project:AXLR" {
 		t.Fatalf("filled continuation sent as %+v", filled)
 	}
+	// A blank continuation or about is one left out (12 November 2026,
+	// codex/gpt-6.1-terra-high: "continuation":" "): a write with links
+	// goes to review under the session's about instead of being refused.
+	if outcome, err := run(`{"kind":"decision","text":"Links blank.","evidence":"e","links":[{"ref":"r","rel":"supports","why":"w"}],"about":"  ","continuation":" "}`); err != nil || outcome.IsError {
+		t.Fatalf("blank continuation: %+v %v", outcome, err)
+	}
+	if blank := recorder.requests[5]; blank.Continuation != "" || blank.About != "project:AXLR" || len(blank.Links) != 1 {
+		t.Fatalf("blank continuation sent as %+v", blank)
+	}
 	for _, refused := range []string{`{"continuation":"read_1","text":"x"}`, `{"kind":"decision","text":"no evidence"}`, `{"kind":"decision","text":"t","evidence":"e","links":[{"ref":"r","rel":"supports","why":"w"}],"continuation":"read_1"}`} {
 		if outcome, _ := run(refused); !outcome.IsError {
 			t.Fatalf("accepted %s", refused)

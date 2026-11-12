@@ -14,7 +14,10 @@ import (
 // the policy, budget, sandbox and correlation it ran under. It is read from the
 // sessions and their receipt journals, so it survives a restart.
 type ExecutionReceipt struct {
-	Status   ExecutionStatus
+	Status ExecutionStatus
+	// Error is the result's: why the execution failed, was interrupted or
+	// exceeded its budget, so the receipt alone says why it ended.
+	Error    string
 	Session  SessionID
 	Sessions []SessionID
 	// StartedAt is when the execution began: its budget's start, else the
@@ -41,7 +44,7 @@ type ExecutionReceipt struct {
 // NewExecutionReceipt reads the receipt of the execution result describes
 // from the sessions it spanned, first to last.
 func NewExecutionReceipt(result ExecutionResult, sessions []ReceiptSession) ExecutionReceipt {
-	receipt := ExecutionReceipt{Status: result.Status, Session: result.Session, Sessions: append([]SessionID(nil), result.Sessions...), Complete: true}
+	receipt := ExecutionReceipt{Status: result.Status, Error: result.Error, Session: result.Session, Sessions: append([]SessionID(nil), result.Sessions...), Complete: true}
 	for _, read := range sessions {
 		state := read.Session.Export()
 		requests, ended := receiptRequests(state.ID, read.Entries)

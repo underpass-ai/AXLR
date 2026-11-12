@@ -12,6 +12,7 @@ const ExecutionReceiptSchema = "axlr.execution-receipt/v1"
 type ExecutionReceipt struct {
 	Schema      string                `json:"schema"`
 	Status      string                `json:"status"`
+	Error       string                `json:"error,omitempty"`
 	Session     string                `json:"session_id"`
 	Sessions    []string              `json:"sessions"`
 	StartedAt   time.Time             `json:"started_at"`

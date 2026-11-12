@@ -33,7 +33,7 @@ var rememberSchema = `{"type":"object","properties":{` +
 	`"evidence":{"type":"string","minLength":1,"maxLength":8200,"description":"One to eight evidence items, one per line (a file:line and what it shows, a command and its result); each line at most 1000 characters."},` +
 	`"links":{"type":"array","maxItems":8,"items":{"type":"object","properties":{"ref":{"type":"string","minLength":1},"rel":{"type":"string","minLength":1},"why":{"type":"string","minLength":1,"maxLength":1000},"evidence":{"type":"string","maxLength":1000}},"required":["ref","rel","why"],"additionalProperties":false}},` +
 	`"about":{"type":"string","minLength":1,"maxLength":256},` +
-	`"continuation":{"type":"string","minLength":1,"maxLength":256}},"additionalProperties":false}`
+	`"continuation":{"type":"string","minLength":1,"maxLength":256,"description":"Only to commit a write that came back needs_review, sent alone; leave it out otherwise."}},"additionalProperties":false}`
 
 // rememberKinds are the memory kinds kmp_write_memory accepts. The console
 // checks a kind before calling KMP: on 14 October 2026 glm-5.3-flash sent
@@ -82,6 +82,10 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	if err := json.Unmarshal(arguments.Bytes(), &args); err != nil {
 		return nil, errors.New("axlr_remember arguments must match its schema")
 	}
+	// A strict-schema model fills the optional fields it has nothing for
+	// with blanks (12 November 2026: continuation " "): a blank about or
+	// continuation is one left out.
+	args.About, args.Continuation = strings.TrimSpace(args.About), strings.TrimSpace(args.Continuation)
 	// A write with no links never comes back needs_review, so it never has
 	// a continuation to send: a strict-schema model (Codex, 12 November 2026)
 	// fills every field and sent {"kind":…,"text":…,"links":[],
@@ -111,7 +115,7 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 		if about, err = sessionMemoryAbout(ctx, u.Labels, state); err != nil {
 			return nil, err
 		}
-	} else if err := checkBoundAbout(session, about); err != nil {
+	} else if err := checkRememberAbout(session, about); err != nil {
 		return nil, err
 	}
 	request := RememberRequest{About: about, Kind: args.Kind, Text: args.Text, SummaryEN: strings.TrimSpace(args.SummaryEN), Evidence: evidence,

@@ -108,8 +108,26 @@ func sessionMemoryAbout(ctx context.Context, labels SessionLabelsPort, state dom
 }
 
 // checkBoundAbout refuses a write to an about outside a bound session's
-// own, with the ones it may name.
+// own; its refusal starts with the abouts it may name.
 func checkBoundAbout(session domain.Session, about string) error {
+	return boundAboutRefusal(session, about, func(allowed []string) string {
+		return "name about as one of " + strings.Join(allowed, ", ")
+	})
+}
+
+// checkRememberAbout is checkBoundAbout for axlr_remember, whose refusal
+// starts with leaving about out: on 12 November 2026 a Codex model that
+// had invented an about read a refusal that began with the policy and
+// sent another invented one, ten times.
+func checkRememberAbout(session domain.Session, about string) error {
+	return boundAboutRefusal(session, about, func(allowed []string) string {
+		return fmt.Sprintf("leave about out to write under %s, or name one of %s", allowed[0], strings.Join(allowed, ", "))
+	})
+}
+
+// boundAboutRefusal refuses an about outside a bound session's own: what
+// to use first, from use, then why this one is refused.
+func boundAboutRefusal(session domain.Session, about string, use func(allowed []string) string) error {
 	if about == "" || !memoryBound(session) {
 		return nil
 	}
@@ -121,9 +139,9 @@ func checkBoundAbout(session domain.Session, about string) error {
 		}
 	}
 	if _, shared := memoryTeam(state); shared {
-		return fmt.Errorf("the execution's policy keeps what it writes to its own abouts and its team's (%s): %s is a teammate's or another's, which it may read and not write", strings.Join(allowed, ", "), about)
+		return fmt.Errorf("%s: %s is a teammate's or another's, which the execution's policy lets this session read and not write", use(allowed), about)
 	}
-	return fmt.Errorf("the execution's policy keeps memory to its own abouts (%s): %s is another's", strings.Join(allowed, ", "), about)
+	return fmt.Errorf("%s: the execution's policy keeps memory to its own abouts and %s is another's", use(allowed), about)
 }
 
 // checkBoundRead refuses a read of an about outside a bound session's
@@ -159,7 +177,7 @@ func checkMemoryWrite(session domain.Session, tool domain.AvailableTool, argumen
 		if call.Continuation != "" {
 			return nil
 		}
-		return fmt.Errorf("the execution's policy keeps what it writes to its own abouts and its team's (%s): name one of them as about", strings.Join(boundAbouts(session.Export()), ", "))
+		return fmt.Errorf("name about as one of %s: the execution's policy keeps what it writes to its own abouts and its team's", strings.Join(boundAbouts(session.Export()), ", "))
 	}
 	return checkBoundAbout(session, call.About)
 }

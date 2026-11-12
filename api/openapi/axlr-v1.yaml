@@ -440,6 +440,7 @@ components:
       properties:
         schema: {type: string, const: axlr.execution-receipt/v1}
         status: {type: string, enum: [completed, needs_decision, interrupted, failed, budget_exceeded]}
+        error: {type: string, description: "As in the result: why the execution failed, was interrupted or exceeded its budget; absent without one."}
         session_id: {type: string}
         sessions: {type: array, items: {type: string}}
         started_at: {type: string, format: date-time, description: The budget's start, else the first message or record.}

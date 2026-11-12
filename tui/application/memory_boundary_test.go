@@ -64,10 +64,10 @@ func TestBoundSessionKeepsRememberAndRecallToItsOwnAbouts(t *testing.T) {
 		}
 	}
 	for _, about := range []string{"project:other-bot", "user:gx10a", "ws:ffffffffffffffffffffffffffffffff"} {
-		if outcome := remember(about); !outcome.IsError || !strings.Contains(string(outcome.Content), "keeps memory to its own abouts ("+project+", "+own+")") || !strings.Contains(string(outcome.Content), about+" is another's") {
+		if outcome := remember(about); !outcome.IsError || !strings.Contains(string(outcome.Content), `"error":"leave about out to write under `+project+", or name one of "+project+", "+own+":") || !strings.Contains(string(outcome.Content), about+" is another's") {
 			t.Fatalf("remember %s: %+v", about, outcome)
 		}
-		if outcome := read(about); !outcome.IsError || !strings.Contains(string(outcome.Content), about+" is another's") {
+		if outcome := read(about); !outcome.IsError || !strings.Contains(string(outcome.Content), `"error":"name about as one of `+project+", "+own+":") || !strings.Contains(string(outcome.Content), about+" is another's") {
 			t.Fatalf("recall %s: %+v", about, outcome)
 		}
 	}
@@ -228,7 +228,7 @@ func TestTeamMemberReadsItsTeamAndWritesItsOwnAndTheTeams(t *testing.T) {
 	writes := len(recorder.requests)
 	for _, about := range []string{"project:qa.qa-explorador", "project:dev", "project:" + filepath.Base(string(state.Workspace)), "user:gx10a"} {
 		outcome := remember(about)
-		if !outcome.IsError || !strings.Contains(string(outcome.Content), "its own abouts and its team's ("+member+", project:qa, "+own+")") || !strings.Contains(string(outcome.Content), about+" is a teammate's or another's") {
+		if !outcome.IsError || !strings.Contains(string(outcome.Content), `"error":"leave about out to write under `+member+", or name one of "+member+", project:qa, "+own+":") || !strings.Contains(string(outcome.Content), about+" is a teammate's or another's") {
 			t.Fatalf("write to %s: %+v", about, outcome)
 		}
 	}
@@ -276,7 +276,7 @@ func TestTeamMemberCannotWriteATeammatesAboutThroughTheEngine(t *testing.T) {
 	for arguments, want := range map[string]string{
 		`{"about":"project:qa.qa-explorador","memories":[]}`: "project:qa.qa-explorador is a teammate's or another's",
 		`{"about":"project:dev","memories":[]}`:              "project:dev is a teammate's or another's",
-		`{"memories":[]}`:                                    "name one of them as about",
+		`{"memories":[]}`:                                    "name about as one of project:qa.",
 		`{"about":7}`:                                        "not an object with a text about",
 	} {
 		if err := checkMemoryWrite(s, write, mustObject(t, arguments)); err == nil || !strings.Contains(err.Error(), want) {

@@ -1042,6 +1042,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		policy := execPolicy{next: approvalSettings, level: execApproval}
 		start, agent, resolve := deps.Start, deps.Agent, deps.Resolve
 		start.Approval, agent.Approval, resolve.Approval = policy, policy, policy
+		// No person reads each failure: a model repeating one ends the run.
+		streak := settings.ExecToolFailureStreak()
+		start.Continue.ToolFailureStreak, agent.Continue.ToolFailureStreak, resolve.Continue.ToolFailureStreak = streak, streak, streak
 		var final domain.Session
 		var code int
 		var steer *execSteerFile
