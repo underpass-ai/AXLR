@@ -16,6 +16,7 @@ func ExecutionReceipt(receipt domain.ExecutionReceipt) dto.ExecutionReceipt {
 	out := dto.ExecutionReceipt{
 		Schema:    dto.ExecutionReceiptSchema,
 		Status:    string(receipt.Status),
+		Error:     receipt.Error,
 		Session:   string(receipt.Session),
 		Sessions:  make([]string, 0, len(receipt.Sessions)),
 		StartedAt: receipt.StartedAt.UTC(),

@@ -108,6 +108,9 @@ func (u AgentTurnUseCase) Execute(ctx context.Context, s *domain.Session, emit f
 			}
 			continue
 		}
+		if err := stopFailureStreak(ctx, u.Continue.Store, s, u.Continue.ToolFailureStreak, emit); err != nil {
+			return err
+		}
 		if err := u.Continue.Execute(ctx, s, emit); err != nil {
 			if !atCallLimit(err) {
 				return err

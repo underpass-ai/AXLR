@@ -127,6 +127,7 @@ Wherever a key takes a model id (`model`, `reviewer_model`, `favorite_models`, `
 | `context_tokens` | integer | `0` (no cap) | [context_tokens](#context_tokens) |
 | `prompt_tokens` | integer | `0` (75,000); a clean install writes it | [prompt_tokens](#prompt_tokens) |
 | `turn_tool_calls` | integer | `0` (32) | [turn_tool_calls](#turn_tool_calls) |
+| `tool_failure_streak` | integer | `0` (3) | [tool_failure_streak](#tool_failure_streak) |
 | `max_session_usd` | number | `0` (no limit) | [max_session_usd](#max_session_usd) |
 | `local_models` | array of objects | `[]` | [local_models](#local_models) |
 | `routing` | object | absent (each execution asks its session's model) | [routing](#routing) |
@@ -143,7 +144,7 @@ Wherever a key takes a model id (`model`, `reviewer_model`, `favorite_models`, `
 | `trace_retention_days` | integer | absent (30) | [trace_retention_days](#trace_retention_days) |
 | `trace_payloads` | boolean | `false` | [trace_payloads](#trace_payloads) |
 
-Several integer keys use `0` for "the default": `prompt_tokens`, `turn_tool_calls`, `repair.watch_minutes`, `repair.max_attempts`, `jobs.max_active`, `jev.timeout_ms`, `local_models[].stream_idle_seconds` and `local_models[].stream_max_minutes`. Their error messages give the range of an explicit value (`between 1 and 720`), but `0` is accepted and means the default. For `context_tokens` and `max_session_usd`, `0` means no limit.
+Several integer keys use `0` for "the default": `prompt_tokens`, `turn_tool_calls`, `tool_failure_streak`, `repair.watch_minutes`, `repair.max_attempts`, `jobs.max_active`, `jev.timeout_ms`, `local_models[].stream_idle_seconds` and `local_models[].stream_max_minutes`. Their error messages give the range of an explicit value (`between 1 and 720`), but `0` is accepted and means the default. For `context_tokens` and `max_session_usd`, `0` means no limit.
 
 ### Model and appearance
 
@@ -252,6 +253,10 @@ Integer. Absent or `0`: 75,000. Otherwise from 16,384 to 16,777,216 (`settings p
 #### turn_tool_calls
 
 Integer. Absent or `0`: 32. Otherwise from 8 to 256 (`settings turn_tool_calls must be between 8 and 256`): below 8 a turn cannot read, edit and check; above 256 one turn could spend a session's budget without you. The tool calls one ordinary turn may make before it pauses; ceremony steps reset the allowance as they advance. Applies to repair, improvement and plan worker sessions as well.
+
+#### tool_failure_streak
+
+Integer. Absent or `0`: 3. Otherwise from 2 to 32 (`settings tool_failure_streak must be between 2 and 32`): one failure is a mistake a model can correct, and past 32 the turn's default allowance goes to one loop. How many calls of one tool in a row, all failed alike, end an `axlr-tui --exec` run: it ends `failed` with `tool loop: …` as its error and a `WARN` line in the app log, instead of spending the turn's allowance. The console, where you read each failure, never stops on it. See [the runtime contract](runtime-contract.md#budget-per-execution).
 
 #### max_session_usd
 

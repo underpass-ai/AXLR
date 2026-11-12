@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,13 @@ func TestExecutionReceiptWireForm(t *testing.T) {
 	}
 	if raw.StartedAt != "2026-10-25T07:00:00Z" || raw.Requests[0]["duration_ms"] != 1500.0 || raw.Requests[0]["cost_usd"] != 0.5 || raw.Requests[1]["cost_usd"] != nil || raw.Requests[1]["duration_ms"] != nil {
 		t.Fatalf("%s", encoded)
+	}
+	if strings.Contains(string(encoded), `"error"`) {
+		t.Fatalf("a receipt without an error carries one: %s", encoded)
+	}
+	receipt.Status, receipt.Error = domain.ExecutionFailed, "tool loop: local_exec failed 3 times in a row with the same error, so the run stopped: exit 1"
+	if failed := ExecutionReceipt(receipt); failed.Status != "failed" || failed.Error != receipt.Error {
+		t.Fatalf("failed receipt %+v", failed)
 	}
 	if _, has := raw.Requests[1]["cost_usd"]; !has {
 		t.Fatalf("an unknown cost is null, not absent: %s", encoded)

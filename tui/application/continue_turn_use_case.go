@@ -84,6 +84,11 @@ type ContinueTurnUseCase struct {
 	// TurnToolCalls is the turn's tool-call budget (settings'
 	// turn_tool_calls); zero means domain.MaxTurnToolCalls.
 	TurnToolCalls int
+	// ToolFailureStreak ends the turn, and the execution failed, once the
+	// model's last calls of one tool failed alike that many times in a
+	// row (stopFailureStreak, in the agent's loop); zero never stops. A
+	// run without a person sets it, the console leaves it zero.
+	ToolFailureStreak int
 	// Usage keeps each session's ledger of tokens, cost and latency, and
 	// MaxSessionUSD refuses a session's requests once its known cost
 	// reaches it (zero, no limit); nil keeps no ledger (session_usage.go).
@@ -267,6 +272,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if !u.offersRemember(*session) {
 		tools = withoutTool(tools, HostRememberName)
 	}
+	tools = withRememberAbouts(tools, *session)
 	if u.Recall == nil {
 		tools = withoutTool(tools, HostRecallName)
 	}

@@ -58,6 +58,10 @@ func NewExecutionResult(s Session, err error) ExecutionResult {
 			call := pending[0].Call
 			result.Pending = &call
 		}
+	case errors.As(err, new(*ToolFailureStreakError)):
+		// The console stopped a model that kept repeating a failure: the
+		// turn is interrupted, kept for a person, and the run failed.
+		result.Status, result.Error = ExecutionFailed, err.Error()
 	case err != nil && (errors.Is(err, context.Canceled) || state.Status == StatusInterrupted):
 		result.Status, result.Error = ExecutionInterrupted, err.Error()
 	case err != nil:

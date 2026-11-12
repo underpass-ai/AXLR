@@ -49,7 +49,7 @@ func TestToolCallLogHearsARefusedTeamMemoryWriteWhole(t *testing.T) {
 		t.Fatalf("%d records", len(log.records))
 	}
 	record := log.records[0]
-	want := teammate + " is a teammate's or another's, which it may read and not write"
+	want := teammate + " is a teammate's or another's, which the execution's policy lets this session read and not write"
 	if record.Session != s.ID() || record.Call != "m1" || record.Tool != HostRememberName || record.PluginTool != "" || record.Decision != domain.DecisionApprove || !record.Failed || !strings.Contains(record.Error, want) {
 		t.Fatalf("record %+v", record)
 	}

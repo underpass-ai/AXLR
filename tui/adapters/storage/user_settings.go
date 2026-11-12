@@ -53,6 +53,10 @@ type UserSettings struct {
 	// TurnToolCalls is a turn's tool-call budget; zero means
 	// domain.MaxTurnToolCalls (32).
 	TurnToolCalls int `json:"turn_tool_calls,omitempty"`
+	// ToolFailureStreak is how many alike failures of one tool in a row
+	// end an --exec run (user_settings_tool_failure_streak.go); zero means
+	// domain.DefaultToolFailureStreak (3).
+	ToolFailureStreak int `json:"tool_failure_streak,omitempty"`
 	// MaxSessionUSD stops a session's model requests once their known cost
 	// reaches it, in dollars; zero means no limit (user_settings_usage.go).
 	MaxSessionUSD float64 `json:"max_session_usd,omitempty"`
@@ -266,6 +270,9 @@ func (s UserSettings) Validate() error {
 	}
 	if s.TurnToolCalls != 0 && (s.TurnToolCalls < minTurnToolCalls || s.TurnToolCalls > maxTurnToolCalls) {
 		return fmt.Errorf("settings turn_tool_calls must be between %d and %d", minTurnToolCalls, maxTurnToolCalls)
+	}
+	if err := s.validateToolFailureStreak(); err != nil {
+		return err
 	}
 	if days := s.TraceRetentionDays; days != nil && (*days < 0 || *days > maxTraceRetentionDays) {
 		return fmt.Errorf("settings trace_retention_days must be between 0 and %d", maxTraceRetentionDays)
