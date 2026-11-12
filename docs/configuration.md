@@ -423,7 +423,7 @@ The levers on price and speed are `provider.sort: "throughput"`, `provider.max_p
 
 #### exec_sandbox
 
-Object; absent means off. Confines every `local_exec`, and every check, forge and git command the console runs through the same runtime, under bubblewrap on Linux. Source: [user_settings_sandbox.go](../tui/adapters/storage/user_settings_sandbox.go), [run_sandbox.go](../tui/cmd/axlr-tui/run_sandbox.go).
+Object; absent means off, but the setup assistant writes `mode: auto` on Linux (since 12 November 2026), with the build and package caches of your home that exist (`~/.cache` or `$XDG_CACHE_HOME`, `~/go/pkg/mod` or `$GOMODCACHE`, `~/.cargo/registry`, `~/.npm`) in `writable`; a section already set is kept. Confines every `local_exec`, and every check, forge and git command the console runs through the same runtime, under bubblewrap on Linux. Source: [user_settings_sandbox.go](../tui/adapters/storage/user_settings_sandbox.go), [run_sandbox.go](../tui/cmd/axlr-tui/run_sandbox.go).
 
 | Key | Type | Default | Meaning |
 |:--|:--|:--|:--|
@@ -431,7 +431,7 @@ Object; absent means off. Confines every `local_exec`, and every check, forge an
 | `network` | boolean | `true` | `false` gives confined commands an empty network namespace, which also stops `git push` and `gh` in `/repair` and `/improve` |
 | `writable` | array of strings | `[]` | Paths outside the workspace that confined commands may write, such as build caches. At most 32; each absolute, already clean (`/tmp/../etc` is refused) and not `/` |
 
-Refused while reading: `settings exec_sandbox.mode must be off, auto or required`, `settings exec_sandbox.writable lists more than 32 paths`, `settings exec_sandbox.writable "<path>" must be a clean absolute path other than the root`. When the mode is not `off`, the launch also checks that each `writable` path exists (`exec_sandbox.writable <path>: …`). The default is `off` because a read-only home breaks common checks until their caches are listed. See [exec sandbox](console.md#exec-sandbox).
+Refused while reading: `settings exec_sandbox.mode must be off, auto or required`, `settings exec_sandbox.writable lists more than 32 paths`, `settings exec_sandbox.writable "<path>" must be a clean absolute path other than the root`. When the mode is not `off`, the launch also checks that each `writable` path exists (`exec_sandbox.writable <path>: …`). Absent stays `off` for a settings file written by hand, because a read-only home breaks common checks until their caches are listed; the setup assistant lists the caches it finds. See [exec sandbox](console.md#exec-sandbox).
 
 ```json
 "exec_sandbox": {

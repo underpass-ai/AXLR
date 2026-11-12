@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -101,11 +102,13 @@ type setupWizard struct {
 	bases   []string
 	// noEngines records that this platform has no engine packages.
 	noEngines bool
+	// goos is the platform the exec sandbox default is decided for.
+	goos string
 }
 
 func newSetupWizard(getenv func(string) string, paths setupPaths, settings *storage.UserSettingsStore, stdin io.Reader, out io.Writer) *setupWizard {
 	client := &http.Client{Timeout: 30 * time.Second}
-	w := &setupWizard{in: bufio.NewReader(stdin), out: out, getenv: getenv, paths: paths, settings: settings}
+	w := &setupWizard{in: bufio.NewReader(stdin), out: out, getenv: getenv, paths: paths, settings: settings, goos: runtime.GOOS}
 	w.secret = func() (string, error) {
 		file, ok := stdin.(*os.File)
 		if !ok || !term.IsTerminal(file.Fd()) {
@@ -164,8 +167,11 @@ func (w *setupWizard) run(ctx context.Context) error {
 	if err := w.installEngines(ctx); err != nil {
 		return err
 	}
+	var sandbox *storage.ExecSandboxSettings
 	if err := w.settings.Change(ctx, func(s *storage.UserSettings) {
 		storage.CompleteDefaults(s, jev)
+		storage.CompleteExecSandbox(s, w.goos, sandboxCaches(w.getenv))
+		sandbox = s.Sandbox
 		if w.noEngines && s.Engines != nil {
 			// Required engines this platform has no package for would stop
 			// every launch (review of 14 October 2026).
@@ -175,6 +181,9 @@ func (w *setupWizard) run(ctx context.Context) error {
 		return err
 	}
 	fmt.Fprintln(w.out, w.t("settings.complete", map[bool]string{true: w.t("jev.on"), false: w.t("jev.off")}[jev]))
+	if sandbox != nil && sandbox.Mode == "auto" {
+		fmt.Fprintln(w.out, w.t("settings.sandbox", len(sandbox.Writable)))
+	}
 	fmt.Fprintf(w.out, "\n%s\n", w.t("done", w.paths.settings))
 	if w.pause {
 		// The console takes the whole screen next; the summary stays until
@@ -669,4 +678,29 @@ func describeModel(m domain.AvailableModel) string {
 // perMillion is a rate's USD per million tokens without its unit.
 func perMillion(rate domain.ModelRate) string {
 	return strings.TrimPrefix(strings.TrimSuffix(rate.Display(), " / 1M tokens"), "$")
+}
+
+// sandboxCaches are the build and package caches of the person's home that
+// exist, which confined commands may write: the exec sandbox's home is
+// read-only, and a check that cannot write its cache fails.
+func sandboxCaches(getenv func(string) string) []string {
+	home := getenv("HOME")
+	if home == "" {
+		return nil
+	}
+	cache := getenv("XDG_CACHE_HOME")
+	if cache == "" {
+		cache = filepath.Join(home, ".cache")
+	}
+	candidates := []string{cache, filepath.Join(home, "go", "pkg", "mod"), filepath.Join(home, ".cargo", "registry"), filepath.Join(home, ".npm")}
+	if modcache := getenv("GOMODCACHE"); modcache != "" {
+		candidates[1] = modcache
+	}
+	var caches []string
+	for _, path := range candidates {
+		if info, err := os.Stat(path); err == nil && info.IsDir() {
+			caches = append(caches, filepath.Clean(path))
+		}
+	}
+	return caches
 }

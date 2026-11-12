@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"strings"
 	"testing"
@@ -380,5 +381,50 @@ func TestSetupRerunKeepsTheLanguageTurnsJevOnAndRequiresNoMissingEngines(t *test
 	settings := savedSettings(t, w)
 	if settings.Language != "es" || settings.Jev == nil || !settings.Jev.Tool || !settings.Jev.FinalCheck || settings.Engines == nil || settings.Engines.Required {
 		t.Fatalf("language %q jev %+v engines %+v\n%s", settings.Language, settings.Jev, settings.Engines, out)
+	}
+}
+
+func TestSetupConfinesCommandsOnLinuxWithTheCachesThatExist(t *testing.T) {
+	for _, goos := range []string{"linux", "darwin"} {
+		t.Run(goos, func(t *testing.T) {
+			env := cliEnv(t)
+			cache := filepath.Join(env["HOME"], ".cache")
+			if err := os.Mkdir(cache, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			var want *storage.ExecSandboxSettings
+			if goos == "linux" {
+				want = &storage.ExecSandboxSettings{Mode: "auto", Writable: []string{cache}}
+			}
+			w, out := wizard(t, env, "", &fakeEngines{})
+			w.goos = goos
+			w.secret = func() (string, error) { return "", nil }
+			if err := w.run(context.Background()); err != nil {
+				t.Fatal(err, out)
+			}
+			if got := savedSettings(t, w).Sandbox; !reflect.DeepEqual(got, want) {
+				t.Fatalf("exec_sandbox %+v, want %+v", got, want)
+			}
+			if said := strings.Contains(out.String(), "Exec sandbox auto"); said != (want != nil) {
+				t.Fatalf("summary says the sandbox: %v\n%s", said, out)
+			}
+		})
+	}
+}
+
+func TestSetupKeepsAnExecSandboxAlreadySet(t *testing.T) {
+	w, out := wizard(t, cliEnv(t), "", &fakeEngines{})
+	w.goos = "linux"
+	w.secret = func() (string, error) { return "", nil }
+	if err := w.settings.Change(context.Background(), func(s *storage.UserSettings) {
+		s.Sandbox = &storage.ExecSandboxSettings{Mode: "off"}
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.run(context.Background()); err != nil {
+		t.Fatal(err, out)
+	}
+	if got := savedSettings(t, w).Sandbox; got == nil || got.Mode != "off" || len(got.Writable) != 0 {
+		t.Fatalf("exec_sandbox %+v, want the person's off", got)
 	}
 }
