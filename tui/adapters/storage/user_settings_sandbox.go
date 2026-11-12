@@ -32,6 +32,27 @@ func (s UserSettings) ExecSandbox() ExecSandboxSettings {
 	return sandbox
 }
 
+// CompleteExecSandbox fills the exec_sandbox section a clean Linux install
+// decides (12 November 2026): auto, so local commands are confined where
+// bubblewrap can and run unconfined, said on stderr, where it cannot, with
+// caches writable so common checks keep working. Another platform, or a
+// section already set, is left as it is.
+func CompleteExecSandbox(s *UserSettings, goos string, caches []string) {
+	if s.Sandbox != nil || goos != "linux" {
+		return
+	}
+	writable := []string{}
+	for _, path := range caches {
+		if len(writable) == maxSandboxWritable {
+			break
+		}
+		if filepath.IsAbs(path) && filepath.Clean(path) == path && path != string(filepath.Separator) {
+			writable = append(writable, path)
+		}
+	}
+	s.Sandbox = &ExecSandboxSettings{Mode: "auto", Writable: writable}
+}
+
 // AllowsNetwork reports whether confined commands keep the network.
 func (s ExecSandboxSettings) AllowsNetwork() bool { return s.Network == nil || *s.Network }
 
