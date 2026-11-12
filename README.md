@@ -65,4 +65,6 @@ The JSON worker, `cmd/axlr`, accepts exactly one request on stdin and returns on
 
 AXLR is an evolving pre-1.0 project with two Go modules. The console runs interactive tasks; the worker exposes a one-request process API; `axlr-serve` exposes its 19 capabilities over HTTP, gRPC and MCP with mTLS. The checked-in release matrix targets Linux, macOS and Windows on amd64 and arm64. The Helm chart and release workflow are implemented; published assets require a successful tagged run. Source-build instructions use POSIX shell syntax. The service currently configures KMP and MADE only and does not expose the console's plugin installation or work-mode controls.
 
+Every release and its breaking changes are in the [changelog](CHANGELOG.md), under the [deprecation policy](docs/product.md#deprecation-policy). [Security and data](docs/security.md) says what leaves the machine; report a vulnerability as the [security policy](SECURITY.md) says.
+
 Part of [Underpass AI](https://underpassai.com).

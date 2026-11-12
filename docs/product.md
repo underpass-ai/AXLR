@@ -53,6 +53,16 @@ Compatibility is defined by the [component matrix](plugins.md#codex-plugin-compa
 - A role in a ceremony does not spawn a worker. Independent review and ownership transfer need real participants and evidence.
 - Completion means observed work and appropriate checks. A lost response, approval or state transition alone cannot prove that an external operation succeeded.
 
+## Deprecation policy
+
+AXLR is pre-1.0, so a minor release may change behaviour. The rules below say how you hear about it. They apply from 12 November 2026; earlier changes are recorded after the fact in the [changelog](../CHANGELOG.md).
+
+- **What counts.** Command-line flags, `settings.json`, `mcp.json` and `credentials.json` keys, the service's HTTP, gRPC and MCP contracts, the JSON worker protocol, the `--exec` result object, host tool schemas, and the pinned ceremony definitions.
+- **Every breaking change** is listed in the changelog under **Changed (breaking)** with what to do, and the owning guide keeps a dated note ("until 14 October 2026 …") so the old behaviour stays findable.
+- **Removing or renaming** any of the above is announced first: the release before the removal marks it deprecated in the changelog and in its guide, with the date it goes, at least 14 days and one minor release ahead. Where it is practical, the old name keeps working, with a warning on stderr, until that date.
+- **Security fixes** may change behaviour without notice; the changelog and the advisory say what changed.
+- **After 1.0** a breaking change needs a major version.
+
 ## Source of truth
 
 This contract describes `main` as audited on 4 October 2026 at `559a1b8`. [Architecture](architecture.md) maps responsibilities to source; the [audit](documentation-audit.md) records corrections and implementation limits. Current guides describe shipped code. Dated plans preserve design intent and may include work that is not implemented.
