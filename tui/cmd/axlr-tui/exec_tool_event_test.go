@@ -61,8 +61,8 @@ func TestExecToolEventSaysHowTheCallEnded(t *testing.T) {
 	if failed.Status != "failed" || failed.Error != "expired SSO session | second line" {
 		t.Fatalf("failed %+v", failed)
 	}
-	long := execToolEvent(domain.PendingTool{Call: call, Outcome: &domain.ToolOutcome{Content: root.Text(strings.Repeat("é", application.MaxToolCallErrorBytes)), IsError: true}}, nil)
-	if len(long.Error) > application.MaxToolCallErrorBytes || !strings.HasSuffix(long.Error, "…") || !utf8.ValidString(long.Error) {
+	long := execToolEvent(domain.PendingTool{Call: call, Outcome: &domain.ToolOutcome{Content: root.Text(strings.Repeat("é", application.MaxToolCallErrorBytes) + " exit 2"), IsError: true}}, nil)
+	if len(long.Error) > application.MaxToolCallErrorBytes || !strings.Contains(long.Error, " … ") || !strings.HasSuffix(long.Error, "é exit 2") || !utf8.ValidString(long.Error) {
 		t.Fatalf("long error of %d bytes", len(long.Error))
 	}
 	empty := execToolEvent(domain.PendingTool{Call: call, Outcome: &domain.ToolOutcome{IsError: true}}, nil)

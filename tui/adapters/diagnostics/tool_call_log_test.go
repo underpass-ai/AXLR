@@ -50,9 +50,9 @@ func TestToolCallLogBoundsAFailureToTheLogsLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer log.Close()
-	ToolCallLog{Log: log}.ToolCallFinished(application.ToolCallRecord{Session: "0123456789abcdef0123456789abcdef", Call: "call_0123456789abcdef", Tool: "axlr_call_tool", PluginTool: "made/made_start_published_ceremony", Decision: "auto_approve", Failed: true, Error: strings.Repeat("é", application.MaxToolCallErrorBytes)})
+	ToolCallLog{Log: log}.ToolCallFinished(application.ToolCallRecord{Session: "0123456789abcdef0123456789abcdef", Call: "call_0123456789abcdef", Tool: "axlr_call_tool", PluginTool: "made/made_start_published_ceremony", Decision: "auto_approve", Failed: true, Error: strings.Repeat("é", application.MaxToolCallErrorBytes) + " the end"})
 	text := strings.TrimSpace(readLog(t, log.Path()))
-	if strings.Contains(text, "[cut]") || !strings.HasSuffix(text, "…") || !strings.Contains(text, "WARN") {
+	if strings.Contains(text, "[cut]") || !strings.Contains(text, " … ") || !strings.HasSuffix(text, "é the end") || !strings.Contains(text, "WARN") {
 		t.Fatalf("log = %q", text)
 	}
 	ToolCallLog{}.ToolCallFinished(application.ToolCallRecord{Failed: true, Error: "nowhere"})

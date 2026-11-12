@@ -10,7 +10,10 @@ const MaxToolCallErrorBytes = 2 << 10
 
 // ToolCallErrorText is a failed call's text on one line: each line
 // trimmed, the empty ones dropped, the rest joined with " | ", at most
-// limit bytes, cut on a character boundary with "…" when longer.
+// limit bytes. A longer text keeps its beginning and its end, cut on
+// character boundaries, with " … " between: the actionable part of a
+// refusal is often its end, and so is a failed command's standard error
+// in the runtime's answer.
 func ToolCallErrorText(content string, limit int) string {
 	lines := strings.Split(strings.ReplaceAll(content, "\r", ""), "\n")
 	kept := lines[:0]
@@ -23,9 +26,10 @@ func ToolCallErrorText(content string, limit int) string {
 	if len(text) <= limit {
 		return text
 	}
-	const ellipsis = "…"
-	if limit <= len(ellipsis) {
+	const gap = " … "
+	if limit <= 2*len(gap) {
 		return utf8Prefix(text, limit)
 	}
-	return utf8Prefix(text, limit-len(ellipsis)) + ellipsis
+	head := utf8Prefix(text, (limit-len(gap))/2)
+	return head + gap + utf8Suffix(text, limit-len(gap)-len(head))
 }

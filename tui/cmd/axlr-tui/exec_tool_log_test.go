@@ -93,8 +93,28 @@ func TestExecLogsEveryFinishedToolCall(t *testing.T) {
 	if strings.Contains(appLog, "The person asked to see it fail.") {
 		t.Fatal("the app log carries the call's arguments")
 	}
-	if !strings.Contains(trace, `"stage":"tool_completed"`) || !strings.Contains(trace, `"error_class":"tool_result"`) {
-		t.Fatalf("trace without a tool_result completion:\n%s", trace)
+	if classes := completionClasses(t, trace); len(classes) != 1 || classes[0] != "tool_result" {
+		t.Fatalf("tool_completed classes %q in\n%s", classes, trace)
+	}
+
+	// The person's decision goes through the console's resolver: a run
+	// that stops at the card, then --decide approve on its session.
+	env = cliEnv(t)
+	env["PATH"] = os.Getenv("PATH")
+	scriptedModel(t, failingExecChunk, answerChunk)
+	code, stdout, stderr = execRun(t, env, "--root", workspace, "--model", "test/model", "--exec", "run it", "--json")
+	if code != execNeedsDecision {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	pending := execResult(t, stdout)
+	scriptedModel(t, answerChunk)
+	code, _, stderr = execRun(t, env, "--root", workspace, "--session", pending.Session, "--decide", "approve", "--json")
+	if code != execCompleted {
+		t.Fatalf("code=%d stderr=%s", code, stderr)
+	}
+	appLog, _ = execLogs(t, env)
+	if want := "tool call: session " + pending.Session + ", call exec-1, tool local_exec, decision approve, failed in "; !strings.Contains(appLog, want) {
+		t.Fatalf("no line %q in\n%s", want, appLog)
 	}
 
 	// A call the policy refuses before it runs is logged as well.
@@ -125,4 +145,20 @@ func TestExecLogsEveryFinishedToolCall(t *testing.T) {
 	if want := "tool call: session " + execResult(t, stdout).Session + ", call exec-1, tool local_exec, decision deny, failed in 0s: " + refused.Error; !strings.Contains(appLog, want) {
 		t.Fatalf("no line %q in\n%s", want, appLog)
 	}
+}
+
+// completionClasses is the error class of each tool_completed record.
+func completionClasses(t *testing.T, trace string) []string {
+	t.Helper()
+	var classes []string
+	for _, line := range strings.Split(strings.TrimSpace(trace), "\n") {
+		var record struct {
+			Stage      string `json:"stage"`
+			ErrorClass string `json:"error_class"`
+		}
+		if json.Unmarshal([]byte(line), &record) == nil && record.Stage == "tool_completed" {
+			classes = append(classes, record.ErrorClass)
+		}
+	}
+	return classes
 }

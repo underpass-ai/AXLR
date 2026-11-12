@@ -390,7 +390,7 @@ Where the receipt is:
 | `reasoning` | — | Readable reasoning as it streams |
 | `text` | `text.delta` | Answer text |
 | `steered` | — | A message from `--steer-file` went to the model: its `text` |
-| `tool.requested`, `tool.completed` | `tool.requested`, `tool.completed` | A call is made, and its outcome recorded. On the command's lines `tool.requested` carries the call's `arguments`, compact, left out past 8 KiB, and both lines carry `plugin_tool` (`plugin/tool`) when the call reaches a plugin's tool, by its name, its opaque `mcp_…` alias or through `axlr_call_tool`; and `tool.completed` its `status` (`ok` or `failed`) and, when failed, its answer as `error`, on one line (its lines joined with ` \| `) and at most 2 KiB (until 12 November 2026, its first line and 240 characters) |
+| `tool.requested`, `tool.completed` | `tool.requested`, `tool.completed` | A call is made, and its outcome recorded. On the command's lines `tool.requested` carries the call's `arguments`, compact, left out past 8 KiB, and both lines carry `plugin_tool` (`plugin/tool`) when the call reaches a plugin's tool, by its name, its opaque `mcp_…` alias or through `axlr_call_tool`; and `tool.completed` its `status` (`ok` or `failed`) and, when failed, its answer as `error`, on one line (its lines joined with ` \| `) and at most 2 KiB, a longer one keeping its beginning and its end with ` … ` between (until 12 November 2026, its first line and 240 characters) |
 | `artifact` | `artifact` | `axlr_deliver` delivered an artifact: the line's (or payload's) `artifact`, after its `tool.completed` |
 | `session.continued` | `session.continued` | The context cap opened a successor |
 | `decision.required` | `approval.required` | A call waits |

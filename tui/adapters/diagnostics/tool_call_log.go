@@ -25,8 +25,9 @@ type ToolCallLog struct {
 //	tool call: session S, call C, tool T (plugin/tool), decision D, ok in 12ms
 //	tool call: session S, call C, tool T, decision D, failed in 3ms: <error>
 //
-// The record holds no arguments, prompt or model text, so neither does
-// the entry.
+// The record has no field for arguments, prompt or model text; a failed
+// call's answer may still quote an argument, and is redacted like every
+// entry.
 func (l ToolCallLog) ToolCallFinished(record application.ToolCallRecord) {
 	if l.Log == nil {
 		return

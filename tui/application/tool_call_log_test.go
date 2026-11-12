@@ -142,10 +142,16 @@ func TestToolCallErrorTextFlattensAndBounds(t *testing.T) {
 	if got := ToolCallErrorText("\n  expired SSO session  \r\n\nsecond line\n", 100); got != "expired SSO session | second line" {
 		t.Fatalf("flattened %q", got)
 	}
-	long := strings.Repeat("é", 2000)
+	// A longer text keeps its beginning and its end: here a command's
+	// standard error, last in the runtime's answer.
+	long := `{"status":"completed","output":{"stdout":"` + strings.Repeat("é", 2000) + `","stderr":"permission denied: /etc/shadow"}}`
 	got := ToolCallErrorText(long, MaxToolCallErrorBytes)
-	if len(got) > MaxToolCallErrorBytes || !strings.HasSuffix(got, "…") || !utf8.ValidString(got) {
-		t.Fatalf("bounded to %d bytes, valid %v", len(got), utf8.ValidString(got))
+	if len(got) > MaxToolCallErrorBytes || !strings.HasPrefix(got, `{"status":"completed"`) || !strings.HasSuffix(got, `"stderr":"permission denied: /etc/shadow"}}`) || strings.Count(got, " … ") != 1 || !utf8.ValidString(got) {
+		t.Fatalf("bounded to %d bytes, valid %v: %q", len(got), utf8.ValidString(got), got)
+	}
+	// Bounding again, tighter, keeps one gap between the same ends.
+	if again := ToolCallErrorText(got, 1536); len(again) > 1536 || strings.Count(again, " … ") != 1 || !strings.HasSuffix(again, "/etc/shadow\"}}") {
+		t.Fatalf("bounded again %q", again)
 	}
 	if got := ToolCallErrorText("abcdef", 2); got != "ab" {
 		t.Fatalf("tiny bound %q", got)
