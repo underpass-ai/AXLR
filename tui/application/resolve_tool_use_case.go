@@ -137,7 +137,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 	started := time.Now()
 
 	tool, toolArgs, known, resolveErr := ResolveToolCall(s.ToolSnapshot(), pending[0].Call)
-	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Continue.Forge, Publisher: u.Continue.Publisher, TurnLimit: u.Continue.turnLimit(), Approval: u.Approval}
+	admit := headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Continue.Forge, Publisher: u.Continue.Publisher, TurnLimit: u.Continue.turnLimit(), Approval: u.Approval, ToolCalls: u.Continue.ToolCalls}
 	if !known || resolveErr != nil || s.HeadOverBudget(admit.turnLimit()) {
 		return rejectUnknown(ctx, s, admit, emit)
 	}
@@ -169,7 +169,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 			if err := rejectUnknownCall(ctx, s, u.Store, u.Diagnostics, pending[0], validationErr); err != nil {
 				return err
 			}
-			if err := emitTool(s, id, emit); err != nil {
+			if err := finishTool(s, id, time.Time{}, u.Continue.ToolCalls, emit); err != nil {
 				return err
 			}
 			return emitSession(s, emit)
@@ -236,11 +236,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		} else if tool.Identity.Kind == domain.ToolKindHost {
 			hostCtx, hostSpan := StartDiagnosticSpan(ctx, u.Diagnostics, DiagnosticActionToolExecution, DiagnosticEvent{Bytes: len(toolArgs.Bytes())})
 			outcome, runErr = (HostToolUseCase{Skills: u.Continue.PluginSkills, Labels: u.Continue.SessionLabels, Repairs: u.Continue.SelfRepair, Judge: u.Continue.Judge.toolPort(), Windows: u.Continue.Windows, Memory: u.Continue.Remember, Recall: u.Continue.Recall, Forge: u.Continue.Forge, Catalog: u.Continue.Catalog, Publisher: u.Continue.Publisher, Tools: u.Tools, Validation: u.Validation, Logs: u.Continue.Logs, Deliverables: u.Continue.Deliverables}).Execute(hostCtx, *s, tool.Identity, toolArgs)
-			class := DiagnosticErrorNone
-			if runErr != nil || outcome.IsError {
-				class = DiagnosticErrorTool
-			}
-			hostSpan.End(class)
+			hostSpan.End(toolOutcomeClass(outcome, runErr))
 		} else if tool.Identity.Kind == domain.ToolKindLocal && tool.Identity.LocalOperation == "read" {
 			// A page is sized to what the projection keeps per tool result.
 			outcome, runErr = boundedLocalRead(ctx, u.Tools, tool.Identity, toolArgs, projectionBudget(u.Continue.Windows, *s).ToolResultBytes())
@@ -259,10 +255,8 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 				outcome, runErr = u.Tools.Execute(ctx, tool.Identity, withSessionContext(*s, tool, toolArgs))
 			}
 		}
-		if outcome.IsError || outcome.Uncertain {
-			spanClass = DiagnosticErrorTool
-		}
 		runErr = joinCause(runErr, ctx.Err())
+		spanClass = toolOutcomeClass(outcome, runErr)
 		if runErr != nil {
 			outcome = domain.ToolOutcome{Content: root.Text(fmt.Sprintf("tool execution failed; effect unknown: %v", runErr)), IsError: true, Uncertain: true}
 			if errors.Is(ctx.Err(), context.Canceled) {
@@ -328,10 +322,10 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 		u.Continue.recordReceipt(ctx, next, domain.ReceiptEntry{Kind: domain.ReceiptCallEnded, At: time.Now(), Call: id})
 		if runErr != nil {
 			u.recordToolCompletion(ctx, started, DiagnosticErrorTool)
-			return joinCause(joinCause(runErr, emitTool(s, id, emit)), emit(Event{Kind: EventState, State: s.Status()}))
+			return joinCause(joinCause(runErr, finishTool(s, id, started, u.Continue.ToolCalls, emit)), emit(Event{Kind: EventState, State: s.Status()}))
 		}
 	}
-	if err := emitTool(s, id, emit); err != nil {
+	if err := finishTool(s, id, started, u.Continue.ToolCalls, emit); err != nil {
 		return err
 	}
 	u.recordToolCompletion(ctx, started, spanClass)

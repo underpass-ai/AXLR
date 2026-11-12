@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	goruntime "runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -308,7 +309,8 @@ func TestToolRunnerLogsTransportFailuresAndNamesTheLog(t *testing.T) {
 		t.Fatal(err)
 	}
 	var logged []string
-	runner := ToolRunner{Executor: executor, LogFailure: func(line string) { logged = append(logged, line) }}
+	trace := &executionClasses{}
+	runner := ToolRunner{Executor: executor, Diagnostics: trace, LogFailure: func(line string) { logged = append(logged, line) }}
 	tool := pluginTools(snapshot)[0]
 	out, err := runner.Execute(context.Background(), tool.Identity, jsonValue(t, `{"lose_reply":true}`))
 	if err != nil || !out.IsError || !strings.Contains(string(out.Content), "axlr_logs") {
@@ -321,4 +323,20 @@ func TestToolRunnerLogsTransportFailuresAndNamesTheLog(t *testing.T) {
 	if err != nil || !out.IsError || strings.Contains(string(out.Content), "axlr_logs") || len(logged) != 1 {
 		t.Fatalf("definite error: %+v %v logged=%q", out, err, logged)
 	}
+	// The trace tells the transport's failure from the plugin's answer.
+	if want := []application.DiagnosticErrorClass{application.DiagnosticErrorTool, application.DiagnosticErrorToolResult}; !slices.Equal(trace.classes, want) {
+		t.Fatalf("execution classes %q, want %q", trace.classes, want)
+	}
+}
+
+// executionClasses keeps the class each tool execution ended with.
+type executionClasses struct {
+	classes []application.DiagnosticErrorClass
+}
+
+func (c *executionClasses) Record(event application.DiagnosticEvent) error {
+	if event.Action == application.DiagnosticActionToolExecution && event.Stage == application.DiagnosticActionEnd {
+		c.classes = append(c.classes, event.ErrorClass)
+	}
+	return nil
 }

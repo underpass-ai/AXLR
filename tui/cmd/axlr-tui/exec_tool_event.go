@@ -1,20 +1,17 @@
 package main
 
 import (
-	"strings"
-	"unicode/utf8"
-
 	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// Bounds of what a tool line carries: arguments past their bound are left
-// out whole rather than cut into invalid JSON, and a failure's text is cut
-// to its first line.
-const (
-	maxExecToolArguments = 8 << 10
-	maxExecToolError     = 240
-)
+// maxExecToolArguments bounds the arguments a tool line carries: past it
+// they are left out whole rather than cut into invalid JSON. A failure's
+// text is kept whole on one line, up to application.MaxToolCallErrorBytes:
+// until 12 November 2026 it was cut to its first line and 240 characters,
+// and a refused memory write reached the bot's panel as "…is a teammat…",
+// without the part that said what to do.
+const maxExecToolArguments = 8 << 10
 
 // execToolEvent is a call's line: requested with the arguments the model
 // gave, so a reader that follows the run sees what the call asks for, or
@@ -22,7 +19,7 @@ const (
 // own name, its opaque alias or through axlr_call_tool, names that tool as
 // plugin/tool, resolved against the session's snapshot as the run resolves it.
 func execToolEvent(tool domain.PendingTool, snapshot []domain.AvailableTool) execEvent {
-	event := execEvent{Type: "tool.requested", Tool: string(tool.Call.Name), Call: string(tool.Call.ID), Decision: string(tool.Decision), PluginTool: execPluginTool(tool, snapshot)}
+	event := execEvent{Type: "tool.requested", Tool: string(tool.Call.Name), Call: string(tool.Call.ID), Decision: string(tool.Decision), PluginTool: application.CallPluginTool(snapshot, tool.Call)}
 	if tool.Outcome == nil {
 		if arguments := tool.Call.Arguments.Compact().Bytes(); len(arguments) <= maxExecToolArguments {
 			event.Arguments = arguments
@@ -33,31 +30,7 @@ func execToolEvent(tool domain.PendingTool, snapshot []domain.AvailableTool) exe
 	event.Status = "ok"
 	if tool.Outcome.IsError {
 		event.Status = "failed"
-		event.Error = execToolError(string(tool.Outcome.Content))
+		event.Error = application.ToolCallErrorText(string(tool.Outcome.Content), application.MaxToolCallErrorBytes)
 	}
 	return event
-}
-
-// execPluginTool is the plugin's tool a call reaches, empty for the
-// console's own tools and for a call that does not resolve.
-func execPluginTool(tool domain.PendingTool, snapshot []domain.AvailableTool) string {
-	target, _, known, err := application.ResolveToolCall(snapshot, tool.Call)
-	if err != nil || !known || target.Identity.Kind != domain.ToolKindPlugin {
-		return ""
-	}
-	return target.Identity.Plugin.PluginID.String() + "/" + target.Identity.Plugin.ToolName.String()
-}
-
-// execToolError is a failure's first non-empty line, cut short.
-func execToolError(content string) string {
-	for _, line := range strings.Split(content, "\n") {
-		if line = strings.TrimSpace(line); line == "" {
-			continue
-		}
-		if utf8.RuneCountInString(line) > maxExecToolError {
-			line = string([]rune(line)[:maxExecToolError-1]) + "…"
-		}
-		return line
-	}
-	return ""
 }

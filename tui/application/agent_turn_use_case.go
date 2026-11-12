@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -128,7 +129,7 @@ func findTool(s *domain.Session, name root.ToolName) (domain.AvailableTool, bool
 }
 
 func (u ContinueTurnUseCase) admission() headAdmission {
-	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Forge, Publisher: u.Publisher, TurnLimit: u.turnLimit(), Approval: u.Approval}
+	return headAdmission{Store: u.Store, Trace: u.Diagnostics, Validation: u.Validation, Forge: u.Forge, Publisher: u.Publisher, TurnLimit: u.turnLimit(), Approval: u.Approval, ToolCalls: u.ToolCalls}
 }
 
 func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, emit func(Event) error) error {
@@ -148,7 +149,7 @@ func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, 
 			if admit.Trace != nil {
 				_ = admit.Trace.Record(DiagnosticEvent{Stage: DiagnosticToolRejected, SpanID: CurrentDiagnosticSpan(ctx), ToolOrdinal: toolDiagnosticOrdinal(s, p.Call.ID)})
 			}
-			if err := emitTool(s, p.Call.ID, emit); err != nil {
+			if err := finishTool(s, p.Call.ID, time.Time{}, admit.ToolCalls, emit); err != nil {
 				return err
 			}
 			continue
@@ -183,7 +184,7 @@ func rejectUnknown(ctx context.Context, s *domain.Session, admit headAdmission, 
 		if err := rejectUnknownCall(ctx, s, admit.Store, admit.Trace, p, resolveErr); err != nil {
 			return err
 		}
-		if err := emitTool(s, p.Call.ID, emit); err != nil {
+		if err := finishTool(s, p.Call.ID, time.Time{}, admit.ToolCalls, emit); err != nil {
 			return err
 		}
 	}

@@ -50,11 +50,12 @@ func (level AppLevel) Rank() int {
 }
 
 // AppLog is the console's readable log: startup notes, plugin connections
-// and the standard error of the plugins it launches, tool failures. Unlike
-// the trace it holds text (error messages, plugin names, paths), so every
-// entry passes through the redactor first; it never records prompts, model
-// output or tool results. Writes are best effort: a failure never reaches
-// the console.
+// and the standard error of the plugins it launches, a line per finished
+// tool call (ToolCallLog). Unlike the trace it holds text (error messages,
+// plugin names, paths, a failed call's answer), so every entry passes
+// through the redactor first; it never records prompts, model output, tool
+// arguments or the answers of calls that succeeded. Writes are best
+// effort: a failure never reaches the console.
 type AppLog struct {
 	mu      sync.Mutex
 	path    string

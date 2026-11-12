@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	root "github.com/underpass-ai/AXLR/domain"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -47,8 +49,8 @@ func TestExecToolEventLeavesOutArgumentsPastTheBound(t *testing.T) {
 	}
 }
 
-// A completed call says how it ended: ok, or failed with the first line of
-// what it answered, cut short; its arguments are not repeated.
+// A completed call says how it ended: ok, or failed with what it answered
+// on one line, whole up to its bound; its arguments are not repeated.
 func TestExecToolEventSaysHowTheCallEnded(t *testing.T) {
 	call := toolCall(t, "synchro_status", `{"env":"pro"}`)
 	ok := execToolEvent(domain.PendingTool{Call: call, Decision: domain.ToolDecision("approve"), Outcome: &domain.ToolOutcome{Content: "fine"}}, nil)
@@ -56,16 +58,27 @@ func TestExecToolEventSaysHowTheCallEnded(t *testing.T) {
 		t.Fatalf("ok %+v", ok)
 	}
 	failed := execToolEvent(domain.PendingTool{Call: call, Outcome: &domain.ToolOutcome{Content: root.Text("\n  expired SSO session  \nsecond line"), IsError: true}}, nil)
-	if failed.Status != "failed" || failed.Error != "expired SSO session" {
+	if failed.Status != "failed" || failed.Error != "expired SSO session | second line" {
 		t.Fatalf("failed %+v", failed)
 	}
-	long := execToolEvent(domain.PendingTool{Call: call, Outcome: &domain.ToolOutcome{Content: root.Text(strings.Repeat("é", 300)), IsError: true}}, nil)
-	if got := []rune(long.Error); len(got) != maxExecToolError || got[len(got)-1] != '…' {
-		t.Fatalf("long error of %d runes", len(got))
+	long := execToolEvent(domain.PendingTool{Call: call, Outcome: &domain.ToolOutcome{Content: root.Text(strings.Repeat("é", application.MaxToolCallErrorBytes) + " exit 2"), IsError: true}}, nil)
+	if len(long.Error) > application.MaxToolCallErrorBytes || !strings.Contains(long.Error, " … ") || !strings.HasSuffix(long.Error, "é exit 2") || !utf8.ValidString(long.Error) {
+		t.Fatalf("long error of %d bytes", len(long.Error))
 	}
 	empty := execToolEvent(domain.PendingTool{Call: call, Outcome: &domain.ToolOutcome{IsError: true}}, nil)
 	if empty.Status != "failed" || empty.Error != "" {
 		t.Fatalf("empty %+v", empty)
+	}
+}
+
+// On 12 November 2026 a bot's refused memory write reached its panel as
+// "…is a teammat…": the event kept 240 characters. It keeps the refusal
+// whole, with the part that says what the bot may do.
+func TestExecToolEventKeepsARefusedMemoryWriteWhole(t *testing.T) {
+	refusal := `{"call_id":"call-2","error":"the execution's policy keeps what it writes to its own abouts and its team's (project:arte.arte-orquestador, project:arte, ws:a062c091657295be0dae7c3e90ea51a8): project:arte.arte-compositor is a teammate's or another's, which it may read and not write"}`
+	event := execToolEvent(domain.PendingTool{Call: toolCall(t, "axlr_remember", `{"kind":"observation","text":"x","evidence":"e"}`), Decision: domain.DecisionAutoApprove, Outcome: &domain.ToolOutcome{Content: root.Text(refusal), IsError: true}}, nil)
+	if event.Status != "failed" || event.Error != refusal {
+		t.Fatalf("error %q", event.Error)
 	}
 }
 
