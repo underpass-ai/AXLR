@@ -51,6 +51,14 @@ func (m Memory) Remember(ctx context.Context, request application.RememberReques
 	if err != nil {
 		var refused *refusal
 		if errors.As(err, &refused) {
+			// The key is derived from the about, the kind and the text: KMP
+			// refusing it as already accepted means this memory is stored,
+			// only its evidence differs. On 13 November 2026 a model wrote
+			// the same text twice and read the conflict as a failure.
+			if refused.Code == "conflict" && request.Continuation == "" && strings.Contains(refused.Message, "already accepted") {
+				return map[string]any{"accepted": false, "already_recorded": true, "about": request.About, "idempotency_key": request.IdempotencyKey,
+					"instruction": "This memory, with this about, kind and text, is already stored: nothing to do. Do not send it again."}, nil
+			}
 			hint := ""
 			if strings.Contains(refused.Message, "SEARCH_SUMMARY_REQUIRED") || strings.Contains(refused.Message, "summary_en") {
 				hint = "; add summary_en: an English summary of the text"

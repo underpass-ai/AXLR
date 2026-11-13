@@ -117,6 +117,15 @@ func TestRememberNamesWhatKMPRefused(t *testing.T) {
 	}
 }
 
+func TestRememberReadsAConflictOfItsOwnKeyAsAlreadyRecorded(t *testing.T) {
+	var requests []map[string]any
+	m := kmpAnswers(t, &requests, map[string]any{"status": "rejected", "error": map[string]any{"code": "conflict", "message": "embedded kernel ingest conflict for `project:qa`: idempotency key 'axlr:remember:0044' was already accepted with different content"}})
+	answer, err := m.Remember(context.Background(), rememberRequest())
+	if err != nil || answer["already_recorded"] != true || answer["accepted"] != false {
+		t.Fatalf("answer %v, err %v", answer, err)
+	}
+}
+
 // A turn entry is one kind turn memory under the session's about, with
 // the console's English summary as summary_en and one evidence line per
 // action.
