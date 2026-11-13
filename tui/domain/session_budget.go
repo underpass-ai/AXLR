@@ -106,6 +106,7 @@ func (s *Session) CompleteAssistant(result axlr.CompletionResult) error {
 // which starts when the step was accepted. A Jev follow-up allows only
 // what the person's request left (see JevNotePrefix).
 func (s Session) callBudget(turnLimit int) (base, limit int) {
+	turnLimit = s.turnAllowance(turnLimit)
 	base, limit = s.state.FinishedBudgetBase, turnLimit
 	if s.state.Ceremony != nil {
 		base = max(base, s.state.Ceremony.BudgetBase)
@@ -116,6 +117,17 @@ func (s Session) callBudget(turnLimit int) (base, limit int) {
 		limit = max(0, turnLimit-requestCalls(s.state.Messages, at))
 	}
 	return base, limit
+}
+
+// turnAllowance is the turn's tool-call budget: turn_tool_calls, or the
+// execution budget's tool_calls when that is larger. An execution runs as
+// one turn, so its own budget is the one that governs: on 13 November 2026
+// a bot run with tool_calls 120 stopped at the default 32, before its check.
+func (s Session) turnAllowance(turnLimit int) int {
+	if b := s.state.Budget; b != nil && b.Budget.ToolCalls() > turnLimit {
+		return b.Budget.ToolCalls()
+	}
+	return turnLimit
 }
 
 // JevNotePrefix opens the console's follow-up turn when Jev doubts a final

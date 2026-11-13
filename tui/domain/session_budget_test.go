@@ -3,6 +3,7 @@ package domain
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	axlr "github.com/underpass-ai/AXLR/domain"
 )
@@ -46,6 +47,26 @@ func TestTheTurnLimitIsTheConfiguredOne(t *testing.T) {
 	run := CeremonyRun{Compact: true}
 	if run.StepCallLimit(64) != CompactStepCalls || run.StepCallLimit(10) != 10 || (CeremonyRun{}).StepCallLimit(64) != 64 {
 		t.Fatal("step limits")
+	}
+}
+
+// An execution's tool_calls budget governs its one turn when it is larger
+// than turn_tool_calls (13 November 2026: a run with 120 stopped at 32).
+func TestAnExecutionBudgetRaisesTheTurnLimit(t *testing.T) {
+	s := budgetSession(t)
+	budget, err := NewExecutionBudget(0, 0, 40, 0)
+	must(t, err)
+	must(t, s.SetBudget(budget, time.Now(), UsageLedger{}))
+	must(t, answerCalls(t, &s, 32, "a", 35))
+	if left, limit := s.CallsLeft(32); left != 5 || limit != 40 {
+		t.Fatalf("left %d of %d", left, limit)
+	}
+	small := budgetSession(t)
+	budget, err = NewExecutionBudget(0, 0, 8, 0)
+	must(t, err)
+	must(t, small.SetBudget(budget, time.Now(), UsageLedger{}))
+	if _, limit := small.CallsLeft(32); limit != 32 {
+		t.Fatalf("a smaller execution budget leaves the turn limit: %d", limit)
 	}
 }
 
