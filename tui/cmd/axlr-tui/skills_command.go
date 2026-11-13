@@ -130,6 +130,10 @@ func (e skillsEnvironment) run(ctx context.Context, args []string, stdout, stder
 	}
 	switch command {
 	case "list":
+		if len(positional) != 0 {
+			fmt.Fprintln(stderr, "usage: axlr-tui skills list [--refresh]")
+			return 2
+		}
 		overview, err := use.Overview(ctx, *refresh)
 		if err != nil {
 			return fail(err)
