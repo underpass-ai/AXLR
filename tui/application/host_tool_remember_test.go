@@ -263,6 +263,8 @@ func TestHostRememberReadsEvidenceLinesAndArrays(t *testing.T) {
 		`{"kind":"constraint","text":"t","evidence":"ok\n` + long + `"}`:                             "line 2 has 1001 characters",
 		`{"kind":"constraint","text":"t","evidence":{"a":1}}`:                                        "must be a string with one item per line",
 		`{"kind":"constraint","text":"t","evidence":[]}`:                                             "one to 8 non-empty lines, got 0",
+		`{"kind":"observation","text":"x","summary_en":"x","evidence":"x","links":[]}`:               "only repeats the text",
+		`{"kind":"observation","text":" x ","evidence":["x"]}`:                                       "nothing was written",
 	} {
 		if outcome := run(arguments); !outcome.IsError || !strings.Contains(string(outcome.Content), want) {
 			t.Fatalf("%.80s: %s, want %q", arguments, outcome.Content, want)

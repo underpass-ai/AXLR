@@ -108,6 +108,14 @@ func (u HostToolUseCase) hostRemember(ctx context.Context, session domain.Sessio
 	if err != nil {
 		return nil, err
 	}
+	// A strict-schema model (Codex gpt-6.1-sol, 12 and 13 November 2026)
+	// often opens with a filler call, {"text":"x","evidence":"x",
+	// "summary_en":"x"}, before the real one; KMP accepted it and the team's
+	// store kept a memory that says nothing. Evidence that only repeats the
+	// text shows nothing, so the call is refused and nothing is written.
+	if len(evidence) == 1 && evidence[0] == strings.TrimSpace(args.Text) {
+		return nil, fmt.Errorf("axlr_remember evidence only repeats the text %q: nothing was written; send the memory with what shows it (a file:line, a command and its result)", truncateRunes(evidence[0], 60))
+	}
 	state := session.Export()
 	about := args.About
 	if about == "" {
@@ -184,4 +192,12 @@ func rememberAccepted(result string) (about, key string, ok bool) {
 		return "", "", false
 	}
 	return written.About, written.IdempotencyKey, true
+}
+
+// truncateRunes cuts s to at most n runes, for quoting it in an error.
+func truncateRunes(s string, n int) string {
+	if utf8.RuneCountInString(s) <= n {
+		return s
+	}
+	return string([]rune(s)[:n]) + "…"
 }
