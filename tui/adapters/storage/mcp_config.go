@@ -177,7 +177,11 @@ func readMCPConfig(path string) (dto.MCPConfig, error) {
 	decoder.DisallowUnknownFields()
 	var config dto.MCPConfig
 	if err := decoder.Decode(&config); err != nil {
-		return dto.MCPConfig{}, errors.New("invalid MCP config JSON")
+		var typeErr *json.UnmarshalTypeError
+		if errors.As(err, &typeErr) && typeErr.Field != "" {
+			return dto.MCPConfig{}, fmt.Errorf("MCP config %s: field %s must be %s", path, typeErr.Field, typeErr.Type)
+		}
+		return dto.MCPConfig{}, fmt.Errorf("MCP config %s: invalid JSON", path)
 	}
 	if decoder.Decode(new(any)) != io.EOF || config.Version != 1 || len(config.Plugins) > 32 {
 		return dto.MCPConfig{}, errors.New("invalid MCP config version or plugin count")
