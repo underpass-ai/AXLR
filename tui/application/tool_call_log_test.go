@@ -77,6 +77,8 @@ func TestToolCallLogHearsEveryFinishedCall(t *testing.T) {
 	store := &memoryStore{}
 	log := &toolCallRecorder{}
 	u := ResolveToolUseCase{Store: store, Tools: executionFunc(func(context.Context, domain.ToolIdentity, root.JSONValue) (domain.ToolOutcome, error) {
+		// The call that runs takes time the clock can see.
+		clockTick()
 		return domain.ToolOutcome{Content: "fine"}, nil
 	}), Continue: ContinueTurnUseCase{Store: store, ToolCalls: log}}
 	if err := u.resolveOne(context.Background(), &s, "a", domain.DecisionApprove, nil); err != nil {

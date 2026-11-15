@@ -83,3 +83,29 @@ jobs:
         run: |
           GOWORK=off CGO_ENABLED=0 go build -trimpath -o /tmp/axlr ./cmd/axlr
           GOWORK=off CGO_ENABLED=0 go -C tui build -trimpath -o /tmp/axlr-tui ./cmd/axlr-tui
+  windows:
+    # The release workflow tests on six native runners, but only once a tag
+    # is pushed, and a tag is not taken back: v0.19.0 stopped there on 15
+    # November 2026, on three tests that had merged green because this
+    # workflow only ran Linux. These are that workflow's native commands on
+    # one Windows runner, so a pull request hears it. macOS and Windows on
+    # arm64 are still first tested by release.yml: run it by hand before
+    # the tag (docs/releasing.md).
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: |
+            go.sum
+            tui/go.sum
+      - name: Native vet and race tests
+        shell: bash
+        run: |
+          go vet ./...
+          go -C tui vet ./...
+          go test -race ./...
+          go -C tui test -race ./...

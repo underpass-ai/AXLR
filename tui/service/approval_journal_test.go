@@ -64,11 +64,18 @@ func startCallingTurn(t *testing.T, client *http.Client, base string) string {
 	return created.ID
 }
 
+// eventually is how long a test waits for something the service does in
+// the background. Each wait ends as soon as the thing is there; the
+// deadline only stops one that never comes. The waits were two seconds
+// until 15 November 2026, when a windows-2025 runner under the race
+// detector was still at tool.requested when journalUntil's passed.
+const eventually = 30 * time.Second
+
 // journalUntil reads the session's journal until its last event is one of
 // last, and returns it.
 func journalUntil(t *testing.T, s *Server, id string, last ...string) []Event {
 	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for {
 		history, _, err := s.events.Read(id, 0)
 		if err != nil {

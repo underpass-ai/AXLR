@@ -45,7 +45,7 @@ func domainID(t *testing.T, id string) domain.SessionID {
 
 func waitEvent(t *testing.T, s *Server, id, kind string) Event {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for {
 		events, _, err := s.events.Read(id, 0)
 		if err != nil {
