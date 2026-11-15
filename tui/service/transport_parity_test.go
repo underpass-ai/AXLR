@@ -307,7 +307,7 @@ func TestCrossTransportReplayApprovesExactPluginOnce(t *testing.T) {
 			t.Fatal(result)
 		}
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for {
 		call, _ := c.s.calls.Load(body.CallID)
 		if call.Status == "completed" {

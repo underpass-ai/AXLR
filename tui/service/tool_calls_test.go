@@ -81,7 +81,7 @@ func TestDirectCallResultIsAuditedBeforeCompletionIsVisible(t *testing.T) {
 			t.Fatalf("call became %s before its result was audited: %v", status, observed)
 		}
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for directCallStatus(t, client, ts.URL, id) != "completed" {
 		if time.Now().After(deadline) {
 			t.Fatal("call did not complete after the audit resumed")
@@ -170,7 +170,7 @@ func TestDecisionAuditFailureLeavesCallUndecided(t *testing.T) {
 	if response.StatusCode != 202 {
 		t.Fatalf("approve after the audit recovered: %d", response.StatusCode)
 	}
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for directCallStatus(t, client, ts.URL, id) != "completed" {
 		if time.Now().After(deadline) {
 			t.Fatal("approved call did not complete")

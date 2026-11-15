@@ -205,7 +205,7 @@ func TestMTLSRolesSessionsAndIdempotentTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	response.Body.Close()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for {
 		events, _, err := s.events.Read(created.ID, 0)
 		if err != nil {
@@ -433,7 +433,7 @@ func TestDirectApprovalRunsExactCallOnce(t *testing.T) {
 		t.Fatalf("approve: %d", response.StatusCode)
 	}
 	response.Body.Close()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for {
 		response = apiRequest(t, client, "GET", ts.URL+"/v1/tool-calls/"+created.ID, "", "")
 		var result struct {
@@ -502,7 +502,7 @@ func TestSessionApprovalAdvancesOnlyThePendingCall(t *testing.T) {
 		t.Fatalf("approval status: %d", response.StatusCode)
 	}
 	response.Body.Close()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for {
 		stored, err := s.sessions.Load(context.Background(), id)
 		if err != nil {
@@ -672,7 +672,7 @@ func TestSessionPolicyRefusesAForbiddenCall(t *testing.T) {
 	}
 	response.Body.Close()
 	id := domain.SessionID(created.ID)
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	for {
 		history, _, err := s.events.Read(created.ID, 0)
 		if err != nil {
@@ -792,7 +792,7 @@ func TestSessionBudgetEndsTheTurnAndCorrelationReachesEveryEvent(t *testing.T) {
 		t.Fatalf("turn status %d", response.StatusCode)
 	}
 	response.Body.Close()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(eventually)
 	var history []Event
 	for {
 		var err error
