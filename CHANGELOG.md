@@ -2,7 +2,9 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
-## Unreleased
+## 0.19.1 — 2026-11-15
+
+This release carries everything that was meant for 0.19.0. The tag `v0.19.0` was pushed on 15 November 2026 and stopped on both Windows runners, on tests that CI had only run on Linux (fixed in #217, which also makes CI run them on Windows); it has no release and no assets. Use 0.19.1.
 
 ### Added
 - [Security policy](SECURITY.md) with a private disclosure address, and a [security and data](docs/security.md) page: what leaves the machine, prompt-injection posture, audit records.
@@ -17,6 +19,11 @@ Every release of AXLR, newest first. Tags follow [semantic versioning](https://s
 - On Linux the setup assistant writes `exec_sandbox.mode: auto`, with the home's existing build and package caches writable, and says so in its summary (#209). A settings file that already has an `exec_sandbox` section keeps it; other platforms are unchanged.
 
 ### Fixed
+- An invalid `--mcp-config` names the file and the field at fault (#216).
+- `skills list` rejects arguments it does not take (#215).
+- `axlr_remember` answers 'already recorded' when KMP refuses its own idempotency key as already accepted (#214), and refuses a filler write whose evidence only repeats its text (#212).
+- An execution's `tool_calls` budget is its turn's call limit when that is larger than `turn_tool_calls` (#213).
+- Tests pass on Windows, and CI runs them there before a tag does (#217).
 - `axlr_remember` under an execution's policy: the request's schema bounds `about` to the abouts the bot may write, the default first, and a refusal starts with which about to use; a blank `about` or `continuation` is one left out. Codex models invented an about meaning "none" (`project:dev.void`) and one bot sent it ten times.
 - An MCP server process that has already finished closes cleanly instead of failing with `os: process already finished` (#207).
 
