@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -27,7 +26,7 @@ func (u usageLedgers) UpdateUsage(_ context.Context, id domain.SessionID, update
 func pricedAnswer(provider string, cost float64, known bool) streamFunc {
 	return func(ctx context.Context, _ root.CompletionRequest, onText func(root.Text) error) (root.CompletionResult, error) {
 		NotifyProviderActivity(ctx, domain.ProviderReasoning)
-		time.Sleep(time.Millisecond)
+		clockTick()
 		if err := onText("done"); err != nil {
 			return root.CompletionResult{}, err
 		}
@@ -169,7 +168,7 @@ func TestACancelledOrFailedRequestStillReachesTheLedger(t *testing.T) {
 		NotifyToolCallProgress(ctx, "local_read", 30)
 		_ = onText(root.Text(strings.Repeat("palabra ", 50)))
 		// Windows' clock can read no time at all for a fake this fast.
-		time.Sleep(2 * time.Millisecond)
+		clockTick()
 		cancel()
 		return root.CompletionResult{RequestBytes: 41000, Provider: "Anthropic"}, context.Canceled
 	})

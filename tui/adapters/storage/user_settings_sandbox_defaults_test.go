@@ -1,11 +1,25 @@
 package storage
 
 import (
+	"path/filepath"
 	"reflect"
 	"testing"
 )
 
+// linuxPaths skips a test that completes the Linux default where Linux
+// paths are not paths. CompleteExecSandbox checks each cache with the
+// host's path rules, and setup only ever gives it the host's own platform:
+// "linux" with Windows path rules happens in a test and nowhere else. The
+// release of v0.19.0 stopped on it, 15 November 2026.
+func linuxPaths(t *testing.T) {
+	t.Helper()
+	if !filepath.IsAbs("/home/you/.cache") {
+		t.Skip("this host's path rules do not take /home/you/.cache as absolute; the Linux default is only completed on Linux")
+	}
+}
+
 func TestCompleteExecSandboxConfinesACleanLinuxInstall(t *testing.T) {
+	linuxPaths(t)
 	var s UserSettings
 	CompleteExecSandbox(&s, "linux", []string{"/home/you/.cache", "relative", "/tmp/../etc", "/"})
 	want := &ExecSandboxSettings{Mode: "auto", Writable: []string{"/home/you/.cache"}}
@@ -31,6 +45,7 @@ func TestCompleteExecSandboxLeavesOtherPlatformsAndASetSection(t *testing.T) {
 }
 
 func TestCompleteExecSandboxBoundsTheWritablePaths(t *testing.T) {
+	linuxPaths(t)
 	caches := make([]string, maxSandboxWritable+5)
 	for i := range caches {
 		caches[i] = "/cache/" + string(rune('a'+i%26)) + string(rune('a'+i/26))

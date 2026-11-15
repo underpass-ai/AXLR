@@ -2,7 +2,15 @@
 
 The repository now contains a tag-gated [release workflow](../.github/workflows/release.yml), a deterministic [archive packager](../scripts/release/package.py), a locked [engine adapter inventory](../distribution/engines.lock.json) and the [Helm chart](../charts/axlr/Chart.yaml). No published release is implied by these source files. The three binaries are `axlr`, `axlr-tui` and `axlr-serve`; each accepts `--version`.
 
-To release, tag a commit of `main` with exactly `vMAJOR.MINOR.PATCH` or a semantic prerelease, and push the tag:
+Before the tag, rehearse it: a pushed tag is not taken back, and the six native runners test nowhere else. Run the workflow by hand on the commit to release and read it green; nothing is published without a tag.
+
+```bash
+gh workflow run release.yml --ref main
+```
+
+On 15 November 2026 the tag `v0.19.0` was pushed without this and stopped on both Windows runners, on tests that CI had only run on Linux; it has no release. CI now runs the same tests on one Windows runner (`windows` in [ci.yml](../.github/workflows/ci.yml)), which leaves macOS and Windows on arm64 to the rehearsal.
+
+Then tag a commit of `main` with exactly `vMAJOR.MINOR.PATCH` or a semantic prerelease, and push the tag:
 
 ```bash
 git tag vX.Y.Z <commit-on-main>
