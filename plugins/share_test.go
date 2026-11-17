@@ -18,7 +18,7 @@ func TestManagerUsesTheSharedSocketOrFallsBackToTheCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registration, err := NewRegistration(Manifest{ID: "kmp", Command: command, Args: []string{"-test.run=^TestPluginHelper$"}, AllowAll: true}, []string{"AXLR_PLUGIN_HELPER=1"})
+	registration, err := NewRegistration(Manifest{ID: "kmp", Command: command, Args: []string{"-test.run=^TestPluginHelper$"}, AllowAll: true}, []string{"AXLR_PLUGIN_HELPER=1", quietRaceExit})
 	if err != nil {
 		t.Fatal(err)
 	}

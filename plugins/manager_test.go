@@ -66,7 +66,7 @@ func pluginRegistration(t *testing.T, id string, allowed []domain.PluginToolName
 	if err != nil {
 		t.Fatal(err)
 	}
-	env := append([]string{"AXLR_PLUGIN_HELPER=1"}, extraEnv...)
+	env := append([]string{"AXLR_PLUGIN_HELPER=1", quietRaceExit}, extraEnv...)
 	r, err := NewRegistration(Manifest{ID: domain.PluginID(id), Command: command, Args: []string{"-test.run=^TestPluginHelper$"}, AllowTools: allowed}, env)
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func TestManagerWildcardDiscoversAndCallsAdvertisedTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	registration, err := NewRegistration(Manifest{ID: "all", Command: command, Args: []string{"-test.run=^TestPluginHelper$"}, AllowAll: true}, []string{"AXLR_PLUGIN_HELPER=1"})
+	registration, err := NewRegistration(Manifest{ID: "all", Command: command, Args: []string{"-test.run=^TestPluginHelper$"}, AllowAll: true}, []string{"AXLR_PLUGIN_HELPER=1", quietRaceExit})
 	if err != nil {
 		t.Fatal(err)
 	}
