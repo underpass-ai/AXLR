@@ -2,7 +2,7 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
-## 0.19.2 — 2026-11-18
+## 0.20.0 — 2026-11-18
 
 ### Changed
 - The image bundles KMP v0.26.1 and MADE v0.11.0 (`distribution/engines.lock.json`, until now KMP v0.24.0 and MADE v0.9.1), with their license and notice files; CI validates the driven ceremonies against MADE v0.11.0.
