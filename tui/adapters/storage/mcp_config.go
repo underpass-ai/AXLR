@@ -181,6 +181,9 @@ func readMCPConfig(path string) (dto.MCPConfig, error) {
 		if errors.As(err, &typeErr) && typeErr.Field != "" {
 			return dto.MCPConfig{}, fmt.Errorf("MCP config %s: field %s must be %s", path, typeErr.Field, typeErr.Type)
 		}
+		if strings.HasPrefix(err.Error(), "json: unknown field ") {
+			return dto.MCPConfig{}, fmt.Errorf("MCP config %s: %s; remove the unknown field", path, err)
+		}
 		return dto.MCPConfig{}, fmt.Errorf("MCP config %s: invalid JSON", path)
 	}
 	if decoder.Decode(new(any)) != io.EOF || config.Version != 1 || len(config.Plugins) > 32 {
