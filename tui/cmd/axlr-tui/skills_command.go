@@ -141,6 +141,10 @@ func (e skillsEnvironment) run(ctx context.Context, args []string, stdout, stder
 		writeSkillOverview(stdout, overview)
 		return 0
 	case "search":
+		if len(positional) == 0 {
+			fmt.Fprintln(stderr, "axlr-tui skills search: at least one search term is required")
+			return 2
+		}
 		matches, catalogs, err := use.Search(ctx, positional)
 		if err != nil {
 			return fail(err)
