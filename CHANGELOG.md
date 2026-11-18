@@ -2,6 +2,16 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.0 — 2026-11-18
+
+### Changed
+- The image bundles KMP v0.26.1 and MADE v0.11.0 (`distribution/engines.lock.json`, until now KMP v0.24.0 and MADE v0.9.1), whose license and notice files are unchanged; CI validates the driven ceremonies against MADE v0.11.0.
+
+### Fixed
+- An MCP configuration with a field AXLR does not know names the field and where it is, and says to remove it, instead of answering `invalid JSON` (#219).
+- `skills search` without search terms is a usage error instead of an empty result (#220).
+- Plugin test children exit at once under `-race` (#221).
+
 ## 0.19.1 — 2026-11-15
 
 This release carries everything that was meant for 0.19.0. The tag `v0.19.0` was pushed on 15 November 2026 and stopped on both Windows runners, on tests that CI had only run on Linux (fixed in #217, which also makes CI run them on Windows); it has no release and no assets. Use 0.19.1.
