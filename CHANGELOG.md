@@ -5,7 +5,7 @@ Every release of AXLR, newest first. Tags follow [semantic versioning](https://s
 ## 0.20.0 — 2026-11-18
 
 ### Changed
-- The image bundles KMP v0.26.1 and MADE v0.11.0 (`distribution/engines.lock.json`, until now KMP v0.24.0 and MADE v0.9.1), with their license and notice files; CI validates the driven ceremonies against MADE v0.11.0.
+- The image bundles KMP v0.26.1 and MADE v0.11.0 (`distribution/engines.lock.json`, until now KMP v0.24.0 and MADE v0.9.1), whose license and notice files are unchanged; CI validates the driven ceremonies against MADE v0.11.0.
 
 ### Fixed
 - An MCP configuration with a field AXLR does not know names the field and where it is, and says to remove it, instead of answering `invalid JSON` (#219).

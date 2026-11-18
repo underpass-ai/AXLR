@@ -17,13 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
-      - name: Validate the console-driven definitions, their pins and the drafts with checksummed MADE 0.10.0
+      - name: Validate the console-driven definitions, their pins and the drafts with checksummed MADE 0.11.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ceremony_test_dir=$(mktemp -d)
-          ceremony_asset=made-mcp-v0.10.0-x86_64-unknown-linux-gnu
-          ceremony_release=https://github.com/underpass-ai/made/releases/download/v0.10.0
+          ceremony_asset=made-mcp-v0.11.0-x86_64-unknown-linux-gnu
+          ceremony_release=https://github.com/underpass-ai/made/releases/download/v0.11.0
           # Authenticated and retried: GitHub's anonymous release downloads
           # answered 504 for hours on 8 November 2026.
           fetch() { curl -fsSL --retry 6 --retry-all-errors --retry-delay 5 -H "Authorization: Bearer $GITHUB_TOKEN" "$1" -o "$2"; }
