@@ -2,6 +2,11 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.1 — 2026-11-19
+
+### Fixed
+- The image bundles MADE v0.11.1 (`distribution/engines.lock.json`, until now v0.11.0), whose request gate checks `const`: `made_begin_artifact_upload` accepts an `imported` provenance again (made#287), and a `children_completed` exit guard that joins `all` or `any` is accepted without `count`. MADE's license and notice files are unchanged; CI validates the driven ceremonies against MADE v0.11.1.
+
 ## 0.20.0 — 2026-11-18
 
 ### Changed
