@@ -7,6 +7,9 @@ Every release of AXLR, newest first. Tags follow [semantic versioning](https://s
 ### Fixed
 - Build with Go 1.26.11 to address GO-2026-6859 in net/http and GO-2026-6809 in crypto/x509 (#225).
 
+### Security
+- The image bundles KMP v0.26.2 and MADE v0.11.2 (`distribution/engines.lock.json`, until now KMP v0.26.1 and MADE v0.11.1), security releases that close CVE-2026-119375 in the bundled SQLite, CVE-2026-111943 in certificate verification, the rustls advisories RUSTSEC-2026-0346..0349 (MADE) and RUSTSEC-2026-0258 in h2. Their license and notice files are unchanged; CI validates the driven ceremonies against MADE v0.11.2.
+
 ## 0.20.1 — 2026-11-19
 
 ### Fixed
