@@ -2,7 +2,7 @@ module github.com/underpass-ai/AXLR
 
 go 1.26
 
-toolchain go1.26.9
+toolchain go1.26.11
 
 require github.com/modelcontextprotocol/go-sdk v1.8.0
 
