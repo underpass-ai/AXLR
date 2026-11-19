@@ -2,6 +2,11 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.2 — 2026-11-19
+
+### Fixed
+- Build with Go 1.26.11 to address GO-2026-6859 in net/http and GO-2026-6809 in crypto/x509 (#225).
+
 ## 0.20.1 — 2026-11-19
 
 ### Fixed
