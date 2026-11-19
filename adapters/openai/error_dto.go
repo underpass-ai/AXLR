@@ -28,6 +28,14 @@ var errorStatuses = map[string]int{
 	"invalid_request_error":      400,
 	"context_length_exceeded":    400,
 	"server_error":               500,
+	// Codex's backend, for a ChatGPT login (codex-rs, codex-api
+	// responses_error.rs and error.rs).
+	"server_is_overloaded":        503,
+	"policy_capacity_unavailable": 503,
+	"slow_down":                   429,
+	"usage_limit_reached":         429,
+	"credit_balance_exhausted":    402,
+	"usage_not_included":          402,
 }
 
 // classify maps an HTTP status and a string code to the error category.

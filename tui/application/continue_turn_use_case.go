@@ -88,6 +88,10 @@ type ContinueTurnUseCase struct {
 	// model's last answers, that many in a row, each failed alike (stopFailureStreak, in the agent's loop); zero never stops. A
 	// run without a person sets it, the console leaves it zero.
 	ToolFailureStreak int
+	// ModelRetryWaits are the waits before each new attempt at a request
+	// the provider failed with an error that may pass (model_retry.go);
+	// nil waits defaultModelRetryWaits, an empty slice never retries.
+	ModelRetryWaits []time.Duration
 	// Usage keeps each session's ledger of tokens, cost and latency, and
 	// MaxSessionUSD refuses a session's requests once its known cost
 	// reaches it (zero, no limit); nil keeps no ledger (session_usage.go).
@@ -431,6 +435,29 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		_ = emit(Event{Kind: EventModelRouted, Model: req.Model, Route: route})
 	}
 	result, meter, err := ask(req, route)
+	// A failure the provider says may pass, before anything reached the
+	// person, is asked again of the same model after a wait, each time as
+	// another request the budget counts. A routing with another candidate
+	// falls back to it instead (19 November 2026: Codex's backend cut a
+	// few requests a day with an error, and each ended its execution).
+	if len(ranked) < 2 {
+		for _, wait := range u.modelRetryWaits() {
+			if !transientModelFailure(err) || !fallsBack(ctx, err, meter, draft.Len()) || !waitForRetry(ctx, wait) {
+				break
+			}
+			if refusal := u.budgetRefusal(ctx, *session); refusal != nil {
+				return interrupt(errors.Join(err, refusal))
+			}
+			if refusal := u.requestRefusal(ctx, *session); refusal != nil {
+				if stop := budgetCause(ctx, refusal); stop != nil {
+					return pauseAtBudget(ctx, u.Store, session, stop, emit)
+				}
+				return interrupt(errors.Join(err, refusal))
+			}
+			_ = emit(Event{Kind: EventModelRouted, Model: req.Model, Route: domain.RouteRetry, RouteFrom: req.Model, RouteError: err.Error()})
+			result, meter, err = ask(req, domain.RouteRetry)
+		}
+	}
 	switch {
 	case ranked == nil || !fallsBack(ctx, err, meter, draft.Len()):
 	case len(ranked) == 1:

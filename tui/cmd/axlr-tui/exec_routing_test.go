@@ -95,13 +95,15 @@ func TestExecRoutesItsRequestsAmongItsCandidates(t *testing.T) {
 		t.Fatalf("result %+v", result)
 	}
 
-	// Remote providers forbidden: the failed local request ends the run.
+	// Remote providers forbidden: the local model is the only candidate,
+	// so the failed request is asked of it again, twice, and then ends the
+	// run.
 	env = cliEnv(t)
 	writeSettings(t, env, routingSettings)
 	strict := writePolicy(t, `{"candidates": ["qwen-local", "anthropic/claude-haiku-5.5"], "objective": "cost", "allow_remote_providers": false}`)
 	hosts = routedHosts(t, true)
 	code, stdout, stderr = execRun(t, env, "--root", t.TempDir(), "--exec", "say done", "--routing", strict, "--json")
-	if code != execFailed || strings.Join(*hosts, ",") != "127.0.0.1:18080" || !strings.Contains(stderr, "remote providers not allowed") {
+	if code != execFailed || strings.Join(*hosts, ",") != "127.0.0.1:18080,127.0.0.1:18080,127.0.0.1:18080" || !strings.Contains(stderr, "remote providers not allowed") || strings.Count(stderr, "qwen-local failed (model endpoint 127.0.0.1:18080 transport failure); asking it again") != 2 {
 		t.Fatalf("code=%d hosts=%v stderr=%s", code, *hosts, stderr)
 	}
 	result := execResult(t, stdout)

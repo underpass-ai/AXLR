@@ -39,13 +39,20 @@ func (a *streamAccumulator) Add(data []byte) ([]domain.Text, error) {
 		Response    *responseDTO    `json:"response"`
 		Code        json.RawMessage `json:"code"`
 		Message     string          `json:"message"`
+		Error       json.RawMessage `json:"error"`
 	}
 	if err := json.Unmarshal(data, &event); err != nil {
 		return nil, errors.New("malformed " + a.provider + " stream event")
 	}
 	switch event.Type {
 	case "error":
-		raw, _ := json.Marshal(errorDTO{Code: event.Code, Message: event.Message})
+		// OpenAI puts the code and the message on the event; Codex's
+		// backend nests them in an error object, which read as an error
+		// without code or message until 19 November 2026.
+		raw := event.Error
+		if len(raw) == 0 || string(raw) == "null" {
+			raw, _ = json.Marshal(errorDTO{Code: event.Code, Message: event.Message})
+		}
 		if err, ok := providerError(raw); ok {
 			return nil, err
 		}

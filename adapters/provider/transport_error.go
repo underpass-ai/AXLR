@@ -13,3 +13,7 @@ func (e *TransportError) Error() string {
 	return DefaultProviderName + " transport failure"
 }
 func (e *TransportError) Unwrap() error { return e.Cause }
+
+// Transient reports that asking again may succeed: the connection failed,
+// not the provider's verdict on the request.
+func (e *TransportError) Transient() bool { return true }
