@@ -7,9 +7,9 @@
       "linux/arm64": {"url": "https://github.com/underpass-ai/kmp/releases/download/v0.26.1/kmp-mcp-v0.26.1-aarch64-unknown-linux-gnu", "sha256": "407fea48a0189ea0fa870b091217ecab405453400f365b24831b4e7a7c9e7411"}
     },
     "made": {
-      "version": "v0.11.0",
-      "linux/amd64": {"url": "https://github.com/underpass-ai/made/releases/download/v0.11.0/made-mcp-v0.11.0-x86_64-unknown-linux-gnu", "sha256": "8a1336e0d377251e6387f7bbef739ebbecf78d9882328045a245ced45e92ac4f"},
-      "linux/arm64": {"url": "https://github.com/underpass-ai/made/releases/download/v0.11.0/made-mcp-v0.11.0-aarch64-unknown-linux-gnu", "sha256": "af8c40cbe3c96113f12c75dc7a706543db27a682e7a1bda1b4214a1a48d79874"}
+      "version": "v0.11.1",
+      "linux/amd64": {"url": "https://github.com/underpass-ai/made/releases/download/v0.11.1/made-mcp-v0.11.1-x86_64-unknown-linux-gnu", "sha256": "cd2c840b7ff2e92772ef9004b31897cbd316dda140dcbfb3acf83728f4e2feb8"},
+      "linux/arm64": {"url": "https://github.com/underpass-ai/made/releases/download/v0.11.1/made-mcp-v0.11.1-aarch64-unknown-linux-gnu", "sha256": "404d73e79cdb8bdfb6610ac6a8d79cec514f49dc8bffbac26f53be4db4da8e0e"}
     }
   }
 }
