@@ -338,9 +338,13 @@ func execLoop(ctx context.Context, first execStep, start application.StartTurnUs
 			}
 		case application.EventModelRouted:
 			// The routing chose the request's model: the one it ranked
-			// first, or the next after the first failed.
-			if e.Route == domain.RouteFallback {
+			// first, or the next after the first failed; or a request
+			// that failed in passing goes to the same model again.
+			switch e.Route {
+			case domain.RouteFallback:
 				fmt.Fprintf(stderr, "axlr-tui: %s failed (%s); the request goes to %s\n", e.RouteFrom, e.RouteError, e.Model)
+			case domain.RouteRetry:
+				fmt.Fprintf(stderr, "axlr-tui: %s failed (%s); asking it again\n", e.RouteFrom, e.RouteError)
 			}
 			write(execEvent{Type: "model.routed", Session: string(session.ID()), Model: string(e.Model), Route: string(e.Route), From: string(e.RouteFrom), Error: e.RouteError})
 		case application.EventReasoningProgress:

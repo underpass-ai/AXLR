@@ -9,4 +9,7 @@ const (
 	// RouteFallback: the model ranked first failed the request, and this
 	// one, the next, took it again.
 	RouteFallback RouteReason = "fallback"
+	// RouteRetry: the provider failed the request before showing anything,
+	// with an error that may pass, and the same model was asked again.
+	RouteRetry RouteReason = "retry"
 )

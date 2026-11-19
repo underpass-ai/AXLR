@@ -351,6 +351,9 @@ func TestStreamFailedAndErrorEvents(t *testing.T) {
 		"error event":  {`{"type":"error","code":"rate_limit_exceeded","message":"slow down","param":null}`, 429, provider.CategoryRateLimited},
 		"quota event":  {`{"type":"error","code":"insufficient_quota","message":"You exceeded your current quota","param":null}`, 402, provider.CategoryInsufficientCredits},
 		"unknown code": {`{"type":"error","code":null,"message":"odd","param":null}`, 502, provider.CategoryProviderFailure},
+		// Codex's backend nests the error object in the event.
+		"codex overloaded":  {`{"type":"error","error":{"type":"service_unavailable_error","code":"server_is_overloaded","message":"Our servers are currently overloaded."}}`, 503, provider.CategoryProviderFailure},
+		"codex usage limit": {`{"type":"error","error":{"type":"usage_limit_reached","code":"usage_limit_reached","message":"The usage limit has been reached"}}`, 429, provider.CategoryRateLimited},
 	} {
 		c, _ := testClient(t, ClientConfig{}, 200, &trackedStreamBody{Reader: strings.NewReader(sse(toolStream[0], tc.event))}, nil)
 		got, err := c.Stream(context.Background(), simpleRequest(), func(domain.Text) error { return nil })
@@ -361,6 +364,16 @@ func TestStreamFailedAndErrorEvents(t *testing.T) {
 		if got.RequestBytes == 0 {
 			t.Fatalf("%s: sent = %+v", name, got)
 		}
+		if failed.Transient() != (tc.category == provider.CategoryProviderFailure) {
+			t.Fatalf("%s: transient = %v", name, failed.Transient())
+		}
+	}
+	// The nested object's message is kept: until 19 November 2026 it read
+	// "provider_failure (HTTP 502)" and nothing more.
+	c, _ := testClient(t, ClientConfig{}, 200, &trackedStreamBody{Reader: strings.NewReader(sse(toolStream[0], `{"type":"error","error":{"code":"server_is_overloaded","message":"Our servers are currently overloaded."}}`))}, nil)
+	_, err := c.Stream(context.Background(), simpleRequest(), func(domain.Text) error { return nil })
+	if err == nil || !strings.Contains(err.Error(), "(HTTP 503): Our servers are currently overloaded.") {
+		t.Fatalf("err = %v", err)
 	}
 }
 

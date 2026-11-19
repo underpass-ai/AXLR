@@ -42,9 +42,9 @@ func (e ReceiptEntry) Validate() error {
 			return err
 		}
 		switch e.Route {
-		case "", RouteRanked, RouteFallback:
+		case "", RouteRanked, RouteFallback, RouteRetry:
 		default:
-			return errors.New("a request's route is ranked or fallback")
+			return errors.New("a request's route is ranked, fallback or retry")
 		}
 	case ReceiptRequestEnded:
 		switch e.Status {

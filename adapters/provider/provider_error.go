@@ -42,6 +42,11 @@ func (e *ProviderError) Error() string {
 	return fmt.Sprintf("%s %s (HTTP %d)", provider, e.Category, e.StatusCode)
 }
 
+// Transient reports whether asking again may succeed: the provider failed
+// the request itself (a 5xx, or an error it sent without a code AXLR
+// knows), not the key, the credits, the request or a rate limit.
+func (e *ProviderError) Transient() bool { return e.Category == CategoryProviderFailure }
+
 // invalidModel recognises the messages providers send for a model id they
 // do not serve: OpenRouter's "… is not a valid model ID" and "No endpoints
 // found for …", the OpenAI-compatible servers' "model … does not exist" or
