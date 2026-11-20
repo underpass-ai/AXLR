@@ -9,6 +9,8 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // dropUnmeantDiscoveryFields reads a call as it was meant when the model
@@ -225,16 +227,43 @@ func hostCutDescription(text string) string {
 }
 
 // termsMatched counts the lowercase terms text contains.
+// termsMatched counts the terms that start a word of text: "port" finds
+// "ports" and "port_scan" but not "report" or "apportionment", which put 26
+// unrelated catalog tools (10 KB) before a local model with a 16K window on
+// 20 November 2026. A term that starts with no letter or digit matches
+// anywhere.
 func termsMatched(text string, terms []string) int {
 	text = strings.ToLower(text)
 	count := 0
 	for _, term := range terms {
-		if strings.Contains(text, term) {
+		if startsAWord(text, term) {
 			count++
 		}
 	}
 	return count
 }
+
+// startsAWord reports term at the start of a word of text: at its beginning
+// or after a character that is no letter or digit.
+func startsAWord(text, term string) bool {
+	if first, _ := utf8.DecodeRuneInString(term); term == "" || !wordRune(first) {
+		return strings.Contains(text, term)
+	}
+	for from := 0; from <= len(text); {
+		i := strings.Index(text[from:], term)
+		if i < 0 {
+			return false
+		}
+		i += from
+		if before, _ := utf8.DecodeLastRuneInString(text[:i]); i == 0 || !wordRune(before) {
+			return true
+		}
+		from = i + 1
+	}
+	return false
+}
+
+func wordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }
 
 func hostInteger(args map[string]json.RawMessage, key string, fallback int) (int, error) {
 	raw, exists := args[key]

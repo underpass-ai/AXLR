@@ -134,3 +134,30 @@ func TestAxlrToolsListsOnlyTheToolsTheSessionOffers(t *testing.T) {
 		}
 	}
 }
+
+// A search term starts a word: on 20 November 2026 "port" matched
+// apportionment, report and support, 26 catalog tools and 10 KB before a
+// local model with a 16K window, and "hash" matched geohash.
+func TestSearchTermsStartAWord(t *testing.T) {
+	for _, tc := range []struct {
+		text, term string
+		want       bool
+	}{
+		{"port_scan probes ports", "port", true},
+		{"lists open ports", "port", true},
+		{"apportionment of seats", "port", false},
+		{"writes a report; support desk", "port", false},
+		{"geohash to coordinates", "hash", false},
+		{"sha-256 hash of a file", "hash", true},
+		{"made_get_ceremony_instance", "ceremony", true},
+		{"made_get_ceremony_instance", "get_ceremony", true},
+		{"tls certificate inspection", "cert", true},
+		{"axlr_logs", "_logs", true},
+		{"señal de red", "señal", true},
+		{"", "port", false},
+	} {
+		if got := termsMatched(tc.text, []string{tc.term}) == 1; got != tc.want {
+			t.Errorf("%q in %q = %v, want %v", tc.term, tc.text, got, tc.want)
+		}
+	}
+}
