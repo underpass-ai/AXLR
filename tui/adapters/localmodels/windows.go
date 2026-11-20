@@ -21,6 +21,10 @@ type Windows struct {
 	Calibration interface {
 		BytesPerToken(root.ModelID) (int, bool)
 	}
+	// Served is what a local model's server said it serves when it refused
+	// a longer request; it lowers that model's window from then on. Nil
+	// learns nothing.
+	Served *ServedWindows
 }
 
 func (w Windows) ContextWindow(id root.ModelID) domain.ContextWindow {
@@ -28,7 +32,21 @@ func (w Windows) ContextWindow(id root.ModelID) domain.ContextWindow {
 	if w.Cap > 0 && (window <= 0 || w.Cap < window) {
 		window = w.Cap
 	}
+	if _, local := w.Local[id]; local {
+		if served, ok := w.Served.window(id); ok && (window <= 0 || served < window) {
+			window = served
+		}
+	}
 	return window
+}
+
+// ObserveServedWindow records the window a local model's server reported
+// when it refused a request (application.ServedWindowPort). A remote model,
+// or a window above the one in force, changes nothing.
+func (w Windows) ObserveServedWindow(id root.ModelID, tokens int) {
+	if _, local := w.Local[id]; local {
+		w.Served.observe(id, domain.ContextWindow(tokens))
+	}
 }
 
 // ContextBudget derives a local model's budget from its window, which its

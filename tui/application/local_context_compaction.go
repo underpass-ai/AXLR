@@ -13,7 +13,8 @@ import (
 )
 
 // compactLocalRequest first tries summarizing closed turns. If the live turn
-// still does not fit, progressively shorten its finished tool results.
+// still does not fit, progressively shorten its finished tool results, and
+// last fold its oldest steps into one note (foldActiveTurn).
 func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, original []root.Message, projection *domain.ContextProjection, budget domain.ContextBudget, cap int) (root.CompletionRequest, int, error) {
 	fitted, counted, err := u.compactLocalHistory(req, original, projection, budget, cap)
 	var full *LocalContextLimitError
@@ -72,6 +73,11 @@ func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, ori
 			}
 			return fitted, counted, err
 		}
+	}
+	// Shortened results still do not fit: the oldest steps of the turn fold
+	// into one note and the latest stay whole.
+	if folded, foldedCount, ok := u.foldActiveTurn(candidate, original, projection, cap); ok {
+		return folded, foldedCount, nil
 	}
 	return fitted, counted, err
 }
@@ -200,18 +206,28 @@ func (e *LocalContextLimitError) Error() string {
 var llamaContextOverflow = regexp.MustCompile(`(?i)request \(([0-9]+) tokens\) exceeds the available context size \(([0-9]+) tokens\)`)
 
 func localContextRetryCap(err error, estimated, configured int) int {
+	prompt, window, ok := llamaOverflow(err)
+	if !ok {
+		return 0
+	}
+	return min(configured, int(float64(estimated)*float64(window/4*3)/float64(prompt)))
+}
+
+// llamaOverflow reads the prompt and the window llama.cpp reported when it
+// refused a request as longer than its context.
+func llamaOverflow(err error) (prompt, window int, ok bool) {
 	var failure *provider.ProviderError
 	if !errors.As(err, &failure) || failure.StatusCode != 400 {
-		return 0
+		return 0, 0, false
 	}
 	counts := llamaContextOverflow.FindStringSubmatch(failure.Message)
 	if len(counts) == 0 {
-		return 0
+		return 0, 0, false
 	}
 	prompt, promptErr := strconv.Atoi(counts[1])
 	window, windowErr := strconv.Atoi(counts[2])
 	if promptErr != nil || windowErr != nil || window < 4 || prompt < window {
-		return 0
+		return 0, 0, false
 	}
-	return min(configured, int(float64(estimated)*float64(window/4*3)/float64(prompt)))
+	return prompt, window, true
 }

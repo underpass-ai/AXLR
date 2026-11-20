@@ -510,6 +510,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		profiles = append(profiles, domain.PluginProfile{ID: registration.Manifest.ID, Name: root.Text(registration.Manifest.ID), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
 	}
 	registrations = append(persisted.Registrations, registrations...)
+	pinMADEToolProfile(registrations)
 	// The memory of this launch: the checkout's own store, prepared and
 	// pinned before anything reads the registrations.
 	kmp, hasKMP, kmpErr := prepareKMPStore(ctx, registrations, workspacePath, dataBase, *kmpStoreFlag)

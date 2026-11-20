@@ -11,6 +11,7 @@ import (
 	"github.com/underpass-ai/AXLR/buildinfo"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/adapters/engines"
+	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 )
 
 // engineServeFlag runs the process as the daemon of one shared engine; the
@@ -34,6 +35,19 @@ func sharedEngine(r plugins.Registration) bool {
 
 // engineSocketDir is where the shared engines' sockets live: the user's
 // runtime directory, else the state directory.
+// pinMADEToolProfile runs every stdio MADE entry under the tool profile the
+// console needs, before the plugin manager and the shared engine read the
+// registrations: MADE's launcher lists `core` by default, which refuses the
+// resume inspection, host handoff and agent status a claimed turn calls
+// (madesetup.ToolProfile). An entry that names a profile keeps it.
+func pinMADEToolProfile(registrations []plugins.Registration) {
+	for i, r := range registrations {
+		if r.Manifest.ID == "made" && r.Manifest.Command != "" {
+			registrations[i].Env = madesetup.WithToolProfile(r.Env)
+		}
+	}
+}
+
 func engineSocketDir(getenv func(string) string, stateBase string) string {
 	if runtimeDir := getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(runtimeDir) {
 		return filepath.Join(runtimeDir, "axlr", "engines")

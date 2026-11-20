@@ -2,6 +2,7 @@ package domain
 
 import (
 	"path/filepath"
+	"regexp"
 	"strings"
 )
 
@@ -170,9 +171,18 @@ func commandFlag(arg string) bool {
 	return strings.ContainsRune(arg[1:], 'c')
 }
 
+// discardRedirect is an output redirection to a device that keeps nothing:
+// >/dev/null, 2> /dev/null, &>/dev/null, >>/dev/null, >/dev/stderr and the
+// like.
+var discardRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*/dev/(?:null|stdout|stderr|tty|fd/[0-9]+)(?:[\s;|&)]|$)`)
+
 // destructiveScript matches a shell string literally: a card for a false
 // positive costs a keypress, a missed deletion costs more.
 func destructiveScript(workspace Workspace, script string, rules map[string]bool) string {
+	// A redirection to a discard device writes nothing: "2>/dev/null" held
+	// the ">/" of an overwrite outside the workspace and put a card on every
+	// probe a local model wrote (13 of 13 cards on wrx80, 20 November 2026).
+	script = discardRedirect.ReplaceAllString(script, " ")
 	lower := " " + strings.ToLower(script) + " "
 	for _, rule := range []struct{ name, pattern string }{{RuleGitPush, "git push"}, {RuleGitResetHard, "reset --hard"}, {RuleGitClean, "git clean"}, {RuleGitBranchDelete, "branch -d"}, {RuleGitBranchDelete, "branch --delete"}, {RuleGitRebase, "git rebase"}} {
 		if rules[rule.name] && strings.Contains(lower, rule.pattern) {

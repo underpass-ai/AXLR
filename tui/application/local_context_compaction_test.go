@@ -33,6 +33,7 @@ func TestLocalContextCompactsAndContinuesInSameSession(t *testing.T) {
 			}
 
 			originalID := session.ID()
+			windows := &servedWindowRecorder{}
 			store, successor := &memoryStore{}, &successorStub{}
 			counter := &byteCounter{}
 			attempts, notices := 0, 0
@@ -41,7 +42,7 @@ func TestLocalContextCompactsAndContinuesInSameSession(t *testing.T) {
 				cap = 24000
 			}
 			useCase := ContinueTurnUseCase{
-				Store: store, Successor: successor, Tokens: counter,
+				Store: store, Successor: successor, Tokens: counter, Windows: windows,
 				LocalModel: func(root.ModelID) bool { return true },
 				ContextCap: func(root.ModelID) int { return cap },
 				Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
@@ -81,6 +82,11 @@ func TestLocalContextCompactsAndContinuesInSameSession(t *testing.T) {
 			}
 			if err != nil || attempts != wantAttempts || notices != 1 || len(successor.created) != 0 {
 				t.Fatalf("err=%v attempts=%d notices=%d successors=%v", err, attempts, notices, successor.created)
+			}
+			// The window the server reported sizes the launch's later
+			// requests (20 November 2026: one refusal per step before).
+			if want := map[bool]int{false: 0, true: 8000}[retry]; windows.observed[session.Export().Model] != want || len(windows.observed) > 1 {
+				t.Fatalf("served windows observed = %v, want %d", windows.observed, want)
 			}
 			saved := store.states[len(store.states)-1]
 			if session.ID() != originalID || len(saved.Messages) != 6 || saved.Messages[1].Content != earlierReply ||
@@ -187,4 +193,20 @@ func TestLocalContextCompactsCompletedResultsInActiveTurn(t *testing.T) {
 	if err != nil || page.(map[string]any)["text"] != string(original) {
 		t.Fatalf("history did not recover the original result: %v", err)
 	}
+}
+
+// servedWindowRecorder is a window port that records what a server reported.
+type servedWindowRecorder struct{ observed map[root.ModelID]int }
+
+func (r *servedWindowRecorder) ContextWindow(root.ModelID) domain.ContextWindow { return 0 }
+
+func (r *servedWindowRecorder) ContextBudget(root.ModelID) domain.ContextBudget {
+	return domain.ContextBudgetForWindow(0)
+}
+
+func (r *servedWindowRecorder) ObserveServedWindow(model root.ModelID, tokens int) {
+	if r.observed == nil {
+		r.observed = map[root.ModelID]int{}
+	}
+	r.observed[model] = tokens
 }

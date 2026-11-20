@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/adapters/engines"
 )
@@ -59,5 +61,31 @@ func TestSharedEnginesThatCannotStartFallBack(t *testing.T) {
 	shareEngines(context.Background(), manager, []plugins.Registration{registration}, engines.Supervisor{Dir: "relative"}, &out)
 	if !strings.Contains(out.String(), "shared engine kmp unavailable (") || !strings.Contains(out.String(), "this console starts its own") || strings.Contains(out.String(), "shared engines:") {
 		t.Fatalf("output %q", &out)
+	}
+}
+
+func TestMADERunsUnderTheFullToolProfileUnlessItsEntryNamesOne(t *testing.T) {
+	command := filepath.Join(t.TempDir(), "run-embedded-mcp.sh")
+	registration := func(id root.PluginID, env []string) plugins.Registration {
+		r, err := plugins.NewRegistration(plugins.Manifest{ID: id, Command: command, AllowAll: true}, env)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return r
+	}
+	registrations := []plugins.Registration{
+		registration("made", []string{"HOME=/home/test"}),
+		registration("made", []string{"MADE_MCP_TOOL_PROFILE=core+ceremony_execution"}),
+		registration("kmp", []string{"KMP_MCP_BACKEND=embedded"}),
+	}
+	pinMADEToolProfile(registrations)
+	if !slices.Contains(registrations[0].Env, "MADE_MCP_TOOL_PROFILE=full") {
+		t.Fatalf("MADE kept the launcher's core profile: %v", registrations[0].Env)
+	}
+	if !slices.Equal(registrations[1].Env, []string{"MADE_MCP_TOOL_PROFILE=core+ceremony_execution"}) {
+		t.Fatalf("an operator's profile was replaced: %v", registrations[1].Env)
+	}
+	if !slices.Equal(registrations[2].Env, []string{"KMP_MCP_BACKEND=embedded"}) {
+		t.Fatalf("KMP's environment changed: %v", registrations[2].Env)
 	}
 }
