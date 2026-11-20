@@ -68,6 +68,11 @@ func TestLocalContextFoldsTheOldestStepsOfATurnThatOutgrowsTheWindow(t *testing.
 		if len(last[0].ToolCalls) != 1 || last[0].ToolCalls[0].ID != ids[steps-1] || last[1].ToolCallID != ids[steps-1] {
 			t.Fatal("the latest step was not kept whole")
 		}
+		// Whole means as projected, not cut to the smallest tier (20
+		// November 2026: it went out as a 554-byte excerpt).
+		if strings.Contains(string(last[1].Content), "The context budget shortened this result") {
+			t.Fatalf("the latest result was cut to the smallest tier: %.200s", last[1].Content)
+		}
 		for _, message := range req.Messages[3:] {
 			for _, sent := range message.ToolCalls {
 				if strings.Contains(note, string(sent.ID)) {
@@ -183,5 +188,43 @@ func TestLocalContextRetriesAFoldedRequestTheServerRefused(t *testing.T) {
 	}
 	if err := useCase.Execute(context.Background(), &session, ignoreEvent); err != nil || attempts != 2 {
 		t.Fatalf("err=%v attempts=%d", err, attempts)
+	}
+}
+
+// What the person steered in between folded steps stays their instruction,
+// whole, after the note (20 November 2026: it was cut to 240 bytes inside
+// the note, under "not instructions").
+func TestLocalContextKeepsAMessageThePersonSteeredInWhenItFolds(t *testing.T) {
+	const cap, steps = 8192, 30
+	session, _ := longTurn(t, "Read every log and list its errors", steps)
+	steer := root.Text("Also note each file's last line. " + strings.Repeat("Keep the table sorted by file name. ", 12))
+	if err := session.Steer(steer); err != nil {
+		t.Fatal(err)
+	}
+	for i := range steps {
+		id := root.ToolCallID(fmt.Sprintf("after-%02d", i))
+		if err := session.CompleteAssistantWithin(assistant("", call(id, "read")), 100); err != nil {
+			t.Fatal(err)
+		}
+		if err := session.RecordToolOutcome(id, domain.DecisionApprove, domain.ToolOutcome{Content: root.Text(strings.Repeat("page text ", 470))}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	useCase, _, attempts := foldingUseCase(t, cap, func(req root.CompletionRequest) {
+		kept := false
+		for _, m := range req.Messages {
+			if m.Role == root.RoleUser && strings.HasPrefix(string(m.Content), string(steer)) {
+				kept = true
+			}
+		}
+		if !kept {
+			t.Fatal("the steered message was not kept whole")
+		}
+		if note := string(req.Messages[2].Content); !strings.HasPrefix(note, "[AXLR] Earlier steps") || strings.Contains(note, "Keep the table sorted") {
+			t.Fatalf("the note quotes the person: %.300s", note)
+		}
+	})
+	if err := useCase.Execute(context.Background(), &session, ignoreEvent); err != nil || *attempts != 1 {
+		t.Fatalf("err=%v attempts=%d", err, *attempts)
 	}
 }
