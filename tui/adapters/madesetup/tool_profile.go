@@ -1,6 +1,11 @@
 package madesetup
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+
+	"github.com/underpass-ai/AXLR/plugins"
+)
 
 // ToolProfileVariable is the MADE launcher setting that chooses the tools the
 // server lists and accepts.
@@ -25,4 +30,23 @@ func WithToolProfile(env []string) []string {
 		}
 	}
 	return append(append([]string(nil), env...), ToolProfileVariable+"="+ToolProfile)
+}
+
+// WithWorkIdentity is the environment of a MADE entry with the console's work
+// identity pinned when the entry is the embedded launcher and names none: the
+// identity the preparation grants and then saves in the entry. Pinned at
+// launch, the engine runs as it from the start and sees the grant issued a
+// moment later on its next call; until 20 November 2026 it ran as the store's
+// trusted host, which holds no grant, so a fresh install's first console had
+// no session instance until it was restarted.
+func WithWorkIdentity(configPath string, r plugins.Registration) []string {
+	values := environment(r.Env)
+	if r.Manifest.URL != "" || values["MADE_MCP_BACKEND"] == "grpc" || filepath.Base(r.Manifest.Command) != embeddedLauncher || values[hostIdentityKey] != "" {
+		return r.Env
+	}
+	work := WorkIdentity(configPath, r.Env)
+	if work == "" {
+		return r.Env
+	}
+	return append(append([]string(nil), r.Env...), hostIdentityKey+"="+work)
 }
