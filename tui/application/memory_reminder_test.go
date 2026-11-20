@@ -219,3 +219,45 @@ func TestMemoryReminderStandsWhereNoRecordSettlesTheTurn(t *testing.T) {
 		t.Fatalf("reminded where Jev settles: %v %v", reminded, err)
 	}
 }
+
+// A command that only reads is no work to record: on 20 November 2026 a
+// local model was reminded after cat big.txt, spent a request and stored
+// "big.txt contains ñáé…" in KMP. Calls from wrx80 sessions that day.
+func TestACommandThatOnlyReadsIsNoWorkToRecord(t *testing.T) {
+	for _, tc := range []struct {
+		arguments string
+		readOnly  bool
+	}{
+		{`{"program":"cat","args":["big.txt"]}`, true},
+		{`{"program":"sqlmap","args":["--version"]}`, true},
+		{`{"program":".venv-sqlmap/bin/sqlmap","args":["--version"]}`, true},
+		{`{"program":"git","args":["-C","x","status","--short"]}`, true},
+		{`{"program":"find","args":[".","-name","*.go"]}`, true},
+		{`{"program":"sh","args":["-c","cat /etc/os-release; echo ---; for p in apt-get pacman go pip; do command -v $p >/dev/null 2>&1 && echo \"$p: $(command -v $p)\"; done"]}`, true},
+		{`{"program":"sh","args":["-c","for d in /usr/bin /etc; do if [ -w $d ]; then echo \"$d ok\"; else echo \"$d no\"; fi; done"]}`, true},
+		{`{"program":"sh","args":["-c","nmap -V | head -1; grep -c ERROR logs/a.log 2>/dev/null"]}`, true},
+		{`{"program":"sh","args":["-c","pacman -Ss nmap | head -3"]}`, false},
+		{`{"program":"pip3","args":["install","--user","sqlmap"]}`, false},
+		{`{"program":"sh","args":["-c","mkdir -p .bin && GOBIN=$PWD/.bin go install example.com/x@latest"]}`, false},
+		{`{"program":"sh","args":["-c","echo hi > notes.txt"]}`, false},
+		{`{"program":"sh","args":["-c","printf 'x' > /tmp/check.txt; grep -c x /tmp/check.txt"]}`, true},
+		{`{"program":"find","args":[".","-name","*.tmp","-delete"]}`, false},
+		{`{"program":"git","args":["commit","-m","x"]}`, false},
+		{`{"program":"command","args":["rm","-rf","build"]}`, false},
+		{`{"program":"env","args":["FOO=1","make"]}`, false},
+		{`{"program":"go","args":["test","./..."]}`, false},
+		{`{"program":"python3","args":["-m","unittest"]}`, false},
+	} {
+		if got := readOnlyExec(mustObject(t, tc.arguments)); got != tc.readOnly {
+			t.Errorf("%s: read only = %v, want %v", tc.arguments, got, tc.readOnly)
+		}
+	}
+	cat := toolCall(t, "c1", "local_exec", `{"program":"cat","args":["big.txt"]}`)
+	install := toolCall(t, "p1", "local_exec", `{"program":"pip3","args":["install","sqlmap"]}`)
+	if needsMemoryReminder(memoryRequest(t, cat), memoryWriteSnapshot()) {
+		t.Fatal("a turn that only ran cat was reminded")
+	}
+	if !needsMemoryReminder(memoryRequest(t, cat, install), memoryWriteSnapshot()) {
+		t.Fatal("a turn that installed something was not reminded")
+	}
+}

@@ -155,7 +155,11 @@ func needsMemoryReminder(request []root.Message, snapshot []domain.AvailableTool
 				}
 			case "local_write", "local_edit":
 				changed = changed || writeSucceeded(results[call.ID])
-			case "local_exec", HostRunToolName:
+			case "local_exec":
+				// A command that only reads (cat, ls, a --version probe)
+				// is no work to record (readOnlyExec).
+				ran = ran || commandRan(results[call.ID]) && !readOnlyExec(call.Arguments)
+			case HostRunToolName:
 				ran = ran || commandRan(results[call.ID])
 			}
 		}
