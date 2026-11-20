@@ -227,7 +227,20 @@ func TestTheApproverActsAsItsOwnIdentity(t *testing.T) {
 	if got.tool != "made_approve_ceremony_guard" || !slices.Contains(got.env, hostIdentityKey+"=axlr-work-1-approver") || slices.Contains(got.env, hostIdentityKey+"=axlr-work-1") {
 		t.Fatalf("approval not made as the approver: %+v", got)
 	}
+	// MADE's launcher accepts guard decisions only from its own terminal by
+	// default; the console's keypress is relayed (20 November 2026).
+	if !slices.Contains(got.env, "MADE_HUMAN_APPROVAL_SOURCE=host") || slices.Contains(got.env, "MADE_HUMAN_APPROVAL_SOURCE=terminal") {
+		t.Fatalf("approval not relayed as the person's: %v", got.env)
+	}
 	if got.args["guard_name"] != "person_approves" || got.args["role_id"] != "HUMAN_APPROVER" {
 		t.Fatalf("%v", got.args)
+	}
+	// An entry that names the source keeps it.
+	a.ConfigPath = madeConfig(t, embeddedLauncher, map[string]string{hostIdentityKey: "axlr-work-1", "MADE_HUMAN_APPROVAL_SOURCE": "terminal"})
+	if err := a.ApproveGuard(context.Background(), "axlr-i", "person_approves"); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(got.env, "MADE_HUMAN_APPROVAL_SOURCE=terminal") || slices.Contains(got.env, "MADE_HUMAN_APPROVAL_SOURCE=host") {
+		t.Fatalf("an operator's approval source was replaced: %v", got.env)
 	}
 }
