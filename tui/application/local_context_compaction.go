@@ -16,7 +16,7 @@ import (
 // still does not fit, progressively shorten its finished tool results.
 func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, original []root.Message, projection *domain.ContextProjection, budget domain.ContextBudget, cap int) (root.CompletionRequest, int, error) {
 	fitted, counted, err := u.compactLocalHistory(req, original, projection, budget, cap)
-	var full *localContextLimitError
+	var full *LocalContextLimitError
 	if !errors.As(err, &full) {
 		return fitted, counted, err
 	}
@@ -89,7 +89,7 @@ func (u ContinueTurnUseCase) compactLocalHistory(req root.CompletionRequest, ori
 		}
 	}
 	if first < 0 {
-		return req, counted, &localContextLimitError{tokens: u.Scale.Estimate(req.Model, counted), fixed: u.Scale.Estimate(req.Model, RequestTokens(u.Tokens, req.Messages[0], req.Tools, nil)), cap: cap}
+		return req, counted, &LocalContextLimitError{Tokens: u.Scale.Estimate(req.Model, counted), GuidanceAndTools: u.Scale.Estimate(req.Model, RequestTokens(u.Tokens, req.Messages[0], req.Tools, nil)), Cap: cap}
 	}
 	// The projection preserves the leading messages and a contiguous suffix.
 	// A previous checkpoint is replaced using the original transcript.
@@ -140,7 +140,7 @@ func (u ContinueTurnUseCase) compactLocalHistory(req root.CompletionRequest, ori
 		projection.ProjectedBytes = ModelMessagesBytes(projection.Messages)
 		return req, compacted, nil
 	}
-	return req, counted, &localContextLimitError{tokens: u.Scale.Estimate(req.Model, minimum), fixed: u.Scale.Estimate(req.Model, prefixTokens), cap: cap}
+	return req, counted, &LocalContextLimitError{Tokens: u.Scale.Estimate(req.Model, minimum), GuidanceAndTools: u.Scale.Estimate(req.Model, prefixTokens), Cap: cap}
 }
 
 // localCheckpoint reuses the history projector's references and prior requests.
@@ -184,13 +184,15 @@ func localCheckpoint(projector ModelContextProjector, original []root.Message, f
 	return root.Message{}, false
 }
 
-type localContextLimitError struct {
-	tokens, fixed, cap int
+// LocalContextLimitError reports an active request that still exceeds its
+// input budget after compaction. Counts are estimated provider tokens.
+type LocalContextLimitError struct {
+	Tokens, GuidanceAndTools, Cap int
 }
 
-func (e *localContextLimitError) Error() string {
+func (e *LocalContextLimitError) Error() string {
 	return fmt.Sprintf("the active request reaches %d tokens with an input budget of %d: guidance and tool schemas use %d, and current messages use %d after compaction; shorten the request or raise the llama.cpp context and local_models.context_tokens",
-		e.tokens, e.cap, e.fixed, e.tokens-e.fixed)
+		e.Tokens, e.Cap, e.GuidanceAndTools, e.Tokens-e.GuidanceAndTools)
 }
 
 // llama.cpp reports the token count it actually measured for a refused

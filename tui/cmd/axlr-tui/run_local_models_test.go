@@ -9,8 +9,10 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/adapters/storage"
 	"github.com/underpass-ai/AXLR/tui/adapters/terminal"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/compose"
 )
 
@@ -40,6 +42,24 @@ func TestRunStartsWithLocalModelsAndNoOpenRouterKey(t *testing.T) {
 	}, &output)
 	if code != 0 || !called {
 		t.Fatalf("code=%d called=%v output=%s", code, called, &output)
+	}
+}
+
+func TestRunShowsLocalInputBudgetInFooter(t *testing.T) {
+	env := cliEnv(t)
+	delete(env, "OPENROUTER_API_KEY")
+	writeSettings(t, env, `{"model":"local/qwen","local_models":[{"id":"local/qwen","url":"http://127.0.0.1:8080/v1","context_tokens":16384}]}`)
+	var output bytes.Buffer
+	code := run(context.Background(), []string{"--root", t.TempDir()}, func(k string) string { return env[k] }, func(model tea.Model) error {
+		model, _ = model.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+		model, _ = model.Update(application.Event{Kind: application.EventUsage, Usage: &root.TokenUsage{PromptTokens: 9416}})
+		if shown := model.View().Content; !strings.Contains(shown, "9.4k/12k tok") {
+			t.Fatalf("footer did not show the local input cap: %q", shown)
+		}
+		return nil
+	}, &output)
+	if code != 0 {
+		t.Fatalf("code=%d output=%s", code, &output)
 	}
 }
 

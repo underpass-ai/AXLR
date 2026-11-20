@@ -921,8 +921,15 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Status.Error = m.budgetErrorText(v.Err, m.Status.Error)
 			m.Status.Error = m.streamTimeoutText(v.Err, m.Status.Error)
 			m.Status.Error = m.withProviderHint(v.Err, m.Status.Error)
+			contextLimit := m.Theme.localContextLimitText(v.Err)
+			if contextLimit != "" {
+				m.Status.Error = contextLimit
+			}
 			if failure, ok := turnFailure(v.Err); ok && wasTurn && returned == "" {
 				// The transcript keeps the failure once the footer moves on.
+				if contextLimit != "" {
+					failure = domain.TurnFailure{Message: contextLimit}
+				}
 				failed = &failure
 			}
 			if returned != "" {
