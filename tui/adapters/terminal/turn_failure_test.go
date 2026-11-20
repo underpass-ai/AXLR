@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/underpass-ai/AXLR/adapters/openrouter"
+	"github.com/underpass-ai/AXLR/tui/application"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
@@ -101,5 +102,38 @@ func TestTurnFailureHintsLocalCreditsApart(t *testing.T) {
 		if hint == "" || strings.Contains(hint, "openrouter") {
 			t.Fatalf("local credits hint %q", hint)
 		}
+	}
+}
+
+func TestLocalContextLimitIsLocalizedInFooterAndSavedTranscript(t *testing.T) {
+	session := navSession(t)
+	if err := session.BeginTurn("hola", nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.InterruptDraft(""); err != nil {
+		t.Fatal(err)
+	}
+	model := navModel(t, &session)
+	model.Theme.Locale = Spanish
+	model.Busy, model.operationID, model.providerWaiting = true, 1, true
+	failure := errors.Join(
+		&openrouter.ProviderError{StatusCode: 400, Message: "request exceeds context"},
+		&application.LocalContextLimitError{Tokens: 5768, GuidanceAndTools: 5759, Cap: 3072},
+	)
+	next, cmd := model.Update(operationComplete{ID: 1, Session: session, Err: failure})
+	model = drain(t, next.(AppModel), cmd)
+	want := "La petición activa necesita 5768 tokens y el límite de entrada es 3072."
+	if !strings.HasPrefix(model.Status.Error, want) ||
+		!strings.Contains(model.Status.Error, "ocupan 5759 tokens") ||
+		!strings.Contains(model.Status.Error, "ocupan 9 tras compactar") {
+		t.Fatalf("footer %q", model.Status.Error)
+	}
+	loaded, err := model.deps.Store.Load(context.Background(), session.ID())
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := loaded.ConsoleLines()
+	if len(lines) != 1 || lines[0].Failure == nil || lines[0].Failure.Message != model.Status.Error {
+		t.Fatalf("persisted lines %+v", lines)
 	}
 }

@@ -916,7 +916,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		LocalEndpoints:          locals.EndpointsByModel(),
 		Usage:                   store,
 		MaxSessionUSD:           settings.MaxSessionUSD,
-		PromptCeiling:           locals.Windows.PromptCeiling,
+		PromptCeiling:           continuation.ContextCap,
 		GitState:                terminal.ReadGitState,
 		Notify:                  settings.NotifyMode(),
 		Sandbox:                 terminal.SandboxStatus{Mode: settings.ExecSandbox().Mode, Unavailable: sandboxUnavailable},

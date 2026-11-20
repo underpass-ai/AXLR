@@ -51,10 +51,9 @@ func (w Windows) ContextBudget(id root.ModelID) domain.ContextBudget {
 	return budget
 }
 
-// PromptCeiling is the prompt, in tokens, the console lets a request to the
-// model reach, for the footer's "27k/64k": a local model's window, and a
-// remote model's prompt budget (prompt_tokens, by default
-// domain.DefaultPromptTokens), within the cap.
+// PromptCeiling is a local model's full context window or a remote model's
+// prompt budget (prompt_tokens), limited by the global context setting.
+// ContextCap applies the local reservation for the reply.
 func (w Windows) PromptCeiling(id root.ModelID) int {
 	if _, local := w.Local[id]; local {
 		return int(w.ContextWindow(id))

@@ -47,6 +47,16 @@ func (m AppModel) withProviderHint(err error, text string) string {
 	return text
 }
 
+// localContextLimitText prefers AXLR's budget breakdown over a server
+// rejection that may be joined to it after an attempted retry.
+func (t Theme) localContextLimitText(err error) string {
+	var limit *application.LocalContextLimitError
+	if !errors.As(err, &limit) {
+		return ""
+	}
+	return t.Tf("error.localContextLimit", limit.Tokens, limit.Cap, limit.GuidanceAndTools, limit.Tokens-limit.GuidanceAndTools)
+}
+
 // streamTimeoutText says a stream the provider adapter cut in the
 // person's language: on 14 October 2026 a Spanish console read "!
 // OpenRouter stream maximum duration exceeded" after glm-5.3-flash had
