@@ -2,6 +2,15 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.8 — 2026-11-20
+
+### Fixed
+- Catalog, skill and tool searches match a term where a word starts, so "port" no longer finds apportionment, report and support (#244).
+- A model connection that fails says how: connection refused (is the server running?), reset, closed by the server, timed out, host not found or unreachable (#244).
+- The factor between the console's token count and the model's is kept between launches, so the first request of a resumed local session fits the server's window (#244).
+- A scratch file written into /tmp or /var/tmp no longer raises an approval card under autonomy; deleting there still does (#244).
+- Sync verdicts show in the console's language (#244).
+
 ## 0.20.7 — 2026-11-20
 
 ### Fixed
