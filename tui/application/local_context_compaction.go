@@ -76,7 +76,7 @@ func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, ori
 	}
 	// Shortened results still do not fit: the oldest steps of the turn fold
 	// into one note and the latest stay whole.
-	if folded, foldedCount, ok := u.foldActiveTurn(candidate, original, projection, cap); ok {
+	if folded, foldedCount, ok := u.foldActiveTurn(candidate, original, projection, budget, cap); ok {
 		return folded, foldedCount, nil
 	}
 	return fitted, counted, err
@@ -205,6 +205,13 @@ func (e *LocalContextLimitError) Error() string {
 // prompt. Use that ratio to aim below the server window on the single retry.
 var llamaContextOverflow = regexp.MustCompile(`(?i)request \(([0-9]+) tokens\) exceeds the available context size \(([0-9]+) tokens\)`)
 
+// openAIContextOverflow is the wording of vLLM and the OpenAI-compatible
+// servers that follow OpenAI's: "maximum context length is 32768 tokens.
+// However, you requested 34001 tokens" (or "your messages resulted in", or
+// "your request has … input tokens"). Until 20 November 2026 only llama.cpp's
+// wording was read, and such a refusal failed the turn instead of compacting.
+var openAIContextOverflow = regexp.MustCompile(`(?i)maximum context length is ([0-9]+) tokens.{0,40}?(?:you requested|resulted in|request has) ([0-9]+)`)
+
 func localContextRetryCap(err error, estimated, configured int) int {
 	prompt, window, ok := llamaOverflow(err)
 	if !ok {
@@ -213,19 +220,24 @@ func localContextRetryCap(err error, estimated, configured int) int {
 	return min(configured, int(float64(estimated)*float64(window/4*3)/float64(prompt)))
 }
 
-// llamaOverflow reads the prompt and the window llama.cpp reported when it
-// refused a request as longer than its context.
+// llamaOverflow reads the prompt and the window a local server (llama.cpp,
+// or one with OpenAI's wording such as vLLM) reported when it refused a
+// request as longer than its context.
 func llamaOverflow(err error) (prompt, window int, ok bool) {
 	var failure *provider.ProviderError
-	if !errors.As(err, &failure) || failure.StatusCode != 400 {
+	if !errors.As(err, &failure) || (failure.StatusCode != 400 && failure.StatusCode != 413) {
 		return 0, 0, false
 	}
-	counts := llamaContextOverflow.FindStringSubmatch(failure.Message)
-	if len(counts) == 0 {
+	var promptText, windowText string
+	if counts := llamaContextOverflow.FindStringSubmatch(failure.Message); len(counts) == 3 {
+		promptText, windowText = counts[1], counts[2]
+	} else if counts := openAIContextOverflow.FindStringSubmatch(failure.Message); len(counts) == 3 {
+		promptText, windowText = counts[2], counts[1]
+	} else {
 		return 0, 0, false
 	}
-	prompt, promptErr := strconv.Atoi(counts[1])
-	window, windowErr := strconv.Atoi(counts[2])
+	prompt, promptErr := strconv.Atoi(promptText)
+	window, windowErr := strconv.Atoi(windowText)
 	if promptErr != nil || windowErr != nil || window < 4 || prompt < window {
 		return 0, 0, false
 	}

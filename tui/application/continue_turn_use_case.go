@@ -308,6 +308,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		}
 	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, currentTurnReasoning(projection.Messages)...), Tools: tools}
+	// A retry after the server refused a compacted request compacts again
+	// from the request as projected, not from the compacted one: a folded
+	// request is no transcript suffix, and until 20 November 2026 its retry
+	// failed the turn with "cannot compact a context projection".
+	retryReq, retryProjection := req, projection
 	counted := 0
 	localCap := 0
 	// An execution's routing chooses the model of each request among its
@@ -473,6 +478,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 				return interrupt(errors.Join(err, refusal))
 			}
 			var fitErr error
+			req, projection = retryReq, retryProjection
 			req, counted, fitErr = u.compactLocalRequest(req, messages, &projection, projectionBudget(u.Windows, *session), retryCap)
 			if fitErr != nil {
 				return interrupt(errors.Join(err, fitErr))

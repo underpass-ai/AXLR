@@ -3,6 +3,7 @@ package application
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -19,12 +20,14 @@ type foldStep struct{ start, end int }
 
 // foldActiveTurn replaces the oldest finished steps of the turn in progress
 // with one extractive note when the turn alone outgrows a small window even
-// with its results shortened. The turn's prompt and its most recent steps
+// with its results shortened. The turn's prompt and its most recent step
 // stay verbatim; the transcript and the session do not change. Before 20
 // November 2026 a 16K window filled after eight calls and the session stayed
 // stuck for good: every later prompt, "sigue" included, joined the same turn
-// and failed the same way.
-func (u ContinueTurnUseCase) foldActiveTurn(req root.CompletionRequest, original []root.Message, projection *domain.ContextProjection, cap int) (root.CompletionRequest, int, bool) {
+// and failed the same way. When folding alone does not fit, the closed turns
+// before it give way to one checkpoint as well: a second turn at 16K failed
+// with the first turn's fifteen calls still in the request.
+func (u ContinueTurnUseCase) foldActiveTurn(req root.CompletionRequest, original []root.Message, projection *domain.ContextProjection, budget domain.ContextBudget, cap int) (root.CompletionRequest, int, bool) {
 	first := max(projection.CutIndex, activeTurnStart(original))
 	offset := len(req.Messages) - len(original)
 	if first+offset < 1 || first >= len(original) {
@@ -39,31 +42,49 @@ func (u ContinueTurnUseCase) foldActiveTurn(req root.CompletionRequest, original
 			steps = append(steps, foldStep{start: i, end: len(original)})
 		}
 	}
+	if len(steps) < 2 {
+		return req, 0, false
+	}
+	from := steps[0].start
+	heads := [][]root.Message{req.Messages[:from+offset]}
+	firstUser := slices.IndexFunc(original, func(m root.Message) bool { return m.Role == root.RoleUser })
+	if firstUser >= 0 && firstUser < first {
+		projector := ModelContextProjector{budget: budget}
+		if summary, ok := localCheckpoint(projector, original, firstUser, first, func(root.Message) bool { return true }); ok {
+			head := append(append([]root.Message(nil), req.Messages[:firstUser+1]...), summary)
+			heads = append(heads, append(head, req.Messages[first+offset:from+offset]...))
+		}
+	}
 	// The last step stays whole: it holds the results the next answer reads.
 	// Each folded result keeps as much of its start as fits before more
 	// steps fold: a note of bare calls let a 16K model invent what one had
 	// returned (wrx80, 20 November 2026). At each size the fewest steps fold.
-	for _, size := range foldGistSizes {
-		for folded := 1; folded < len(steps); folded++ {
-			from, to := steps[0].start, steps[folded].start
-			note := root.Message{Role: root.RoleUser, Content: root.Text(foldNote(original, from, to, size))}
-			messages := make([]root.Message, 0, len(req.Messages))
-			messages = append(messages, req.Messages[:from+offset]...)
-			messages = append(messages, note)
-			messages = append(messages, req.Messages[to+offset:]...)
-			counted := RequestTokens(u.Tokens, messages[0], req.Tools, messages[1:])
-			if u.Scale.Estimate(req.Model, counted) > cap {
-				continue
+	for h, head := range heads {
+		for _, size := range foldGistSizes {
+			for folded := 1; folded < len(steps); folded++ {
+				to := steps[folded].start
+				note := root.Message{Role: root.RoleUser, Content: root.Text(foldNote(original, from, to, size))}
+				messages := make([]root.Message, 0, len(head)+1+len(req.Messages)-to-offset)
+				messages = append(messages, head...)
+				messages = append(messages, note)
+				messages = append(messages, req.Messages[to+offset:]...)
+				counted := RequestTokens(u.Tokens, messages[0], req.Tools, messages[1:])
+				if u.Scale.Estimate(req.Model, counted) > cap {
+					continue
+				}
+				fitted := req
+				fitted.Messages = messages
+				if fitted.Validate() != nil {
+					return req, 0, false
+				}
+				projection.Messages = fitted.Messages[1:]
+				projection.ProjectedBytes = ModelMessagesBytes(projection.Messages)
+				projection.TurnCompacted = true
+				if h > 0 {
+					projection.CutIndex, projection.DroppedMessages = first, first-firstUser
+				}
+				return fitted, counted, true
 			}
-			fitted := req
-			fitted.Messages = messages
-			if fitted.Validate() != nil {
-				return req, 0, false
-			}
-			projection.Messages = fitted.Messages[1:]
-			projection.ProjectedBytes = ModelMessagesBytes(projection.Messages)
-			projection.TurnCompacted = true
-			return fitted, counted, true
 		}
 	}
 	return req, 0, false
