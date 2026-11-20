@@ -177,3 +177,32 @@ func TestTheCappedPromptKeepsTheDraft(t *testing.T) {
 		t.Fatalf("busy %v, submitted %q, composer %q", m.Busy, m.submittedPrompt, m.Composer.Input.Value())
 	}
 }
+
+// A launch-only key edited in another editor applies after a restart, and
+// the person learns it when sending a prompt (20 November 2026: a window
+// raised to 90000 in nvim beside a running console said nothing).
+func TestSendingAPromptSaysWhichLaunchSettingsChangedSinceLaunch(t *testing.T) {
+	for _, tc := range []struct {
+		changed []string
+		want    string
+	}{
+		{[]string{"local_models", "context_tokens"}, "settings.json cambió local_models, context_tokens desde el arranque: reinicia axlr-tui para aplicarlo"},
+		{nil, ""},
+	} {
+		s, err := domain.NewSession("0123456789abcdef0123456789abcdef", testWorkspace(), "model")
+		if err != nil {
+			t.Fatal(err)
+		}
+		store := submissionStore{err: errors.New("disk full")}
+		start := application.StartTurnUseCase{Catalog: submissionCatalog{}, Store: store, Continue: application.ContinueTurnUseCase{Store: store}}
+		changed := tc.changed
+		m := update(New(Dependencies{Session: &s, Start: start, Monochrome: true, Locale: Spanish, LaunchSettingsChanged: func(context.Context) []string { return changed }}), tea.WindowSizeMsg{Width: 100, Height: 30})
+		m.Composer.Input.SetValue("hola")
+		n, _ := m.Update(ControlIntent("send"))
+		m = n.(AppModel)
+		if m.Status.Notice != tc.want {
+			t.Errorf("notice = %q, want %q", m.Status.Notice, tc.want)
+		}
+		m.zones.Close()
+	}
+}

@@ -1568,6 +1568,13 @@ func (m AppModel) submitDraft() (tea.Model, tea.Cmd) {
 	m.startTurnClock()
 	m.Composer.Input.Reset()
 	m.Status.Error = ""
+	if m.deps.LaunchSettingsChanged != nil {
+		// An edit of a launch-only key in another editor applies after a
+		// restart: the person learns it at each prompt until then.
+		if changed := m.deps.LaunchSettingsChanged(m.deps.Context); len(changed) > 0 {
+			m.Status.Notice = m.Theme.Tf("notice.settingsChanged", strings.Join(changed, ", "))
+		}
+	}
 	m.failures = nil
 	m.draft = ""
 	m.draftOperationID = 0

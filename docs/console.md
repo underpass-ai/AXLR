@@ -137,7 +137,7 @@ English is the default. `--lang es` or `AXLR_LANG=es` changes interface labels o
 
 ## Edit settings as JSON
 
-The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/settings.json` when `XDG_CONFIG_HOME` is unset. The first-run setup assistant creates it; the [configuration reference](configuration.md) lists every key with its default and limits. Create or edit it with any text editor:
+The console reads `$XDG_CONFIG_HOME/axlr/settings.json`, or `$HOME/.config/axlr/settings.json` when `XDG_CONFIG_HOME` is unset. `local_models`, `context_tokens`, `prompt_tokens` and `exec_sandbox` are read at launch: an edit made in another editor while the console runs applies after a restart, and each prompt sent until then says which of them changed (since 20 November 2026; before, a window raised beside a running console said nothing). The first-run setup assistant creates it; the [configuration reference](configuration.md) lists every key with its default and limits. Create or edit it with any text editor:
 
 ```json
 {

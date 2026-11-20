@@ -874,8 +874,16 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if session != nil {
 		shown = session.Export()
 	}
+	launchSettings := settings
 	deps := terminal.Dependencies{
-		Context:                 ctx,
+		Context: ctx,
+		LaunchSettingsChanged: func(ctx context.Context) []string {
+			now, err := settingsStore.Load(ctx)
+			if err != nil {
+				return nil
+			}
+			return storage.LaunchSettingsChanged(launchSettings, now)
+		},
 		Diagnostics:             trace,
 		Plugins:                 pluginManager,
 		InstalledPlugins:        axlrCatalog,

@@ -9,11 +9,14 @@ import (
 )
 
 type Dependencies struct {
-	Context          context.Context
-	Diagnostics      application.DiagnosticPort
-	Plugins          application.PluginManagementPort
-	InstalledPlugins application.InstalledPluginPort
-	EngineUpdates    application.EngineUpdatePort
+	// LaunchSettingsChanged names the settings.json keys read only at launch
+	// that changed since (storage.LaunchSettingsChanged); nil checks nothing.
+	LaunchSettingsChanged func(context.Context) []string
+	Context               context.Context
+	Diagnostics           application.DiagnosticPort
+	Plugins               application.PluginManagementPort
+	InstalledPlugins      application.InstalledPluginPort
+	EngineUpdates         application.EngineUpdatePort
 	// ToolCatalog serves /tools and stages the model's axlr_install_tool
 	// call for its card; its zero value offers neither.
 	ToolCatalog application.CatalogUseCase
