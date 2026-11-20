@@ -40,9 +40,9 @@ func transportKind(err error) string {
 	switch {
 	case err == nil:
 		return ""
-	case errors.Is(err, syscall.ECONNREFUSED):
+	case errors.Is(err, syscall.ECONNREFUSED), errnoIn(err, refusedErrnos):
 		return "connection refused (is the server running?)"
-	case errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.EPIPE):
+	case errors.Is(err, syscall.ECONNRESET), errors.Is(err, syscall.EPIPE), errnoIn(err, resetErrnos):
 		return "connection reset by the server"
 	case errors.As(err, &dns):
 		return "host not found"
@@ -50,8 +50,22 @@ func transportKind(err error) string {
 		return "connection closed by the server"
 	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
 		return "timed out"
-	case errors.Is(err, syscall.EHOSTUNREACH), errors.Is(err, syscall.ENETUNREACH):
+	case errors.Is(err, syscall.EHOSTUNREACH), errors.Is(err, syscall.ENETUNREACH), errnoIn(err, unreachableErrnos):
 		return "host unreachable"
 	}
 	return ""
+}
+
+// errnoIn reports err wrapping one of the platform's codes.
+func errnoIn(err error, codes []syscall.Errno) bool {
+	var errno syscall.Errno
+	if !errors.As(err, &errno) {
+		return false
+	}
+	for _, code := range codes {
+		if errno == code {
+			return true
+		}
+	}
+	return false
 }
