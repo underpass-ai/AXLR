@@ -2,6 +2,11 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.6 — 2026-11-20
+
+### Changed
+- Show the actual prompt cap and localize context errors (#239).
+
 ## 0.20.5 — 2026-11-20
 
 ### Changed
