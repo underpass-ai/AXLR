@@ -13,7 +13,8 @@ import (
 )
 
 // compactLocalRequest first tries summarizing closed turns. If the live turn
-// still does not fit, progressively shorten its finished tool results.
+// still does not fit, progressively shorten its finished tool results, and
+// last fold its oldest steps into one note (foldActiveTurn).
 func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, original []root.Message, projection *domain.ContextProjection, budget domain.ContextBudget, cap int) (root.CompletionRequest, int, error) {
 	fitted, counted, err := u.compactLocalHistory(req, original, projection, budget, cap)
 	var full *LocalContextLimitError
@@ -72,6 +73,11 @@ func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, ori
 			}
 			return fitted, counted, err
 		}
+	}
+	// Shortened results still do not fit: the oldest steps of the turn fold
+	// into one note and the latest stay whole.
+	if folded, foldedCount, ok := u.foldActiveTurn(candidate, original, projection, cap); ok {
+		return folded, foldedCount, nil
 	}
 	return fitted, counted, err
 }
