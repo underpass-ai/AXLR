@@ -65,10 +65,10 @@ func (r ToolRunner) Execute(ctx context.Context, id domain.ToolIdentity, args ro
 	}
 	// The why is the console's: the runtime decodes a local tool's
 	// arguments strictly and would refuse it.
-	request := dto.Request{ProtocolVersion: runtime.ProtocolVersion, RequestID: requestID(ctx), Tool: id.LocalOperation, Arguments: application.StripWhy(args).Bytes()}
+	request := dto.Request{ProtocolVersion: runtime.ProtocolVersion, RequestID: requestID(ctx), Tool: id.LocalOperation, Arguments: canonicalArguments(application.StripWhy(args).Bytes())}
 	if id.Kind == domain.ToolKindPlugin {
 		request.Tool = "plugins.call"
-		encoded, err := json.Marshal(dto.PluginCallArgs{PluginID: id.Plugin.PluginID.String(), ToolName: id.Plugin.ToolName.String(), Arguments: args.Bytes()})
+		encoded, err := json.Marshal(dto.PluginCallArgs{PluginID: id.Plugin.PluginID.String(), ToolName: id.Plugin.ToolName.String(), Arguments: canonicalArguments(args.Bytes())})
 		if err != nil {
 			return domain.ToolOutcome{}, err
 		}

@@ -6,10 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"reflect"
 )
 
-// strictToolJSON preserves all numbers and rejects duplicate keys at every
-// depth. The schema validator and executor therefore see the same argument.
+// strictToolJSON preserves all numbers and rejects duplicate keys with
+// different values at every depth. The schema validator and executor
+// therefore see the same argument. A key repeated with the same value says
+// one thing and is kept once: a local model behind llama.cpp sent
+// "stdin":"" three times and "args" twice in one local_exec, refused for
+// it, and spent a request sending it again (wrx80, 20 November 2026).
 func strictToolJSON(raw []byte) (any, error) {
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
@@ -43,12 +48,15 @@ func readToolJSON(decoder *json.Decoder, depth int) (any, error) {
 			if !ok {
 				return nil, errors.New("JSON object key must be a string")
 			}
-			if _, exists := object[key]; exists {
-				return nil, fmt.Errorf("duplicate JSON key %q", key)
-			}
 			value, err := readToolJSON(decoder, depth+1)
 			if err != nil {
 				return nil, err
+			}
+			if existing, exists := object[key]; exists {
+				if !reflect.DeepEqual(existing, value) {
+					return nil, fmt.Errorf("duplicate JSON key %q with different values", key)
+				}
+				continue
 			}
 			object[key] = value
 		}
@@ -74,4 +82,20 @@ func readToolJSON(decoder *json.Decoder, depth int) (any, error) {
 	default:
 		return token, nil
 	}
+}
+
+// canonicalArguments is raw with every key once: the runtime and an MCP
+// server decode strictly and refuse a repeated key, which strictToolJSON
+// admits when its values are the same. Arguments it refuses are left as
+// they are, for the receiver to refuse.
+func canonicalArguments(raw []byte) []byte {
+	value, err := strictToolJSON(raw)
+	if err != nil {
+		return raw
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return raw
+	}
+	return encoded
 }

@@ -163,9 +163,16 @@ func TestToolArgumentValidatorAnnotationsAndDuplicateArgumentKeys(t *testing.T) 
 	if err := validator.Validate(schema, jsonValue(t, `{"about":"project:AXLR"}`)); err != nil {
 		t.Fatal("annotation treated as assertion", err)
 	}
-	for _, args := range []string{`{"about":"x","about":"y"}`, `{"object":{"nested":1,"nested":2}}`} {
+	for _, args := range []string{`{"about":"x","about":"y"}`, `{"object":{"nested":1,"nested":2}}`, `{"object":{"list":[1,2]},"object":{"list":[1,3]}}`} {
 		if err := validator.Validate(schema, jsonValue(t, args)); err == nil {
 			t.Fatal("duplicate argument key admitted")
+		}
+	}
+	// A key repeated with the same value is one argument (20 November 2026:
+	// a local model repeated "stdin":"" and "args" in one local_exec).
+	for _, args := range []string{`{"about":"x","about":"x"}`, `{"object":{"list":[1,2],"list":[1,2]}}`} {
+		if err := validator.Validate(schema, jsonValue(t, args)); err != nil {
+			t.Fatalf("%s refused: %v", args, err)
 		}
 	}
 	value, _ := root.NewJSONValue([]byte(`[]`))
@@ -206,5 +213,27 @@ func TestToolArgumentValidatorCacheIsBoundedConcurrentAndTracksSchemaChanges(t *
 	changed := validationSchema(t, `{"type":"object","required":["new_required"]}`)
 	if err := validator.Validate(changed, jsonValue(t, `{}`)); err == nil {
 		t.Fatal("stale schema cache accepted missing required property")
+	}
+}
+
+// The local_exec arguments a local model sent on wrx80 on 20 November 2026,
+// with "stdin" three times and "args" twice, all with the same values.
+func TestARepeatedButIdenticalLocalExecArgumentIsAdmitted(t *testing.T) {
+	var exec root.ToolDefinition
+	for _, tool := range localToolDefinitions() {
+		if tool.Definition.Name == "local_exec" {
+			exec = tool.Definition
+		}
+	}
+	if exec.Name == "" {
+		t.Fatal("no local_exec definition")
+	}
+	raw := `{"program":"go","args":["install","github.com/ffuf/ffuf/v2@latest"],"stdin":"","timeout_ms":300000,"stdin":"","args":["install","github.com/ffuf/ffuf/v2@latest"],"stdin":""}`
+	if err := NewToolArgumentValidator().Validate(exec, jsonValue(t, raw)); err != nil {
+		t.Fatalf("refused: %v", err)
+	}
+	changed := `{"program":"go","args":["install","x"],"args":["install","y"]}`
+	if err := NewToolArgumentValidator().Validate(exec, jsonValue(t, changed)); err == nil {
+		t.Fatal("args repeated with different values admitted")
 	}
 }

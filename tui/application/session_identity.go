@@ -31,15 +31,26 @@ func (c *SessionCeremony) openContext(ctx context.Context, s *domain.Session) {
 		return
 	}
 	instance, _ := s.Instance()
-	if instance.MemoryContext != "" {
-		return
-	}
 	id := s.ID()
 	store, registrationKey := c.Identity.Store, c.Identity.RegistrationKey
 	if member := teamMember(s.Export()); member != "" {
 		store, registrationKey = store+"#"+member, registrationKey+":"+member
 	}
 	agent, known := c.Identity.Agents.Agent(ctx, store)
+	if instance.MemoryContext != "" {
+		// A context saved without its agent (older sessions) cannot be
+		// told apart, and stays.
+		if instance.MemoryAgent == "" || known && agent == instance.MemoryAgent {
+			return
+		}
+		// The context belongs to the store its agent was registered in. A
+		// session whose workspace store changed (a git init turns the
+		// per-user default into the checkout's .kernel) kept a context the
+		// new store does not know, and every recall and turn entry was
+		// refused with "no agent context is registered here" (wrx80,
+		// 20 November 2026). It opens one in the current store.
+		c.log("memory context %s of session %s is not this store's (%s): opening one here", instance.MemoryContext, id, store)
+	}
 	var result GuideResult
 	var err error
 	if known {

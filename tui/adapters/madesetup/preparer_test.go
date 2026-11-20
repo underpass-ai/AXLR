@@ -110,6 +110,11 @@ func TestPreparationGrantsTheConfiguredWorkIdentityAsTheTrustedHost(t *testing.T
 			t.Fatalf("work grant includes privileged action %s", action)
 		}
 	}
+	// The handoff of a claim an earlier run left open is the console's own
+	// declaration: refused under v2 (20 November 2026).
+	if !slices.Contains(issue.args["actions"].([]string), "record_ceremony_host_handoff") || !strings.HasPrefix(issue.args["grant_id"].(string), "axlr-default-work-v3-") {
+		t.Fatalf("work grant %v lacks the handoff", issue.args)
+	}
 	if approver.args["grant_id"] != grantID(ApproverGrantID, "made-local-host-abc-axlr-work-approver") || approver.args["grantee_id"] != "made-local-host-abc-axlr-work-approver" || !slices.Equal(approver.args["actions"].([]string), []string{"approve_ceremony_guard", "get_ceremony_instance"}) {
 		t.Fatalf("approver grant: %v", approver.args)
 	}
