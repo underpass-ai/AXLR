@@ -16,6 +16,13 @@ type ModelContextWindowPort interface {
 	ContextBudget(root.ModelID) domain.ContextBudget
 }
 
+// ServedWindowPort learns the window a local model's server serves from its
+// refusal of a longer request, so the launch's later requests are sized to
+// it rather than refused first. A ModelContextWindowPort may implement it.
+type ServedWindowPort interface {
+	ObserveServedWindow(root.ModelID, int)
+}
+
 // sessionModel is the model a session's requests go to: a ceremony may ask
 // another model than the session's, such as the planner.
 func sessionModel(s domain.Session) root.ModelID {

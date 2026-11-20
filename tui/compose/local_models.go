@@ -31,7 +31,7 @@ func NewLocalModels(settings storage.UserSettings, getenv func(string) string) L
 	setup := LocalModels{
 		Models:  settings.LocalModels,
 		Keys:    map[root.ModelID]string{},
-		Windows: localmodels.Windows{Local: map[root.ModelID]domain.ContextWindow{}, Cap: domain.ContextWindow(settings.ContextTokens), Prompt: settings.PromptTokens},
+		Windows: localmodels.Windows{Local: map[root.ModelID]domain.ContextWindow{}, Cap: domain.ContextWindow(settings.ContextTokens), Prompt: settings.PromptTokens, Served: &localmodels.ServedWindows{}},
 		KeyEnvs: map[string]bool{"OPENROUTER_API_KEY": true},
 	}
 	for _, local := range settings.LocalModels {

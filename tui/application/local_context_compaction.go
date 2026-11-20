@@ -200,18 +200,28 @@ func (e *LocalContextLimitError) Error() string {
 var llamaContextOverflow = regexp.MustCompile(`(?i)request \(([0-9]+) tokens\) exceeds the available context size \(([0-9]+) tokens\)`)
 
 func localContextRetryCap(err error, estimated, configured int) int {
+	prompt, window, ok := llamaOverflow(err)
+	if !ok {
+		return 0
+	}
+	return min(configured, int(float64(estimated)*float64(window/4*3)/float64(prompt)))
+}
+
+// llamaOverflow reads the prompt and the window llama.cpp reported when it
+// refused a request as longer than its context.
+func llamaOverflow(err error) (prompt, window int, ok bool) {
 	var failure *provider.ProviderError
 	if !errors.As(err, &failure) || failure.StatusCode != 400 {
-		return 0
+		return 0, 0, false
 	}
 	counts := llamaContextOverflow.FindStringSubmatch(failure.Message)
 	if len(counts) == 0 {
-		return 0
+		return 0, 0, false
 	}
 	prompt, promptErr := strconv.Atoi(counts[1])
 	window, windowErr := strconv.Atoi(counts[2])
 	if promptErr != nil || windowErr != nil || window < 4 || prompt < window {
-		return 0
+		return 0, 0, false
 	}
-	return min(configured, int(float64(estimated)*float64(window/4*3)/float64(prompt)))
+	return prompt, window, true
 }

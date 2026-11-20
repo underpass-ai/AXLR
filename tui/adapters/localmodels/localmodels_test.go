@@ -191,3 +191,39 @@ func TestContextCapIsThreeQuartersOfALocalWindowAndThePromptCeilingElsewhere(t *
 		t.Fatalf("capped remote cap %d", got)
 	}
 }
+
+func TestWindowsLearnTheWindowALocalServerReportsAndNeverRaiseIt(t *testing.T) {
+	local, remote := root.ModelID("local/qwen"), root.ModelID("openai/gpt")
+	windows := Windows{Local: map[root.ModelID]domain.ContextWindow{local: 200000}, Served: &ServedWindows{}}
+	if windows.ContextCap(local) != 150000 {
+		t.Fatalf("configured cap = %d", windows.ContextCap(local))
+	}
+	// llama.cpp refused a request: it serves 90112 (wrx80, 20 November 2026).
+	windows.ObserveServedWindow(local, 90112)
+	if windows.ContextWindow(local) != 90112 || windows.ContextCap(local) != 67584 {
+		t.Fatalf("window = %d cap = %d after the server reported 90112", windows.ContextWindow(local), windows.ContextCap(local))
+	}
+	if windows.ContextBudget(local) != domain.ContextBudgetForWindow(90112) {
+		t.Fatal("the projection budget kept the configured window")
+	}
+	windows.ObserveServedWindow(local, 120000)
+	if windows.ContextWindow(local) != 90112 {
+		t.Fatalf("a larger report raised the window to %d", windows.ContextWindow(local))
+	}
+	windows.ObserveServedWindow(remote, 4096)
+	if windows.ContextWindow(remote) != 0 {
+		t.Fatalf("a remote model learned a window: %d", windows.ContextWindow(remote))
+	}
+	// A copy shares what was learned: the cap func is bound to a copy.
+	cap := windows.ContextCap
+	windows.ObserveServedWindow(local, 65536)
+	if cap(local) != 49152 {
+		t.Fatalf("a copy of the windows missed the report: %d", cap(local))
+	}
+	// Windows without a store learn nothing and do not fail.
+	bare := Windows{Local: map[root.ModelID]domain.ContextWindow{local: 16384}}
+	bare.ObserveServedWindow(local, 8192)
+	if bare.ContextWindow(local) != 16384 {
+		t.Fatal("windows without a store changed")
+	}
+}
