@@ -168,7 +168,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	skillIndex := &axlrplugin.Catalog{Root: cfg.StateDir, CatalogSkills: catalogSkills.Reader}
-	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: sessions.Store(), Ceremonies: ceremonies, Session: lifecycle, Calibration: calibration, Language: "en", PluginGuidance: skillIndex.Guidance, PluginSkills: skillIndex}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: sessions.Store(), Ceremonies: ceremonies, Session: lifecycle, Calibration: calibration, Language: "en", PluginGuidance: skillIndex.Guidance, PluginSkills: skillIndex, ExecGuidance: compose.SandboxGuidance(sandbox)}
 	routing := compose.NewModelRouting(locals, key != "", catalogModels.ModelCatalog{APIKey: key, HTTPClient: httpClient})
 	// The settings' routing is the default of a session created without one.
 	defaultRouting, err := settings.ExecutionRouting()

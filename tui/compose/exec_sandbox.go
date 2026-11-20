@@ -56,3 +56,22 @@ func ExecSandbox(ctx context.Context, name string, settings storage.ExecSandboxS
 		return nil, err.Error(), nil
 	}
 }
+
+// SandboxGuidance is the sentence that tells the model what a local command
+// can do under the exec sandbox, "" without one. The model was not told
+// before 20 November 2026, and a local model on wrx80 spent eight calls of a
+// small window learning that sudo and pacman fail under it.
+func SandboxGuidance(sandbox *local.Sandbox) string {
+	if sandbox == nil {
+		return ""
+	}
+	writable := "the workspace"
+	if len(sandbox.Writable) > 0 {
+		writable += ", " + strings.Join(sandbox.Writable, ", ")
+	}
+	network := "on"
+	if !sandbox.Network {
+		network = "off"
+	}
+	return "Local commands run in a sandbox: they may write only " + writable + " and a private /tmp, never as root (sudo and the system package manager fail), and the network is " + network + ". Install or build at user level into a writable path.\n"
+}

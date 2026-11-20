@@ -849,7 +849,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ceremonies.Starter = planRunner
 		planPanel = planRunner
 	}
-	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, Language: string(locale)}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, Language: string(locale), ExecGuidance: compose.SandboxGuidance(sandbox)}
 	continuation.Logs = logReader(appLog)
 	continuation.ToolCalls = toolCallLog(appLog)
 	// The usage ledger, the context cap and its successors, forged and

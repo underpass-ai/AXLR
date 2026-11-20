@@ -51,3 +51,21 @@ func TestExecSandboxUsesBwrapWhenItCanConfine(t *testing.T) {
 		t.Fatalf("output %q", &out)
 	}
 }
+
+// The model learns what a sandboxed command can do from one fixed sentence
+// (20 November 2026: eight calls of a 16K window spent finding that sudo and
+// pacman fail under it).
+func TestSandboxGuidanceTellsTheModelWhereCommandsMayWrite(t *testing.T) {
+	if SandboxGuidance(nil) != "" {
+		t.Fatal("guidance without a sandbox")
+	}
+	got := SandboxGuidance(&local.Sandbox{Network: true, Writable: []string{"/home/me/.cache", "/home/me/go/pkg/mod"}})
+	for _, want := range []string{"write only the workspace, /home/me/.cache, /home/me/go/pkg/mod and a private /tmp", "never as root (sudo and the system package manager fail)", "the network is on", "user level"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("guidance misses %q: %s", want, got)
+		}
+	}
+	if !strings.Contains(SandboxGuidance(&local.Sandbox{}), "the network is off") {
+		t.Fatal("an offline sandbox reads as online")
+	}
+}
