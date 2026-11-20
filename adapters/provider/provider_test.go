@@ -1,8 +1,11 @@
 package provider
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net"
 	"strings"
 	"testing"
 )
@@ -137,5 +140,36 @@ func TestEndpoints(t *testing.T) {
 	}
 	if EndpointName("https://api.openai.com/v1/responses") != "model endpoint api.openai.com" || EndpointName("::") != "model endpoint" || EndpointHost("https://api.openai.com/v1") != "api.openai.com" {
 		t.Fatal("names")
+	}
+}
+
+// A transport failure says how the connection failed, never the cause's
+// text: a stopped llama.cpp read only "transport failure" until 20
+// November 2026.
+func TestATransportFailureNamesHowTheConnectionFailed(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	_ = listener.Close()
+	_, refused := net.Dial("tcp", address)
+	if refused == nil {
+		t.Skip("the closed port accepted a connection")
+	}
+	for cause, want := range map[error]string{
+		refused:                     "model endpoint 127.0.0.1 transport failure: connection refused (is the server running?)",
+		&net.DNSError{Name: "x"}:    "model endpoint 127.0.0.1 transport failure: host not found",
+		io.ErrUnexpectedEOF:         "model endpoint 127.0.0.1 transport failure: connection closed by the server",
+		context.DeadlineExceeded:    "model endpoint 127.0.0.1 transport failure: timed out",
+		errors.New("tls: bad cert"): "model endpoint 127.0.0.1 transport failure",
+	} {
+		got := (&TransportError{Cause: cause, Provider: "model endpoint 127.0.0.1"}).Error()
+		if got != want {
+			t.Errorf("%v: got %q want %q", cause, got, want)
+		}
+	}
+	if got := (&TransportError{Cause: io.EOF}).Error(); got != DefaultProviderName+" transport failure: connection closed by the server" {
+		t.Errorf("default provider: %q", got)
 	}
 }
