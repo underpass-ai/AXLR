@@ -2,6 +2,15 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.9 — 2026-11-20
+
+### Fixed
+- A second long local turn folds behind a checkpoint of the turns before it, instead of failing at a small window (#246).
+- A context overflow worded as OpenAI's, as vLLM words it, is read and compacted like llama.cpp's (#246).
+- The memory reminder no longer follows a turn whose commands only read or print, such as cat, ls or a --version probe (#246).
+- Each prompt says when local_models, context_tokens, prompt_tokens or exec_sandbox changed in settings.json since launch, which needs a restart (#246).
+- A retry after the server refused a folded request compacts again from the projection instead of failing the turn (#246).
+
 ## 0.20.8 — 2026-11-20
 
 ### Fixed
