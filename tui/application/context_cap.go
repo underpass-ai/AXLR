@@ -10,15 +10,6 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// The context cap (decision D10 of the lifecycle integration design): a
-// request's context (guidance, tool schemas, messages) never exceeds the
-// cap in tokens, counted with one tokenizer for every model. Nothing is
-// dropped or compacted in place, so the provider's prompt cache keeps its
-// prefix; when the next request would exceed the cap, the turn is
-// interrupted, the session's instance closed, and the person's prompt
-// continues in a successor session whose first prompt recalls the
-// predecessor's memory.
-
 // messageTokenOverhead is what a message costs beyond its text: the role
 // and the framing, as OpenAI counts them.
 const messageTokenOverhead = 4

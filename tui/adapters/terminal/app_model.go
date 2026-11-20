@@ -607,6 +607,9 @@ func (m AppModel) handle(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Kind == application.EventState {
 			m.Status.State = v.State
 		}
+		if v.Kind == application.EventContextCompacted {
+			m.Status.Notice = m.Theme.T("notice.contextCompacted")
+		}
 		if v.SessionUsage != nil {
 			m = m.observeUsage(*v.SessionUsage, v.BudgetWarning)
 		}
