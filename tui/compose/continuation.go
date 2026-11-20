@@ -3,6 +3,8 @@ package compose
 import (
 	"path/filepath"
 
+	root "github.com/underpass-ai/AXLR/domain"
+
 	"github.com/underpass-ai/AXLR/tui/adapters/catalog"
 	"github.com/underpass-ai/AXLR/tui/adapters/ceremonyhost"
 	"github.com/underpass-ai/AXLR/tui/adapters/localmodels"
@@ -59,14 +61,15 @@ func Equip(c *application.ContinueTurnUseCase, e Equipment) (application.Catalog
 	c.ModelStats, c.Routing = stats, e.Routing
 	// axlr_deliver hands the execution's deliverables over in the workspace.
 	c.Deliverables = storage.Deliverables{}
-	// The context cap: one tokenizer for every model, no cut and no
-	// checkpoint, a successor session past the cap.
+	// Local endpoints compact in place. Remote requests open a successor
+	// past the cap so their retained prompt prefix remains cacheable.
 	if counter, err := tokens.New(); err != nil {
 		if e.Note != nil {
 			e.Note("token counter unavailable, the byte budgets apply: " + err.Error())
 		}
 	} else {
 		c.Tokens, c.ContextCap, c.Scale = counter, e.Windows.ContextCap, &application.TokenScale{}
+		c.LocalModel = func(model root.ModelID) bool { _, local := e.Windows.Local[model]; return local }
 		c.Successor = Successors{Create: application.CreateSessionUseCase{Store: e.Store, Labels: e.Labels, About: e.About}, Labels: e.Labels, Store: e.Store, Usage: e.Usage}
 	}
 	var tools application.CatalogUseCase

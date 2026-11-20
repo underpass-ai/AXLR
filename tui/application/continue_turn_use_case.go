@@ -57,6 +57,8 @@ type ContinueTurnUseCase struct {
 	// opens the session a capped prompt continues in.
 	Tokens     TokenCounterPort
 	ContextCap func(root.ModelID) int
+	// LocalModel identifies configured local endpoints that compact in place.
+	LocalModel func(root.ModelID) bool
 	Successor  SuccessorPort
 	// Scale learns each model's provider count per counted token; nil
 	// takes the count as it is.
@@ -303,6 +305,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	req := root.CompletionRequest{Model: model, Messages: append([]root.Message{guidance}, currentTurnReasoning(projection.Messages)...), Tools: tools}
 	counted := 0
+	localCap := 0
 	// An execution's routing chooses the model of each request among its
 	// candidates; past every candidate's cap the turn continues in a
 	// successor, as past the session model's (model_routing.go).
@@ -329,11 +332,20 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		ranked, req.Model = ranking.Ranked, ranking.Ranked[0].Model
 	} else if cap, capped := u.capsContext(*session); capped {
 		counted = RequestTokens(u.Tokens, guidance, tools, req.Messages[1:])
+		if u.LocalModel != nil && u.LocalModel(model) {
+			localCap = cap
+		}
 		if estimated := u.Scale.Estimate(model, counted); estimated > cap {
-			contextSpan.End(DiagnosticErrorInvalidState)
-			// The turn ends interrupted either way: continued in the
-			// successor, or refused when the prompt alone exceeds the cap.
-			return interrupt(u.continueInSuccessor(ctx, session, estimated, cap))
+			if localCap == 0 {
+				contextSpan.End(DiagnosticErrorInvalidState)
+				return interrupt(u.continueInSuccessor(ctx, session, estimated, cap))
+			}
+			var fitErr error
+			req, counted, fitErr = u.compactLocalRequest(req, messages, &projection, projectionBudget(u.Windows, *session), cap)
+			if fitErr != nil {
+				contextSpan.End(DiagnosticErrorInvalidState)
+				return interrupt(fitErr)
+			}
 		}
 	}
 	if u.Diagnostics != nil {
@@ -360,6 +372,11 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	if err := emit(Event{Kind: EventState, State: domain.StatusStreaming}); err != nil {
 		return interrupt(err)
+	}
+	if localCap > 0 && projection.DroppedMessages > 0 {
+		if err := emit(Event{Kind: EventContextCompacted}); err != nil {
+			return interrupt(err)
+		}
 	}
 	// ask sends the request once, to req.Model, and records it in the
 	// ledger, the receipt and the model's stats whether it finished,
@@ -435,6 +452,28 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		_ = emit(Event{Kind: EventModelRouted, Model: req.Model, Route: route})
 	}
 	result, meter, err := ask(req, route)
+	if localCap > 0 && fallsBack(ctx, err, meter, draft.Len()) {
+		if retryCap := localContextRetryCap(err, u.Scale.Estimate(model, counted), localCap); retryCap > 0 {
+			if refusal := u.budgetRefusal(ctx, *session); refusal != nil {
+				return interrupt(errors.Join(err, refusal))
+			}
+			if refusal := u.requestRefusal(ctx, *session); refusal != nil {
+				if stop := budgetCause(ctx, refusal); stop != nil {
+					return pauseAtBudget(ctx, u.Store, session, stop, emit)
+				}
+				return interrupt(errors.Join(err, refusal))
+			}
+			var fitErr error
+			req, counted, fitErr = u.compactLocalRequest(req, messages, &projection, projectionBudget(u.Windows, *session), retryCap)
+			if fitErr != nil {
+				return interrupt(errors.Join(err, fitErr))
+			}
+			if err := emit(Event{Kind: EventContextCompacted}); err != nil {
+				return interrupt(err)
+			}
+			result, meter, err = ask(req, domain.RouteRetry)
+		}
+	}
 	// A failure the provider says may pass, before anything reached the
 	// person, is asked again of the same model after a wait, each time as
 	// another request the budget counts. A routing with another candidate
