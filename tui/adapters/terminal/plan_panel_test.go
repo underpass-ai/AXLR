@@ -175,7 +175,7 @@ func TestThePlansPanelCountsInTheSingularAndHidesZeroRounds(t *testing.T) {
 	plan.Syncs = []domain.SyncRecord{{Wave: 1, Verdict: "green"}, {Wave: 2, Verdict: "red", Rounds: 1}, {Wave: 3, Verdict: "red", Rounds: 2}}
 	for locale, want := range map[Locale][]string{
 		English: {"1 task in 1 wave", "sync wave 1 · green\n", "sync wave 2 · red · 1 round\n", "sync wave 3 · red · 2 rounds"},
-		Spanish: {"1 tarea en 1 ola", "sync de la ola 1 · green\n", "sync de la ola 2 · red · 1 ronda\n", "sync de la ola 3 · red · 2 rondas"},
+		Spanish: {"1 tarea en 1 ola", "sync de la ola 1 · verde\n", "sync de la ola 2 · rojo · 1 ronda\n", "sync de la ola 3 · rojo · 2 rondas"},
 	} {
 		content := ansi.Strip(planPanelContent([]domain.PlanRecord{plan}, Theme{Locale: locale, Monochrome: true}, time.Now()))
 		for _, w := range want {

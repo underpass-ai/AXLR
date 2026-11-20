@@ -54,6 +54,13 @@ func TestDestructiveReasonNamesTheRule(t *testing.T) {
 		{"sh", []string{"-c", "ls 2>/dev/null; echo hi > /etc/motd"}, "", RuleDeleteOutside},
 		{"sh", []string{"-c", "echo hi >/dev/nullfile"}, "", RuleDeleteOutside},
 		{"sh", []string{"-c", "ls 2>/dev/null && rm -rf /tmp/x"}, "", RuleDeleteOutside},
+		// A redirection into the temporary directory writes a scratch file
+		// (20 November 2026); deleting there or writing elsewhere still asks.
+		{"sh", []string{"-c", "printf 'a\\nb\\n' > /tmp/counts.txt; grep -c a /tmp/counts.txt"}, "", ""},
+		{"bash", []string{"-c", "go test ./... >/var/tmp/out.log 2>&1; tail /var/tmp/out.log"}, "", ""},
+		{"sh", []string{"-c", "echo x > /tmp/x; rm -rf /tmp/x"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x > /tmp/x; echo y > /etc/hosts"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x > /tmpfile"}, "", RuleDeleteOutside},
 		{"go", []string{"test", "./..."}, "", ""},
 		{"ls", []string{"/"}, "", ""},
 		// A wrapper option's value is not the program (14 October 2026).

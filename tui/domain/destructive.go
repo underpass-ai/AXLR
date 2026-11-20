@@ -176,6 +176,9 @@ func commandFlag(arg string) bool {
 // like.
 var discardRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*/dev/(?:null|stdout|stderr|tty|fd/[0-9]+)(?:[\s;|&)]|$)`)
 
+// scratchRedirect is an output redirection into /tmp or /var/tmp.
+var scratchRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*/(?:var/)?tmp/[^\s;|&)<>]*`)
+
 // destructiveScript matches a shell string literally: a card for a false
 // positive costs a keypress, a missed deletion costs more.
 func destructiveScript(workspace Workspace, script string, rules map[string]bool) string {
@@ -183,6 +186,11 @@ func destructiveScript(workspace Workspace, script string, rules map[string]bool
 	// the ">/" of an overwrite outside the workspace and put a card on every
 	// probe a local model wrote (13 of 13 cards on wrx80, 20 November 2026).
 	script = discardRedirect.ReplaceAllString(script, " ")
+	// Nor does one into the temporary directory, scratch space by design
+	// and private to the command under the exec sandbox: a local model
+	// checking a draft with printf … > /tmp/x raised six cards in one plan
+	// (wrx80, 20 November 2026). Deleting there keeps its card.
+	script = scratchRedirect.ReplaceAllString(script, " ")
 	lower := " " + strings.ToLower(script) + " "
 	for _, rule := range []struct{ name, pattern string }{{RuleGitPush, "git push"}, {RuleGitResetHard, "reset --hard"}, {RuleGitClean, "git clean"}, {RuleGitBranchDelete, "branch -d"}, {RuleGitBranchDelete, "branch --delete"}, {RuleGitRebase, "git rebase"}} {
 		if rules[rule.name] && strings.Contains(lower, rule.pattern) {

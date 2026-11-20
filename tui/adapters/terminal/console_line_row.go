@@ -32,7 +32,7 @@ func consoleLineRow(line domain.ConsoleLine, theme Theme) transcriptRow {
 		if plan.CostKnown {
 			cost = theme.Tf("transcript.planCost", FormatUSD(plan.CostUSD))
 		}
-		row.Text = theme.Tf("transcript.planOutcome", plan.PlanID, theme.T("plans.status."+string(plan.Status)), plan.Done, plan.Tasks, plan.Blocked, plan.Skipped, syncVerdicts(plan.Syncs), changedFiles(plan.Changed), cost)
+		row.Text = theme.Tf("transcript.planOutcome", plan.PlanID, theme.T("plans.status."+string(plan.Status)), plan.Done, plan.Tasks, plan.Blocked, plan.Skipped, syncVerdicts(theme, plan.Syncs), changedFiles(plan.Changed), cost)
 	}
 	if restore := line.Restore; restore != nil {
 		// Ctrl+D shows the restore's diff beside the steps.
@@ -52,19 +52,30 @@ func consoleLineRow(line domain.ConsoleLine, theme Theme) transcriptRow {
 	return row
 }
 
-// syncVerdicts reads "green" for one wave and "w1 green, w2 red" for more.
-func syncVerdicts(syncs []domain.SyncVerdict) string {
+// syncVerdicts reads "green" for one wave and "w1 green, w2 red" for more,
+// in the console's language.
+func syncVerdicts(theme Theme, syncs []domain.SyncVerdict) string {
 	switch len(syncs) {
 	case 0:
 		return "—"
 	case 1:
-		return syncs[0].Verdict
+		return syncVerdict(theme, syncs[0].Verdict)
 	}
 	parts := make([]string, len(syncs))
 	for i, sync := range syncs {
-		parts[i] = fmt.Sprintf("w%d %s", sync.Wave, sync.Verdict)
+		parts[i] = fmt.Sprintf("w%d %s", sync.Wave, syncVerdict(theme, sync.Verdict))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// syncVerdict is a sync's verdict in the console's language: a Spanish
+// console read "sync w1 deferred, w2 green" until 20 November 2026. A
+// verdict without a label stays as it is.
+func syncVerdict(theme Theme, verdict string) string {
+	if _, known := enMessages["plans.verdict."+verdict]; known {
+		return theme.T("plans.verdict." + verdict)
+	}
+	return verdict
 }
 
 // changedFiles names the first files a plan changed and counts the rest.

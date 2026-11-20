@@ -153,7 +153,7 @@ func planPanelContent(records []domain.PlanRecord, theme Theme, now time.Time) s
 			}
 		}
 		for _, s := range plan.Syncs {
-			row := theme.Tf("plans.syncRow", s.Wave, s.Verdict)
+			row := theme.Tf("plans.syncRow", s.Wave, syncVerdict(theme, s.Verdict))
 			if s.Rounds > 0 {
 				// "0 rounds" said nothing on 12 October 2026.
 				row += theme.Tn("plans.syncRounds", s.Rounds, s.Rounds)

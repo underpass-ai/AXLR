@@ -31,9 +31,13 @@ type tokenCalibrationFile struct {
 }
 
 type tokenCalibrationEntry struct {
-	BytesPerToken float64   `json:"bytes_per_token"`
-	Samples       int       `json:"samples"`
-	Updated       time.Time `json:"updated"`
+	BytesPerToken float64 `json:"bytes_per_token"`
+	Samples       int     `json:"samples"`
+	// TokenFactor is the model's prompt tokens over the console's o200k
+	// count of the same request (application.TokenScale), kept across
+	// launches; 0 when never measured.
+	TokenFactor float64   `json:"token_factor,omitempty"`
+	Updated     time.Time `json:"updated"`
 }
 
 // TokenCalibration keeps each model's measured bytes per prompt token in one
@@ -88,7 +92,48 @@ func (c *TokenCalibration) Observe(ctx context.Context, model root.ModelID, requ
 	if measured.Samples == entry.Samples {
 		return nil
 	}
-	file.Models[string(model)] = tokenCalibrationEntry{BytesPerToken: measured.Ratio, Samples: measured.Samples, Updated: c.now().UTC().Truncate(time.Second)}
+	entry.BytesPerToken, entry.Samples, entry.Updated = measured.Ratio, measured.Samples, c.now().UTC().Truncate(time.Second)
+	file.Models[string(model)] = entry
+	return c.write(ctx, file)
+}
+
+// TokenFactor is the model's saved token factor (application.TokenScaleMemory).
+func (c *TokenCalibration) TokenFactor(model root.ModelID) (float64, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	file, err := c.read()
+	if err != nil {
+		return 0, false
+	}
+	factor := file.Models[string(model)].TokenFactor
+	return factor, factor >= 1 && factor <= 4
+}
+
+// SaveTokenFactor keeps the model's token factor for later launches.
+func (c *TokenCalibration) SaveTokenFactor(model root.ModelID, factor float64) error {
+	if factor < 1 || factor > 4 {
+		return errors.New("token factor out of range")
+	}
+	ctx := context.Background()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	release, err := acquireMCPConfigLock(ctx, c.path)
+	if err != nil {
+		return err
+	}
+	defer release()
+	file, err := c.read()
+	if err != nil {
+		file = tokenCalibrationFile{Version: tokenCalibrationVersion, Models: map[string]tokenCalibrationEntry{}}
+	}
+	entry := file.Models[string(model)]
+	entry.TokenFactor, entry.Updated = factor, c.now().UTC().Truncate(time.Second)
+	file.Models[string(model)] = entry
+	return c.write(ctx, file)
+}
+
+// write saves the file, keeping the most recently updated models.
+func (c *TokenCalibration) write(ctx context.Context, file tokenCalibrationFile) error {
 	if len(file.Models) > maxCalibratedModels {
 		ids := make([]string, 0, len(file.Models))
 		for id := range file.Models {

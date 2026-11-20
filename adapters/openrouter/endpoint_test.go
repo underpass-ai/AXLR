@@ -130,7 +130,7 @@ func TestThinkingOffReachesTheChatTemplate(t *testing.T) {
 func TestStreamFailuresNameTheEndpoint(t *testing.T) {
 	for name, tc := range map[string]struct{ body, want string }{
 		"no [DONE]":   {streamEvents(textChunk, stopChunk), "model endpoint 127.0.0.1:8080 stream ended without [DONE]"},
-		"cut event":   {"data: " + textChunk, "model endpoint 127.0.0.1:8080 transport failure"},
+		"cut event":   {"data: " + textChunk, "model endpoint 127.0.0.1:8080 transport failure: connection closed by the server"},
 		"error event": {streamEvents(textChunk, `{"error":{"code":503,"message":"overloaded"}}`), "model endpoint 127.0.0.1:8080 provider_failure (HTTP 503): overloaded"},
 	} {
 		t.Run(name, func(t *testing.T) {

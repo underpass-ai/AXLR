@@ -126,3 +126,39 @@ func TestTokenCalibrationBoundsTheFileAndSurvivesDamage(t *testing.T) {
 		t.Fatal("a relative path was accepted")
 	}
 }
+
+// The token factor survives the launch beside the bytes per token, and
+// neither measurement erases the other (20 November 2026: every launch
+// started at 1 and a resumed local session overflowed its server).
+func TestTokenCalibrationKeepsTheTokenFactorAcrossLaunches(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "axlr", "bytes-per-token.json")
+	model := root.ModelID("local/qwen")
+	first, err := NewTokenCalibration(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := first.TokenFactor(model); ok {
+		t.Fatal("a factor before any measurement")
+	}
+	if err := first.SaveTokenFactor(model, 1.52); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.Observe(context.Background(), model, 300000, 100000); err != nil {
+		t.Fatal(err)
+	}
+	if err := first.SaveTokenFactor(model, 9); err == nil {
+		t.Fatal("an out-of-range factor was saved")
+	}
+	next, err := NewTokenCalibration(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if factor, ok := next.TokenFactor(model); !ok || factor != 1.52 {
+		t.Fatalf("factor after a new launch = %v %v", factor, ok)
+	}
+	data, _ := os.ReadFile(path)
+	var file tokenCalibrationFile
+	if err := json.Unmarshal(data, &file); err != nil || file.Models[string(model)].Samples != 1 || file.Models[string(model)].BytesPerToken != 3 {
+		t.Fatalf("the bytes per token were lost: %s", data)
+	}
+}
