@@ -373,7 +373,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	if err := emit(Event{Kind: EventState, State: domain.StatusStreaming}); err != nil {
 		return interrupt(err)
 	}
-	if localCap > 0 && projection.DroppedMessages > 0 {
+	if localCap > 0 && (projection.DroppedMessages > 0 || projection.TurnCompacted) {
 		if err := emit(Event{Kind: EventContextCompacted}); err != nil {
 			return interrupt(err)
 		}

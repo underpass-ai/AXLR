@@ -112,3 +112,79 @@ func TestLocalContextReportsActiveRequestThatCannotFit(t *testing.T) {
 		t.Fatalf("err=%v successors=%v", err, successor.created)
 	}
 }
+
+func TestLocalContextCompactsCompletedResultsInActiveTurn(t *testing.T) {
+	const cap = 12288
+	const resultCount = 12
+	session := turnSession(t)
+	id := session.ID()
+	prompt := root.Text("Continue the report")
+	if err := session.BeginTurn(prompt, turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	calls := make([]root.ToolCall, resultCount)
+	for i := range calls {
+		calls[i] = call(root.ToolCallID(fmt.Sprintf("finished-%d", i)), "read")
+	}
+	if err := session.CompleteAssistant(assistant("", calls...)); err != nil {
+		t.Fatal(err)
+	}
+	original := root.Text(strings.Repeat("page text ", 470))
+	for _, completed := range calls {
+		if err := session.RecordToolOutcome(completed.ID, domain.DecisionApprove, domain.ToolOutcome{Content: original}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	store, successor, counter := &memoryStore{}, &successorStub{}, &byteCounter{}
+	attempts, notices := 0, 0
+	useCase := ContinueTurnUseCase{
+		Store: store, Successor: successor, Tokens: counter,
+		LocalModel: func(root.ModelID) bool { return true },
+		ContextCap: func(root.ModelID) int { return cap },
+		Windows:    windowsFunc(func(root.ModelID) domain.ContextWindow { return 16384 }),
+		Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			attempts++
+			if len(req.Messages) != resultCount+3 || req.Messages[1].Content != prompt {
+				t.Fatal("compaction removed messages from the active turn")
+			}
+			if tokens := RequestTokens(counter, req.Messages[0], req.Tools, req.Messages[1:]); tokens > cap {
+				t.Fatalf("projected %d tokens, input budget is %d", tokens, cap)
+			}
+			for i, projected := range req.Messages[3:] {
+				sent := req.Messages[2].ToolCalls[i]
+				if sent.ID != calls[i].ID || sent.Name != calls[i].Name || string(sent.Arguments.Bytes()) != string(calls[i].Arguments.Bytes()) || projected.ToolCallID != calls[i].ID {
+					t.Fatal("compaction changed a completed call or detached its result")
+				}
+				if !strings.Contains(string(projected.Content), fmt.Sprintf("axlr_history({message_index: %d,", i+2)) {
+					t.Fatalf("result %d has no exact history reference", i)
+				}
+			}
+			return assistant("continued the report"), nil
+		}),
+	}
+	err := useCase.Execute(context.Background(), &session, func(event Event) error {
+		if event.Kind == EventContextCompacted {
+			notices++
+		}
+		return nil
+	})
+	if err != nil || attempts != 1 || notices != 1 || len(successor.created) != 0 || session.ID() != id {
+		t.Fatalf("err=%v attempts=%d notices=%d successors=%v", err, attempts, notices, successor.created)
+	}
+	saved := store.states[len(store.states)-1]
+	for i, message := range saved.Messages[2 : resultCount+2] {
+		if message.Content != original || message.ToolCallID != calls[i].ID {
+			t.Fatalf("original tool result %d changed", i)
+		}
+	}
+	if saved.Messages[resultCount+2].Content != "continued the report" {
+		t.Fatal("assistant answer was not saved")
+	}
+	if err := session.BeginTurn("Check the report", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	page, err := hostHistory(session.Messages(), hostJSON(t, `{"message_index":2,"limit_bytes":8192}`), MaxHistoryReadBytes)
+	if err != nil || page.(map[string]any)["text"] != string(original) {
+		t.Fatalf("history did not recover the original result: %v", err)
+	}
+}
