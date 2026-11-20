@@ -76,7 +76,7 @@ func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, ori
 	}
 	// Shortened results still do not fit: the oldest steps of the turn fold
 	// into one note and the latest stay whole.
-	if folded, foldedCount, ok := u.foldActiveTurn(candidate, original, projection, cap); ok {
+	if folded, foldedCount, ok := u.foldActiveTurn(candidate, original, projection, budget, cap); ok {
 		return folded, foldedCount, nil
 	}
 	return fitted, counted, err

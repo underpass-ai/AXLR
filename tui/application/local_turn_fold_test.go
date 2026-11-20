@@ -108,3 +108,49 @@ func TestLocalContextResumesATurnStoppedAtTheWindowWhenThePersonSaysGoOn(t *test
 		t.Fatalf("err=%v attempts=%d", err, *attempts)
 	}
 }
+
+// A second long turn folds its own steps and puts the closed first turn in
+// one checkpoint: on 20 November 2026 a second turn at 16K failed with the
+// first turn's calls still whole in the request.
+func TestLocalContextFoldsASecondTurnBehindACheckpointOfTheFirst(t *testing.T) {
+	const cap, steps, second = 8192, 20, 40
+	session, _ := longTurn(t, "Read logs 01 to 20", steps)
+	if err := session.CompleteAssistantWithin(assistant("Turn one: every log has two ERROR lines."), 100); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.BeginTurn("Now logs 21 to 40", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	var last root.ToolCallID
+	for i := range second {
+		last = root.ToolCallID(fmt.Sprintf("second-%02d", i))
+		if err := session.CompleteAssistantWithin(assistant("", call(last, "read")), 100); err != nil {
+			t.Fatal(err)
+		}
+		content := root.Text(fmt.Sprintf("second-%02d ", i) + strings.Repeat("page text ", 470))
+		if err := session.RecordToolOutcome(last, domain.DecisionApprove, domain.ToolOutcome{Content: content}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	useCase, store, attempts := foldingUseCase(t, cap, func(req root.CompletionRequest) {
+		var prompt, note, firstTurn bool
+		for _, m := range req.Messages {
+			text := string(m.Content)
+			prompt = prompt || text == "Now logs 21 to 40"
+			note = note || strings.HasPrefix(text, "[AXLR] Earlier steps of this turn")
+			firstTurn = firstTurn || strings.HasPrefix(text, "result-")
+		}
+		if !prompt || !note || firstTurn {
+			t.Fatalf("prompt=%v note=%v first turn whole=%v", prompt, note, firstTurn)
+		}
+		if tail := req.Messages[len(req.Messages)-1]; tail.ToolCallID != last {
+			t.Fatal("the latest step was not kept whole")
+		}
+	})
+	if err := useCase.Execute(context.Background(), &session, ignoreEvent); err != nil || *attempts != 1 {
+		t.Fatalf("err=%v attempts=%d", err, *attempts)
+	}
+	if saved := store.states[len(store.states)-1]; len(saved.Messages) != 2*steps+3+2*second+1 {
+		t.Fatalf("the stored transcript changed: %d messages", len(saved.Messages))
+	}
+}
