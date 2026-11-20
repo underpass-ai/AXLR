@@ -210,3 +210,28 @@ func (r *servedWindowRecorder) ObserveServedWindow(model root.ModelID, tokens in
 	}
 	r.observed[model] = tokens
 }
+
+// A local server that words the overflow as OpenAI does (vLLM) is read as
+// llama.cpp's is (20 November 2026: only llama.cpp's wording was).
+func TestLocalOverflowReadsLlamaAndOpenAIWordings(t *testing.T) {
+	for message, want := range map[string][2]int{
+		"request (91591 tokens) exceeds the available context size (90112 tokens), try increasing it":                                                                                                       {91591, 90112},
+		"This model's maximum context length is 32768 tokens. However, you requested 34001 tokens (33001 in the messages, 1000 in the completion). Please reduce the length of the messages or completion.": {34001, 32768},
+		"This model's maximum context length is 128000 tokens. However, your messages resulted in 130500 tokens.":                                                                                           {130500, 128000},
+		"maximum context length is 8192 tokens. However, your request has 9000 input tokens.":                                                                                                               {9000, 8192},
+	} {
+		prompt, window, ok := llamaOverflow(&provider.ProviderError{StatusCode: 400, Message: message})
+		if !ok || prompt != want[0] || window != want[1] {
+			t.Errorf("%q: prompt=%d window=%d ok=%v, want %v", message, prompt, window, ok, want)
+		}
+	}
+	for _, refused := range []error{
+		&provider.ProviderError{StatusCode: 500, Message: "maximum context length is 8192 tokens. However, you requested 9000 tokens"},
+		&provider.ProviderError{StatusCode: 400, Message: "invalid tool schema"},
+		&provider.ProviderError{StatusCode: 400, Message: "maximum context length is 8192 tokens. However, you requested 100 tokens"},
+	} {
+		if _, _, ok := llamaOverflow(refused); ok {
+			t.Errorf("read %v as an overflow", refused)
+		}
+	}
+}
