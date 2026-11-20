@@ -65,3 +65,22 @@ func TestFilesReportABinaryFileAsNotText(t *testing.T) {
 		t.Fatalf("found=%v err=%v, want ErrNotText with the runtime's message", found, err)
 	}
 }
+
+// A directory is no file: the runtime says not_regular_file, and the console
+// tells it apart so a plan whose scope names one is a defect (20 November
+// 2026), keeping the runtime's message.
+func TestFilesReportADirectoryAsNotAFile(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, "logs"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	executor, err := runtime.New(runtime.Config{Root: root, Env: []string{"PATH=" + os.Getenv("PATH")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = executor.Close() })
+	_, found, err := Files{Tools: axlr.ToolRunner{Executor: executor}}.Read(context.Background(), "logs", 1<<20)
+	if found || !errors.Is(err, application.ErrNotFile) || !strings.Contains(err.Error(), "read requires a regular file") {
+		t.Fatalf("found=%v err=%v, want ErrNotFile with the runtime's message", found, err)
+	}
+}

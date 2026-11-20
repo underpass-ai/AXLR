@@ -11,6 +11,7 @@ import (
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/adapters/engines"
+	"github.com/underpass-ai/AXLR/tui/adapters/madesetup"
 )
 
 func TestOnlyKMPAndMADECommandsAreShared(t *testing.T) {
@@ -64,28 +65,35 @@ func TestSharedEnginesThatCannotStartFallBack(t *testing.T) {
 	}
 }
 
-func TestMADERunsUnderTheFullToolProfileUnlessItsEntryNamesOne(t *testing.T) {
-	command := filepath.Join(t.TempDir(), "run-embedded-mcp.sh")
-	registration := func(id root.PluginID, env []string) plugins.Registration {
+func TestMADERunsUnderTheFullToolProfileAndTheWorkIdentityUnlessItsEntryNamesThem(t *testing.T) {
+	dir := t.TempDir()
+	launcher, binary := filepath.Join(dir, "run-embedded-mcp.sh"), filepath.Join(dir, "made-mcp")
+	registration := func(id root.PluginID, command string, env []string) plugins.Registration {
 		r, err := plugins.NewRegistration(plugins.Manifest{ID: id, Command: command, AllowAll: true}, env)
 		if err != nil {
 			t.Fatal(err)
 		}
 		return r
 	}
+	const config = "/home/test/.config/axlr/mcp.json"
 	registrations := []plugins.Registration{
-		registration("made", []string{"HOME=/home/test"}),
-		registration("made", []string{"MADE_MCP_TOOL_PROFILE=core+ceremony_execution"}),
-		registration("kmp", []string{"KMP_MCP_BACKEND=embedded"}),
+		registration("made", launcher, []string{"HOME=/home/test"}),
+		registration("made", launcher, []string{"MADE_MCP_TOOL_PROFILE=core+ceremony_execution", "MADE_AUTH_TRUSTED_HOST_ID=ops-host"}),
+		registration("made", binary, nil),
+		registration("kmp", launcher, []string{"KMP_MCP_BACKEND=embedded"}),
 	}
-	pinMADEToolProfile(registrations)
-	if !slices.Contains(registrations[0].Env, "MADE_MCP_TOOL_PROFILE=full") {
-		t.Fatalf("MADE kept the launcher's core profile: %v", registrations[0].Env)
+	pinMADEEnvironment(config, registrations)
+	work := madesetup.WorkIdentity(config, nil)
+	if !slices.Contains(registrations[0].Env, "MADE_MCP_TOOL_PROFILE=full") || !slices.Contains(registrations[0].Env, "MADE_AUTH_TRUSTED_HOST_ID="+work) {
+		t.Fatalf("the embedded entry kept the launcher's profile or its trusted host: %v", registrations[0].Env)
 	}
-	if !slices.Equal(registrations[1].Env, []string{"MADE_MCP_TOOL_PROFILE=core+ceremony_execution"}) {
-		t.Fatalf("an operator's profile was replaced: %v", registrations[1].Env)
+	if !slices.Equal(registrations[1].Env, []string{"MADE_MCP_TOOL_PROFILE=core+ceremony_execution", "MADE_AUTH_TRUSTED_HOST_ID=ops-host"}) {
+		t.Fatalf("an operator's profile or host was replaced: %v", registrations[1].Env)
 	}
-	if !slices.Equal(registrations[2].Env, []string{"KMP_MCP_BACKEND=embedded"}) {
-		t.Fatalf("KMP's environment changed: %v", registrations[2].Env)
+	if !slices.Equal(registrations[2].Env, []string{"MADE_MCP_TOOL_PROFILE=full"}) {
+		t.Fatalf("a bare binary got a work identity: %v", registrations[2].Env)
+	}
+	if !slices.Equal(registrations[3].Env, []string{"KMP_MCP_BACKEND=embedded"}) {
+		t.Fatalf("KMP's environment changed: %v", registrations[3].Env)
 	}
 }

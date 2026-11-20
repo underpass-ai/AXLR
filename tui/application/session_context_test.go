@@ -216,6 +216,29 @@ func TestTheSystemPromptNamesTheConsoleLanguageForTheWhy(t *testing.T) {
 	}
 }
 
+// The model was not told local commands run sandboxed and spent calls on
+// sudo and pacman (20 November 2026): the exec sandbox's sentence reaches
+// the system prompt, and none without a sandbox.
+func TestTheSystemPromptSaysWhatASandboxedCommandMayDo(t *testing.T) {
+	for _, guidance := range []string{"Local commands run in a sandbox: they may write only the workspace and a private /tmp, never as root.\n", ""} {
+		s := turnSession(t)
+		if err := s.BeginTurn("Instala nmap", HostTools()); err != nil {
+			t.Fatal(err)
+		}
+		var system string
+		u := AgentTurnUseCase{Continue: ContinueTurnUseCase{Store: &memoryStore{}, ExecGuidance: guidance, Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			system = string(req.Messages[0].Content)
+			return assistant("Hecho"), nil
+		})}}
+		if err := u.Execute(context.Background(), &s, nil); err != nil {
+			t.Fatal(err)
+		}
+		if guidance != "" && !strings.Contains(system, guidance) || guidance == "" && strings.Contains(system, "run in a sandbox") {
+			t.Fatalf("guidance %q: system prompt %q", guidance, system)
+		}
+	}
+}
+
 // The model narrated the console's bookkeeping: "como es el segundo
 // mensaje, pongo título a la sesión" (14 October 2026). Titling is asked
 // for silently.

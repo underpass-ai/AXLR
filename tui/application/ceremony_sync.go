@@ -58,6 +58,22 @@ func (d *CeremonyDriver) RunSync(ctx context.Context, plan domain.PlanRecord, wa
 			ids = append(ids, t.ID)
 		}
 	}
+	// An earlier wave's red check that names a file a later wave writes
+	// waits for that wave: the end-to-end check is the plan's goal, and on
+	// 20 November 2026 a two-wave plan spent two reconciliation rounds after
+	// wave 1 on "resumen2.md: No such file", which wave 2 was to write, and
+	// ended partial although every task was done.
+	var early *CheckResult
+	if wave < plan.Waves {
+		result, err := d.Checks.Run(ctx, plan.E2E)
+		if err != nil {
+			return SyncOutcome{}, err
+		}
+		if result.Ran && result.ExitCode != 0 && namesLaterWave(plan, wave, result.Output) {
+			return SyncOutcome{Verdict: SyncDeferred, Output: syncTail(result.Output)}, nil
+		}
+		early = &result
+	}
 	about := sessionAbout(plan.Session)
 	if d.Labels != nil {
 		if labels, err := d.Labels.Load(ctx); err == nil && labels[plan.Session].About != "" {
@@ -76,14 +92,13 @@ func (d *CeremonyDriver) RunSync(ctx context.Context, plan domain.PlanRecord, wa
 		if err != nil {
 			return outcome, fmt.Errorf("claim integrate: %w", err)
 		}
-		result, err := d.Checks.Run(ctx, plan.E2E)
-		if err != nil {
+		var result CheckResult
+		if early != nil {
+			result, early = *early, nil
+		} else if result, err = d.Checks.Run(ctx, plan.E2E); err != nil {
 			return outcome, err
 		}
-		tail := result.Output
-		if len(tail) > syncTailBytes {
-			tail = "…" + tail[len(tail)-syncTailBytes:]
-		}
+		tail := syncTail(result.Output)
 		verdict, trigger := "red", "conflict"
 		switch {
 		case result.Ran && result.ExitCode == 0:
@@ -119,6 +134,37 @@ func (d *CeremonyDriver) RunSync(ctx context.Context, plan domain.PlanRecord, wa
 			return outcome, fmt.Errorf("transition reconciled: %w", err)
 		}
 	}
+}
+
+// SyncDeferred is the verdict of an earlier wave whose end-to-end check
+// fails on a file a later wave writes: the last wave's sync decides.
+const SyncDeferred = "deferred"
+
+// syncTail is the end of a check's output a sync keeps.
+func syncTail(output string) string {
+	if len(output) > syncTailBytes {
+		return "…" + output[len(output)-syncTailBytes:]
+	}
+	return output
+}
+
+// namesLaterWave reports a failing output that names a scope file of a task
+// in a wave after this one.
+func namesLaterWave(plan domain.PlanRecord, wave int, failing string) bool {
+	var later []domain.PlanTask
+	for _, t := range plan.Tasks {
+		if t.Wave > wave {
+			later = append(later, t)
+		}
+	}
+	for _, t := range later {
+		for _, p := range t.Scope {
+			if strings.Contains(failing, p) || strings.Contains(failing, lastPathElement(p)) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // affectedTasks are the wave's tasks whose scope files the failing output

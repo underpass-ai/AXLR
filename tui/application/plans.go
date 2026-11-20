@@ -303,7 +303,8 @@ func (r *PlanRunner) run(ctx context.Context, id string) {
 			}
 		}
 		for _, s := range p.Syncs {
-			if s.Verdict != "green" {
+			// A deferred wave waited for a later one, whose sync decides.
+			if s.Verdict != "green" && s.Verdict != SyncDeferred {
 				p.Status = domain.PlanPartial
 			}
 		}

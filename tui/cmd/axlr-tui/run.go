@@ -510,7 +510,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		profiles = append(profiles, domain.PluginProfile{ID: registration.Manifest.ID, Name: root.Text(registration.Manifest.ID), Purpose: domain.PluginPurposeTools, Approval: domain.ApprovalManual})
 	}
 	registrations = append(persisted.Registrations, registrations...)
-	pinMADEToolProfile(registrations)
+	pinMADEEnvironment(configPath, registrations)
 	// The memory of this launch: the checkout's own store, prepared and
 	// pinned before anything reads the registrations.
 	kmp, hasKMP, kmpErr := prepareKMPStore(ctx, registrations, workspacePath, dataBase, *kmpStoreFlag)
@@ -849,7 +849,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 		ceremonies.Starter = planRunner
 		planPanel = planRunner
 	}
-	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, Language: string(locale)}
+	continuation := application.ContinueTurnUseCase{Engines: ceremonyhost.Guidance{}, Validation: validator, Models: models, Windows: locals.Windows, Judge: judge, Store: loggedStore, Diagnostics: trace, PluginGuidance: axlrCatalog.Guidance, PluginSkills: axlrCatalog, SessionLabels: sessionLabels, Ceremonies: ceremonies, Session: sessionCeremony, Calibration: calibration, Language: string(locale), ExecGuidance: compose.SandboxGuidance(sandbox)}
 	continuation.Logs = logReader(appLog)
 	continuation.ToolCalls = toolCallLog(appLog)
 	// The usage ledger, the context cap and its successors, forged and

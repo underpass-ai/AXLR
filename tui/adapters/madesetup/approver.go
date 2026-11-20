@@ -18,6 +18,11 @@ const ApproverGrantID = "axlr-approver-v1"
 // else; the work identity never holds them.
 var approverActions = []string{"approve_ceremony_guard", "get_ceremony_instance"}
 
+// approvalSourceKey is MADE's setting for where a human guard decision may
+// come from: `host` records one the MCP session relays, `terminal` only one
+// typed at `made-mcp approve-guard`.
+const approvalSourceKey = "MADE_HUMAN_APPROVAL_SOURCE"
+
 // approverIdentity is the identity that acts for the person at the console.
 func approverIdentity(work string) string { return work + "-approver" }
 
@@ -48,7 +53,17 @@ func (a *Approver) ApproveGuard(ctx context.Context, instance, guard string) err
 		if !isWorkIdentity(work) {
 			return errors.New("MADE has no AXLR work identity; prepare it: open /mcp, select MADE and press p")
 		}
-		approver := server(made, append(without(made.Env, hostIdentityKey), hostIdentityKey+"="+approverIdentity(work)))
+		// The approver relays the person's keypress at this console: MADE
+		// records it as a relayed human decision (`host`). Its launcher
+		// defaults to `terminal`, which refused every console approval of
+		// a plan, a repair merge or a postmortem (20 November 2026); the
+		// work identity's engine keeps that default, so the model still
+		// cannot approve a guard. An entry that names a source keeps it.
+		env := append(without(made.Env, hostIdentityKey), hostIdentityKey+"="+approverIdentity(work))
+		if _, named := environment(made.Env)[approvalSourceKey]; !named {
+			env = append(env, approvalSourceKey+"=host")
+		}
+		approver := server(made, env)
 		call := a.Call
 		if call == nil {
 			call = CallOnce

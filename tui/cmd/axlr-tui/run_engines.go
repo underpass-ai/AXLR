@@ -35,14 +35,17 @@ func sharedEngine(r plugins.Registration) bool {
 
 // engineSocketDir is where the shared engines' sockets live: the user's
 // runtime directory, else the state directory.
-// pinMADEToolProfile runs every stdio MADE entry under the tool profile the
-// console needs, before the plugin manager and the shared engine read the
-// registrations: MADE's launcher lists `core` by default, which refuses the
-// resume inspection, host handoff and agent status a claimed turn calls
-// (madesetup.ToolProfile). An entry that names a profile keeps it.
-func pinMADEToolProfile(registrations []plugins.Registration) {
+// pinMADEEnvironment runs every stdio MADE entry under the tool profile the
+// console needs and as its work identity, before the plugin manager and the
+// shared engine read the registrations. MADE's launcher lists `core` by
+// default, which refuses the resume inspection, host handoff and agent status
+// a claimed turn calls (madesetup.ToolProfile); an entry that names a profile
+// keeps it. An embedded entry that names no identity runs as the one the
+// preparation is about to grant (madesetup.WithWorkIdentity).
+func pinMADEEnvironment(configPath string, registrations []plugins.Registration) {
 	for i, r := range registrations {
 		if r.Manifest.ID == "made" && r.Manifest.Command != "" {
+			r.Env = madesetup.WithWorkIdentity(configPath, r)
 			registrations[i].Env = madesetup.WithToolProfile(r.Env)
 		}
 	}

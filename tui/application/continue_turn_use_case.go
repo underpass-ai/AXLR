@@ -52,6 +52,9 @@ type ContinueTurnUseCase struct {
 	Remember RememberPort
 	// Recall reads KMP for axlr_recall; nil, without KMP, offers none.
 	Recall RecallPort
+	// ExecGuidance says what a local command can do under the console's exec
+	// sandbox (compose.SandboxGuidance); empty without one.
+	ExecGuidance string
 	// Tokens counts a request's tokens and ContextCap gives the cap for a
 	// model (decision D10); nil keeps the byte budgets' cuts. Successor
 	// opens the session a capped prompt continues in.
@@ -248,6 +251,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	guidance := modelHostGuidance(session, u.Engines)
 	guidance.Content += root.Text(callBudgetGuidance(u.turnLimit()))
 	guidance.Content += root.Text(languageGuidance(u.Language))
+	guidance.Content += root.Text(u.ExecGuidance)
 	_, _, focused := focusedRun(*session)
 	if u.SessionLabels != nil && !focused {
 		text, err := sessionContextGuidance(ctx, *session, u.SessionLabels)

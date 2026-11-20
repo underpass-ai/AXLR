@@ -73,6 +73,9 @@ func (f Files) Read(ctx context.Context, path string, maxBytes int) ([]byte, boo
 				// code was dropped here; the console digests it as opaque.
 				return nil, false, fmt.Errorf("read %s: %s: %w", path, result.Error.Message, application.ErrNotText)
 			}
+			if result.Error.Code == "not_regular_file" {
+				return nil, false, fmt.Errorf("read %s: %s: %w", path, result.Error.Message, application.ErrNotFile)
+			}
 			return nil, false, fmt.Errorf("read %s: %s", path, result.Error.Message)
 		}
 		var page struct {
