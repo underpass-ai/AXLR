@@ -60,6 +60,9 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 		{"edit", `{"path":"file","old_text":"hello","new_text":"bye","why":"change the fixture"}`, "written_bytes"},
 		{"read", `{"path":"file"}`, "bye"},
 		{"exec", `{"program":"/bin/echo","args":["worked"]}`, "worked"},
+		// A key repeated with the same value reaches the strict runtime once
+		// (20 November 2026: a local model repeated "stdin" and "args").
+		{"exec", `{"program":"/bin/echo","args":["twice"],"stdin":"","args":["twice"],"stdin":""}`, "twice"},
 	}
 	if goruntime.GOOS == "windows" {
 		arguments, err := json.Marshal(map[string]any{"program": os.Args[0], "args": []string{"-test.run=^TestExecEchoHelper$", "--", "axlr-echo-helper"}})
@@ -67,6 +70,8 @@ func TestToolRunnerLocalOperations(t *testing.T) {
 			t.Fatal(err)
 		}
 		operations[4].args = string(arguments)
+		operations[5].args = strings.Replace(string(arguments), `"program"`, `"stdin":"","stdin":"","program"`, 1)
+		operations[5].want = "worked"
 	}
 	for _, tc := range operations {
 		id, _ := domain.NewLocalToolIdentity(tc.op)
