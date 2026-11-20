@@ -719,3 +719,32 @@ func TestSessionCeremonyContinuesAClosedInstanceInItsSuccessor(t *testing.T) {
 		t.Fatalf("calls %v inputs %v", engine.calls, engine.inputs)
 	}
 }
+
+// A session whose workspace store changed opens a context in the new store:
+// on 20 November 2026 a git init turned the per-user default into the
+// checkout's .kernel, and the resumed session's recalls and turn entries were
+// refused with "no agent context is registered here".
+func TestSessionCeremonyOpensAContextInTheStoreTheWorkspaceNowUses(t *testing.T) {
+	engine := &fakeEngine{}
+	c, _, _, _ := sessionCeremonyFor(t, engine)
+	guide, agents := &guideStub{}, &agentsStub{agents: map[string]string{"/home/me/.local/share/kmp/default": "agent_old"}}
+	c.Identity = identityFor(guide, agents)
+	s := turnSession(t)
+	if err := s.BeginTurn("hola", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SetInstance(domain.SessionInstance{MemoryAgent: "agent_old", MemoryContext: "ctx_old"}); err != nil {
+		t.Fatal(err)
+	}
+	c.BeginTurn(context.Background(), &s)
+	instance, _ := s.Instance()
+	if instance.MemoryAgent != "agent_axlr:install-1" || instance.MemoryContext == "ctx_old" || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" {
+		t.Fatalf("instance %+v agents %v", instance, agents.agents)
+	}
+	// The same store keeps the context it opened.
+	calls := len(guide.calls)
+	c.BeginTurn(context.Background(), &s)
+	if again, _ := s.Instance(); again.MemoryContext != instance.MemoryContext || len(guide.calls) != calls {
+		t.Fatalf("reopened in the same store: %+v calls %v", again, guide.calls)
+	}
+}
