@@ -46,6 +46,14 @@ func TestDestructiveReasonNamesTheRule(t *testing.T) {
 		{"sh", []string{"-c", "rm -rf build && go test ./..."}, "", ""},
 		{"sh", []string{"-c", "echo hi > /etc/motd"}, "", RuleDeleteOutside},
 		{"sh", []string{"-c", "curl -X DELETE https://api"}, "", RuleNetworkWrite},
+		// A redirection to a discard device writes nothing (20 November 2026).
+		{"sh", []string{"-c", "for p in apt pacman; do command -v $p >/dev/null 2>&1 && echo $p; done"}, "", ""},
+		{"sh", []string{"-c", "ls ~/go/bin 2>/dev/null; nmap -V 2> /dev/null | head -1"}, "", ""},
+		{"bash", []string{"-c", "make test &>/dev/null || echo failed >/dev/stderr"}, "", ""},
+		{"sh", []string{"-c", "cat x >>/dev/null"}, "", ""},
+		{"sh", []string{"-c", "ls 2>/dev/null; echo hi > /etc/motd"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo hi >/dev/nullfile"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "ls 2>/dev/null && rm -rf /tmp/x"}, "", RuleDeleteOutside},
 		{"go", []string{"test", "./..."}, "", ""},
 		{"ls", []string{"/"}, "", ""},
 		// A wrapper option's value is not the program (14 October 2026).
