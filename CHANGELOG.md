@@ -2,6 +2,17 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.7 — 2026-11-20
+
+### Fixed
+- MADE's work grant is issued on a fresh install and MADE runs under its full tool profile, so sessions get their ceremony instance and claimed turns are no longer refused (#241).
+- Output sent to /dev/null no longer raises an approval card under autonomy (#241).
+- A local turn that outgrows a small window folds its oldest steps instead of leaving the session stuck for good (#241).
+- After llama.cpp refuses a request as too long, later requests are sized to the window it reported (#241).
+- The person's guard approval at the console reaches MADE, and a fresh install's first session already has its ceremony instance (#242).
+- A directory in a plan task's scope is a defect the model corrects, and an earlier wave's sync waits for the wave that writes the file it misses (#242).
+- The model is told what a local command may do under the exec sandbox (#242).
+
 ## 0.20.6 — 2026-11-20
 
 ### Changed
