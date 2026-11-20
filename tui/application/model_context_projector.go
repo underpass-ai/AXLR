@@ -53,6 +53,8 @@ func NewDefaultModelContextProjector() ModelContextProjector {
 	return projector
 }
 
+var toolResultCompactionLimits = [...]int{8 << 10, 4 << 10, 2 << 10, 1 << 10}
+
 // Project fits the conversation into the budget. Earlier turns are dropped
 // whole; when the turn in progress alone does not fit, its tool results are
 // shortened step by step rather than failing the turn.
@@ -61,7 +63,7 @@ func (p ModelContextProjector) Project(original []root.Message) (domain.ContextP
 	if !errors.Is(err, ErrContextBudgetExceeded) {
 		return projection, err
 	}
-	for _, limit := range []int{8 << 10, 4 << 10, 2 << 10, 1 << 10} {
+	for _, limit := range toolResultCompactionLimits {
 		if limit >= p.budget.ToolResultBytes() {
 			continue
 		}
@@ -100,7 +102,7 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 	for i, message := range original {
 		if message.Role == root.RoleUser {
 			starts = append(starts, i)
-			if !strings.HasPrefix(string(message.Content), "[AXLR") && (i == 0 || original[i-1].Role != root.RoleTool) {
+			if personTurnStart(original, i) {
 				closedBefore = i
 			}
 		}
@@ -235,6 +237,23 @@ func (p ModelContextProjector) project(original []root.Message, turnLimit int, t
 		return projection, ErrContextBudgetExceeded
 	}
 	return projection, nil
+}
+
+// A host note or a message steered in after a tool result stays with
+// the active turn that owns those results.
+func personTurnStart(messages []root.Message, index int) bool {
+	return messages[index].Role == root.RoleUser &&
+		!strings.HasPrefix(string(messages[index].Content), "[AXLR") &&
+		(index == 0 || messages[index-1].Role != root.RoleTool)
+}
+
+func activeTurnStart(messages []root.Message) int {
+	for i := len(messages) - 1; i > 0; i-- {
+		if personTurnStart(messages, i) {
+			return i
+		}
+	}
+	return 0
 }
 
 // ModelMessagesBytes matches provider JSON message encoding, including string

@@ -6,16 +6,79 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/underpass-ai/AXLR/adapters/provider"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// compactLocalRequest replaces complete older turns with a bounded extractive
-// checkpoint. The provider view changes; the transcript and session do not.
+// compactLocalRequest first tries summarizing closed turns. If the live turn
+// still does not fit, progressively shorten its finished tool results.
 func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, original []root.Message, projection *domain.ContextProjection, budget domain.ContextBudget, cap int) (root.CompletionRequest, int, error) {
+	fitted, counted, err := u.compactLocalHistory(req, original, projection, budget, cap)
+	var full *localContextLimitError
+	if !errors.As(err, &full) {
+		return fitted, counted, err
+	}
+
+	first := max(projection.CutIndex, activeTurnStart(original))
+	offset := len(req.Messages) - len(original)
+	if first+offset < 1 {
+		return fitted, counted, err
+	}
+	callNames := make(map[root.ToolCallID]root.ToolName)
+	for _, message := range original[first:] {
+		for _, call := range message.ToolCalls {
+			callNames[call.ID] = call.Name
+		}
+	}
+	candidate := req
+	candidate.Messages = append([]root.Message(nil), req.Messages...)
+	remaining := counted
+	for _, limit := range toolResultCompactionLimits {
+		changed := false
+		for i, message := range original[first:] {
+			name := callNames[message.ToolCallID]
+			// Discovery results supply exact argument schemas used by the model.
+			if message.Role != root.RoleTool || name == "" || name == "axlr_tools" {
+				continue
+			}
+			index := first + i
+			content, clipErr := projectToolContentIn(string(message.Content), index, limit, excerptCompacted, name)
+			if clipErr != nil {
+				continue // The original may carry required protocol controls.
+			}
+			projected := &candidate.Messages[index+offset]
+			saved := u.Tokens.Count(string(projected.Content)) - u.Tokens.Count(content)
+			if saved > 0 {
+				projected.Content = root.Text(content)
+				remaining -= saved
+				changed = true
+			}
+		}
+		if !changed {
+			continue
+		}
+		if u.Scale.Estimate(req.Model, remaining) <= cap {
+			projection.Messages = candidate.Messages[1:]
+			projection.ProjectedBytes = ModelMessagesBytes(projection.Messages)
+			projection.TurnCompacted = true
+			return candidate, remaining, nil
+		}
+		fitted, counted, err = u.compactLocalHistory(candidate, original, projection, budget, cap)
+		if !errors.As(err, &full) {
+			if err == nil {
+				projection.TurnCompacted = true
+			}
+			return fitted, counted, err
+		}
+	}
+	return fitted, counted, err
+}
+
+// compactLocalHistory replaces complete older turns with a bounded extractive
+// checkpoint. The provider view changes; the transcript and session do not.
+func (u ContinueTurnUseCase) compactLocalHistory(req root.CompletionRequest, original []root.Message, projection *domain.ContextProjection, budget domain.ContextBudget, cap int) (root.CompletionRequest, int, error) {
 	counted := RequestTokens(u.Tokens, req.Messages[0], req.Tools, req.Messages[1:])
 	projector := ModelContextProjector{budget: budget}
 	first := -1
@@ -26,7 +89,7 @@ func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, ori
 		}
 	}
 	if first < 0 {
-		return req, counted, localContextFull(u.Scale.Estimate(req.Model, counted), cap)
+		return req, counted, &localContextLimitError{tokens: u.Scale.Estimate(req.Model, counted), fixed: u.Scale.Estimate(req.Model, RequestTokens(u.Tokens, req.Messages[0], req.Tools, nil)), cap: cap}
 	}
 	// The projection preserves the leading messages and a contiguous suffix.
 	// A previous checkpoint is replaced using the original transcript.
@@ -53,8 +116,7 @@ func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, ori
 		}
 		// A host note or a user instruction steered in after a tool
 		// result does not close the turn that owns those calls.
-		if cut == first || original[cut].Role != root.RoleUser || original[cut-1].Role == root.RoleTool ||
-			strings.HasPrefix(string(original[cut].Content), "[AXLR") {
+		if cut == first || !personTurnStart(original, cut) {
 			continue
 		}
 		minimum = prefixTokens + suffixTokens
@@ -78,7 +140,7 @@ func (u ContinueTurnUseCase) compactLocalRequest(req root.CompletionRequest, ori
 		projection.ProjectedBytes = ModelMessagesBytes(projection.Messages)
 		return req, compacted, nil
 	}
-	return req, counted, localContextFull(u.Scale.Estimate(req.Model, minimum), cap)
+	return req, counted, &localContextLimitError{tokens: u.Scale.Estimate(req.Model, minimum), fixed: u.Scale.Estimate(req.Model, prefixTokens), cap: cap}
 }
 
 // localCheckpoint reuses the history projector's references and prior requests.
@@ -122,8 +184,13 @@ func localCheckpoint(projector ModelContextProjector, original []root.Message, f
 	return root.Message{}, false
 }
 
-func localContextFull(tokens, cap int) error {
-	return fmt.Errorf("the active request reaches %d tokens with an input budget of %d and cannot be compacted further; shorten the request or raise the llama.cpp context and local_models.context_tokens", tokens, cap)
+type localContextLimitError struct {
+	tokens, fixed, cap int
+}
+
+func (e *localContextLimitError) Error() string {
+	return fmt.Sprintf("the active request reaches %d tokens with an input budget of %d: guidance and tool schemas use %d, and current messages use %d after compaction; shorten the request or raise the llama.cpp context and local_models.context_tokens",
+		e.tokens, e.cap, e.fixed, e.tokens-e.fixed)
 }
 
 // llama.cpp reports the token count it actually measured for a refused

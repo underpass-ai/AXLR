@@ -57,7 +57,7 @@ func projectToolContentIn(raw string, index, limit int, place excerptPlace, tool
 		bounded["retrieval"] = localReadRetrieval(page.end(), limit)
 	}
 	if place == excerptCompacted {
-		bounded["retrieval"] = "This turn no longer fits the model context, so its earlier results were shortened. Answer with what you have, or ask the user before gathering more."
+		bounded["retrieval"] = fmt.Sprintf("The context budget shortened this result. Use the excerpt or ask before gathering more. Once this turn closes, use axlr_history({message_index: %d, offset_bytes: 0}) for the exact original.", index)
 	}
 	if key, id, named := namedCall(original); named {
 		bounded[key] = id
