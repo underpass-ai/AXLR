@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/underpass-ai/AXLR/adapters/provider"
 	root "github.com/underpass-ai/AXLR/domain"
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
@@ -152,5 +153,35 @@ func TestLocalContextFoldsASecondTurnBehindACheckpointOfTheFirst(t *testing.T) {
 	}
 	if saved := store.states[len(store.states)-1]; len(saved.Messages) != 2*steps+3+2*second+1 {
 		t.Fatalf("the stored transcript changed: %d messages", len(saved.Messages))
+	}
+}
+
+// The server refuses a folded request: the retry folds again from the
+// request as projected and the turn goes on (20 November 2026: the retry
+// failed with "cannot compact a context projection without a contiguous
+// transcript suffix").
+func TestLocalContextRetriesAFoldedRequestTheServerRefused(t *testing.T) {
+	const cap, steps = 8192, 60
+	session, _ := longTurn(t, "Read every log and list its errors", steps)
+	counter, attempts := &byteCounter{}, 0
+	useCase := ContinueTurnUseCase{
+		Store: &memoryStore{}, Successor: &successorStub{}, Tokens: counter, TurnToolCalls: 100,
+		LocalModel: func(root.ModelID) bool { return true },
+		ContextCap: func(root.ModelID) int { return cap },
+		Windows:    windowsFunc(func(root.ModelID) domain.ContextWindow { return domain.ContextWindow(cap / 3 * 4) }),
+		Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			attempts++
+			tokens := RequestTokens(counter, req.Messages[0], req.Tools, req.Messages[1:])
+			if attempts == 1 {
+				if !strings.HasPrefix(string(req.Messages[2].Content), "[AXLR] Earlier steps") {
+					t.Fatal("the first request was not folded")
+				}
+				return root.CompletionResult{}, &provider.ProviderError{StatusCode: 400, Message: fmt.Sprintf("request (%d tokens) exceeds the available context size (%d tokens), try increasing it", tokens+400, tokens)}
+			}
+			return assistant("done"), nil
+		}),
+	}
+	if err := useCase.Execute(context.Background(), &session, ignoreEvent); err != nil || attempts != 2 {
+		t.Fatalf("err=%v attempts=%d", err, attempts)
 	}
 }
