@@ -11,11 +11,17 @@ import (
 // a failed read with errors.Is.
 var ErrNotText = errors.New("not UTF-8 text")
 
+// ErrNotFile marks a path that is there but is no regular file, such as a
+// directory: a plan task's scope names files, and on 20 November 2026 a
+// scope of "logs" passed the plan's checks and failed the approved plan.
+var ErrNotFile = errors.New("not a regular file")
+
 // WorkspaceFilesPort reads and writes workspace files for the console through
 // the same runtime as the model's tools, so the workspace boundary holds.
 type WorkspaceFilesPort interface {
 	// Read returns at most maxBytes; found is false when the file is missing.
-	// A file that is binary or not UTF-8 is an error wrapping ErrNotText.
+	// A file that is binary or not UTF-8 is an error wrapping ErrNotText; a
+	// directory or another path that is no regular file, ErrNotFile.
 	Read(ctx context.Context, path string, maxBytes int) (content []byte, found bool, err error)
 	// Write creates or replaces the file.
 	Write(ctx context.Context, path string, content []byte) error

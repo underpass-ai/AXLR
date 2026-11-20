@@ -417,3 +417,33 @@ func TestAPlanApprovedAsDefectiveRunsNoCommandIfItPasses(t *testing.T) {
 		t.Fatalf("a command ran without the person: %v", runs)
 	}
 }
+
+// directoryFiles answers a read of a directory as the workspace does.
+type directoryFiles struct {
+	*fakeFiles
+	dirs map[string]bool
+}
+
+func (f directoryFiles) Read(ctx context.Context, path string, max int) ([]byte, bool, error) {
+	if f.dirs[path] {
+		return nil, false, fmt.Errorf("read %s: read requires a regular file: %w", path, ErrNotFile)
+	}
+	return f.fakeFiles.Read(ctx, path, max)
+}
+
+// A directory in a task's scope is a defect the model corrects: on 20
+// November 2026 a scope of "logs" passed and the approved plan failed with
+// "read requires a regular file", leaving the decompose step stuck.
+func TestPlanRefusesADirectoryInATasksScope(t *testing.T) {
+	d, _, _, _, s := planDriver(t)
+	d.Files = directoryFiles{fakeFiles: d.Files.(*fakeFiles), dirs: map[string]bool{"logs": true}}
+	withDirectory := strings.Replace(goodTasks, `"scope":["lines.go","lines_test.go"]`, `"scope":["logs","lines_test.go"]`, 1)
+	report := step(t, d, &s, planArgs(t, withDirectory))
+	text, _ := json.Marshal(report["defects"])
+	if !strings.Contains(string(text), `task linecount: scope path \"logs\" is a directory; list each file the task may change`) {
+		t.Fatalf("a directory in scope must be a defect: %s %v", text, report)
+	}
+	if report["next_step"] != "decompose" {
+		t.Fatalf("a plan with a directory in scope must repeat decompose: %v", report)
+	}
+}

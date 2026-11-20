@@ -166,8 +166,12 @@ func (d *CeremonyDriver) verifyPlanBeforeCommands(ctx context.Context, slug stri
 			}
 			t.Scope = append(t.Scope, clean)
 			// A binary file exists: it is not new, and reading it must not
-			// fail the plan (20 October 2026, an untracked .pyc).
-			if _, found, err := d.Files.Read(ctx, clean, 1); err != nil && !errors.Is(err, ErrNotText) {
+			// fail the plan (20 October 2026, an untracked .pyc). A directory
+			// is a defect the model can correct, not a failed step: the
+			// approved plan of 20 November 2026 broke on scope "logs".
+			if _, found, err := d.Files.Read(ctx, clean, 1); errors.Is(err, ErrNotFile) {
+				defect("task %s: scope path %q is a directory; list each file the task may change", task.ID, raw)
+			} else if err != nil && !errors.Is(err, ErrNotText) {
 				return v, err
 			} else if !found && err == nil {
 				t.New = append(t.New, clean)
