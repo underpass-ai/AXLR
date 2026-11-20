@@ -15,6 +15,38 @@ import (
 type TokenScale struct {
 	mu      sync.Mutex
 	factors map[root.ModelID]float64
+	// Memory keeps each model's factor across launches; nil keeps it for the
+	// launch only. Before 20 November 2026 every launch started at 1, and
+	// the first request of a resumed local session, numeric logs that Qwen
+	// counts at 1.5 times o200k, went out at 93.5K tokens to a 90K server.
+	Memory TokenScaleMemory
+	asked  map[root.ModelID]bool
+}
+
+// TokenScaleMemory keeps a model's factor between launches.
+type TokenScaleMemory interface {
+	TokenFactor(model root.ModelID) (float64, bool)
+	SaveTokenFactor(model root.ModelID, factor float64) error
+}
+
+// remembered loads the model's saved factor once per launch; t.mu is held.
+func (t *TokenScale) remembered(model root.ModelID) {
+	if t.Memory == nil || t.asked[model] {
+		return
+	}
+	if t.asked == nil {
+		t.asked = map[root.ModelID]bool{}
+	}
+	t.asked[model] = true
+	if _, known := t.factors[model]; known {
+		return
+	}
+	if factor, ok := t.Memory.TokenFactor(model); ok {
+		if t.factors == nil {
+			t.factors = map[root.ModelID]float64{}
+		}
+		t.factors[model] = min(max(factor, tokenScaleMinimum), tokenScaleMaximum)
+	}
 }
 
 const (
@@ -30,6 +62,7 @@ func (t *TokenScale) Factor(model root.ModelID) float64 {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.remembered(model)
 	if factor, ok := t.factors[model]; ok {
 		return factor
 	}
@@ -44,6 +77,7 @@ func (t *TokenScale) Observe(model root.ModelID, counted, reported int) {
 	ratio := min(max(float64(reported)/float64(counted), tokenScaleMinimum), tokenScaleMaximum)
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.remembered(model)
 	if t.factors == nil {
 		t.factors = map[root.ModelID]float64{}
 	}
@@ -51,6 +85,10 @@ func (t *TokenScale) Observe(model root.ModelID, counted, reported int) {
 		ratio = current*(1-tokenScaleWeight) + ratio*tokenScaleWeight
 	}
 	t.factors[model] = ratio
+	if t.Memory != nil {
+		// A factor that cannot be saved is learned again next launch.
+		_ = t.Memory.SaveTokenFactor(model, ratio)
+	}
 }
 
 // Estimate is the provider's likely count for a counted request.

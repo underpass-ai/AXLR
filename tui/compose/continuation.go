@@ -68,7 +68,12 @@ func Equip(c *application.ContinueTurnUseCase, e Equipment) (application.Catalog
 			e.Note("token counter unavailable, the byte budgets apply: " + err.Error())
 		}
 	} else {
-		c.Tokens, c.ContextCap, c.Scale = counter, e.Windows.ContextCap, &application.TokenScale{}
+		scale := &application.TokenScale{}
+		if memory, ok := c.Calibration.(application.TokenScaleMemory); ok {
+			// The factor measured in earlier launches sizes the first request.
+			scale.Memory = memory
+		}
+		c.Tokens, c.ContextCap, c.Scale = counter, e.Windows.ContextCap, scale
 		c.LocalModel = func(model root.ModelID) bool { _, local := e.Windows.Local[model]; return local }
 		c.Successor = Successors{Create: application.CreateSessionUseCase{Store: e.Store, Labels: e.Labels, About: e.About}, Labels: e.Labels, Store: e.Store, Usage: e.Usage}
 	}
