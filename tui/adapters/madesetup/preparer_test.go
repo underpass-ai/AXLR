@@ -119,6 +119,13 @@ func TestPreparationGrantsTheConfiguredWorkIdentityAsTheTrustedHost(t *testing.T
 	if verify.tool != "made_list_ceremony_definitions" || !slices.Contains(verify.env, hostIdentityKey+"=made-local-host-abc-axlr-work") {
 		t.Fatalf("readback did not run as the work identity: %+v", verify)
 	}
+	// MADE's launcher lists `core` by default, which hides the grant tools
+	// (every start of a fresh install failed, 20 November 2026).
+	for _, c := range []recordedCall{issue, approver, verify} {
+		if !slices.Contains(c.env, ToolProfileVariable+"="+ToolProfile) {
+			t.Fatalf("%s ran without the full tool profile: %v", c.tool, c.env)
+		}
+	}
 }
 
 func TestPreparationIsANoOpForAnExistingIdenticalGrant(t *testing.T) {

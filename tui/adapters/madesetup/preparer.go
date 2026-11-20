@@ -201,8 +201,10 @@ func isWorkIdentity(id string) bool {
 	return strings.HasPrefix(id, "axlr-work-") || strings.HasSuffix(id, "-axlr-work")
 }
 
+// server runs MADE under the tool profile AXLR needs: the admin issues and
+// revokes grants, which `core` hides (WithToolProfile).
 func server(r *plugins.Registration, env []string) mcpclient.Server {
-	return mcpclient.Server{Name: mcpclient.ServerName(r.Manifest.ID.String()), Command: r.Manifest.Command, Args: r.Manifest.Args, Env: env}
+	return mcpclient.Server{Name: mcpclient.ServerName(r.Manifest.ID.String()), Command: r.Manifest.Command, Args: r.Manifest.Args, Env: WithToolProfile(env)}
 }
 
 func environment(env []string) map[string]string {
