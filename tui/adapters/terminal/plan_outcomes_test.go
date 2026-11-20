@@ -128,9 +128,18 @@ func TestPlanOutcomeLineInSpanishWithCostAndWaves(t *testing.T) {
 	line := domain.ConsoleLine{AfterMessage: 2, Plan: &domain.PlanOutcome{PlanID: "p-123456", Status: domain.PlanPartial, Tasks: 5, Done: 3, Blocked: 1, Skipped: 1,
 		Syncs: []domain.SyncVerdict{{Wave: 1, Verdict: "green"}, {Wave: 2, Verdict: "red"}}, Changed: []string{"a.go", "b.go", "c.go", "d.go", "e.go"}, CostUSD: 0.0123, CostKnown: true}}
 	got := consoleLineRow(line, theme).Text
-	want := "consola: el plan p-123456 terminó: hecho en parte · 3/5 tareas hechas · bloqueadas: 1 · omitidas: 1 · sync w1 green, w2 red · cambió: a.go, b.go, c.go +2 · las sesiones de tarea costaron " + FormatUSD(0.0123)
+	// The verdicts are in the console's language (until 20 November 2026 a
+	// Spanish console read "sync w1 green, w2 red").
+	want := "consola: el plan p-123456 terminó: hecho en parte · 3/5 tareas hechas · bloqueadas: 1 · omitidas: 1 · sync w1 verde, w2 rojo · cambió: a.go, b.go, c.go +2 · las sesiones de tarea costaron " + FormatUSD(0.0123)
 	if got != want {
 		t.Fatalf("got  %q\nwant %q", got, want)
+	}
+	line.Plan.Syncs = []domain.SyncVerdict{{Wave: 1, Verdict: "deferred"}, {Wave: 2, Verdict: "blocked"}, {Wave: 3, Verdict: "odd"}}
+	if got := consoleLineRow(line, theme).Text; !strings.Contains(got, "sync w1 aplazado, w2 bloqueado, w3 odd") {
+		t.Fatalf("verdicts: %q", got)
+	}
+	if got := consoleLineRow(line, Theme{Locale: English, Monochrome: true}).Text; !strings.Contains(got, "sync w1 deferred, w2 blocked, w3 odd") {
+		t.Fatalf("English verdicts: %q", got)
 	}
 }
 
