@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,50 @@ func TestASyncReconcilesTwiceThenBlocks(t *testing.T) {
 	}
 }
 
+// An earlier wave's end-to-end check that fails on a file a later wave
+// writes waits for that wave (20 November 2026: two reconciliation rounds
+// after wave 1 on "resumen2.md: No such file", which wave 2 was to write).
+func TestAnEarlierWaveWaitsWhenItsCheckFailsOnALaterWavesFile(t *testing.T) {
+	plan := domain.PlanRecord{ID: "p", Session: "s", Waves: 2, E2E: domain.CheckCommand{Program: "grep", Args: []string{"total", "resumen2.md"}}, Tasks: []domain.PlanTask{
+		{ID: "count", Wave: 1, Scope: []string{"notes/count.txt"}}, {ID: "write", Wave: 2, Scope: []string{"resumen2.md"}},
+	}}
+	reconcile := func(context.Context, int, []domain.PlanTask, string) ([]SyncResponse, error) {
+		t.Fatal("a wave whose check waits for a later wave was reconciled")
+		return nil, nil
+	}
+	engine, checks := &syncEngine{}, &fakeChecks{exits: []int{2}, outputs: []string{"grep: resumen2.md: No such file or directory"}}
+	d := &CeremonyDriver{Engine: engine, Checks: checks, Now: func() time.Time { return time.Unix(1, 0) }}
+	outcome, err := d.RunSync(context.Background(), plan, 1, reconcile)
+	if err != nil || outcome.Verdict != SyncDeferred || !strings.Contains(outcome.Output, "resumen2.md") || slices.Contains(engine.calls, "transition conflict") {
+		t.Fatalf("outcome %+v err=%v engine %v", outcome, err, engine.calls)
+	}
+	// A failure on this wave's own file is reconciled as before, and the
+	// check that found it is not run twice.
+	engine, checks = &syncEngine{}, &fakeChecks{exits: []int{1, 0}, outputs: []string{"notes/count.txt: want 2"}}
+	d = &CeremonyDriver{Engine: engine, Checks: checks, Now: func() time.Time { return time.Unix(1, 0) }}
+	rounds := 0
+	outcome, err = d.RunSync(context.Background(), plan, 1, func(_ context.Context, round int, affected []domain.PlanTask, _ string) ([]SyncResponse, error) {
+		rounds++
+		if len(affected) != 1 || affected[0].ID != "count" {
+			t.Fatalf("affected %+v", affected)
+		}
+		return []SyncResponse{{Task: "count", Summary: "fixed"}}, nil
+	})
+	if err != nil || outcome.Verdict != "green" || rounds != 1 || len(checks.runs) != 2 {
+		t.Fatalf("outcome %+v rounds=%d runs=%d err=%v", outcome, rounds, len(checks.runs), err)
+	}
+	// The last wave decides: the same failure there is reconciled.
+	engine, checks = &syncEngine{}, &fakeChecks{exits: []int{2, 0}, outputs: []string{"grep: resumen2.md: No such file or directory"}}
+	d = &CeremonyDriver{Engine: engine, Checks: checks, Now: func() time.Time { return time.Unix(1, 0) }}
+	rounds = 0
+	if outcome, err = d.RunSync(context.Background(), plan, 2, func(context.Context, int, []domain.PlanTask, string) ([]SyncResponse, error) {
+		rounds++
+		return nil, nil
+	}); err != nil || outcome.Verdict != "green" || rounds != 1 {
+		t.Fatalf("last wave: outcome %+v rounds=%d err=%v", outcome, rounds, err)
+	}
+}
+
 func TestAffectedTasksAreThoseTheFailureNames(t *testing.T) {
 	tasks := []domain.PlanTask{{ID: "a", Scope: []string{"pkg/a.go"}}, {ID: "b", Scope: []string{"pkg/b.go"}}}
 	if got := affectedTasks(tasks, "FAIL pkg/b.go:12: want 2"); len(got) != 1 || got[0].ID != "b" {
@@ -69,6 +114,8 @@ type scriptedBench struct {
 	outcome map[string]domain.TaskStatus
 	order   []string
 	syncs   []int
+	// verdicts are the sync verdicts by wave; green when absent.
+	verdicts map[int]string
 }
 
 func (b *scriptedBench) BeginTask(_ context.Context, s *domain.Session, _ domain.PlanRecord, task domain.PlanTask) error {
@@ -89,6 +136,9 @@ func (b *scriptedBench) Begin(_ context.Context, s *domain.Session, _ root.Text,
 }
 func (b *scriptedBench) RunSync(_ context.Context, _ domain.PlanRecord, wave int, _ Reconciler) (SyncOutcome, error) {
 	b.syncs = append(b.syncs, wave)
+	if verdict, ok := b.verdicts[wave]; ok {
+		return SyncOutcome{Instance: fmt.Sprint("sync", wave), Verdict: verdict}, nil
+	}
 	return SyncOutcome{Instance: fmt.Sprint("sync", wave), Verdict: "green"}, nil
 }
 func (b *scriptedBench) Digest(_ context.Context, path string) string {
@@ -165,6 +215,23 @@ func TestARunnerSyncsEachFinishedWaveAndEndsDone(t *testing.T) {
 	runner.Close()
 	if record := plans.records[0]; record.Status != domain.PlanDone || len(record.Syncs) != 2 || fmt.Sprint(bench.syncs) != "[1 2]" {
 		t.Fatalf("record %+v syncs %v", record, bench.syncs)
+	}
+}
+
+func TestAPlanWhoseEarlierWaveWaitedEndsDoneWhenTheLastWaveIsGreen(t *testing.T) {
+	plans := &memoryPlans{}
+	_ = plans.Save(context.Background(), domain.PlanRecord{ID: "p", Session: "s", Workspace: domain.Workspace(t.TempDir()), Worker: "local/gemma", Status: domain.PlanReady, Waves: 2, Tasks: []domain.PlanTask{
+		{ID: "a", Wave: 1, Status: domain.TaskPending}, {ID: "b", Wave: 2, DependsOn: []string{"a"}, Status: domain.TaskPending},
+	}})
+	bench := &scriptedBench{plans: plans, outcome: map[string]domain.TaskStatus{"a": domain.TaskDone, "b": domain.TaskDone}, verdicts: map[int]string{1: SyncDeferred}}
+	runner := &PlanRunner{Plans: plans, Store: &memoryStore{}, Workbench: benchPort{bench}, RunToken: "t"}
+	if err := runner.Start(context.Background(), "p"); err != nil {
+		t.Fatal(err)
+	}
+	runner.Wait()
+	runner.Close()
+	if record := plans.records[0]; record.Status != domain.PlanDone || len(record.Syncs) != 2 || record.Syncs[0].Verdict != SyncDeferred {
+		t.Fatalf("record %+v", record)
 	}
 }
 
