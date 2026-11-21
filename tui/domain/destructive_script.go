@@ -1,0 +1,271 @@
+package domain
+
+import (
+	"path/filepath"
+	"regexp"
+	"strings"
+)
+
+// A shell string is judged command by command, as a call is: every command
+// of every segment, and of every substitution, with the directory a cd
+// left it in. The patterns it was matched with before were all skipped
+// when the script named the workspace, so `cd <workspace> && echo x >
+// /etc/hosts` ran without a card, and an rm anywhere put a card on any
+// absolute path a command only read (review of 21 November 2026).
+
+var (
+	// scriptSubstitution is an innermost $(…), <(…), >(…) or `…`: its
+	// commands run too, in a subshell.
+	scriptSubstitution = regexp.MustCompile("[$<>]\\(([^()]*)\\)|`([^`]*)`")
+	// scriptRedirect is an output redirection and its target: >, >>, >|,
+	// &>, >&FILE. A >& whose target is a descriptor duplicates it.
+	scriptRedirect = regexp.MustCompile(`(?:[0-9]*|&)>(?:>|\|)?(&)?\s*([^\s;|&<>()]+)`)
+	// scriptSeparator ends a command.
+	scriptSeparator = regexp.MustCompile(`&&|\|\||[;|&\n]`)
+	// scriptProtected are the operators holding a separator's character.
+	scriptProtected = strings.NewReplacer(">&", ">\x00", "&>", "\x00>", ">|", ">\x01")
+	scriptRestored  = strings.NewReplacer("\x00", "&", "\x01", "|")
+)
+
+// shellKeywords open, close or join commands; they are no program.
+var shellKeywords = map[string]bool{"if": true, "then": true, "else": true, "elif": true, "fi": true, "do": true, "done": true, "while": true, "until": true, "esac": true, "{": true, "}": true, "(": true, ")": true, "!": true, "time": true}
+
+// writers name the files they write, and so are judged like deleters.
+var writers = map[string]bool{"tee": true}
+
+// scriptJudge walks a shell string's commands in order.
+type scriptJudge struct {
+	workspace Workspace
+	rules     map[string]bool
+	cwd       string // the workspace-relative directory; may climb out with ..
+	lost      bool   // a cd went where the string does not say
+	paths     []string
+}
+
+func destructiveCommands(workspace Workspace, script, cwd string, rules map[string]bool) string {
+	j := scriptJudge{workspace: workspace, rules: rules, cwd: cwd}
+	for _, word := range strings.Fields(script) {
+		if word = unquote(word); strings.HasPrefix(word, "/") || strings.HasPrefix(word, "~") {
+			j.paths = append(j.paths, word)
+		}
+	}
+	return j.script(script)
+}
+
+func (j *scriptJudge) script(script string) string {
+	for {
+		m := scriptSubstitution.FindStringSubmatchIndex(script)
+		if m == nil {
+			break
+		}
+		inner := *j // a subshell: its cd stays inside
+		if rule := inner.script(script[max(m[2], m[4]):max(m[3], m[5])]); rule != "" {
+			return rule
+		}
+		script = script[:m[0]] + "x" + script[m[1]:]
+	}
+	for _, segment := range scriptSeparator.Split(scriptProtected.Replace(script), -1) {
+		if rule := j.segment(scriptRestored.Replace(segment)); rule != "" {
+			return rule
+		}
+	}
+	return ""
+}
+
+func (j *scriptJudge) segment(segment string) string {
+	if j.rules[RuleDeleteOutside] {
+		for _, m := range scriptRedirect.FindAllStringSubmatch(segment, -1) {
+			target := unquote(m[2])
+			if m[1] == "&" && (target == "-" || strings.Trim(target, "0123456789") == "") {
+				continue
+			}
+			if j.outside(target) {
+				return RuleDeleteOutside
+			}
+		}
+	}
+	words := strings.Fields(scriptRedirect.ReplaceAllString(segment, " "))
+	for i := range words {
+		words[i] = unquote(words[i])
+	}
+	for len(words) > 0 && (shellKeywords[words[0]] || words[0] == "for" || words[0] == "case" || assignment(words[0])) {
+		switch words[0] {
+		case "for":
+			return "" // the loop's word list, not a command
+		case "case":
+			// case WORD in PATTERN) COMMAND: the arm's command runs.
+			in := -1
+			for i, word := range words {
+				if word == "in" {
+					in = i
+					break
+				}
+			}
+			if in < 0 {
+				return ""
+			}
+			words = words[in:]
+			if len(words) > 1 && strings.HasSuffix(words[1], ")") {
+				words = words[1:]
+			}
+		}
+		words = words[1:]
+	}
+	if len(words) == 0 {
+		return ""
+	}
+	if words[0] == "cd" || words[0] == "pushd" {
+		j.chdir(words[1:])
+		return ""
+	}
+	return j.command(words[0], words[1:])
+}
+
+func (j *scriptJudge) command(program string, args []string) string {
+	program, args = unwrapPrivilege(program, args)
+	base := filepath.Base(program)
+	if rule := gitRule(base, args); rule != "" && j.rules[rule] {
+		return rule
+	}
+	if j.rules[RuleNetworkWrite] && networkWrite(base, args, strings.Join(append([]string{base}, args...), " ")) {
+		return RuleNetworkWrite
+	}
+	if !j.rules[RuleDeleteOutside] {
+		return ""
+	}
+	switch base {
+	case "xargs":
+		// Its paths come from the pipe: any absolute path the string
+		// names stands for them.
+		if j.removesFromInput(args) {
+			for _, path := range j.paths {
+				if j.outside(path) {
+					return RuleDeleteOutside
+				}
+			}
+		}
+		return ""
+	case "find":
+		if findDeletes(args) {
+			for _, arg := range args {
+				if strings.HasPrefix(arg, "-") || arg == "(" || arg == "!" {
+					break
+				}
+				if j.outside(arg) {
+					return RuleDeleteOutside
+				}
+			}
+		}
+		return ""
+	case "dd":
+		for _, arg := range args {
+			if strings.HasPrefix(arg, "of=") && j.outside(arg[3:]) {
+				return RuleDeleteOutside
+			}
+		}
+		return ""
+	}
+	if deleters[base] || writers[base] {
+		for _, arg := range args {
+			if arg != "" && !strings.HasPrefix(arg, "-") && (j.outside(arg) || fileRemovers[base] && j.isRoot(arg)) {
+				return RuleDeleteOutside
+			}
+		}
+	}
+	return ""
+}
+
+// isRoot reports a path that is the workspace itself: removing or moving
+// it takes the whole workspace.
+func (j *scriptJudge) isRoot(path string) bool {
+	if strings.HasPrefix(path, "$") || strings.HasPrefix(path, "~") || j.lost && !strings.HasPrefix(path, "/") {
+		return false
+	}
+	root := filepath.Clean(string(j.workspace))
+	if !strings.HasPrefix(path, "/") && !filepath.IsAbs(path) {
+		path = filepath.Join(root, j.cwd, path)
+	}
+	return root != "." && root != "" && filepath.Clean(path) == root
+}
+
+// removesFromInput reports an xargs whose command deletes or writes.
+func (j *scriptJudge) removesFromInput(args []string) bool {
+	for i := 0; i < len(args); i++ {
+		switch arg := args[i]; {
+		case arg == "-I" || arg == "-n" || arg == "-P" || arg == "-L" || arg == "-d" || arg == "-E" || arg == "-s" || arg == "-a":
+			i++ // the option's value
+		case strings.HasPrefix(arg, "-"):
+		default:
+			base := filepath.Base(arg)
+			return deleters[base] || writers[base]
+		}
+	}
+	return false
+}
+
+// findDeletes reports a find that deletes what it finds.
+func findDeletes(args []string) bool {
+	for i, arg := range args {
+		if arg == "-delete" {
+			return true
+		}
+		if (arg == "-exec" || arg == "-execdir" || arg == "-ok" || arg == "-okdir") && i+1 < len(args) {
+			if base := filepath.Base(args[i+1]); deleters[base] || writers[base] {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// chdir follows a cd: into the workspace, out of it, or somewhere the
+// string does not say (home, the previous directory, a variable).
+func (j *scriptJudge) chdir(args []string) {
+	target := ""
+	for _, arg := range args {
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			target = arg
+			break
+		}
+	}
+	switch {
+	case target == "" || target == "-" || strings.HasPrefix(target, "~") || strings.HasPrefix(target, "$"):
+		j.lost = true
+	case strings.HasPrefix(target, "/"):
+		rel, err := filepath.Rel(filepath.Clean(string(j.workspace)), filepath.Clean(target))
+		if err != nil {
+			j.lost = true
+			return
+		}
+		j.cwd, j.lost = rel, false
+	case !j.lost:
+		j.cwd = filepath.Join(j.cwd, target)
+	}
+}
+
+// outside reports a path a command deletes or writes outside the
+// workspace. A variable other than HOME is not resolved, as before.
+func (j *scriptJudge) outside(path string) bool {
+	switch {
+	case path == "":
+		return false
+	case strings.HasPrefix(path, "$HOME") || strings.HasPrefix(path, "${HOME}"):
+		return true
+	case strings.HasPrefix(path, "$"):
+		return false
+	case j.lost && !strings.HasPrefix(path, "/") && !strings.HasPrefix(path, "~"):
+		return true
+	}
+	return outsideWorkspace(j.workspace, j.cwd, path)
+}
+
+// assignment is a NAME=value word before a command.
+func assignment(word string) bool {
+	eq := strings.IndexByte(word, '=')
+	return eq > 0 && !strings.ContainsAny(word[:eq], "/-.$\"'")
+}
+
+// unquote drops the quotes that open or close a word.
+func unquote(word string) string {
+	return strings.Trim(word, "\"'")
+}

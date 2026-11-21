@@ -89,27 +89,11 @@ func DestructiveReason(workspace Workspace, program string, args []string, cwd s
 	base := filepath.Base(program)
 	if shells[base] {
 		if script := shellScript(args); script != "" {
-			return destructiveScript(workspace, script, rules)
+			return destructiveScript(workspace, script, cwd, rules)
 		}
 	}
-	words := strings.Join(append([]string{base}, args...), " ")
-	if rule := gitRule(base, args); rule != "" && rules[rule] {
-		return rule
-	}
-	if rules[RuleNetworkWrite] && networkWrite(base, args, words) {
-		return RuleNetworkWrite
-	}
-	if rules[RuleDeleteOutside] && deleters[base] {
-		for _, arg := range args {
-			if strings.HasPrefix(arg, "-") || arg == "" {
-				continue
-			}
-			if outsideWorkspace(workspace, cwd, arg) {
-				return RuleDeleteOutside
-			}
-		}
-	}
-	return ""
+	j := scriptJudge{workspace: workspace, rules: rules, cwd: cwd, paths: args}
+	return j.command(program, args)
 }
 
 // wrapperValues are the options of each wrapper that take the next word
@@ -209,7 +193,7 @@ func withoutScratchRedirects(script string) string {
 
 // destructiveScript matches a shell string literally: a card for a false
 // positive costs a keypress, a missed deletion costs more.
-func destructiveScript(workspace Workspace, script string, rules map[string]bool) string {
+func destructiveScript(workspace Workspace, script, cwd string, rules map[string]bool) string {
 	// A redirection to a discard device writes nothing: "2>/dev/null" held
 	// the ">/" of an overwrite outside the workspace and put a card on every
 	// probe a local model wrote (13 of 13 cards on wrx80, 20 November 2026).
@@ -234,19 +218,7 @@ func destructiveScript(workspace Workspace, script string, rules map[string]bool
 			}
 		}
 	}
-	if rules[RuleDeleteOutside] {
-		for _, pattern := range []string{"rm -rf /", "rm -rf ~", "rm -r /", "rm -r ~", "rm -rf $home", "> /", ">/", "> ~", ">~", "mv /", "mv ~"} {
-			if strings.Contains(lower, pattern) && !strings.Contains(lower, string(workspace)) {
-				return RuleDeleteOutside
-			}
-		}
-		for _, field := range strings.Fields(script) {
-			if (strings.HasPrefix(field, "/") || strings.HasPrefix(field, "~")) && strings.Contains(lower, " rm ") && outsideWorkspace(workspace, "", field) {
-				return RuleDeleteOutside
-			}
-		}
-	}
-	return ""
+	return destructiveCommands(workspace, script, cwd, rules)
 }
 
 // gitRule names the git rule a call falls under.

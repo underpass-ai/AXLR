@@ -144,3 +144,39 @@ func TestCancelledStreamReportsTheCancellationOnce(t *testing.T) {
 		t.Fatalf("err = %q", err)
 	}
 }
+
+// TestTheModelReadsTheReplyThePersonInterrupted: a reply cut short with Esc
+// stays on screen as an interrupted draft, but the model never saw it and
+// answered "120", the end of an earlier list, when asked where it had
+// stopped (wrx80, 21 November 2026).
+func TestTheModelReadsTheReplyThePersonInterrupted(t *testing.T) {
+	s := turnSession(t)
+	if err := s.BeginTurn("count to 200 in words", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	long := strings.Repeat("filler, ", 800) + "twenty-six, twenty-se"
+	if err := s.InterruptDraft(root.Text(long)); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BeginTurn("where did you stop?", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	var request root.CompletionRequest
+	u := ContinueTurnUseCase{Store: &memoryStore{}, Models: streamFunc(func(_ context.Context, r root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+		request = r
+		return assistant("twenty-six"), nil
+	})}
+	if err := u.Execute(context.Background(), &s, ignoreEvent); err != nil {
+		t.Fatal(err)
+	}
+	last := string(request.Messages[len(request.Messages)-1].Content)
+	if !strings.HasPrefix(last, "where did you stop?") || !strings.Contains(last, "twenty-six, twenty-se") || !strings.Contains(last, "interrupted") {
+		t.Fatalf("the model was not told what it had written before the person interrupted it: %q", last)
+	}
+	if len(last) > 2500 {
+		t.Fatalf("the interrupted reply was quoted whole (%d bytes), not its end", len(last))
+	}
+	if got := s.Messages()[len(s.Messages())-2].Content; got != "where did you stop?" {
+		t.Fatalf("the stored prompt changed: %q", got)
+	}
+}

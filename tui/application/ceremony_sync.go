@@ -124,7 +124,7 @@ func (d *CeremonyDriver) RunSync(ctx context.Context, plan domain.PlanRecord, wa
 		if err != nil {
 			return outcome, fmt.Errorf("claim reconcile: %w", err)
 		}
-		affected := affectedTasks(tasks, tail)
+		affected := affectedTasks(tasks, tail, string(plan.Workspace))
 		responses, err = reconcile(ctx, round+1, affected, tail)
 		if err != nil {
 			return outcome, err
@@ -164,7 +164,7 @@ func namesLaterWave(plan domain.PlanRecord, wave int, failing string) bool {
 				continue
 			}
 			for _, p := range t.Scope {
-				named, located := namesPath(line, p)
+				named, located := namesPath(line, p, string(plan.Workspace))
 				if named && (slices.Contains(t.New, p) || located || failureLine.MatchString(line)) {
 					return true
 				}
@@ -177,32 +177,60 @@ func namesLaterWave(plan domain.PlanRecord, wave int, failing string) bool {
 // failureLine is an output line that reports an error.
 var failureLine = regexp.MustCompile(`(?i)error|fail|undefined|cannot|can't|no such|not found|missing|panic|traceback|exception|assert`)
 
-// namesPath reports whether text names the file p, whole or by its last
-// element, bounded so that a longer name does not count, and whether a
-// name is followed by a line number (p:12).
-func namesPath(text, p string) (named, located bool) {
-	for _, name := range []string{p, lastPathElement(p)} {
-		for from := 0; ; {
-			i := strings.Index(text[from:], name)
-			if i < 0 {
-				break
-			}
-			start, end := from+i, from+i+len(name)
-			from = start + 1
-			if start > 0 && pathByte(text[start-1]) && text[start-1] != '/' || start > 0 && text[start-1] == '/' && name == p {
-				continue
-			}
-			if end < len(text) && (pathByte(text[end]) && text[end] != '.' || text[end] == '.' && end+1 < len(text) && alphanumeric(text[end+1])) {
-				continue
-			}
-			named = true
-			if end+1 < len(text) && text[end] == ':' && text[end+1] >= '0' && text[end+1] <= '9' {
-				return true, true
-			}
+// namesPath reports whether text names the file p, and whether a name is
+// followed by a line number (p:12, or Python's "p", line 12). A name is a
+// whole path token: p itself after any ./, p's absolute path in the
+// workspace, or a shorter path that p ends with (util.go, pkg/util.go for
+// svc/pkg/util.go). A longer token is another file: stringutil.go for
+// util.go, or crates/b/src/lib.rs for crates/a/src/lib.rs. Until
+// 21 November 2026 a top-level file after ./ or a / was never named.
+func namesPath(text, p, workspace string) (named, located bool) {
+	base := lastPathElement(p)
+	if base == "" {
+		return false, false
+	}
+	for from := 0; from < len(text); {
+		i := strings.Index(text[from:], base)
+		if i < 0 {
+			break
+		}
+		start, end := from+i, from+i+len(base)
+		for start > 0 && pathByte(text[start-1]) {
+			start--
+		}
+		for end < len(text) && pathByte(text[end]) {
+			end++
+		}
+		from = end
+		token := strings.TrimRight(text[start:end], ".")
+		if !samePath(token, p, workspace) {
+			continue
+		}
+		named = true
+		rest := text[start+len(token):]
+		if len(rest) > 1 && rest[0] == ':' && digit(rest[1]) || strings.HasPrefix(rest, `", line `) && len(rest) > 8 && digit(rest[8]) {
+			return true, true
 		}
 	}
 	return named, false
 }
+
+// samePath reports a path token that is the scope file p.
+func samePath(token, p, workspace string) bool {
+	for strings.HasPrefix(token, "./") {
+		token = token[2:]
+	}
+	if strings.HasPrefix(token, "/") {
+		root := strings.TrimSuffix(workspace, "/")
+		if root == "" || !strings.HasPrefix(token, root+"/") {
+			return false
+		}
+		token = token[len(root)+1:]
+	}
+	return token != "" && (token == p || strings.HasSuffix(p, "/"+token))
+}
+
+func digit(b byte) bool { return b >= '0' && b <= '9' }
 
 func pathByte(b byte) bool { return alphanumeric(b) || b == '.' || b == '_' || b == '-' || b == '/' }
 
@@ -212,11 +240,11 @@ func alphanumeric(b byte) bool {
 
 // affectedTasks are the wave's tasks whose scope files the failing output
 // names; when none is named, every task of the wave.
-func affectedTasks(tasks []domain.PlanTask, failing string) []domain.PlanTask {
+func affectedTasks(tasks []domain.PlanTask, failing, workspace string) []domain.PlanTask {
 	var named []domain.PlanTask
 	for _, t := range tasks {
 		for _, p := range t.Scope {
-			if mentioned, _ := namesPath(failing, p); mentioned {
+			if mentioned, _ := namesPath(failing, p, workspace); mentioned {
 				named = append(named, t)
 				break
 			}
