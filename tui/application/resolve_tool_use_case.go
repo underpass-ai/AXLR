@@ -252,7 +252,7 @@ func (u ResolveToolUseCase) resolveOne(ctx context.Context, s *domain.Session, i
 				outcome = domain.ToolOutcome{Content: root.Text(err.Error()), IsError: true}
 			} else {
 				// The model's KMP calls run in the session's context (decision D3).
-				outcome, runErr = u.Tools.Execute(ctx, tool.Identity, withSessionContext(*s, tool, toolArgs))
+				outcome, runErr = u.Tools.Execute(ctx, tool.Identity, toolArgs)
 			}
 		}
 		runErr = joinCause(runErr, ctx.Err())

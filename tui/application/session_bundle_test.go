@@ -78,7 +78,7 @@ func TestExportSessionBundleNamesTheFileAndCarriesTheLabels(t *testing.T) {
 func TestImportSessionMakesTheBundleThisConsoles(t *testing.T) {
 	s := changedSession(t, []changeStep{{"w1", domain.FileChange{Path: "a.go", Before: "one", After: "two"}}})
 	state := s.Export()
-	state.Instance = &domain.SessionInstance{Instance: "axlr-session-" + string(state.ID), Turns: 3, Fence: "fence-1", OperationID: "op-1", ClaimedAt: time.Now(), LeaseMS: 1000, Reports: 2, ClaimIncarnation: "inc", MemoryAgent: "agent-1", MemoryContext: "ctx-1", Recalled: "parser", LastRecord: `{"turn":3}`, Pending: []string{encodeEntry(TurnEntry{About: "ws:" + string(state.ID), Key: "k1", Summary: "pending", Evidence: []string{"e"}, ContextID: "ctx-1"})}}
+	state.Instance = &domain.SessionInstance{Instance: "axlr-session-" + string(state.ID), Turns: 3, Fence: "fence-1", OperationID: "op-1", ClaimedAt: time.Now(), LeaseMS: 1000, Reports: 2, ClaimIncarnation: "inc", Recalled: "parser", LastRecord: `{"turn":3}`, Pending: []string{encodeEntry(TurnEntry{About: "ws:" + string(state.ID), Key: "k1", Summary: "pending", Evidence: []string{"e"}})}}
 	origin, err := domain.RestoreSession(state)
 	if err != nil {
 		t.Fatal(err)
@@ -98,7 +98,7 @@ func TestImportSessionMakesTheBundleThisConsoles(t *testing.T) {
 	if got.Workspace != elsewhere || got.Ceremony != nil || instance == nil {
 		t.Fatalf("state %+v", got)
 	}
-	if !instance.Closed || instance.Instance != "axlr-session-"+string(state.ID) || instance.Turns != 3 || instance.Fence != "" || instance.OperationID != "" || !instance.ClaimedAt.IsZero() || instance.Reports != 0 || instance.ClaimIncarnation != "" || instance.MemoryAgent != "" || instance.MemoryContext != "" || instance.LastRecord != `{"turn":3}` {
+	if !instance.Closed || instance.Instance != "axlr-session-"+string(state.ID) || instance.Turns != 3 || instance.Fence != "" || instance.OperationID != "" || !instance.ClaimedAt.IsZero() || instance.Reports != 0 || instance.ClaimIncarnation != "" || instance.LastRecord != `{"turn":3}` {
 		t.Fatalf("instance %+v", instance)
 	}
 	if len(instance.Pending) != 2 {
@@ -106,7 +106,7 @@ func TestImportSessionMakesTheBundleThisConsoles(t *testing.T) {
 	}
 	kept, _ := decodeEntry(instance.Pending[0])
 	handoff, _ := decodeEntry(instance.Pending[1])
-	if kept.ContextID != "" || kept.Summary != "pending" {
+	if kept.Summary != "pending" {
 		t.Fatalf("kept %+v", kept)
 	}
 	if handoff.About != "ws:"+string(state.ID) || handoff.Kind != "observation" || handoff.Summary != "Session imported from laptop (exported 2026-10-13T20:00:00Z) and continued on gx10." || handoff.Evidence[0] != "axlr-tui --import /tmp/b.json" || handoff.Labels["event"][0] != "import" {

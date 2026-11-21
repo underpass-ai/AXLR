@@ -9,14 +9,13 @@ import (
 	"path/filepath"
 )
 
-// Preparer creates a store the console chose and fills it: the bundle,
-// the person's configuration and the guide.
+// Preparer creates a store the console chose and fills it: the bundle and
+// the person's configuration. KMP 1.0 serves kmp_guide from the engine, so
+// no guide is written into the store.
 type Preparer struct {
-	// CLI runs kmp-mcp for the bundle import and the guide sync; without a
-	// binary only the directory is prepared.
+	// CLI runs kmp-mcp for the bundle import; without a binary only the
+	// directory is prepared.
 	CLI CLI
-	// PluginRoot holds guide/guide.requests.json; empty syncs no guide.
-	PluginRoot string
 	// UserStore is the per-user default whose configuration a new project
 	// store copies; empty, or the selected store itself, copies nothing.
 	UserStore string
@@ -30,8 +29,8 @@ var configurationFiles = []string{"typesafe.json", "rerank.json", "wake-focus.js
 
 // Prepare creates the selected store when missing: the directory with KMP's
 // self-ignoring .gitignore, the checkout's bundle imported into it (import
-// needs an empty store, so it comes first), the user store's configuration,
-// then the guide. An existing store is left as it is. env is the
+// needs an empty store, so it comes first), then the user store's
+// configuration. An existing store is left as it is. env is the
 // registration's child environment; the store is pinned into it.
 func (p Preparer) Prepare(ctx context.Context, selection Selection, env []string) (Report, error) {
 	var report Report
@@ -71,12 +70,6 @@ func (p Preparer) Prepare(ctx context.Context, selection Selection, env []string
 			}
 			report.Configured = append(report.Configured, name)
 		}
-	}
-	if guide := (GuideSync{CLI: p.CLI, PluginRoot: p.PluginRoot}); guide.Configured() {
-		if err := guide.Sync(ctx, selection, env); err != nil {
-			return report, err
-		}
-		report.GuideSynced = true
 	}
 	return report, nil
 }

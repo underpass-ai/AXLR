@@ -99,9 +99,9 @@ func TestPrepareKMPStoreOutsideACheckoutUsesTheUserDefaultAndTheDirectoryAbout(t
 }
 
 func TestKMPStoreLineDescribesWhatANewStoreReceived(t *testing.T) {
-	store := kmpStore{Selection: kmpstore.Selection{Path: "/m", Reason: kmpstore.ReasonOperator}, Report: kmpstore.Report{Created: true, Imported: 7, Configured: []string{"typesafe.json"}, GuideSynced: true}, About: "project:AXLR", FromBundle: true}
+	store := kmpStore{Selection: kmpstore.Selection{Path: "/m", Reason: kmpstore.ReasonOperator}, Report: kmpstore.Report{Created: true, Imported: 7, Configured: []string{"typesafe.json"}}, About: "project:AXLR", FromBundle: true}
 	line := store.line("/data")
-	for _, part := range []string{"pinned in mcp.json", "about project:AXLR (from .kmp/memory.jsonl)", "7 events imported", "1 configuration files copied from " + filepath.Join("/data", "kmp", "default"), "guide synced"} {
+	for _, part := range []string{"pinned in mcp.json", "about project:AXLR (from .kmp/memory.jsonl)", "7 events imported", "1 configuration files copied from " + filepath.Join("/data", "kmp", "default")} {
 		if !strings.Contains(line, part) {
 			t.Fatalf("line %q lacks %q", line, part)
 		}

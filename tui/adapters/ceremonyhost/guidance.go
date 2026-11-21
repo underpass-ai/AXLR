@@ -11,7 +11,7 @@ import (
 // session line they stay under 1 KB and identical across sessions, so
 // the prompt's cached prefix keeps them.
 const (
-	kmpGuidance = "Memory (KMP): the console recalled the workspace's memory in the [AXLR · recall] note of your first prompt and records every turn itself; you never register, wake or page KMP for bookkeeping. For a question use axlr_recall; UNKNOWN is a valid answer, never invent a memory. Save a KMP about the person or the repository's instructions name with axlr_session.\n"
+	kmpGuidance = "Memory (KMP): the console recalled the workspace's memory in the [AXLR · recall] note of your first prompt and records every turn itself; you never wake or page KMP for bookkeeping. For a question use axlr_recall; UNKNOWN is a valid answer, never invent a memory. Save a KMP about the person or the repository's instructions name with axlr_session.\n"
 	// kmpRecordGuidance asks for the model's own records where it keeps
 	// them; the bridged form serves a session without axlr_remember. Both
 	// are bookkeeping the person never hears about: they asked the model

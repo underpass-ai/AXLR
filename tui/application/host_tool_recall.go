@@ -34,7 +34,7 @@ func RecallTool() domain.AvailableTool {
 	schema, _ := root.NewJSONObject([]byte(recallSchema))
 	return domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{
 		Name:        HostRecallName,
-		Description: "Read the workspace's memory in one call. With a question: an evidence-backed answer under the session's about, or UNKNOWN, which is a valid answer; never invent a memory. mode wake: where the work on the about stands. mode history: its newest entries, or those since an instant. The console adds the about, the session's memory context and the budget; it needs no registration or schema read. Read-only.",
+		Description: "Read the workspace's memory in one call. With a question: an evidence-backed answer under the session's about, or UNKNOWN, which is a valid answer; never invent a memory. mode wake: where the work on the about stands. mode history: its newest entries, or those since an instant. The console adds the about and the budget; it needs no schema read. Read-only.",
 		Parameters:  schema,
 	}}
 }
@@ -87,9 +87,6 @@ func (u HostToolUseCase) hostRecall(ctx context.Context, session domain.Session,
 		return nil, err
 	}
 	request := RecallRequest{Mode: mode, About: about, Intent: question, Since: since, Entries: recallHistoryEntries}
-	if instance, ok := session.Instance(); ok {
-		request.ContextID = instance.MemoryContext
-	}
 	result, err := u.Recall.Recall(ctx, request)
 	if err != nil {
 		return nil, err

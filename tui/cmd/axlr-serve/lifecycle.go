@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/underpass-ai/AXLR/plugins"
 	"github.com/underpass-ai/AXLR/tui/adapters/axlr"
@@ -44,8 +43,7 @@ func serviceSettings(ctx context.Context, path string) (storage.UserSettings, er
 }
 
 // sessionLifecycle makes every service session a MADE axlr_session
-// instance with its KMP context, as the console's sessions are (decisions
-// D3 and D4), and sweeps the instances a stopped service left open. The
+// instance, as the console's sessions are (decision D4), and sweeps the instances a stopped service left open. The
 // ceremony driver it returns is nil when MADE is not registered.
 func sessionLifecycle(ctx context.Context, cfg service.Config, registrations []plugins.Registration, settings storage.UserSettings, runner axlr.ToolRunner, models axlr.ModelStream, labels *storage.SessionLabelStore, sessions *service.Sessions, windows localmodels.Windows, judge *application.Judge, note func(string)) (*application.SessionCeremony, *application.CeremonyDriver, error) {
 	installID, err := storage.InstallID(cfg.StateDir)
@@ -60,8 +58,7 @@ func sessionLifecycle(ctx context.Context, cfg service.Config, registrations []p
 	host := application.HostIdentity{Owner: serviceOwner, AgentID: installID, Incarnation: hex.EncodeToString(runToken[:]), Hostname: hostname}
 	lifecycle := &application.SessionCeremony{Labels: labels, Usage: sessions.Usage(), Store: sessions.Store(), Host: host, Log: note}
 	memory := ceremonyhost.Memory{Tools: runner}
-	// The registry key names the remote store the service's engine reaches.
-	lifecycle.Identity = &application.MemoryIdentity{Store: "kmp:" + cfg.KMP.Endpoint, RegistrationKey: "axlr-serve:" + installID, Agents: storage.NewMemoryAgentStore(filepath.Join(cfg.StateDir, "kmp-agents.json")), Guide: memory, Recall: memory}
+	lifecycle.Identity = &application.MemoryIdentity{Recall: memory}
 	ceremonies := compose.CeremonyDriver(registrations, runner, labels, serviceOwner)
 	if ceremonies == nil {
 		return lifecycle, nil, nil

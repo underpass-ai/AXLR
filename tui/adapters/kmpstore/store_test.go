@@ -145,7 +145,7 @@ func TestPrepareCreatesImportsConfiguresAndSyncsANewProjectStore(t *testing.T) {
 		}
 	}
 	var runs []run
-	p := Preparer{PluginRoot: "/opt/kmp", UserStore: user, CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
+	p := Preparer{UserStore: user, CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
 		runs = append(runs, run{command, args, env})
 		if args[0] == "import" {
 			return []byte("note\n" + `{"events_imported":7,"mutations_applied":99}` + "\n"), nil
@@ -157,11 +157,12 @@ func TestPrepareCreatesImportsConfiguresAndSyncsANewProjectStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !report.Created || report.Imported != 7 || !report.GuideSynced || !reflect.DeepEqual(report.Configured, []string{"typesafe.json", "rerank.json"}) {
+	if !report.Created || report.Imported != 7 || !reflect.DeepEqual(report.Configured, []string{"typesafe.json", "rerank.json"}) {
 		t.Fatalf("%+v", report)
 	}
 	child := []string{"HOME=/h", BackendVariable + "=embedded", DataDirVariable + "=" + selection.Path, "PATH=/bin"}
-	want := []run{{"/opt/kmp/bin/kmp-mcp", []string{"import", bundle}, child}, {"/opt/kmp/bin/kmp-mcp", []string{"guide", "sync", "--plugin-root", "/opt/kmp"}, child}}
+	// KMP 1.0 serves kmp_guide from the engine: no guide sync follows.
+	want := []run{{"/opt/kmp/bin/kmp-mcp", []string{"import", bundle}, child}}
 	if !reflect.DeepEqual(runs, want) {
 		t.Fatalf("runs %+v", runs)
 	}
@@ -181,12 +182,12 @@ func TestPrepareLeavesAnExistingStoreAlone(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(store, "FORMAT_VERSION"), []byte("4"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
+	p := Preparer{CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
 		t.Fatal("nothing runs on an existing store")
 		return nil, nil
 	}}}
 	report, err := p.Prepare(context.Background(), Selection{Path: store, Reason: ReasonOperator}, nil)
-	if err != nil || report.Created || report.Imported != 0 || report.GuideSynced || len(report.Configured) != 0 {
+	if err != nil || report.Created || report.Imported != 0 || len(report.Configured) != 0 {
 		t.Fatalf("%+v %v", report, err)
 	}
 }
@@ -194,7 +195,7 @@ func TestPrepareLeavesAnExistingStoreAlone(t *testing.T) {
 func TestPrepareWithoutABinaryOrBundleOnlyCreatesTheDirectory(t *testing.T) {
 	store := filepath.Join(t.TempDir(), "default")
 	report, err := Preparer{}.Prepare(context.Background(), Selection{Path: store, Reason: ReasonUser}, nil)
-	if err != nil || !report.Created || report.Imported != 0 || report.GuideSynced {
+	if err != nil || !report.Created || report.Imported != 0 {
 		t.Fatalf("%+v %v", report, err)
 	}
 	if _, err := os.Stat(filepath.Join(store, ".gitignore")); err != nil {
@@ -218,7 +219,7 @@ func TestPrepareReportsAFailedImportAndStillFinishesTheStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	var runs []run
-	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
+	p := Preparer{CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(_ context.Context, command string, args, env []string) ([]byte, error) {
 		runs = append(runs, run{command, args, env})
 		if args[0] == "import" {
 			return nil, errors.New("could not decode bundle header")
@@ -226,18 +227,8 @@ func TestPrepareReportsAFailedImportAndStillFinishesTheStore(t *testing.T) {
 		return nil, nil
 	}}}
 	report, err := p.Prepare(context.Background(), Resolve(top, nil, t.TempDir()), nil)
-	if err != nil || !strings.Contains(report.ImportFailed, "bundle header") || report.Imported != 0 || !report.GuideSynced || len(runs) != 2 {
+	if err != nil || !strings.Contains(report.ImportFailed, "bundle header") || report.Imported != 0 || len(runs) != 1 {
 		t.Fatalf("%+v %v %+v", report, err, runs)
-	}
-}
-
-func TestPrepareReportsAFailedGuideSync(t *testing.T) {
-	p := Preparer{PluginRoot: "/opt/kmp", CLI: CLI{Binary: "/opt/kmp/bin/kmp-mcp", Run: func(context.Context, string, []string, []string) ([]byte, error) {
-		return nil, errors.New("no guide assets")
-	}}}
-	_, err := p.Prepare(context.Background(), Selection{Path: filepath.Join(t.TempDir(), "default"), Reason: ReasonUser}, nil)
-	if err == nil || !strings.Contains(err.Error(), "guide") {
-		t.Fatalf("%v", err)
 	}
 }
 

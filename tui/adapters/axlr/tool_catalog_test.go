@@ -99,7 +99,7 @@ func TestToolCatalogKeepsUniqueNativeNamesUsableFromGuides(t *testing.T) {
 		t.Fatalf("a catalog without surfaces set one: %+v", pluginSnapshot[0].Surface)
 	}
 	// The engine adapters' surfaces reach each plugin tool of the snapshot.
-	surface := domain.ToolSurface{Role: domain.PluginRoleMemory, ContextArgument: "context_id"}
+	surface := domain.ToolSurface{Role: domain.PluginRoleMemory, MemoryWrite: true}
 	var asked root.PluginRef
 	owned, err := (ToolCatalog{Plugins: manager, Surfaces: func(ref root.PluginRef) domain.ToolSurface { asked = ref; return surface }}).Snapshot(context.Background())
 	if tools := pluginTools(owned); err != nil || len(tools) != 1 || tools[0].Surface != surface || asked.ToolName != "echo" {

@@ -51,9 +51,10 @@ func TestSessionInstanceSidecarRoundTripsAndIsDiscarded(t *testing.T) {
 	}
 }
 
-// A sidecar written before the memory ids were typed (keys kmp_agent and
-// kmp_context, a predecessor as text) loads into the same instance, and
-// the console writes the same keys back.
+// A sidecar written before KMP 1.0 (keys kmp_agent and kmp_context, a
+// predecessor as text) loads into the same instance without the memory
+// agent and context, which KMP 1.0 does not have, and the console does not
+// write them back.
 func TestSessionInstanceSidecarKeepsTheKeysOnDisk(t *testing.T) {
 	store, dir := openStore(t)
 	s := fixture(t)
@@ -66,16 +67,15 @@ func TestSessionInstanceSidecarKeepsTheKeysOnDisk(t *testing.T) {
 	loaded, err := store.Load(context.Background(), s.Export().ID)
 	must(t, err)
 	got, has := loaded.Instance()
-	if !has || got.MemoryAgent != "agent_1" || got.MemoryContext != "context_1" || got.Predecessor != "fedcba9876543210fedcba9876543210" {
+	if !has || got.Instance != "axlr-session-"+id || got.Turns != 2 || got.Predecessor != "fedcba9876543210fedcba9876543210" {
 		t.Fatalf("loaded %+v", got)
 	}
 	must(t, store.Save(context.Background(), loaded))
 	data, err := os.ReadFile(path)
 	must(t, err)
-	for _, key := range []string{`"kmp_agent":"agent_1"`, `"kmp_context":"context_1"`, `"predecessor":"fedcba9876543210fedcba9876543210"`} {
-		if !strings.Contains(strings.ReplaceAll(string(data), " ", ""), key) {
-			t.Fatalf("written %s lacks %s", data, key)
-		}
+	compact := strings.ReplaceAll(string(data), " ", "")
+	if !strings.Contains(compact, `"predecessor":"fedcba9876543210fedcba9876543210"`) || strings.Contains(compact, "kmp_agent") || strings.Contains(compact, "kmp_context") {
+		t.Fatalf("written %s", data)
 	}
 }
 
@@ -91,7 +91,7 @@ func TestSessionInstanceSidecarRoundTripsAMaximalInstance(t *testing.T) {
 	}
 	entry, err := json.Marshal(map[string]any{"About": "ws:x", "Key": "axlr:turn:x:1", "Summary": strings.Repeat(`"s" `, 100), "Evidence": evidence, "Labels": map[string][]string{"ws": {"/ws"}, "session": {"x"}}})
 	must(t, err)
-	instance := domain.SessionInstance{Instance: "axlr-session-" + string(s.Export().ID), Turns: 9, Fence: "fence-9", MemoryContext: "ctx_1", LastRecord: `{"answer":"` + strings.Repeat(`\"`, (domain.MaxSessionRecordBytes-20)/2) + `"}`}
+	instance := domain.SessionInstance{Instance: "axlr-session-" + string(s.Export().ID), Turns: 9, Fence: "fence-9", LastRecord: `{"answer":"` + strings.Repeat(`\"`, (domain.MaxSessionRecordBytes-20)/2) + `"}`}
 	for i := 0; i < domain.MaxPendingEntries; i++ {
 		instance.Pending = append(instance.Pending, string(entry))
 	}
@@ -103,8 +103,8 @@ func TestSessionInstanceSidecarRoundTripsAMaximalInstance(t *testing.T) {
 	loaded, err := store.Load(context.Background(), s.Export().ID)
 	must(t, err)
 	got, has := loaded.Instance()
-	if !has || got.Fence != "fence-9" || got.MemoryContext != "ctx_1" || got.LastRecord != instance.LastRecord || len(got.Pending) != domain.MaxPendingEntries || got.Pending[0] != string(entry) || len(got.RecalledMemories) != 8 {
-		t.Fatalf("loaded has=%v fence %q context %q pending %d", has, got.Fence, got.MemoryContext, len(got.Pending))
+	if !has || got.Fence != "fence-9" || got.LastRecord != instance.LastRecord || len(got.Pending) != domain.MaxPendingEntries || got.Pending[0] != string(entry) || len(got.RecalledMemories) != 8 {
+		t.Fatalf("loaded has=%v fence %q pending %d", has, got.Fence, len(got.Pending))
 	}
 }
 

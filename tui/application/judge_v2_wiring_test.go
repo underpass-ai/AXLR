@@ -302,7 +302,7 @@ func TestJudgeV2SupersedeIsNotAskedOutsideItsScope(t *testing.T) {
 		"sixteen":    {many, "decision", true},
 	} {
 		c, _, _, _ := sessionCeremonyFor(t, &fakeEngine{})
-		c.Identity = &MemoryIdentity{Store: "/s", RegistrationKey: "k", Agents: &agentsStub{agents: map[string]string{}}, Guide: &guideStub{}, UserAbout: "user:tirso"}
+		c.Identity = &MemoryIdentity{UserAbout: "user:tirso"}
 		judge := &v2Judge{t: t, answers: settleV2Answers(1, 1, tc.kind)}
 		c.Judge, c.Decisions = judge, v2Decisions()
 		c.Decisions.Supersede = tc.supersede

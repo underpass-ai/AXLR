@@ -73,7 +73,7 @@ func (c *SessionCeremony) settleV2(ctx context.Context, s domain.Session, instan
 	// The sentence was read whole for Jev; what the store keeps is
 	// redacted, as the record's answer is.
 	entry := SettledEntry{About: about, Kind: kind.Choice, Text: Redact(text), SummaryEN: settledSummaryEN(kind.Choice, record),
-		Evidence: append([]string{stepRef, fmt.Sprintf("Jev (%s) judged the turn durable with p=%.2f", JudgeV2Version, *gate.Yes)}, actions...), Key: fmt.Sprintf("axlr:settled:%s:%d:1", stateOf.ID, record.PromptIndex), ContextID: instance.MemoryContext, Probability: *gate.Yes,
+		Evidence: append([]string{stepRef, fmt.Sprintf("Jev (%s) judged the turn durable with p=%.2f", JudgeV2Version, *gate.Yes)}, actions...), Key: fmt.Sprintf("axlr:settled:%s:%d:1", stateOf.ID, record.PromptIndex), Probability: *gate.Yes,
 		Labels: map[string][]string{"session": {string(stateOf.ID)}, "ws": {string(stateOf.Workspace)}, "judged_by": {"jev"}, "judge_policy": {JudgeV2Version}, "model": {record.Model}, "mode": {record.Mode}}}
 	if link := c.supersedesV2(ctx, instance, entry, project, actions, stepRef); link != nil {
 		entry.Links = []MemoryLink{*link}

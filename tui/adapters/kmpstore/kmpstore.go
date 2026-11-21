@@ -2,8 +2,8 @@
 // workspace: the checkout's own .kernel inside a git repository, the
 // per-user default outside one, or the directory an operator pinned in
 // mcp.json. A store the console creates receives the repository's committed
-// bundle and the KMP guide, so a clone on another machine starts with the
-// project's memory (decision D1 of the lifecycle integration design).
+// bundle, so a clone on another machine starts with the project's memory
+// (decision D1 of the lifecycle integration design).
 package kmpstore
 
 const (

@@ -12,7 +12,9 @@ import (
 
 // The surface of a plugin tool is saved with the session's snapshot and
 // read back, so a session paused mid-turn resumes with the protocol it
-// ran with; a session file without surfaces still loads.
+// ran with; a session file without surfaces still loads, and one written
+// before KMP 1.0, whose memory tools named a context argument, loads
+// without it.
 func TestSessionSnapshotKeepsEachToolsSurface(t *testing.T) {
 	store, _ := openStore(t)
 	s := fixture(t)
@@ -21,7 +23,7 @@ func TestSessionSnapshotKeepsEachToolsSurface(t *testing.T) {
 	must(t, err)
 	params, err := root.NewJSONObject([]byte(`{"type":"object"}`))
 	must(t, err)
-	surface := domain.ToolSurface{Role: domain.PluginRoleMemory, ContextArgument: "context_id", MemoryWrite: true}
+	surface := domain.ToolSurface{Role: domain.PluginRoleMemory, MemoryWrite: true}
 	tool := domain.AvailableTool{Identity: identity, Definition: root.ToolDefinition{Name: "kmp_write_memory", Description: "kmp/kmp_write_memory: write", Parameters: params}, Surface: surface}
 	must(t, s.BeginTurn("hello", []domain.AvailableTool{tool}))
 	must(t, store.Save(context.Background(), s))
@@ -32,11 +34,20 @@ func TestSessionSnapshotKeepsEachToolsSurface(t *testing.T) {
 	}
 	encoded, err := snapshot(s)
 	must(t, err)
-	encoded.ToolSnapshot[0].Surface = nil
+	encoded.ToolSnapshot[0].Surface.ContextArgument = "context_id"
 	data, _ := json.Marshal(encoded)
+	var beforeOne dto.SessionSnapshot
+	must(t, json.Unmarshal(data, &beforeOne))
+	restored, err := restore(beforeOne)
+	must(t, err)
+	if tools := restored.ToolSnapshot(); len(tools) != 1 || tools[0].Surface != surface {
+		t.Fatalf("file written before KMP 1.0 %+v", tools)
+	}
+	encoded.ToolSnapshot[0].Surface = nil
+	data, _ = json.Marshal(encoded)
 	var old dto.SessionSnapshot
 	must(t, json.Unmarshal(data, &old))
-	restored, err := restore(old)
+	restored, err = restore(old)
 	must(t, err)
 	if tools := restored.ToolSnapshot(); len(tools) != 1 || tools[0].Surface != (domain.ToolSurface{}) {
 		t.Fatalf("old file %+v", tools)

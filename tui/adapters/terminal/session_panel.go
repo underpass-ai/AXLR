@@ -36,9 +36,6 @@ func sessionPanelContent(state domain.SessionState, theme Theme, project string)
 	if instance != nil && instance.Predecessor != "" {
 		fmt.Fprintf(&b, "%s %s\n", theme.T("session.predecessor"), instance.Predecessor)
 	}
-	if instance != nil && instance.MemoryContext != "" {
-		fmt.Fprintf(&b, "%s %s\n", theme.T("session.context"), instance.MemoryContext)
-	}
 	switch {
 	case instance == nil:
 		b.WriteString(theme.T("session.none"))
