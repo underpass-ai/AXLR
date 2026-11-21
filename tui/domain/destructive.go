@@ -176,8 +176,36 @@ func commandFlag(arg string) bool {
 // like.
 var discardRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*/dev/(?:null|stdout|stderr|tty|fd/[0-9]+)(?:[\s;|&)]|$)`)
 
-// scratchRedirect is an output redirection into /tmp or /var/tmp.
-var scratchRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*/(?:var/)?tmp/[^\s;|&)<>]*`)
+// scratchRedirect is an output redirection into /tmp or /var/tmp by a plain
+// path: letters, digits and . _ - + @ % , = : / only, ended by a blank, a
+// separator or the end. A path with $, a backquote or a quote may hide a
+// command substitution, and one with a ".." segment may climb out
+// (scratchPath): both keep their card (21 November 2026).
+var scratchRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*(/(?:var/)?tmp/[A-Za-z0-9._+@%,=:/-]*)(?:[\s;|&)]|$)`)
+
+// scratchPath reports a /tmp path that stays in /tmp: no ".." segment.
+func scratchPath(path string) bool {
+	for _, segment := range strings.Split(path, "/") {
+		if segment == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// withoutScratchRedirects is script with its redirections into /tmp by a
+// plain path that stays there replaced by a blank, keeping the separator
+// that ended each.
+func withoutScratchRedirects(script string) string {
+	return scratchRedirect.ReplaceAllStringFunc(script, func(match string) string {
+		parts := scratchRedirect.FindStringSubmatch(match)
+		if !scratchPath(parts[1]) {
+			return match
+		}
+		end := match[strings.Index(match, parts[1])+len(parts[1]):]
+		return " " + end
+	})
+}
 
 // destructiveScript matches a shell string literally: a card for a false
 // positive costs a keypress, a missed deletion costs more.
@@ -190,8 +218,10 @@ func destructiveScript(workspace Workspace, script string, rules map[string]bool
 	// and private to the command under the exec sandbox: a local model
 	// checking a draft with printf … > /tmp/x raised six cards in one plan
 	// (wrx80, 20 November 2026). Deleting there keeps its card.
-	script = scratchRedirect.ReplaceAllString(script, " ")
-	lower := " " + strings.ToLower(script) + " "
+	script = withoutScratchRedirects(script)
+	// Blanks are folded so that a stripped redirection between a rule's
+	// words, as in "git 2>/dev/null push", does not split them.
+	lower := " " + strings.ToLower(strings.Join(strings.Fields(script), " ")) + " "
 	for _, rule := range []struct{ name, pattern string }{{RuleGitPush, "git push"}, {RuleGitResetHard, "reset --hard"}, {RuleGitClean, "git clean"}, {RuleGitBranchDelete, "branch -d"}, {RuleGitBranchDelete, "branch --delete"}, {RuleGitRebase, "git rebase"}} {
 		if rules[rule.name] && strings.Contains(lower, rule.pattern) {
 			return rule.name

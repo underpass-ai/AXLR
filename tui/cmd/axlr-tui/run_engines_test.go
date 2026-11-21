@@ -97,3 +97,23 @@ func TestMADERunsUnderTheFullToolProfileAndTheWorkIdentityUnlessItsEntryNamesThe
 		t.Fatalf("KMP's environment changed: %v", registrations[3].Env)
 	}
 }
+
+// An embedded entry whose identity is set but empty (env_from naming an unset
+// variable) gets the work identity in its place: appending a second one made
+// the plugin manager refuse the entry and the console exit at every launch.
+func TestAnEmptyMADEIdentityIsReplacedNotDuplicated(t *testing.T) {
+	launcher := filepath.Join(t.TempDir(), "run-embedded-mcp.sh")
+	r, err := plugins.NewRegistration(plugins.Manifest{ID: "made", Command: launcher, AllowAll: true}, []string{"HOME=/home/test", "MADE_AUTH_TRUSTED_HOST_ID="})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const config = "/home/test/.config/axlr/mcp.json"
+	registrations := []plugins.Registration{r}
+	pinMADEEnvironment(config, registrations)
+	if _, err := plugins.NewRegistration(registrations[0].Manifest, registrations[0].Env); err != nil {
+		t.Fatalf("the pinned entry is refused: %v (%v)", err, registrations[0].Env)
+	}
+	if !slices.Contains(registrations[0].Env, "MADE_AUTH_TRUSTED_HOST_ID="+madesetup.WorkIdentity(config, nil)) || slices.Contains(registrations[0].Env, "MADE_AUTH_TRUSTED_HOST_ID=") {
+		t.Fatalf("env %v", registrations[0].Env)
+	}
+}

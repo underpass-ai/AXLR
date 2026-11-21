@@ -350,7 +350,27 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 				return interrupt(u.continueInSuccessor(ctx, session, estimated, cap))
 			}
 			var fitErr error
-			req, counted, fitErr = u.compactLocalRequest(req, messages, &projection, projectionBudget(u.Windows, *session), cap)
+			before := projection
+			fitted, fittedCount, fitErr := u.compactLocalRequest(req, messages, &projection, projectionBudget(u.Windows, *session), cap)
+			var full *LocalContextLimitError
+			if errors.As(fitErr, &full) && u.Scale.Factor(model) > 1 {
+				// A learned factor that leaves no room for the request at
+				// all is not trusted: the request is fitted as counted and
+				// the provider's report corrects the factor. Saved across
+				// launches, one odd high ratio otherwise refused every
+				// request of a local model before any was sent, and nothing
+				// could lower it (21 November 2026). A server that still
+				// refuses it is retried below with its own count.
+				projection = before
+				if counted <= cap {
+					fitted, fittedCount, fitErr = req, counted, nil
+				} else {
+					asCounted := u
+					asCounted.Scale = nil
+					fitted, fittedCount, fitErr = asCounted.compactLocalRequest(req, messages, &projection, projectionBudget(u.Windows, *session), cap)
+				}
+			}
+			req, counted = fitted, fittedCount
 			if fitErr != nil {
 				contextSpan.End(DiagnosticErrorInvalidState)
 				return interrupt(fitErr)

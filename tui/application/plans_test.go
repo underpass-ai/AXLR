@@ -97,6 +97,34 @@ func TestAnEarlierWaveWaitsWhenItsCheckFailsOnALaterWavesFile(t *testing.T) {
 	}
 }
 
+// A later wave's file defers an earlier wave's red check only when the
+// output names that file whole and as the failure: a longer name that ends
+// the same, or a passing test file in a progress line, is this wave's own
+// failure to reconcile (21 November 2026).
+func TestOnlyALaterWavesFileNamedAsTheFailureDefersTheCheck(t *testing.T) {
+	plan := domain.PlanRecord{Waves: 2, Tasks: []domain.PlanTask{
+		{ID: "core", Wave: 1, Scope: []string{"pkg/stringutil.go", "tests/test_core.py"}},
+		{ID: "util", Wave: 2, Scope: []string{"pkg/util.go", "tests/test_cli.py", "resumen2.md"}, New: []string{"resumen2.md"}},
+	}}
+	for _, tc := range []struct {
+		output string
+		defers bool
+	}{
+		{"pkg/stringutil.go:3:2: undefined: Trim", false},
+		{"tests/test_cli.py ....                [ 50%]\nFAILED tests/test_core.py::test_parse - AssertionError", false},
+		{"grep: resumen2.md: No such file or directory", true},
+		{"cat: resumen2.md: cannot open", true},
+		{"pkg/util.go:12:2: undefined: Helper", true},
+		{"./pkg/util.go:12: syntax error", true},
+		{"FAILED tests/test_cli.py::test_flag - AssertionError", true},
+		{"wrote resumen2.mdx", false},
+	} {
+		if got := namesLaterWave(plan, 1, tc.output); got != tc.defers {
+			t.Errorf("%q: defers=%v want %v", tc.output, got, tc.defers)
+		}
+	}
+}
+
 func TestAffectedTasksAreThoseTheFailureNames(t *testing.T) {
 	tasks := []domain.PlanTask{{ID: "a", Scope: []string{"pkg/a.go"}}, {ID: "b", Scope: []string{"pkg/b.go"}}}
 	if got := affectedTasks(tasks, "FAIL pkg/b.go:12: want 2"); len(got) != 1 || got[0].ID != "b" {

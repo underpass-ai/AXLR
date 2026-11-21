@@ -61,6 +61,19 @@ func TestDestructiveReasonNamesTheRule(t *testing.T) {
 		{"sh", []string{"-c", "echo x > /tmp/x; rm -rf /tmp/x"}, "", RuleDeleteOutside},
 		{"sh", []string{"-c", "echo x > /tmp/x; echo y > /etc/hosts"}, "", RuleDeleteOutside},
 		{"sh", []string{"-c", "echo x > /tmpfile"}, "", RuleDeleteOutside},
+		// Only a plain path stays scratch: one that climbs out of /tmp or
+		// hides a command substitution keeps its card (21 November 2026).
+		{"sh", []string{"-c", "echo x > /tmp/../etc/passwd"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x >/tmp/../home/me/.bashrc"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x > /tmp/$(rm -rf ~)"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x > /tmp/`rm -rf ~`"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x > /tmp/a.log;rm -rf /home/me"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "go vet ./... 2>/tmp/vet-1.txt; wc -l /tmp/vet-1.txt"}, "", ""},
+		// A stripped redirection does not split a rule's words (21 November
+		// 2026: "git 2>/dev/null push" left "git   push").
+		{"sh", []string{"-c", "git 2>/dev/null push origin main"}, "", RuleGitPush},
+		{"sh", []string{"-c", "git 2>/tmp/e push --force"}, "", RuleGitPush},
+		{"sh", []string{"-c", "git  reset  --hard HEAD~1"}, "", RuleGitResetHard},
 		{"go", []string{"test", "./..."}, "", ""},
 		{"ls", []string{"/"}, "", ""},
 		// A wrapper option's value is not the program (14 October 2026).
