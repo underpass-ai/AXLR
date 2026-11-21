@@ -2,9 +2,9 @@
   "version": 1,
   "engines": {
     "kmp": {
-      "version": "v0.27.1",
-      "linux/amd64": {"url": "https://github.com/underpass-ai/kmp/releases/download/v0.27.1/kmp-mcp-v0.27.1-x86_64-unknown-linux-gnu", "sha256": "904fe172bcead0107c9644da14f5870925e91a8d54decb52f6c8ee33d1b71445"},
-      "linux/arm64": {"url": "https://github.com/underpass-ai/kmp/releases/download/v0.27.1/kmp-mcp-v0.27.1-aarch64-unknown-linux-gnu", "sha256": "412fe3bd2f684d8c4d4f15d3efabcc5bce9ca1471488332d77eb178ad2ca4f08"}
+      "version": "v1.0.0",
+      "linux/amd64": {"url": "https://github.com/underpass-ai/kmp/releases/download/v1.0.0/kmp-mcp-v1.0.0-x86_64-unknown-linux-gnu", "sha256": "81a85b144131af11139c59cd69eda6aa2766a5b08cb8470524fc04a09135477d"},
+      "linux/arm64": {"url": "https://github.com/underpass-ai/kmp/releases/download/v1.0.0/kmp-mcp-v1.0.0-aarch64-unknown-linux-gnu", "sha256": "c79b0d62ec4363dd18317dc07548a4ad4076d1726e54f182a4ee1d54568222c9"}
     },
     "made": {
       "version": "v0.12.0",
