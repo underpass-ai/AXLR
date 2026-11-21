@@ -217,8 +217,9 @@ func namesPath(text, p, workspace string) (named, located bool) {
 
 // samePath reports a path token that is the scope file p.
 func samePath(token, p, workspace string) bool {
-	for strings.HasPrefix(token, "./") {
-		token = token[2:]
+	for strings.HasPrefix(token, "./") || strings.HasPrefix(token, "../") {
+		// A check run in a subdirectory names files from there.
+		token = token[strings.IndexByte(token, '/')+1:]
 	}
 	if strings.HasPrefix(token, "/") {
 		root := strings.TrimSuffix(workspace, "/")

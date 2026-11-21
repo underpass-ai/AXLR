@@ -43,9 +43,14 @@ type scriptJudge struct {
 }
 
 func destructiveCommands(workspace Workspace, script, cwd string, rules map[string]bool) string {
+	script = strings.ReplaceAll(script, "\\\n", " ") // a continued line is one command
 	j := scriptJudge{workspace: workspace, rules: rules, cwd: cwd}
 	for _, word := range strings.Fields(script) {
-		if word = unquote(word); strings.HasPrefix(word, "/") || strings.HasPrefix(word, "~") {
+		word = unquote(word)
+		if assignment(word) {
+			word = unquote(word[strings.IndexByte(word, '=')+1:])
+		}
+		if strings.HasPrefix(word, "/") || strings.HasPrefix(word, "~") {
 			j.paths = append(j.paths, word)
 		}
 	}
@@ -84,30 +89,35 @@ func (j *scriptJudge) segment(segment string) string {
 			}
 		}
 	}
-	words := strings.Fields(scriptRedirect.ReplaceAllString(segment, " "))
-	for i := range words {
-		words[i] = unquote(words[i])
+	raw := strings.Fields(scriptRedirect.ReplaceAllString(segment, " "))
+	if len(raw) > 0 && raw[0] == "case" {
+		// case WORD in PATTERN) COMMAND: the arm's command runs.
+		in := -1
+		for i, word := range raw {
+			if word == "in" {
+				in = i
+				break
+			}
+		}
+		if in < 0 {
+			return ""
+		}
+		raw = raw[in+1:]
+		if len(raw) > 0 && strings.HasSuffix(raw[0], ")") {
+			raw = raw[1:]
+		}
 	}
-	for len(words) > 0 && (shellKeywords[words[0]] || words[0] == "for" || words[0] == "case" || assignment(words[0])) {
-		switch words[0] {
-		case "for":
+	// Quotes and a subshell's parentheses are no part of a word: (rm -rf
+	// /etc) runs rm.
+	var words []string
+	for _, word := range raw {
+		if word = strings.Trim(word, "\"'()"); word != "" {
+			words = append(words, word)
+		}
+	}
+	for len(words) > 0 && (shellKeywords[words[0]] || words[0] == "for" || assignment(words[0])) {
+		if words[0] == "for" {
 			return "" // the loop's word list, not a command
-		case "case":
-			// case WORD in PATTERN) COMMAND: the arm's command runs.
-			in := -1
-			for i, word := range words {
-				if word == "in" {
-					in = i
-					break
-				}
-			}
-			if in < 0 {
-				return ""
-			}
-			words = words[in:]
-			if len(words) > 1 && strings.HasSuffix(words[1], ")") {
-				words = words[1:]
-			}
 		}
 		words = words[1:]
 	}
@@ -118,7 +128,22 @@ func (j *scriptJudge) segment(segment string) string {
 		j.chdir(words[1:])
 		return ""
 	}
-	return j.command(words[0], words[1:])
+	if rule := j.command(words[0], words[1:]); rule != "" {
+		return rule
+	}
+	// A remover after a word the judge does not know runs it, or hands it
+	// to a shell: timeout 60 rm, exec rm, eval "rm …", sudo bash -c "rm …",
+	// echo "rm …" | sh. Its operands are judged as a call's.
+	if j.rules[RuleDeleteOutside] {
+		for i := 1; i < len(words); i++ {
+			if base := filepath.Base(words[i]); fileRemovers[base] || writers[base] || base == "dd" {
+				if rule := j.command(words[i], words[i+1:]); rule != "" {
+					return rule
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func (j *scriptJudge) command(program string, args []string) string {
@@ -159,20 +184,96 @@ func (j *scriptJudge) command(program string, args []string) string {
 		return ""
 	case "dd":
 		for _, arg := range args {
-			if strings.HasPrefix(arg, "of=") && j.outside(arg[3:]) {
+			if strings.HasPrefix(arg, "of=") && !scratchOrDiscard(arg[3:]) && j.outside(arg[3:]) {
 				return RuleDeleteOutside
 			}
 		}
 		return ""
+	case "cp":
+		// cp writes only its destination; its sources are read.
+		if target := copyTarget(args); target != "" && j.outside(target) {
+			return RuleDeleteOutside
+		}
+		return ""
 	}
-	if deleters[base] || writers[base] {
-		for _, arg := range args {
-			if arg != "" && !strings.HasPrefix(arg, "-") && (j.outside(arg) || fileRemovers[base] && j.isRoot(arg)) {
-				return RuleDeleteOutside
-			}
+	if !deleters[base] && !writers[base] {
+		return ""
+	}
+	operands := nonFlags(args)
+	for i, arg := range operands {
+		switch {
+		case writers[base] && scratchOrDiscard(arg):
+			// tee /tmp/test.log or tee /dev/stderr writes scratch, as a
+			// redirection there does.
+		case j.outside(arg):
+			return RuleDeleteOutside
+		case j.unresolved(arg):
+			return RuleDeleteOutside
+		case removesWhole[base] && (base != "mv" || i < len(operands)-1) && j.isRoot(arg):
+			return RuleDeleteOutside
 		}
 	}
 	return ""
+}
+
+// removesWhole are the programs that take away what they name: rm .. on
+// the workspace removes it. mv moves only its sources away.
+var removesWhole = map[string]bool{"rm": true, "rmdir": true, "unlink": true, "shred": true, "mv": true}
+
+// nonFlags are a command's operands: its words but options, and all of
+// them after --.
+func nonFlags(args []string) []string {
+	var operands []string
+	for i, arg := range args {
+		if arg == "--" {
+			return append(operands, args[i+1:]...)
+		}
+		if arg != "" && !strings.HasPrefix(arg, "-") {
+			operands = append(operands, arg)
+		}
+	}
+	return operands
+}
+
+// copyTarget is the file or directory cp writes: -t's value, or its last
+// operand.
+func copyTarget(args []string) string {
+	for i, arg := range args {
+		if (arg == "-t" || arg == "--target-directory") && i+1 < len(args) {
+			return args[i+1]
+		}
+		if strings.HasPrefix(arg, "--target-directory=") {
+			return strings.TrimPrefix(arg, "--target-directory=")
+		}
+	}
+	if operands := nonFlags(args); len(operands) > 1 {
+		return operands[len(operands)-1]
+	}
+	return ""
+}
+
+// scratchFile is a plain path in a temporary directory, or a discard
+// device, as the redirections the console strips.
+var scratchFile = regexp.MustCompile(`^(?:/(?:var/)?tmp/[A-Za-z0-9._+@%,=:/-]*|/dev/(?:null|stdout|stderr|tty|fd/[0-9]+))$`)
+
+func scratchOrDiscard(path string) bool {
+	return scratchFile.MatchString(path) && scratchPath(path)
+}
+
+// unresolved reports a variable operand (not HOME, which outside judges)
+// in a string that names a path outside the workspace anywhere, a loop's
+// list or an assignment's value among them: for d in /etc; do rm -rf $d.
+// Without such a path it is taken for the workspace's, as before.
+func (j *scriptJudge) unresolved(path string) bool {
+	if !strings.HasPrefix(path, "$") {
+		return false
+	}
+	for _, named := range j.paths {
+		if j.outside(named) {
+			return true
+		}
+	}
+	return false
 }
 
 // isRoot reports a path that is the workspace itself: removing or moving
@@ -183,6 +284,9 @@ func (j *scriptJudge) isRoot(path string) bool {
 	}
 	root := filepath.Clean(string(j.workspace))
 	if !strings.HasPrefix(path, "/") && !filepath.IsAbs(path) {
+		if filepath.Clean(path) == "." {
+			return false // rm refuses . and grep -r "rm -rf" . removes nothing
+		}
 		path = filepath.Join(root, j.cwd, path)
 	}
 	return root != "." && root != "" && filepath.Clean(path) == root
@@ -249,7 +353,7 @@ func (j *scriptJudge) outside(path string) bool {
 	switch {
 	case path == "":
 		return false
-	case strings.HasPrefix(path, "$HOME") || strings.HasPrefix(path, "${HOME}"):
+	case strings.HasPrefix(path, "$HOME") || strings.HasPrefix(path, "${HOME"):
 		return true
 	case strings.HasPrefix(path, "$"):
 		return false

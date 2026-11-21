@@ -127,6 +127,7 @@ func TestOnlyALaterWavesFileNamedAsTheFailureDefersTheCheck(t *testing.T) {
 		{"/home/me/go/pkg/mod/x/pkg/util.go:4: error", false},
 		{"pkg/util.go.orig: error", false},
 		{"  File \"/ws/tests/test_cli.py\", line 7, in test_flag", true},
+		{"../pkg/util.go:3:1: undefined: y", true},
 	} {
 		if got := namesLaterWave(plan, 1, tc.output); got != tc.defers {
 			t.Errorf("%q: defers=%v want %v", tc.output, got, tc.defers)

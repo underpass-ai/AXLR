@@ -125,6 +125,20 @@ func TestDestructiveReasonNamesTheRule(t *testing.T) {
 		{"sh", []string{"-c", "go build -o bin/x ./cmd/x 2>&1 | tee build.log"}, "", ""},
 		{"sh", []string{"-c", "if [ -d build ]; then rm -rf build; fi"}, "", ""},
 		{"sh", []string{"-c", "FOO=1 rm -rf build"}, "", ""},
+		// tee into scratch or a device, mv into the workspace's root, cp's
+		// sources, a search for "rm -rf" and a loop over workspace files
+		// write nothing outside.
+		{"sh", []string{"-c", "go test ./... 2>&1 | tee /tmp/test.log"}, "", ""},
+		{"sh", []string{"-c", "go test ./... | tee /dev/stderr"}, "", ""},
+		{"mv", []string{"build/out.txt", "."}, "", ""},
+		{"sh", []string{"-c", "mv build/out.txt ."}, "", ""},
+		{"sh", []string{"-c", "cp /etc/os-release x"}, "", ""},
+		{"cp", []string{"/etc/os-release", "x"}, "", ""},
+		{"cp", []string{"-t", "/etc", "x"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "grep -rn \"rm -rf\" ."}, "", ""},
+		{"sh", []string{"-c", "for f in *.o; do rm -f $f; done"}, "", ""},
+		{"sh", []string{"-c", "tmp=$(mktemp); echo x > $tmp; rm -f $tmp"}, "", ""},
+		{"sh", []string{"-c", "echo x | tee -a /etc/hosts"}, "", RuleDeleteOutside},
 	}
 	for _, tc := range cases {
 		if got := DestructiveReason(ws, tc.program, tc.args, tc.cwd, nil); got != tc.want {

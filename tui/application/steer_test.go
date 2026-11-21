@@ -170,7 +170,7 @@ func TestTheModelReadsTheReplyThePersonInterrupted(t *testing.T) {
 		t.Fatal(err)
 	}
 	last := string(request.Messages[len(request.Messages)-1].Content)
-	if !strings.HasPrefix(last, "where did you stop?") || !strings.Contains(last, "twenty-six, twenty-se") || !strings.Contains(last, "interrupted") {
+	if !strings.HasPrefix(last, "where did you stop?") || !strings.Contains(last, "twenty-six, twenty-se") || !strings.Contains(last, "cut short") {
 		t.Fatalf("the model was not told what it had written before the person interrupted it: %q", last)
 	}
 	if len(last) > 2500 {

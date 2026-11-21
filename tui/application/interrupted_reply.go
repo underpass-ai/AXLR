@@ -12,7 +12,8 @@ import (
 const interruptedReplyTail = 1500
 
 // markInterrupted tells the model, on the prompt that followed it, what its
-// reply showed when the person interrupted it. The draft stays on screen as
+// reply showed when it was cut short: by the person (Esc) or by a failure,
+// such as the model's server going away mid-reply. The draft stays on screen as
 // an interrupted reply but was in no message, so asked where it had
 // stopped, a local model answered from an earlier reply (wrx80, 21 November
 // 2026). The stored prompt is unchanged; only the request reads the note.
@@ -28,7 +29,7 @@ func markInterrupted(messages []root.Message, drafts []domain.ArchivedDraft) []r
 			marked = append([]root.Message(nil), messages...)
 			copied = true
 		}
-		marked[i].Content += root.Text("\n\n[AXLR · The person interrupted your previous reply before it finished. It had shown them: «" + replyTail(string(draft.Content)) + "»]")
+		marked[i].Content += root.Text("\n\n[AXLR · Your previous reply was cut short before it finished (stopped by the person or by a failure). It had shown: «" + replyTail(string(draft.Content)) + "»]")
 	}
 	return marked
 }
