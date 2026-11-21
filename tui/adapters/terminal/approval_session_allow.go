@@ -104,6 +104,22 @@ func (p allowingPolicy) AutoApproves(id domain.ToolIdentity) bool {
 	return p.settings != nil && p.settings.AutoApproves(id)
 }
 
+// AlwaysAsk passes on the person's destructive list; until 21 November 2026
+// the wrapper hid it and every rule applied, an emptied list included.
+func (p allowingPolicy) AlwaysAsk() []string {
+	if always, ok := p.settings.(application.AlwaysAskPort); ok {
+		return always.AlwaysAsk()
+	}
+	return nil
+}
+
+// PrivateTmp passes on whether the exec sandbox gives commands their own
+// /tmp.
+func (p allowingPolicy) PrivateTmp() bool {
+	private, ok := p.settings.(application.PrivateTmpPort)
+	return ok && private.PrivateTmp()
+}
+
 func (p allowingPolicy) ApprovesCall(session domain.SessionID, id domain.ToolIdentity, arguments root.JSONValue) bool {
 	return id.Kind == domain.ToolKindLocal && id.LocalOperation == "exec" && p.allowed.allows(session, arguments)
 }
