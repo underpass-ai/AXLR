@@ -2,6 +2,15 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.14 — 2026-11-21
+
+### Fixed
+- A shell command that removes outside the workspace keeps its approval card again where 0.20.13 lost it: a command substitution as the removed path (`rm -rf $(find /var/log …)`), a `cd` inside `bash -c`, `eval`, a function or `ssh`, `env -C` and `sudo -D`, and `find -L`. Writes into `/tmp` quoted or after `cd /tmp` no longer ask, and a long script is judged quickly (#258).
+- Under a confining exec sandbox, deleting a plain path in `/tmp`, which is each command's own, no longer asks; the console also honours an emptied `always_ask` list, which it ignored (#258).
+- Loading a model's saved token factor no longer makes other models' estimates wait, and saving it gives up on a file another process holds (#258).
+- A MADE entry that resolves its trusted host from an unset variable no longer fails the preparation at every launch (#258).
+- A plan names scope files with `@` or `+` in their path, and under a diff's `a/` or a module path (#258).
+
 ## 0.20.13 — 2026-11-21
 
 ### Fixed
