@@ -116,10 +116,17 @@ func (p *Preparer) Prepare(ctx context.Context) (application.OrchestratorPrepara
 	}
 	result.ApproverIdentity = approverIdentity(work)
 	if configured == "" {
-		if err := p.Store.SetPluginEnvironment(ctx, made.Manifest.ID, hostIdentityKey, work); err != nil {
+		// An entry that resolves the key from the host environment keeps
+		// it: each launch pins the work identity instead (WithWorkIdentity).
+		// The refusal failed the preparation at every launch until
+		// 21 November 2026.
+		switch err := p.Store.SetPluginEnvironment(ctx, made.Manifest.ID, hostIdentityKey, work); {
+		case errors.Is(err, storage.ErrEnvironmentFromHost):
+		case err != nil:
 			return result, err
+		default:
+			result.RestartRequired = true
 		}
-		result.RestartRequired = true
 	}
 	worker := server(made, append(without(made.Env, hostIdentityKey), hostIdentityKey+"="+work))
 	if _, err := p.call(ctx, worker, "made_list_ceremony_definitions", map[string]any{}); err != nil {

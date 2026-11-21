@@ -161,3 +161,21 @@ func strconvQuote(text string) string {
 	encoded, _ := json.Marshal(text)
 	return string(encoded)
 }
+
+type privateTmpPolicy struct{ private bool }
+
+func (p privateTmpPolicy) AutoApproves(domain.ToolIdentity) bool { return true }
+func (p privateTmpPolicy) PrivateTmp() bool                      { return p.private }
+
+// Under the exec sandbox a command's /tmp is its own: deleting a scratch
+// file there keeps no card (wrx80, 21 November 2026).
+func TestDeletingInAPrivateTmpKeepsNoCard(t *testing.T) {
+	s := turnSession(t)
+	arguments := mustObject(t, `{"program":"sh","args":["-c","go build -o /tmp/ledger ./cmd/ledger && rm -f /tmp/cuentas.json"]}`)
+	if got := DestructiveReason(privateTmpPolicy{private: true}, s, localIdentity("exec"), arguments); got != "" {
+		t.Fatalf("a delete in a private /tmp asked: %q", got)
+	}
+	if got := DestructiveReason(privateTmpPolicy{private: false}, s, localIdentity("exec"), arguments); got != domain.RuleDeleteOutside {
+		t.Fatalf("a delete in a shared /tmp did not ask: %q", got)
+	}
+}

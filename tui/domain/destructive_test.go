@@ -139,6 +139,14 @@ func TestDestructiveReasonNamesTheRule(t *testing.T) {
 		{"sh", []string{"-c", "for f in *.o; do rm -f $f; done"}, "", ""},
 		{"sh", []string{"-c", "tmp=$(mktemp); echo x > $tmp; rm -f $tmp"}, "", ""},
 		{"sh", []string{"-c", "echo x | tee -a /etc/hosts"}, "", RuleDeleteOutside},
+		// False cards the review found in ordinary work (21 November 2026).
+		{"sh", []string{"-c", "go test ./... > \"/tmp/test.log\" 2>&1"}, "", ""},
+		{"sh", []string{"-c", "cd /tmp && cat > t.go <<'EOF'\npackage main\nEOF\ngo run t.go"}, "", ""},
+		{"sh", []string{"-c", "mkdir -p /tmp/x && cd /tmp/x && printf 'package main' > main.go"}, "", ""},
+		{"sh", []string{"-c", "cd ~/repo && go test ./... > out.log"}, "", ""},
+		{"sh", []string{"-c", "cp bin/axlr /tmp/"}, "", ""},
+		{"sh", []string{"-c", "LOG=/tmp/test.log; go test ./... | tee \"$LOG\""}, "", ""},
+		{"sh", []string{"-c", "cd ~/repo && rm -rf build"}, "", RuleDeleteOutside},
 	}
 	for _, tc := range cases {
 		if got := DestructiveReason(ws, tc.program, tc.args, tc.cwd, nil); got != tc.want {
@@ -151,6 +159,31 @@ func TestDestructiveReasonNamesTheRule(t *testing.T) {
 	}
 	if got := DestructiveReason("/home/Me/Repo", "sh", []string{"-c", "cd /home/Me/Repo && rm -rf /etc"}, "", nil); got != RuleDeleteOutside {
 		t.Fatalf("a delete outside a mixed-case workspace raised %q", got)
+	}
+	// Under an exec sandbox /tmp is the command's own and discarded when
+	// it exits: deleting a plain path there removes nothing outside, so it
+	// asks nothing (wrx80, 21 November 2026: a local model's rm -f
+	// /tmp/cuentas.json stopped a run under full autonomy).
+	for _, tc := range []struct {
+		script     string
+		privateTmp bool
+		want       string
+	}{
+		{"rm -f /tmp/cuentas.json", true, ""},
+		{"rm -f /tmp/cuentas.json", false, RuleDeleteOutside},
+		{"cd /tmp && rm -rf build", true, ""},
+		{"for f in /tmp/a /tmp/b; do rm -f $f; done", true, ""},
+		{"rm -rf /tmp/../etc", true, RuleDeleteOutside},
+		{"rm -rf /tmp", true, RuleDeleteOutside},
+		{"rm -rf /var/tmp/x", true, RuleDeleteOutside},
+		{"rm -f /tmp/a /etc/b", true, RuleDeleteOutside},
+	} {
+		if got := DestructiveReasonIn(ws, tc.privateTmp, "sh", []string{"-c", tc.script}, "", nil); got != tc.want {
+			t.Fatalf("%q (private /tmp %v): got %q want %q", tc.script, tc.privateTmp, got, tc.want)
+		}
+	}
+	if got := DestructiveReasonIn(ws, true, "rm", []string{"-f", "/tmp/x"}, "", nil); got != "" {
+		t.Fatalf("a direct rm in a private /tmp raised %q", got)
 	}
 	// Only the rules in force apply.
 	if got := DestructiveReason(ws, "git", []string{"push"}, "", []string{RuleNetworkWrite}); got != "" {

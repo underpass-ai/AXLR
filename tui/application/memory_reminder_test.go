@@ -288,6 +288,9 @@ func TestACommandThatOnlyReadsIsNoWorkToRecord(t *testing.T) {
 		{`{"program":"journalctl","args":["--user","-u","axlr-node","-n","50"]}`, true},
 		{`{"program":"journalctl","args":["--vacuum-time=1d"]}`, false},
 		{`{"program":"yarn","args":["version","--patch"]}`, false},
+		{`{"program":"yarn","args":["version","--new-version=2.0.0"]}`, false},
+		{`{"program":"ss","args":["-K","dst","10.0.0.1"]}`, false},
+		{`{"program":"ss","args":["-ltnp"]}`, true},
 		{`{"program":"sh","args":["-c","diff <(rm -rf build) /dev/null"]}`, false},
 		{`{"program":"sh","args":["-c","diff <(sort a.txt) <(sort b.txt)"]}`, true},
 	} {

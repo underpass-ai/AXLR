@@ -62,6 +62,10 @@ func (s *MCPConfigStore) SaveApproval(ctx context.Context, id root.PluginID, mod
 	return s.write(ctx, config)
 }
 
+// ErrEnvironmentFromHost is SetPluginEnvironment's refusal of a key the
+// entry resolves from the host environment (env_from).
+var ErrEnvironmentFromHost = errors.New("MCP environment key is resolved from the host environment")
+
 // SetPluginEnvironment persists one literal environment value of a configured
 // plugin. A key that is resolved from the host environment is never replaced.
 func (s *MCPConfigStore) SetPluginEnvironment(ctx context.Context, id root.PluginID, key, value string) error {
@@ -98,7 +102,7 @@ func (s *MCPConfigStore) SetPluginEnvironment(ctx context.Context, id root.Plugi
 			return errors.New("duplicate MCP plugin ID")
 		}
 		if _, resolved := selected.EnvFrom[key]; resolved {
-			return errors.New("MCP environment key is resolved from the host environment")
+			return ErrEnvironmentFromHost
 		}
 		if config.Plugins[i].Env == nil {
 			config.Plugins[i].Env = map[string]string{}

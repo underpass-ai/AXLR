@@ -24,6 +24,24 @@ type ApprovalSettings struct {
 	fallback application.ToolApprovalPolicyPort
 	data     approvalSettingsFile
 	settings *UserSettingsStore
+	// privateTmp: the launch's exec sandbox confines local commands, each
+	// with its own /tmp (application.PrivateTmpPort).
+	privateTmp bool
+}
+
+// SetPrivateTmp records whether the launch's exec sandbox confines local
+// commands.
+func (s *ApprovalSettings) SetPrivateTmp(private bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.privateTmp = private
+}
+
+// PrivateTmp reports whether local commands run with a /tmp of their own.
+func (s *ApprovalSettings) PrivateTmp() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.privateTmp
 }
 
 var _ application.ApprovalSettingsPort = (*ApprovalSettings)(nil)

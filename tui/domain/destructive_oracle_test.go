@@ -3,6 +3,7 @@ package domain
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // oldDestructiveScript is the shell-string check of 0.20.12, kept as an
@@ -48,6 +49,18 @@ func TestScriptCardsAreASupersetOfTheOldOnes(t *testing.T) {
 		"rm -f out.txt; cat /etc/os-release":      true,
 		"rm -rf build && ls /usr/local/bin":       true,
 		"rm -rf build; grep -c x /var/log/syslog": true,
+	}
+	// Cards neither check gave before the review, which the judge now gives.
+	for _, script := range []string{
+		"env -C /etc rm -rf passwd",
+		"sudo -D /etc rm -f passwd",
+		"T=/var/log/app; find \"$T\" -delete",
+		"CACHE=\"$HOME/.cache/foo\"; rm -rf \"$CACHE\"",
+		"$(rm -rf /etc/$((1+1)))",
+	} {
+		if got := destructiveScript(ws, script, "", map[string]bool{RuleDeleteOutside: true}, false); got == "" {
+			t.Errorf("%q has no card", script)
+		}
 	}
 	corpus := []string{
 		"(rm -rf /etc)",
@@ -98,6 +111,24 @@ func TestScriptCardsAreASupersetOfTheOldOnes(t *testing.T) {
 		"go test ./... > /home/me/repo/out.txt",
 		"echo x > /tmp/x; rm -rf /tmp/x",
 		"cd /home/me/repo && rm -rf /etc",
+		// The review of block 8 (21 November 2026): cards 0.20.13 lost.
+		"rm -rf $(find /var/log/app -name '*.log' -mtime +7)",
+		"rm -f $(ls -d /etc/*.bak)",
+		"cd \"$(dirname /etc/passwd)\" && rm -f passwd",
+		"sudo bash -c 'cd /var/www && rm -rf *'",
+		"bash -c \"cd /etc && rm -f passwd\"",
+		"ssh host \"cd /srv && rm -rf old\"",
+		"find /etc -type d -name build | xargs -I{} sh -c 'cd {} && rm -rf out'",
+		"eval 'cd /etc; rm passwd'",
+		"f() { cd /etc; rm passwd; }",
+		"builtin cd /etc && rm passwd",
+		"env -C /etc rm -rf passwd",
+		"sudo -D /etc rm -f passwd",
+		"echo $(rm -rf /etc; echo \"(done)\")",
+		"x=$(rm -rf /var/lib/app && echo \"(ok)\")",
+		"find -L /etc -name x -exec rm {} +",
+		"T=/var/log/app; find \"$T\" -delete",
+		"CACHE=\"$HOME/.cache/foo\"; rm -rf \"$CACHE\"",
 	}
 	all := map[string]bool{}
 	for _, rule := range DestructiveRules() {
@@ -105,12 +136,40 @@ func TestScriptCardsAreASupersetOfTheOldOnes(t *testing.T) {
 	}
 	for _, script := range corpus {
 		old := oldDestructiveScript(ws, script, all)
-		now := destructiveScript(ws, script, "", all)
+		now := destructiveScript(ws, script, "", all, false)
 		if old != "" && now == "" && !relaxed[script] {
 			t.Errorf("%q lost its card (%s)", script, old)
+		}
+		if old == "" && now == "" && strings.Contains(script, "$(dirname /etc") {
+			t.Errorf("%q has no card", script)
 		}
 		if relaxed[script] && now != "" {
 			t.Errorf("%q still asks (%s)", script, now)
 		}
+	}
+}
+
+// A long string is judged in time that grows with its length, not with
+// its length squared: a 300 KB heredoc of Go struct tags took 12 s, a pass
+// over the whole string per substitution (review, 21 November 2026). Ten
+// times the tags must cost well under the hundred times a quadratic pass
+// would; a fixed bound failed under the race detector on CI.
+func TestALongScriptIsJudgedQuickly(t *testing.T) {
+	judge := func(tags int) time.Duration {
+		script := "cat > tags.go <<'EOF'\n" + strings.Repeat("\tName string `json:\"name\"`\n", tags) + "EOF\ngo build ./..."
+		fastest := time.Duration(1 << 62)
+		for range 3 {
+			start := time.Now()
+			if got := DestructiveReason("/home/me/repo", "sh", []string{"-c", script}, "", nil); got != "" {
+				t.Fatalf("got %q", got)
+			}
+			fastest = min(fastest, time.Since(start))
+		}
+		return fastest
+	}
+	small, large := judge(800), judge(8000)
+	t.Logf("800 tags %v, 8000 tags %v", small, large)
+	if large > 30*small {
+		t.Fatalf("ten times the tags took %v against %v: %.0f times", large, small, float64(large)/float64(small))
 	}
 }

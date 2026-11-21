@@ -109,12 +109,17 @@ func (c *TokenCalibration) TokenFactor(model root.ModelID) (float64, bool) {
 	return factor, factor >= 1 && factor <= 4
 }
 
+// tokenFactorSaveWait bounds how long a save waits for the file another
+// console holds: a factor not saved is learned again next launch.
+var tokenFactorSaveWait = 5 * time.Second
+
 // SaveTokenFactor keeps the model's token factor for later launches.
 func (c *TokenCalibration) SaveTokenFactor(model root.ModelID, factor float64) error {
 	if factor < 1 || factor > 4 {
 		return errors.New("token factor out of range")
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), tokenFactorSaveWait)
+	defer cancel()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	release, err := acquireMCPConfigLock(ctx, c.path)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -166,4 +167,51 @@ func TestSavingAFactorDoesNotBlockAnotherModelsEstimate(t *testing.T) {
 		t.Fatalf("the learned factor is not in force while it saves: %v", got)
 	}
 	close(memory.release)
+}
+
+// sharedLockFactors is a memory whose load and save share one lock, as
+// the file's do: a save holds it across the file lock, the write and the
+// fsync, and a load waits for it.
+type sharedLockFactors struct {
+	mu              sync.Mutex
+	saving, release chan struct{}
+}
+
+func (m *sharedLockFactors) TokenFactor(root.ModelID) (float64, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return 0, false
+}
+
+func (m *sharedLockFactors) SaveTokenFactor(root.ModelID, float64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.saving <- struct{}{}
+	<-m.release
+	return nil
+}
+
+// Loading a model's saved factor does not hold the scale either: the
+// first estimate of a model not loaded yet waited on the file behind a
+// save while holding the scale, and every estimate waited behind it,
+// loaded models' too (review, 21 November 2026).
+func TestLoadingAFactorDoesNotBlockLoadedModels(t *testing.T) {
+	memory := &sharedLockFactors{saving: make(chan struct{}), release: make(chan struct{})}
+	defer close(memory.release)
+	scale := &TokenScale{Memory: memory}
+	scale.Factor("local/other")
+	go scale.Observe("local/qwen", 1000, 1500)
+	<-memory.saving
+	go scale.Estimate("local/new", 1000) // waits on the file
+	time.Sleep(50 * time.Millisecond)
+	done := make(chan int)
+	go func() { done <- scale.Estimate("local/other", 1000) }()
+	select {
+	case got := <-done:
+		if got != 1000 {
+			t.Fatalf("estimate = %d", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a loaded model's estimate waited for another model's load")
+	}
 }
