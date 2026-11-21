@@ -2,6 +2,14 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.12 — 2026-11-21
+
+### Fixed
+- Saving a model's token factor no longer makes other models' estimates wait for the file write (#253).
+- A tool argument with malformed Unicode, such as a lone surrogate, is refused instead of written with a replacement character (#253).
+- The restart notice no longer shows at every prompt after an empty list in `settings.json`; `max_session_usd`, `turn_tool_calls` and `reviewer_model` changes are noticed too (#253).
+- The memory reminder no longer takes `npm version patch`, writing options such as `go env -w`, or a command substitution that writes for a read-only command (#253).
+
 ## 0.20.11 — 2026-11-21
 
 ### Fixed
