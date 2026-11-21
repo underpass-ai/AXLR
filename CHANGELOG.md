@@ -2,6 +2,15 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.11 — 2026-11-21
+
+### Fixed
+- A redirection into `/tmp` skips the destructive card only by a plain path: `> /tmp/../etc/passwd` or a path holding a command substitution asks again (#251).
+- `git 2>/dev/null push` and other rules split by a stripped redirection keep their card (#251).
+- An embedded MADE entry whose trusted host is set but empty no longer stops the console from starting (#251).
+- A saved token factor that leaves no room for a local request no longer refuses every request; the request is sent as counted and the report corrects the factor (#251).
+- A plan's earlier wave defers its red check only when the output names a later wave's file whole and as the failure (#251).
+
 ## 0.20.10 — 2026-11-21
 
 ### Changed
