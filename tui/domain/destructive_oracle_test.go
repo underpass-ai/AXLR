@@ -149,16 +149,27 @@ func TestScriptCardsAreASupersetOfTheOldOnes(t *testing.T) {
 	}
 }
 
-// A long string is judged in time linear in its substitutions' depth, not
-// their number: a 300 KB heredoc of Go struct tags took 12 s (review,
-// 21 November 2026).
+// A long string is judged in time that grows with its length, not with
+// its length squared: a 300 KB heredoc of Go struct tags took 12 s, a pass
+// over the whole string per substitution (review, 21 November 2026). Ten
+// times the tags must cost well under the hundred times a quadratic pass
+// would; a fixed bound failed under the race detector on CI.
 func TestALongScriptIsJudgedQuickly(t *testing.T) {
-	script := "cat > tags.go <<'EOF'\n" + strings.Repeat("\tName string `json:\"name\"`\n", 8000) + "EOF\ngo build ./..."
-	start := time.Now()
-	if got := DestructiveReason("/home/me/repo", "sh", []string{"-c", script}, "", nil); got != "" {
-		t.Fatalf("got %q", got)
+	judge := func(tags int) time.Duration {
+		script := "cat > tags.go <<'EOF'\n" + strings.Repeat("\tName string `json:\"name\"`\n", tags) + "EOF\ngo build ./..."
+		fastest := time.Duration(1 << 62)
+		for range 3 {
+			start := time.Now()
+			if got := DestructiveReason("/home/me/repo", "sh", []string{"-c", script}, "", nil); got != "" {
+				t.Fatalf("got %q", got)
+			}
+			fastest = min(fastest, time.Since(start))
+		}
+		return fastest
 	}
-	if took := time.Since(start); took > 2*time.Second {
-		t.Fatalf("judging a %d-byte script took %v", len(script), took)
+	small, large := judge(800), judge(8000)
+	t.Logf("800 tags %v, 8000 tags %v", small, large)
+	if large > 30*small {
+		t.Fatalf("ten times the tags took %v against %v: %.0f times", large, small, float64(large)/float64(small))
 	}
 }
