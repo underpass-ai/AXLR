@@ -237,3 +237,28 @@ func TestARepeatedButIdenticalLocalExecArgumentIsAdmitted(t *testing.T) {
 		t.Fatal("args repeated with different values admitted")
 	}
 }
+
+// Malformed Unicode is refused, not replaced: Go's decoder turns a lone
+// surrogate into U+FFFD, and since arguments are re-encoded once (block 5)
+// the runtime's own refusal never saw it, so local_write wrote "x�y"
+// for "x\ud800y" (21 November 2026).
+func TestALoneSurrogateInToolArgumentsIsRefusedNotReplaced(t *testing.T) {
+	var write root.ToolDefinition
+	for _, tool := range localToolDefinitions() {
+		if tool.Definition.Name == "local_write" {
+			write = tool.Definition
+		}
+	}
+	for _, raw := range []string{`{"path":"a.txt","content":"x\ud800y","mode":"create"}`, `{"path":"a.txt","content":"x\udc00y","mode":"create"}`} {
+		if err := NewToolArgumentValidator().Validate(write, jsonValue(t, raw)); err == nil {
+			t.Fatalf("%s admitted", raw)
+		}
+		if got := string(canonicalArguments([]byte(raw))); got != raw {
+			t.Fatalf("re-encoded to %s", got)
+		}
+	}
+	paired := `{"path":"a.txt","content":"x😀y","mode":"create"}`
+	if err := NewToolArgumentValidator().Validate(write, jsonValue(t, paired)); err != nil {
+		t.Fatalf("a surrogate pair refused: %v", err)
+	}
+}

@@ -247,6 +247,33 @@ func TestACommandThatOnlyReadsIsNoWorkToRecord(t *testing.T) {
 		{`{"program":"env","args":["FOO=1","make"]}`, false},
 		{`{"program":"go","args":["test","./..."]}`, false},
 		{`{"program":"python3","args":["-m","unittest"]}`, false},
+		// A word "version" that is not the probe, and options that write
+		// (21 November 2026).
+		{`{"program":"npm","args":["version"]}`, true},
+		{`{"program":"kubectl","args":["version","--client"]}`, true},
+		{`{"program":"npm","args":["version","patch"]}`, false},
+		{`{"program":"rm","args":["-rf","version"]}`, false},
+		{`{"program":"git","args":["tag","version"]}`, false},
+		{`{"program":"git","args":["--version"]}`, true},
+		{`{"program":"sh","args":["-c","git tag version"]}`, false},
+		{`{"program":"go","args":["env","GOPATH"]}`, true},
+		{`{"program":"go","args":["env","-w","GOFLAGS=-mod=mod"]}`, false},
+		{`{"program":"sort","args":["-uo","out.txt","in.txt"]}`, false},
+		{`{"program":"find","args":[".","-fls","list.txt"]}`, false},
+		{`{"program":"uniq","args":["in.txt","out.txt"]}`, false},
+		{`{"program":"uniq","args":["-c","in.txt"]}`, true},
+		{`{"program":"tree","args":["-o","tree.txt"]}`, false},
+		{`{"program":"git","args":["diff","--output=patch.diff"]}`, false},
+		// What a substitution or a case arm runs counts too, and only a
+		// plain /tmp path or a whole device name is harmless.
+		{`{"program":"sh","args":["-c","echo $(rm -rf build)"]}`, false},
+		{`{"program":"sh","args":["-c","echo ` + "`rm -rf build`" + `"]}`, false},
+		{`{"program":"sh","args":["-c","echo \"go: $(command -v go)\""]}`, true},
+		{`{"program":"sh","args":["-c","ls; case x in x) rm -rf b;; esac"]}`, false},
+		{`{"program":"sh","args":["-c","case $1 in -v) echo v;; esac"]}`, true},
+		{`{"program":"sh","args":["-c","echo x > /dev/ttyUSB0"]}`, false},
+		{`{"program":"sh","args":["-c","echo x > /tmp/../home/me/notes"]}`, false},
+		{`{"program":"sh","args":["-c","printf x > /tmp/a;rm -rf b"]}`, false},
 	} {
 		if got := readOnlyExec(mustObject(t, tc.arguments)); got != tc.readOnly {
 			t.Errorf("%s: read only = %v, want %v", tc.arguments, got, tc.readOnly)

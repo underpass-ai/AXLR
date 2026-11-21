@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	root "github.com/underpass-ai/AXLR/domain"
 )
@@ -81,4 +82,42 @@ func TestAFactorThatLeavesNoRoomIsNotTrusted(t *testing.T) {
 	if got := memory.factors[model]; got >= 4 {
 		t.Fatalf("the report did not lower the saved factor: %v", got)
 	}
+}
+
+// blockingFactors is a memory whose save waits until released.
+type blockingFactors struct {
+	saving, release chan struct{}
+}
+
+func (b *blockingFactors) TokenFactor(root.ModelID) (float64, bool) { return 0, false }
+
+func (b *blockingFactors) SaveTokenFactor(root.ModelID, float64) error {
+	b.saving <- struct{}{}
+	<-b.release
+	return nil
+}
+
+// Saving a factor (a cross-process file lock, a write and an fsync) does
+// not hold the scale: another model's estimate, another session's in
+// axlr-serve, does not wait for it (21 November 2026).
+func TestSavingAFactorDoesNotBlockAnotherModelsEstimate(t *testing.T) {
+	memory := &blockingFactors{saving: make(chan struct{}), release: make(chan struct{})}
+	scale := &TokenScale{Memory: memory}
+	scale.Factor("local/other") // loaded before the save starts
+	go scale.Observe("local/qwen", 1000, 1500)
+	<-memory.saving
+	done := make(chan int)
+	go func() { done <- scale.Estimate("local/other", 1000) }()
+	select {
+	case got := <-done:
+		if got != 1000 {
+			t.Fatalf("estimate = %d", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("an estimate waited for another model's save")
+	}
+	if got := scale.Factor("local/qwen"); got != 1.5 {
+		t.Fatalf("the learned factor is not in force while it saves: %v", got)
+	}
+	close(memory.release)
 }

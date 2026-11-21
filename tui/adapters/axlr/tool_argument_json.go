@@ -1,6 +1,8 @@
 package axlr
 
 import (
+	"github.com/underpass-ai/AXLR/runtime"
+
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -16,6 +18,12 @@ import (
 // "stdin":"" three times and "args" twice in one local_exec, refused for
 // it, and spent a request sending it again (wrx80, 20 November 2026).
 func strictToolJSON(raw []byte) (any, error) {
+	// Malformed Unicode is refused, not replaced: canonicalArguments
+	// re-encodes what it decodes, so the runtime's own refusal never saw
+	// "x\ud800y" and local_write wrote "x\uFFFDy" (21 November 2026).
+	if err := runtime.ValidateJSONText(raw); err != nil {
+		return nil, err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.UseNumber()
 	value, err := readToolJSON(decoder, 0)
