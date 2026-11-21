@@ -109,7 +109,7 @@ func readOnlyCommand(base string, args []string) bool {
 				return true
 			}
 		}
-		if args[0] == "version" && (len(args) == 1 || strings.HasPrefix(args[1], "-") && !versionBump[args[1]]) {
+		if args[0] == "version" && (len(args) == 1 || strings.HasPrefix(args[1], "-") && !versionBump[strings.SplitN(args[1], "=", 2)[0]]) {
 			return true
 		}
 	}
@@ -147,6 +147,11 @@ func readOnlyCommand(base string, args []string) bool {
 				return false
 			}
 		}
+	case "ss":
+		// ss -K kills the sockets it lists.
+		return !slices.ContainsFunc(args, func(a string) bool {
+			return a == "--kill" || len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.ContainsRune(a, 'K')
+		})
 	case "ip":
 		return len(args) > 0 && !slices.ContainsFunc(args, func(a string) bool { return writingIP[a] })
 	case "systemctl":
@@ -187,16 +192,23 @@ func readOnlyScript(script string) bool {
 	// What a command substitution runs counts as a command: echo $(rm -rf
 	// build) is a write (21 November 2026). Innermost first; one left
 	// unparsed is not judged read-only.
-	for {
-		match := shellSubstitution.FindStringSubmatchIndex(script)
-		if match == nil {
-			break
-		}
-		inner := script[max(match[2], match[4]):max(match[3], match[5])]
-		if strings.TrimSpace(inner) != "" && !readOnlyScript(inner) {
+	for depth := 0; depth < 64; depth++ {
+		// Every substitution of a depth in one pass, not a pass per match.
+		writes := false
+		next := shellSubstitution.ReplaceAllStringFunc(script, func(match string) string {
+			groups := shellSubstitution.FindStringSubmatch(match)
+			if inner := groups[1] + groups[2]; !writes && strings.TrimSpace(inner) != "" && !readOnlyScript(inner) {
+				writes = true
+			}
+			return "x"
+		})
+		if writes {
 			return false
 		}
-		script = script[:match[0]] + "x" + script[match[1]:]
+		if next == script {
+			break
+		}
+		script = next
 	}
 	if strings.Contains(script, "$(") || strings.Contains(script, "<(") || strings.Contains(script, ">(") || strings.Contains(script, "`") {
 		return false

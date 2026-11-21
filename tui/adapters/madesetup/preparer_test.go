@@ -249,3 +249,35 @@ func TestTheApproverActsAsItsOwnIdentity(t *testing.T) {
 		t.Fatalf("an operator's approval source was replaced: %v", got.env)
 	}
 }
+
+// An entry that resolves the trusted host from an unset host variable
+// gets the work identity pinned at each launch (WithWorkIdentity) and is
+// not rewritten: the store refuses to replace a key env_from resolves, and
+// the refusal failed the preparation at every launch, two MADE admin calls
+// and a warning each time (review, 21 November 2026).
+func TestPreparationLeavesAnEnvFromIdentityToTheLaunch(t *testing.T) {
+	path := madeConfig(t, embeddedLauncher, nil)
+	var config map[string]any
+	data, _ := os.ReadFile(path)
+	_ = json.Unmarshal(data, &config)
+	config["plugins"].([]any)[0].(map[string]any)["env_from"] = map[string]string{"HOME": "HOME", hostIdentityKey: "AXLR_QA_UNSET"}
+	data, _ = json.Marshal(config)
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	engine := &fakeEngine{}
+	store := &storage.MCPConfigStore{Path: path}
+	getenv := func(name string) string {
+		if name == "AXLR_QA_UNSET" {
+			return ""
+		}
+		return "/home/test"
+	}
+	result, err := (&Preparer{ConfigPath: path, Getenv: getenv, Store: store, Call: engine.call}).Prepare(context.Background())
+	if err != nil || result.Status != "granted" || result.RestartRequired || !strings.HasPrefix(result.WorkIdentity, "axlr-work-") {
+		t.Fatalf("status %q restart %v identity %q: %v", result.Status, result.RestartRequired, result.WorkIdentity, err)
+	}
+	if after, _ := os.ReadFile(path); string(after) != string(data) {
+		t.Fatalf("the entry was rewritten: %s", after)
+	}
+}

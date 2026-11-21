@@ -180,10 +180,11 @@ var failureLine = regexp.MustCompile(`(?i)error|fail|undefined|cannot|can't|no s
 // namesPath reports whether text names the file p, and whether a name is
 // followed by a line number (p:12, or Python's "p", line 12). A name is a
 // whole path token: p itself after any ./, p's absolute path in the
-// workspace, or a shorter path that p ends with (util.go, pkg/util.go for
-// svc/pkg/util.go). A longer token is another file: stringutil.go for
-// util.go, or crates/b/src/lib.rs for crates/a/src/lib.rs. Until
-// 21 November 2026 a top-level file after ./ or a / was never named.
+// workspace, a shorter path that p ends with (util.go, pkg/util.go for
+// svc/pkg/util.go), or p under a diff's a/ or a module path. A longer token
+// is another file: stringutil.go for util.go, or crates/b/src/lib.rs for
+// crates/a/src/lib.rs. Until 21 November 2026 a top-level file after ./ or
+// a / was never named.
 func namesPath(text, p, workspace string) (named, located bool) {
 	base := lastPathElement(p)
 	if base == "" {
@@ -228,12 +229,25 @@ func samePath(token, p, workspace string) bool {
 		}
 		token = token[len(root)+1:]
 	}
-	return token != "" && (token == p || strings.HasSuffix(p, "/"+token))
+	if token == "" {
+		return false
+	}
+	if token == p || strings.HasSuffix(p, "/"+token) {
+		return true
+	}
+	// A relative token that ends with the whole of p names it under a
+	// diff's a/ or b/, or under a module path in a -trimpath build
+	// (github.com/org/repo/pkg/util.go); crates/b/pkg/util.go is another
+	// file.
+	prefix, found := strings.CutSuffix(token, "/"+p)
+	return found && (prefix == "a" || prefix == "b" || strings.Contains(strings.SplitN(prefix, "/", 2)[0], "."))
 }
 
 func digit(b byte) bool { return b >= '0' && b <= '9' }
 
-func pathByte(b byte) bool { return alphanumeric(b) || b == '.' || b == '_' || b == '-' || b == '/' }
+func pathByte(b byte) bool {
+	return alphanumeric(b) || b == '.' || b == '_' || b == '-' || b == '/' || b == '@' || b == '+' || b == '~'
+}
 
 func alphanumeric(b byte) bool {
 	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'

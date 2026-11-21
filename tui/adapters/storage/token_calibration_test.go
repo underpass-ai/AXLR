@@ -162,3 +162,31 @@ func TestTokenCalibrationKeepsTheTokenFactorAcrossLaunches(t *testing.T) {
 		t.Fatalf("the bytes per token were lost: %s", data)
 	}
 }
+
+// A save gives up when another process holds the file: the turn that
+// reported the factor waits for it, and before 21 November 2026 it waited
+// for good.
+func TestSavingATokenFactorGivesUpOnAHeldFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bytes-per-token.json")
+	calibration, err := NewTokenCalibration(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release, err := acquireMCPConfigLock(context.Background(), path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer release()
+	defer func(wait time.Duration) { tokenFactorSaveWait = wait }(tokenFactorSaveWait)
+	tokenFactorSaveWait = 200 * time.Millisecond
+	done := make(chan error, 1)
+	go func() { done <- calibration.SaveTokenFactor("local/qwen", 1.5) }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("a save through a held file reported success")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a save waited for good on a held file")
+	}
+}

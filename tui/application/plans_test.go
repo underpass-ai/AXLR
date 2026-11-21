@@ -128,6 +128,10 @@ func TestOnlyALaterWavesFileNamedAsTheFailureDefersTheCheck(t *testing.T) {
 		{"pkg/util.go.orig: error", false},
 		{"  File \"/ws/tests/test_cli.py\", line 7, in test_flag", true},
 		{"../pkg/util.go:3:1: undefined: y", true},
+		// Paths with @ or +, a diff's a/ prefix and a module path name the
+		// file too (review of block 8, 21 November 2026).
+		{"--- a/pkg/util.go", false},
+		{"github.com/org/repo/pkg/util.go:12: undefined: z", true},
 	} {
 		if got := namesLaterWave(plan, 1, tc.output); got != tc.defers {
 			t.Errorf("%q: defers=%v want %v", tc.output, got, tc.defers)
@@ -142,6 +146,10 @@ func TestAffectedTasksAreThoseTheFailureNames(t *testing.T) {
 	}
 	if got := affectedTasks(tasks, "build failed", ""); len(got) != 2 {
 		t.Fatalf("unnamed failure must involve the whole wave: %+v", got)
+	}
+	scoped := []domain.PlanTask{{ID: "ui", Scope: []string{"packages/@org/ui/src/index.ts"}}, {ID: "doc", Scope: []string{"docs/c++/guide.md"}}, {ID: "other", Scope: []string{"x.go"}}}
+	if got := affectedTasks(scoped, "packages/@org/ui/src/index.ts:3:1 - error TS2304\ndocs/c++/guide.md:4: broken link", ""); len(got) != 2 || got[0].ID != "ui" || got[1].ID != "doc" {
+		t.Fatalf("a path with @ or + was not named: %+v", got)
 	}
 	top := []domain.PlanTask{{ID: "main", Scope: []string{"main.go"}}, {ID: "util", Scope: []string{"pkg/util.go"}}}
 	if got := affectedTasks(top, "./main.go:12: undefined: Helper\n./pkg/util.go:3: note: declared here", ""); len(got) != 2 {
