@@ -102,7 +102,7 @@ func TestAnEarlierWaveWaitsWhenItsCheckFailsOnALaterWavesFile(t *testing.T) {
 // the same, or a passing test file in a progress line, is this wave's own
 // failure to reconcile (21 November 2026).
 func TestOnlyALaterWavesFileNamedAsTheFailureDefersTheCheck(t *testing.T) {
-	plan := domain.PlanRecord{Waves: 2, Tasks: []domain.PlanTask{
+	plan := domain.PlanRecord{Waves: 2, Workspace: "/ws", Tasks: []domain.PlanTask{
 		{ID: "core", Wave: 1, Scope: []string{"pkg/stringutil.go", "tests/test_core.py"}},
 		{ID: "util", Wave: 2, Scope: []string{"pkg/util.go", "tests/test_cli.py", "resumen2.md"}, New: []string{"resumen2.md"}},
 	}}
@@ -118,6 +118,20 @@ func TestOnlyALaterWavesFileNamedAsTheFailureDefersTheCheck(t *testing.T) {
 		{"./pkg/util.go:12: syntax error", true},
 		{"FAILED tests/test_cli.py::test_flag - AssertionError", true},
 		{"wrote resumen2.mdx", false},
+		// A top-level file is named after ./ or the workspace too, and a
+		// file of the same name in another directory is not it (review,
+		// 21 November 2026).
+		{"sh: ./resumen2.md: not found", true},
+		{"python3: can't open file '/ws/resumen2.md': [Errno 2] No such file or directory", true},
+		{"crates/b/pkg/util.go:10: undefined: x", false},
+		{"/home/me/go/pkg/mod/x/pkg/util.go:4: error", false},
+		{"pkg/util.go.orig: error", false},
+		{"  File \"/ws/tests/test_cli.py\", line 7, in test_flag", true},
+		{"../pkg/util.go:3:1: undefined: y", true},
+		// Paths with @ or +, a diff's a/ prefix and a module path name the
+		// file too (review of block 8, 21 November 2026).
+		{"--- a/pkg/util.go", false},
+		{"github.com/org/repo/pkg/util.go:12: undefined: z", true},
 	} {
 		if got := namesLaterWave(plan, 1, tc.output); got != tc.defers {
 			t.Errorf("%q: defers=%v want %v", tc.output, got, tc.defers)
@@ -127,11 +141,19 @@ func TestOnlyALaterWavesFileNamedAsTheFailureDefersTheCheck(t *testing.T) {
 
 func TestAffectedTasksAreThoseTheFailureNames(t *testing.T) {
 	tasks := []domain.PlanTask{{ID: "a", Scope: []string{"pkg/a.go"}}, {ID: "b", Scope: []string{"pkg/b.go"}}}
-	if got := affectedTasks(tasks, "FAIL pkg/b.go:12: want 2"); len(got) != 1 || got[0].ID != "b" {
+	if got := affectedTasks(tasks, "FAIL pkg/b.go:12: want 2", ""); len(got) != 1 || got[0].ID != "b" {
 		t.Fatalf("affected = %+v", got)
 	}
-	if got := affectedTasks(tasks, "build failed"); len(got) != 2 {
+	if got := affectedTasks(tasks, "build failed", ""); len(got) != 2 {
 		t.Fatalf("unnamed failure must involve the whole wave: %+v", got)
+	}
+	scoped := []domain.PlanTask{{ID: "ui", Scope: []string{"packages/@org/ui/src/index.ts"}}, {ID: "doc", Scope: []string{"docs/c++/guide.md"}}, {ID: "other", Scope: []string{"x.go"}}}
+	if got := affectedTasks(scoped, "packages/@org/ui/src/index.ts:3:1 - error TS2304\ndocs/c++/guide.md:4: broken link", ""); len(got) != 2 || got[0].ID != "ui" || got[1].ID != "doc" {
+		t.Fatalf("a path with @ or + was not named: %+v", got)
+	}
+	top := []domain.PlanTask{{ID: "main", Scope: []string{"main.go"}}, {ID: "util", Scope: []string{"pkg/util.go"}}}
+	if got := affectedTasks(top, "./main.go:12: undefined: Helper\n./pkg/util.go:3: note: declared here", ""); len(got) != 2 {
+		t.Fatalf("a top-level file after ./ was not named: %+v", got)
 	}
 }
 

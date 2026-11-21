@@ -87,11 +87,103 @@ func TestDestructiveReasonNamesTheRule(t *testing.T) {
 		{"bash", []string{"-euc", "rm -rf /tmp/x"}, "", RuleDeleteOutside},
 		{"bash", []string{"-eu", "script.sh"}, "", ""},
 		{"bash", []string{"--rcfile", "x", "script.sh"}, "", ""},
+		// Each command of a script is judged on its own: a script that
+		// named the workspace skipped every pattern, so cd into it and
+		// echo x > /etc/hosts ran without a card (review, 21 November 2026).
+		{"sh", []string{"-c", "cd /home/me/repo && echo x > /etc/hosts"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "cd /home/me/repo && mv /etc/hosts x"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "cd /home/me/repo&&rm -rf /etc"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "ls;rm -rf /etc"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "cd /home/me/repo && echo $(rm -rf ~)"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "diff <(rm -rf ~/notes) /dev/null"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x >| /etc/passwd"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x >&/etc/passwd"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "echo x | sudo tee -a /etc/hosts"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "dd if=/dev/zero of=/dev/sda bs=1M"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "cd .. && rm -rf other"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "cd .. && rm -rf repo"}, "", RuleDeleteOutside},
+		{"rm", []string{"-rf", "/home/me/repo"}, "", RuleDeleteOutside},
+		{"rm", []string{"-rf", "/home/me/repo/build"}, "", ""},
+		{"find", []string{"/var/log", "-delete"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "cd / && rm -rf usr"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "cd $HOME; rm -rf notes"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "ls /etc | xargs rm -f"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "find /var/log -name '*.gz' -delete"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "find /etc -name x -exec rm {} \\;"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "rm -rf \"/home/me/other dir\""}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "git -C sub push origin main"}, "", RuleGitPush},
+		{"sh", []string{"-c", "git --no-pager push"}, "", RuleGitPush},
+		{"sh", []string{"-c", "cd /home/me/repo && git push"}, "", RuleGitPush},
+		{"sh", []string{"-c", "cd /home/me/repo && curl -sS -X POST https://api.example"}, "", RuleNetworkWrite},
+		// …and only what a command deletes or writes counts: a path it
+		// reads elsewhere in the script no longer raises the card.
+		{"sh", []string{"-c", "cd /home/me/repo && go test ./... > /home/me/repo/out.txt 2>&1"}, "", ""},
+		{"sh", []string{"-c", "rm -f out.txt; cat /etc/os-release"}, "", ""},
+		{"sh", []string{"-c", "cd /home/me/repo/sub && rm -rf build"}, "", ""},
+		{"sh", []string{"-c", "cd sub && rm -rf ../build"}, "", ""},
+		{"sh", []string{"-c", "find . -name '*.o' -delete; ls -la /usr/local/bin"}, "", ""},
+		{"sh", []string{"-c", "go build -o bin/x ./cmd/x 2>&1 | tee build.log"}, "", ""},
+		{"sh", []string{"-c", "if [ -d build ]; then rm -rf build; fi"}, "", ""},
+		{"sh", []string{"-c", "FOO=1 rm -rf build"}, "", ""},
+		// tee into scratch or a device, mv into the workspace's root, cp's
+		// sources, a search for "rm -rf" and a loop over workspace files
+		// write nothing outside.
+		{"sh", []string{"-c", "go test ./... 2>&1 | tee /tmp/test.log"}, "", ""},
+		{"sh", []string{"-c", "go test ./... | tee /dev/stderr"}, "", ""},
+		{"mv", []string{"build/out.txt", "."}, "", ""},
+		{"sh", []string{"-c", "mv build/out.txt ."}, "", ""},
+		{"sh", []string{"-c", "cp /etc/os-release x"}, "", ""},
+		{"cp", []string{"/etc/os-release", "x"}, "", ""},
+		{"cp", []string{"-t", "/etc", "x"}, "", RuleDeleteOutside},
+		{"sh", []string{"-c", "grep -rn \"rm -rf\" ."}, "", ""},
+		{"sh", []string{"-c", "for f in *.o; do rm -f $f; done"}, "", ""},
+		{"sh", []string{"-c", "tmp=$(mktemp); echo x > $tmp; rm -f $tmp"}, "", ""},
+		{"sh", []string{"-c", "echo x | tee -a /etc/hosts"}, "", RuleDeleteOutside},
+		// False cards the review found in ordinary work (21 November 2026).
+		{"sh", []string{"-c", "go test ./... > \"/tmp/test.log\" 2>&1"}, "", ""},
+		{"sh", []string{"-c", "cd /tmp && cat > t.go <<'EOF'\npackage main\nEOF\ngo run t.go"}, "", ""},
+		{"sh", []string{"-c", "mkdir -p /tmp/x && cd /tmp/x && printf 'package main' > main.go"}, "", ""},
+		{"sh", []string{"-c", "cd ~/repo && go test ./... > out.log"}, "", ""},
+		{"sh", []string{"-c", "cp bin/axlr /tmp/"}, "", ""},
+		{"sh", []string{"-c", "LOG=/tmp/test.log; go test ./... | tee \"$LOG\""}, "", ""},
+		{"sh", []string{"-c", "cd ~/repo && rm -rf build"}, "", RuleDeleteOutside},
 	}
 	for _, tc := range cases {
 		if got := DestructiveReason(ws, tc.program, tc.args, tc.cwd, nil); got != tc.want {
 			t.Fatalf("%s %v (cwd %q): got %q want %q", tc.program, tc.args, tc.cwd, got, tc.want)
 		}
+	}
+	// A workspace in mixed case is compared as written.
+	if got := DestructiveReason("/home/Me/Repo", "sh", []string{"-c", "cd /home/Me/Repo && rm -rf build"}, "", nil); got != "" {
+		t.Fatalf("a mixed-case workspace raised %q", got)
+	}
+	if got := DestructiveReason("/home/Me/Repo", "sh", []string{"-c", "cd /home/Me/Repo && rm -rf /etc"}, "", nil); got != RuleDeleteOutside {
+		t.Fatalf("a delete outside a mixed-case workspace raised %q", got)
+	}
+	// Under an exec sandbox /tmp is the command's own and discarded when
+	// it exits: deleting a plain path there removes nothing outside, so it
+	// asks nothing (wrx80, 21 November 2026: a local model's rm -f
+	// /tmp/cuentas.json stopped a run under full autonomy).
+	for _, tc := range []struct {
+		script     string
+		privateTmp bool
+		want       string
+	}{
+		{"rm -f /tmp/cuentas.json", true, ""},
+		{"rm -f /tmp/cuentas.json", false, RuleDeleteOutside},
+		{"cd /tmp && rm -rf build", true, ""},
+		{"for f in /tmp/a /tmp/b; do rm -f $f; done", true, ""},
+		{"rm -rf /tmp/../etc", true, RuleDeleteOutside},
+		{"rm -rf /tmp", true, RuleDeleteOutside},
+		{"rm -rf /var/tmp/x", true, RuleDeleteOutside},
+		{"rm -f /tmp/a /etc/b", true, RuleDeleteOutside},
+	} {
+		if got := DestructiveReasonIn(ws, tc.privateTmp, "sh", []string{"-c", tc.script}, "", nil); got != tc.want {
+			t.Fatalf("%q (private /tmp %v): got %q want %q", tc.script, tc.privateTmp, got, tc.want)
+		}
+	}
+	if got := DestructiveReasonIn(ws, true, "rm", []string{"-f", "/tmp/x"}, "", nil); got != "" {
+		t.Fatalf("a direct rm in a private /tmp raised %q", got)
 	}
 	// Only the rules in force apply.
 	if got := DestructiveReason(ws, "git", []string{"push"}, "", []string{RuleNetworkWrite}); got != "" {

@@ -24,7 +24,10 @@ type TokenScale struct {
 	// the first request of a resumed local session, numeric logs that Qwen
 	// counts at 1.5 times o200k, went out at 93.5K tokens to a 90K server.
 	Memory TokenScaleMemory
-	asked  map[root.ModelID]bool
+	// loading holds, per model, a channel closed once its saved factor was
+	// read: the read runs outside mu, and a second caller for the same
+	// model waits on it, another model's does not.
+	loading map[root.ModelID]chan struct{}
 }
 
 // TokenScaleMemory keeps a model's factor between launches.
@@ -33,19 +36,33 @@ type TokenScaleMemory interface {
 	SaveTokenFactor(model root.ModelID, factor float64) error
 }
 
-// remembered loads the model's saved factor once per launch; t.mu is held.
+// remembered loads the model's saved factor once per launch, before t.mu
+// is taken. The read waits while a save holds the file; done under t.mu,
+// it held every other model's estimate too (review, 21 November 2026).
 func (t *TokenScale) remembered(model root.ModelID) {
-	if t.Memory == nil || t.asked[model] {
+	if t.Memory == nil {
 		return
 	}
-	if t.asked == nil {
-		t.asked = map[root.ModelID]bool{}
-	}
-	t.asked[model] = true
-	if _, known := t.factors[model]; known {
+	t.mu.Lock()
+	if done, started := t.loading[model]; started {
+		t.mu.Unlock()
+		<-done
 		return
 	}
-	if factor, ok := t.Memory.TokenFactor(model); ok {
+	if t.loading == nil {
+		t.loading = map[root.ModelID]chan struct{}{}
+	}
+	done := make(chan struct{})
+	t.loading[model] = done
+	t.mu.Unlock()
+	defer close(done)
+	factor, ok := t.Memory.TokenFactor(model)
+	if !ok {
+		return
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if _, known := t.factors[model]; !known {
 		if t.factors == nil {
 			t.factors = map[root.ModelID]float64{}
 		}
@@ -64,9 +81,9 @@ func (t *TokenScale) Factor(model root.ModelID) float64 {
 	if t == nil {
 		return 1
 	}
+	t.remembered(model)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.remembered(model)
 	if factor, ok := t.factors[model]; ok {
 		return factor
 	}
@@ -79,8 +96,8 @@ func (t *TokenScale) Observe(model root.ModelID, counted, reported int) {
 		return
 	}
 	ratio := min(max(float64(reported)/float64(counted), tokenScaleMinimum), tokenScaleMaximum)
-	t.mu.Lock()
 	t.remembered(model)
+	t.mu.Lock()
 	if t.factors == nil {
 		t.factors = map[root.ModelID]float64{}
 	}

@@ -139,5 +139,16 @@ func DestructiveReason(policy ToolApprovalPolicyPort, s domain.Session, id domai
 	if asks, ok := policy.(AlwaysAskPort); ok {
 		enabled = asks.AlwaysAsk()
 	}
-	return domain.DestructiveReason(s.Export().Workspace, call.Program, call.Args, call.Cwd, enabled)
+	_, confined := s.Sandbox() // an execution's sandbox gives each command its own /tmp
+	if private, ok := policy.(PrivateTmpPort); ok && private.PrivateTmp() {
+		confined = true
+	}
+	return domain.DestructiveReasonIn(s.Export().Workspace, confined, call.Program, call.Args, call.Cwd, enabled)
+}
+
+// PrivateTmpPort says whether local commands run with a /tmp of their own,
+// discarded when they exit: under the exec sandbox, deleting a plain path
+// there is no deletion outside the workspace.
+type PrivateTmpPort interface {
+	PrivateTmp() bool
 }

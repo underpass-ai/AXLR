@@ -217,7 +217,7 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 		return interrupt(err)
 	}
 	model := sessionModel(*session)
-	messages := session.Messages()
+	messages := markInterrupted(session.Messages(), session.Export().ArchivedDrafts)
 	if _, live := session.Ceremony(); !live {
 		messages = markSteered(messages)
 	}
@@ -482,12 +482,18 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 	}
 	result, meter, err := ask(req, route)
 	if localCap > 0 && fallsBack(ctx, err, meter, draft.Len()) {
-		if retryCap := localContextRetryCap(err, u.Scale.Estimate(model, counted), localCap); retryCap > 0 {
-			// The server's own window sizes the launch's later requests.
+		if retryCap := localContextRetryCap(err, counted, localCap); retryCap > 0 {
+			// The server's own window sizes the launch's later requests,
+			// and its count of the refused request corrects the factor.
+			// The retry is sized by that count, not by the factor: under a
+			// stale saved factor it was compacted to the same factor again,
+			// could not fit, and stopped every turn (review, 21 November
+			// 2026).
+			prompt, window, _ := llamaOverflow(err)
 			if served, ok := u.Windows.(ServedWindowPort); ok {
-				_, window, _ := llamaOverflow(err)
 				served.ObserveServedWindow(model, window)
 			}
+			u.Scale.Observe(model, counted, prompt)
 			if refusal := u.budgetRefusal(ctx, *session); refusal != nil {
 				return interrupt(errors.Join(err, refusal))
 			}
@@ -499,7 +505,9 @@ func (u ContinueTurnUseCase) Execute(ctx context.Context, session *domain.Sessio
 			}
 			var fitErr error
 			req, projection = retryReq, retryProjection
-			req, counted, fitErr = u.compactLocalRequest(req, messages, &projection, projectionBudget(u.Windows, *session), retryCap)
+			asCounted := u
+			asCounted.Scale = nil
+			req, counted, fitErr = asCounted.compactLocalRequest(req, messages, &projection, projectionBudget(u.Windows, *session), retryCap)
 			if fitErr != nil {
 				return interrupt(errors.Join(err, fitErr))
 			}

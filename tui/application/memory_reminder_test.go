@@ -274,6 +274,25 @@ func TestACommandThatOnlyReadsIsNoWorkToRecord(t *testing.T) {
 		{`{"program":"sh","args":["-c","echo x > /dev/ttyUSB0"]}`, false},
 		{`{"program":"sh","args":["-c","echo x > /tmp/../home/me/notes"]}`, false},
 		{`{"program":"sh","args":["-c","printf x > /tmp/a;rm -rf b"]}`, false},
+		// System probes read too; ip, systemctl and journalctl are judged
+		// by their verb (wrx80, 21 November 2026: uptime -p cost a turn).
+		{`{"program":"uptime","args":["-p"]}`, true},
+		{`{"program":"sh","args":["-c","lsblk; pgrep -af llama; ss -ltnp | grep 18083"]}`, true},
+		{`{"program":"hexdump","args":["-C","a.bin"]}`, true},
+		{`{"program":"ip","args":["-br","addr","show"]}`, true},
+		{`{"program":"ip","args":["link","set","eth0","down"]}`, false},
+		{`{"program":"ip","args":["netns","exec","n1","rm","-rf","x"]}`, false},
+		{`{"program":"systemctl","args":["--user","status","axlr-node"]}`, true},
+		{`{"program":"systemctl","args":["--user","restart","axlr-node"]}`, false},
+		{`{"program":"systemctl","args":["--failed"]}`, true},
+		{`{"program":"journalctl","args":["--user","-u","axlr-node","-n","50"]}`, true},
+		{`{"program":"journalctl","args":["--vacuum-time=1d"]}`, false},
+		{`{"program":"yarn","args":["version","--patch"]}`, false},
+		{`{"program":"yarn","args":["version","--new-version=2.0.0"]}`, false},
+		{`{"program":"ss","args":["-K","dst","10.0.0.1"]}`, false},
+		{`{"program":"ss","args":["-ltnp"]}`, true},
+		{`{"program":"sh","args":["-c","diff <(rm -rf build) /dev/null"]}`, false},
+		{`{"program":"sh","args":["-c","diff <(sort a.txt) <(sort b.txt)"]}`, true},
 	} {
 		if got := readOnlyExec(mustObject(t, tc.arguments)); got != tc.readOnly {
 			t.Errorf("%s: read only = %v, want %v", tc.arguments, got, tc.readOnly)

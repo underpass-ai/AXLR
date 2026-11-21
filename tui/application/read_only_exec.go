@@ -19,7 +19,26 @@ var readOnlyPrograms = map[string]bool{
 	"tree": true, "diff": true, "cmp": true, "sha256sum": true, "sha1sum": true, "md5sum": true, "uniq": true, "cut": true,
 	"tr": true, "nl": true, "realpath": true, "readlink": true, "basename": true, "dirname": true, "test": true, "[": true,
 	"true": true, "false": true, "nproc": true, "free": true, "lscpu": true, "ps": true, "sort": true, "jq": true, "read": true,
+	"uptime": true, "w": true, "who": true, "groups": true, "tty": true, "arch": true, "locale": true, "getconf": true,
+	"lsblk": true, "lspci": true, "lsusb": true, "lsmod": true, "pgrep": true, "pidof": true, "ss": true, "netstat": true,
+	"lsof": true, "vmstat": true, "od": true, "hexdump": true, "strings": true, "column": true,
 }
+
+// readOnlySystemctl are the systemctl verbs that only show units.
+var readOnlySystemctl = map[string]bool{
+	"status": true, "show": true, "cat": true, "is-active": true, "is-enabled": true, "is-failed": true, "list-units": true,
+	"list-unit-files": true, "list-timers": true, "list-sockets": true, "list-dependencies": true,
+}
+
+// writingIP are the ip words that change the network or run a command.
+var writingIP = map[string]bool{
+	"add": true, "del": true, "delete": true, "set": true, "change": true, "replace": true, "flush": true, "append": true,
+	"prepend": true, "exec": true, "attach": true, "detach": true,
+}
+
+// versionBump are the options with which `version` writes a new one:
+// yarn version --patch bumps, commits and tags.
+var versionBump = map[string]bool{"--patch": true, "--minor": true, "--major": true, "--premajor": true, "--preminor": true, "--prepatch": true, "--prerelease": true, "--new-version": true}
 
 var readOnlyGit = map[string]bool{"status": true, "log": true, "diff": true, "show": true, "rev-parse": true, "ls-files": true, "blame": true, "describe": true, "grep": true, "shortlog": true}
 
@@ -32,8 +51,9 @@ var shellControl = map[string]bool{"for": true, "while": true, "until": true, "i
 var (
 	shellHarmlessRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*(&[0-9]|/dev/(?:null|stdout|stderr|tty)|/(?:var/)?tmp/[A-Za-z0-9._+@%,=:/-]*)(?:[\s;|&)]|$)`)
 	shellSegment          = regexp.MustCompile(`&&|\|\||[;|&\n]`)
-	// shellSubstitution is an innermost $(…) or `…`: its command runs too.
-	shellSubstitution = regexp.MustCompile("\\$\\(([^()]*)\\)|`([^`]*)`")
+	// shellSubstitution is an innermost $(…), <(…), >(…) or `…`: its
+	// command runs too.
+	shellSubstitution = regexp.MustCompile("[$<>]\\(([^()]*)\\)|`([^`]*)`")
 )
 
 // withoutHarmlessRedirects is script with its harmless redirections replaced
@@ -89,7 +109,7 @@ func readOnlyCommand(base string, args []string) bool {
 				return true
 			}
 		}
-		if args[0] == "version" && (len(args) == 1 || strings.HasPrefix(args[1], "-")) {
+		if args[0] == "version" && (len(args) == 1 || strings.HasPrefix(args[1], "-") && !versionBump[strings.SplitN(args[1], "=", 2)[0]]) {
 			return true
 		}
 	}
@@ -127,6 +147,30 @@ func readOnlyCommand(base string, args []string) bool {
 				return false
 			}
 		}
+	case "ss":
+		// ss -K kills the sockets it lists.
+		return !slices.ContainsFunc(args, func(a string) bool {
+			return a == "--kill" || len(a) > 1 && a[0] == '-' && a[1] != '-' && strings.ContainsRune(a, 'K')
+		})
+	case "ip":
+		return len(args) > 0 && !slices.ContainsFunc(args, func(a string) bool { return writingIP[a] })
+	case "systemctl":
+		// No verb lists the units; the first word that is no option is the verb.
+		for _, arg := range args {
+			if !strings.HasPrefix(arg, "-") {
+				return readOnlySystemctl[arg]
+			}
+		}
+		return true
+	case "journalctl":
+		return !slices.ContainsFunc(args, func(a string) bool {
+			for _, option := range []string{"--vacuum", "--rotate", "--flush", "--sync", "--relinquish-var", "--setup-keys", "--update-catalog"} {
+				if strings.HasPrefix(a, option) {
+					return true
+				}
+			}
+			return false
+		})
 	case "uniq":
 		// uniq IN OUT writes OUT.
 		operands := 0
@@ -148,18 +192,25 @@ func readOnlyScript(script string) bool {
 	// What a command substitution runs counts as a command: echo $(rm -rf
 	// build) is a write (21 November 2026). Innermost first; one left
 	// unparsed is not judged read-only.
-	for {
-		match := shellSubstitution.FindStringSubmatchIndex(script)
-		if match == nil {
-			break
-		}
-		inner := script[max(match[2], match[4]):max(match[3], match[5])]
-		if strings.TrimSpace(inner) != "" && !readOnlyScript(inner) {
+	for depth := 0; depth < 64; depth++ {
+		// Every substitution of a depth in one pass, not a pass per match.
+		writes := false
+		next := shellSubstitution.ReplaceAllStringFunc(script, func(match string) string {
+			groups := shellSubstitution.FindStringSubmatch(match)
+			if inner := groups[1] + groups[2]; !writes && strings.TrimSpace(inner) != "" && !readOnlyScript(inner) {
+				writes = true
+			}
+			return "x"
+		})
+		if writes {
 			return false
 		}
-		script = script[:match[0]] + "x" + script[match[1]:]
+		if next == script {
+			break
+		}
+		script = next
 	}
-	if strings.Contains(script, "$(") || strings.Contains(script, "`") {
+	if strings.Contains(script, "$(") || strings.Contains(script, "<(") || strings.Contains(script, ">(") || strings.Contains(script, "`") {
 		return false
 	}
 	rest := withoutHarmlessRedirects(script)

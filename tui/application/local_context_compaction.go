@@ -212,12 +212,16 @@ var llamaContextOverflow = regexp.MustCompile(`(?i)request \(([0-9]+) tokens\) e
 // wording was read, and such a refusal failed the turn instead of compacting.
 var openAIContextOverflow = regexp.MustCompile(`(?i)maximum context length is ([0-9]+) tokens.{0,40}?(?:you requested|resulted in|request has) ([0-9]+)`)
 
-func localContextRetryCap(err error, estimated, configured int) int {
+// localContextRetryCap is the single retry's cap in the console's own
+// count: three quarters of the server's window, or the configured cap if
+// smaller, scaled by the server's count of the refused request against the
+// console's (counted). 0 when err is no overflow refusal.
+func localContextRetryCap(err error, counted, configured int) int {
 	prompt, window, ok := llamaOverflow(err)
-	if !ok {
+	if !ok || counted <= 0 {
 		return 0
 	}
-	return min(configured, int(float64(estimated)*float64(window/4*3)/float64(prompt)))
+	return int(float64(counted) * float64(min(configured, window/4*3)) / float64(prompt))
 }
 
 // llamaOverflow reads the prompt and the window a local server (llama.cpp,

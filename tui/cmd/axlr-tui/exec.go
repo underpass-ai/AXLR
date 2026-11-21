@@ -51,6 +51,11 @@ func (p execPolicy) AutoApproves(id domain.ToolIdentity) bool {
 	return p.next != nil && p.next.AutoApproves(id)
 }
 
+func (p execPolicy) PrivateTmp() bool {
+	private, ok := p.next.(application.PrivateTmpPort)
+	return ok && private.PrivateTmp()
+}
+
 func (p execPolicy) AlwaysAsk() []string {
 	if always, ok := p.next.(application.AlwaysAskPort); ok {
 		return always.AlwaysAsk()

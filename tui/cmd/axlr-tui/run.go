@@ -561,6 +561,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	if err != nil {
 		return fail(err)
 	}
+	approvalSettings.SetPrivateTmp(sandbox != nil && sandbox.Unavailable == "")
 	executor, err := runtime.New(runtime.Config{Root: workspacePath, Env: compose.ExecEnvironment(getenv), Plugins: manager, Sandbox: sandbox})
 	if err != nil {
 		return fail(err)

@@ -2,10 +2,13 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/underpass-ai/AXLR/adapters/provider"
 	root "github.com/underpass-ai/AXLR/domain"
 )
 
@@ -84,6 +87,50 @@ func TestAFactorThatLeavesNoRoomIsNotTrusted(t *testing.T) {
 	}
 }
 
+// A stale factor that the server then refuses as too long is corrected by
+// the server's own count, and the retry is sized by it: the retry was
+// compacted under the stale factor again, could not fit, and stopped the
+// turn, every turn, since a refusal never corrected the factor (review,
+// 21 November 2026).
+func TestAServerRefusalSizesTheRetryAndCorrectsAStaleFactor(t *testing.T) {
+	session := turnSession(t)
+	if err := session.BeginTurn("Keep the original tests", turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.CompleteAssistant(assistant(root.Text("Decided to keep parser behavior. " + strings.Repeat("detail ", 1700)))); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.BeginTurn(root.Text(strings.Repeat("y", 2000)), turnTools()); err != nil {
+		t.Fatal(err)
+	}
+	model := session.Export().Model
+	memory := &memoryFactors{factors: map[root.ModelID]float64{model: 4}}
+	counter := &byteCounter{}
+	attempts := 0
+	useCase := ContinueTurnUseCase{
+		Store: &memoryStore{}, Successor: &successorStub{}, Tokens: counter,
+		LocalModel: func(root.ModelID) bool { return true },
+		ContextCap: func(root.ModelID) int { return 6000 },
+		Scale:      &TokenScale{Memory: memory},
+		Models: streamFunc(func(_ context.Context, req root.CompletionRequest, _ func(root.Text) error) (root.CompletionResult, error) {
+			attempts++
+			served := RequestTokens(counter, req.Messages[0], req.Tools, req.Messages[1:]) * 3 / 2
+			if served > 7000 {
+				return root.CompletionResult{}, &provider.ProviderError{StatusCode: 400, Message: fmt.Sprintf("request (%d tokens) exceeds the available context size (7000 tokens), try increasing it", served)}
+			}
+			result := assistant("done")
+			result.Usage = &root.TokenUsage{PromptTokens: served}
+			return result, nil
+		}),
+	}
+	if err := useCase.Execute(context.Background(), &session, ignoreEvent); err != nil || attempts != 2 {
+		t.Fatalf("err=%v attempts=%d", err, attempts)
+	}
+	if got := memory.factors[model]; got >= 3 {
+		t.Fatalf("the refusal and the report left the factor at %v", got)
+	}
+}
+
 // blockingFactors is a memory whose save waits until released.
 type blockingFactors struct {
 	saving, release chan struct{}
@@ -120,4 +167,51 @@ func TestSavingAFactorDoesNotBlockAnotherModelsEstimate(t *testing.T) {
 		t.Fatalf("the learned factor is not in force while it saves: %v", got)
 	}
 	close(memory.release)
+}
+
+// sharedLockFactors is a memory whose load and save share one lock, as
+// the file's do: a save holds it across the file lock, the write and the
+// fsync, and a load waits for it.
+type sharedLockFactors struct {
+	mu              sync.Mutex
+	saving, release chan struct{}
+}
+
+func (m *sharedLockFactors) TokenFactor(root.ModelID) (float64, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return 0, false
+}
+
+func (m *sharedLockFactors) SaveTokenFactor(root.ModelID, float64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.saving <- struct{}{}
+	<-m.release
+	return nil
+}
+
+// Loading a model's saved factor does not hold the scale either: the
+// first estimate of a model not loaded yet waited on the file behind a
+// save while holding the scale, and every estimate waited behind it,
+// loaded models' too (review, 21 November 2026).
+func TestLoadingAFactorDoesNotBlockLoadedModels(t *testing.T) {
+	memory := &sharedLockFactors{saving: make(chan struct{}), release: make(chan struct{})}
+	defer close(memory.release)
+	scale := &TokenScale{Memory: memory}
+	scale.Factor("local/other")
+	go scale.Observe("local/qwen", 1000, 1500)
+	<-memory.saving
+	go scale.Estimate("local/new", 1000) // waits on the file
+	time.Sleep(50 * time.Millisecond)
+	done := make(chan int)
+	go func() { done <- scale.Estimate("local/other", 1000) }()
+	select {
+	case got := <-done:
+		if got != 1000 {
+			t.Fatalf("estimate = %d", got)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("a loaded model's estimate waited for another model's load")
+	}
 }
