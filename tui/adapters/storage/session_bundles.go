@@ -96,7 +96,7 @@ func (SessionBundles) Decode(data []byte) (domain.Session, application.SessionBu
 		times = append(times, t)
 	}
 	var instance *domain.SessionInstance
-	if record := bundle.Instance; record != nil {
+	if record := bundle.Instance; record != nil && !contextOnly(record) {
 		decoded := domain.SessionInstance{Instance: record.Instance, Turns: record.Turns, Fence: record.Fence, TurnIndex: record.TurnIndex, ClaimRequests: record.ClaimRequests, ClaimCost: record.ClaimCost, Closed: record.Closed, LastRecord: record.LastRecord, Unavailable: record.Unavailable, Pending: record.Pending, Recalled: record.Recalled, OperationID: record.OperationID, ClaimAttempt: record.ClaimAttempt, ClaimedAt: parseInstant(record.ClaimedAt), LeaseMS: record.LeaseMS, Reported: parseInstant(record.ReportedAt), Reports: record.Reports, ClaimIncarnation: record.Incarnation, RecalledMemories: record.Recalled2, Predecessor: domain.SessionID(record.Predecessor)}
 		if err := decoded.Validate(); err != nil {
 			return domain.Session{}, meta, fmt.Errorf("session instance: %w", err)
@@ -109,4 +109,11 @@ func (SessionBundles) Decode(data []byte) (domain.Session, application.SessionBu
 	}
 	session, err := restoreSnapshot(bundle.Snapshot, false, times, domain.WorkMode(bundle.Mode), nil, instance, notes)
 	return session, meta, err
+}
+
+// contextOnly reports an instance written before KMP 1.0 that held only
+// the session's memory context, which KMP 1.0 does not have: a bundle
+// with one imports without an instance.
+func contextOnly(record *sessionInstance) bool {
+	return record.Instance == "" && record.Unavailable == "" && record.Recalled == "" && record.Predecessor == "" && len(record.Pending) == 0
 }
