@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/underpass-ai/AXLR/tui/domain"
@@ -149,22 +151,63 @@ func syncTail(output string) string {
 }
 
 // namesLaterWave reports a failing output that names a scope file of a task
-// in a wave after this one.
+// in a wave after this one as the failure: a file the later wave creates,
+// named anywhere, or one it changes, named on a line that reports an error
+// or at a line number. A longer name that ends the same (stringutil.go for
+// util.go) or a passing test file in a progress line deferred a real
+// failure of this wave, which then had no reconciliation round (21 November
+// 2026).
 func namesLaterWave(plan domain.PlanRecord, wave int, failing string) bool {
-	var later []domain.PlanTask
-	for _, t := range plan.Tasks {
-		if t.Wave > wave {
-			later = append(later, t)
-		}
-	}
-	for _, t := range later {
-		for _, p := range t.Scope {
-			if strings.Contains(failing, p) || strings.Contains(failing, lastPathElement(p)) {
-				return true
+	for _, line := range strings.Split(failing, "\n") {
+		for _, t := range plan.Tasks {
+			if t.Wave <= wave {
+				continue
+			}
+			for _, p := range t.Scope {
+				named, located := namesPath(line, p)
+				if named && (slices.Contains(t.New, p) || located || failureLine.MatchString(line)) {
+					return true
+				}
 			}
 		}
 	}
 	return false
+}
+
+// failureLine is an output line that reports an error.
+var failureLine = regexp.MustCompile(`(?i)error|fail|undefined|cannot|can't|no such|not found|missing|panic|traceback|exception|assert`)
+
+// namesPath reports whether text names the file p, whole or by its last
+// element, bounded so that a longer name does not count, and whether a
+// name is followed by a line number (p:12).
+func namesPath(text, p string) (named, located bool) {
+	for _, name := range []string{p, lastPathElement(p)} {
+		for from := 0; ; {
+			i := strings.Index(text[from:], name)
+			if i < 0 {
+				break
+			}
+			start, end := from+i, from+i+len(name)
+			from = start + 1
+			if start > 0 && pathByte(text[start-1]) && text[start-1] != '/' || start > 0 && text[start-1] == '/' && name == p {
+				continue
+			}
+			if end < len(text) && (pathByte(text[end]) && text[end] != '.' || text[end] == '.' && end+1 < len(text) && alphanumeric(text[end+1])) {
+				continue
+			}
+			named = true
+			if end+1 < len(text) && text[end] == ':' && text[end+1] >= '0' && text[end+1] <= '9' {
+				return true, true
+			}
+		}
+	}
+	return named, false
+}
+
+func pathByte(b byte) bool { return alphanumeric(b) || b == '.' || b == '_' || b == '-' || b == '/' }
+
+func alphanumeric(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
 }
 
 // affectedTasks are the wave's tasks whose scope files the failing output
@@ -173,7 +216,7 @@ func affectedTasks(tasks []domain.PlanTask, failing string) []domain.PlanTask {
 	var named []domain.PlanTask
 	for _, t := range tasks {
 		for _, p := range t.Scope {
-			if strings.Contains(failing, p) || strings.Contains(failing, lastPathElement(p)) {
+			if mentioned, _ := namesPath(failing, p); mentioned {
 				named = append(named, t)
 				break
 			}

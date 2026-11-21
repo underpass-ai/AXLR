@@ -38,7 +38,10 @@ func WithToolProfile(env []string) []string {
 // launch, the engine runs as it from the start and sees the grant issued a
 // moment later on its next call; until 20 November 2026 it ran as the store's
 // trusted host, which holds no grant, so a fresh install's first console had
-// no session instance until it was restarted.
+// no session instance until it was restarted. An identity set but empty (an
+// env_from naming an unset variable) is replaced, not joined by a second:
+// the plugin manager refuses an entry that sets a key twice, and the console
+// exited at every launch (21 November 2026).
 func WithWorkIdentity(configPath string, r plugins.Registration) []string {
 	values := environment(r.Env)
 	if r.Manifest.URL != "" || values["MADE_MCP_BACKEND"] == "grpc" || filepath.Base(r.Manifest.Command) != embeddedLauncher || values[hostIdentityKey] != "" {
@@ -48,5 +51,5 @@ func WithWorkIdentity(configPath string, r plugins.Registration) []string {
 	if work == "" {
 		return r.Env
 	}
-	return append(append([]string(nil), r.Env...), hostIdentityKey+"="+work)
+	return append(without(r.Env, hostIdentityKey), hostIdentityKey+"="+work)
 }
