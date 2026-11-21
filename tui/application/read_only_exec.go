@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	root "github.com/underpass-ai/AXLR/domain"
@@ -24,12 +25,30 @@ var readOnlyGit = map[string]bool{"status": true, "log": true, "diff": true, "sh
 
 var shellControl = map[string]bool{"for": true, "while": true, "until": true, "if": true, "elif": true, "case": true, "esac": true, "done": true, "fi": true, "in": true, "{": true, "}": true, "(": true, ")": true}
 
-// shellWrite is an output redirection that is not to a discard device or the
-// temporary directory: what is left after those are removed.
+// shellHarmlessRedirect is an output redirection to a descriptor, a whole
+// discard device or a plain /tmp path (letters, digits and ._-+@%,=:/),
+// ended by a blank, a separator or the end; harmlessPath refuses a ".."
+// segment. /dev/ttyUSB0 and /tmp/../home/me/notes are writes.
 var (
-	shellHarmlessRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*(?:&[0-9]|/dev/(?:null|stdout|stderr|tty)|/(?:var/)?tmp/[^\s;|&)<>]*)`)
+	shellHarmlessRedirect = regexp.MustCompile(`(?:[0-9]*|&)>>?\s*(&[0-9]|/dev/(?:null|stdout|stderr|tty)|/(?:var/)?tmp/[A-Za-z0-9._+@%,=:/-]*)(?:[\s;|&)]|$)`)
 	shellSegment          = regexp.MustCompile(`&&|\|\||[;|&\n]`)
+	// shellSubstitution is an innermost $(…) or `…`: its command runs too.
+	shellSubstitution = regexp.MustCompile("\\$\\(([^()]*)\\)|`([^`]*)`")
 )
+
+// withoutHarmlessRedirects is script with its harmless redirections replaced
+// by a blank, keeping the separator that ended each.
+func withoutHarmlessRedirects(script string) string {
+	return shellHarmlessRedirect.ReplaceAllStringFunc(script, func(match string) string {
+		target := shellHarmlessRedirect.FindStringSubmatch(match)[1]
+		for _, segment := range strings.Split(target, "/") {
+			if segment == ".." {
+				return match
+			}
+		}
+		return " " + match[strings.Index(match, target)+len(target):]
+	})
+}
 
 // readOnlyExec reports a local_exec that only reads or prints: cat, ls, a
 // --version probe, git status, or a shell string made of such commands. The
@@ -60,11 +79,18 @@ func readOnlyExec(arguments root.JSONValue) bool {
 }
 
 func readOnlyCommand(base string, args []string) bool {
+	// A probe: --version, -V or --help among one or two arguments, or the
+	// word version alone or before an option (npm version, kubectl version
+	// --client). npm version patch, rm -rf version and git tag version
+	// write (21 November 2026).
 	if len(args) >= 1 && len(args) <= 2 {
 		for _, arg := range args {
-			if arg == "--version" || arg == "-V" || arg == "version" || arg == "--help" {
+			if arg == "--version" || arg == "-V" || arg == "--help" {
 				return true
 			}
+		}
+		if args[0] == "version" && (len(args) == 1 || strings.HasPrefix(args[1], "-")) {
+			return true
 		}
 	}
 	switch base {
@@ -74,7 +100,7 @@ func readOnlyCommand(base string, args []string) bool {
 		return len(args) == 0
 	case "find":
 		for _, arg := range args {
-			if arg == "-delete" || strings.HasPrefix(arg, "-exec") || strings.HasPrefix(arg, "-ok") || strings.HasPrefix(arg, "-fprint") {
+			if arg == "-delete" || arg == "-fls" || strings.HasPrefix(arg, "-exec") || strings.HasPrefix(arg, "-ok") || strings.HasPrefix(arg, "-fprint") {
 				return false
 			}
 		}
@@ -85,17 +111,32 @@ func readOnlyCommand(base string, args []string) bool {
 			case arg == "-C" || arg == "-c" || arg == "--git-dir" || arg == "--work-tree":
 				i++ // the option's value
 			case !strings.HasPrefix(arg, "-"):
-				return readOnlyGit[arg]
+				return readOnlyGit[arg] && !slices.ContainsFunc(args[i+1:], func(a string) bool { return strings.HasPrefix(a, "--output") })
 			}
 		}
 		return false
 	case "go":
-		return len(args) > 0 && (args[0] == "version" || args[0] == "env" || args[0] == "list")
-	case "sort":
+		if len(args) > 0 && args[0] == "env" {
+			return !slices.ContainsFunc(args[1:], func(a string) bool { return a == "-w" || a == "-u" })
+		}
+		return len(args) > 0 && (args[0] == "version" || args[0] == "list")
+	case "sort", "tree":
 		for _, arg := range args {
-			if arg == "-o" || strings.HasPrefix(arg, "--output") {
+			// -o FILE, alone or in a cluster such as sort -uo.
+			if strings.HasPrefix(arg, "--output") || len(arg) > 1 && arg[0] == '-' && arg[1] != '-' && strings.ContainsRune(arg, 'o') {
 				return false
 			}
+		}
+	case "uniq":
+		// uniq IN OUT writes OUT.
+		operands := 0
+		for _, arg := range args {
+			if !strings.HasPrefix(arg, "-") {
+				operands++
+			}
+		}
+		if operands > 1 {
+			return false
 		}
 	}
 	return readOnlyPrograms[base]
@@ -104,7 +145,24 @@ func readOnlyCommand(base string, args []string) bool {
 // readOnlyScript reports a shell string whose every command only reads or
 // prints and that writes no file outside the discard devices and /tmp.
 func readOnlyScript(script string) bool {
-	rest := shellHarmlessRedirect.ReplaceAllString(script, " ")
+	// What a command substitution runs counts as a command: echo $(rm -rf
+	// build) is a write (21 November 2026). Innermost first; one left
+	// unparsed is not judged read-only.
+	for {
+		match := shellSubstitution.FindStringSubmatchIndex(script)
+		if match == nil {
+			break
+		}
+		inner := script[max(match[2], match[4]):max(match[3], match[5])]
+		if strings.TrimSpace(inner) != "" && !readOnlyScript(inner) {
+			return false
+		}
+		script = script[:match[0]] + "x" + script[match[1]:]
+	}
+	if strings.Contains(script, "$(") || strings.Contains(script, "`") {
+		return false
+	}
+	rest := withoutHarmlessRedirects(script)
 	if strings.Contains(rest, ">") || strings.Contains(rest, "<<") {
 		return false
 	}
@@ -112,7 +170,20 @@ func readOnlyScript(script string) bool {
 	for _, segment := range shellSegment.Split(rest, -1) {
 		words := strings.Fields(segment)
 		for len(words) > 0 && (shellControl[words[0]] || words[0] == "do" || words[0] == "then" || words[0] == "else" || strings.Contains(words[0], "=") && !strings.HasPrefix(words[0], "=")) {
-			if words[0] == "for" || words[0] == "case" || words[0] == "in" {
+			if words[0] == "case" {
+				// case WORD in PATTERN) COMMAND: the arm's command runs.
+				in := slices.Index(words, "in")
+				if in < 0 {
+					words = nil
+					break
+				}
+				words = words[in+1:]
+				if len(words) > 0 && strings.HasSuffix(words[0], ")") {
+					words = words[1:]
+				}
+				continue
+			}
+			if words[0] == "for" || words[0] == "in" {
 				words = nil // the loop's word list, not a command
 				break
 			}

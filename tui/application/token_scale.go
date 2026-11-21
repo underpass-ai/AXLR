@@ -13,7 +13,11 @@ import (
 // by the factor, which starts at 1 and follows the reports with an
 // exponential average, clamped between 1 and 4.
 type TokenScale struct {
-	mu      sync.Mutex
+	mu sync.Mutex
+	// saving orders saves, which run outside mu: a save takes a file lock
+	// across processes, writes and syncs, and another model's estimate,
+	// another session's in axlr-serve, does not wait for it.
+	saving  sync.Mutex
 	factors map[root.ModelID]float64
 	// Memory keeps each model's factor across launches; nil keeps it for the
 	// launch only. Before 20 November 2026 every launch started at 1, and
@@ -76,7 +80,6 @@ func (t *TokenScale) Observe(model root.ModelID, counted, reported int) {
 	}
 	ratio := min(max(float64(reported)/float64(counted), tokenScaleMinimum), tokenScaleMaximum)
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	t.remembered(model)
 	if t.factors == nil {
 		t.factors = map[root.ModelID]float64{}
@@ -85,10 +88,17 @@ func (t *TokenScale) Observe(model root.ModelID, counted, reported int) {
 		ratio = current*(1-tokenScaleWeight) + ratio*tokenScaleWeight
 	}
 	t.factors[model] = ratio
-	if t.Memory != nil {
-		// A factor that cannot be saved is learned again next launch.
-		_ = t.Memory.SaveTokenFactor(model, ratio)
+	t.mu.Unlock()
+	if t.Memory == nil {
+		return
 	}
+	t.saving.Lock()
+	defer t.saving.Unlock()
+	t.mu.Lock()
+	latest := t.factors[model] // a later report may have moved it meanwhile
+	t.mu.Unlock()
+	// A factor that cannot be saved is learned again next launch.
+	_ = t.Memory.SaveTokenFactor(model, latest)
 }
 
 // Estimate is the provider's likely count for a counted request.

@@ -73,6 +73,12 @@ func strictJSON(data []byte, dst any) error {
 	return json.Unmarshal(data, dst)
 }
 
+// ValidateJSONText refuses JSON text whose strings encoding/json would
+// silently change: invalid UTF-8 or an unpaired surrogate escape, which the
+// decoder replaces with U+FFFD. The console checks tool arguments with it
+// before decoding them, since it re-encodes what it sends.
+func ValidateJSONText(data []byte) error { return validateJSONText(data) }
+
 // validateJSONText prevents encoding/json from silently replacing malformed Unicode.
 func validateJSONText(data []byte) error {
 	if !utf8.Valid(data) {
