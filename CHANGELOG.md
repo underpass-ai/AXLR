@@ -2,6 +2,15 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.13 — 2026-11-21
+
+### Fixed
+- A shell command with a destructive step keeps its approval card when it also names the workspace: `cd <workspace> && echo x > /etc/hosts` asked nothing under autonomy. Each command of the string, its substitutions and subshells included, is now judged on its own, and a path a command only reads no longer raises a card (#256).
+- After a local server refuses a request as too long, its own count corrects the token factor and sizes the retry, so a stale saved factor no longer stops every turn (#256).
+- A plan's red check names a scope file written as `./main.go`, `../pkg/util.go` or the workspace's absolute path, and no longer takes a file of the same name in another directory for it (#256).
+- The model is told what a reply cut short with Esc, or by a failure, had shown, so it no longer answers as if it had never written it (#256).
+- The memory reminder no longer follows system probes such as `uptime`, `lsblk`, `ss`, `systemctl status` or `journalctl -u` (#256).
+
 ## 0.20.12 — 2026-11-21
 
 ### Fixed
