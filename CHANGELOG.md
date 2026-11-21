@@ -2,6 +2,17 @@
 
 Every release of AXLR, newest first. Tags follow [semantic versioning](https://semver.org/) at 0.x: a minor version may change behaviour, and each such change is listed under **Changed (breaking)** with what to do. The [deprecation policy](docs/product.md#deprecation-policy) says how much notice a change gets. GitHub writes each release's notes from its merged pull requests; this file is the curated record.
 
+## 0.20.10 — 2026-11-21
+
+### Changed
+- The image bundles KMP v0.27.1, whose undated labels inherit their entry's clock (#248).
+
+### Fixed
+- A folded local turn keeps its latest step and what the person wrote mid-turn whole (#249).
+- A tool argument key repeated with the same value is admitted once instead of refusing the call (#249).
+- The work grant names the handoff of a claim an earlier run left open, so MADE records it (#249).
+- A session whose workspace's KMP store changed, after a git init for instance, opens a memory context in the new store (#249).
+
 ## 0.20.9 — 2026-11-20
 
 ### Fixed
