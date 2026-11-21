@@ -38,12 +38,12 @@ func TestCompareReadsRelateBetweenAbouts(t *testing.T) {
 			"facts":      []any{map[string]any{"about": "project:A", "ref": "project:A:entry:decision:x"}, map[string]any{"about": "project:A", "ref": "r2"}, map[string]any{"about": "ws:1", "ref": "r3"}},
 		}), nil
 	})}
-	result, err := m.Compare(context.Background(), application.CompareRequest{About: "project:A", Others: []string{"ws:1", "project:A", "project:B"}, ContextID: "ctx-1"})
+	result, err := m.Compare(context.Background(), application.CompareRequest{About: "project:A", Others: []string{"ws:1", "project:A", "project:B"}})
 	if err != nil {
 		t.Fatal(err)
 	}
 	dimensions := request["dimensions"].(map[string]any)
-	if request["about"] != "project:A" || request["context_id"] != "ctx-1" || dimensions["scope"] != "abouts" || len(dimensions["abouts"].([]any)) != 3 {
+	if request["about"] != "project:A" || request["context_id"] != nil || dimensions["scope"] != "abouts" || len(dimensions["abouts"].([]any)) != 3 {
 		t.Fatalf("request %+v", request)
 	}
 	if strings.Join(result.Abouts, ",") != "project:A,ws:1,project:B" || len(result.Declared) != 1 || len(result.Proposals) != 1 || result.Facts["project:A"] != 2 || result.Facts["ws:1"] != 1 {
@@ -73,7 +73,7 @@ func TestForgetSupersedesTheEntryAndCommitsTheReview(t *testing.T) {
 		}
 		switch len(tools) {
 		case 1:
-			if id.Plugin.ToolName != "kmp_inspect" || request["about"] != "project:Repo-B" || request["ref"] != ref || request["context_id"] != "ctx-1" {
+			if id.Plugin.ToolName != "kmp_inspect" || request["about"] != "project:Repo-B" || request["ref"] != ref || request["context_id"] != nil {
 				t.Fatalf("inspect %+v", request)
 			}
 			return packet(t, map[string]any{"object": map[string]any{"kind": "decision", "text": "Las fechas en UTC.", "metadata": map[string]any{"summary_en": "Dates in UTC."}}}), nil
@@ -87,7 +87,7 @@ func TestForgetSupersedesTheEntryAndCommitsTheReview(t *testing.T) {
 			return packet(t, map[string]any{"accepted": true, "status": "committed"}), nil
 		}
 	})}
-	receipt, err := m.Forget(context.Background(), application.ForgetRequest{Ref: ref, Why: "ya no aplica", Command: "/memory forget " + ref + " ya no aplica", ContextID: "ctx-1", Labels: map[string][]string{"session": {"s1"}}})
+	receipt, err := m.Forget(context.Background(), application.ForgetRequest{Ref: ref, Why: "ya no aplica", Command: "/memory forget " + ref + " ya no aplica", Labels: map[string][]string{"session": {"s1"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

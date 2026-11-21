@@ -33,14 +33,12 @@ func recallCeremony(t *testing.T, recall *recallStub) *SessionCeremony {
 	t.Helper()
 	c, _, _, _ := sessionCeremonyFor(t, nil)
 	c.Engine = nil
-	identity := identityFor(&guideStub{}, &agentsStub{agents: map[string]string{}})
-	identity.Recall, identity.UserAbout = recall, "user:tirso"
-	c.Identity = identity
+	c.Identity = &MemoryIdentity{Recall: recall, UserAbout: "user:tirso"}
 	return c
 }
 
-// The first prompt wakes the project's about and the person's, in the
-// session's context, and the note says what each holds; nothing recorded
+// The first prompt wakes the project's about and the person's, and the
+// note says what each holds; nothing recorded
 // is one line (decision D6).
 func TestRecallNoteWakesTheProjectAndThePersonAtTheFirstPrompt(t *testing.T) {
 	recall := &recallStub{texts: map[string]string{"user:tirso": "- prefers commits in English"}}
@@ -52,11 +50,11 @@ func TestRecallNoteWakesTheProjectAndThePersonAtTheFirstPrompt(t *testing.T) {
 	if note != want {
 		t.Fatalf("note %q", note)
 	}
-	if len(recall.requests) != 2 || recall.requests[0].About != project || recall.requests[0].ContextID != "ctx_1" || recall.requests[0].Intent != "añade tests al parser" || recall.requests[1].About != "user:tirso" {
+	if len(recall.requests) != 2 || recall.requests[0].About != project || recall.requests[0].Intent != "añade tests al parser" || recall.requests[1].About != "user:tirso" {
 		t.Fatalf("requests %+v", recall.requests)
 	}
 	instance, _ := s.Instance()
-	if instance.Recalled != "añade tests al parser" || instance.MemoryContext != "ctx_1" {
+	if instance.Recalled != "añade tests al parser" {
 		t.Fatalf("instance %+v", instance)
 	}
 	// The next prompt on the same topic gets no note; another topic does.
@@ -89,12 +87,12 @@ func TestRecallNoteWakesTheSessionsOwnAboutWhenResumed(t *testing.T) {
 	if err := s.CompleteAssistant(assistant("hecho")); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.SetInstance(domain.SessionInstance{MemoryContext: "ctx_old", Recalled: "primero"}); err != nil {
+	if err := s.SetInstance(domain.SessionInstance{Recalled: "primero"}); err != nil {
 		t.Fatal(err)
 	}
 	id := string(s.ID())
 	note := c.Recall(context.Background(), &s, "primero")
-	if !strings.Contains(note, "ws:"+id+": nothing recorded yet.") || len(recall.requests) != 3 || recall.requests[2].About != "ws:"+id || recall.requests[2].ContextID != "ctx_old" {
+	if !strings.Contains(note, "ws:"+id+": nothing recorded yet.") || len(recall.requests) != 3 || recall.requests[2].About != "ws:"+id {
 		t.Fatalf("note %q requests %+v", note, recall.requests)
 	}
 	if note := c.Recall(context.Background(), &s, "primero"); note != "" || len(recall.requests) != 3 {

@@ -751,9 +751,9 @@ func run(ctx context.Context, args []string, getenv func(string) string, launch 
 	}
 	var kmpMemory *ceremonyhost.Memory
 	if hasKMP {
-		memory := ceremonyhost.Memory{Tools: runner, SyncGuide: kmp.SyncGuide}
+		memory := ceremonyhost.Memory{Tools: runner}
 		kmpMemory = &memory
-		sessionCeremony.Identity = &application.MemoryIdentity{Store: kmp.Selection.Path, RegistrationKey: "axlr:" + installID, Agents: storage.NewMemoryAgentStore(filepath.Join(stateBase, "axlr", "kmp-agents.json")), Guide: memory, Recall: memory, UserAbout: userAbout(getenv)}
+		sessionCeremony.Identity = &application.MemoryIdentity{Recall: memory, UserAbout: userAbout(getenv)}
 	}
 	if ceremonies != nil {
 		sessionCeremony.Engine = ceremonies.Engine

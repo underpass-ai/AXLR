@@ -152,7 +152,7 @@ func TestBoundSessionWakesItsPreviousTaskAndNotThePerson(t *testing.T) {
 // about: the person's memory is not the bot's to write.
 func TestBoundSessionSettlesAPreferenceInItsOwnAbout(t *testing.T) {
 	c, _, _, _ := sessionCeremonyFor(t, &fakeEngine{})
-	c.Identity = &MemoryIdentity{Store: "/s", RegistrationKey: "k", Agents: &agentsStub{agents: map[string]string{}}, Guide: &guideStub{}, UserAbout: "user:tirso"}
+	c.Identity = &MemoryIdentity{UserAbout: "user:tirso"}
 	c.Judge = &scriptedJudge{gate: 0.9, sentence: "Las fechas del parser se guardan en UTC, como pide la RFC 3339", sentenceP: 0.8, kind: "preference", replaces: "none", replacesP: 0.9}
 	s := turnSession(t)
 	policy, err := domain.NewExecutionPolicy(domain.PolicyActWithinPolicy, nil, nil)
@@ -296,18 +296,13 @@ func TestTeamMemberCannotWriteATeammatesAboutThroughTheEngine(t *testing.T) {
 	}
 }
 
-// A member's first prompt wakes its own about and the team's, and each
-// member registers its own agent in the team's store, so the store says
-// which bot wrote a memory.
-func TestTeamMemberWakesTheTeamAndRegistersItsOwnAgent(t *testing.T) {
+// A member's first prompt wakes its own about and the team's.
+func TestTeamMemberWakesTheTeam(t *testing.T) {
 	s := teamSession(t, false)
 	state := s.Export()
 	name := filepath.Base(string(state.Workspace))
 	recall := &recallStub{texts: map[string]string{"project:qa": "- the weekly plan covers kmp and made"}}
 	c := recallCeremony(t, recall)
-	guide, agents := &guideStub{}, &agentsStub{agents: map[string]string{}}
-	c.Identity = identityFor(guide, agents)
-	c.Identity.Recall = recall
 	c.Store = &listingStore{}
 	note := c.Recall(context.Background(), &s, "plan the week")
 	var abouts []string
@@ -319,19 +314,5 @@ func TestTeamMemberWakesTheTeamAndRegistersItsOwnAgent(t *testing.T) {
 	}
 	if !strings.Contains(note, "Memory of project:qa:\n- the weekly plan covers kmp and made") {
 		t.Fatalf("note %q", note)
-	}
-	key := "axlr:install-1:" + name
-	if guide.calls[0] != "register "+key || agents.agents["/repo/.kernel#"+name] != "agent_"+key {
-		t.Fatalf("calls %v agents %v", guide.calls, agents.agents)
-	}
-	if instance, _ := s.Instance(); instance.MemoryAgent != domain.MemoryAgentID("agent_"+key) {
-		t.Fatalf("instance %+v", instance)
-	}
-	// A bot with no team keeps the store's one agent.
-	alone := boundSession(t, false)
-	guide.calls = nil
-	c.Recall(context.Background(), &alone, "plan the week")
-	if guide.calls[0] != "register axlr:install-1" || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" {
-		t.Fatalf("calls %v agents %v", guide.calls, agents.agents)
 	}
 }

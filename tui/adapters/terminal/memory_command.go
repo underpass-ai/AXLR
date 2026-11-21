@@ -58,15 +58,6 @@ func (m AppModel) sessionAbout() string {
 	return m.deps.About
 }
 
-// sessionContext is the session's memory context, "" before the first
-// prompt.
-func (m AppModel) sessionContext() domain.MemoryContextID {
-	if instance := m.Header.State.Instance; instance != nil {
-		return instance.MemoryContext
-	}
-	return ""
-}
-
 // saveMemory exports the project about as the bundle.
 func (m AppModel) saveMemory() (tea.Model, tea.Cmd) {
 	if m.deps.MemoryBundle == nil {
@@ -122,7 +113,7 @@ func (m AppModel) compareMemory(others []string) (tea.Model, tea.Cmd) {
 	m.Info.Viewport.GotoTop()
 	m.overlay = "memory"
 	compare := m.deps.MemoryCompare
-	request := application.CompareRequest{About: about, Others: others, ContextID: m.sessionContext()}
+	request := application.CompareRequest{About: about, Others: others}
 	var result application.CompareResult
 	cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {
 		var err error
@@ -153,7 +144,7 @@ func (m AppModel) forgetMemory(ref, why, command string) (tea.Model, tea.Cmd) {
 	m.Status.Error = ""
 	forget := m.deps.MemoryForget
 	state := m.Header.State
-	request := application.ForgetRequest{Ref: ref, Why: why, Command: command, At: time.Now(), ContextID: m.sessionContext(),
+	request := application.ForgetRequest{Ref: ref, Why: why, Command: command, At: time.Now(),
 		Labels: map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "event": {"forget"}}}
 	var receipt application.ForgetReceipt
 	cmd := m.BeginOperation(func(ctx context.Context, _ *domain.Session, _ func(application.Event) error) error {

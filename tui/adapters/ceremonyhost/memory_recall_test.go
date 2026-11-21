@@ -38,11 +38,11 @@ func TestRecallWakeTreatsAMissingAboutAsNothingRecorded(t *testing.T) {
 	m := recallAnswers(t, &requests, &tools,
 		map[string]any{"error": map[string]any{"code": "not_found", "message": "embedded kernel wake failed for `user:nobody`: node 'user:nobody' not found"}},
 		map[string]any{"wake": map[string]any{"current_state": []any{"project:AXLR:entry:decision:x (decision): keep dates in UTC"}, "open_loops": []any{}, "next_actions": []any{"add the parser tests"}}})
-	got, err := m.Recall(context.Background(), application.RecallRequest{About: "user:nobody", ContextID: "ctx_1", Intent: "resume the parser work"})
+	got, err := m.Recall(context.Background(), application.RecallRequest{About: "user:nobody", Intent: "resume the parser work"})
 	if err != nil || !got.Empty || got.Mode != application.RecallWake {
 		t.Fatalf("%+v %v", got, err)
 	}
-	if tools[0] != "kmp_wake" || requests[0]["context_id"] != "ctx_1" || requests[0]["intent"] != "resume the parser work" || requests[0]["about"] != "user:nobody" {
+	if tools[0] != "kmp_wake" || requests[0]["context_id"] != nil || requests[0]["intent"] != "resume the parser work" || requests[0]["about"] != "user:nobody" {
 		t.Fatalf("%v %+v", tools, requests[0])
 	}
 	got, err = m.Recall(context.Background(), application.RecallRequest{Mode: application.RecallWake, About: "project:AXLR"})
@@ -50,7 +50,7 @@ func TestRecallWakeTreatsAMissingAboutAsNothingRecorded(t *testing.T) {
 		t.Fatalf("%+v %v", got, err)
 	}
 	if _, has := requests[1]["context_id"]; has {
-		t.Fatalf("no context sent for none: %+v", requests[1])
+		t.Fatalf("KMP 1.0 takes no context: %+v", requests[1])
 	}
 }
 
@@ -64,11 +64,11 @@ func TestRecallAskCompactsTheEvidence(t *testing.T) {
 		"warnings":   []any{"open-ended"},
 		"projection": map[string]any{"page": map[string]any{"has_more": true}},
 	})
-	got, err := m.Recall(context.Background(), application.RecallRequest{Mode: application.RecallAsk, About: "ws:s", Intent: "what did the session do", Since: "2026-10-01T00:00:00Z", ContextID: "ctx_1"})
+	got, err := m.Recall(context.Background(), application.RecallRequest{Mode: application.RecallAsk, About: "ws:s", Intent: "what did the session do", Since: "2026-10-01T00:00:00Z"})
 	if err != nil || got.Empty || tools[0] != "kmp_ask" {
 		t.Fatalf("%+v %v %v", got, err, tools)
 	}
-	if requests[0]["question"] != "what did the session do" || requests[0]["context_id"] != "ctx_1" || requests[0]["interval"].(map[string]any)["start"] != "2026-10-01T00:00:00Z" || requests[0]["budget"].(map[string]any)["max_bytes"] != float64(recallAskBytes) {
+	if requests[0]["question"] != "what did the session do" || requests[0]["context_id"] != nil || requests[0]["interval"].(map[string]any)["start"] != "2026-10-01T00:00:00Z" || requests[0]["budget"].(map[string]any)["max_bytes"] != float64(recallAskBytes) {
 		t.Fatalf("%+v", requests[0])
 	}
 	evidence := got.Answer["evidence"].([]map[string]any)

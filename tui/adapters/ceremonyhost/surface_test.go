@@ -13,26 +13,22 @@ func ref(plugin, tool string) root.PluginRef {
 	return root.PluginRef{PluginID: root.PluginID(plugin), ToolName: root.PluginToolName(tool)}
 }
 
-// KMP's guide and MADE's write verbs are the console's; KMP's calls carry
-// the session's context; the memory write is marked; reads of MADE and
-// the tools of other plugins are the model's.
+// MADE's write verbs are the console's; KMP 1.0's guide is a read-only
+// topic lookup the model may call, and no KMP call carries a context; the
+// memory write is marked; reads of MADE and the tools of other plugins are
+// the model's.
 func TestSurfaceKeepsTheEnginesProtocolsToTheConsole(t *testing.T) {
-	guide := Surface(ref("kmp", "kmp_guide"))
-	if guide.Role != domain.PluginRoleMemory || guide.Hidden == "" || guide.ContextArgument != "" || guide.MemoryWrite {
+	if guide := Surface(ref("kmp", "kmp_guide")); guide != (domain.ToolSurface{Role: domain.PluginRoleMemory}) {
 		t.Fatalf("kmp_guide %+v", guide)
 	}
-	write := Surface(ref("kmp", "kmp_write_memory"))
-	if write.Hidden != "" || write.ContextArgument != "context_id" || !write.MemoryWrite {
+	if write := Surface(ref("kmp", "kmp_write_memory")); write != (domain.ToolSurface{Role: domain.PluginRoleMemory, MemoryWrite: true}) {
 		t.Fatalf("kmp_write_memory %+v", write)
 	}
-	if ask := Surface(ref("kmp", "kmp_ask")); ask.Hidden != "" || ask.ContextArgument != "context_id" || ask.MemoryWrite {
+	if ask := Surface(ref("kmp", "kmp_ask")); ask != (domain.ToolSurface{Role: domain.PluginRoleMemory}) {
 		t.Fatalf("kmp_ask %+v", ask)
 	}
-	if !strings.Contains(guide.Hidden, "axlr_recall") || !strings.Contains(guide.Hidden, "without context_id") {
-		t.Fatalf("kmp_guide refusal: %s", guide.Hidden)
-	}
 	for _, verb := range []string{"made_start_published_ceremony", "made_start_ceremony", "made_claim_ceremony_step", "made_complete_ceremony_step", "made_apply_ceremony_transition", "made_cancel_ceremony", "made_pause_ceremony", "made_resume_ceremony", "made_run_ceremony", "made_run_ceremony_step", "made_approve_ceremony_guard", "made_defer_ceremony_guard", "made_issue_authorization_grant", "made_revoke_authorization_grant", "made_publish_ceremony_definition", "made_register_agent", "made_unregister_agent", "made_delete_contract", "made_begin_artifact_upload", "made_put_artifact_chunk", "made_report_ceremony_agent_status", "made_renew_ceremony_step_lease", "made_record_ceremony_host_handoff", "made_orchestrate", "made_deliberate", "made_create_council", "made_design_agentic_system", "made_lease_council_events", "made_pull_ceremony_events", "made_request_ceremony_intervention"} {
-		if s := Surface(ref("made", verb)); s.Role != domain.PluginRoleOrchestrator || s.Hidden == "" || s.ContextArgument != "" {
+		if s := Surface(ref("made", verb)); s.Role != domain.PluginRoleOrchestrator || s.Hidden == "" {
 			t.Fatalf("%s %+v", verb, s)
 		}
 	}

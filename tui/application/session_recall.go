@@ -33,11 +33,10 @@ const recalledIntentBytes = 600
 
 // Recall wakes memory for the prompt the session is about to begin and
 // returns the note to append to it, or "" when the prompt continues the
-// topic last woken. It opens the session's KMP context first, so the wake
-// runs in it. The note is bounded as a ceremony's recall is (2 KiB; 1 KiB
-// under the compact profile), shared by the abouts in order: the project's,
-// the team's for a member of one, the person's, and the session's own when
-// the session is resumed.
+// topic last woken. The note is bounded as a ceremony's recall is (2 KiB;
+// 1 KiB under the compact profile), shared by the abouts in order: the
+// project's, the team's for a member of one, the person's, and the
+// session's own when the session is resumed.
 func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt string) string {
 	if !c.drives(*s) || c.Identity == nil || c.Identity.Recall == nil {
 		return ""
@@ -45,7 +44,6 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 	if s.Mode().StartsCeremony() || s.Mode() == domain.ModePlan {
 		return "" // the ceremony wakes its own about; the planner reads code
 	}
-	c.openContext(ctx, s)
 	instance, _ := s.Instance()
 	id := s.ID()
 	resumed := len(s.Messages()) > 0 && !c.seen(id)
@@ -93,7 +91,7 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 		if remaining <= 0 {
 			break
 		}
-		section, lines, nothing := c.recallSection(ctx, about, prompt, instance.MemoryContext, i == 0, remaining)
+		section, lines, nothing := c.recallSection(ctx, about, prompt, i == 0, remaining)
 		remaining -= len(section) + 1
 		sections = append(sections, section)
 		empty = empty && nothing
@@ -124,8 +122,8 @@ func (c *SessionCeremony) Recall(ctx context.Context, s *domain.Session, prompt 
 // recorded", nothing more) and reported as empty; a failure is disclosed,
 // never hidden. The memories exposed come back too, "ref text" per line,
 // for Jev.
-func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt string, contextID domain.MemoryContextID, project bool, limit int) (string, []string, bool) {
-	result, err := c.Identity.Recall.Recall(ctx, RecallRequest{Mode: RecallWake, About: about, Intent: prompt, ContextID: contextID})
+func (c *SessionCeremony) recallSection(ctx context.Context, about, prompt string, project bool, limit int) (string, []string, bool) {
+	result, err := c.Identity.Recall.Recall(ctx, RecallRequest{Mode: RecallWake, About: about, Intent: prompt})
 	if err != nil {
 		c.log("recall of %s: %v", about, err)
 		return bounded(fmt.Sprintf("%s: memory recall unavailable: %s", about, bounded(err.Error(), 200)), limit), nil, false

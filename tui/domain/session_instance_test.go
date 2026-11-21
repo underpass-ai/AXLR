@@ -41,3 +41,17 @@ func TestSessionInstanceIsValidatedAndCopied(t *testing.T) {
 		t.Fatalf("restored %+v", got)
 	}
 }
+
+// An instance with no ceremony keeps the recall cadence of a session with
+// memory and no orchestrator; a predecessor must be a session id.
+func TestSessionInstanceOfRecallOrPredecessorAlone(t *testing.T) {
+	if err := (SessionInstance{Recalled: "the parser"}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (SessionInstance{Predecessor: "0123456789abcdef0123456789abcdef"}).Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := (SessionInstance{Predecessor: "not-a-session"}).Validate(); err == nil {
+		t.Fatal("a malformed predecessor accepted")
+	}
+}

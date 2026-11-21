@@ -24,7 +24,7 @@ const (
 var _ application.RecallPort = Memory{}
 
 // Recall reads memory for the console or for axlr_recall: a wake, a
-// question or a span of history under one about, in the session's context.
+// question or a span of history under one about.
 // An about nothing was recorded under is Empty, not an error, for every
 // about: the console's recall note and the model's question both ask about
 // abouts that may not exist yet (a new project, a person's user about).
@@ -36,9 +36,6 @@ func (m Memory) Recall(ctx context.Context, request application.RecallRequest) (
 	result := application.RecallResult{About: about, Mode: request.Mode}
 	var tool string
 	arguments := map[string]any{"about": about}
-	if request.ContextID != "" {
-		arguments["context_id"] = string(request.ContextID)
-	}
 	switch request.Mode {
 	case "", application.RecallWake:
 		tool, result.Mode = "kmp_wake", application.RecallWake

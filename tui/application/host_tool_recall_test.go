@@ -20,9 +20,6 @@ func recallIdentity(t *testing.T) domain.ToolIdentity {
 
 func TestHostRecallBuildsTheRequestFromTheSession(t *testing.T) {
 	s := rememberSession(t, domain.ModeNormal)
-	if err := s.SetInstance(domain.SessionInstance{MemoryContext: "ctx_1"}); err != nil {
-		t.Fatal(err)
-	}
 	labels := &contextLabels{labels: map[domain.SessionID]domain.SessionLabel{s.Export().ID: {About: "project:AXLR"}}}
 	recall := &recallStub{texts: map[string]string{"project:AXLR": "- the parser keeps dates in UTC"}}
 	u := HostToolUseCase{Recall: recall, Labels: labels}
@@ -42,7 +39,7 @@ func TestHostRecallBuildsTheRequestFromTheSession(t *testing.T) {
 		return answer
 	}
 	answer := run(`{"why":"see where the parser stands"}`)
-	if answer["mode"] != RecallWake || answer["about"] != "project:AXLR" || answer["recorded"] != true || answer["memory"] != "- the parser keeps dates in UTC" || recall.requests[0].ContextID != "ctx_1" {
+	if answer["mode"] != RecallWake || answer["about"] != "project:AXLR" || answer["recorded"] != true || answer["memory"] != "- the parser keeps dates in UTC" {
 		t.Fatalf("wake %+v %+v", answer, recall.requests[0])
 	}
 	run(`{"question":"what timezone does the parser use?"}`)

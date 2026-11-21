@@ -41,3 +41,22 @@ func TestInstallIDIsOneAcrossRacingStarts(t *testing.T) {
 		t.Fatalf("install-id: %v %v", info, err)
 	}
 }
+
+func TestInstallIDIsDrawnOnceAndKept(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "axlr")
+	first, err := InstallID(dir)
+	if err != nil || !isHexID(first) {
+		t.Fatalf("%q %v", first, err)
+	}
+	second, err := InstallID(dir)
+	if err != nil || second != first {
+		t.Fatalf("%q %q %v", first, second, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "install-id"), []byte("garbage\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	third, err := InstallID(dir)
+	if err != nil || third == first || !isHexID(third) {
+		t.Fatalf("an unreadable id is drawn again: %q %v", third, err)
+	}
+}

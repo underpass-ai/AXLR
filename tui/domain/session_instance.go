@@ -39,13 +39,6 @@ type SessionInstance struct {
 	// turn ended (the engine down, a refusal); the console retries them at
 	// the next turn end and at close, oldest first.
 	Pending []string
-	// MemoryAgent and MemoryContext are the console's identity in the
-	// memory engine for this session: the agent registered in the
-	// session's store and the context opened for the session, which the
-	// console passes on every memory call (decision D3). The model never
-	// sees them.
-	MemoryAgent   MemoryAgentID
-	MemoryContext MemoryContextID
 	// Recalled is the intent the console last woke memory for; "" before
 	// the first prompt's recall.
 	Recalled string
@@ -81,18 +74,10 @@ const MaxSessionRecordBytes = 16 << 10
 const MaxPendingEntries = 50
 
 func (i SessionInstance) Validate() error {
-	if i.Instance == "" && i.Unavailable == "" && i.MemoryContext == "" && i.Predecessor == "" {
-		return errors.New("session instance needs an id, a reason it is unavailable, a memory context or a predecessor")
-	}
-	if i.MemoryContext != "" {
-		if err := i.MemoryContext.Validate(); err != nil {
-			return err
-		}
-	}
-	if i.MemoryAgent != "" {
-		if err := i.MemoryAgent.Validate(); err != nil {
-			return err
-		}
+	// A session with memory and no orchestrator keeps only the recall
+	// cadence: until KMP 1.0 its memory context carried the record.
+	if i.Instance == "" && i.Unavailable == "" && i.Recalled == "" && i.Predecessor == "" {
+		return errors.New("session instance needs an id, a reason it is unavailable, a recall or a predecessor")
 	}
 	if i.Predecessor != "" {
 		if _, err := NewSessionID(string(i.Predecessor)); err != nil {

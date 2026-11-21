@@ -44,8 +44,8 @@ type SessionCeremony struct {
 	// Usage gives each turn its share of the session's ledger; nil none.
 	Usage SessionUsagePort
 	Store SessionStorePort
-	// Identity opens the session's KMP context (session_identity.go); nil
-	// without KMP.
+	// Identity is where the recall note reads memory and whose memory it
+	// adds (session_recall.go); nil without KMP.
 	Identity *MemoryIdentity
 	// Host is how the console names itself in MADE's host reports
 	// (host_report.go).
@@ -173,7 +173,7 @@ func (c *SessionCeremony) open(ctx context.Context, s *domain.Session, successor
 	// The entries KMP has not taken yet travel to the successor (an
 	// imported session's handoff among them); until 13 October 2026 they
 	// were lost with the predecessor.
-	instance := domain.SessionInstance{Instance: id, MemoryAgent: current.MemoryAgent, MemoryContext: current.MemoryContext, Recalled: current.Recalled, Predecessor: current.Predecessor, RecalledMemories: current.RecalledMemories, Pending: current.Pending}
+	instance := domain.SessionInstance{Instance: id, Recalled: current.Recalled, Predecessor: current.Predecessor, RecalledMemories: current.RecalledMemories, Pending: current.Pending}
 	if err := c.setInstance(s, instance); err != nil {
 		return domain.SessionInstance{}, false
 	}
@@ -208,15 +208,13 @@ func (c *SessionCeremony) setInstance(s *domain.Session, instance domain.Session
 	return err
 }
 
-// BeginTurn opens the session's KMP context at its first prompt and claims
-// the turn step for the prompt the session just began, completing first
-// the turn an interrupted console left claimed. It changes the session in
-// place; the caller saves it.
+// BeginTurn claims the turn step for the prompt the session just began,
+// completing first the turn an interrupted console left claimed. It
+// changes the session in place; the caller saves it.
 func (c *SessionCeremony) BeginTurn(ctx context.Context, s *domain.Session) {
 	if !c.drives(*s) {
 		return
 	}
-	c.openContext(ctx, s)
 	if c.Engine == nil {
 		return
 	}
@@ -328,7 +326,6 @@ func (c *SessionCeremony) complete(ctx context.Context, s *domain.Session, insta
 		if entry.About == record.About {
 			delete(entry.Labels, "project")
 		}
-		entry.ContextID = instance.MemoryContext
 		instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
 		if !record.Interrupted {
 			c.settle(ctx, *s, instance, record, stepRef)
@@ -501,7 +498,7 @@ func (c *SessionCeremony) end(ctx context.Context, s *domain.Session, reason, tr
 			// KMP's kinds have no session_closed (refused on 13 October
 			// 2026): the entry is an observation labelled event=closed.
 			entry := TurnEntry{Kind: "observation", About: sessionAbout(state.ID), Key: fmt.Sprintf("axlr:%s:%s", trigger, instance.Instance), Summary: fmt.Sprintf("Session %s after %s (%s).", trigger, plural(instance.Turns, "turn"), reason),
-				Evidence: []string{fmt.Sprintf("ceremony %s %s", instance.Instance, trigger)}, OccurredAt: c.now(), ContextID: instance.MemoryContext,
+				Evidence: []string{fmt.Sprintf("ceremony %s %s", instance.Instance, trigger)}, OccurredAt: c.now(),
 				Labels: labelCorrelation(map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "mode": {string(s.Mode())}, "event": {trigger}}, *s)}
 			instance.Pending = c.journal(ctx, append(instance.Pending, encodeEntry(entry)))
 		}

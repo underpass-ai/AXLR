@@ -19,26 +19,12 @@ func BundleAbout(topLevel string) (string, error) {
 	if topLevel == "" {
 		return "", nil
 	}
-	file, err := os.Open(filepath.Join(topLevel, filepath.FromSlash(BundlePath)))
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return "", nil
-		}
-		return "", err
-	}
-	defer file.Close()
-	line, err := readLine(file)
+	abouts, err := bundleAbouts(filepath.Join(topLevel, filepath.FromSlash(BundlePath)))
 	if err != nil {
 		return "", err
-	}
-	var header struct {
-		Abouts []string `json:"abouts"`
-	}
-	if err := json.Unmarshal(line, &header); err != nil {
-		return "", fmt.Errorf("unreadable bundle header: %w", err)
 	}
 	var projects []string
-	for _, about := range header.Abouts {
+	for _, about := range abouts {
 		if strings.HasPrefix(about, "project:") {
 			projects = append(projects, about)
 		}
@@ -56,6 +42,30 @@ func BundleAbout(topLevel string) (string, error) {
 		}
 	}
 	return "", nil
+}
+
+// bundleAbouts lists the abouts a bundle's header names; none when the
+// file does not exist.
+func bundleAbouts(path string) ([]string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+	line, err := readLine(file)
+	if err != nil {
+		return nil, err
+	}
+	var header struct {
+		Abouts []string `json:"abouts"`
+	}
+	if err := json.Unmarshal(line, &header); err != nil {
+		return nil, fmt.Errorf("unreadable bundle header: %w", err)
+	}
+	return header.Abouts, nil
 }
 
 // readLine reads the first line of a file, at most 64 KiB.

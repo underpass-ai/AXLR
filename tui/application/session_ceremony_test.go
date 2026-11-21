@@ -518,166 +518,35 @@ func TestSweepAbandonedEndsOnlyUnheldOpenInstances(t *testing.T) {
 	}
 }
 
-type guideStub struct {
-	calls   []string
-	fail    map[string]error
-	context int
-}
-
-func (g *guideStub) Guide(_ context.Context, registrationKey string, agentID domain.MemoryAgentID, contextKey string) (GuideResult, error) {
-	call := "register " + registrationKey
-	if registrationKey == "" {
-		call = "context " + string(agentID) + " " + contextKey
-	}
-	g.calls = append(g.calls, call)
-	if err := g.fail[call]; err != nil {
-		return GuideResult{}, err
-	}
-	if registrationKey != "" {
-		return GuideResult{AgentID: domain.MemoryAgentID("agent_" + registrationKey), ContextID: "ctx_registration"}, nil
-	}
-	g.context++
-	return GuideResult{AgentID: agentID, ContextID: domain.MemoryContextID("ctx_" + itoa(g.context))}, nil
-}
-
-type agentsStub struct{ agents map[string]string }
-
-func (a *agentsStub) Agent(_ context.Context, store string) (domain.MemoryAgentID, bool) {
-	id, ok := a.agents[store]
-	return domain.MemoryAgentID(id), ok
-}
-
-func (a *agentsStub) Remember(_ context.Context, store string, agentID domain.MemoryAgentID, _ string) error {
-	a.agents[store] = string(agentID)
-	return nil
-}
-
-func identityFor(guide *guideStub, agents *agentsStub) *MemoryIdentity {
-	return &MemoryIdentity{Store: "/repo/.kernel", RegistrationKey: "axlr:install-1", Agents: agents, Guide: guide}
-}
-
-// The first prompt in a store registers the console's agent once and opens
-// one context per session; the next session reuses the agent.
-func TestSessionCeremonyRegistersTheAgentOnceAndOpensAContextPerSession(t *testing.T) {
-	engine := &fakeEngine{}
-	c, _, _, _ := sessionCeremonyFor(t, engine)
-	guide, agents := &guideStub{}, &agentsStub{agents: map[string]string{}}
-	c.Identity = identityFor(guide, agents)
-	s := turnSession(t)
-	if err := s.BeginTurn("hola", turnTools()); err != nil {
-		t.Fatal(err)
-	}
-	c.BeginTurn(context.Background(), &s)
-	instance, _ := s.Instance()
-	if instance.MemoryAgent != "agent_axlr:install-1" || instance.MemoryContext != "ctx_1" || instance.Instance == "" {
-		t.Fatalf("instance %+v", instance)
-	}
-	if strings.Join(guide.calls, ";") != "register axlr:install-1;context agent_axlr:install-1 axlr:session:"+string(s.ID()) || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" {
-		t.Fatalf("calls %v agents %v", guide.calls, agents.agents)
-	}
-	// The second prompt opens nothing more.
-	if err := s.CompleteAssistant(assistant("hola")); err != nil {
-		t.Fatal(err)
-	}
-	_ = c.EndTurn(context.Background(), &s)
-	if err := s.BeginTurn("otra", turnTools()); err != nil {
-		t.Fatal(err)
-	}
-	c.BeginTurn(context.Background(), &s)
-	if instance, _ = s.Instance(); instance.MemoryContext != "ctx_1" || len(guide.calls) != 2 {
-		t.Fatalf("instance %+v calls %v", instance, guide.calls)
-	}
-	// Another session in the same store reuses the agent.
-	other, err := domain.NewSession("fedcba9876543210fedcba9876543210", s.Export().Workspace, "test/model")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := other.BeginTurn("hola", turnTools()); err != nil {
-		t.Fatal(err)
-	}
-	c.BeginTurn(context.Background(), &other)
-	if instance, _ = other.Instance(); instance.MemoryContext != "ctx_2" || guide.calls[2] != "context agent_axlr:install-1 axlr:session:fedcba9876543210fedcba9876543210" {
-		t.Fatalf("instance %+v calls %v", instance, guide.calls)
-	}
-}
-
-// An agent KMP no longer knows (the store emptied) is registered again; a
-// registration that fails leaves the session without a context and the
-// turn runs.
-func TestSessionCeremonyRegistersAgainWhenTheStoreForgotTheAgent(t *testing.T) {
-	engine := &fakeEngine{}
-	c, _, _, _ := sessionCeremonyFor(t, engine)
-	guide := &guideStub{fail: map[string]error{"context stale axlr:session:0123456789abcdef0123456789abcdef": errors.New("not_found: agent stale")}}
-	agents := &agentsStub{agents: map[string]string{"/repo/.kernel": "stale"}}
-	c.Identity = identityFor(guide, agents)
-	s := turnSession(t)
-	if err := s.BeginTurn("hola", turnTools()); err != nil {
-		t.Fatal(err)
-	}
-	c.BeginTurn(context.Background(), &s)
-	instance, _ := s.Instance()
-	if instance.MemoryAgent != "agent_axlr:install-1" || instance.MemoryContext != "ctx_1" || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" || len(guide.calls) != 3 {
-		t.Fatalf("instance %+v calls %v agents %v", instance, guide.calls, agents.agents)
-	}
-	var logged []string
-	c.Log = func(line string) { logged = append(logged, line) }
-	guide = &guideStub{fail: map[string]error{"register axlr:install-1": errors.New("engine down")}}
-	c.Identity = identityFor(guide, &agentsStub{agents: map[string]string{}})
-	other, err := domain.NewSession("fedcba9876543210fedcba9876543210", s.Export().Workspace, "test/model")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := other.BeginTurn("hola", turnTools()); err != nil {
-		t.Fatal(err)
-	}
-	c.BeginTurn(context.Background(), &other)
-	if instance, _ = other.Instance(); instance.MemoryContext != "" || instance.Instance == "" || instance.Fence == "" {
-		t.Fatalf("instance %+v", instance)
-	}
-	if len(logged) == 0 || !strings.Contains(logged[0], "engine down") {
-		t.Fatalf("logged %v", logged)
-	}
-}
-
-// Without MADE the session still gets its KMP context, and the turn's
-// entry carries it.
-func TestSessionCeremonyOpensTheContextWithoutMADE(t *testing.T) {
-	c, store, _, _ := sessionCeremonyFor(t, nil)
-	c.Engine = nil
-	guide, agents := &guideStub{}, &agentsStub{agents: map[string]string{}}
-	c.Identity = identityFor(guide, agents)
-	s := turnSession(t)
-	if err := s.BeginTurn("hola", turnTools()); err != nil {
-		t.Fatal(err)
-	}
-	c.BeginTurn(context.Background(), &s)
-	instance, has := s.Instance()
-	if !has || instance.MemoryContext != "ctx_1" || instance.Instance != "" || instance.Unavailable != "" {
-		t.Fatalf("instance %+v", instance)
-	}
-	if err := c.EndTurn(context.Background(), &s); err != nil || len(store.states) != 0 {
-		t.Fatalf("no MADE record without MADE: %v %d", err, len(store.states))
-	}
-	if _, err := domain.RestoreSession(s.Export()); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestSessionCeremonyTurnEntryCarriesTheContext(t *testing.T) {
+// KMP 1.0 keeps no agents or contexts: a session's first prompt registers
+// nothing, its instance holds no memory identity, and its turn entry
+// carries none. An entry queued before KMP 1.0 with the context it then
+// carried is written without it.
+func TestSessionCeremonyKeepsNoMemoryIdentity(t *testing.T) {
 	engine := &fakeEngine{}
 	c, _, journal, _ := sessionCeremonyFor(t, engine)
-	c.Identity = identityFor(&guideStub{}, &agentsStub{agents: map[string]string{}})
+	c.Identity = &MemoryIdentity{}
 	s := turnSession(t)
 	if err := s.BeginTurn("añade hola.txt y comprueba", turnTools()); err != nil {
 		t.Fatal(err)
 	}
 	c.BeginTurn(context.Background(), &s)
+	if instance, _ := s.Instance(); instance.Instance == "" {
+		t.Fatalf("instance %+v", instance)
+	}
 	recordTurnOn(t, &s)
 	if err := c.EndTurn(context.Background(), &s); err != nil {
 		t.Fatal(err)
 	}
-	if len(journal.entries) != 1 || journal.entries[0].ContextID != "ctx_1" {
+	if len(journal.entries) != 1 {
 		t.Fatalf("journal %+v", journal.entries)
+	}
+	if encoded := encodeEntry(journal.entries[0]); strings.Contains(encoded, "Context") {
+		t.Fatalf("entry %s", encoded)
+	}
+	old, err := decodeEntry(`{"About":"ws:x","Key":"axlr:turn:x:1","Summary":"s","ContextID":"context_1"}`)
+	if err != nil || strings.Contains(encodeEntry(old), "context_1") {
+		t.Fatalf("old entry %+v %v", old, err)
 	}
 }
 
@@ -717,34 +586,5 @@ func TestSessionCeremonyContinuesAClosedInstanceInItsSuccessor(t *testing.T) {
 	}
 	if !strings.HasPrefix(strings.Join(engine.calls, ";"), "start refused "+closed.Instance+"-2;start axlr_session 1.0 about=;claim turn 2") || engine.inputs["predecessor"] != closed.Instance {
 		t.Fatalf("calls %v inputs %v", engine.calls, engine.inputs)
-	}
-}
-
-// A session whose workspace store changed opens a context in the new store:
-// on 20 November 2026 a git init turned the per-user default into the
-// checkout's .kernel, and the resumed session's recalls and turn entries were
-// refused with "no agent context is registered here".
-func TestSessionCeremonyOpensAContextInTheStoreTheWorkspaceNowUses(t *testing.T) {
-	engine := &fakeEngine{}
-	c, _, _, _ := sessionCeremonyFor(t, engine)
-	guide, agents := &guideStub{}, &agentsStub{agents: map[string]string{"/home/me/.local/share/kmp/default": "agent_old"}}
-	c.Identity = identityFor(guide, agents)
-	s := turnSession(t)
-	if err := s.BeginTurn("hola", turnTools()); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.SetInstance(domain.SessionInstance{MemoryAgent: "agent_old", MemoryContext: "ctx_old"}); err != nil {
-		t.Fatal(err)
-	}
-	c.BeginTurn(context.Background(), &s)
-	instance, _ := s.Instance()
-	if instance.MemoryAgent != "agent_axlr:install-1" || instance.MemoryContext == "ctx_old" || agents.agents["/repo/.kernel"] != "agent_axlr:install-1" {
-		t.Fatalf("instance %+v agents %v", instance, agents.agents)
-	}
-	// The same store keeps the context it opened.
-	calls := len(guide.calls)
-	c.BeginTurn(context.Background(), &s)
-	if again, _ := s.Instance(); again.MemoryContext != instance.MemoryContext || len(guide.calls) != calls {
-		t.Fatalf("reopened in the same store: %+v calls %v", again, guide.calls)
 	}
 }

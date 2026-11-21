@@ -4,7 +4,7 @@ What a program needs from AXLR to run one unit of work and read what came of it,
 
 ## One execution is one session
 
-An execution is a session of AXLR: its transcript, its tool calls with their decisions, its usage ledger and its MADE instance and KMP context, as the [console](console.md) keeps them. The session stays after the execution ends, so a later execution can continue it (a decision on a pending call, a new prompt). Past the context cap the execution goes on in a successor session; the result names every session it spanned.
+An execution is a session of AXLR: its transcript, its tool calls with their decisions, its usage ledger and its MADE instance, as the [console](console.md) keeps them. The session stays after the execution ends, so a later execution can continue it (a decision on a pending call, a new prompt). Past the context cap the execution goes on in a successor session; the result names every session it spanned.
 
 | Concept | In AXLR |
 |---|---|

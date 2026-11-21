@@ -14,10 +14,7 @@ func engineSurface(ref root.PluginRef) domain.ToolSurface {
 	name := string(ref.ToolName)
 	switch ref.PluginID {
 	case "kmp":
-		if name == "kmp_guide" {
-			return domain.ToolSurface{Role: domain.PluginRoleMemory, Hidden: "kmp_guide is the console's"}
-		}
-		return domain.ToolSurface{Role: domain.PluginRoleMemory, ContextArgument: "context_id", MemoryWrite: name == "kmp_write_memory"}
+		return domain.ToolSurface{Role: domain.PluginRoleMemory, MemoryWrite: name == "kmp_write_memory"}
 	case "made":
 		verb := strings.TrimPrefix(name, "made_")
 		for _, prefix := range []string{"list_", "get_", "read_", "stream_", "search_", "inspect_", "design_", "validate_"} {

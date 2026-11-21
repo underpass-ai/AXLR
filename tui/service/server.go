@@ -39,7 +39,7 @@ type Dependencies struct {
 	// Sessions is the store the loop was composed with (OpenSessions); nil
 	// opens one under the state directory.
 	Sessions *Sessions
-	// Lifecycle runs each session's MADE instance and memory context, as
+	// Lifecycle runs each session's MADE instance and memory recall, as
 	// the console does (decision D4); nil records nothing. CloseSession and
 	// shutdown close the instances it opened.
 	Lifecycle *application.SessionCeremony

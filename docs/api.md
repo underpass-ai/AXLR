@@ -60,7 +60,7 @@ The state directory contains session snapshots, event journals, call arguments a
 
 ## The console's loop in the service
 
-Since 23 October 2026 the service composes its turns with the console's loop (`tui/compose`): the context cap and its successor sessions, the session's MADE instance and KMP context, Jev, forged and catalog tools, the memory tools, the cost cap and the exec sandbox. A client such as a bot needs these facts:
+Since 23 October 2026 the service composes its turns with the console's loop (`tui/compose`): the context cap and its successor sessions, the session's MADE instance, Jev, forged and catalog tools, the memory tools, the cost cap and the exec sandbox. A client such as a bot needs these facts:
 
 - **Result.** The session and the event that ends a turn carry the execution's result, the same object `axlr-tui --exec --json` writes last ([runtime contract](runtime-contract.md)); a bot reads it instead of the transcript.
 - **Policy.** `CreateSession` takes `policy`, the [runtime contract](runtime-contract.md)'s policy per execution: an autonomy level and the tools the session may and may not use. The session keeps it, `GetSession` shows it, and a call it forbids is refused outside the model before any `approval.required`, with status `forbidden` in the result; a tool it forbids is not offered to the model. An invalid policy is `422 invalid_policy`.

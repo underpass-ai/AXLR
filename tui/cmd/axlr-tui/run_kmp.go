@@ -44,9 +44,6 @@ type kmpStore struct {
 	// directory inside it. Either is bound to the session, since the
 	// console's default about is derived from the workspace alone.
 	FromBundle, FromRoot bool
-	// SyncGuide writes the guide into the store, for a kmp_guide that
-	// finds none; nil when no plugin root holds the guide assets.
-	SyncGuide func(context.Context) error
 	// Memories is how many events the store holds under About, when
 	// Counted (decision J2).
 	Memories int
@@ -65,7 +62,7 @@ type kmpStore struct {
 // read that list, so every console path opens the same store (decision D1
 // of the lifecycle integration design). given is the store --kmp-store
 // named, which wins over the pin and the workspace; "" resolves as usual.
-// Without a stdio kmp registration it does nothing. A preparation that fails (an import, the guide) leaves
+// Without a stdio kmp registration it does nothing. A preparation that fails (an import, a copy) leaves
 // the store pinned and is reported; the console still starts.
 func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, workspace, dataBase, given string) (store kmpStore, found bool, err error) {
 	index := -1
@@ -94,13 +91,10 @@ func prepareKMPStore(ctx context.Context, registrations []plugins.Registration, 
 			store.About, store.FromRoot = about, true
 		}
 	}
-	binary, pluginRoot := kmpstore.Binary(r.Manifest.Command)
+	binary, _ := kmpstore.Binary(r.Manifest.Command)
 	cli := kmpstore.CLI{Binary: binary}
-	preparer := kmpstore.Preparer{CLI: cli, PluginRoot: pluginRoot, UserStore: kmpstore.UserDefault(dataBase)}
+	preparer := kmpstore.Preparer{CLI: cli, UserStore: kmpstore.UserDefault(dataBase)}
 	selection, env := store.Selection, r.Env
-	store.SyncGuide = func(ctx context.Context) error {
-		return kmpstore.GuideSync{CLI: cli, PluginRoot: pluginRoot}.Sync(ctx, selection, env)
-	}
 	store.Count = func(ctx context.Context, about string) (int, bool, error) {
 		return kmpstore.Counter{CLI: cli}.Count(ctx, selection, about, env)
 	}
@@ -232,9 +226,6 @@ func (s kmpStore) line(dataBase string) string {
 	}
 	if len(s.Report.Configured) > 0 {
 		fmt.Fprintf(&b, ", %d configuration files copied from %s", len(s.Report.Configured), kmpstore.UserDefault(dataBase))
-	}
-	if s.Report.GuideSynced {
-		b.WriteString(", guide synced")
 	}
 	return b.String()
 }

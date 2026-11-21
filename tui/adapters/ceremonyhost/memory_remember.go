@@ -44,9 +44,6 @@ func (m Memory) Remember(ctx context.Context, request application.RememberReques
 		}
 		arguments = map[string]any{"about": request.About, "actor": "axlr", "idempotency_key": request.IdempotencyKey, "labels": request.Labels, "memories": []any{memory}}
 	}
-	if request.ContextID != "" {
-		arguments["context_id"] = string(request.ContextID)
-	}
 	result, err := m.writeMemory(ctx, arguments)
 	if err != nil {
 		var refused *refusal

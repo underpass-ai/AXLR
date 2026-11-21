@@ -232,7 +232,7 @@ func (m AppModel) answerUndo(k tea.KeyPressMsg) (AppModel, tea.Cmd) {
 		forgetter, memories.Kept = m.deps.MemoryForget, nil
 		state := m.Header.State
 		for _, ref := range refs {
-			requests = append(requests, application.ForgetRequest{Ref: ref, Why: "undone with /undo: the turn that recorded it was put back", Command: "/undo", At: time.Now(), ContextID: m.sessionContext(),
+			requests = append(requests, application.ForgetRequest{Ref: ref, Why: "undone with /undo: the turn that recorded it was put back", Command: "/undo", At: time.Now(),
 				Labels: map[string][]string{"ws": {string(state.Workspace)}, "session": {string(state.ID)}, "event": {"forget"}}})
 		}
 	}

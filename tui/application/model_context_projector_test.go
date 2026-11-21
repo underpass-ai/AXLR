@@ -241,12 +241,6 @@ func TestProjectionRefusesToSilentlyTruncateOversizedProtocolControls(t *testing
 	if !errors.Is(err, ErrContextBudgetExceeded) {
 		t.Fatalf("protocol identity silently clipped: %v", err)
 	}
-	guide := contextToolTurn(t, "kmp_guide", string(raw))
-	original := append(guide, contextMessages(50, 1500)[1:]...)
-	projection, err := NewDefaultModelContextProjector().Project(original)
-	if err != nil || !strings.Contains(string(projection.Messages[0].Content), `"identities_omitted":true`) {
-		t.Fatalf("closed oversized identity must be recoverable, never truncated: %v", err)
-	}
 }
 
 func TestClosedOversizedProtocolForcesRecoverableWholeTurnCut(t *testing.T) {
@@ -293,10 +287,10 @@ func TestClosedOversizedProtocolForcesRecoverableWholeTurnCut(t *testing.T) {
 			if err := json.Unmarshal([]byte(projection.Messages[0].Content), &checkpoint); err != nil {
 				t.Fatal(err)
 			}
-			protocol := checkpoint["latest_memory_protocol"].(map[string]any)
-			controls := protocol["controls"].(map[string]any)
-			if protocol["message_index"] != float64(2) || protocol["protocol_controls_omitted"] != true || controls["context_id"] != "context-original" || controls[field] != nil || protocol["retrieval"] == nil {
-				t.Fatalf("missing explicit exact identity/recovery: %v", protocol)
+			// KMP 1.0 keeps no memory identity: the checkpoint carries no
+			// protocol state of the omitted turn, only how to retrieve it.
+			if _, kept := checkpoint["latest_memory_protocol"]; kept {
+				t.Fatalf("memory protocol kept: %v", checkpoint)
 			}
 			if checkpoint["omitted_until_exclusive"] != float64(len(closed)) {
 				t.Fatal("checkpoint provenance changed")
@@ -405,56 +399,7 @@ func TestProviderMessageSizeCountsEscapedArgumentsAndUnicode(t *testing.T) {
 	}
 }
 
-func TestCheckpointPreservesMemoryIdentityAndGuideLookup(t *testing.T) {
-	guide := contextToolTurn(t, "mcp_opaque_legacy_alias", `{"protocol_version":1,"status":"completed","output":{"content":[],"structured_content":{"context_id":"old-context","guide_revision":"revision-1","scheme":[],"agent":{"id":"old-agent"}}}}`)
-	// Later results mention the spelling context_id in prose without actually
-	// carrying an identity. They must not hide the earlier registered identity.
-	notIdentity := root.Message{Role: root.RoleTool, ToolCallID: "call_other", Content: `{"status":"completed","content":[{"type":"text","text":"reuse context_id from the guide"}]}`}
-	original := append(append(guide, notIdentity), contextMessages(scaled(45), 1600)[1:]...)
-	projection, err := NewDefaultModelContextProjector().Project(original)
-	if err != nil {
-		t.Fatal(err)
-	}
-	checkpoint := projection.Messages[0]
-	for _, expected := range []string{"old-context", "old-agent", "latest_memory_guide", `"message_index":2`, "Do not register a second"} {
-		if !strings.Contains(string(checkpoint.Content), expected) {
-			t.Fatalf("lost guide/identity %q: %s", expected, checkpoint.Content)
-		}
-	}
-}
-
-func TestGuideRecoveryUsesPacketShapeNotWriteProseOrOpaqueAlias(t *testing.T) {
-	guide := contextToolTurn(t, "mcp_8469fd8c2a67", `{"protocol_version":1,"output":{"structured_content":{"context_id":"context-legacy","agent":{"id":"agent-legacy"},"guide_revision":"rev-legacy","scheme":[]},"content":[]}}`)
-	args, _ := root.NewJSONObject([]byte(`{"name":"kmp_write_memory","arguments":{"text":"Previously used kmp_guide"}}`))
-	write := []root.Message{
-		{Role: root.RoleUser, Content: "record an outcome"},
-		{Role: root.RoleAssistant, ToolCalls: []root.ToolCall{{ID: "write-two", Name: "axlr_call_tool", Arguments: args}}},
-		{Role: root.RoleTool, ToolCallID: "write-two", Content: `{"status":"completed","context_id":"context-legacy","receipt":{"note":"kmp_guide was used"}}`},
-	}
-	original := append(append(guide, write...), contextMessages(scaled(45), 1600)[1:]...)
-	projection, err := NewDefaultModelContextProjector().Project(original)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var checkpoint struct {
-		Guide struct {
-			Index int `json:"message_index"`
-		} `json:"latest_memory_guide"`
-	}
-	if err := json.Unmarshal([]byte(projection.Messages[0].Content), &checkpoint); err != nil || checkpoint.Guide.Index != 2 {
-		t.Fatalf("guide lookup selected write prose rather than legacy guide result: %v %+v", err, checkpoint)
-	}
-	valid := map[string]any{"context_id": "context", "guide_revision": "revision", "scheme": []any{}, "agent": map[string]any{"id": "agent"}}
-	text, _ := json.Marshal(valid)
-	if memoryGuidePacket(map[string]any{"content": []any{map[string]any{"type": "text", "text": string(text)}}}) == nil {
-		t.Fatal("textual MCP guide packet was missed")
-	}
-	if memoryGuidePacket(map[string]any{"payload": valid}) != nil || memoryGuidePacket(map[string]any{"context_id": "context", "guide_revision": "revision", "scheme": "not an array", "agent": map[string]any{"id": "agent"}}) != nil {
-		t.Fatal("unrelated nested claim or malformed guide granted guide identity")
-	}
-}
-
-func TestColdRestoreWithOpaqueGuideToolReproducesProjectionAndIdentity(t *testing.T) {
+func TestColdRestoreWithOpaqueGuideToolReproducesProjection(t *testing.T) {
 	session, err := domain.NewSession("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", domain.Workspace(t.TempDir()), "test/model")
 	if err != nil {
 		t.Fatal(err)
@@ -496,8 +441,8 @@ func TestColdRestoreWithOpaqueGuideToolReproducesProjectionAndIdentity(t *testin
 	if err != nil || !reflect.DeepEqual(first, cold) {
 		t.Fatalf("cold restore changed boundary or provider projection: %v", err)
 	}
-	if !strings.Contains(string(cold.Messages[0].Content), "context-restored") || !strings.Contains(string(cold.Messages[0].Content), `"message_index":2`) {
-		t.Fatal("restored guide identity/recovery index lost")
+	if strings.Contains(string(cold.Messages[0].Content), "context-restored") {
+		t.Fatal("a memory identity of a result before KMP 1.0 reached the checkpoint")
 	}
 }
 

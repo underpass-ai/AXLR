@@ -32,9 +32,6 @@ func (m Memory) Forget(ctx context.Context, request application.ForgetRequest) (
 		return application.ForgetReceipt{}, err
 	}
 	inspect := map[string]any{"about": about, "ref": ref, "budget": map[string]any{"max_bytes": forgetInspectBytes}, "include": map[string]any{"details": false, "incoming": false, "outgoing": false, "raw": false}}
-	if request.ContextID != "" {
-		inspect["context_id"] = string(request.ContextID)
-	}
 	found, err := callPlugin(ctx, m.Tools, "kmp", "kmp_inspect", inspect)
 	if err != nil {
 		var refused *refusal
@@ -77,9 +74,6 @@ func (m Memory) Forget(ctx context.Context, request application.ForgetRequest) (
 	}
 	digest := sha256.Sum256([]byte(ref))
 	arguments := map[string]any{"about": about, "actor": "axlr", "idempotency_key": fmt.Sprintf("axlr:forget:%s:%d", hex.EncodeToString(digest[:8]), at.UTC().Unix()), "labels": labels, "memories": []any{memory}}
-	if request.ContextID != "" {
-		arguments["context_id"] = string(request.ContextID)
-	}
 	receipt := application.ForgetReceipt{About: about, Ref: ref, Text: text}
 	result, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", arguments)
 	if err != nil {
@@ -101,8 +95,8 @@ func (m Memory) Forget(ctx context.Context, request application.ForgetRequest) (
 	if continuation == "" {
 		return receipt, fmt.Errorf("KMP asked for a review of the link to %s and offered no continuation", ref)
 	}
-	// The continuation goes alone: any other argument, the context
-	// included, starts a different call (KMP 0.25.0, 13 October 2026).
+	// The continuation goes alone: any other argument starts a different
+	// call (KMP 0.25.0, 13 October 2026).
 	committed, err := callPlugin(ctx, m.Tools, "kmp", "kmp_write_memory", map[string]any{"continuation": continuation})
 	if err != nil {
 		return receipt, fmt.Errorf("KMP did not commit the close of %s: %w", ref, err)

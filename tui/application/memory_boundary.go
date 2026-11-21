@@ -51,16 +51,6 @@ func memoryTeam(state domain.SessionState) (domain.MemoryTeam, bool) {
 // teamAbout is what a team's members hold in common, project:<team>.
 func teamAbout(team domain.MemoryTeam) string { return "project:" + string(team) }
 
-// teamMember is the session's name in its team: the workspace's, since a
-// node gives each bot one workspace named after it; "" when the session
-// shares its memory with no team or the workspace has no usable name.
-func teamMember(state domain.SessionState) string {
-	if _, shared := memoryTeam(state); !shared {
-		return ""
-	}
-	return strings.TrimPrefix(ProjectAbout(state.Workspace), "project:")
-}
-
 // MemberAbout is a member's own about in its team's store,
 // project:<team>.<member>, the member being the workspace's name as
 // ProjectAbout reads it, and bounded as ProjectAbout is; "" for a

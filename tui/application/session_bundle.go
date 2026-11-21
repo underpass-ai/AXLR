@@ -16,20 +16,21 @@ import (
 const SessionBundleSuffix = ".axlr-session.json"
 
 // ImportedInstance is the bundle's instance made this console's: what
-// bound it to the origin's host and store is dropped (the live claim, the
-// host reports, the KMP agent and context), it is closed so the next turn
-// opens its successor with it as predecessor, and the handoff is queued
-// as an observation under the session's about, written at the next turn.
+// bound it to the origin's host is dropped (the live claim and the host
+// reports), it is closed so the next turn opens its successor with it as
+// predecessor, and the handoff is queued as an observation under the
+// session's about, written at the next turn.
 func ImportedInstance(instance *domain.SessionInstance, id domain.SessionID, workspace domain.Workspace, meta SessionBundleMeta, host, source string, now time.Time) *domain.SessionInstance {
 	next := domain.SessionInstance{}
 	if instance != nil {
 		next = domain.SessionInstance{Instance: instance.Instance, Turns: instance.Turns, Closed: instance.Instance != "", LastRecord: instance.LastRecord, Recalled: instance.Recalled, RecalledMemories: instance.RecalledMemories, Predecessor: instance.Predecessor}
 		for _, encoded := range instance.Pending {
+			// Decoded and encoded again: an entry queued before KMP 1.0
+			// loses the memory context it carried.
 			entry, err := decodeEntry(encoded)
 			if err != nil {
 				continue
 			}
-			entry.ContextID = ""
 			next.Pending = append(next.Pending, encodeEntry(entry))
 		}
 	}

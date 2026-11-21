@@ -7,26 +7,19 @@ import (
 	"github.com/underpass-ai/AXLR/tui/domain"
 )
 
-// The engines' protocols as the console owns them (decisions D3, D6 and
-// G6 of the lifecycle integration design): what the model may call of
-// KMP and MADE, which argument carries the session's KMP context, and
-// which call is the memory write. The application reads the result from
-// each tool's surface and never names an engine.
+// The engines' protocols as the console owns them (decisions D6 and G6
+// of the lifecycle integration design): what the model may call of KMP
+// and MADE, and which call is the memory write. The application reads the
+// result from each tool's surface and never names an engine. KMP 1.0 has
+// no agents or contexts: its kmp_guide is a read-only topic lookup the
+// model may call like any other read.
 
 // Plugin ids of the two engines the console runs.
 const (
-	memoryPluginID        root.PluginID = "kmp"
-	orchestratorPluginID  root.PluginID = "made"
-	memoryWriteTool                     = "kmp_write_memory"
-	memoryGuideTool                     = "kmp_guide"
-	memoryContextArgument               = "context_id"
+	memoryPluginID       root.PluginID = "kmp"
+	orchestratorPluginID root.PluginID = "made"
+	memoryWriteTool                    = "kmp_write_memory"
 )
-
-// memoryOwnedRefusal answers a model that reaches for KMP's identity:
-// registering an agent, opening a context and choosing the store are the
-// console's alone, and it says what to do instead, since the guidance of
-// older sessions still names kmp_guide.
-const memoryOwnedRefusal = "kmp_guide is the console's: it registered this session with KMP and passes the session's context on every KMP call; ask memory with axlr_recall, or call kmp_ask, kmp_wake and kmp_write_memory through axlr_call_tool without context_id"
 
 // orchestratorOwnedRefusal answers a model that reaches for MADE's write
 // surface: the console starts, claims, completes and transitions every
@@ -48,11 +41,7 @@ func Surface(ref root.PluginRef) domain.ToolSurface {
 	name := ref.ToolName.String()
 	switch ref.PluginID {
 	case memoryPluginID:
-		surface := domain.ToolSurface{Role: domain.PluginRoleMemory, ContextArgument: memoryContextArgument, MemoryWrite: name == memoryWriteTool}
-		if name == memoryGuideTool {
-			surface.Hidden, surface.ContextArgument = memoryOwnedRefusal, ""
-		}
-		return surface
+		return domain.ToolSurface{Role: domain.PluginRoleMemory, MemoryWrite: name == memoryWriteTool}
 	case orchestratorPluginID:
 		surface := domain.ToolSurface{Role: domain.PluginRoleOrchestrator}
 		if !madeRead(strings.TrimPrefix(name, "made_")) {

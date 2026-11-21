@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"reflect"
 	"strings"
 	"testing"
@@ -29,7 +30,7 @@ func TestSessionBundleRoundTrip(t *testing.T) {
 	if err := s.SetMode(domain.ModeReview); err != nil {
 		t.Fatal(err)
 	}
-	instance := domain.SessionInstance{Instance: "axlr-session-" + string(id), Turns: 1, Closed: true, LastRecord: `{"turn":1}`, Pending: []string{`{"About":"ws:x"}`}, MemoryAgent: "a", MemoryContext: "c", Predecessor: "fedcba9876543210fedcba9876543210"}
+	instance := domain.SessionInstance{Instance: "axlr-session-" + string(id), Turns: 1, Closed: true, LastRecord: `{"turn":1}`, Pending: []string{`{"About":"ws:x"}`}, Predecessor: "fedcba9876543210fedcba9876543210"}
 	if err := s.SetInstance(instance); err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +55,7 @@ func TestSessionBundleRoundTrip(t *testing.T) {
 	if state.ID != want.ID || state.Workspace != want.Workspace || len(state.Messages) != len(want.Messages) || back.Mode() != domain.ModeCeremony || state.ChosenCeremony != want.ChosenCeremony {
 		t.Fatalf("state %+v", state)
 	}
-	if state.Instance == nil || state.Instance.Instance != instance.Instance || !state.Instance.Closed || state.Instance.MemoryContext != "c" || state.Instance.Predecessor != "fedcba9876543210fedcba9876543210" || len(state.Instance.Pending) != 1 {
+	if state.Instance == nil || state.Instance.Instance != instance.Instance || !state.Instance.Closed || state.Instance.Predecessor != "fedcba9876543210fedcba9876543210" || len(state.Instance.Pending) != 1 {
 		t.Fatalf("instance %+v", state.Instance)
 	}
 	if len(state.MessageTimes) != len(want.MessageTimes) {
@@ -90,5 +91,38 @@ func TestSessionBundleWithToolCallsRoundTrips(t *testing.T) {
 	}
 	if got, want := argumentBytes(back.Messages()), argumentBytes(s.Messages()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("arguments = %q, want %q", got, want)
+	}
+}
+
+// A bundle exported before KMP 1.0 whose instance held only the session's
+// memory context imports without an instance; one that also held a recall
+// keeps the recall.
+func TestSessionBundleOfAContextOnlyInstanceImports(t *testing.T) {
+	s := fixture(t)
+	data, err := SessionBundles{}.Encode(s, application.SessionBundleMeta{ExportedAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var bundle map[string]any
+	if err := json.Unmarshal(data, &bundle); err != nil {
+		t.Fatal(err)
+	}
+	bundle["instance"] = map[string]any{"version": sessionInstanceVersion, "kmp_agent": "agent_1", "kmp_context": "context_1"}
+	old, _ := json.Marshal(bundle)
+	back, _, err := SessionBundles{}.Decode(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, has := back.Instance(); has {
+		t.Fatal("a context-only instance came back")
+	}
+	bundle["instance"] = map[string]any{"version": sessionInstanceVersion, "kmp_context": "context_1", "recalled": "the parser"}
+	old, _ = json.Marshal(bundle)
+	back, _, err = SessionBundles{}.Decode(old)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if instance, has := back.Instance(); !has || instance.Recalled != "the parser" {
+		t.Fatalf("instance %+v %v", instance, has)
 	}
 }

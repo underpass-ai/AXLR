@@ -157,7 +157,7 @@ func defaultAboutName(t *testing.T, s domain.Session) string {
 func TestJevSettlementRoutesAndDeclines(t *testing.T) {
 	engine := &fakeEngine{}
 	c, _, _, _ := sessionCeremonyFor(t, engine)
-	c.Identity = &MemoryIdentity{Store: "/s", RegistrationKey: "k", Agents: &agentsStub{agents: map[string]string{}}, Guide: &guideStub{}, UserAbout: "user:tirso"}
+	c.Identity = &MemoryIdentity{UserAbout: "user:tirso"}
 	c.Judge = &scriptedJudge{gate: 0.9, sentence: "Las fechas del parser se guardan en UTC, como pide la RFC 3339", sentenceP: 0.8, kind: "preference", replaces: "none", replacesP: 0.9}
 	journal, _ := settledTurn(t, c, nil)
 	if len(journal.settled) != 1 || journal.settled[0].About != "user:tirso" || len(journal.settled[0].Links) != 0 {
